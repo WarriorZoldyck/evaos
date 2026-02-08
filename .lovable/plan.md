@@ -1,119 +1,60 @@
 
 
-## EVA - Dashboard de Gestão Financeira Inteligente
+## Implementar Tema Claro como Padrao + Alternancia de Tema
 
-### Fase 1: Fundação (Auth + Layout + Navegação)
+### Situacao Atual
+- O app so tem tema escuro (dark mode hard-coded no CSS)
+- A biblioteca `next-themes` ja esta instalada mas nao esta configurada como provider
+- Todas as cores estao definidas como CSS variables em `index.css` (apenas um conjunto de cores escuras)
 
-**Página de Login/Cadastro**
-- Tela de autenticação com tema escuro (azul marinho profundo)
-- Campos de email e senha com validação
-- Links para "Esqueci minha senha" e "Cadastre-se"
-- Redirecionamento automático após login
+### O que sera feito
 
-**Layout Principal com Sidebar**
-- Sidebar colapsável com ícones Lucide React
-- Menu: Dashboard, Lançamentos, Plano de Caixa, DRE, Precificação, Contas & Cartões, Categorias, Fornecedores/Clientes, Configurações
-- Seletor de contexto global no topo: "Pessoal" ou "Empresa X" (usando tabela `companies`)
-- Tema escuro como padrão (slate/gray 900, tons de azul marinho)
-- Layout responsivo com suporte mobile
+**1. Adicionar variaveis CSS para tema claro (light)**
+- Criar um conjunto completo de variaveis CSS para o modo claro em `index.css`
+- Manter as variaveis do modo escuro dentro de `.dark { ... }`
+- O `:root` passara a ter as cores claras como padrao
+- Cores claras: fundo branco/cinza claro, textos escuros, sidebar clara, cards brancos
 
----
+**2. Configurar o ThemeProvider (next-themes)**
+- Envolver o App com `<ThemeProvider>` usando `defaultTheme="system"` para herdar a preferencia do sistema operacional do usuario
+- Atributo aplicado no `<html>` via classe (`class`)
+- Armazenar a preferencia do usuario em `localStorage` para persistencia
 
-### Fase 2: Dashboard Inteligente
+**3. Criar botao de alternancia de tema**
+- Adicionar um componente `ThemeToggle` no header do `AppLayout` (ao lado do `SidebarTrigger`)
+- Icone de sol/lua com dropdown para 3 opcoes: Claro, Escuro, Sistema
+- Estilo limpo e consistente com o design do app
 
-**Cards de Resumo**
-- Faturamento, Entradas, Saídas e Saldo do Período
-- Valores calculados dinamicamente a partir da tabela `transactions` filtrados pelo contexto (Pessoal/Empresa)
+### Arquivos que serao modificados/criados
 
-**Filtros**
-- Filtro de período: Hoje, Esta Semana, Este Mês, Este Ano, Personalizado (calendário)
-- Todos os dados reagem ao contexto global e ao período selecionado
+| Arquivo | Acao |
+|---|---|
+| `src/index.css` | Modificar: reorganizar variaveis CSS para suportar light (`:root`) e dark (`.dark`) |
+| `src/App.tsx` | Modificar: envolver com `ThemeProvider` do next-themes |
+| `src/components/ThemeToggle.tsx` | Criar: componente com dropdown Sol/Lua/Sistema |
+| `src/components/layout/AppLayout.tsx` | Modificar: adicionar `ThemeToggle` no header |
 
-**Gráficos (Recharts)**
-- Gráfico de linha para "Projeção de Saldo" com filtros de 30, 60 e 90 dias
-- Dois gráficos de rosca (doughnut) para "Resumo do Mês por Categoria" — um para Receitas e outro para Despesas
+### Detalhes tecnicos
 
-**Listas de Ação**
-- "Próximos Lançamentos" pendentes com botão "Liquidar"
-- Modal de liquidação: confirmar valor final, data e conta de saída
-- Card de "Análise de Performance" com gasto médio diário
+**Variaveis CSS (index.css)**
+- `:root` (padrao = claro): backgrounds brancos (#ffffff, #f8fafc), textos escuros (#0f172a), borders cinza claro
+- `.dark`: manter as cores atuais (azul marinho profundo, textos claros)
+- Sidebar, cards, popovers, inputs - tudo tera variantes para ambos os temas
 
----
+**ThemeProvider (App.tsx)**
+- `attribute="class"` para usar classes CSS
+- `defaultTheme="system"` para respeitar a preferencia do SO
+- `enableSystem={true}` para detectar automaticamente
+- `storageKey="eva-theme"` para persistir a escolha
 
-### Fase 3: Gestão de Lançamentos
+**ThemeToggle**
+- Dropdown com 3 opcoes: "Claro" (Sun icon), "Escuro" (Moon icon), "Sistema" (Monitor icon)
+- Posicionado no header principal, visivel em todas as paginas internas
 
-**Lista de Transações**
-- Visualização em lista agrupada por origem (Carteira, Banco, Cartão)
-- Abas para "Realizado" e "Projetado"
-- Busca por descrição e filtros por categoria, status e tipo
+### Sobre os dados existentes
 
-**Modal de Registro (CRUD Completo)**
-- Tabs para Receita / Despesa / Transferência
-- Campos: contexto, tipo, status, valor, data de pagamento, data de competência, categoria/subcategoria (3 níveis), fornecedor/cliente, conta bancária, cartão ou carteira
-- Suporte a lançamentos parcelados (series_id, installment_number)
-- Suporte a lançamentos recorrentes (tabela recurring_transactions)
-
-**Lógica de Transferência**
-- Um comando cria duas transações vinculadas por transfer_id (saída de uma conta, entrada em outra)
-
-**Edição em Série**
-- Ao editar/excluir parcelados: opções "Apenas este", "Este e os próximos", "Todos da série"
-
----
-
-### Fase 4: Módulos Financeiros
-
-**Plano de Caixa (Fluxo de Caixa)**
-- Visão por regime de caixa (data de pagamento)
-- Agrupamento por período e categoria
-
-**DRE por Competência**
-- Visão por regime de competência (competence_date)
-- Agrupado por categorias hierárquicas
-
-**Precificação (FHC)**
-- Calculadora baseada em custos fixos, variáveis, tempo de execução e margem de lucro
-- Utiliza as tabelas pricing_configurations e pricing_procedures existentes
-
----
-
-### Fase 5: Cadastros e CRM
-
-**Contas & Cartões**
-- CRUD para contas bancárias (com agência e número)
-- CRUD para cartões de crédito (com limite, dia de fechamento e vencimento)
-- CRUD para carteiras digitais
-- Saldo calculado dinamicamente a partir das transações pagas
-
-**Gestão de Categorias**
-- Interface em árvore hierárquica com 3 níveis: Categoria > Subcategoria > Sub-subcategoria
-- Separação entre "Canais de Receita" e "Centros de Despesa"
-
-**Clientes e Fornecedores**
-- Tabelas com nome e CNPJ/CPF
-- Adicionar, editar e excluir registros
-
-**Gestão de Empresas**
-- CRUD de empresas com nome e CNPJ
-- As empresas aparecem no seletor de contexto global
-
----
-
-### Fase 6: Importação Inteligente
-
-**Upload de Extratos**
-- Botão para upload de arquivos CSV e PDF
-- Edge function para processar os arquivos
-- Extratos são transformados em rascunhos de transações para revisão antes de salvar
-- Interface para revisar, ajustar categorias e confirmar importação em lote
-
----
-
-### Design e UX
-
-- **Tema**: Dark mode predominante com azul marinho profundo (#0f172a, #1e293b) e acentos em azul (#3b82f6)
-- **Tipografia**: Inter (clean e profissional)
-- **Ícones**: Lucide React em todo o app
-- **Notificações**: Sistema de toast para feedback de sucesso/erro
-- **Responsividade**: Layout adaptável para desktop e mobile
-
+- Nenhuma alteracao no banco de dados sera necessaria
+- Todas as 14 tabelas permanecem intactas
+- Os 7 usuarios e seus dados (682 transacoes, 362 categorias, etc.) nao sao afetados
+- As politicas RLS continuam funcionando normalmente
+- A unica mudanca e visual (CSS + theme provider)
