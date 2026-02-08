@@ -1,0 +1,946 @@
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
+  }
+  public: {
+    Tables: {
+      bank_accounts: {
+        Row: {
+          account_number: string | null
+          agency_number: string | null
+          company_id: string | null
+          created_at: string | null
+          id: string
+          initial_balance: number
+          name: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          account_number?: string | null
+          agency_number?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          initial_balance?: number
+          name: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          account_number?: string | null
+          agency_number?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          initial_balance?: number
+          name?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      card_terminals: {
+        Row: {
+          acquirer: string | null
+          affiliation_key: string | null
+          bank_account_id: string
+          company_id: string | null
+          created_at: string | null
+          credit_rate: number | null
+          debit_rate: number | null
+          id: string
+          name: string
+          rates_info: string | null
+          settlement_days_credit: number | null
+          settlement_days_debit: number | null
+          unique_id: string | null
+          user_id: string
+        }
+        Insert: {
+          acquirer?: string | null
+          affiliation_key?: string | null
+          bank_account_id: string
+          company_id?: string | null
+          created_at?: string | null
+          credit_rate?: number | null
+          debit_rate?: number | null
+          id?: string
+          name: string
+          rates_info?: string | null
+          settlement_days_credit?: number | null
+          settlement_days_debit?: number | null
+          unique_id?: string | null
+          user_id: string
+        }
+        Update: {
+          acquirer?: string | null
+          affiliation_key?: string | null
+          bank_account_id?: string
+          company_id?: string | null
+          created_at?: string | null
+          credit_rate?: number | null
+          debit_rate?: number | null
+          id?: string
+          name?: string
+          rates_info?: string | null
+          settlement_days_credit?: number | null
+          settlement_days_debit?: number | null
+          unique_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_terminals_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "card_terminals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          type: string | null
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          type?: string | null
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          type?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          cnpj_cpf: string | null
+          created_at: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          cnpj_cpf?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          cnpj_cpf?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      companies: {
+        Row: {
+          cnpj: string
+          created_at: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          cnpj: string
+          created_at?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          cnpj?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      credit_cards: {
+        Row: {
+          bank_account_id: string
+          closing_day: number
+          company_id: string | null
+          created_at: string | null
+          due_day: number
+          id: string
+          last_four_digits: string | null
+          limit: number
+          name: string
+          user_id: string
+        }
+        Insert: {
+          bank_account_id: string
+          closing_day: number
+          company_id?: string | null
+          created_at?: string | null
+          due_day: number
+          id?: string
+          last_four_digits?: string | null
+          limit: number
+          name: string
+          user_id: string
+        }
+        Update: {
+          bank_account_id?: string
+          closing_day?: number
+          company_id?: string | null
+          created_at?: string | null
+          due_day?: number
+          id?: string
+          last_four_digits?: string | null
+          limit?: number
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_cards_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_cards_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_configurations: {
+        Row: {
+          hours_per_month: number | null
+          id: string
+          matrix_values: Json | null
+          profit_margin: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          hours_per_month?: number | null
+          id?: string
+          matrix_values?: Json | null
+          profit_margin?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          hours_per_month?: number | null
+          id?: string
+          matrix_values?: Json | null
+          profit_margin?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      pricing_procedure_items: {
+        Row: {
+          description: string
+          id: string
+          procedure_id: string | null
+          value: number | null
+        }
+        Insert: {
+          description: string
+          id?: string
+          procedure_id?: string | null
+          value?: number | null
+        }
+        Update: {
+          description?: string
+          id?: string
+          procedure_id?: string | null
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_procedure_items_procedure_id_fkey"
+            columns: ["procedure_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_procedures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_procedures: {
+        Row: {
+          created_at: string | null
+          desired_price: number | null
+          execution_time: number | null
+          id: string
+          name: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          desired_price?: number | null
+          execution_time?: number | null
+          id?: string
+          name: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          desired_price?: number | null
+          execution_time?: number | null
+          id?: string
+          name?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          cpf: string | null
+          full_name: string | null
+          id: string
+          updated_at: string | null
+          whatsapp_number: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          cpf?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+          whatsapp_number?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          cpf?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+          whatsapp_number?: string | null
+        }
+        Relationships: []
+      }
+      recurring_transactions: {
+        Row: {
+          amount: number
+          attachment_url: string | null
+          bank_account_id: string | null
+          barcode: string | null
+          card_terminal_id: string | null
+          category: string
+          client_id: string | null
+          company_id: string | null
+          competence_date: string | null
+          contact_name: string | null
+          created_at: string | null
+          credit_card_id: string | null
+          day_of_month: number | null
+          day_of_week: number | null
+          description: string
+          end_date: string | null
+          frequency: string
+          id: string
+          installment_number: number | null
+          installments: number | null
+          installments_total: number | null
+          is_reconciled: boolean | null
+          last_updated_amount: number | null
+          month: number | null
+          notes: string | null
+          original_amount: number | null
+          payment_date: string | null
+          payment_method: string | null
+          series_id: string | null
+          start_date: string
+          status: string | null
+          subcategory: string | null
+          subcategory2: string | null
+          supplier_id: string | null
+          total_amount: number | null
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+          wallet_id: string | null
+        }
+        Insert: {
+          amount: number
+          attachment_url?: string | null
+          bank_account_id?: string | null
+          barcode?: string | null
+          card_terminal_id?: string | null
+          category: string
+          client_id?: string | null
+          company_id?: string | null
+          competence_date?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          credit_card_id?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          description: string
+          end_date?: string | null
+          frequency: string
+          id?: string
+          installment_number?: number | null
+          installments?: number | null
+          installments_total?: number | null
+          is_reconciled?: boolean | null
+          last_updated_amount?: number | null
+          month?: number | null
+          notes?: string | null
+          original_amount?: number | null
+          payment_date?: string | null
+          payment_method?: string | null
+          series_id?: string | null
+          start_date: string
+          status?: string | null
+          subcategory?: string | null
+          subcategory2?: string | null
+          supplier_id?: string | null
+          total_amount?: number | null
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+          wallet_id?: string | null
+        }
+        Update: {
+          amount?: number
+          attachment_url?: string | null
+          bank_account_id?: string | null
+          barcode?: string | null
+          card_terminal_id?: string | null
+          category?: string
+          client_id?: string | null
+          company_id?: string | null
+          competence_date?: string | null
+          contact_name?: string | null
+          created_at?: string | null
+          credit_card_id?: string | null
+          day_of_month?: number | null
+          day_of_week?: number | null
+          description?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          installment_number?: number | null
+          installments?: number | null
+          installments_total?: number | null
+          is_reconciled?: boolean | null
+          last_updated_amount?: number | null
+          month?: number | null
+          notes?: string | null
+          original_amount?: number | null
+          payment_date?: string | null
+          payment_method?: string | null
+          series_id?: string | null
+          start_date?: string
+          status?: string | null
+          subcategory?: string | null
+          subcategory2?: string | null
+          supplier_id?: string | null
+          total_amount?: number | null
+          type?: Database["public"]["Enums"]["transaction_type"]
+          user_id?: string
+          wallet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_card_terminal_id_fkey"
+            columns: ["card_terminal_id"]
+            isOneToOne: false
+            referencedRelation: "card_terminals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_credit_card_id_fkey"
+            columns: ["credit_card_id"]
+            isOneToOne: false
+            referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          cnpj: string | null
+          created_at: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          cnpj?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          cnpj?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          amount: number
+          attachment_url: string | null
+          bank_account_id: string | null
+          barcode: string | null
+          card_terminal_id: string | null
+          category: string
+          client_id: string | null
+          company_id: string | null
+          competence_date: string
+          contact_name: string | null
+          created_at: string | null
+          credit_card_id: string | null
+          description: string
+          external_id: string | null
+          id: string
+          installment_number: number | null
+          installments: number | null
+          installments_total: number | null
+          is_reconciled: boolean | null
+          liquidation_notes: string | null
+          notes: string | null
+          original_amount: number | null
+          parent_id: string | null
+          payment_date: string
+          payment_method: string | null
+          series_id: string | null
+          status: Database["public"]["Enums"]["transaction_status"]
+          subcategory: string | null
+          subcategory2: string | null
+          supplier_id: string | null
+          transfer_id: string | null
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+          wallet_id: string | null
+        }
+        Insert: {
+          amount: number
+          attachment_url?: string | null
+          bank_account_id?: string | null
+          barcode?: string | null
+          card_terminal_id?: string | null
+          category: string
+          client_id?: string | null
+          company_id?: string | null
+          competence_date: string
+          contact_name?: string | null
+          created_at?: string | null
+          credit_card_id?: string | null
+          description: string
+          external_id?: string | null
+          id?: string
+          installment_number?: number | null
+          installments?: number | null
+          installments_total?: number | null
+          is_reconciled?: boolean | null
+          liquidation_notes?: string | null
+          notes?: string | null
+          original_amount?: number | null
+          parent_id?: string | null
+          payment_date: string
+          payment_method?: string | null
+          series_id?: string | null
+          status: Database["public"]["Enums"]["transaction_status"]
+          subcategory?: string | null
+          subcategory2?: string | null
+          supplier_id?: string | null
+          transfer_id?: string | null
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+          wallet_id?: string | null
+        }
+        Update: {
+          amount?: number
+          attachment_url?: string | null
+          bank_account_id?: string | null
+          barcode?: string | null
+          card_terminal_id?: string | null
+          category?: string
+          client_id?: string | null
+          company_id?: string | null
+          competence_date?: string
+          contact_name?: string | null
+          created_at?: string | null
+          credit_card_id?: string | null
+          description?: string
+          external_id?: string | null
+          id?: string
+          installment_number?: number | null
+          installments?: number | null
+          installments_total?: number | null
+          is_reconciled?: boolean | null
+          liquidation_notes?: string | null
+          notes?: string | null
+          original_amount?: number | null
+          parent_id?: string | null
+          payment_date?: string
+          payment_method?: string | null
+          series_id?: string | null
+          status?: Database["public"]["Enums"]["transaction_status"]
+          subcategory?: string | null
+          subcategory2?: string | null
+          supplier_id?: string | null
+          transfer_id?: string | null
+          type?: Database["public"]["Enums"]["transaction_type"]
+          user_id?: string
+          wallet_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_card_terminal_id_fkey"
+            columns: ["card_terminal_id"]
+            isOneToOne: false
+            referencedRelation: "card_terminals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_credit_card_id_fkey"
+            columns: ["credit_card_id"]
+            isOneToOne: false
+            referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallets: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          initial_balance: number
+          name: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          initial_balance?: number
+          name: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          initial_balance?: number
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallets_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      get_account_balance: {
+        Args: { account_id_param: string }
+        Returns: number
+      }
+      get_public_tables: {
+        Args: never
+        Returns: {
+          table_name: string
+        }[]
+      }
+      list_tables: {
+        Args: never
+        Returns: {
+          table_name: string
+        }[]
+      }
+    }
+    Enums: {
+      account_type: "Conta Corrente" | "Poupança"
+      bank_account_type: "Conta Corrente" | "Poupança"
+      recurring_frequency: "monthly" | "weekly" | "yearly"
+      transaction_status: "Pendente" | "Pago"
+      transaction_type: "receita" | "despesa"
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      account_type: ["Conta Corrente", "Poupança"],
+      bank_account_type: ["Conta Corrente", "Poupança"],
+      recurring_frequency: ["monthly", "weekly", "yearly"],
+      transaction_status: ["Pendente", "Pago"],
+      transaction_type: ["receita", "despesa"],
+    },
+  },
+} as const
