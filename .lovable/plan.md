@@ -1,94 +1,102 @@
 
 
-## Fase 3: Gestao de Lancamentos - CRUD Completo
+## Fase 4 - Modulo de Precificacao (FHC - Formacao de Hora Clinica)
 
-### Situacao atual
+### O que e o FHC
 
-A pagina `/lancamentos` e apenas um placeholder. O banco ja possui **682 transacoes** reais (236 receitas pagas, 346 despesas pagas, 100 pendentes), **47 parcelados**, **43 recorrentes**, **10 contas bancarias**, **9 cartoes de credito**, **4 carteiras**, **31 fornecedores**, **5 clientes** e **362 categorias**. Todos esses dados serao preservados e utilizados nos formularios.
+A Formacao de Hora Clinica (FHC) e um metodo de precificacao que calcula o preco minimo de cada procedimento com base em:
+1. **Custos fixos totais** (clinica + pessoais) divididos pelas horas trabalhadas no mes = **custo por hora**
+2. **Custos variaveis** do procedimento (materiais, laboratorio, etc.)
+3. **Tempo de execucao** do procedimento
+4. **Margem de lucro** desejada
+
+**Formula:**
+```text
+Custo/Hora = (Despesas Fixas Clinica + Despesas Casa) / Horas Trabalhadas por Mes
+
+Preco Procedimento = (Custo/Hora x Tempo de Execucao em horas) + Custos Variaveis + Margem de Lucro
+```
+
+### Estrutura de custos (baseada na planilha enviada)
+
+A planilha define 3 grupos de despesa, que serao usados para calcular automaticamente o custo/hora a partir das transacoes reais do banco de dados:
+
+- **Despesas Fixas Clinica**: Prediais, Salarios, Administrativos, Outros
+- **Despesas Variaveis Clinica**: Dentais, Salario, Laboratorio, Honorarios, Implantes, Administrativo, Diversos
+- **Despesas Casa/Pessoais**: Educacao, Moradia, Salarios, Lazer, Planejamento, Vestuario, Alimentacao, Transporte, Saude, Outros
 
 ### O que sera construido
 
 ---
 
-#### 1. Pagina Principal de Lancamentos (`src/pages/Lancamentos.tsx`)
+#### 1. Pagina de Precificacao (`src/pages/Precificacao.tsx`)
 
-**Header com acoes**
-- Titulo "Lancamentos" + subtitulo com contexto (Pessoal/Empresa)
-- Botao "+ Novo Lancamento" (destaque em azul) que abre o modal de criacao
-- Barra de busca por descricao
-- Filtros rapidos: Tipo (Receita/Despesa/Todos), Status (Pago/Pendente/Todos), Categoria
+**Secao 1 - Configuracao Geral (Card superior)**
+- Horas trabalhadas por mes (input numerico, default 160)
+- Margem de lucro padrao (input %, default 30%)
+- Botao "Salvar Configuracao"
+- Card resumo mostrando:
+  - Total Despesas Fixas Clinica (calculado das transacoes)
+  - Total Despesas Pessoais (calculado das transacoes)
+  - **Custo por Hora Clinica** (destaque visual)
 
-**Abas de visualizacao**
-- Aba "Realizado" - transacoes com status "Pago"
-- Aba "Projetado" - transacoes com status "Pendente"
-- Aba "Todos" - todas as transacoes
+**Secao 2 - Lista de Procedimentos (Cards/Tabela)**
+- Botao "+ Novo Procedimento"
+- Tabela com colunas: Nome, Tempo (horas), Custos Variaveis, Custo Total, Preco Sugerido, Preco Desejado, Acoes
+- Cada procedimento mostra o calculo detalhado em tooltip/expansao
+- Botoes: Editar, Duplicar, Excluir
 
-**Lista/tabela de transacoes**
-- Colunas: Data Pagamento, Descricao, Categoria, Contato, Valor (verde para receita, vermelho para despesa), Status (badge), Acoes
-- Paginacao (20 itens por pagina)
-- Indicador visual para parcelados (ex: "3/12")
-- Ordenacao por data (mais recentes primeiro)
-- Cada linha tera botoes: Editar, Duplicar, Excluir, e Liquidar (se pendente)
-
----
-
-#### 2. Modal de Novo Lancamento (`src/components/lancamentos/TransactionFormModal.tsx`)
-
-**Tabs no topo do modal: Receita | Despesa | Transferencia**
-
-**Campos do formulario (Receita e Despesa):**
-- Descricao (texto, obrigatorio)
-- Valor (R$, numerico, obrigatorio)
-- Data de Pagamento (date picker, obrigatorio)
-- Data de Competencia (date picker, obrigatorio, default = data pagamento)
-- Status: Pendente / Pago (select)
-- Categoria (select populado da tabela `categories`, filtrado pelo contexto)
-- Subcategoria (select, aparece apos selecionar categoria pai)
-- Sub-subcategoria (select, aparece apos selecionar subcategoria, 3o nivel)
-- Forma de Pagamento: PIX, Boleto, Dinheiro, Cartao de Credito, Cartao de Debito, Transferencia
-- Conta Bancaria OU Cartao de Credito OU Carteira (condicional conforme forma de pagamento)
-- Fornecedor (para despesa) ou Cliente (para receita) - select com busca
-- Nome do contato (campo texto alternativo se nao quiser usar o select)
-- Observacoes (textarea, opcional)
-- Codigo de barras (texto, opcional)
-- Anexo (URL, opcional)
-
-**Opcao de parcelamento:**
-- Toggle "Parcelado?"
-- Se sim: Numero de parcelas (inteiro)
-- Gera N transacoes com `series_id` compartilhado, `installment_number` sequencial, valor dividido
-
-**Campos do formulario (Transferencia):**
-- Valor
-- Data
-- Conta de Origem (select)
-- Conta de Destino (select)
-- Descricao
-- Cria 2 transacoes vinculadas por `transfer_id`: uma despesa na origem, uma receita no destino
+**Secao 3 - Card de Calculo Detalhado (ao selecionar procedimento)**
+- Decomposicao do preco: custo fixo proporcional + materiais + margem
+- Comparacao: Preco Sugerido vs Preco Desejado
+- Indicador visual se o preco desejado esta abaixo do custo
 
 ---
 
-#### 3. Edicao e Exclusao de Lancamentos
+#### 2. Modal de Procedimento (`src/components/precificacao/ProcedureFormModal.tsx`)
 
-**Editar**: Abre o mesmo modal preenchido com os dados existentes. Ao salvar, atualiza via `supabase.update()`.
+**Campos:**
+- Nome do procedimento (texto, obrigatorio)
+- Tempo de execucao em horas (numerico, obrigatorio, ex: 1.5)
+- Preco desejado (R$, opcional - para comparacao)
+- Lista de itens de custo variavel (dinamica, adicionar/remover):
+  - Descricao do item (ex: "Resina composta", "Anestesia")
+  - Valor unitario (R$)
 
-**Excluir transacao simples**: Confirmacao via dialog, depois `supabase.delete()`.
-
-**Excluir/Editar parcelados (series_id):** Dialog com 3 opcoes:
-- "Apenas este" - edita/exclui so o selecionado
-- "Este e os proximos" - edita/exclui do selecionado em diante (filtra por `series_id` + `installment_number >= atual`)
-- "Todos da serie" - edita/exclui todos com o mesmo `series_id`
-
-**Liquidar**: Reutiliza o `LiquidateModal` existente do Dashboard
+**Calculo em tempo real no modal:**
+- Custo fixo proporcional = Custo/Hora x Tempo
+- Custos variaveis = soma dos itens
+- Subtotal = Custo fixo + Custos variaveis
+- Margem = Subtotal x % margem
+- **Preco sugerido = Subtotal + Margem**
 
 ---
 
-#### 4. Hook de dados (`src/hooks/useTransactions.ts`)
+#### 3. Hook de Precificacao (`src/hooks/usePricing.ts`)
 
-- Busca transacoes filtradas por contexto (Pessoal/Empresa), tipo, status, busca textual, categoria
-- Suporta paginacao server-side
-- Funcoes: `createTransaction`, `updateTransaction`, `deleteTransaction`, `deleteSeriesTransactions`
-- Busca de dados auxiliares: contas bancarias, cartoes, carteiras, categorias, fornecedores, clientes
+**Busca de custos reais (do banco de dados):**
+- Soma todas as transacoes do tipo "despesa" com status "Pago" dos ultimos 12 meses
+- Separa por categoria para classificar em Fixos Clinica vs Pessoais
+- Calcula media mensal de cada grupo
+
+**CRUD de configuracao:**
+- Salva/busca `pricing_configurations` (hours_per_month, profit_margin, matrix_values)
+- `matrix_values` armazenara o mapeamento de categorias para grupos de custo
+
+**CRUD de procedimentos:**
+- Lista, cria, atualiza, exclui `pricing_procedures`
+- Lista, cria, atualiza, exclui `pricing_procedure_items` (itens de custo variavel)
+
+---
+
+#### 4. Componentes auxiliares
+
+| Componente | Descricao |
+|---|---|
+| `PricingConfigCard.tsx` | Card com horas/mes, margem e resumo de custos |
+| `ProcedureTable.tsx` | Tabela de procedimentos com calculo inline |
+| `ProcedureFormModal.tsx` | Modal para criar/editar procedimento + itens de custo |
+| `CostBreakdownCard.tsx` | Card de decomposicao detalhada do preco |
 
 ---
 
@@ -96,32 +104,37 @@ A pagina `/lancamentos` e apenas um placeholder. O banco ja possui **682 transac
 
 | Arquivo | Acao |
 |---|---|
-| `src/pages/Lancamentos.tsx` | Reescrever: pagina completa com listagem, busca, filtros e abas |
-| `src/hooks/useTransactions.ts` | Criar: hook para CRUD de transacoes + dados auxiliares |
-| `src/components/lancamentos/TransactionFormModal.tsx` | Criar: modal com formulario completo (tabs Receita/Despesa/Transferencia) |
-| `src/components/lancamentos/TransactionTable.tsx` | Criar: tabela de transacoes com acoes |
-| `src/components/lancamentos/TransactionFilters.tsx` | Criar: barra de filtros e busca |
-| `src/components/lancamentos/SeriesEditDialog.tsx` | Criar: dialog para edicao/exclusao de parcelados |
+| `src/pages/Precificacao.tsx` | Reescrever: pagina completa com config + lista de procedimentos |
+| `src/hooks/usePricing.ts` | Criar: hook para configuracao, custos reais e CRUD de procedimentos |
+| `src/components/precificacao/PricingConfigCard.tsx` | Criar: card de configuracao geral e resumo de custos |
+| `src/components/precificacao/ProcedureTable.tsx` | Criar: tabela de procedimentos com precos calculados |
+| `src/components/precificacao/ProcedureFormModal.tsx` | Criar: modal de procedimento com itens de custo variavel |
+| `src/components/precificacao/CostBreakdownCard.tsx` | Criar: decomposicao visual do preco de um procedimento |
 
 ### Detalhes tecnicos
 
-**Formulario**
-- React Hook Form + Zod para validacao
-- Campos condicionais (ex: conta bancaria so aparece se forma de pagamento for PIX/Boleto/Transferencia; cartao aparece se for Cartao de Credito)
-- Categorias carregadas em cascata: nivel 1 (parent_id = null) > nivel 2 (parent_id = cat1) > nivel 3 (parent_id = cat2)
-- Fornecedores/clientes carregados via select com busca (combobox)
+**Calculo do Custo/Hora**
+- Busca transacoes "despesa" + "Pago" dos ultimos 12 meses
+- O campo `matrix_values` (JSONB) na tabela `pricing_configurations` armazena um mapa configuravel: quais categorias pertencem a "Fixos Clinica" e quais a "Pessoais"
+- Valores default baseados nas categorias da planilha (Prediais, Salarios, Administrativos, etc.)
+- Total mensal = soma dos 12 meses / 12
 
-**Parcelamento**
-- Ao criar parcelado, gera um `series_id` (UUID), calcula valor por parcela (valor total / N), cria N registros com `installment_number` de 1 a N, datas de pagamento incrementais (mensal)
+**Persistencia**
+- Configuracao salva em `pricing_configurations` (1 registro por usuario)
+- Procedimentos salvos em `pricing_procedures` com `user_id`
+- Itens de custo em `pricing_procedure_items` vinculados por `procedure_id`
 
-**Transferencia**
-- Gera um `transfer_id` (UUID), cria transacao de despesa na conta origem e receita na conta destino, ambas com o mesmo `transfer_id`
+**Integracao com dados reais**
+- O modulo puxa automaticamente os custos reais das transacoes ja cadastradas
+- Quanto mais transacoes o usuario registrar, mais preciso sera o FHC
+- Se nao houver transacoes, o usuario pode informar valores manualmente no `matrix_values`
 
 **Contexto**
-- Todas as queries filtram por `company_id` (empresa selecionada) ou `company_id IS NULL` (pessoal)
-- `user_id` e sempre preenchido com `auth.uid()` (RLS garante seguranca)
+- A precificacao nao filtra por empresa/pessoal pois e um calculo global do profissional
+- Usa `user_id` do auth para RLS
 
 **Preservacao de dados**
-- Nenhuma migracao de banco necessaria - a estrutura ja esta completa
-- Nenhum dado existente sera alterado ou excluido
-- Todas as 682 transacoes, 43 recorrentes e demais registros permanecem intactos
+- Nenhuma migracao de banco necessaria
+- As 3 tabelas de pricing ja existem e estao vazias, prontas para uso
+- Nenhum dado existente sera alterado
+
