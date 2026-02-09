@@ -1,137 +1,138 @@
 
+## Maquininhas, Detalhes de Lancamento e Melhorias na Liquidacao
 
-## Melhorias no Modulo de Lancamentos e Categorias
-
-Este plano abrange 5 grandes melhorias solicitadas para os modulos de Lancamentos e Categorias.
+Este plano abrange 4 grandes blocos de funcionalidade interligados.
 
 ---
 
-### 1. Filtragem de Categorias por Tipo (Receita/Despesa) no Formulario
+### Bloco 1 - Gestao de Maquininhas na Pagina de Contas
 
-**Problema atual:** O formulario de novo lancamento mostra todas as categorias raiz, independentemente do tipo (receita/despesa) selecionado na aba.
+A tabela `card_terminals` ja existe no banco com dados reais (REDE, TESTE 2612, etc.). Tem campos para taxas de debito/credito, prazos D+N, e taxas por parcelamento em `rates_info` (JSON). O que falta e a interface no app.
 
-**Solucao:**
-- Filtrar `rootCategories` no `TransactionFormModal.tsx` pelo campo `type` da categoria
-- Quando a aba for "receita", mostrar apenas categorias com `type = 'receita'` ou `type = 'ambos'`
-- Quando a aba for "despesa", mostrar apenas categorias com `type = 'despesa'` ou `type = 'ambos'`
-- Mesma logica para subcategorias e sub-subcategorias (herdam contexto do pai)
-- As categorias ja possuem o campo `type` no banco de dados
+**O que sera feito:**
+- Adicionar uma 4a aba "Maquininhas" na pagina de Contas (`src/pages/Contas.tsx`)
+- Listar maquininhas cadastradas com: Nome, Adquirente, Conta vinculada, badges de taxas (ex: DEBITO: 0.99% D+1, CREDITO: 3.29% D+2)
+- Modal de cadastro/edicao de maquininha (`src/components/contas/TerminalFormModal.tsx`):
+  - Campos: Nome, Adquirente, Conta de Recebimento (select das bank_accounts), Identificacao Serial
+  - Secao "Prazos de Liquidacao e Taxas Base": D+ Debito, Taxa Debito (%), D+ Credito, Taxa Credito (%)
+  - Secao "Taxas por Parcelamento": lista dinamica com campos VEZES + TAXA (%), botao "+ Novo Plano/Parcela", botao excluir por linha
+  - Nota informativa: "A EVA aplicara essas taxas automaticamente ao selecionar esta maquininha no lancamento."
+- CRUD completo no hook `useAccounts.ts` para `card_terminals`
 
-### 2. Transferencia entre Contas Melhorada
+---
 
-**Problema atual:** A transferencia ja existe no formulario com aba separada criando 2 transacoes (saida e entrada) vinculadas por `transfer_id`. Porem, a conta de origem/destino so lista `bankAccounts`.
+### Bloco 2 - Maquininha no Formulario de Lancamento (Receita)
 
-**Solucao:**
-- Incluir tambem `wallets` e `credit_cards` como opcoes nos selects de origem e destino da transferencia
-- Agrupar as opcoes por tipo (Contas Bancarias, Carteiras, Cartoes) usando separadores visuais no Select
-- A logica de criar 2 lancamentos vinculados ja esta correta e nao precisa mudar
+Quando o usuario cria uma receita e seleciona "Cartao de Credito" ou "Cartao de Debito" como forma de pagamento:
 
-### 3. Parcelamento Avancado (Valor da Primeira Parcela + Edicao Individual + Deteccao de Juros)
+**Campos condicionais que aparecem:**
+- Select de Maquininha (filtrado por contexto pessoal/empresa)
+- Ao selecionar a maquininha, o sistema automaticamente:
+  - Mostra a taxa aplicavel (debito base, credito base ou taxa do parcelamento correspondente)
+  - Calcula e exibe: Valor bruto, Desconto MDR (taxa %), Valor liquido
+  - Define a data de recebimento automaticamente: data do lancamento + D+N da maquininha
+  - Associa a `bank_account_id` da maquininha como conta de recebimento
 
-**Problema atual:** O parcelamento divide o valor total igualmente entre todas as parcelas. Nao permite definir valor da 1a parcela diferente, nem detecta juros ao editar parcelas individuais.
+**Forma de pagamento contextual:**
+- Quando forma de pagamento = "PIX": mostra apenas select de Conta Bancaria ou Carteira
+- Quando forma de pagamento = "Dinheiro": mostra apenas select de Carteira
+- Quando forma de pagamento = "Boleto": mostra apenas select de Conta Bancaria
+- Quando forma de pagamento = "Cartao de Credito": mostra select de Maquininha + calculo de MDR
+- Quando forma de pagamento = "Cartao de Debito": mostra select de Maquininha + calculo de MDR
+- Quando forma de pagamento = "Transferencia": mostra select de Conta Bancaria
 
-**Solucao:**
+O campo `card_terminal_id` ja existe na tabela `transactions`.
 
-**3a. Criacao de parcelas com valor customizado da 1a parcela:**
-- Adicionar toggle "Valor da primeira parcela diferente?" quando parcelamento estiver ativo
-- Campos: numero de parcelas, valor total, valor da 1a parcela (opcional)
-- Se valor da 1a parcela for informado, o restante e distribuido igualmente entre as demais
-- Formula: `valor_demais = (total - valor_1a) / (n_parcelas - 1)`
+---
 
-**3b. Edicao individual com recalculo:**
-- Ao editar uma parcela de uma serie, permitir alterar o `amount`
-- O sistema recalcula o `original_amount` (soma de todas as parcelas da serie)
-- Se a soma ficar maior que o `original_amount` original, exibir um alerta: "O valor total ficou R$ X,XX acima do original. Deseja registrar como juros/ajuste?"
-- Opcoes: "Registrar como juros" (cria campo `notes` automatico), "E apenas um ajuste" (atualiza silenciosamente)
-- Ao salvar, atualiza o `original_amount` em todas as parcelas da serie
+### Bloco 3 - Detalhes do Lancamento (novo componente)
 
-**3c. Toggle de recorrencia (Lancamento Fixo):**
-- Adicionar segundo toggle no formulario: "Lancamento Fixo / Recorrencia" (conforme screenshot de referencia)
-- Campos adicionais: frequencia (Mensal, Semanal, Quinzenal, Anual), data de fim (opcional)
-- Gera transacoes futuras usando `series_id` com `installment_number` sequencial
-- Diferenca do parcelado: o valor e o mesmo em todos, nao divide o total
+Ao clicar em um lancamento na lista, abre um painel/modal de detalhes com todas as informacoes:
 
-### 4. Layout da Pagina de Lancamentos (Inspirado na Referencia)
+**Informacoes exibidas:**
+- Descricao, tipo (receita/despesa), status
+- Datas: pagamento, competencia, recebimento (se maquininha)
+- Categoria completa (hierarquia)
+- Fornecedor ou Cliente vinculado
+- Forma de pagamento + conta vinculada
+- Se maquininha: Valor original, Taxa MDR (%), Valor da taxa, Valor liquido, Nome da maquininha, Prazo D+N
+- Se parcelado: Numero da parcela, total de parcelas, valor original da serie
+- Observacoes, codigo de barras, anexo
+- Botoes de acao: Editar, Duplicar, Liquidar, Excluir
 
-**Problema atual:** A listagem atual usa uma tabela HTML padrao. O layout de referencia agrupa transacoes por conta, com icone, saldo acumulado, e cada transacao mostrando a hierarquia completa da categoria (ex: "MORADIA > FINANCIAMENTO").
+**Novo componente:** `src/components/lancamentos/TransactionDetailModal.tsx`
 
-**Solucao:**
+**Integracao:** No `TransactionTable`, o clique na linha abre os detalhes (nao edita diretamente). O menu de 3 pontos continua com as acoes rapidas.
 
-**4a. Agrupamento por conta:**
-- Agrupar transacoes por `bank_account_id` / `wallet_id` / `credit_card_id`
-- Cada grupo mostra: icone da conta, nome, quantidade de movimentacoes, saldo acumulado
-- Grupo e colapsavel (collapsible), comecando aberto
+---
 
-**4b. Layout de cada transacao dentro do grupo:**
-- Coluna esquerda: checkbox + dia/mes
-- Centro: descricao + badges (FIXO, parcela) + hierarquia de categoria (CATEGORIA > SUBCATEGORIA)
-- Direita: valor formatado (verde/vermelho) + status (LIQUIDADO / 1A PREDITIVA) + menu de acoes (3 pontos)
+### Bloco 4 - Melhorias na Liquidacao
 
-**4c. Filtros (barra superior):**
-- Manter abas REALIZADO / PROJETADO
-- Adicionar campo de busca por descricao ou contato
-- Dropdown "TODAS CATEGORIAS"
-- Filtro de periodo (data inicio / data fim)
-- Toggle TUDO / ENTRADAS / SAIDAS
+**Liquidacao de series (parcelado/recorrente):**
+- Quando clicar em "Liquidar" em um lancamento que faz parte de uma serie, perguntar: "Liquidar somente este" ou "Liquidar todos pendentes da serie"
+- Se liquidar todos, atualiza o status de todos os lancamentos pendentes da mesma `series_id`
 
-### 5. Layout da Pagina de Categorias (Inspirado na Referencia)
-
-**Problema atual:** As categorias sao listadas em uma unica coluna com arvore expandida por padrao.
-
-**Solucao:**
-
-**5a. Layout em duas colunas:**
-- Coluna esquerda: "CANAIS DE RECEITA" (icone verde +) - categorias com `type = 'receita'` ou `type = 'ambos'`
-- Coluna direita: "CENTROS DE DESPESA" (icone vermelho x) - categorias com `type = 'despesa'` ou `type = 'ambos'`
-
-**5b. Cada categoria raiz como item colapsavel:**
-- Comeca fechado (collapsed) por padrao
-- Seta > para expandir, mostra "N SUB-ITENS" como badge
-- Ao expandir, mostra subcategorias e sub-subcategorias indentadas
-
-**5c. Adicionar categoria inline:**
-- Manter o select "DESPESA/RECEITA" + input "Novo grupo principal..." + botao "+ ADICIONAR" no topo (conforme referencia)
+**Parcelamento de fatura do cartao:**
+- Ao liquidar um lancamento de cartao de credito, adicionar opcao "Parcelar esta fatura"
+- Campos adicionais: Quantidade de parcelas, Taxa de juros (%)
+- O sistema calcula o novo valor total (com juros) e gera as parcelas como novos lancamentos vinculados
 
 ---
 
 ### Detalhes Tecnicos
 
+**Arquivos a serem criados:**
+
+| Arquivo | Descricao |
+|---|---|
+| `src/components/contas/TerminalFormModal.tsx` | Modal de cadastro/edicao de maquininha com taxas base e parcelamento |
+| `src/components/lancamentos/TransactionDetailModal.tsx` | Modal de detalhes completo de um lancamento |
+
 **Arquivos a serem modificados:**
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/components/lancamentos/TransactionFormModal.tsx` | Filtrar categorias por tipo, melhorar transferencia com wallets/cards, parcelamento avancado com 1a parcela, toggle recorrencia |
-| `src/components/lancamentos/TransactionTable.tsx` | Reescrever para layout agrupado por conta com collapsible e badges de categoria hierarquica |
-| `src/components/lancamentos/TransactionFilters.tsx` | Adicionar filtro de periodo (datas), toggle entradas/saidas |
-| `src/pages/Lancamentos.tsx` | Adaptar para novo formato de filtros (datas, entradas/saidas) e agrupamento |
-| `src/hooks/useTransactions.ts` | Adicionar filtros de data, funcao para atualizar serie inteira ao editar parcela, suporte a recorrencia |
-| `src/pages/Categorias.tsx` | Reescrever layout em duas colunas (Receita vs Despesa), itens fechados por padrao |
-| `src/components/categorias/CategoryTreeItem.tsx` | Ajustar para comecar fechado, mostrar contagem de sub-itens, estilo mais limpo |
+| `src/hooks/useAccounts.ts` | Adicionar CRUD de `card_terminals` (fetch, create, update, delete) + exportar tipo `CardTerminal` |
+| `src/pages/Contas.tsx` | Adicionar 4a aba "Maquininhas" com listagem e acoes |
+| `src/hooks/useTransactions.ts` | Adicionar `cardTerminals` ao fetch auxiliar para uso no form e detalhes |
+| `src/components/lancamentos/TransactionFormModal.tsx` | Adicionar select de maquininha condicional, calculo de MDR, data automatica D+N, campos condicionais por forma de pagamento |
+| `src/components/lancamentos/TransactionTable.tsx` | Adicionar onClick na linha para abrir detalhes + prop `onViewDetails` |
+| `src/pages/Lancamentos.tsx` | Integrar `TransactionDetailModal` e `cardTerminals`, passar maquininhas ao form |
+| `src/components/dashboard/LiquidateModal.tsx` | Adicionar opcao de liquidar serie inteira e parcelar fatura do cartao |
 
-**Logica de filtragem de categorias por tipo:**
+**Estrutura dos dados de maquininha (ja existente no banco):**
+
 ```text
-Se aba = "receita" -> mostrar categorias onde type IN ('receita', 'ambos')
-Se aba = "despesa" -> mostrar categorias onde type IN ('despesa', 'ambos')
+card_terminals:
+  - name: "REDE"
+  - acquirer: "REDE"  
+  - bank_account_id: uuid (conta onde cai o dinheiro)
+  - debit_rate: 0.99
+  - credit_rate: 3.29
+  - settlement_days_debit: 1 (D+1)
+  - settlement_days_credit: 2 (D+2)
+  - rates_info: JSON com taxas por parcela
+    [{"installments": 2, "rate": 4.64}, {"installments": 3, "rate": 5.24}, ...]
 ```
 
-**Logica de deteccao de juros ao editar parcela:**
+**Calculo de MDR no lancamento:**
+
 ```text
-1. Usuario edita parcela N de uma serie
-2. Sistema busca todas as parcelas da mesma series_id
-3. Calcula nova soma total
-4. Se nova_soma > original_amount da serie:
-   - Exibe dialog: "Valor excedeu em R$ X. E juros ou ajuste?"
-   - Se juros: adiciona nota automatica "Juros: +R$ X"
-   - Atualiza original_amount em todas as parcelas
+Se forma_pagamento = "Cartao de Debito":
+  taxa = maquininha.debit_rate
+  dias_recebimento = maquininha.settlement_days_debit
+
+Se forma_pagamento = "Cartao de Credito" e SEM parcelamento:
+  taxa = maquininha.credit_rate
+  dias_recebimento = maquininha.settlement_days_credit
+
+Se forma_pagamento = "Cartao de Credito" e COM parcelamento:
+  taxa = rates_info.find(r => r.installments === num_parcelas)?.rate || credit_rate
+  dias_recebimento = maquininha.settlement_days_credit
+
+Valor da taxa = valor_bruto * (taxa / 100)
+Valor liquido = valor_bruto - valor_da_taxa
+Data de recebimento = data_pagamento + dias_recebimento
 ```
 
-**Agrupamento de transacoes por conta:**
-```text
-1. Buscar transacoes normalmente (ja filtradas)
-2. No frontend, agrupar por bank_account_id || wallet_id || credit_card_id
-3. Para cada grupo, calcular saldo acumulado (receitas - despesas)
-4. Transacoes sem conta vinculada ficam em grupo "Sem conta"
-```
-
-**Nenhuma migracao de banco necessaria** - todas as colunas e tabelas ja existem.
-
+**Nenhuma migracao de banco necessaria** - a tabela `card_terminals` ja existe com todos os campos necessarios, e `transactions` ja tem `card_terminal_id`.
