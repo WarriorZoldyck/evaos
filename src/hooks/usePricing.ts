@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +64,9 @@ export function usePricing() {
   const [costSummary, setCostSummary] = useState<CostSummary>({ totalFixosClinica: 0, totalPessoais: 0, custoHora: 0 });
   const [loading, setLoading] = useState(true);
   const [selectedProcedureId, setSelectedProcedureId] = useState<string | null>(null);
+  const configRef = useRef<PricingConfig | null>(null);
+
+  useEffect(() => { configRef.current = config; }, [config]);
 
   // ─── Fetch config ───
   const fetchConfig = useCallback(async () => {
@@ -151,7 +154,7 @@ export function usePricing() {
         return;
       }
 
-      const currentConfig = config;
+      const currentConfig = configRef.current;
       const matrix = currentConfig?.matrix_values ?? DEFAULT_MATRIX;
       const hours = hoursPerMonth ?? currentConfig?.hours_per_month ?? 160;
 
@@ -178,7 +181,7 @@ export function usePricing() {
         custoHora,
       });
     },
-    [user, config]
+    [user]
   );
 
   // ─── Fetch procedures with items ───
