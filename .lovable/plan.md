@@ -1,124 +1,105 @@
 
-## Bloco 2: Maquininha no Formulario + Data Automatica do Cartao
+## Integrar Lançamentos Recorrentes (`recurring_transactions`) no App
 
-Este plano implementa as funcionalidades que estao faltando no formulario de lancamentos: select de maquininha, calculo de MDR em tempo real, campos contextuais por forma de pagamento, e auto-ajuste da data ao selecionar cartao de credito.
+### O Problema
 
----
+A tabela `recurring_transactions` tem **42 registros** (24 mensais, 18 diarios) que nunca sao consultados pelo app. Nenhum arquivo no codigo faz referencia a essa tabela. O dashboard e a pagina de lancamentos so consultam a tabela `transactions`, por isso:
 
-### Problema 1: Cartoes de credito nao trazem `closing_day` e `due_day`
+1. Lancamentos recorrentes de boleto e outros meios nao aparecem
+2. Previstos de pagamento ficam incompletos (faltam os que vem de recorrencias)
 
-O fetch de `credit_cards` em `useTransactions.ts` so busca `id, name, last_four_digits`. Para auto-setar a data de fechamento ao selecionar um cartao, precisamos tambem de `closing_day`, `due_day` e `bank_account_id`.
+### A Solucao
 
-**Arquivo:** `src/hooks/useTransactions.ts`
-- Alterar a interface `CreditCard` para incluir `closing_day`, `due_day` e `bank_account_id`
-- Alterar a query de credit_cards para: `select("id, name, last_four_digits, closing_day, due_day, bank_account_id")`
-
----
-
-### Problema 2: Maquininha nao aparece no formulario de lancamento
-
-O `cardTerminals` e recebido como prop pelo `TransactionFormModal`, mas **nunca e passado** para o componente interno `MainFormContent`. Alem disso, `MainFormContent` nao tem nenhuma logica para mostrar maquininhas ou calcular MDR.
-
-**Arquivo:** `src/components/lancamentos/TransactionFormModal.tsx`
-
-Mudancas no `MainFormContent`:
-
-**2a. Adicionar props de maquininha e cartoes completos:**
-- Adicionar `cardTerminals` na interface `MainFormContentProps`
-- Adicionar `creditCards` com `closing_day` e `due_day` (tipo estendido)
-- Passar `cardTerminals` nas chamadas de `MainFormContent` (receita e despesa)
-
-**2b. Select de maquininha condicional (receita com cartao):**
-- Quando `activeTab === "receita"` E `payment_method` for "Cartao de Credito" ou "Cartao de Debito", mostrar um select de Maquininha
-- Novo campo no form schema: `card_terminal_id` (string opcional)
-- Ao selecionar uma maquininha, calcular e exibir automaticamente:
-  - Taxa aplicavel (debito base, credito base, ou taxa do parcelamento)
-  - Valor bruto, Desconto MDR, Valor liquido
-  - Data de recebimento estimada (D+N)
-  - A conta de recebimento da maquininha e auto-preenchida no `bank_account_id`
-
-**2c. Campos condicionais por forma de pagamento:**
-- PIX: mostra select de Conta Bancaria + Carteira
-- Dinheiro: mostra select de Carteira
-- Boleto: mostra select de Conta Bancaria
-- Transferencia: mostra select de Conta Bancaria
-- Cartao de Credito (receita): mostra select de Maquininha + MDR
-- Cartao de Credito (despesa): mostra select de Cartao de Credito cadastrado
-- Cartao de Debito (receita): mostra select de Maquininha + MDR
-- Cartao de Debito (despesa): mostra select de Conta Bancaria
-
-**2d. Auto-set da data ao selecionar cartao de credito (despesa):**
-- Quando o usuario seleciona "Cartao de Credito" como forma de pagamento E seleciona um cartao especifico
-- O sistema calcula a proxima data de fechamento daquele cartao:
-  - Se hoje < dia do fechamento, a data e o dia do fechamento do mes atual
-  - Se hoje >= dia do fechamento, a data e o dia do fechamento do proximo mes
-- Atualiza automaticamente o campo `payment_date` com essa data
-
-**2e. Salvar `card_terminal_id` na transacao:**
-- Ao submeter, incluir `card_terminal_id` no `baseData` quando uma maquininha for selecionada
-- Incluir o `bank_account_id` da maquininha automaticamente
+Criar um hook `useRecurringTransactions` que busca os registros recorrentes e "materializa" as ocorrencias futuras (calcula as datas de cada repeticao com base na frequencia). Essas ocorrencias virtuais serao exibidas tanto no Dashboard (Proximos Lancamentos) quanto na pagina de Lancamentos.
 
 ---
 
-### Problema 3: Calculo de MDR em tempo real
+### Etapa 1 - Hook `useRecurringTransactions`
 
-No formulario, quando uma maquininha for selecionada, exibir um bloco informativo (nao editavel) com:
+**Arquivo novo:** `src/hooks/useRecurringTransactions.ts`
 
-```text
-+--------------------------------------------+
-| Detalhes da Maquininha: REDE               |
-| Taxa: 3.29%                                |
-| Valor bruto: R$ 1.000,00                   |
-| Desconto MDR: -R$ 32,90                    |
-| Valor liquido: R$ 967,10                   |
-| Recebimento em: D+2 (15/02/2026)           |
-+--------------------------------------------+
-```
+- Faz `select(*)` na tabela `recurring_transactions` com filtro de company/personal
+- Para cada registro, gera as ocorrencias futuras entre hoje e um horizonte (ex: 90 dias):
+  - `frequency = "monthly"`: adiciona 1 mes ao `payment_date` para cada repeticao, ate `end_date` ou horizonte
+  - `frequency = "daily"`: adiciona 1 dia para cada repeticao
+- Cada ocorrencia gerada tem um ID virtual (ex: `rec_{id}_{YYYY-MM-DD}`) e os dados do registro pai
+- Retorna a lista de ocorrencias no mesmo formato da interface `Transaction` usada pelo dashboard, com um campo extra `isRecurring: true` para diferenciar visualmente
 
-A logica de calculo:
-- Debito: usa `debit_rate` e `settlement_days_debit`
-- Credito a vista: usa `credit_rate` e `settlement_days_credit`
-- Credito parcelado: busca em `rates_info` o plano que corresponde ao numero de parcelas, ou usa `credit_rate` como fallback
+### Etapa 2 - Integrar no Dashboard
+
+**Arquivo modificado:** `src/hooks/useDashboardData.ts`
+
+- Importar e chamar o hook de recorrentes
+- No calculo de `upcomingTransactions`, mesclar os lancamentos pendentes de `transactions` com as ocorrencias geradas de `recurring_transactions`
+- Ordenar tudo por `payment_date` e limitar a 10 itens
+- Na projecao de saldo (`getProjectionData`), incluir as ocorrencias recorrentes futuras no calculo do saldo projetado
+
+### Etapa 3 - Integrar na Pagina de Lancamentos
+
+**Arquivo modificado:** `src/hooks/useTransactions.ts`
+
+- Adicionar um fetch de `recurring_transactions` e gerar ocorrencias futuras
+- Mesclar com os lancamentos normais na listagem quando o filtro de status for "Pendente" ou "todos"
+- Marcar visualmente esses lancamentos como "Recorrente" na tabela
+
+### Etapa 4 - Indicador Visual
+
+**Arquivo modificado:** `src/components/lancamentos/TransactionTable.tsx`
+
+- Quando o lancamento for recorrente (`isRecurring`), exibir um badge "Recorrente" ou icone de repeticao (Repeat) ao lado da descricao
+
+**Arquivo modificado:** `src/components/dashboard/UpcomingTransactions.tsx`
+
+- Adicionar badge ou icone de recorrencia nos itens que vem de `recurring_transactions`
 
 ---
 
 ### Detalhes Tecnicos
 
+**Logica de geracao de ocorrencias:**
+
+```text
+Para cada recurring_transaction:
+  data_atual = max(start_date, hoje)
+  enquanto data_atual <= min(end_date, hoje + 90 dias):
+    criar ocorrencia virtual com:
+      id: "rec_" + registro.id + "_" + formato(data_atual)
+      description, amount, type, category, payment_method, etc do registro pai
+      payment_date: data_atual
+      status: "Pendente"
+      isRecurring: true
+    
+    se frequency == "monthly": data_atual += 1 mes
+    se frequency == "daily": data_atual += 1 dia
+```
+
+**Campos de `recurring_transactions` que serao mapeados:**
+
+| Campo recorrente | Campo na interface Transaction |
+|---|---|
+| description | description |
+| amount | amount |
+| type | type |
+| category | category |
+| payment_method | payment_method |
+| bank_account_id | bank_account_id |
+| credit_card_id | credit_card_id |
+| contact_name | contact_name |
+| series_id | series_id |
+
+**Arquivos a serem criados:**
+
+| Arquivo | Descricao |
+|---|---|
+| `src/hooks/useRecurringTransactions.ts` | Hook que busca recorrentes e materializa ocorrencias futuras |
+
 **Arquivos a serem modificados:**
 
 | Arquivo | Mudanca |
 |---|---|
-| `src/hooks/useTransactions.ts` | Expandir query e interface de `CreditCard` com `closing_day`, `due_day`, `bank_account_id` |
-| `src/components/lancamentos/TransactionFormModal.tsx` | Adicionar `card_terminal_id` ao schema, passar `cardTerminals` e creditCards estendidos ao `MainFormContent`, implementar select de maquininha, calculo de MDR, campos contextuais, auto-date do cartao |
+| `src/hooks/useDashboardData.ts` | Mesclar ocorrencias recorrentes em upcomingTransactions e projecao |
+| `src/hooks/useTransactions.ts` | Mesclar recorrentes na listagem de lancamentos |
+| `src/components/lancamentos/TransactionTable.tsx` | Badge visual para lancamentos recorrentes |
+| `src/components/dashboard/UpcomingTransactions.tsx` | Badge visual para recorrentes |
 
-**Logica de auto-date para cartao de credito (despesa):**
-
-```text
-Dado: closing_day = 26, hoje = 09/02/2026
-Se dia_atual (9) < closing_day (26):
-  payment_date = 26/02/2026 (mes atual)
-Senao:
-  payment_date = 26/03/2026 (proximo mes)
-```
-
-**Logica de campos contextuais:**
-
-```text
-RECEITA:
-  PIX -> Conta Bancaria OU Carteira
-  Boleto -> Conta Bancaria
-  Dinheiro -> Carteira
-  Transferencia -> Conta Bancaria
-  Cartao Credito -> Maquininha + MDR
-  Cartao Debito -> Maquininha + MDR
-
-DESPESA:
-  PIX -> Conta Bancaria OU Carteira
-  Boleto -> Conta Bancaria
-  Dinheiro -> Carteira
-  Transferencia -> Conta Bancaria
-  Cartao Credito -> Select de Cartao (com auto-date de fechamento)
-  Cartao Debito -> Conta Bancaria
-```
-
-**Nenhuma migracao de banco necessaria.**
+**Nenhuma migracao de banco necessaria** - a tabela `recurring_transactions` ja existe com todos os campos.
