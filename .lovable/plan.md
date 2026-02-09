@@ -1,140 +1,137 @@
 
 
-## Fase 4 - Modulo de Precificacao (FHC - Formacao de Hora Clinica)
+## Melhorias no Modulo de Lancamentos e Categorias
 
-### O que e o FHC
+Este plano abrange 5 grandes melhorias solicitadas para os modulos de Lancamentos e Categorias.
 
-A Formacao de Hora Clinica (FHC) e um metodo de precificacao que calcula o preco minimo de cada procedimento com base em:
-1. **Custos fixos totais** (clinica + pessoais) divididos pelas horas trabalhadas no mes = **custo por hora**
-2. **Custos variaveis** do procedimento (materiais, laboratorio, etc.)
-3. **Tempo de execucao** do procedimento
-4. **Margem de lucro** desejada
+---
 
-**Formula:**
+### 1. Filtragem de Categorias por Tipo (Receita/Despesa) no Formulario
+
+**Problema atual:** O formulario de novo lancamento mostra todas as categorias raiz, independentemente do tipo (receita/despesa) selecionado na aba.
+
+**Solucao:**
+- Filtrar `rootCategories` no `TransactionFormModal.tsx` pelo campo `type` da categoria
+- Quando a aba for "receita", mostrar apenas categorias com `type = 'receita'` ou `type = 'ambos'`
+- Quando a aba for "despesa", mostrar apenas categorias com `type = 'despesa'` ou `type = 'ambos'`
+- Mesma logica para subcategorias e sub-subcategorias (herdam contexto do pai)
+- As categorias ja possuem o campo `type` no banco de dados
+
+### 2. Transferencia entre Contas Melhorada
+
+**Problema atual:** A transferencia ja existe no formulario com aba separada criando 2 transacoes (saida e entrada) vinculadas por `transfer_id`. Porem, a conta de origem/destino so lista `bankAccounts`.
+
+**Solucao:**
+- Incluir tambem `wallets` e `credit_cards` como opcoes nos selects de origem e destino da transferencia
+- Agrupar as opcoes por tipo (Contas Bancarias, Carteiras, Cartoes) usando separadores visuais no Select
+- A logica de criar 2 lancamentos vinculados ja esta correta e nao precisa mudar
+
+### 3. Parcelamento Avancado (Valor da Primeira Parcela + Edicao Individual + Deteccao de Juros)
+
+**Problema atual:** O parcelamento divide o valor total igualmente entre todas as parcelas. Nao permite definir valor da 1a parcela diferente, nem detecta juros ao editar parcelas individuais.
+
+**Solucao:**
+
+**3a. Criacao de parcelas com valor customizado da 1a parcela:**
+- Adicionar toggle "Valor da primeira parcela diferente?" quando parcelamento estiver ativo
+- Campos: numero de parcelas, valor total, valor da 1a parcela (opcional)
+- Se valor da 1a parcela for informado, o restante e distribuido igualmente entre as demais
+- Formula: `valor_demais = (total - valor_1a) / (n_parcelas - 1)`
+
+**3b. Edicao individual com recalculo:**
+- Ao editar uma parcela de uma serie, permitir alterar o `amount`
+- O sistema recalcula o `original_amount` (soma de todas as parcelas da serie)
+- Se a soma ficar maior que o `original_amount` original, exibir um alerta: "O valor total ficou R$ X,XX acima do original. Deseja registrar como juros/ajuste?"
+- Opcoes: "Registrar como juros" (cria campo `notes` automatico), "E apenas um ajuste" (atualiza silenciosamente)
+- Ao salvar, atualiza o `original_amount` em todas as parcelas da serie
+
+**3c. Toggle de recorrencia (Lancamento Fixo):**
+- Adicionar segundo toggle no formulario: "Lancamento Fixo / Recorrencia" (conforme screenshot de referencia)
+- Campos adicionais: frequencia (Mensal, Semanal, Quinzenal, Anual), data de fim (opcional)
+- Gera transacoes futuras usando `series_id` com `installment_number` sequencial
+- Diferenca do parcelado: o valor e o mesmo em todos, nao divide o total
+
+### 4. Layout da Pagina de Lancamentos (Inspirado na Referencia)
+
+**Problema atual:** A listagem atual usa uma tabela HTML padrao. O layout de referencia agrupa transacoes por conta, com icone, saldo acumulado, e cada transacao mostrando a hierarquia completa da categoria (ex: "MORADIA > FINANCIAMENTO").
+
+**Solucao:**
+
+**4a. Agrupamento por conta:**
+- Agrupar transacoes por `bank_account_id` / `wallet_id` / `credit_card_id`
+- Cada grupo mostra: icone da conta, nome, quantidade de movimentacoes, saldo acumulado
+- Grupo e colapsavel (collapsible), comecando aberto
+
+**4b. Layout de cada transacao dentro do grupo:**
+- Coluna esquerda: checkbox + dia/mes
+- Centro: descricao + badges (FIXO, parcela) + hierarquia de categoria (CATEGORIA > SUBCATEGORIA)
+- Direita: valor formatado (verde/vermelho) + status (LIQUIDADO / 1A PREDITIVA) + menu de acoes (3 pontos)
+
+**4c. Filtros (barra superior):**
+- Manter abas REALIZADO / PROJETADO
+- Adicionar campo de busca por descricao ou contato
+- Dropdown "TODAS CATEGORIAS"
+- Filtro de periodo (data inicio / data fim)
+- Toggle TUDO / ENTRADAS / SAIDAS
+
+### 5. Layout da Pagina de Categorias (Inspirado na Referencia)
+
+**Problema atual:** As categorias sao listadas em uma unica coluna com arvore expandida por padrao.
+
+**Solucao:**
+
+**5a. Layout em duas colunas:**
+- Coluna esquerda: "CANAIS DE RECEITA" (icone verde +) - categorias com `type = 'receita'` ou `type = 'ambos'`
+- Coluna direita: "CENTROS DE DESPESA" (icone vermelho x) - categorias com `type = 'despesa'` ou `type = 'ambos'`
+
+**5b. Cada categoria raiz como item colapsavel:**
+- Comeca fechado (collapsed) por padrao
+- Seta > para expandir, mostra "N SUB-ITENS" como badge
+- Ao expandir, mostra subcategorias e sub-subcategorias indentadas
+
+**5c. Adicionar categoria inline:**
+- Manter o select "DESPESA/RECEITA" + input "Novo grupo principal..." + botao "+ ADICIONAR" no topo (conforme referencia)
+
+---
+
+### Detalhes Tecnicos
+
+**Arquivos a serem modificados:**
+
+| Arquivo | Mudanca |
+|---|---|
+| `src/components/lancamentos/TransactionFormModal.tsx` | Filtrar categorias por tipo, melhorar transferencia com wallets/cards, parcelamento avancado com 1a parcela, toggle recorrencia |
+| `src/components/lancamentos/TransactionTable.tsx` | Reescrever para layout agrupado por conta com collapsible e badges de categoria hierarquica |
+| `src/components/lancamentos/TransactionFilters.tsx` | Adicionar filtro de periodo (datas), toggle entradas/saidas |
+| `src/pages/Lancamentos.tsx` | Adaptar para novo formato de filtros (datas, entradas/saidas) e agrupamento |
+| `src/hooks/useTransactions.ts` | Adicionar filtros de data, funcao para atualizar serie inteira ao editar parcela, suporte a recorrencia |
+| `src/pages/Categorias.tsx` | Reescrever layout em duas colunas (Receita vs Despesa), itens fechados por padrao |
+| `src/components/categorias/CategoryTreeItem.tsx` | Ajustar para comecar fechado, mostrar contagem de sub-itens, estilo mais limpo |
+
+**Logica de filtragem de categorias por tipo:**
 ```text
-Custo/Hora = (Despesas Fixas Clinica + Despesas Casa) / Horas Trabalhadas por Mes
-
-Preco Procedimento = (Custo/Hora x Tempo de Execucao em horas) + Custos Variaveis + Margem de Lucro
+Se aba = "receita" -> mostrar categorias onde type IN ('receita', 'ambos')
+Se aba = "despesa" -> mostrar categorias onde type IN ('despesa', 'ambos')
 ```
 
-### Estrutura de custos (baseada na planilha enviada)
+**Logica de deteccao de juros ao editar parcela:**
+```text
+1. Usuario edita parcela N de uma serie
+2. Sistema busca todas as parcelas da mesma series_id
+3. Calcula nova soma total
+4. Se nova_soma > original_amount da serie:
+   - Exibe dialog: "Valor excedeu em R$ X. E juros ou ajuste?"
+   - Se juros: adiciona nota automatica "Juros: +R$ X"
+   - Atualiza original_amount em todas as parcelas
+```
 
-A planilha define 3 grupos de despesa, que serao usados para calcular automaticamente o custo/hora a partir das transacoes reais do banco de dados:
+**Agrupamento de transacoes por conta:**
+```text
+1. Buscar transacoes normalmente (ja filtradas)
+2. No frontend, agrupar por bank_account_id || wallet_id || credit_card_id
+3. Para cada grupo, calcular saldo acumulado (receitas - despesas)
+4. Transacoes sem conta vinculada ficam em grupo "Sem conta"
+```
 
-- **Despesas Fixas Clinica**: Prediais, Salarios, Administrativos, Outros
-- **Despesas Variaveis Clinica**: Dentais, Salario, Laboratorio, Honorarios, Implantes, Administrativo, Diversos
-- **Despesas Casa/Pessoais**: Educacao, Moradia, Salarios, Lazer, Planejamento, Vestuario, Alimentacao, Transporte, Saude, Outros
-
-### O que sera construido
-
----
-
-#### 1. Pagina de Precificacao (`src/pages/Precificacao.tsx`)
-
-**Secao 1 - Configuracao Geral (Card superior)**
-- Horas trabalhadas por mes (input numerico, default 160)
-- Margem de lucro padrao (input %, default 30%)
-- Botao "Salvar Configuracao"
-- Card resumo mostrando:
-  - Total Despesas Fixas Clinica (calculado das transacoes)
-  - Total Despesas Pessoais (calculado das transacoes)
-  - **Custo por Hora Clinica** (destaque visual)
-
-**Secao 2 - Lista de Procedimentos (Cards/Tabela)**
-- Botao "+ Novo Procedimento"
-- Tabela com colunas: Nome, Tempo (horas), Custos Variaveis, Custo Total, Preco Sugerido, Preco Desejado, Acoes
-- Cada procedimento mostra o calculo detalhado em tooltip/expansao
-- Botoes: Editar, Duplicar, Excluir
-
-**Secao 3 - Card de Calculo Detalhado (ao selecionar procedimento)**
-- Decomposicao do preco: custo fixo proporcional + materiais + margem
-- Comparacao: Preco Sugerido vs Preco Desejado
-- Indicador visual se o preco desejado esta abaixo do custo
-
----
-
-#### 2. Modal de Procedimento (`src/components/precificacao/ProcedureFormModal.tsx`)
-
-**Campos:**
-- Nome do procedimento (texto, obrigatorio)
-- Tempo de execucao em horas (numerico, obrigatorio, ex: 1.5)
-- Preco desejado (R$, opcional - para comparacao)
-- Lista de itens de custo variavel (dinamica, adicionar/remover):
-  - Descricao do item (ex: "Resina composta", "Anestesia")
-  - Valor unitario (R$)
-
-**Calculo em tempo real no modal:**
-- Custo fixo proporcional = Custo/Hora x Tempo
-- Custos variaveis = soma dos itens
-- Subtotal = Custo fixo + Custos variaveis
-- Margem = Subtotal x % margem
-- **Preco sugerido = Subtotal + Margem**
-
----
-
-#### 3. Hook de Precificacao (`src/hooks/usePricing.ts`)
-
-**Busca de custos reais (do banco de dados):**
-- Soma todas as transacoes do tipo "despesa" com status "Pago" dos ultimos 12 meses
-- Separa por categoria para classificar em Fixos Clinica vs Pessoais
-- Calcula media mensal de cada grupo
-
-**CRUD de configuracao:**
-- Salva/busca `pricing_configurations` (hours_per_month, profit_margin, matrix_values)
-- `matrix_values` armazenara o mapeamento de categorias para grupos de custo
-
-**CRUD de procedimentos:**
-- Lista, cria, atualiza, exclui `pricing_procedures`
-- Lista, cria, atualiza, exclui `pricing_procedure_items` (itens de custo variavel)
-
----
-
-#### 4. Componentes auxiliares
-
-| Componente | Descricao |
-|---|---|
-| `PricingConfigCard.tsx` | Card com horas/mes, margem e resumo de custos |
-| `ProcedureTable.tsx` | Tabela de procedimentos com calculo inline |
-| `ProcedureFormModal.tsx` | Modal para criar/editar procedimento + itens de custo |
-| `CostBreakdownCard.tsx` | Card de decomposicao detalhada do preco |
-
----
-
-### Arquivos que serao criados/modificados
-
-| Arquivo | Acao |
-|---|---|
-| `src/pages/Precificacao.tsx` | Reescrever: pagina completa com config + lista de procedimentos |
-| `src/hooks/usePricing.ts` | Criar: hook para configuracao, custos reais e CRUD de procedimentos |
-| `src/components/precificacao/PricingConfigCard.tsx` | Criar: card de configuracao geral e resumo de custos |
-| `src/components/precificacao/ProcedureTable.tsx` | Criar: tabela de procedimentos com precos calculados |
-| `src/components/precificacao/ProcedureFormModal.tsx` | Criar: modal de procedimento com itens de custo variavel |
-| `src/components/precificacao/CostBreakdownCard.tsx` | Criar: decomposicao visual do preco de um procedimento |
-
-### Detalhes tecnicos
-
-**Calculo do Custo/Hora**
-- Busca transacoes "despesa" + "Pago" dos ultimos 12 meses
-- O campo `matrix_values` (JSONB) na tabela `pricing_configurations` armazena um mapa configuravel: quais categorias pertencem a "Fixos Clinica" e quais a "Pessoais"
-- Valores default baseados nas categorias da planilha (Prediais, Salarios, Administrativos, etc.)
-- Total mensal = soma dos 12 meses / 12
-
-**Persistencia**
-- Configuracao salva em `pricing_configurations` (1 registro por usuario)
-- Procedimentos salvos em `pricing_procedures` com `user_id`
-- Itens de custo em `pricing_procedure_items` vinculados por `procedure_id`
-
-**Integracao com dados reais**
-- O modulo puxa automaticamente os custos reais das transacoes ja cadastradas
-- Quanto mais transacoes o usuario registrar, mais preciso sera o FHC
-- Se nao houver transacoes, o usuario pode informar valores manualmente no `matrix_values`
-
-**Contexto**
-- A precificacao nao filtra por empresa/pessoal pois e um calculo global do profissional
-- Usa `user_id` do auth para RLS
-
-**Preservacao de dados**
-- Nenhuma migracao de banco necessaria
-- As 3 tabelas de pricing ja existem e estao vazias, prontas para uso
-- Nenhum dado existente sera alterado
+**Nenhuma migracao de banco necessaria** - todas as colunas e tabelas ja existem.
 
