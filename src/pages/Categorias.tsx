@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,7 +12,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { FolderTree, Plus, Search } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Search, TrendingUp, TrendingDown } from "lucide-react";
 import { useCategories, type Category } from "@/hooks/useCategories";
 import { useCompany } from "@/contexts/CompanyContext";
 import { CategoryFormModal } from "@/components/categorias/CategoryFormModal";
@@ -32,11 +39,14 @@ export default function Categorias() {
   const [editData, setEditData] = useState<{ id: string; name: string; type: string | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
-  const openCreateRoot = () => {
-    setParentId(null);
-    setParentName(undefined);
-    setEditData(null);
-    setFormOpen(true);
+  // Inline add
+  const [inlineType, setInlineType] = useState<string>("receita");
+  const [inlineName, setInlineName] = useState("");
+
+  const handleInlineAdd = async () => {
+    if (!inlineName.trim()) return;
+    const success = await createCategory({ name: inlineName.trim(), type: inlineType });
+    if (success) setInlineName("");
   };
 
   const openCreateChild = (pId: string, pName: string) => {
@@ -66,61 +76,146 @@ export default function Categorias() {
     setDeleteTarget(null);
   };
 
+  // Split tree into revenue and expense
+  const revenueTree = tree.filter(cat => cat.type === "receita" || cat.type === "ambos");
+  const expenseTree = tree.filter(cat => cat.type === "despesa" || cat.type === "ambos");
+
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Categorias</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Organize receitas e despesas em até 3 níveis — {isPersonal ? "Pessoal" : "Empresa"}
-          </p>
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Categorias</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Organize receitas e despesas em até 3 níveis — {isPersonal ? "Pessoal" : "Empresa"}
+        </p>
+      </div>
+
+      {/* Inline Add + Search */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex gap-2 flex-1">
+          <Select value={inlineType} onValueChange={setInlineType}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="receita">Receita</SelectItem>
+              <SelectItem value="despesa">Despesa</SelectItem>
+              <SelectItem value="ambos">Ambos</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Novo grupo principal..."
+            value={inlineName}
+            onChange={(e) => setInlineName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleInlineAdd()}
+            className="flex-1"
+          />
+          <Button onClick={handleInlineAdd} disabled={!inlineName.trim()}>
+            <Plus className="h-4 w-4 mr-1" />
+            Adicionar
+          </Button>
         </div>
-        <Button onClick={openCreateRoot} className="shrink-0">
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Categoria
-        </Button>
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar categorias..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar categorias..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      {/* Two Column Layout */}
+      {loading ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {[0, 1].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-3">
+                {Array.from({ length: 5 }).map((_, j) => (
+                  <Skeleton key={j} className="h-10 w-full" />
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Revenue Column */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+                </div>
+                Canais de Receita
+                {revenueTree.length > 0 && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {revenueTree.length} grupo{revenueTree.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {revenueTree.length === 0 ? (
+                <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+                  {search ? "Nenhuma encontrada" : "Nenhuma categoria de receita"}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {revenueTree.map((cat) => (
+                    <CategoryTreeItem
+                      key={cat.id}
+                      category={cat}
+                      level={0}
+                      onAdd={openCreateChild}
+                      onEdit={openEdit}
+                      onDelete={setDeleteTarget}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardContent className="p-4">
-          {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : tree.length === 0 ? (
-            <div className="h-48 flex flex-col items-center justify-center text-muted-foreground text-sm gap-2">
-              <FolderTree className="h-8 w-8 opacity-50" />
-              {search ? "Nenhuma categoria encontrada" : "Nenhuma categoria cadastrada"}
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {tree.map((cat) => (
-                <CategoryTreeItem
-                  key={cat.id}
-                  category={cat}
-                  level={0}
-                  onAdd={openCreateChild}
-                  onEdit={openEdit}
-                  onDelete={setDeleteTarget}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          {/* Expense Column */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                  <TrendingDown className="h-4 w-4 text-red-500" />
+                </div>
+                Centros de Despesa
+                {expenseTree.length > 0 && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {expenseTree.length} grupo{expenseTree.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {expenseTree.length === 0 ? (
+                <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+                  {search ? "Nenhuma encontrada" : "Nenhuma categoria de despesa"}
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  {expenseTree.map((cat) => (
+                    <CategoryTreeItem
+                      key={cat.id}
+                      category={cat}
+                      level={0}
+                      onAdd={openCreateChild}
+                      onEdit={openEdit}
+                      onDelete={setDeleteTarget}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Form Modal */}
       <CategoryFormModal

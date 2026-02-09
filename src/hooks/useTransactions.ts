@@ -13,6 +13,8 @@ export interface TransactionFilters {
   status: "Pago" | "Pendente" | "todos";
   search: string;
   categoryId: string;
+  dateFrom: string;
+  dateTo: string;
 }
 
 interface BankAccount {
@@ -65,6 +67,8 @@ export function useTransactions() {
     status: "todos",
     search: "",
     categoryId: "",
+    dateFrom: "",
+    dateTo: "",
   });
 
   // Auxiliary data
@@ -131,10 +135,16 @@ export function useTransactions() {
       query = query.eq("status", filters.status);
     }
     if (filters.search.trim()) {
-      query = query.ilike("description", `%${filters.search.trim()}%`);
+      query = query.or(`description.ilike.%${filters.search.trim()}%,contact_name.ilike.%${filters.search.trim()}%`);
     }
     if (filters.categoryId) {
       query = query.eq("category", filters.categoryId);
+    }
+    if (filters.dateFrom) {
+      query = query.gte("payment_date", filters.dateFrom);
+    }
+    if (filters.dateTo) {
+      query = query.lte("payment_date", filters.dateTo);
     }
 
     const from = page * PAGE_SIZE;
