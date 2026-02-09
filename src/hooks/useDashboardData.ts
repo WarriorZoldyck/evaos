@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useRecurringTransactions, type RecurringOccurrence } from "@/hooks/useRecurringTransactions";
 import {
   startOfDay,
   endOfDay,
@@ -94,6 +95,7 @@ function getDateRange(filters: DashboardFilters): { start: Date; end: Date } {
 export function useDashboardData(filters: DashboardFilters) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
+  const { occurrences: recurringOccurrences, loading: recurringLoading, refetch: refetchRecurring } = useRecurringTransactions(90);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -174,11 +176,20 @@ export function useDashboardData(filters: DashboardFilters) {
 
   // Upcoming (Pendente) transactions
   const upcomingTransactions = useMemo(() => {
-    return transactions
+    const pending = transactions
       .filter((t) => t.status === "Pendente")
+      .map((t) => ({ ...t, isRecurring: false as const }));
+
+    // Filter recurring occurrences within period
+    const recurringInPeriod = recurringOccurrences
+      .filter((r) => r.payment_date >= startStr && r.payment_date <= endStr)
+      .map((r) => ({ ...r }));
+
+    const combined = [...pending, ...recurringInPeriod];
+    return combined
       .sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime())
       .slice(0, 10);
-  }, [transactions]);
+  }, [transactions, recurringOccurrences, startStr, endStr]);
 
   // Category summary for doughnut charts
   const categoryBreakdown = useMemo(() => {
@@ -227,6 +238,7 @@ export function useDashboardData(filters: DashboardFilters) {
       const futureEnd = addDays(today, days);
       const dateRange = eachDayOfInterval({ start: today, end: futureEnd });
 
+      // Combine future real transactions + recurring occurrences
       const futureTransactions = allTransactions.filter(
         (t) => new Date(t.payment_date) > today && new Date(t.payment_date) <= futureEnd
       );
@@ -237,6 +249,17 @@ export function useDashboardData(filters: DashboardFilters) {
         const current = futureByDate.get(dateKey) || 0;
         const amount = t.type === "receita" ? Number(t.amount) : -Number(t.amount);
         futureByDate.set(dateKey, current + amount);
+      });
+
+      // Add recurring occurrences to projection
+      recurringOccurrences.forEach((r) => {
+        const rDate = new Date(r.payment_date + "T00:00:00");
+        if (rDate > today && rDate <= futureEnd) {
+          const dateKey = r.payment_date;
+          const current = futureByDate.get(dateKey) || 0;
+          const amount = r.type === "receita" ? Number(r.amount) : -Number(r.amount);
+          futureByDate.set(dateKey, current + amount);
+        }
       });
 
       const points: ProjectionPoint[] = [];
@@ -254,7 +277,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
       return points;
     };
-  }, [allTransactions]);
+  }, [allTransactions, recurringOccurrences]);
 
   // Performance: average daily spending
   const performance = useMemo(() => {
@@ -275,6 +298,7 @@ export function useDashboardData(filters: DashboardFilters) {
     categoryBreakdown,
     getProjectionData,
     performance,
-    loading,
+    loading: loading || recurringLoading,
+    refetchRecurring,
   };
 }
