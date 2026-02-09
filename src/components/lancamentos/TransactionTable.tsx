@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Edit, Copy, Trash2, CheckCircle2, MoreHorizontal, Loader2,
-  ChevronDown, ChevronRight, Landmark, Wallet, CreditCard, HelpCircle,
+  ChevronDown, ChevronRight, Landmark, Wallet, CreditCard, HelpCircle, Eye,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ interface TransactionTableProps {
   onDuplicate: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
   onLiquidate: (transaction: Transaction) => void;
+  onViewDetails: (transaction: Transaction) => void;
 }
 
 export function TransactionTable({
@@ -52,6 +53,7 @@ export function TransactionTable({
   onDuplicate,
   onDelete,
   onLiquidate,
+  onViewDetails,
 }: TransactionTableProps) {
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount);
@@ -175,6 +177,7 @@ export function TransactionTable({
                   onDuplicate={onDuplicate}
                   onDelete={onDelete}
                   onLiquidate={onLiquidate}
+                  onViewDetails={onViewDetails}
                 />
               );
             })}
@@ -273,6 +276,7 @@ function TransactionRow({
   onDuplicate,
   onDelete,
   onLiquidate,
+  onViewDetails,
 }: {
   transaction: Transaction;
   installment: string | null;
@@ -282,9 +286,10 @@ function TransactionRow({
   onDuplicate: (t: Transaction) => void;
   onDelete: (t: Transaction) => void;
   onLiquidate: (t: Transaction) => void;
+  onViewDetails: (t: Transaction) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group">
+    <div className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group cursor-pointer" onClick={() => onViewDetails(t)}>
       {/* Date */}
       <div className="text-center shrink-0 w-12">
         <div className="text-lg font-bold leading-tight text-foreground">
@@ -352,12 +357,17 @@ function TransactionRow({
             variant="ghost"
             size="icon"
             className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => e.stopPropagation()}
           >
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => onEdit(t)}>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(t); }}>
+            <Eye className="mr-2 h-4 w-4" />
+            Ver Detalhes
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(t); }}>
             <Edit className="mr-2 h-4 w-4" />
             Editar
           </DropdownMenuItem>

@@ -18,6 +18,8 @@ interface Transaction {
   category: string;
   bank_account_id: string | null;
   contact_name: string | null;
+  series_id: string | null;
+  credit_card_id: string | null;
 }
 
 interface UpcomingTransactionsProps {
