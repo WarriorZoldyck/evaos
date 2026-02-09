@@ -47,6 +47,7 @@ import type {
   Transaction,
   TransactionInsert,
   Category,
+  CardTerminalInfo,
 } from "@/hooks/useTransactions";
 
 const PAYMENT_METHODS = [
@@ -117,6 +118,7 @@ interface TransactionFormModalProps {
   suppliers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
   categories: Category[];
+  cardTerminals: CardTerminalInfo[];
 }
 
 export function TransactionFormModal({
@@ -132,6 +134,7 @@ export function TransactionFormModal({
   suppliers,
   clients,
   categories,
+  cardTerminals,
 }: TransactionFormModalProps) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();

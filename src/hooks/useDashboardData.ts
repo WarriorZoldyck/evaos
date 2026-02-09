@@ -42,6 +42,7 @@ interface Transaction {
   wallet_id: string | null;
   company_id: string | null;
   contact_name: string | null;
+  series_id: string | null;
 }
 
 export interface CategorySummary {
