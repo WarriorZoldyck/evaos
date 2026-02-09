@@ -21,13 +21,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet } from "lucide-react";
-import { useAccounts, type BankAccount, type CreditCard as CreditCardType, type Wallet as WalletType } from "@/hooks/useAccounts";
+import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet, Smartphone } from "lucide-react";
+import { useAccounts, type CardTerminal } from "@/hooks/useAccounts";
 import { useCompany } from "@/contexts/CompanyContext";
 import { AccountFormModal } from "@/components/contas/AccountFormModal";
+import { TerminalFormModal } from "@/components/contas/TerminalFormModal";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type AccountTab = "bank" | "card" | "wallet";
+type AccountTab = "bank" | "card" | "wallet" | "terminal";
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -35,24 +36,45 @@ const formatCurrency = (v: number) =>
 export default function Contas() {
   const { isPersonal } = useCompany();
   const {
-    bankAccounts, creditCards, wallets, loading,
+    bankAccounts, creditCards, wallets, cardTerminals, loading,
     createBankAccount, updateBankAccount, deleteBankAccount,
     createCreditCard, updateCreditCard, deleteCreditCard,
     createWallet, updateWallet, deleteWallet,
+    createCardTerminal, updateCardTerminal, deleteCardTerminal,
   } = useAccounts();
 
   const [activeTab, setActiveTab] = useState<AccountTab>("bank");
   const [formOpen, setFormOpen] = useState(false);
   const [editData, setEditData] = useState<any>(null);
+  const [terminalFormOpen, setTerminalFormOpen] = useState(false);
+  const [terminalEditData, setTerminalEditData] = useState<CardTerminal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; tab: AccountTab } | null>(null);
 
-  const openCreate = () => { setEditData(null); setFormOpen(true); };
-  const openEdit = (data: any) => { setEditData(data); setFormOpen(true); };
+  const openCreate = () => {
+    if (activeTab === "terminal") {
+      setTerminalEditData(null);
+      setTerminalFormOpen(true);
+    } else {
+      setEditData(null);
+      setFormOpen(true);
+    }
+  };
+
+  const openEdit = (data: any) => {
+    if (activeTab === "terminal") {
+      setTerminalEditData(data);
+      setTerminalFormOpen(true);
+    } else {
+      setEditData(data);
+      setFormOpen(true);
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
     if (deleteTarget.tab === "bank") await deleteBankAccount(deleteTarget.id);
     else if (deleteTarget.tab === "card") await deleteCreditCard(deleteTarget.id);
+    else if (deleteTarget.tab === "terminal") await deleteCardTerminal(deleteTarget.id);
     else await deleteWallet(deleteTarget.id);
     setDeleteTarget(null);
   };
@@ -72,10 +94,21 @@ export default function Contas() {
     return createWallet(data);
   };
 
+  const handleSaveTerminal = async (data: any) => {
+    if (terminalEditData) return updateCardTerminal(terminalEditData.id, data);
+    return createCardTerminal(data);
+  };
+
   const btnLabel: Record<AccountTab, string> = {
     bank: "Nova Conta",
     card: "Novo Cartão",
     wallet: "Nova Carteira",
+    terminal: "Nova Maquininha",
+  };
+
+  const parseRatesInfo = (ri: string | null): { installments: number; rate: number }[] => {
+    if (!ri) return [];
+    try { return JSON.parse(ri); } catch { return []; }
   };
 
   return (
@@ -84,7 +117,7 @@ export default function Contas() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Contas & Cartões</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Gerencie contas bancárias, cartões e carteiras — {isPersonal ? "Pessoal" : "Empresa"}
+            Gerencie contas bancárias, cartões, carteiras e maquininhas — {isPersonal ? "Pessoal" : "Empresa"}
           </p>
         </div>
         <Button onClick={openCreate} className="shrink-0">
@@ -94,7 +127,7 @@ export default function Contas() {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AccountTab)}>
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="bank" className="gap-2">
             <Landmark className="h-4 w-4" />
             Contas Bancárias
@@ -109,6 +142,11 @@ export default function Contas() {
             <Wallet className="h-4 w-4" />
             Carteiras
             <Badge variant="secondary" className="ml-1 text-xs">{wallets.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="terminal" className="gap-2">
+            <Smartphone className="h-4 w-4" />
+            Maquininhas
+            <Badge variant="secondary" className="ml-1 text-xs">{cardTerminals.length}</Badge>
           </TabsTrigger>
         </TabsList>
 
@@ -243,18 +281,93 @@ export default function Contas() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Card Terminals */}
+        <TabsContent value="terminal">
+          <Card>
+            <CardContent className="p-0">
+              {loading ? (
+                <div className="p-6 space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+              ) : cardTerminals.length === 0 ? (
+                <div className="h-48 flex flex-col items-center justify-center text-muted-foreground text-sm gap-2">
+                  <Smartphone className="h-8 w-8 opacity-50" />
+                  Nenhuma maquininha cadastrada
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Adquirente</TableHead>
+                      <TableHead>Conta</TableHead>
+                      <TableHead>Taxas</TableHead>
+                      <TableHead className="w-24 text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cardTerminals.map((term) => {
+                      const accountName = bankAccounts.find((a) => a.id === term.bank_account_id)?.name || "—";
+                      const rates = parseRatesInfo(term.rates_info);
+                      return (
+                        <TableRow key={term.id}>
+                          <TableCell className="font-medium">{term.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{term.acquirer || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{accountName}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {term.debit_rate != null && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  DÉB: {term.debit_rate}% D+{term.settlement_days_debit ?? "?"}
+                                </Badge>
+                              )}
+                              {term.credit_rate != null && (
+                                <Badge variant="outline" className="text-[10px]">
+                                  CRÉD: {term.credit_rate}% D+{term.settlement_days_credit ?? "?"}
+                                </Badge>
+                              )}
+                              {rates.length > 0 && (
+                                <Badge variant="secondary" className="text-[10px]">
+                                  +{rates.length} plano{rates.length > 1 ? "s" : ""}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => openEdit(term)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: term.id, name: term.name, tab: "terminal" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
-      {/* Form Modal */}
+      {/* Account Form Modal (bank, card, wallet) */}
       <AccountFormModal
         open={formOpen}
         onClose={() => { setFormOpen(false); setEditData(null); }}
-        tab={activeTab}
+        tab={activeTab === "terminal" ? "bank" : activeTab}
         editData={editData}
         bankAccounts={bankAccounts.map((a) => ({ id: a.id, name: a.name }))}
         onSaveBankAccount={handleSaveBankAccount}
         onSaveCreditCard={handleSaveCreditCard}
         onSaveWallet={handleSaveWallet}
+      />
+
+      {/* Terminal Form Modal */}
+      <TerminalFormModal
+        open={terminalFormOpen}
+        onClose={() => { setTerminalFormOpen(false); setTerminalEditData(null); }}
+        editData={terminalEditData}
+        bankAccounts={bankAccounts.map((a) => ({ id: a.id, name: a.name }))}
+        onSave={handleSaveTerminal}
       />
 
       {/* Delete Confirmation */}

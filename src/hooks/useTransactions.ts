@@ -44,6 +44,18 @@ interface Client {
   name: string;
 }
 
+export interface CardTerminalInfo {
+  id: string;
+  name: string;
+  acquirer: string | null;
+  bank_account_id: string;
+  debit_rate: number | null;
+  credit_rate: number | null;
+  settlement_days_debit: number | null;
+  settlement_days_credit: number | null;
+  rates_info: string | null;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -78,6 +90,7 @@ export function useTransactions() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [cardTerminals, setCardTerminals] = useState<CardTerminalInfo[]>([]);
 
   const companyFilter = useCallback(
     (query: any) => {
@@ -96,7 +109,7 @@ export function useTransactions() {
     if (!user) return;
 
     const fetchAux = async () => {
-      const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes] =
+      const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes, termRes] =
         await Promise.all([
           companyFilter(supabase.from("bank_accounts").select("id, name, type")).order("name"),
           companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits")).order("name"),
@@ -104,6 +117,7 @@ export function useTransactions() {
           supabase.from("suppliers").select("id, name").order("name"),
           supabase.from("clients").select("id, name").order("name"),
           companyFilter(supabase.from("categories").select("id, name, parent_id, type")).order("name"),
+          companyFilter(supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info")).order("name"),
         ]);
 
       if (accRes.data) setBankAccounts(accRes.data);
@@ -112,6 +126,7 @@ export function useTransactions() {
       if (supplierRes.data) setSuppliers(supplierRes.data);
       if (clientRes.data) setClients(clientRes.data);
       if (catRes.data) setCategories(catRes.data);
+      if (termRes.data) setCardTerminals(termRes.data as CardTerminalInfo[]);
     };
 
     fetchAux();
@@ -304,5 +319,6 @@ export function useTransactions() {
     suppliers,
     clients,
     categories,
+    cardTerminals,
   };
 }
