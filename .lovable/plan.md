@@ -1,50 +1,58 @@
 
 
-## Correção: Loop Infinito ao Salvar Configuração na Precificação
+## Melhorias na Pagina de Lancamentos
 
-### Causa Raiz
+Quatro ajustes conforme solicitado:
 
-O hook `usePricing` tem uma dependência circular nos `useCallback`/`useEffect`:
+---
 
-```text
-saveConfig
-  -> fetchConfig() -> setConfig(newValue)
-  -> config muda
-  -> fetchCosts recria (porque config está nas deps do useCallback)
-  -> useEffect detecta novo fetchCosts
-  -> useEffect roda init() de novo
-  -> fetchConfig -> setConfig -> config muda -> fetchCosts recria -> useEffect roda...
-  -> LOOP INFINITO
-```
+### 1. Remover agrupamento por conta - Exibir tudo em lista plana
 
-### Solução
+Atualmente os lancamentos sao agrupados em grupos colapsaveis por conta bancaria/cartao/carteira. Como ja existem filtros de data, o ideal e mostrar todos os lancamentos em uma lista plana, ordenados por data.
 
-Remover `config` da lista de dependências de `fetchCosts` e usar um `useRef` para acessar o valor atual de `config` sem causar recriação das funções.
+**Arquivo:** `src/components/lancamentos/TransactionTable.tsx`
 
-**Arquivo:** `src/hooks/usePricing.ts`
+- Remover toda a logica de `groups` (useMemo que agrupa por conta)
+- Remover o componente `AccountGroup` (Collapsible)
+- Renderizar cada transacao diretamente em uma lista simples com divisores
+- Adicionar o nome da conta/cartao como informacao na linha (texto pequeno ao lado da categoria)
 
-1. Adicionar um `configRef` com `useRef` que é sincronizado com `config` via um `useEffect` separado
-2. Dentro de `fetchCosts`, ler `configRef.current` em vez de `config` diretamente
-3. Alterar as dependências de `fetchCosts` para `[user]` apenas (removendo `config`)
-4. Isso quebra o ciclo: `saveConfig` -> `fetchConfig` -> `setConfig` já nao recria `fetchCosts`, então o `useEffect` de init nao dispara novamente
+### 2. Mostrar o "contexto" (contact_name) nos lancamentos
 
-### Mudança concreta
+O campo `contact_name` ja existe na tabela `transactions` e ja e exibido na `TransactionRow`, porem so aparece se preenchido. Vou garantir que tambem exiba o nome do fornecedor ou cliente quando `contact_name` estiver vazio, buscando pelo `supplier_id` ou `client_id`.
 
-```text
-// ANTES (linha 181):
-}, [user, config]);
+**Arquivo:** `src/components/lancamentos/TransactionTable.tsx`
 
-// DEPOIS:
-}, [user]);
+- Receber `suppliers` e `clients` como props
+- Na `TransactionRow`, se `contact_name` estiver vazio, buscar o nome pelo `supplier_id` ou `client_id`
+- Exibir o nome do contato/fornecedor/cliente abaixo da categoria
 
-// + adicionar useRef para config
-const configRef = useRef<PricingConfig | null>(null);
-useEffect(() => { configRef.current = config; }, [config]);
+**Arquivo:** `src/pages/Lancamentos.tsx`
 
-// Dentro de fetchCosts, trocar:
-const currentConfig = config;
-// por:
-const currentConfig = configRef.current;
-```
+- Passar `suppliers` e `clients` como props para `TransactionTable`
 
-Nenhum outro arquivo precisa ser alterado. A correção é cirúrgica no hook.
+### 3. Mascara de valor (R$) no modal de criacao
+
+Atualmente o campo de valor e um `<Input type="number">` sem formatacao. Vou trocar por um input com mascara de moeda brasileira (R$ 1.234,56).
+
+**Arquivo:** `src/components/lancamentos/TransactionFormModal.tsx`
+
+- Criar uma funcao helper `formatCurrencyInput` que formata o valor digitado como moeda BR
+- Trocar o `<Input type="number">` do campo `amount` por um input de texto com mascara
+- Ao digitar, o usuario ve "1.234,56" e o valor e convertido para numero ao submeter
+- Aplicar nos dois formularios (principal e transferencia)
+
+### 4. Paginacao exibindo todas as transacoes (nao 3 em 3)
+
+O PAGE_SIZE atual e 20, que e adequado. O problema visual de "3 em 3" vem do agrupamento colapsavel - ao remover o agrupamento (item 1), todas as 20 transacoes da pagina aparecerao de uma vez.
+
+---
+
+### Resumo dos arquivos
+
+| Arquivo | Mudanca |
+|---|---|
+| `src/components/lancamentos/TransactionTable.tsx` | Remover agrupamento, lista plana, exibir conta na linha, mostrar contato/fornecedor/cliente |
+| `src/components/lancamentos/TransactionFormModal.tsx` | Mascara de moeda no campo valor |
+| `src/pages/Lancamentos.tsx` | Passar suppliers e clients para TransactionTable |
+
