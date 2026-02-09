@@ -5,7 +5,7 @@ export default function DRE() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">DRE por Competência</h1>
+        <h1 className="text-2xl font-bold font-display text-foreground">DRE por Competência</h1>
         <p className="text-muted-foreground text-sm mt-1">Demonstrativo de Resultado do Exercício</p>
       </div>
       <Card>

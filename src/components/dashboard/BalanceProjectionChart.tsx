@@ -39,9 +39,9 @@ export function BalanceProjectionChart({ getProjectionData, loading }: BalancePr
   const data = getProjectionData(selectedDays);
 
   return (
-    <Card>
+    <Card className="shadow-premium">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-base font-semibold">Projeção de Saldo</CardTitle>
+        <CardTitle className="text-base font-semibold font-display">Projeção de Saldo</CardTitle>
         <div className="flex gap-1">
           {projectionOptions.map((opt) => (
             <Button
@@ -68,20 +68,20 @@ export function BalanceProjectionChart({ getProjectionData, loading }: BalancePr
             <AreaChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
               <defs>
                 <linearGradient id="saldoGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(217, 91%, 60%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(195, 100%, 50%)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(195, 100%, 50%)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(217, 33%, 17%)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(215, 25%, 16%)" />
               <XAxis
                 dataKey="date"
-                tick={{ fill: "hsl(215, 20%, 55%)", fontSize: 11 }}
+                tick={{ fill: "hsl(215, 18%, 55%)", fontSize: 11 }}
                 tickLine={false}
-                axisLine={{ stroke: "hsl(217, 33%, 17%)" }}
+                axisLine={{ stroke: "hsl(215, 25%, 16%)" }}
                 interval="preserveStartEnd"
               />
               <YAxis
-                tick={{ fill: "hsl(215, 20%, 55%)", fontSize: 11 }}
+                tick={{ fill: "hsl(215, 18%, 55%)", fontSize: 11 }}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => formatCurrency(v)}
@@ -89,10 +89,10 @@ export function BalanceProjectionChart({ getProjectionData, loading }: BalancePr
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "hsl(222, 47%, 8%)",
-                  border: "1px solid hsl(217, 33%, 17%)",
-                  borderRadius: "8px",
-                  color: "hsl(210, 40%, 96%)",
+                  backgroundColor: "hsl(220, 30%, 9%)",
+                  border: "1px solid hsl(215, 25%, 16%)",
+                  borderRadius: "10px",
+                  color: "hsl(210, 30%, 92%)",
                   fontSize: 12,
                 }}
                 formatter={(value: number) => [
@@ -103,11 +103,11 @@ export function BalanceProjectionChart({ getProjectionData, loading }: BalancePr
               <Area
                 type="monotone"
                 dataKey="saldo"
-                stroke="hsl(217, 91%, 60%)"
+                stroke="hsl(195, 100%, 50%)"
                 strokeWidth={2}
                 fill="url(#saldoGradient)"
                 dot={false}
-                activeDot={{ r: 4, fill: "hsl(217, 91%, 60%)" }}
+                activeDot={{ r: 4, fill: "hsl(195, 100%, 50%)", stroke: "hsl(195, 100%, 70%)", strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>

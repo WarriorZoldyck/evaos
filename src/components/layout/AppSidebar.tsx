@@ -36,7 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TrendingUp } from "lucide-react";
+import evaLogo from "@/assets/eva-os-logo.jpeg";
 
 const mainMenuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -68,12 +68,12 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 shrink-0 rounded-lg bg-primary/20 flex items-center justify-center">
-            <TrendingUp className="h-5 w-5 text-primary" />
+          <div className="h-9 w-9 shrink-0 rounded-lg overflow-hidden glow-primary-sm">
+            <img src={evaLogo} alt="EVA OS" className="h-full w-full object-cover" />
           </div>
           {!collapsed && (
             <div className="flex flex-col">
-              <span className="text-lg font-bold text-foreground tracking-tight">EVA</span>
+              <span className="text-lg font-bold font-display tracking-tight text-gradient-primary">EVA OS</span>
               <span className="text-[10px] text-muted-foreground leading-none">Gestão Financeira</span>
             </div>
           )}
@@ -85,13 +85,13 @@ export function AppSidebar() {
         <div className="px-3 pb-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-2 rounded-lg bg-sidebar-accent px-3 py-2.5 text-sm text-sidebar-accent-foreground hover:bg-accent transition-colors">
+              <button className="w-full flex items-center gap-2 rounded-lg bg-sidebar-accent/80 px-3 py-2.5 text-sm text-sidebar-accent-foreground hover:bg-accent transition-all duration-200 border border-transparent hover:border-primary/20">
                 {isPersonal ? (
                   <User className="h-4 w-4 text-primary shrink-0" />
                 ) : (
                   <Building2 className="h-4 w-4 text-primary shrink-0" />
                 )}
-                <span className="truncate flex-1 text-left">{contextLabel}</span>
+                <span className="truncate flex-1 text-left font-medium">{contextLabel}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               </button>
             </DropdownMenuTrigger>
@@ -117,7 +117,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Principal</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainMenuItems.map((item) => (
@@ -126,8 +126,8 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end={item.url === "/"}
-                      className="hover:bg-sidebar-accent"
-                      activeClassName="bg-sidebar-accent text-primary font-medium"
+                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -140,7 +140,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Financeiro</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Financeiro</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {financeMenuItems.map((item) => (
@@ -148,8 +148,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      className="hover:bg-sidebar-accent"
-                      activeClassName="bg-sidebar-accent text-primary font-medium"
+                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -162,7 +162,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>Cadastros</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Cadastros</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {registrationMenuItems.map((item) => (
@@ -170,8 +170,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      className="hover:bg-sidebar-accent"
-                      activeClassName="bg-sidebar-accent text-primary font-medium"
+                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -190,8 +190,8 @@ export function AppSidebar() {
             <SidebarMenuButton asChild tooltip="Configurações">
               <NavLink
                 to="/configuracoes"
-                className="hover:bg-sidebar-accent"
-                activeClassName="bg-sidebar-accent text-primary font-medium"
+                className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
               >
                 <Settings className="h-4 w-4" />
                 <span>Configurações</span>
@@ -202,7 +202,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               onClick={signOut}
               tooltip="Sair"
-              className="hover:bg-destructive/10 hover:text-destructive"
+              className="hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all duration-200"
             >
               <LogOut className="h-4 w-4" />
               <span>Sair</span>
@@ -210,7 +210,7 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
         {!collapsed && user && (
-          <div className="px-3 py-2 border-t border-sidebar-border mt-1">
+          <div className="px-3 py-2.5 border-t border-sidebar-border mt-1">
             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
           </div>
         )}
