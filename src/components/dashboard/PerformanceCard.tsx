@@ -23,10 +23,12 @@ export function PerformanceCard({
   loading,
 }: PerformanceCardProps) {
   return (
-    <Card>
+    <Card className="shadow-premium">
       <CardHeader>
-        <CardTitle className="text-base font-semibold flex items-center gap-2">
-          <Activity className="h-4 w-4 text-primary" />
+        <CardTitle className="text-base font-semibold font-display flex items-center gap-2">
+          <div className="h-7 w-7 rounded-lg bg-gradient-primary flex items-center justify-center">
+            <Activity className="h-3.5 w-3.5 text-white" />
+          </div>
           Análise de Performance
         </CardTitle>
       </CardHeader>
@@ -39,25 +41,25 @@ export function PerformanceCard({
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+              <div className="h-12 w-12 rounded-xl bg-gradient-destructive/10 flex items-center justify-center">
                 <TrendingDown className="h-6 w-6 text-destructive" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Gasto médio diário</p>
-                <p className="text-xl font-bold text-foreground">{formatCurrency(avgDailySpending)}</p>
+                <p className="text-xs text-muted-foreground font-medium">Gasto médio diário</p>
+                <p className="text-xl font-bold font-display text-foreground">{formatCurrency(avgDailySpending)}</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-border bg-muted/30 p-3">
-                <p className="text-xs text-muted-foreground">Total de despesas</p>
-                <p className="text-sm font-semibold text-foreground mt-0.5">
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 card-hover">
+                <p className="text-xs text-muted-foreground font-medium">Total de despesas</p>
+                <p className="text-sm font-semibold font-display text-foreground mt-1">
                   {formatCurrency(totalExpenses)}
                 </p>
               </div>
-              <div className="rounded-lg border border-border bg-muted/30 p-3">
-                <p className="text-xs text-muted-foreground">Dias no período</p>
-                <p className="text-sm font-semibold text-foreground mt-0.5">{daysInPeriod} dias</p>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-3 card-hover">
+                <p className="text-xs text-muted-foreground font-medium">Dias no período</p>
+                <p className="text-sm font-semibold font-display text-foreground mt-1">{daysInPeriod} dias</p>
               </div>
             </div>
           </div>

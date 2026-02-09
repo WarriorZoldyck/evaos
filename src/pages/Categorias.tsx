@@ -84,7 +84,7 @@ export default function Categorias() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Categorias</h1>
+        <h1 className="text-2xl font-bold font-display text-foreground">Categorias</h1>
         <p className="text-muted-foreground text-sm mt-1">
           Organize receitas e despesas em até 3 níveis — {isPersonal ? "Pessoal" : "Empresa"}
         </p>

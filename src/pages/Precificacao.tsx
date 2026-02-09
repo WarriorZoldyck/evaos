@@ -53,7 +53,7 @@ export default function Precificacao() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Precificação</h1>
+        <h1 className="text-2xl font-bold font-display text-foreground">Precificação</h1>
         <p className="text-muted-foreground text-sm mt-1">
           Formação de Hora Clínica (FHC) — calcule o preço ideal dos seus procedimentos
         </p>

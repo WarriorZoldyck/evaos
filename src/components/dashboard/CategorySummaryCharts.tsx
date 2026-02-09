@@ -28,9 +28,9 @@ function DoughnutChart({
   loading: boolean;
 }) {
   return (
-    <Card>
+    <Card className="shadow-premium">
       <CardHeader>
-        <CardTitle className="text-base font-semibold">{title}</CardTitle>
+        <CardTitle className="text-base font-semibold font-display">{title}</CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -59,10 +59,10 @@ function DoughnutChart({
               </Pie>
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "hsl(222, 47%, 8%)",
-                  border: "1px solid hsl(217, 33%, 17%)",
-                  borderRadius: "8px",
-                  color: "hsl(210, 40%, 96%)",
+                  backgroundColor: "hsl(220, 30%, 9%)",
+                  border: "1px solid hsl(215, 25%, 16%)",
+                  borderRadius: "10px",
+                  color: "hsl(210, 30%, 92%)",
                   fontSize: 12,
                 }}
                 formatter={(value: number) => [formatCurrency(value)]}
@@ -71,7 +71,7 @@ function DoughnutChart({
                 verticalAlign="bottom"
                 height={36}
                 formatter={(value: string) => (
-                  <span style={{ color: "hsl(215, 20%, 55%)", fontSize: 11 }}>{value}</span>
+                  <span style={{ color: "hsl(215, 18%, 55%)", fontSize: 11 }}>{value}</span>
                 )}
               />
             </PieChart>

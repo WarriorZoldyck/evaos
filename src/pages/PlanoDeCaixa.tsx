@@ -5,7 +5,7 @@ export default function PlanoDeCaixa() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Plano de Caixa</h1>
+        <h1 className="text-2xl font-bold font-display text-foreground">Plano de Caixa</h1>
         <p className="text-muted-foreground text-sm mt-1">Fluxo de caixa por regime de pagamento</p>
       </div>
       <Card>

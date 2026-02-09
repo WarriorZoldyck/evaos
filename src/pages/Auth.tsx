@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, TrendingUp, BarChart3, Wallet } from "lucide-react";
+import { Loader2, BarChart3, Wallet, Shield, Zap } from "lucide-react";
+import evaLogo from "@/assets/eva-os-logo.jpeg";
 
 export default function Auth() {
   const { user, loading } = useAuth();
@@ -26,34 +27,48 @@ export default function Auth() {
 
   return (
     <div className="flex min-h-screen">
-      {/* Left side - Branding */}
+      {/* Left side - Premium Branding */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-center items-center p-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-background to-background" />
-        <div className="relative z-10 max-w-md text-center space-y-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="h-14 w-14 rounded-xl bg-primary/20 flex items-center justify-center">
-              <TrendingUp className="h-8 w-8 text-primary" />
+        {/* Background gradient layers */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-primary/3" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-primary/8 rounded-full blur-3xl" />
+        
+        <div className="relative z-10 max-w-md text-center space-y-10">
+          {/* Logo */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-20 w-20 rounded-2xl overflow-hidden glow-primary shadow-premium">
+              <img src={evaLogo} alt="EVA OS" className="h-full w-full object-cover" />
             </div>
-            <h1 className="text-5xl font-bold tracking-tight text-foreground">EVA</h1>
+            <div>
+              <h1 className="text-4xl font-bold font-display tracking-tight text-gradient-primary">EVA OS</h1>
+              <p className="text-sm text-muted-foreground mt-1 tracking-wide">Gestão Financeira Inteligente</p>
+            </div>
           </div>
-          <p className="text-xl text-muted-foreground leading-relaxed">
-            Dashboard de Gestão Financeira Inteligente
+
+          <p className="text-lg text-muted-foreground leading-relaxed">
+            Controle total das suas finanças pessoais e empresariais em um único lugar.
           </p>
-          <div className="grid grid-cols-2 gap-4 pt-8">
-            <FeatureCard icon={BarChart3} title="Relatórios" description="DRE e Fluxo de Caixa" />
-            <FeatureCard icon={Wallet} title="Controle" description="Contas e Cartões" />
+
+          <div className="grid grid-cols-2 gap-3 pt-4">
+            <FeatureCard icon={BarChart3} title="Relatórios" description="DRE e Fluxo de Caixa em tempo real" />
+            <FeatureCard icon={Wallet} title="Multi-conta" description="Bancos, cartões e carteiras" />
+            <FeatureCard icon={Shield} title="Seguro" description="Dados criptografados e protegidos" />
+            <FeatureCard icon={Zap} title="Inteligente" description="Automações e cálculos MDR" />
           </div>
         </div>
       </div>
 
       {/* Right side - Auth Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-8">
-            <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center">
-              <TrendingUp className="h-6 w-6 text-primary" />
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-primary/3 lg:hidden" />
+        <div className="w-full max-w-md relative z-10">
+          {/* Mobile logo */}
+          <div className="lg:hidden flex flex-col items-center gap-3 mb-8">
+            <div className="h-16 w-16 rounded-xl overflow-hidden glow-primary shadow-premium">
+              <img src={evaLogo} alt="EVA OS" className="h-full w-full object-cover" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground">EVA</h1>
+            <h1 className="text-2xl font-bold font-display text-gradient-primary">EVA OS</h1>
           </div>
 
           <Tabs defaultValue="login" className="w-full">
@@ -78,10 +93,12 @@ export default function Auth() {
 
 function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
   return (
-    <div className="rounded-xl bg-card/50 border border-border/50 p-4 text-left">
-      <Icon className="h-5 w-5 text-primary mb-2" />
+    <div className="rounded-xl glass p-4 text-left card-hover group">
+      <div className="h-8 w-8 rounded-lg bg-gradient-primary-soft flex items-center justify-center mb-2.5 group-hover:glow-primary-sm transition-all duration-300">
+        <Icon className="h-4 w-4 text-primary" />
+      </div>
       <h3 className="font-semibold text-sm text-foreground">{title}</h3>
-      <p className="text-xs text-muted-foreground">{description}</p>
+      <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</p>
     </div>
   );
 }
@@ -109,10 +126,10 @@ function LoginForm() {
   };
 
   return (
-    <Card className="border-border/50">
+    <Card className="shadow-premium border-border/50">
       <CardHeader>
-        <CardTitle className="text-xl">Bem-vindo de volta</CardTitle>
-        <CardDescription>Entre com suas credenciais para acessar o EVA</CardDescription>
+        <CardTitle className="text-xl font-display">Bem-vindo de volta</CardTitle>
+        <CardDescription>Entre com suas credenciais para acessar o EVA OS</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
@@ -125,6 +142,7 @@ function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="h-11"
             />
           </div>
           <div className="space-y-2">
@@ -136,11 +154,12 @@ function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="h-11"
             />
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full h-11 bg-gradient-primary hover:opacity-90 transition-opacity font-semibold" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Entrar
           </Button>
@@ -182,10 +201,10 @@ function SignupForm() {
   };
 
   return (
-    <Card className="border-border/50">
+    <Card className="shadow-premium border-border/50">
       <CardHeader>
-        <CardTitle className="text-xl">Criar conta</CardTitle>
-        <CardDescription>Preencha seus dados para começar a usar o EVA</CardDescription>
+        <CardTitle className="text-xl font-display">Criar conta</CardTitle>
+        <CardDescription>Preencha seus dados para começar a usar o EVA OS</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
@@ -197,6 +216,7 @@ function SignupForm() {
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               required
+              className="h-11"
             />
           </div>
           <div className="space-y-2">
@@ -208,6 +228,7 @@ function SignupForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="h-11"
             />
           </div>
           <div className="space-y-2">
@@ -220,11 +241,12 @@ function SignupForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
+              className="h-11"
             />
           </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full h-11 bg-gradient-primary hover:opacity-90 transition-opacity font-semibold" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Criar conta
           </Button>
@@ -254,9 +276,9 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <Card className="border-border/50">
+    <Card className="shadow-premium border-border/50">
       <CardHeader>
-        <CardTitle className="text-xl">Esqueci minha senha</CardTitle>
+        <CardTitle className="text-xl font-display">Esqueci minha senha</CardTitle>
         <CardDescription>Informe seu email para receber o link de redefinição</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
@@ -270,11 +292,12 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              className="h-11"
             />
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full h-11 bg-gradient-primary hover:opacity-90 transition-opacity font-semibold" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Enviar link
           </Button>

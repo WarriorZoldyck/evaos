@@ -22,10 +22,11 @@ interface CardItemProps {
   value: number;
   icon: React.ElementType;
   trend: "up" | "down" | "neutral";
+  gradient: string;
   loading: boolean;
 }
 
-function SummaryCard({ title, value, icon: Icon, trend, loading }: CardItemProps) {
+function SummaryCard({ title, value, icon: Icon, trend, gradient, loading }: CardItemProps) {
   const trendColor =
     trend === "up"
       ? "text-success"
@@ -34,18 +35,20 @@ function SummaryCard({ title, value, icon: Icon, trend, loading }: CardItemProps
         : "text-primary";
 
   return (
-    <Card className="hover:border-primary/30 transition-colors">
-      <CardContent className="pt-6">
+    <Card className="card-hover shadow-premium overflow-hidden relative group">
+      <CardContent className="pt-6 relative z-10">
         <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">{title}</p>
+          <div className="space-y-1.5">
+            <p className="text-sm text-muted-foreground font-medium">{title}</p>
             {loading ? (
               <Skeleton className="h-8 w-28" />
             ) : (
-              <p className="text-2xl font-bold text-foreground">{formatCurrency(value)}</p>
+              <p className={`text-2xl font-bold font-display ${trendColor}`}>
+                {formatCurrency(value)}
+              </p>
             )}
           </div>
-          <div className={`h-10 w-10 rounded-lg bg-muted flex items-center justify-center ${trendColor}`}>
+          <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${gradient} text-white shadow-lg transition-transform duration-300 group-hover:scale-110`}>
             <Icon className="h-5 w-5" />
           </div>
         </div>
@@ -62,6 +65,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, loading }: 
         value={faturamento}
         icon={DollarSign}
         trend="neutral"
+        gradient="bg-gradient-primary"
         loading={loading}
       />
       <SummaryCard
@@ -69,6 +73,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, loading }: 
         value={entradas}
         icon={TrendingUp}
         trend="up"
+        gradient="bg-gradient-success"
         loading={loading}
       />
       <SummaryCard
@@ -76,6 +81,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, loading }: 
         value={saidas}
         icon={TrendingDown}
         trend="down"
+        gradient="bg-gradient-destructive"
         loading={loading}
       />
       <SummaryCard
@@ -83,6 +89,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, loading }: 
         value={saldo}
         icon={Wallet}
         trend={saldo >= 0 ? "up" : "down"}
+        gradient={saldo >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
         loading={loading}
       />
     </div>
