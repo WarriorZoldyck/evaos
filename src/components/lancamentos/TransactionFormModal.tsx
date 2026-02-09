@@ -48,7 +48,9 @@ import type {
   TransactionInsert,
   Category,
   CardTerminalInfo,
+  CreditCard,
 } from "@/hooks/useTransactions";
+import { PaymentMethodFields } from "./PaymentMethodFields";
 
 const PAYMENT_METHODS = [
   "PIX",
@@ -79,6 +81,7 @@ const transactionSchema = z.object({
   bank_account_id: z.string().optional(),
   credit_card_id: z.string().optional(),
   wallet_id: z.string().optional(),
+  card_terminal_id: z.string().optional(),
   supplier_id: z.string().optional(),
   client_id: z.string().optional(),
   contact_name: z.string().max(100).optional(),
@@ -113,7 +116,7 @@ interface TransactionFormModalProps {
   onSaveMultiple: (data: TransactionInsert[]) => Promise<boolean>;
   onUpdate: (id: string, data: Partial<Transaction>) => Promise<boolean>;
   bankAccounts: { id: string; name: string }[];
-  creditCards: { id: string; name: string; last_four_digits: string | null }[];
+  creditCards: CreditCard[];
   wallets: { id: string; name: string }[];
   suppliers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
@@ -228,11 +231,10 @@ export function TransactionFormModal({
   const subSubCategories = categories.filter((c) => c.parent_id === watchSubcategory);
 
   const watchPaymentMethod = form.watch("payment_method");
-  const showBankAccount = ["PIX", "Boleto", "Transferência", "Cartão de Débito", "Dinheiro"].includes(
-    watchPaymentMethod || ""
-  );
-  const showCreditCard = watchPaymentMethod === "Cartão de Crédito";
-  const showWallet = watchPaymentMethod === "Dinheiro";
+  const isCardPayment = watchPaymentMethod === "Cartão de Crédito" || watchPaymentMethod === "Cartão de Débito";
+  const showCreditCard = !isCardPayment && watchPaymentMethod === "Cartão de Crédito"; // legacy, handled by PaymentMethodFields now
+  const showBankAccount = false; // handled by PaymentMethodFields
+  const showWallet = false; // handled by PaymentMethodFields
 
   const handleMainSubmit = async (data: FormData) => {
     if (!user) return;
@@ -251,9 +253,10 @@ export function TransactionFormModal({
       subcategory: data.subcategory || null,
       subcategory2: data.subcategory2 || null,
       payment_method: data.payment_method || null,
-      bank_account_id: showBankAccount && data.bank_account_id ? data.bank_account_id : null,
-      credit_card_id: showCreditCard && data.credit_card_id ? data.credit_card_id : null,
-      wallet_id: showWallet && data.wallet_id ? data.wallet_id : null,
+      bank_account_id: data.bank_account_id || null,
+      credit_card_id: data.credit_card_id || null,
+      wallet_id: data.wallet_id || null,
+      card_terminal_id: data.card_terminal_id || null,
       supplier_id: activeTab === "despesa" && data.supplier_id ? data.supplier_id : null,
       client_id: activeTab === "receita" && data.client_id ? data.client_id : null,
       contact_name: data.contact_name?.trim() || null,
@@ -437,14 +440,12 @@ export function TransactionFormModal({
               subCategories={subCategories}
               subSubCategories={subSubCategories}
               watchPaymentMethod={watchPaymentMethod}
-              showBankAccount={showBankAccount}
-              showCreditCard={showCreditCard}
-              showWallet={showWallet}
               bankAccounts={bankAccounts}
               creditCards={creditCards}
               wallets={wallets}
               clients={clients}
               suppliers={suppliers}
+              cardTerminals={cardTerminals}
             />
           </TabsContent>
 
@@ -459,14 +460,12 @@ export function TransactionFormModal({
               subCategories={subCategories}
               subSubCategories={subSubCategories}
               watchPaymentMethod={watchPaymentMethod}
-              showBankAccount={showBankAccount}
-              showCreditCard={showCreditCard}
-              showWallet={showWallet}
               bankAccounts={bankAccounts}
               creditCards={creditCards}
               wallets={wallets}
               clients={clients}
               suppliers={suppliers}
+              cardTerminals={cardTerminals}
             />
           </TabsContent>
 
@@ -660,14 +659,12 @@ interface MainFormContentProps {
   subCategories: Category[];
   subSubCategories: Category[];
   watchPaymentMethod: string | undefined;
-  showBankAccount: boolean;
-  showCreditCard: boolean;
-  showWallet: boolean;
   bankAccounts: { id: string; name: string }[];
-  creditCards: { id: string; name: string; last_four_digits: string | null }[];
+  creditCards: CreditCard[];
   wallets: { id: string; name: string }[];
   clients: { id: string; name: string }[];
   suppliers: { id: string; name: string }[];
+  cardTerminals: CardTerminalInfo[];
 }
 
 function MainFormContent({
@@ -679,14 +676,13 @@ function MainFormContent({
   rootCategories,
   subCategories,
   subSubCategories,
-  showBankAccount,
-  showCreditCard,
-  showWallet,
+  watchPaymentMethod,
   bankAccounts,
   creditCards,
   wallets,
   clients,
   suppliers,
+  cardTerminals,
 }: MainFormContentProps) {
   const watchInstallment = form.watch("is_installment");
   const watchRecurring = form.watch("is_recurring");
@@ -943,88 +939,16 @@ function MainFormContent({
           )}
         </div>
 
-        {/* Conditional account fields */}
-        {showBankAccount && (
-          <FormField
-            control={form.control}
-            name="bank_account_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Conta Bancária</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {bankAccounts.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-
-        {showCreditCard && (
-          <FormField
-            control={form.control}
-            name="credit_card_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Cartão de Crédito</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {creditCards.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                        {c.last_four_digits ? ` •••• ${c.last_four_digits}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
-
-        {showWallet && (
-          <FormField
-            control={form.control}
-            name="wallet_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Carteira</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {wallets.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        )}
+        {/* Contextual payment method fields */}
+        <PaymentMethodFields
+          form={form}
+          activeTab={activeTab}
+          paymentMethod={watchPaymentMethod}
+          bankAccounts={bankAccounts}
+          creditCards={creditCards}
+          wallets={wallets}
+          cardTerminals={cardTerminals}
+        />
 
         {/* Contact */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
