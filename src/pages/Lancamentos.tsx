@@ -145,13 +145,15 @@ export default function Lancamentos() {
           </div>
         </Tabs>
         <CardContent className="pt-4">
-          <TransactionTable
+           <TransactionTable
             transactions={transactions}
             loading={loading}
             categories={categories}
             bankAccounts={bankAccounts}
             wallets={wallets}
             creditCards={creditCards}
+            suppliers={suppliers}
+            clients={clients}
             page={page}
             totalPages={totalPages}
             totalCount={totalCount}

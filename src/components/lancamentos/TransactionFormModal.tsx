@@ -52,6 +52,50 @@ import type {
 } from "@/hooks/useTransactions";
 import { PaymentMethodFields } from "./PaymentMethodFields";
 
+// Currency mask input for BRL
+function CurrencyInput({
+  value,
+  onChange,
+  placeholder = "0,00",
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  placeholder?: string;
+}) {
+  const [display, setDisplay] = useState(value ? formatBRL(value) : "");
+
+  function formatBRL(v: number): string {
+    return v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value.replace(/[^\d]/g, "");
+    if (!raw) {
+      setDisplay("");
+      onChange(0);
+      return;
+    }
+    const numeric = parseInt(raw, 10) / 100;
+    setDisplay(formatBRL(numeric));
+    onChange(numeric);
+  }
+
+  // Sync from outside (e.g. form reset)
+  useEffect(() => {
+    if (value === 0) setDisplay("");
+    else setDisplay(formatBRL(value));
+  }, [value]);
+
+  return (
+    <Input
+      inputMode="numeric"
+      placeholder={placeholder}
+      value={display}
+      onChange={handleChange}
+    />
+  );
+}
+
 const PAYMENT_METHODS = [
   "PIX",
   "Boleto",
@@ -490,14 +534,18 @@ export function TransactionFormModal({
                   )}
                 />
 
-                <FormField
+           <FormField
                   control={transferForm.control}
                   name="amount"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Valor (R$)</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" min="0" {...field} />
+                        <CurrencyInput
+                          value={field.value}
+                          onChange={field.onChange}
+                          placeholder="0,00"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -713,7 +761,11 @@ function MainFormContent({
               <FormItem>
                 <FormLabel>Valor (R$) *</FormLabel>
                 <FormControl>
-                  <Input type="number" step="0.01" min="0" {...field} />
+                  <CurrencyInput
+                    value={field.value}
+                    onChange={field.onChange}
+                    placeholder="0,00"
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
