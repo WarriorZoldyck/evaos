@@ -37,7 +37,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -54,6 +56,13 @@ const PAYMENT_METHODS = [
   "Cartão de Crédito",
   "Cartão de Débito",
   "Transferência",
+] as const;
+
+const RECURRING_FREQUENCIES = [
+  { value: "monthly", label: "Mensal" },
+  { value: "weekly", label: "Semanal" },
+  { value: "biweekly", label: "Quinzenal" },
+  { value: "yearly", label: "Anual" },
 ] as const;
 
 const transactionSchema = z.object({
@@ -77,6 +86,10 @@ const transactionSchema = z.object({
   attachment_url: z.string().url("URL inválida").max(500).or(z.literal("")).optional(),
   is_installment: z.boolean().default(false),
   installments_count: z.coerce.number().int().min(2).max(120).optional(),
+  first_installment_amount: z.coerce.number().positive().optional(),
+  is_recurring: z.boolean().default(false),
+  recurring_frequency: z.string().optional(),
+  recurring_end_date: z.date().optional(),
 });
 
 type FormData = z.infer<typeof transactionSchema>;
@@ -151,6 +164,10 @@ export function TransactionFormModal({
       attachment_url: "",
       is_installment: false,
       installments_count: 2,
+      first_installment_amount: undefined,
+      is_recurring: false,
+      recurring_frequency: "monthly",
+      recurring_end_date: undefined,
     },
   });
 
@@ -190,6 +207,9 @@ export function TransactionFormModal({
         barcode: editTransaction.barcode || "",
         attachment_url: editTransaction.attachment_url || "",
         is_installment: false,
+        is_recurring: false,
+        recurring_frequency: "monthly",
+        first_installment_amount: undefined,
       });
     } else if (!editTransaction && open) {
       form.reset();
@@ -246,24 +266,80 @@ export function TransactionFormModal({
       success = await onUpdate(editTransaction.id, updateData);
     } else if (data.is_installment && data.installments_count && data.installments_count >= 2) {
       const seriesId = crypto.randomUUID();
-      const installmentAmount = Math.round((data.amount / data.installments_count) * 100) / 100;
-      const installments: TransactionInsert[] = [];
+      const total = data.amount;
+      const count = data.installments_count;
+      let firstAmount: number;
+      let restAmount: number;
 
-      for (let i = 0; i < data.installments_count; i++) {
+      if (data.first_installment_amount && data.first_installment_amount > 0 && data.first_installment_amount < total) {
+        firstAmount = Math.round(data.first_installment_amount * 100) / 100;
+        restAmount = Math.round(((total - firstAmount) / (count - 1)) * 100) / 100;
+      } else {
+        firstAmount = Math.round((total / count) * 100) / 100;
+        restAmount = firstAmount;
+      }
+
+      const installments: TransactionInsert[] = [];
+      for (let i = 0; i < count; i++) {
         const payDate = addMonths(data.payment_date, i);
         const compDate = addMonths(data.competence_date, i);
         installments.push({
           ...baseData,
-          amount: installmentAmount,
-          original_amount: data.amount,
+          amount: i === 0 ? firstAmount : restAmount,
+          original_amount: total,
           payment_date: format(payDate, "yyyy-MM-dd"),
           competence_date: format(compDate, "yyyy-MM-dd"),
           series_id: seriesId,
           installment_number: i + 1,
-          installments_total: data.installments_count,
+          installments_total: count,
         });
       }
       success = await onSaveMultiple(installments);
+    } else if (data.is_recurring && data.recurring_frequency) {
+      const seriesId = crypto.randomUUID();
+      const frequency = data.recurring_frequency;
+      const endDate = data.recurring_end_date;
+
+      const getNextDate = (base: Date, index: number): Date => {
+        switch (frequency) {
+          case "weekly": {
+            const d = new Date(base);
+            d.setDate(d.getDate() + index * 7);
+            return d;
+          }
+          case "biweekly": {
+            const d = new Date(base);
+            d.setDate(d.getDate() + index * 14);
+            return d;
+          }
+          case "yearly":
+            return addMonths(base, index * 12);
+          default:
+            return addMonths(base, index);
+        }
+      };
+
+      const maxOccurrences = frequency === "weekly" ? 52 : frequency === "biweekly" ? 26 : frequency === "yearly" ? 5 : 12;
+      const recurrings: TransactionInsert[] = [];
+
+      for (let i = 0; i < maxOccurrences; i++) {
+        const payDate = getNextDate(data.payment_date, i);
+        const compDate = getNextDate(data.competence_date, i);
+        if (endDate && payDate > endDate) break;
+
+        recurrings.push({
+          ...baseData,
+          amount: data.amount,
+          payment_date: format(payDate, "yyyy-MM-dd"),
+          competence_date: format(compDate, "yyyy-MM-dd"),
+          series_id: seriesId,
+          installment_number: i + 1,
+        });
+      }
+
+      if (recurrings.length > 0) {
+        success = await onSaveMultiple(recurrings);
+      }
     } else {
       success = await onSave(baseData);
     }
@@ -276,8 +352,20 @@ export function TransactionFormModal({
     if (!user) return;
     setSaving(true);
 
+    const parseAccountId = (combined: string) => {
+      const [type, ...idParts] = combined.split(":");
+      const id = idParts.join(":");
+      return {
+        bank_account_id: type === "bank" ? id : null,
+        wallet_id: type === "wallet" ? id : null,
+        credit_card_id: type === "card" ? id : null,
+      };
+    };
+
     const transferId = crypto.randomUUID();
     const dateStr = format(data.payment_date, "yyyy-MM-dd");
+    const sourceAccount = parseAccountId(data.source_account_id);
+    const destAccount = parseAccountId(data.dest_account_id);
 
     const transfers: TransactionInsert[] = [
       {
@@ -290,7 +378,7 @@ export function TransactionFormModal({
         competence_date: dateStr,
         status: "Pago",
         category: "Transferência",
-        bank_account_id: data.source_account_id,
+        ...sourceAccount,
         transfer_id: transferId,
       },
       {
@@ -303,7 +391,7 @@ export function TransactionFormModal({
         competence_date: dateStr,
         status: "Pago",
         category: "Transferência",
-        bank_account_id: data.dest_account_id,
+        ...destAccount,
         transfer_id: transferId,
       },
     ];
@@ -342,7 +430,7 @@ export function TransactionFormModal({
               saving={saving}
               isEditing={isEditing}
               onSubmit={handleMainSubmit}
-              rootCategories={rootCategories}
+              rootCategories={rootCategories.filter(c => c.type === "receita" || c.type === "ambos")}
               subCategories={subCategories}
               subSubCategories={subSubCategories}
               watchPaymentMethod={watchPaymentMethod}
@@ -364,7 +452,7 @@ export function TransactionFormModal({
               saving={saving}
               isEditing={isEditing}
               onSubmit={handleMainSubmit}
-              rootCategories={rootCategories}
+              rootCategories={rootCategories.filter(c => c.type === "despesa" || c.type === "ambos")}
               subCategories={subCategories}
               subSubCategories={subSubCategories}
               watchPaymentMethod={watchPaymentMethod}
@@ -465,11 +553,32 @@ export function TransactionFormModal({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {bankAccounts.map((a) => (
-                              <SelectItem key={a.id} value={a.id}>
-                                {a.name}
-                              </SelectItem>
-                            ))}
+                            {bankAccounts.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>Contas Bancárias</SelectLabel>
+                                {bankAccounts.map((a) => (
+                                  <SelectItem key={a.id} value={`bank:${a.id}`}>{a.name}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
+                            {wallets.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>Carteiras</SelectLabel>
+                                {wallets.map((w) => (
+                                  <SelectItem key={w.id} value={`wallet:${w.id}`}>{w.name}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
+                            {creditCards.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>Cartões de Crédito</SelectLabel>
+                                {creditCards.map((c) => (
+                                  <SelectItem key={c.id} value={`card:${c.id}`}>
+                                    {c.name}{c.last_four_digits ? ` •••• ${c.last_four_digits}` : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -490,11 +599,32 @@ export function TransactionFormModal({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {bankAccounts.map((a) => (
-                              <SelectItem key={a.id} value={a.id}>
-                                {a.name}
-                              </SelectItem>
-                            ))}
+                            {bankAccounts.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>Contas Bancárias</SelectLabel>
+                                {bankAccounts.map((a) => (
+                                  <SelectItem key={a.id} value={`bank:${a.id}`}>{a.name}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
+                            {wallets.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>Carteiras</SelectLabel>
+                                {wallets.map((w) => (
+                                  <SelectItem key={w.id} value={`wallet:${w.id}`}>{w.name}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
+                            {creditCards.length > 0 && (
+                              <SelectGroup>
+                                <SelectLabel>Cartões de Crédito</SelectLabel>
+                                {creditCards.map((c) => (
+                                  <SelectItem key={c.id} value={`card:${c.id}`}>
+                                    {c.name}{c.last_four_digits ? ` •••• ${c.last_four_digits}` : ""}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -556,6 +686,8 @@ function MainFormContent({
   suppliers,
 }: MainFormContentProps) {
   const watchInstallment = form.watch("is_installment");
+  const watchRecurring = form.watch("is_recurring");
+  const [customFirstInstallment, setCustomFirstInstallment] = useState(false);
 
   return (
     <Form {...form}>
@@ -1003,33 +1135,141 @@ function MainFormContent({
           />
         </div>
 
-        {/* Installments toggle */}
+        {/* Installments / Recurring toggle */}
         {!isEditing && (
-          <div className="space-y-3 rounded-lg border border-border p-4">
-            <div className="flex items-center gap-3">
-              <Switch
-                id="installment-toggle"
-                checked={watchInstallment}
-                onCheckedChange={(checked) =>
-                  form.setValue("is_installment", checked)
-                }
-              />
-              <Label htmlFor="installment-toggle">Parcelado?</Label>
+          <div className="space-y-4 rounded-lg border border-border p-4">
+            {/* Installment toggle */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="installment-toggle"
+                  checked={watchInstallment}
+                  onCheckedChange={(checked) => {
+                    form.setValue("is_installment", checked);
+                    if (checked) form.setValue("is_recurring", false);
+                  }}
+                />
+                <Label htmlFor="installment-toggle">Parcelado?</Label>
+              </div>
+              {watchInstallment && (
+                <div className="space-y-3 pl-2 border-l-2 border-primary/20 ml-2">
+                  <FormField
+                    control={form.control}
+                    name="installments_count"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número de parcelas</FormLabel>
+                        <FormControl>
+                          <Input type="number" min="2" max="120" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      id="custom-first"
+                      checked={customFirstInstallment}
+                      onCheckedChange={setCustomFirstInstallment}
+                    />
+                    <Label htmlFor="custom-first" className="text-sm">Valor da 1ª parcela diferente?</Label>
+                  </div>
+                  {customFirstInstallment && (
+                    <FormField
+                      control={form.control}
+                      name="first_installment_amount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Valor da 1ª parcela (R$)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.01" min="0" placeholder="Ex: 150.00" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+              )}
             </div>
-            {watchInstallment && (
-              <FormField
-                control={form.control}
-                name="installments_count"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Número de parcelas</FormLabel>
-                    <FormControl>
-                      <Input type="number" min="2" max="120" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+
+            {/* Recurring toggle (mutually exclusive with installment) */}
+            {!watchInstallment && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Switch
+                    id="recurring-toggle"
+                    checked={watchRecurring}
+                    onCheckedChange={(checked) => {
+                      form.setValue("is_recurring", checked);
+                      if (checked) form.setValue("is_installment", false);
+                    }}
+                  />
+                  <Label htmlFor="recurring-toggle">Lançamento Fixo / Recorrente?</Label>
+                </div>
+                {watchRecurring && (
+                  <div className="space-y-3 pl-2 border-l-2 border-primary/20 ml-2">
+                    <FormField
+                      control={form.control}
+                      name="recurring_frequency"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Frequência</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value || "monthly"}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {RECURRING_FREQUENCIES.map((f) => (
+                                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="recurring_end_date"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                          <FormLabel>Data de fim (opcional)</FormLabel>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full pl-3 text-left font-normal",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                >
+                                  {field.value
+                                    ? format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                                    : "Sem data de fim"}
+                                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                              <Calendar
+                                mode="single"
+                                selected={field.value}
+                                onSelect={field.onChange}
+                                locale={ptBR}
+                              />
+                            </PopoverContent>
+                          </Popover>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 )}
-              />
+              </div>
             )}
           </div>
         )}

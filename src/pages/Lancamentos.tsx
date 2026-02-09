@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,30 +27,14 @@ export default function Lancamentos() {
   const { isPersonal } = useCompany();
 
   const {
-    transactions,
-    loading,
-    totalCount,
-    page,
-    setPage,
-    totalPages,
-    filters,
-    setFilters,
-    createTransaction,
-    createMultipleTransactions,
-    updateTransaction,
-    deleteTransaction,
-    deleteSeriesTransactions,
-    duplicateTransaction,
+    transactions, loading, totalCount, page, setPage, totalPages,
+    filters, setFilters,
+    createTransaction, createMultipleTransactions, updateTransaction,
+    deleteTransaction, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions,
-    bankAccounts,
-    creditCards,
-    wallets,
-    suppliers,
-    clients,
-    categories,
+    bankAccounts, creditCards, wallets, suppliers, clients, categories,
   } = useTransactions();
 
-  // Modal states
   const [formOpen, setFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
@@ -58,20 +42,14 @@ export default function Lancamentos() {
   const [seriesDialogMode, setSeriesDialogMode] = useState<"edit" | "delete">("delete");
   const [seriesTarget, setSeriesTarget] = useState<Transaction | null>(null);
   const [liquidateTarget, setLiquidateTarget] = useState<Transaction | null>(null);
-
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
 
-  // Handle tab change by updating status filter
   const handleTabChange = (value: string) => {
     const tab = value as TabValue;
     setActiveTab(tab);
-    if (tab === "realizado") {
-      setFilters({ ...filters, status: "Pago" });
-    } else if (tab === "projetado") {
-      setFilters({ ...filters, status: "Pendente" });
-    } else {
-      setFilters({ ...filters, status: "todos" });
-    }
+    if (tab === "realizado") setFilters({ ...filters, status: "Pago" });
+    else if (tab === "projetado") setFilters({ ...filters, status: "Pendente" });
+    else setFilters({ ...filters, status: "todos" });
   };
 
   const handleEdit = (t: Transaction) => {
@@ -116,15 +94,10 @@ export default function Lancamentos() {
         );
       }
     } else {
-      // edit: for "only", open the form. For series edits, open form for single too (simplified).
       setEditingTransaction(seriesTarget);
       setFormOpen(true);
     }
     setSeriesTarget(null);
-  };
-
-  const handleLiquidate = (t: Transaction) => {
-    setLiquidateTarget(t);
   };
 
   return (
@@ -167,55 +140,25 @@ export default function Lancamentos() {
               <TabsTrigger value="projetado">Projetado</TabsTrigger>
             </TabsList>
           </div>
-
-          <CardContent className="pt-4">
-            <TabsContent value="todos" className="mt-0">
-              <TransactionTable
-                transactions={transactions}
-                loading={loading}
-                categories={categories}
-                page={page}
-                totalPages={totalPages}
-                totalCount={totalCount}
-                onPageChange={setPage}
-                onEdit={handleEdit}
-                onDuplicate={duplicateTransaction}
-                onDelete={handleDelete}
-                onLiquidate={handleLiquidate}
-              />
-            </TabsContent>
-            <TabsContent value="realizado" className="mt-0">
-              <TransactionTable
-                transactions={transactions}
-                loading={loading}
-                categories={categories}
-                page={page}
-                totalPages={totalPages}
-                totalCount={totalCount}
-                onPageChange={setPage}
-                onEdit={handleEdit}
-                onDuplicate={duplicateTransaction}
-                onDelete={handleDelete}
-                onLiquidate={handleLiquidate}
-              />
-            </TabsContent>
-            <TabsContent value="projetado" className="mt-0">
-              <TransactionTable
-                transactions={transactions}
-                loading={loading}
-                categories={categories}
-                page={page}
-                totalPages={totalPages}
-                totalCount={totalCount}
-                onPageChange={setPage}
-                onEdit={handleEdit}
-                onDuplicate={duplicateTransaction}
-                onDelete={handleDelete}
-                onLiquidate={handleLiquidate}
-              />
-            </TabsContent>
-          </CardContent>
         </Tabs>
+        <CardContent className="pt-4">
+          <TransactionTable
+            transactions={transactions}
+            loading={loading}
+            categories={categories}
+            bankAccounts={bankAccounts}
+            wallets={wallets}
+            creditCards={creditCards}
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            onPageChange={setPage}
+            onEdit={handleEdit}
+            onDuplicate={duplicateTransaction}
+            onDelete={handleDelete}
+            onLiquidate={(t) => setLiquidateTarget(t)}
+          />
+        </CardContent>
       </Card>
 
       {/* Form Modal */}
@@ -246,8 +189,8 @@ export default function Lancamentos() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir &quot;{deleteTarget?.description}&quot;?
-              Esta ação não pode ser desfeita.
+              Tem certeza que deseja excluir &quot;{deleteTarget?.description}
+              &quot;? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -273,7 +216,7 @@ export default function Lancamentos() {
         onConfirm={handleSeriesConfirm}
       />
 
-      {/* Liquidate modal (reused from Dashboard) */}
+      {/* Liquidate modal */}
       <LiquidateModal
         transaction={
           liquidateTarget

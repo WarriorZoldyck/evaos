@@ -22,9 +22,15 @@ export function CategoryTreeItem({
   onEdit,
   onDelete,
 }: CategoryTreeItemProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const hasChildren = category.children && category.children.length > 0;
   const canAddChild = level < maxLevel;
+
+  const countAllDescendants = (cat: typeof category): number => {
+    if (!cat.children || cat.children.length === 0) return 0;
+    return cat.children.reduce((acc, child) => acc + 1 + countAllDescendants(child), 0);
+  };
+  const totalDescendants = countAllDescendants(category);
 
   const Icon = level === 0 ? FolderTree : level === 1 ? Folder : FileText;
   const typeLabels: Record<string, string> = { receita: "Receita", despesa: "Despesa", ambos: "Ambos" };
@@ -59,9 +65,9 @@ export function CategoryTreeItem({
           </Badge>
         )}
 
-        {hasChildren && (
+        {totalDescendants > 0 && (
           <Badge variant="secondary" className="text-xs shrink-0">
-            {category.children!.length}
+            {totalDescendants} sub-{totalDescendants === 1 ? "item" : "itens"}
           </Badge>
         )}
 
