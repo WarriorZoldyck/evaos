@@ -3,15 +3,10 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Edit, Copy, Trash2, CheckCircle2, MoreHorizontal, Loader2,
-  ChevronDown, ChevronRight, Landmark, Wallet, CreditCard, HelpCircle, Eye, Repeat,
+  Landmark, Wallet, CreditCard, HelpCircle, Eye, Repeat,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +22,8 @@ interface TransactionTableProps {
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
   creditCards: { id: string; name: string }[];
+  suppliers: { id: string; name: string }[];
+  clients: { id: string; name: string }[];
   page: number;
   totalPages: number;
   totalCount: number;
@@ -45,6 +42,8 @@ export function TransactionTable({
   bankAccounts,
   wallets,
   creditCards,
+  suppliers,
+  clients,
   page,
   totalPages,
   totalCount,
@@ -80,44 +79,26 @@ export function TransactionTable({
     return null;
   };
 
-  // Group transactions by account
-  const groups = useMemo(() => {
-    const map = new Map<
-      string,
-      { transactions: Transaction[]; name: string; iconType: string }
-    >();
+  const getAccountName = (t: Transaction) => {
+    if (t.bank_account_id) return bankAccounts.find((a) => a.id === t.bank_account_id)?.name;
+    if (t.wallet_id) return wallets.find((w) => w.id === t.wallet_id)?.name;
+    if (t.credit_card_id) return creditCards.find((c) => c.id === t.credit_card_id)?.name;
+    return null;
+  };
 
-    transactions.forEach((t) => {
-      let key: string;
-      let name: string;
-      let iconType: string;
+  const getAccountIcon = (t: Transaction) => {
+    if (t.bank_account_id) return <Landmark className="h-3 w-3" />;
+    if (t.wallet_id) return <Wallet className="h-3 w-3" />;
+    if (t.credit_card_id) return <CreditCard className="h-3 w-3" />;
+    return null;
+  };
 
-      if (t.bank_account_id) {
-        key = `bank:${t.bank_account_id}`;
-        name = bankAccounts.find((a) => a.id === t.bank_account_id)?.name || "Conta Bancária";
-        iconType = "bank";
-      } else if (t.wallet_id) {
-        key = `wallet:${t.wallet_id}`;
-        name = wallets.find((w) => w.id === t.wallet_id)?.name || "Carteira";
-        iconType = "wallet";
-      } else if (t.credit_card_id) {
-        key = `card:${t.credit_card_id}`;
-        name = creditCards.find((c) => c.id === t.credit_card_id)?.name || "Cartão";
-        iconType = "card";
-      } else {
-        key = "none";
-        name = "Sem conta vinculada";
-        iconType = "none";
-      }
-
-      if (!map.has(key)) {
-        map.set(key, { transactions: [], name, iconType });
-      }
-      map.get(key)!.transactions.push(t);
-    });
-
-    return Array.from(map.entries());
-  }, [transactions, bankAccounts, wallets, creditCards]);
+  const getContactName = (t: Transaction) => {
+    if (t.contact_name) return t.contact_name;
+    if (t.supplier_id) return suppliers.find((s) => s.id === t.supplier_id)?.name || null;
+    if (t.client_id) return clients.find((c) => c.id === t.client_id)?.name || null;
+    return null;
+  };
 
   if (loading) {
     return (
@@ -136,52 +117,136 @@ export function TransactionTable({
     );
   }
 
-  const getIcon = (iconType: string) => {
-    switch (iconType) {
-      case "bank": return <Landmark className="h-4 w-4" />;
-      case "wallet": return <Wallet className="h-4 w-4" />;
-      case "card": return <CreditCard className="h-4 w-4" />;
-      default: return <HelpCircle className="h-4 w-4" />;
-    }
-  };
-
   return (
-    <div className="space-y-3">
-      {groups.map(([key, group]) => {
-        const balance = group.transactions.reduce(
-          (acc, t) => (t.type === "receita" ? acc + t.amount : acc - t.amount),
-          0
-        );
+    <div className="space-y-0 divide-y divide-border">
+      {transactions.map((t) => {
+        const installment = getInstallmentLabel(t);
+        const categoryParts = getCategoryHierarchy(t);
+        const accountName = getAccountName(t);
+        const accountIcon = getAccountIcon(t);
+        const contactName = getContactName(t);
 
         return (
-          <AccountGroup
-            key={key}
-            icon={getIcon(group.iconType)}
-            name={group.name}
-            count={group.transactions.length}
-            balance={balance}
-            formatCurrency={formatCurrency}
+          <div
+            key={t.id}
+            className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group cursor-pointer"
+            onClick={() => onViewDetails(t)}
           >
-            {group.transactions.map((t) => {
-              const installment = getInstallmentLabel(t);
-              const categoryParts = getCategoryHierarchy(t);
+            {/* Date */}
+            <div className="text-center shrink-0 w-12">
+              <div className="text-lg font-bold leading-tight text-foreground">
+                {format(new Date(t.payment_date + "T00:00:00"), "dd")}
+              </div>
+              <div className="text-[10px] uppercase text-muted-foreground leading-tight">
+                {format(new Date(t.payment_date + "T00:00:00"), "MMM", { locale: ptBR })}
+              </div>
+            </div>
 
-              return (
-                <TransactionRow
-                  key={t.id}
-                  transaction={t}
-                  installment={installment}
-                  categoryParts={categoryParts}
-                  formatCurrency={formatCurrency}
-                  onEdit={onEdit}
-                  onDuplicate={onDuplicate}
-                  onDelete={onDelete}
-                  onLiquidate={onLiquidate}
-                  onViewDetails={onViewDetails}
-                />
-              );
-            })}
-          </AccountGroup>
+            {/* Description + Category + Account + Contact */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground truncate">
+                  {t.description}
+                </span>
+                {(t as any).isRecurring && (
+                  <Badge variant="outline" className="text-[10px] shrink-0 gap-0.5 border-primary/30 text-primary">
+                    <Repeat className="h-2.5 w-2.5" />
+                    Recorrente
+                  </Badge>
+                )}
+                {t.series_id && !installment && !(t as any).isRecurring && (
+                  <Badge variant="outline" className="text-[10px] shrink-0">
+                    FIXO
+                  </Badge>
+                )}
+                {installment && (
+                  <Badge variant="outline" className="text-[10px] shrink-0">
+                    {installment}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                {categoryParts.length > 0 && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {categoryParts.join(" › ")}
+                  </p>
+                )}
+                {accountName && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 shrink-0">
+                    {accountIcon}
+                    {accountName}
+                  </span>
+                )}
+              </div>
+              {contactName && (
+                <p className="text-xs text-muted-foreground/70 truncate">
+                  {contactName}
+                </p>
+              )}
+            </div>
+
+            {/* Value */}
+            <div className="text-right shrink-0">
+              <span
+                className={`text-sm font-semibold ${
+                  t.type === "receita"
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-red-600 dark:text-red-400"
+                }`}
+              >
+                {t.type === "receita" ? "+" : "-"} {formatCurrency(t.amount)}
+              </span>
+            </div>
+
+            {/* Status */}
+            <Badge
+              variant={t.status === "Pago" ? "default" : "secondary"}
+              className="text-[10px] shrink-0 hidden sm:inline-flex"
+            >
+              {t.status === "Pago" ? "Liquidado" : "Pendente"}
+            </Badge>
+
+            {/* Actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(t); }}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  Ver Detalhes
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(t); }}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onDuplicate(t)}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Duplicar
+                </DropdownMenuItem>
+                {t.status === "Pendente" && (
+                  <DropdownMenuItem onClick={() => onLiquidate(t)}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Liquidar
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={() => onDelete(t)}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         );
       })}
 
@@ -212,190 +277,6 @@ export function TransactionTable({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Account Group (collapsible) ────────────────────────────────
-function AccountGroup({
-  icon,
-  name,
-  count,
-  balance,
-  formatCurrency,
-  children,
-}: {
-  icon: React.ReactNode;
-  name: string;
-  count: number;
-  balance: number;
-  formatCurrency: (n: number) => string;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <Collapsible open={open} onOpenChange={setOpen} className="border border-border rounded-lg overflow-hidden">
-      <CollapsibleTrigger className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent/50 transition-colors">
-        {open ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
-        <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center text-primary shrink-0">
-          {icon}
-        </div>
-        <span className="font-medium text-sm">{name}</span>
-        <Badge variant="secondary" className="text-xs shrink-0">
-          {count} mov.
-        </Badge>
-        <span
-          className={`ml-auto text-sm font-semibold shrink-0 ${
-            balance >= 0
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-red-600 dark:text-red-400"
-          }`}
-        >
-          {formatCurrency(balance)}
-        </span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="divide-y divide-border">{children}</div>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-// ── Transaction Row ────────────────────────────────────────────
-function TransactionRow({
-  transaction: t,
-  installment,
-  categoryParts,
-  formatCurrency,
-  onEdit,
-  onDuplicate,
-  onDelete,
-  onLiquidate,
-  onViewDetails,
-}: {
-  transaction: Transaction;
-  installment: string | null;
-  categoryParts: string[];
-  formatCurrency: (n: number) => string;
-  onEdit: (t: Transaction) => void;
-  onDuplicate: (t: Transaction) => void;
-  onDelete: (t: Transaction) => void;
-  onLiquidate: (t: Transaction) => void;
-  onViewDetails: (t: Transaction) => void;
-}) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group cursor-pointer" onClick={() => onViewDetails(t)}>
-      {/* Date */}
-      <div className="text-center shrink-0 w-12">
-        <div className="text-lg font-bold leading-tight text-foreground">
-          {format(new Date(t.payment_date + "T00:00:00"), "dd")}
-        </div>
-        <div className="text-[10px] uppercase text-muted-foreground leading-tight">
-          {format(new Date(t.payment_date + "T00:00:00"), "MMM", { locale: ptBR })}
-        </div>
-      </div>
-
-      {/* Description + Category */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground truncate">
-            {t.description}
-          </span>
-          {(t as any).isRecurring && (
-            <Badge variant="outline" className="text-[10px] shrink-0 gap-0.5 border-primary/30 text-primary">
-              <Repeat className="h-2.5 w-2.5" />
-              Recorrente
-            </Badge>
-          )}
-          {t.series_id && !installment && !(t as any).isRecurring && (
-            <Badge variant="outline" className="text-[10px] shrink-0">
-              FIXO
-            </Badge>
-          )}
-          {installment && (
-            <Badge variant="outline" className="text-[10px] shrink-0">
-              {installment}
-            </Badge>
-          )}
-        </div>
-        {categoryParts.length > 0 && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
-            {categoryParts.join(" › ")}
-          </p>
-        )}
-        {t.contact_name && (
-          <p className="text-xs text-muted-foreground/70 truncate">
-            {t.contact_name}
-          </p>
-        )}
-      </div>
-
-      {/* Value */}
-      <div className="text-right shrink-0">
-        <span
-          className={`text-sm font-semibold ${
-            t.type === "receita"
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-red-600 dark:text-red-400"
-          }`}
-        >
-          {t.type === "receita" ? "+" : "-"} {formatCurrency(t.amount)}
-        </span>
-      </div>
-
-      {/* Status */}
-      <Badge
-        variant={t.status === "Pago" ? "default" : "secondary"}
-        className="text-[10px] shrink-0 hidden sm:inline-flex"
-      >
-        {t.status === "Pago" ? "Liquidado" : "Pendente"}
-      </Badge>
-
-      {/* Actions */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(t); }}>
-            <Eye className="mr-2 h-4 w-4" />
-            Ver Detalhes
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(t); }}>
-            <Edit className="mr-2 h-4 w-4" />
-            Editar
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => onDuplicate(t)}>
-            <Copy className="mr-2 h-4 w-4" />
-            Duplicar
-          </DropdownMenuItem>
-          {t.status === "Pendente" && (
-            <DropdownMenuItem onClick={() => onLiquidate(t)}>
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              Liquidar
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem
-            onClick={() => onDelete(t)}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Excluir
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
   );
 }
