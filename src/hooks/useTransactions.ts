@@ -23,10 +23,13 @@ interface BankAccount {
   type: string;
 }
 
-interface CreditCard {
+export interface CreditCard {
   id: string;
   name: string;
   last_four_digits: string | null;
+  closing_day: number;
+  due_day: number;
+  bank_account_id: string;
 }
 
 interface Wallet {
@@ -112,7 +115,7 @@ export function useTransactions() {
       const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes, termRes] =
         await Promise.all([
           companyFilter(supabase.from("bank_accounts").select("id, name, type")).order("name"),
-          companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits")).order("name"),
+          companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, bank_account_id")).order("name"),
           companyFilter(supabase.from("wallets").select("id, name")).order("name"),
           supabase.from("suppliers").select("id, name").order("name"),
           supabase.from("clients").select("id, name").order("name"),
