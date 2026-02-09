@@ -8,6 +8,7 @@ import type { Tables } from "@/integrations/supabase/types";
 export type BankAccount = Tables<"bank_accounts">;
 export type CreditCard = Tables<"credit_cards">;
 export type Wallet = Tables<"wallets">;
+export type CardTerminal = Tables<"card_terminals">;
 
 export function useAccounts() {
   const { user } = useAuth();
@@ -17,6 +18,7 @@ export function useAccounts() {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [cardTerminals, setCardTerminals] = useState<CardTerminal[]>([]);
   const [loading, setLoading] = useState(true);
 
   const companyFilter = useCallback(
@@ -32,15 +34,17 @@ export function useAccounts() {
     if (!user) return;
     setLoading(true);
 
-    const [accRes, cardRes, walletRes] = await Promise.all([
+    const [accRes, cardRes, walletRes, termRes] = await Promise.all([
       companyFilter(supabase.from("bank_accounts").select("*")).order("name"),
       companyFilter(supabase.from("credit_cards").select("*")).order("name"),
       companyFilter(supabase.from("wallets").select("*")).order("name"),
+      companyFilter(supabase.from("card_terminals").select("*")).order("name"),
     ]);
 
     if (accRes.data) setBankAccounts(accRes.data);
     if (cardRes.data) setCreditCards(cardRes.data);
     if (walletRes.data) setWallets(walletRes.data);
+    if (termRes.data) setCardTerminals(termRes.data);
     setLoading(false);
   }, [user, companyFilter]);
 
@@ -168,10 +172,63 @@ export function useAccounts() {
     return true;
   };
 
+  // Card Terminals CRUD
+  const createCardTerminal = async (data: {
+    name: string; acquirer?: string | null; bank_account_id: string;
+    unique_id?: string | null; debit_rate?: number | null; credit_rate?: number | null;
+    settlement_days_debit?: number | null; settlement_days_credit?: number | null;
+    rates_info?: string | null;
+  }) => {
+    if (!user) return false;
+    const { error } = await supabase.from("card_terminals").insert({
+      name: data.name,
+      acquirer: data.acquirer || null,
+      bank_account_id: data.bank_account_id,
+      unique_id: data.unique_id || null,
+      debit_rate: data.debit_rate ?? null,
+      credit_rate: data.credit_rate ?? null,
+      settlement_days_debit: data.settlement_days_debit ?? null,
+      settlement_days_credit: data.settlement_days_credit ?? null,
+      rates_info: data.rates_info || null,
+      user_id: user.id,
+      company_id: selectedCompanyId || null,
+    });
+    if (error) {
+      toast({ title: "Erro ao criar maquininha", description: error.message, variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Maquininha criada!" });
+    fetchAll();
+    return true;
+  };
+
+  const updateCardTerminal = async (id: string, data: Partial<CardTerminal>) => {
+    const { error } = await supabase.from("card_terminals").update(data).eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao atualizar maquininha", description: error.message, variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Maquininha atualizada!" });
+    fetchAll();
+    return true;
+  };
+
+  const deleteCardTerminal = async (id: string) => {
+    const { error } = await supabase.from("card_terminals").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao excluir maquininha", description: error.message, variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Maquininha excluída!" });
+    fetchAll();
+    return true;
+  };
+
   return {
     bankAccounts,
     creditCards,
     wallets,
+    cardTerminals,
     loading,
     refetch: fetchAll,
     createBankAccount,
@@ -183,5 +240,8 @@ export function useAccounts() {
     createWallet,
     updateWallet,
     deleteWallet,
+    createCardTerminal,
+    updateCardTerminal,
+    deleteCardTerminal,
   };
 }

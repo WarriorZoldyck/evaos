@@ -18,6 +18,7 @@ import { useTransactions, type Transaction } from "@/hooks/useTransactions";
 import { TransactionFilters } from "@/components/lancamentos/TransactionFilters";
 import { TransactionTable } from "@/components/lancamentos/TransactionTable";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
+import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
 import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 
@@ -33,6 +34,7 @@ export default function Lancamentos() {
     deleteTransaction, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
+    cardTerminals,
   } = useTransactions();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -42,6 +44,7 @@ export default function Lancamentos() {
   const [seriesDialogMode, setSeriesDialogMode] = useState<"edit" | "delete">("delete");
   const [seriesTarget, setSeriesTarget] = useState<Transaction | null>(null);
   const [liquidateTarget, setLiquidateTarget] = useState<Transaction | null>(null);
+  const [detailTarget, setDetailTarget] = useState<Transaction | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
 
   const handleTabChange = (value: string) => {
@@ -157,6 +160,7 @@ export default function Lancamentos() {
             onDuplicate={duplicateTransaction}
             onDelete={handleDelete}
             onLiquidate={(t) => setLiquidateTarget(t)}
+            onViewDetails={(t) => setDetailTarget(t)}
           />
         </CardContent>
       </Card>
@@ -178,6 +182,24 @@ export default function Lancamentos() {
         suppliers={suppliers}
         clients={clients}
         categories={categories}
+        cardTerminals={cardTerminals}
+      />
+
+      {/* Detail Modal */}
+      <TransactionDetailModal
+        transaction={detailTarget}
+        onClose={() => setDetailTarget(null)}
+        categories={categories}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
+        cardTerminals={cardTerminals}
+        suppliers={suppliers}
+        clients={clients}
+        onEdit={handleEdit}
+        onDuplicate={duplicateTransaction}
+        onLiquidate={(t) => { setDetailTarget(null); setLiquidateTarget(t); }}
+        onDelete={handleDelete}
       />
 
       {/* Delete confirmation */}
@@ -227,6 +249,8 @@ export default function Lancamentos() {
                 type: liquidateTarget.type,
                 payment_date: liquidateTarget.payment_date,
                 bank_account_id: liquidateTarget.bank_account_id,
+                series_id: liquidateTarget.series_id,
+                credit_card_id: liquidateTarget.credit_card_id,
               }
             : null
         }
