@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Edit, Copy, Trash2, CheckCircle2, MoreHorizontal, Loader2,
-  ChevronDown, ChevronRight, Landmark, Wallet, CreditCard, HelpCircle, Eye,
+  ChevronDown, ChevronRight, Landmark, Wallet, CreditCard, HelpCircle, Eye, Repeat,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -306,7 +306,13 @@ function TransactionRow({
           <span className="text-sm font-medium text-foreground truncate">
             {t.description}
           </span>
-          {t.series_id && !installment && (
+          {(t as any).isRecurring && (
+            <Badge variant="outline" className="text-[10px] shrink-0 gap-0.5 border-primary/30 text-primary">
+              <Repeat className="h-2.5 w-2.5" />
+              Recorrente
+            </Badge>
+          )}
+          {t.series_id && !installment && !(t as any).isRecurring && (
             <Badge variant="outline" className="text-[10px] shrink-0">
               FIXO
             </Badge>
