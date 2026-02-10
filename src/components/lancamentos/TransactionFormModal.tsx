@@ -1,13 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format, addMonths } from "date-fns";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, User, Building2 } from "lucide-react";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCompany, type Company } from "@/contexts/CompanyContext";
 import {
   Dialog,
   DialogContent,
@@ -80,7 +80,6 @@ function CurrencyInput({
     onChange(numeric);
   }
 
-  // Sync from outside (e.g. form reset)
   useEffect(() => {
     if (value === 0) setDisplay("");
     else setDisplay(formatBRL(value));
@@ -164,7 +163,6 @@ function TransferAccountOptions({
   wallets: { id: string; name: string }[];
   creditCards: CreditCard[];
 }) {
-  // If allAccounts is available, group by context (Pessoal / Company Name)
   if (allAccounts) {
     const contexts = new Map<string, { banks: typeof allAccounts.bankAccounts; wallets: typeof allAccounts.wallets; cards: typeof allAccounts.creditCards }>();
     
@@ -177,7 +175,6 @@ function TransferAccountOptions({
     allAccounts.wallets.forEach((w) => addToContext(w.company_name).wallets.push(w));
     allAccounts.creditCards.forEach((c) => addToContext(c.company_name).cards.push(c));
 
-    // Sort: "Pessoal" first
     const sorted = Array.from(contexts.entries()).sort(([a], [b]) => {
       if (a === "Pessoal") return -1;
       if (b === "Pessoal") return 1;
@@ -206,7 +203,6 @@ function TransferAccountOptions({
     );
   }
 
-  // Fallback: no allAccounts, use current context accounts
   return (
     <>
       {bankAccounts.length > 0 && (
@@ -260,6 +256,7 @@ interface TransactionFormModalProps {
   categories: Category[];
   cardTerminals: CardTerminalInfo[];
   allAccounts?: AllAccounts;
+  companies?: Company[];
 }
 
 export function TransactionFormModal({
@@ -277,15 +274,17 @@ export function TransactionFormModal({
   categories,
   cardTerminals,
   allAccounts,
+  companies = [],
 }: TransactionFormModalProps) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
   const [activeTab, setActiveTab] = useState<"receita" | "despesa" | "transferencia">("despesa");
   const [saving, setSaving] = useState(false);
+  const [formCompanyId, setFormCompanyId] = useState<string | null>(null);
 
   const isEditing = !!editTransaction;
+  const formIsPersonal = formCompanyId === null;
 
-  // Main form
   const form = useForm<FormData>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
@@ -316,7 +315,6 @@ export function TransactionFormModal({
     },
   });
 
-  // Transfer form
   const transferForm = useForm<TransferFormData>({
     resolver: zodResolver(transferSchema),
     defaultValues: {
@@ -328,41 +326,62 @@ export function TransactionFormModal({
     },
   });
 
-  // Populate form when editing
-  useEffect(() => {
-    if (editTransaction && open) {
-      setActiveTab(editTransaction.type);
-      form.reset({
-        description: editTransaction.description,
-        amount: editTransaction.amount,
-        payment_date: new Date(editTransaction.payment_date + "T00:00:00"),
-        competence_date: new Date(editTransaction.competence_date + "T00:00:00"),
-        status: editTransaction.status,
-        category: editTransaction.category,
-        subcategory: editTransaction.subcategory || "",
-        subcategory2: editTransaction.subcategory2 || "",
-        payment_method: editTransaction.payment_method || "",
-        bank_account_id: editTransaction.bank_account_id || "",
-        credit_card_id: editTransaction.credit_card_id || "",
-        wallet_id: editTransaction.wallet_id || "",
-        supplier_id: editTransaction.supplier_id || "",
-        client_id: editTransaction.client_id || "",
-        contact_name: editTransaction.contact_name || "",
-        notes: editTransaction.notes || "",
-        barcode: editTransaction.barcode || "",
-        attachment_url: editTransaction.attachment_url || "",
-        is_installment: false,
-        is_recurring: false,
-        recurring_frequency: "monthly",
-        first_installment_amount: undefined,
-      });
-    } else if (!editTransaction && open) {
-      form.reset();
-      transferForm.reset();
-    }
-  }, [editTransaction, open, form, transferForm]);
+  const paymentDateManuallyEdited = useRef(false);
 
-  // Categories cascade
+  const watchCompetenceDate = form.watch("competence_date");
+  useEffect(() => {
+    if (!paymentDateManuallyEdited.current && watchCompetenceDate) {
+      form.setValue("payment_date", watchCompetenceDate);
+    }
+  }, [watchCompetenceDate, form]);
+
+  useEffect(() => {
+    if (open) {
+      paymentDateManuallyEdited.current = false;
+      if (editTransaction) {
+        setFormCompanyId(editTransaction.company_id ?? null);
+        setActiveTab(editTransaction.type);
+        form.reset({
+          description: editTransaction.description,
+          amount: editTransaction.amount,
+          payment_date: new Date(editTransaction.payment_date + "T00:00:00"),
+          competence_date: new Date(editTransaction.competence_date + "T00:00:00"),
+          status: editTransaction.status,
+          category: editTransaction.category,
+          subcategory: editTransaction.subcategory || "",
+          subcategory2: editTransaction.subcategory2 || "",
+          payment_method: editTransaction.payment_method || "",
+          bank_account_id: editTransaction.bank_account_id || "",
+          credit_card_id: editTransaction.credit_card_id || "",
+          wallet_id: editTransaction.wallet_id || "",
+          supplier_id: editTransaction.supplier_id || "",
+          client_id: editTransaction.client_id || "",
+          contact_name: editTransaction.contact_name || "",
+          notes: editTransaction.notes || "",
+          barcode: editTransaction.barcode || "",
+          attachment_url: editTransaction.attachment_url || "",
+          is_installment: false,
+          is_recurring: false,
+          recurring_frequency: "monthly",
+          first_installment_amount: undefined,
+        });
+        paymentDateManuallyEdited.current = true;
+      } else {
+        setFormCompanyId(selectedCompanyId);
+        setActiveTab(isPersonal ? "despesa" : "receita");
+        form.reset();
+        transferForm.reset();
+      }
+    }
+  }, [editTransaction, open]);
+
+  const handleContextChange = (companyId: string | null) => {
+    setFormCompanyId(companyId);
+    if (!isEditing) {
+      setActiveTab(companyId === null ? "despesa" : "receita");
+    }
+  };
+
   const rootCategories = categories.filter((c) => !c.parent_id);
   const watchCategory = form.watch("category");
   const watchSubcategory = form.watch("subcategory");
@@ -370,10 +389,6 @@ export function TransactionFormModal({
   const subSubCategories = categories.filter((c) => c.parent_id === watchSubcategory);
 
   const watchPaymentMethod = form.watch("payment_method");
-  const isCardPayment = watchPaymentMethod === "Cartão de Crédito" || watchPaymentMethod === "Cartão de Débito";
-  const showCreditCard = !isCardPayment && watchPaymentMethod === "Cartão de Crédito"; // legacy, handled by PaymentMethodFields now
-  const showBankAccount = false; // handled by PaymentMethodFields
-  const showWallet = false; // handled by PaymentMethodFields
 
   const handleMainSubmit = async (data: FormData) => {
     if (!user) return;
@@ -381,7 +396,7 @@ export function TransactionFormModal({
 
     const baseData: TransactionInsert = {
       user_id: user.id,
-      company_id: isPersonal ? null : selectedCompanyId,
+      company_id: formCompanyId,
       type: activeTab as "receita" | "despesa",
       description: data.description.trim(),
       amount: data.amount,
@@ -507,7 +522,6 @@ export function TransactionFormModal({
       };
     };
 
-    // Determine company_id from the selected account
     const getCompanyIdForAccount = (combined: string): string | null => {
       if (!allAccounts) return isPersonal ? null : selectedCompanyId;
       const [type, ...idParts] = combined.split(":");
@@ -577,6 +591,33 @@ export function TransactionFormModal({
           </DialogTitle>
         </DialogHeader>
 
+        {/* Context selector */}
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">Contexto</Label>
+          <Select
+            value={formCompanyId ?? "__pessoal__"}
+            onValueChange={(v) => handleContextChange(v === "__pessoal__" ? null : v)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__pessoal__">
+                <span className="flex items-center gap-2">
+                  <User className="h-4 w-4" /> Pessoal
+                </span>
+              </SelectItem>
+              {companies.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  <span className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" /> {c.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <Tabs
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as typeof activeTab)}
@@ -589,7 +630,6 @@ export function TransactionFormModal({
             </TabsList>
           )}
 
-          {/* Receita / Despesa form */}
           <TabsContent value="receita">
             <MainFormContent
               form={form}
@@ -607,6 +647,7 @@ export function TransactionFormModal({
               clients={clients}
               suppliers={suppliers}
               cardTerminals={cardTerminals}
+              paymentDateManuallyEdited={paymentDateManuallyEdited}
             />
           </TabsContent>
 
@@ -627,10 +668,10 @@ export function TransactionFormModal({
               clients={clients}
               suppliers={suppliers}
               cardTerminals={cardTerminals}
+              paymentDateManuallyEdited={paymentDateManuallyEdited}
             />
           </TabsContent>
 
-          {/* Transfer form */}
           <TabsContent value="transferencia">
             <Form {...transferForm}>
               <form
@@ -651,7 +692,7 @@ export function TransactionFormModal({
                   )}
                 />
 
-           <FormField
+                <FormField
                   control={transferForm.control}
                   name="amount"
                   render={({ field }) => (
@@ -780,6 +821,7 @@ interface MainFormContentProps {
   clients: { id: string; name: string }[];
   suppliers: { id: string; name: string }[];
   cardTerminals: CardTerminalInfo[];
+  paymentDateManuallyEdited: React.MutableRefObject<boolean>;
 }
 
 function MainFormContent({
@@ -798,6 +840,7 @@ function MainFormContent({
   clients,
   suppliers,
   cardTerminals,
+  paymentDateManuallyEdited,
 }: MainFormContentProps) {
   const watchInstallment = form.watch("is_installment");
   const watchRecurring = form.watch("is_recurring");
@@ -806,33 +849,105 @@ function MainFormContent({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-        {/* Description + Amount */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="description"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Descrição *</FormLabel>
+        {/* Status */}
+        <FormField
+          control={form.control}
+          name="status"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Status</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
-                  <Input placeholder="Ex: Aluguel" {...field} />
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                <SelectContent>
+                  <SelectItem value="Pendente">Pendente</SelectItem>
+                  <SelectItem value="Pago">Pago</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Descrição */}
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Descrição *</FormLabel>
+              <FormControl>
+                <Input placeholder="Ex: Aluguel" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Fornecedor/Cliente */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {activeTab === "despesa" ? (
+            <FormField
+              control={form.control}
+              name="supplier_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fornecedor</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {suppliers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : (
+            <FormField
+              control={form.control}
+              name="client_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cliente</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
           <FormField
             control={form.control}
-            name="amount"
+            name="contact_name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Valor (R$) *</FormLabel>
+                <FormLabel>Nome do contato</FormLabel>
                 <FormControl>
-                  <CurrencyInput
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder="0,00"
-                  />
+                  <Input placeholder="Alternativo ao select" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -840,44 +955,8 @@ function MainFormContent({
           />
         </div>
 
-        {/* Dates */}
+        {/* Dates: Competência → Pagamento */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="payment_date"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Data de Pagamento *</FormLabel>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <FormControl>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        {field.value
-                          ? format(field.value, "dd/MM/yyyy", { locale: ptBR })
-                          : "Selecione"}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
-                    </FormControl>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={field.value}
-                      onSelect={field.onChange}
-                      locale={ptBR}
-                    />
-                  </PopoverContent>
-                </Popover>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
           <FormField
             control={form.control}
             name="competence_date"
@@ -914,56 +993,66 @@ function MainFormContent({
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="payment_date"
+            render={({ field }) => (
+              <FormItem className="flex flex-col">
+                <FormLabel>Data de Pagamento *</FormLabel>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <FormControl>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                      >
+                        {field.value
+                          ? format(field.value, "dd/MM/yyyy", { locale: ptBR })
+                          : "Selecione"}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </FormControl>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={field.value}
+                      onSelect={(date) => {
+                        field.onChange(date);
+                        paymentDateManuallyEdited.current = true;
+                      }}
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
-        {/* Status + Payment Method */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Status</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="Pendente">Pendente</SelectItem>
-                    <SelectItem value="Pago">Pago</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="payment_method"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Forma de Pagamento</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value || ""}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {PAYMENT_METHODS.map((m) => (
-                      <SelectItem key={m} value={m}>
-                        {m}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+        {/* Valor Bruto */}
+        <FormField
+          control={form.control}
+          name="amount"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Valor Bruto (R$) *</FormLabel>
+              <FormControl>
+                <CurrencyInput
+                  value={field.value}
+                  onChange={field.onChange}
+                  placeholder="0,00"
+                />
+              </FormControl>
+              <p className="text-xs text-muted-foreground">Este valor será considerado como faturamento</p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         {/* Category cascade */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1058,7 +1147,33 @@ function MainFormContent({
           )}
         </div>
 
-        {/* Contextual payment method fields */}
+        {/* Forma de pagamento */}
+        <FormField
+          control={form.control}
+          name="payment_method"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Forma de Pagamento</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value || ""}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Conta/Maquininha */}
         <PaymentMethodFields
           form={form}
           activeTab={activeTab}
@@ -1069,122 +1184,9 @@ function MainFormContent({
           cardTerminals={cardTerminals}
         />
 
-        {/* Contact */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {activeTab === "despesa" ? (
-            <FormField
-              control={form.control}
-              name="supplier_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Fornecedor</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {suppliers.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          ) : (
-            <FormField
-              control={form.control}
-              name="client_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cliente</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {clients.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-          <FormField
-            control={form.control}
-            name="contact_name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome do contato</FormLabel>
-                <FormControl>
-                  <Input placeholder="Alternativo ao select" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {/* Notes, barcode, attachment */}
-        <FormField
-          control={form.control}
-          name="notes"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Observações</FormLabel>
-              <FormControl>
-                <Textarea rows={2} placeholder="Opcional..." {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="barcode"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Código de barras</FormLabel>
-                <FormControl>
-                  <Input placeholder="Opcional" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="attachment_url"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Anexo (URL)</FormLabel>
-                <FormControl>
-                  <Input placeholder="https://..." {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {/* Installments / Recurring toggle */}
+        {/* Installments / Recurring */}
         {!isEditing && (
           <div className="space-y-4 rounded-lg border border-border p-4">
-            {/* Installment toggle */}
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <Switch
@@ -1239,7 +1241,6 @@ function MainFormContent({
               )}
             </div>
 
-            {/* Recurring toggle (mutually exclusive with installment) */}
             {!watchInstallment && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
@@ -1319,6 +1320,50 @@ function MainFormContent({
             )}
           </div>
         )}
+
+        {/* Observações */}
+        <FormField
+          control={form.control}
+          name="notes"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Observações</FormLabel>
+              <FormControl>
+                <Textarea rows={2} placeholder="Opcional..." {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="barcode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Código de barras</FormLabel>
+                <FormControl>
+                  <Input placeholder="Opcional" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="attachment_url"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Anexo (URL)</FormLabel>
+                <FormControl>
+                  <Input placeholder="https://..." {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <Button type="submit" className="w-full" disabled={saving}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

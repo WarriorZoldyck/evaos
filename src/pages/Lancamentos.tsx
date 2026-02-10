@@ -225,6 +225,7 @@ export default function Lancamentos() {
         categories={categories}
         cardTerminals={cardTerminals}
         allAccounts={allAccounts}
+        companies={companies}
       />
 
       {/* Detail Modal */}
