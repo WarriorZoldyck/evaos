@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, User, Building2, ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useTransactions, type Transaction } from "@/hooks/useTransactions";
 import { TransactionFilters } from "@/components/lancamentos/TransactionFilters";
@@ -25,7 +32,9 @@ import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 type TabValue = "todos" | "realizado" | "projetado";
 
 export default function Lancamentos() {
-  const { isPersonal } = useCompany();
+  const { isPersonal, companies, selectedCompanyId, setSelectedCompanyId } = useCompany();
+  const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
+  const contextLabel = isPersonal ? "Pessoal" : selectedCompany?.name ?? "Pessoal";
 
   const {
     transactions, loading, totalCount, page, setPage, totalPages,
@@ -107,12 +116,42 @@ export default function Lancamentos() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold font-display text-foreground">Lançamentos</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            {isPersonal ? "Finanças Pessoais" : "Finanças da Empresa"} •{" "}
-            {totalCount} lançamento{totalCount !== 1 ? "s" : ""}
-          </p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold font-display text-foreground">Lançamentos</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              {totalCount} lançamento{totalCount !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-2 rounded-lg bg-accent/80 px-3 py-2 text-sm hover:bg-accent transition-all duration-200 border border-border hover:border-primary/20">
+                {isPersonal ? (
+                  <User className="h-4 w-4 text-primary shrink-0" />
+                ) : (
+                  <Building2 className="h-4 w-4 text-primary shrink-0" />
+                )}
+                <span className="truncate font-medium">{contextLabel}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuItem onClick={() => setSelectedCompanyId(null)}>
+                <User className="mr-2 h-4 w-4" />
+                Pessoal
+              </DropdownMenuItem>
+              {companies.length > 0 && <DropdownMenuSeparator />}
+              {companies.map((company) => (
+                <DropdownMenuItem
+                  key={company.id}
+                  onClick={() => setSelectedCompanyId(company.id)}
+                >
+                  <Building2 className="mr-2 h-4 w-4" />
+                  {company.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         <Button
           onClick={() => {
