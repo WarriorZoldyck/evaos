@@ -34,7 +34,7 @@ export default function Lancamentos() {
     deleteTransaction, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
-    cardTerminals,
+    cardTerminals, allAccounts,
   } = useTransactions();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -185,6 +185,7 @@ export default function Lancamentos() {
         clients={clients}
         categories={categories}
         cardTerminals={cardTerminals}
+        allAccounts={allAccounts}
       />
 
       {/* Detail Modal */}

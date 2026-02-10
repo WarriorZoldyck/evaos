@@ -95,6 +95,13 @@ export function useTransactions() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [cardTerminals, setCardTerminals] = useState<CardTerminalInfo[]>([]);
 
+  // All accounts across all contexts (for transfers)
+  const [allAccounts, setAllAccounts] = useState<{
+    bankAccounts: { id: string; name: string; company_id: string | null; company_name: string }[];
+    wallets: { id: string; name: string; company_id: string | null; company_name: string }[];
+    creditCards: { id: string; name: string; last_four_digits: string | null; company_id: string | null; company_name: string }[];
+  }>({ bankAccounts: [], wallets: [], creditCards: [] });
+
   const companyFilter = useCallback(
     (query: any) => {
       if (isPersonal) {
@@ -133,6 +140,41 @@ export function useTransactions() {
     };
 
     fetchAux();
+
+    // Fetch ALL accounts (no company filter) for transfers
+    const fetchAllAccounts = async () => {
+      const [allAccRes, allWalletRes, allCardRes, companiesRes] = await Promise.all([
+        supabase.from("bank_accounts").select("id, name, company_id").order("name"),
+        supabase.from("wallets").select("id, name, company_id").order("name"),
+        supabase.from("credit_cards").select("id, name, last_four_digits, company_id").order("name"),
+        supabase.from("companies").select("id, name").order("name"),
+      ]);
+
+      const companyMap = new Map<string, string>();
+      if (companiesRes.data) {
+        companiesRes.data.forEach((c) => companyMap.set(c.id, c.name));
+      }
+
+      const getCompanyName = (companyId: string | null) =>
+        companyId ? companyMap.get(companyId) || "Empresa" : "Pessoal";
+
+      setAllAccounts({
+        bankAccounts: (allAccRes.data || []).map((a) => ({
+          ...a,
+          company_name: getCompanyName(a.company_id),
+        })),
+        wallets: (allWalletRes.data || []).map((w) => ({
+          ...w,
+          company_name: getCompanyName(w.company_id),
+        })),
+        creditCards: (allCardRes.data || []).map((c) => ({
+          ...c,
+          company_name: getCompanyName(c.company_id),
+        })),
+      });
+    };
+
+    fetchAllAccounts();
   }, [user, companyFilter]);
 
   // Fetch transactions
@@ -323,5 +365,6 @@ export function useTransactions() {
     clients,
     categories,
     cardTerminals,
+    allAccounts,
   };
 }

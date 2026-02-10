@@ -152,6 +152,99 @@ const transferSchema = z.object({
 
 type TransferFormData = z.infer<typeof transferSchema>;
 
+// Helper: grouped account options for transfer selects
+function TransferAccountOptions({
+  allAccounts,
+  bankAccounts,
+  wallets,
+  creditCards,
+}: {
+  allAccounts?: AllAccounts;
+  bankAccounts: { id: string; name: string }[];
+  wallets: { id: string; name: string }[];
+  creditCards: CreditCard[];
+}) {
+  // If allAccounts is available, group by context (Pessoal / Company Name)
+  if (allAccounts) {
+    const contexts = new Map<string, { banks: typeof allAccounts.bankAccounts; wallets: typeof allAccounts.wallets; cards: typeof allAccounts.creditCards }>();
+    
+    const addToContext = (name: string) => {
+      if (!contexts.has(name)) contexts.set(name, { banks: [], wallets: [], cards: [] });
+      return contexts.get(name)!;
+    };
+
+    allAccounts.bankAccounts.forEach((a) => addToContext(a.company_name).banks.push(a));
+    allAccounts.wallets.forEach((w) => addToContext(w.company_name).wallets.push(w));
+    allAccounts.creditCards.forEach((c) => addToContext(c.company_name).cards.push(c));
+
+    // Sort: "Pessoal" first
+    const sorted = Array.from(contexts.entries()).sort(([a], [b]) => {
+      if (a === "Pessoal") return -1;
+      if (b === "Pessoal") return 1;
+      return a.localeCompare(b);
+    });
+
+    return (
+      <>
+        {sorted.map(([contextName, accounts]) => (
+          <SelectGroup key={contextName}>
+            <SelectLabel className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{contextName}</SelectLabel>
+            {accounts.banks.map((a) => (
+              <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>🏦 {a.name}</SelectItem>
+            ))}
+            {accounts.wallets.map((w) => (
+              <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>👛 {w.name}</SelectItem>
+            ))}
+            {accounts.cards.map((c) => (
+              <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>
+                💳 {c.name}{c.last_four_digits ? ` •••• ${c.last_four_digits}` : ""}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        ))}
+      </>
+    );
+  }
+
+  // Fallback: no allAccounts, use current context accounts
+  return (
+    <>
+      {bankAccounts.length > 0 && (
+        <SelectGroup>
+          <SelectLabel>Contas Bancárias</SelectLabel>
+          {bankAccounts.map((a) => (
+            <SelectItem key={a.id} value={`bank:${a.id}`}>{a.name}</SelectItem>
+          ))}
+        </SelectGroup>
+      )}
+      {wallets.length > 0 && (
+        <SelectGroup>
+          <SelectLabel>Carteiras</SelectLabel>
+          {wallets.map((w) => (
+            <SelectItem key={w.id} value={`wallet:${w.id}`}>{w.name}</SelectItem>
+          ))}
+        </SelectGroup>
+      )}
+      {creditCards.length > 0 && (
+        <SelectGroup>
+          <SelectLabel>Cartões de Crédito</SelectLabel>
+          {creditCards.map((c) => (
+            <SelectItem key={c.id} value={`card:${c.id}`}>
+              {c.name}{c.last_four_digits ? ` •••• ${c.last_four_digits}` : ""}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      )}
+    </>
+  );
+}
+
+interface AllAccounts {
+  bankAccounts: { id: string; name: string; company_id: string | null; company_name: string }[];
+  wallets: { id: string; name: string; company_id: string | null; company_name: string }[];
+  creditCards: { id: string; name: string; last_four_digits: string | null; company_id: string | null; company_name: string }[];
+}
+
 interface TransactionFormModalProps {
   open: boolean;
   onClose: () => void;
@@ -166,6 +259,7 @@ interface TransactionFormModalProps {
   clients: { id: string; name: string }[];
   categories: Category[];
   cardTerminals: CardTerminalInfo[];
+  allAccounts?: AllAccounts;
 }
 
 export function TransactionFormModal({
@@ -182,6 +276,7 @@ export function TransactionFormModal({
   clients,
   categories,
   cardTerminals,
+  allAccounts,
 }: TransactionFormModalProps) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
@@ -412,15 +507,37 @@ export function TransactionFormModal({
       };
     };
 
+    // Determine company_id from the selected account
+    const getCompanyIdForAccount = (combined: string): string | null => {
+      if (!allAccounts) return isPersonal ? null : selectedCompanyId;
+      const [type, ...idParts] = combined.split(":");
+      const id = idParts.join(":");
+      if (type === "bank") {
+        const acc = allAccounts.bankAccounts.find((a) => a.id === id);
+        return acc?.company_id ?? null;
+      }
+      if (type === "wallet") {
+        const acc = allAccounts.wallets.find((w) => w.id === id);
+        return acc?.company_id ?? null;
+      }
+      if (type === "card") {
+        const acc = allAccounts.creditCards.find((c) => c.id === id);
+        return acc?.company_id ?? null;
+      }
+      return null;
+    };
+
     const transferId = crypto.randomUUID();
     const dateStr = format(data.payment_date, "yyyy-MM-dd");
     const sourceAccount = parseAccountId(data.source_account_id);
     const destAccount = parseAccountId(data.dest_account_id);
+    const sourceCompanyId = getCompanyIdForAccount(data.source_account_id);
+    const destCompanyId = getCompanyIdForAccount(data.dest_account_id);
 
     const transfers: TransactionInsert[] = [
       {
         user_id: user.id,
-        company_id: isPersonal ? null : selectedCompanyId,
+        company_id: sourceCompanyId,
         type: "despesa",
         description: data.description.trim(),
         amount: data.amount,
@@ -433,7 +550,7 @@ export function TransactionFormModal({
       },
       {
         user_id: user.id,
-        company_id: isPersonal ? null : selectedCompanyId,
+        company_id: destCompanyId,
         type: "receita",
         description: data.description.trim(),
         amount: data.amount,
@@ -468,7 +585,7 @@ export function TransactionFormModal({
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="receita">Receita</TabsTrigger>
               <TabsTrigger value="despesa">Despesa</TabsTrigger>
-              <TabsTrigger value="transferencia">Transferência</TabsTrigger>
+              <TabsTrigger value="transferencia">Transf. entre Contas</TabsTrigger>
             </TabsList>
           )}
 
@@ -603,32 +720,7 @@ export function TransactionFormModal({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {bankAccounts.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Contas Bancárias</SelectLabel>
-                                {bankAccounts.map((a) => (
-                                  <SelectItem key={a.id} value={`bank:${a.id}`}>{a.name}</SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                            {wallets.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Carteiras</SelectLabel>
-                                {wallets.map((w) => (
-                                  <SelectItem key={w.id} value={`wallet:${w.id}`}>{w.name}</SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                            {creditCards.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Cartões de Crédito</SelectLabel>
-                                {creditCards.map((c) => (
-                                  <SelectItem key={c.id} value={`card:${c.id}`}>
-                                    {c.name}{c.last_four_digits ? ` •••• ${c.last_four_digits}` : ""}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
+                            <TransferAccountOptions allAccounts={allAccounts} bankAccounts={bankAccounts} wallets={wallets} creditCards={creditCards} />
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -649,32 +741,7 @@ export function TransactionFormModal({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {bankAccounts.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Contas Bancárias</SelectLabel>
-                                {bankAccounts.map((a) => (
-                                  <SelectItem key={a.id} value={`bank:${a.id}`}>{a.name}</SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                            {wallets.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Carteiras</SelectLabel>
-                                {wallets.map((w) => (
-                                  <SelectItem key={w.id} value={`wallet:${w.id}`}>{w.name}</SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                            {creditCards.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Cartões de Crédito</SelectLabel>
-                                {creditCards.map((c) => (
-                                  <SelectItem key={c.id} value={`card:${c.id}`}>
-                                    {c.name}{c.last_four_digits ? ` •••• ${c.last_four_digits}` : ""}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
+                            <TransferAccountOptions allAccounts={allAccounts} bankAccounts={bankAccounts} wallets={wallets} creditCards={creditCards} />
                           </SelectContent>
                         </Select>
                         <FormMessage />
