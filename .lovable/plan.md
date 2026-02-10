@@ -1,58 +1,55 @@
 
 
-## Melhorias na Pagina de Lancamentos
+## Transferencia Entre Contas (Pessoal e Empresa)
 
-Quatro ajustes conforme solicitado:
+### Problema Atual
 
----
+O formulario de transferencia so mostra contas do contexto atual (Pessoal ou Empresa selecionada). Porem, transferencias sao justamente para mover dinheiro **entre** contextos diferentes -- de uma conta pessoal para uma conta da empresa, ou vice-versa.
 
-### 1. Remover agrupamento por conta - Exibir tudo em lista plana
+### Solucao
 
-Atualmente os lancamentos sao agrupados em grupos colapsaveis por conta bancaria/cartao/carteira. Como ja existem filtros de data, o ideal e mostrar todos os lancamentos em uma lista plana, ordenados por data.
-
-**Arquivo:** `src/components/lancamentos/TransactionTable.tsx`
-
-- Remover toda a logica de `groups` (useMemo que agrupa por conta)
-- Remover o componente `AccountGroup` (Collapsible)
-- Renderizar cada transacao diretamente em uma lista simples com divisores
-- Adicionar o nome da conta/cartao como informacao na linha (texto pequeno ao lado da categoria)
-
-### 2. Mostrar o "contexto" (contact_name) nos lancamentos
-
-O campo `contact_name` ja existe na tabela `transactions` e ja e exibido na `TransactionRow`, porem so aparece se preenchido. Vou garantir que tambem exiba o nome do fornecedor ou cliente quando `contact_name` estiver vazio, buscando pelo `supplier_id` ou `client_id`.
-
-**Arquivo:** `src/components/lancamentos/TransactionTable.tsx`
-
-- Receber `suppliers` e `clients` como props
-- Na `TransactionRow`, se `contact_name` estiver vazio, buscar o nome pelo `supplier_id` ou `client_id`
-- Exibir o nome do contato/fornecedor/cliente abaixo da categoria
-
-**Arquivo:** `src/pages/Lancamentos.tsx`
-
-- Passar `suppliers` e `clients` como props para `TransactionTable`
-
-### 3. Mascara de valor (R$) no modal de criacao
-
-Atualmente o campo de valor e um `<Input type="number">` sem formatacao. Vou trocar por um input com mascara de moeda brasileira (R$ 1.234,56).
-
-**Arquivo:** `src/components/lancamentos/TransactionFormModal.tsx`
-
-- Criar uma funcao helper `formatCurrencyInput` que formata o valor digitado como moeda BR
-- Trocar o `<Input type="number">` do campo `amount` por um input de texto com mascara
-- Ao digitar, o usuario ve "1.234,56" e o valor e convertido para numero ao submeter
-- Aplicar nos dois formularios (principal e transferencia)
-
-### 4. Paginacao exibindo todas as transacoes (nao 3 em 3)
-
-O PAGE_SIZE atual e 20, que e adequado. O problema visual de "3 em 3" vem do agrupamento colapsavel - ao remover o agrupamento (item 1), todas as 20 transacoes da pagina aparecerao de uma vez.
+Buscar **todas** as contas do usuario (de todos os contextos) especificamente para o formulario de transferencia, e exibi-las agrupadas por contexto (Pessoal / Nome da Empresa).
 
 ---
 
-### Resumo dos arquivos
+### Mudancas
 
-| Arquivo | Mudanca |
-|---|---|
-| `src/components/lancamentos/TransactionTable.tsx` | Remover agrupamento, lista plana, exibir conta na linha, mostrar contato/fornecedor/cliente |
-| `src/components/lancamentos/TransactionFormModal.tsx` | Mascara de moeda no campo valor |
-| `src/pages/Lancamentos.tsx` | Passar suppliers e clients para TransactionTable |
+**Arquivo: `src/hooks/useTransactions.ts`**
 
+- Adicionar um novo estado `allAccounts` que busca contas bancarias, carteiras e cartoes de credito **sem** o `companyFilter`
+- Buscar tambem os nomes das empresas do usuario para usar como labels nos grupos
+- Retornar `allAccounts` no return do hook
+
+Estrutura do novo estado:
+```text
+allAccounts: {
+  bankAccounts: { id, name, company_id, company_name }[]
+  wallets: { id, name, company_id, company_name }[]
+  creditCards: { id, name, last_four_digits, company_id, company_name }[]
+}
+```
+
+**Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
+
+- Receber `allAccounts` como prop
+- No formulario de transferencia, usar `allAccounts` em vez de `bankAccounts`/`wallets`/`creditCards`
+- Agrupar as opcoes nos selects por contexto:
+  - "Pessoal" para contas com `company_id = null`
+  - Nome da empresa para contas vinculadas a uma empresa
+- Ao submeter a transferencia, determinar o `company_id` correto para cada lancamento baseado na conta selecionada (origem e destino podem ter `company_id` diferentes)
+
+**Arquivo: `src/pages/Lancamentos.tsx`**
+
+- Passar `allAccounts` como prop para `TransactionFormModal`
+
+### Logica da Transferencia ao Salvar
+
+Quando o usuario transfere de uma conta pessoal para uma conta da empresa:
+- Lancamento de **saida** (despesa): `company_id = null` (pessoal)
+- Lancamento de **entrada** (receita): `company_id = id_da_empresa`
+
+Cada lancamento herda o `company_id` da conta que foi selecionada como origem/destino, respectivamente.
+
+### Tab Label
+
+Renomear a aba de "Transferencia" para "Transferencia entre Contas" para deixar claro o proposito.
