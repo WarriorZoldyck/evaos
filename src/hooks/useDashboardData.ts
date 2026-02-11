@@ -213,8 +213,10 @@ export function useDashboardData(filters: DashboardFilters) {
 
     const saldo = entradas - saidas;
 
-    // Previsto: todas as transações por competência no período
-    const previstoReceitas = faturamento;
+    // Previsto: todas as transações por competência no período (soma real de cada parcela/transação)
+    const previstoReceitas = competenceTransactions
+      .filter((t) => t.type === "receita")
+      .reduce((acc, t) => acc + Number(t.amount), 0);
     const previstoSaidas = competenceTransactions
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
