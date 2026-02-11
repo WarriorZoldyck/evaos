@@ -49,6 +49,10 @@ export default function Dashboard() {
         entradas={summary.entradas}
         saidas={summary.saidas}
         saldo={summary.saldo}
+        previstoReceitas={summary.previstoReceitas}
+        previstoSaidas={summary.previstoSaidas}
+        consolidadoReceitas={summary.consolidadoReceitas}
+        consolidadoSaidas={summary.consolidadoSaidas}
         loading={loading}
       />
 
