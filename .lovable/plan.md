@@ -1,69 +1,62 @@
 
-## Criar Categorias Inline no Modal de Lancamentos + Filtro por Contexto
 
-### Problema 1: Categorias misturadas
-Atualmente, as categorias sao carregadas no `useTransactions` usando o `companyFilter` do contexto global (sidebar). Porem, dentro do modal de lancamentos, o usuario pode trocar o contexto (Pessoal vs Empresa) via o seletor interno. Quando troca, as categorias nao acompanham -- continuam mostrando as do contexto anterior.
+## Atualizacoes no Dashboard: Cards extras + Filtros melhorados
 
-### Problema 2: Sem opcao de criar categoria no modal
-O usuario precisa sair do modal, ir ate a pagina de Categorias, criar la, e voltar. Falta um botao "Criar Nova" dentro dos selects de categoria, subcategoria e sub-subcategoria.
+### 1. Novos cards "Entrada Consolidada / Prevista" e "Saida Consolidada / Prevista"
 
----
+Abaixo da fileira atual de 4 cards (Faturamento, Entradas, Saidas, Saldo), adicionar mais 4 cards no mesmo estilo visual:
 
-### Solucao
+| Card | Valor | Cor |
+|------|-------|-----|
+| Entrada Consolidada | `consolidadoReceitas` (receitas pagas) | Verde |
+| Entrada Prevista | `previstoReceitas` (receitas por competencia) | Verde claro/neutro |
+| Saida Consolidada | `consolidadoSaidas` (despesas pagas) | Vermelho |
+| Saida Prevista | `previstoSaidas` (despesas por competencia) | Vermelho claro/neutro |
 
-#### 1. Filtrar categorias pelo contexto do formulario
+Os dados ja existem no hook `useDashboardData` (campos `consolidadoReceitas`, `consolidadoSaidas`, `previstoReceitas`, `previstoSaidas`). A secao "Previsto vs Consolidado" com barras de progresso sera mantida ou removida conforme preferencia, ja que os novos cards substituem visualmente essa informacao.
 
-No `TransactionFormModal`, em vez de usar as `categories` vindas do `useTransactions` (filtradas pelo contexto global), filtrar localmente pelo `formCompanyId`:
+**Arquivo:** `src/components/dashboard/SummaryCards.tsx`
 
-- Adicionar um estado local de categorias no modal
-- Buscar categorias do Supabase quando `formCompanyId` mudar (pessoal = `company_id IS NULL`, empresa = `company_id = X`)
-- Usar essas categorias locais para popular os selects de categoria/subcategoria/sub-subcategoria
+### 2. Filtro de periodo no header: setas de navegacao por mes
 
-#### 2. Botao "Criar Nova" nos selects de categoria
+Substituir o botao "Personalizado" por um controle de navegacao mensal:
 
-Adicionar em cada nivel de categoria (categoria, subcategoria, sub-subcategoria) um botao/item especial no dropdown que abre um mini-dialog inline para criar a categoria:
+- Botoes: Hoje | Semana | Mes | Ano
+- Depois: seta esquerda `<` | "Fev 2026" (mes/ano atual) | seta direita `>`
+- As setas avancam/retrocedem o mes
+- Clicar no label do mes abre o calendario para selecao personalizada de range
 
-- Campo de nome
-- Tipo herdado do pai (ou selecionavel no nivel raiz)
-- `parent_id` automatico conforme o nivel
-- Apos criar, recarregar a lista de categorias e selecionar a nova automaticamente
+**Arquivo:** `src/components/dashboard/PeriodFilter.tsx`
+**Arquivo:** `src/hooks/useDashboardData.ts` (nenhuma mudanca necessaria, ja suporta `custom` com datas)
 
-#### 3. Componente reutilizavel
+### 3. Botao "Ano todo" na Projecao de Saldo
 
-Criar um componente `CategorySelectWithCreate` que encapsula:
-- O Select com as opcoes existentes
-- Um item "+ Criar nova" no final da lista
-- Um mini-dialog/popover para o formulario de criacao rapida
-- Callback para atualizar o form apos criacao
+Adicionar uma quarta opcao ao lado de 30/60/90 dias no grafico de projecao:
+
+- Opcoes: 30 dias | 60 dias | 90 dias | Ano todo
+
+O "Ano todo" calcula os dias restantes ate o final do ano e usa como horizonte de projecao.
+
+**Arquivo:** `src/components/dashboard/BalanceProjectionChart.tsx`
+**Arquivo:** `src/hooks/useDashboardData.ts` (ajustar tipo `ProjectionDays` para aceitar `365` ou `"year"`)
 
 ---
 
 ### Detalhes Tecnicos
 
-**Arquivos modificados:**
+**SummaryCards.tsx:**
+- Adicionar segunda fileira de 4 `SummaryCard` abaixo da primeira
+- Cards: Entrada Consolidada (icone CheckCircle, verde), Entrada Prevista (icone Clock, azul), Saida Consolidada (icone CheckCircle, vermelho), Saida Prevista (icone Clock, laranja)
 
-1. **`src/components/lancamentos/TransactionFormModal.tsx`**
-   - Adicionar estado `formCategories` com fetch proprio baseado em `formCompanyId`
-   - Substituir os 3 selects de categoria pelo novo componente `CategorySelectWithCreate`
-   - Passar `formCompanyId` e callback de refresh
+**PeriodFilter.tsx:**
+- Manter botoes Hoje, Semana, Mes, Ano
+- Substituir o Popover "Personalizado" por: `ChevronLeft` | label clicavel "Mes/Ano" | `ChevronRight`
+- Estado interno `customMonth` (Date) que navega mes a mes
+- Ao clicar nas setas: seta o filtro como `custom` com inicio/fim do mes correspondente
+- Ao clicar no label: abre Popover com Calendar em modo range
 
-2. **Novo: `src/components/lancamentos/CategorySelectWithCreate.tsx`**
-   - Props: `categories`, `value`, `onChange`, `placeholder`, `parentId?`, `formCompanyId`, `activeTab`, `onCategoryCreated`
-   - Renderiza um Select com as categorias + item "+ Criar nova"
-   - Ao clicar em "+ Criar nova", abre um Dialog com campo de nome
-   - Insere no Supabase com `user_id`, `company_id`, `parent_id`, `type`
-   - Chama `onCategoryCreated()` para refetch e auto-seleciona a nova
+**BalanceProjectionChart.tsx:**
+- Alterar tipo `ProjectionDays` para `number` (ou union `30 | 60 | 90 | 365`)
+- Adicionar opcao `{ days: 365, label: "Ano todo" }` no array de opcoes
+- No `useDashboardData`, o `getProjectionData` ja aceita qualquer numero de dias, entao basta adicionar o botao
 
-3. **`src/components/lancamentos/TransactionFormModal.tsx` (MainFormContent)**
-   - Receber `formCompanyId` como prop
-   - useEffect para buscar categorias quando `formCompanyId` muda
-   - Substituir os blocos de FormField de categoria/subcategoria/sub-subcategoria pelo novo componente
-
-**Fluxo de dados:**
-```text
-formCompanyId muda
-  -> fetch categories WHERE company_id = X (ou IS NULL)
-  -> popula rootCategories, subCategories, subSubCategories
-  -> cada select tem opcao "+ Criar nova"
-  -> ao criar, insert no Supabase + refetch + auto-select
-```
