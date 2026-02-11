@@ -57,18 +57,22 @@ export function TransactionTable({
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount);
 
+  const findCategory = (value: string | null | undefined) => {
+    if (!value) return null;
+    return categories.find((c) => c.id === value || c.name === value) ?? null;
+  };
+
   const getCategoryHierarchy = (t: Transaction) => {
     const parts: string[] = [];
-    const cat = categories.find((c) => c.id === t.category);
+    const cat = findCategory(t.category);
     if (cat) parts.push(cat.name);
-    if (t.subcategory) {
-      const sub = categories.find((c) => c.id === t.subcategory);
-      if (sub) parts.push(sub.name);
-    }
-    if (t.subcategory2) {
-      const sub2 = categories.find((c) => c.id === t.subcategory2);
-      if (sub2) parts.push(sub2.name);
-    }
+    else if (t.category) parts.push(t.category);
+    const sub = findCategory(t.subcategory);
+    if (sub) parts.push(sub.name);
+    else if (t.subcategory) parts.push(t.subcategory);
+    const sub2 = findCategory(t.subcategory2);
+    if (sub2) parts.push(sub2.name);
+    else if (t.subcategory2) parts.push(t.subcategory2);
     return parts;
   };
 
