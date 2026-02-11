@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, CalendarIcon } from "lucide-react";
+import { Search, CalendarIcon, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -86,6 +86,28 @@ export function TransactionFilters({
             Saídas
           </ToggleGroupItem>
         </ToggleGroup>
+
+        {/* Sort order */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-2 h-10"
+          onClick={() =>
+            onFiltersChange({
+              ...filters,
+              sortOrder: filters.sortOrder === "desc" ? "asc" : "desc",
+            })
+          }
+        >
+          {filters.sortOrder === "desc" ? (
+            <ArrowDown className="h-4 w-4" />
+          ) : (
+            <ArrowUp className="h-4 w-4" />
+          )}
+          <span className="text-xs">
+            {filters.sortOrder === "desc" ? "Recentes" : "Antigos"}
+          </span>
+        </Button>
 
         {/* Category */}
         <Select

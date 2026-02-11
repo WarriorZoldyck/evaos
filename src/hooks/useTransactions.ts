@@ -15,6 +15,7 @@ export interface TransactionFilters {
   categoryId: string;
   dateFrom: string;
   dateTo: string;
+  sortOrder: "desc" | "asc";
 }
 
 interface BankAccount {
@@ -84,6 +85,7 @@ export function useTransactions() {
     categoryId: "",
     dateFrom: "",
     dateTo: "",
+    sortOrder: "desc",
   });
 
   // Auxiliary data
@@ -210,9 +212,11 @@ export function useTransactions() {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
+    const ascending = filters.sortOrder === "asc";
+
     const { data, count, error } = await query
-      .order("payment_date", { ascending: false })
-      .order("created_at", { ascending: false })
+      .order("payment_date", { ascending })
+      .order("created_at", { ascending })
       .range(from, to);
 
     if (error) {
