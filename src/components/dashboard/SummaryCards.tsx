@@ -1,7 +1,6 @@
-import { TrendingUp, TrendingDown, Wallet, DollarSign } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, CheckCircle, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 
 interface SummaryCardsProps {
   faturamento: number;
@@ -62,73 +61,6 @@ function SummaryCard({ title, value, icon: Icon, trend, gradient, loading }: Car
   );
 }
 
-function ForecastSection({
-  previstoReceitas,
-  previstoSaidas,
-  consolidadoReceitas,
-  consolidadoSaidas,
-  loading,
-}: {
-  previstoReceitas: number;
-  previstoSaidas: number;
-  consolidadoReceitas: number;
-  consolidadoSaidas: number;
-  loading: boolean;
-}) {
-  const pctReceitas = previstoReceitas > 0 ? Math.min((consolidadoReceitas / previstoReceitas) * 100, 100) : 0;
-  const pctSaidas = previstoSaidas > 0 ? Math.min((consolidadoSaidas / previstoSaidas) * 100, 100) : 0;
-
-  return (
-    <Card className="shadow-premium">
-      <CardContent className="pt-6">
-        <p className="text-sm font-semibold font-display text-foreground mb-4">Previsto vs Consolidado</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-          {/* Receitas */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Receitas</p>
-            {loading ? (
-              <Skeleton className="h-16 w-full" />
-            ) : (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Previsto</span>
-                  <span className="font-medium text-foreground">{formatCurrency(previstoReceitas)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Consolidado</span>
-                  <span className="font-medium text-success">{formatCurrency(consolidadoReceitas)}</span>
-                </div>
-                <Progress value={pctReceitas} className="h-2" />
-                <p className="text-xs text-muted-foreground text-right">{pctReceitas.toFixed(0)}% realizado</p>
-              </>
-            )}
-          </div>
-          {/* Despesas */}
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Despesas</p>
-            {loading ? (
-              <Skeleton className="h-16 w-full" />
-            ) : (
-              <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Previsto</span>
-                  <span className="font-medium text-foreground">{formatCurrency(previstoSaidas)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Consolidado</span>
-                  <span className="font-medium text-destructive">{formatCurrency(consolidadoSaidas)}</span>
-                </div>
-                <Progress value={pctSaidas} className="h-2" />
-                <p className="text-xs text-muted-foreground text-right">{pctSaidas.toFixed(0)}% realizado</p>
-              </>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function SummaryCards({ faturamento, entradas, saidas, saldo, previstoReceitas, previstoSaidas, consolidadoReceitas, consolidadoSaidas, loading }: SummaryCardsProps) {
   return (
     <div className="space-y-4">
@@ -166,13 +98,40 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, previstoRec
           loading={loading}
         />
       </div>
-      <ForecastSection
-        previstoReceitas={previstoReceitas}
-        previstoSaidas={previstoSaidas}
-        consolidadoReceitas={consolidadoReceitas}
-        consolidadoSaidas={consolidadoSaidas}
-        loading={loading}
-      />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SummaryCard
+          title="Entrada Consolidada"
+          value={consolidadoReceitas}
+          icon={CheckCircle}
+          trend="up"
+          gradient="bg-gradient-success"
+          loading={loading}
+        />
+        <SummaryCard
+          title="Entrada Prevista"
+          value={previstoReceitas}
+          icon={Clock}
+          trend="neutral"
+          gradient="bg-gradient-primary"
+          loading={loading}
+        />
+        <SummaryCard
+          title="Saída Consolidada"
+          value={consolidadoSaidas}
+          icon={CheckCircle}
+          trend="down"
+          gradient="bg-gradient-destructive"
+          loading={loading}
+        />
+        <SummaryCard
+          title="Saída Prevista"
+          value={previstoSaidas}
+          icon={Clock}
+          trend="down"
+          gradient="bg-gradient-destructive"
+          loading={loading}
+        />
+      </div>
     </div>
   );
 }
