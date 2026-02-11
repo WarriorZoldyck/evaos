@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -30,18 +30,18 @@ interface TerminalFormModalProps {
 }
 
 const DECORATIVE_KEYS = [
-  { label: "1", sub: "" },
-  { label: "2", sub: "abc" },
-  { label: "3", sub: "def" },
-  { label: "4", sub: "ghi" },
-  { label: "5", sub: "jkl" },
-  { label: "6", sub: "mno" },
-  { label: "7", sub: "pqrs" },
-  { label: "8", sub: "tuv" },
-  { label: "9", sub: "wxyz" },
-  { label: "✱", sub: "" },
-  { label: "0", sub: "" },
-  { label: "#", sub: "" },
+  { label: "1", value: "1" },
+  { label: "2", value: "2", sub: "abc" },
+  { label: "3", value: "3", sub: "def" },
+  { label: "4", value: "4", sub: "ghi" },
+  { label: "5", value: "5", sub: "jkl" },
+  { label: "6", value: "6", sub: "mno" },
+  { label: "7", value: "7", sub: "pqrs" },
+  { label: "8", value: "8", sub: "tuv" },
+  { label: "9", value: "9", sub: "wxyz" },
+  { label: "✱", value: "." },
+  { label: "0", value: "0" },
+  { label: "⌫", value: "backspace" },
 ];
 
 export function TerminalFormModal({
@@ -61,9 +61,19 @@ export function TerminalFormModal({
   const [settlementDaysCredit, setSettlementDaysCredit] = useState("");
   const [ratesInfo, setRatesInfo] = useState<RateInfo[]>([]);
   const [saving, setSaving] = useState(false);
+  const [activeField, setActiveField] = useState<string | null>(null);
+  const [pressedKey, setPressedKey] = useState<string | null>(null);
+
+  const fieldSetters: Record<string, [string, (v: string) => void]> = {
+    settlementDaysDebit: [settlementDaysDebit, setSettlementDaysDebit],
+    debitRate: [debitRate, setDebitRate],
+    settlementDaysCredit: [settlementDaysCredit, setSettlementDaysCredit],
+    creditRate: [creditRate, setCreditRate],
+  };
 
   useEffect(() => {
     if (!open) return;
+    setActiveField(null);
     if (editData) {
       setName(editData.name || "");
       setAcquirer(editData.acquirer || "");
@@ -94,6 +104,22 @@ export function TerminalFormModal({
     setRatesInfo(updated);
   };
 
+  const handleKeyPress = useCallback((keyValue: string) => {
+    setPressedKey(keyValue);
+    setTimeout(() => setPressedKey(null), 150);
+
+    if (!activeField || !fieldSetters[activeField]) return;
+    const [current, setter] = fieldSetters[activeField];
+
+    if (keyValue === "backspace") {
+      setter(current.slice(0, -1));
+    } else if (keyValue === ".") {
+      if (!current.includes(".")) setter(current + ".");
+    } else {
+      setter(current + keyValue);
+    }
+  }, [activeField, fieldSetters]);
+
   const handleSave = async () => {
     if (!name.trim() || !bankAccountId) return;
     setSaving(true);
@@ -113,8 +139,12 @@ export function TerminalFormModal({
     if (success) onClose();
   };
 
-  const screenInputClass =
-    "bg-white/10 border border-cyan-400/30 text-white font-mono text-sm placeholder:text-white/30 focus:border-cyan-300 focus:ring-1 focus:ring-cyan-300/40 h-8 rounded-lg transition-colors";
+  const screenInputClass = (field: string) =>
+    `bg-white/10 border text-white font-mono text-sm placeholder:text-white/30 focus:ring-1 h-8 rounded-lg transition-all ${
+      activeField === field
+        ? "border-cyan-300 ring-1 ring-cyan-300/40 bg-white/15"
+        : "border-cyan-400/30 focus:border-cyan-300 focus:ring-cyan-300/40"
+    }`;
   const bodyInputClass =
     "bg-white/10 border border-white/20 text-white placeholder:text-white/30 focus:border-cyan-300 focus:ring-1 focus:ring-cyan-300/40 h-9 rounded-lg transition-colors";
 
@@ -139,7 +169,6 @@ export function TerminalFormModal({
             padding: "6px",
           }}
         >
-          {/* Inner bezel */}
           <div
             className="relative overflow-hidden"
             style={{
@@ -177,24 +206,20 @@ export function TerminalFormModal({
             >
               <div className="max-h-[340px] overflow-y-auto p-4 space-y-4 scrollbar-thin">
                 {/* Name */}
-                <div>
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="NOME DA MAQUININHA"
-                    className="w-full bg-transparent text-white font-bold text-base tracking-wide placeholder:text-white/25 border-none outline-none"
-                  />
-                </div>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="NOME DA MAQUININHA"
+                  className="w-full bg-transparent text-white font-bold text-base tracking-wide placeholder:text-white/25 border-none outline-none"
+                />
 
                 {/* Acquirer */}
-                <div>
-                  <input
-                    value={acquirer}
-                    onChange={(e) => setAcquirer(e.target.value)}
-                    placeholder="Adquirente (REDE, CIELO...)"
-                    className="w-full bg-transparent text-cyan-200/70 text-xs tracking-wider placeholder:text-white/20 border-none outline-none"
-                  />
-                </div>
+                <input
+                  value={acquirer}
+                  onChange={(e) => setAcquirer(e.target.value)}
+                  placeholder="Adquirente (REDE, CIELO...)"
+                  className="w-full bg-transparent text-cyan-200/70 text-xs tracking-wider placeholder:text-white/20 border-none outline-none"
+                />
 
                 {/* Rates grid */}
                 <div className="space-y-2.5">
@@ -208,19 +233,19 @@ export function TerminalFormModal({
                   <div className="grid grid-cols-2 gap-2.5">
                     <div className="space-y-1">
                       <label className="text-[9px] font-mono text-cyan-400/80 uppercase tracking-wider">D+ Débito</label>
-                      <Input type="number" min="0" value={settlementDaysDebit} onChange={(e) => setSettlementDaysDebit(e.target.value)} placeholder="1" className={screenInputClass} />
+                      <Input type="number" min="0" value={settlementDaysDebit} onChange={(e) => setSettlementDaysDebit(e.target.value)} onFocus={() => setActiveField("settlementDaysDebit")} placeholder="1" className={screenInputClass("settlementDaysDebit")} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-mono text-cyan-400/80 uppercase tracking-wider">Taxa Débito %</label>
-                      <Input type="number" step="0.01" min="0" value={debitRate} onChange={(e) => setDebitRate(e.target.value)} placeholder="0.99" className={screenInputClass} />
+                      <Input type="number" step="0.01" min="0" value={debitRate} onChange={(e) => setDebitRate(e.target.value)} onFocus={() => setActiveField("debitRate")} placeholder="0.99" className={screenInputClass("debitRate")} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-mono text-cyan-400/80 uppercase tracking-wider">D+ Crédito</label>
-                      <Input type="number" min="0" value={settlementDaysCredit} onChange={(e) => setSettlementDaysCredit(e.target.value)} placeholder="30" className={screenInputClass} />
+                      <Input type="number" min="0" value={settlementDaysCredit} onChange={(e) => setSettlementDaysCredit(e.target.value)} onFocus={() => setActiveField("settlementDaysCredit")} placeholder="30" className={screenInputClass("settlementDaysCredit")} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[9px] font-mono text-cyan-400/80 uppercase tracking-wider">Taxa Crédito %</label>
-                      <Input type="number" step="0.01" min="0" value={creditRate} onChange={(e) => setCreditRate(e.target.value)} placeholder="3.29" className={screenInputClass} />
+                      <Input type="number" step="0.01" min="0" value={creditRate} onChange={(e) => setCreditRate(e.target.value)} onFocus={() => setActiveField("creditRate")} placeholder="3.29" className={screenInputClass("creditRate")} />
                     </div>
                   </div>
                 </div>
@@ -274,22 +299,38 @@ export function TerminalFormModal({
               </div>
             </div>
 
-            {/* ===== DECORATIVE KEYPAD ===== */}
+            {/* ===== FUNCTIONAL KEYPAD ===== */}
             <div className="px-6 pt-4 pb-2">
+              {activeField && (
+                <div className="text-center mb-2">
+                  <span className="text-[8px] font-mono text-cyan-400/60 uppercase tracking-widest">
+                    Editando: {activeField === "settlementDaysDebit" ? "D+ Débito" : activeField === "debitRate" ? "Taxa Débito" : activeField === "settlementDaysCredit" ? "D+ Crédito" : "Taxa Crédito"}
+                  </span>
+                </div>
+              )}
               <div className="grid grid-cols-3 gap-1.5">
                 {DECORATIVE_KEYS.map((key) => (
-                  <div
+                  <button
                     key={key.label}
-                    className="flex flex-col items-center justify-center h-9 rounded-lg select-none"
+                    type="button"
+                    onClick={() => handleKeyPress(key.value)}
+                    disabled={!activeField}
+                    className={`flex flex-col items-center justify-center h-9 rounded-lg select-none transition-all ${
+                      !activeField
+                        ? "opacity-40 cursor-not-allowed"
+                        : "cursor-pointer active:scale-95 hover:bg-white/15"
+                    } ${pressedKey === key.value ? "scale-95 bg-white/20" : ""}`}
                     style={{
-                      background: "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)",
+                      background: pressedKey === key.value
+                        ? "linear-gradient(180deg, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.10) 100%)"
+                        : "linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)",
                       boxShadow: "0 1px 2px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
                       border: "1px solid rgba(255,255,255,0.1)",
                     }}
                   >
                     <span className="text-white/70 text-sm font-semibold leading-none">{key.label}</span>
                     {key.sub && <span className="text-white/30 text-[7px] leading-none mt-0.5">{key.sub}</span>}
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
