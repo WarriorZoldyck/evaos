@@ -1,37 +1,58 @@
 
 
-## Correcao: Data de Vencimento do Cartao de Credito
+## Correção em Massa: Datas de Pagamento de Cartão de Crédito
 
-### Problema
+### Diagnóstico
 
-Quando o usuario seleciona um cartao de credito em uma despesa, o sistema esta definindo a **data de pagamento** como o **dia de fechamento** (`closing_day`) em vez do **dia de vencimento** (`due_day`).
+Foram encontradas **100 transações** com a data de pagamento incorreta (dia diferente do `due_day` do cartão) em **2 usuários**:
 
-O codigo atual no arquivo `PaymentMethodFields.tsx` (linhas 71-86) calcula a data usando `selectedCreditCard.closing_day` e a salva diretamente como `payment_date`.
+| Usuário | Transações incorretas |
+|---------|----------------------|
+| 673ade6e... | 97 |
+| b049592f... | 3 |
 
-### Logica Correta
+Já existem 82 transações com a data correta (provavelmente criadas após a correção do código).
 
-A data de pagamento deve ser o **dia do vencimento** (`due_day`), calculada com base no ciclo de fechamento:
+### Causa
 
-1. Se hoje esta **antes** do dia de fechamento, a fatura atual vence no **mes atual** no `due_day`
-2. Se hoje esta **no dia ou apos** o fechamento, a fatura vence no **proximo mes** no `due_day`
-3. Se o `due_day` for menor que o `closing_day` (ex: fecha dia 25, vence dia 5), o vencimento cai no mes seguinte ao fechamento
+O sistema utilizava o `closing_day` (dia de fechamento) ou outros dias ao invés do `due_day` (dia de vencimento) na `payment_date`.
 
-### Exemplo
+### Lógica de Correção
 
-- Cartao: Fechamento dia 25, Vencimento dia 5
-- Hoje: 11/02/2026 (antes do fechamento dia 25)
-- Fatura atual fecha em 25/02/2026
-- **Vencimento correto: 05/03/2026** (mes seguinte ao fechamento)
-- Atualmente o sistema coloca: 25/02/2026 (errado, usa o fechamento)
+A correção precisa recalcular a `payment_date` com base na `competence_date` (data da compra) e no ciclo do cartão:
 
-### Alteracao
+1. Se a compra foi feita **antes** do dia de fechamento: pertence ao ciclo daquele mês
+2. Se a compra foi feita **no dia ou após** o fechamento: pertence ao ciclo do mês seguinte
+3. O vencimento (`due_day`) cai no mês do fechamento se `due_day > closing_day`, ou no mês seguinte se `due_day < closing_day`
 
-**Arquivo:** `src/components/lancamentos/PaymentMethodFields.tsx`
+### Execução
 
-Substituir o `useEffect` (linhas 71-86) para:
+Será executado um script SQL diretamente no banco de dados (via SQL Editor do Supabase) que:
 
-1. Determinar o mes de fechamento da fatura atual
-2. Calcular a data de vencimento usando `due_day`
-3. Se `due_day` < `closing_day`, avancar um mes (vencimento cai no mes seguinte ao fechamento)
-4. Definir `payment_date` com a data de vencimento correta
+1. Cruza cada transação de cartão de crédito com os dados do cartão (`closing_day` e `due_day`)
+2. Recalcula a `payment_date` correta usando a lógica acima
+3. Atualiza apenas as transações onde o dia da `payment_date` atual difere do `due_day`
+
+### Detalhes Técnicos
+
+O SQL calculará a data correta assim:
+
+```text
+Para cada transação:
+  competence_day = dia da competence_date
+  
+  Se competence_day < closing_day:
+    closing_month = mês da competence_date
+  Senão:
+    closing_month = mês seguinte à competence_date
+  
+  Se due_day < closing_day:
+    due_month = closing_month + 1
+  Senão:
+    due_month = closing_month
+  
+  payment_date = due_month/due_day/ano
+```
+
+O script será executado no SQL Editor do Supabase para corrigir todas as 100 transações de uma vez.
 
