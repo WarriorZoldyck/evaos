@@ -44,6 +44,9 @@ interface Transaction {
   company_id: string | null;
   contact_name: string | null;
   series_id: string | null;
+  installment_number: number | null;
+  installments_total: number | null;
+  original_amount: number | null;
 }
 
 export interface CategorySummary {
@@ -135,7 +138,7 @@ export function useDashboardData(filters: DashboardFilters) {
     const fetchCompetenceTransactions = async () => {
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr);
 
@@ -191,10 +194,22 @@ export function useDashboardData(filters: DashboardFilters) {
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // Faturamento: todas as receitas por competência no período
+    // Faturamento: valor bruto total das vendas por competência no período
     const faturamento = competenceTransactions
       .filter((t) => t.type === "receita")
-      .reduce((acc, t) => acc + Number(t.amount), 0);
+      .reduce((acc, t) => {
+        // Transação avulsa (sem série): usar amount normalmente
+        if (!t.series_id) return acc + Number(t.amount);
+        // Parcela 1: usar valor bruto total (amount * installments_total)
+        if (t.installment_number === 1) {
+          const totalValue = t.original_amount
+            ? Number(t.original_amount)
+            : Number(t.amount) * (t.installments_total || 1);
+          return acc + totalValue;
+        }
+        // Parcelas 2+: ignorar (já contabilizado na parcela 1)
+        return acc;
+      }, 0);
 
     const saldo = entradas - saidas;
 
