@@ -1,75 +1,68 @@
 
 
-## Redesign do Formulario de Maquininha - Layout Skeuomorfico
+## Redesign da Maquininha - Moldura Realista Estilo Ton/Moderninha
 
 ### Conceito
 
-Transformar o formulario atual (modal generico com inputs) em um layout visual que lembra uma maquininha de cartao fisica, usando tons de azul alinhados com a identidade EVA OS.
+Criar uma moldura CSS que simule o formato fisico real de uma maquininha de cartao, inspirada nos modelos Ton T2/T3 e Moderninha da imagem de referencia. O corpo tera formato retangular com cantos arredondados generosos, uma "tela" touchscreen destacada no topo, e um "teclado" numerico decorativo na parte inferior.
 
-### Layout Visual
-
-O modal tera um "corpo" de maquininha com:
-
-1. **Topo da maquininha** - Header arredondado azul escuro com o nome/logo da adquirente e um indicador LED (bolinha verde pulsante)
-2. **Tela/Display** - Area central com fundo escuro simulando a tela LCD da maquininha, onde ficam os campos de taxa e prazos de liquidacao (D+ Debito, D+ Credito, Taxa Debito, Taxa Credito)
-3. **Corpo principal** - Area azul com gradiente sutil, contendo os campos basicos (Nome, Adquirente, Conta de Recebimento, Identificacao/Serial)
-4. **Teclado/Area inferior** - Secao das taxas por parcelamento estilizada como "teclas" da maquininha, com cards individuais por plano de parcelamento
-5. **Slot do cartao** - Detalhe decorativo no topo simulando a entrada do cartao
-
-### Paleta de Cores
-
-- Corpo: gradiente de `#1e3a5f` para `#2563eb` (azul escuro para azul eletrico)
-- Display/tela: `#0f172a` com texto cyan/verde (estilo LCD)
-- Botoes: azul mais claro com hover em cyan
-- Bordas arredondadas generosas para simular o formato fisico
-
-### Estrutura do Componente
+### Estrutura Visual
 
 ```text
-+------------------------------------------+
-|  [====  Slot do Cartao  ====]            |
-|                                          |
-|  (LED)  NOME DA MAQUININHA               |
-|         Adquirente                       |
-|                                          |
-|  +------------------------------------+  |
-|  |  DISPLAY LCD                       |  |
-|  |  D+ Debito: [1]   Taxa: [0.99%]   |  |
-|  |  D+ Credito: [30]  Taxa: [3.29%]  |  |
-|  +------------------------------------+  |
-|                                          |
-|  Conta: [Select____________]             |
-|  Serial: [________________]              |
-|                                          |
-|  TAXAS POR PARCELAMENTO                  |
-|  [2x 4.5%] [3x 5.2%] [+ Novo]          |
-|                                          |
-|  [Cancelar]          [Criar Maquininha]  |
-+------------------------------------------+
+         ___________________
+        /                   \        <- Topo arredondado
+       |  * LED              |
+       |  +-----------------+|
+       |  |                 ||       <- Tela/Display (conteudo principal)
+       |  |  Nome, Taxas,   ||
+       |  |  Conta, Serial  ||
+       |  |  Parcelamento   ||
+       |  |                 ||
+       |  +-----------------+|
+       |                     |
+       |  [1] [2abc] [3def]  |       <- Teclado decorativo (visual only)
+       |  [4ghi] [5jkl] [6] |
+       |  [7] [8tuv] [9wxyz]|
+       |  [*] [0   ] [#]    |
+       |                     |
+       |  [Cancelar] [OK >>] |       <- Botoes de acao
+       |                     |
+        \___________________/        <- Base arredondada
 ```
 
-### Detalhes de Implementacao
+### Mudancas Principais vs. Versao Atual
+
+1. **Moldura externa mais pronunciada**: Borda grossa com gradiente 3D, sombras laterais e `border-radius` grande para simular plastico moldado
+2. **Tela embutida**: A area de conteudo (inputs, selects) fica dentro de uma "tela" com borda fina e cantos arredondados, simulando um display touchscreen
+3. **Teclado decorativo**: Grid 3x4 de "teclas" puramente decorativas na parte inferior, dando o aspecto visual de maquininha real (nao interativas)
+4. **Alto-relevo e profundidade**: Uso de multiplas camadas de sombra (`box-shadow`) e bordas para dar sensacao de volume/3D
+5. **Conteudo visivel e agradavel**: Fundo da tela mais claro (nao preto puro), labels com bom contraste, inputs com fundo semi-transparente branco para legibilidade
+
+### Paleta e Estetica
+
+- **Corpo/moldura**: Azul EVA OS com gradiente de `#1a3a6c` para `#2563eb`, com borda interna mais clara para efeito de chanfro
+- **Tela**: Fundo `#0c1829` com borda fina azul-clara, texto branco e labels em cyan claro
+- **Teclas decorativas**: Botoes pequenos com `bg-white/10`, bordas sutis, texto branco/cinza
+- **Slot do cartao**: Fenda horizontal no topo com sombra interna
+- **LED**: Verde pulsante como indicador de "ligada"
+
+### Visibilidade do Conteudo
+
+- Labels com tamanho `text-xs` e cor `text-cyan-300` (bom contraste no fundo escuro)
+- Inputs com fundo `bg-white/10` e texto branco, placeholder visivel
+- Secoes claramente separadas dentro da tela
+- Scroll interno apenas na area da tela, moldura fixa
+
+### Detalhes Tecnicos
 
 **Arquivo modificado:** `src/components/contas/TerminalFormModal.tsx`
 
-- Manter toda a logica de estado e handlers existentes (sem mudanca funcional)
-- Substituir apenas o JSX/layout dentro do DialogContent
-- Usar classes Tailwind para o design skeuomorfico (gradientes, sombras internas, bordas arredondadas)
-- Animacao sutil no LED (pulse) e transicoes nos inputs ao focar
-- Display LCD com fonte monospacada e cor cyan
-- Responsivo: em telas menores, o layout se adapta mantendo a estetica
-
-### Elementos de Design
-
-- **LED indicator**: Bolinha verde com animacao `animate-pulse` no header
-- **Card slot**: Barra fina com gradiente no topo simulando entrada do cartao
-- **Display**: `bg-slate-900` com `font-mono text-cyan-400` para efeito LCD
-- **Corpo**: `bg-gradient-to-b from-blue-800 to-blue-600` com `rounded-2xl`
-- **Inputs dentro do display**: Estilizados com fundo transparente e bordas cyan
-- **Botoes de parcelamento**: Cards compactos com hover effect tipo "tecla"
-- **Sombra interna**: `shadow-inner` no display para profundidade
-
-### Arquivo modificado
-
-- `src/components/contas/TerminalFormModal.tsx` (unico arquivo, apenas mudanca visual)
+- Logica de estado e handlers permanece identica
+- JSX completamente reescrito com a nova estrutura:
+  - Container externo com formato de maquininha (padding lateral grosso, bordas 3D)
+  - Area da "tela" com scroll interno contendo todos os campos do formulario
+  - Grid 3x4 de teclas decorativas abaixo da tela
+  - Botoes Cancelar/Salvar estilizados como botoes fisicos da maquininha
+- Tailwind CSS puro, sem dependencias extras
+- Efeito 3D via multiplas camadas de `box-shadow` e `border` com cores graduais
 
