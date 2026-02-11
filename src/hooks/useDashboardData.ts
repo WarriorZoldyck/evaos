@@ -97,6 +97,7 @@ export function useDashboardData(filters: DashboardFilters) {
   const { selectedCompanyId, isPersonal } = useCompany();
   const { occurrences: recurringOccurrences, loading: recurringLoading, refetch: refetchRecurring } = useRecurringTransactions(90);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [competenceTransactions, setCompetenceTransactions] = useState<Transaction[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -131,7 +132,28 @@ export function useDashboardData(filters: DashboardFilters) {
       setLoading(false);
     };
 
+    const fetchCompetenceTransactions = async () => {
+      let query = supabase
+        .from("transactions")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name")
+        .gte("competence_date", startStr)
+        .lte("competence_date", endStr);
+
+      if (isPersonal) {
+        query = query.is("company_id", null);
+      } else if (selectedCompanyId) {
+        query = query.eq("company_id", selectedCompanyId);
+      }
+
+      const { data, error } = await query;
+
+      if (!error && data) {
+        setCompetenceTransactions(data as Transaction[]);
+      }
+    };
+
     fetchTransactions();
+    fetchCompetenceTransactions();
   }, [user, selectedCompanyId, isPersonal, startStr, endStr]);
 
   // Fetch all transactions for projections (no date filter)
@@ -168,20 +190,24 @@ export function useDashboardData(filters: DashboardFilters) {
     const saidas = paidTransactions
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
-    const faturamento = transactions
+
+    // Faturamento: todas as receitas por competência no período
+    const faturamento = competenceTransactions
       .filter((t) => t.type === "receita")
       .reduce((acc, t) => acc + Number(t.amount), 0);
+
     const saldo = entradas - saidas;
 
+    // Previsto: todas as transações por competência no período
     const previstoReceitas = faturamento;
-    const previstoSaidas = transactions
+    const previstoSaidas = competenceTransactions
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
     const consolidadoReceitas = entradas;
     const consolidadoSaidas = saidas;
 
     return { faturamento, entradas, saidas, saldo, previstoReceitas, previstoSaidas, consolidadoReceitas, consolidadoSaidas };
-  }, [transactions]);
+  }, [transactions, competenceTransactions]);
 
   // Upcoming (Pendente) transactions
   const upcomingTransactions = useMemo(() => {
