@@ -1,58 +1,69 @@
 
+## Criar Categorias Inline no Modal de Lancamentos + Filtro por Contexto
 
-## Correção em Massa: Datas de Pagamento de Cartão de Crédito
+### Problema 1: Categorias misturadas
+Atualmente, as categorias sao carregadas no `useTransactions` usando o `companyFilter` do contexto global (sidebar). Porem, dentro do modal de lancamentos, o usuario pode trocar o contexto (Pessoal vs Empresa) via o seletor interno. Quando troca, as categorias nao acompanham -- continuam mostrando as do contexto anterior.
 
-### Diagnóstico
+### Problema 2: Sem opcao de criar categoria no modal
+O usuario precisa sair do modal, ir ate a pagina de Categorias, criar la, e voltar. Falta um botao "Criar Nova" dentro dos selects de categoria, subcategoria e sub-subcategoria.
 
-Foram encontradas **100 transações** com a data de pagamento incorreta (dia diferente do `due_day` do cartão) em **2 usuários**:
+---
 
-| Usuário | Transações incorretas |
-|---------|----------------------|
-| 673ade6e... | 97 |
-| b049592f... | 3 |
+### Solucao
 
-Já existem 82 transações com a data correta (provavelmente criadas após a correção do código).
+#### 1. Filtrar categorias pelo contexto do formulario
 
-### Causa
+No `TransactionFormModal`, em vez de usar as `categories` vindas do `useTransactions` (filtradas pelo contexto global), filtrar localmente pelo `formCompanyId`:
 
-O sistema utilizava o `closing_day` (dia de fechamento) ou outros dias ao invés do `due_day` (dia de vencimento) na `payment_date`.
+- Adicionar um estado local de categorias no modal
+- Buscar categorias do Supabase quando `formCompanyId` mudar (pessoal = `company_id IS NULL`, empresa = `company_id = X`)
+- Usar essas categorias locais para popular os selects de categoria/subcategoria/sub-subcategoria
 
-### Lógica de Correção
+#### 2. Botao "Criar Nova" nos selects de categoria
 
-A correção precisa recalcular a `payment_date` com base na `competence_date` (data da compra) e no ciclo do cartão:
+Adicionar em cada nivel de categoria (categoria, subcategoria, sub-subcategoria) um botao/item especial no dropdown que abre um mini-dialog inline para criar a categoria:
 
-1. Se a compra foi feita **antes** do dia de fechamento: pertence ao ciclo daquele mês
-2. Se a compra foi feita **no dia ou após** o fechamento: pertence ao ciclo do mês seguinte
-3. O vencimento (`due_day`) cai no mês do fechamento se `due_day > closing_day`, ou no mês seguinte se `due_day < closing_day`
+- Campo de nome
+- Tipo herdado do pai (ou selecionavel no nivel raiz)
+- `parent_id` automatico conforme o nivel
+- Apos criar, recarregar a lista de categorias e selecionar a nova automaticamente
 
-### Execução
+#### 3. Componente reutilizavel
 
-Será executado um script SQL diretamente no banco de dados (via SQL Editor do Supabase) que:
+Criar um componente `CategorySelectWithCreate` que encapsula:
+- O Select com as opcoes existentes
+- Um item "+ Criar nova" no final da lista
+- Um mini-dialog/popover para o formulario de criacao rapida
+- Callback para atualizar o form apos criacao
 
-1. Cruza cada transação de cartão de crédito com os dados do cartão (`closing_day` e `due_day`)
-2. Recalcula a `payment_date` correta usando a lógica acima
-3. Atualiza apenas as transações onde o dia da `payment_date` atual difere do `due_day`
+---
 
-### Detalhes Técnicos
+### Detalhes Tecnicos
 
-O SQL calculará a data correta assim:
+**Arquivos modificados:**
 
+1. **`src/components/lancamentos/TransactionFormModal.tsx`**
+   - Adicionar estado `formCategories` com fetch proprio baseado em `formCompanyId`
+   - Substituir os 3 selects de categoria pelo novo componente `CategorySelectWithCreate`
+   - Passar `formCompanyId` e callback de refresh
+
+2. **Novo: `src/components/lancamentos/CategorySelectWithCreate.tsx`**
+   - Props: `categories`, `value`, `onChange`, `placeholder`, `parentId?`, `formCompanyId`, `activeTab`, `onCategoryCreated`
+   - Renderiza um Select com as categorias + item "+ Criar nova"
+   - Ao clicar em "+ Criar nova", abre um Dialog com campo de nome
+   - Insere no Supabase com `user_id`, `company_id`, `parent_id`, `type`
+   - Chama `onCategoryCreated()` para refetch e auto-seleciona a nova
+
+3. **`src/components/lancamentos/TransactionFormModal.tsx` (MainFormContent)**
+   - Receber `formCompanyId` como prop
+   - useEffect para buscar categorias quando `formCompanyId` muda
+   - Substituir os blocos de FormField de categoria/subcategoria/sub-subcategoria pelo novo componente
+
+**Fluxo de dados:**
 ```text
-Para cada transação:
-  competence_day = dia da competence_date
-  
-  Se competence_day < closing_day:
-    closing_month = mês da competence_date
-  Senão:
-    closing_month = mês seguinte à competence_date
-  
-  Se due_day < closing_day:
-    due_month = closing_month + 1
-  Senão:
-    due_month = closing_month
-  
-  payment_date = due_month/due_day/ano
+formCompanyId muda
+  -> fetch categories WHERE company_id = X (ou IS NULL)
+  -> popula rootCategories, subCategories, subSubCategories
+  -> cada select tem opcao "+ Criar nova"
+  -> ao criar, insert no Supabase + refetch + auto-select
 ```
-
-O script será executado no SQL Editor do Supabase para corrigir todas as 100 transações de uma vez.
-
