@@ -73,17 +73,29 @@ export function PaymentMethodFields({
 
     const today = new Date();
     const closingDay = selectedCreditCard.closing_day;
+    const dueDay = selectedCreditCard.due_day;
     const currentDay = today.getDate();
 
-    let closingDate: Date;
-    if (currentDay < closingDay) {
-      closingDate = new Date(today.getFullYear(), today.getMonth(), closingDay);
-    } else {
-      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-      closingDate = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), closingDay);
+    // Determine the closing month: if today is before closing, it's this month; otherwise next month
+    let closingYear = today.getFullYear();
+    let closingMonth = today.getMonth(); // 0-indexed
+    if (currentDay >= closingDay) {
+      closingMonth += 1;
     }
 
-    form.setValue("payment_date", closingDate);
+    // Due date starts in the same month as closing
+    let dueYear = closingYear;
+    let dueMonth = closingMonth;
+
+    // If due_day < closing_day, the due date falls in the month after the closing month
+    if (dueDay < closingDay) {
+      dueMonth += 1;
+    }
+
+    // Normalize overflow (e.g. month 12 → January next year)
+    const dueDate = new Date(dueYear, dueMonth, dueDay);
+
+    form.setValue("payment_date", dueDate);
   }, [selectedCreditCardId, showCreditCardSelect, selectedCreditCard, form]);
 
   // Clear irrelevant fields when payment method changes
