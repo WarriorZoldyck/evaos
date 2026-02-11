@@ -1,54 +1,75 @@
 
 
-## Correcao do Faturamento - Valor Bruto Total por Competencia
+## Redesign do Formulario de Maquininha - Layout Skeuomorfico
 
-### Problema
+### Conceito
 
-Quando uma venda de R$1000 e parcelada em 4x de R$250, cada parcela tem uma `competence_date` diferente (Fev, Mar, Abr, Mai). No mes de Fevereiro, o faturamento mostra apenas R$250 (a parcela 1), quando deveria mostrar R$1000 (o valor bruto total da venda).
+Transformar o formulario atual (modal generico com inputs) em um layout visual que lembra uma maquininha de cartao fisica, usando tons de azul alinhados com a identidade EVA OS.
 
-### Solucao
+### Layout Visual
 
-No calculo do faturamento, tratar transacoes parceladas de forma especial:
+O modal tera um "corpo" de maquininha com:
 
-- **Transacao avulsa** (sem `series_id`): usar `amount` normalmente
-- **Parcela 1 de uma serie** (`installment_number === 1`): usar o valor bruto total. Calculado como `amount * installments_total` (ou `original_amount` quando disponivel e maior que o amount)
-- **Parcelas 2+ de uma serie** (`installment_number > 1`): ignorar no calculo do faturamento (ja foi contabilizado na parcela 1)
+1. **Topo da maquininha** - Header arredondado azul escuro com o nome/logo da adquirente e um indicador LED (bolinha verde pulsante)
+2. **Tela/Display** - Area central com fundo escuro simulando a tela LCD da maquininha, onde ficam os campos de taxa e prazos de liquidacao (D+ Debito, D+ Credito, Taxa Debito, Taxa Credito)
+3. **Corpo principal** - Area azul com gradiente sutil, contendo os campos basicos (Nome, Adquirente, Conta de Recebimento, Identificacao/Serial)
+4. **Teclado/Area inferior** - Secao das taxas por parcelamento estilizada como "teclas" da maquininha, com cards individuais por plano de parcelamento
+5. **Slot do cartao** - Detalhe decorativo no topo simulando a entrada do cartao
 
-### Exemplo com dados reais
+### Paleta de Cores
 
-Venda "Teste cartao D+2": series_id = 2126bea4
-- Parcela 1: amount=250, installments_total=4, competence=2026-02-10
-- Parcela 2: amount=250, competence=2026-03-10
-- Parcela 3: amount=250, competence=2026-04-10
-- Parcela 4: amount=250, competence=2026-05-10
+- Corpo: gradiente de `#1e3a5f` para `#2563eb` (azul escuro para azul eletrico)
+- Display/tela: `#0f172a` com texto cyan/verde (estilo LCD)
+- Botoes: azul mais claro com hover em cyan
+- Bordas arredondadas generosas para simular o formato fisico
 
-**Hoje**: Faturamento de Fevereiro = R$250
-**Correto**: Faturamento de Fevereiro = R$1.000 (250 x 4)
-
-### Detalhes Tecnicos
-
-**Arquivo: `src/hooks/useDashboardData.ts`**
-
-Alterar o calculo do `faturamento` no `useMemo` do summary:
+### Estrutura do Componente
 
 ```text
-// Para cada transacao de receita no periodo por competencia:
-if (sem series_id) {
-  faturamento += amount
-} else if (installment_number === 1) {
-  // Valor bruto = parcela * total de parcelas
-  faturamento += amount * installments_total
-} else {
-  // Parcelas 2+ sao ignoradas no faturamento
-  // (ja contabilizadas na parcela 1)
-}
++------------------------------------------+
+|  [====  Slot do Cartao  ====]            |
+|                                          |
+|  (LED)  NOME DA MAQUININHA               |
+|         Adquirente                       |
+|                                          |
+|  +------------------------------------+  |
+|  |  DISPLAY LCD                       |  |
+|  |  D+ Debito: [1]   Taxa: [0.99%]   |  |
+|  |  D+ Credito: [30]  Taxa: [3.29%]  |  |
+|  +------------------------------------+  |
+|                                          |
+|  Conta: [Select____________]             |
+|  Serial: [________________]              |
+|                                          |
+|  TAXAS POR PARCELAMENTO                  |
+|  [2x 4.5%] [3x 5.2%] [+ Novo]          |
+|                                          |
+|  [Cancelar]          [Criar Maquininha]  |
++------------------------------------------+
 ```
 
-Sera necessario adicionar `installment_number`, `installments_total` e `original_amount` ao select das queries de competencia, pois hoje esses campos nao sao buscados.
+### Detalhes de Implementacao
 
-**Nota**: Os demais calculos (entradas, saidas, saldo, previsto, consolidado) permanecem iguais -- eles trabalham com fluxo de caixa real por `payment_date`.
+**Arquivo modificado:** `src/components/contas/TerminalFormModal.tsx`
+
+- Manter toda a logica de estado e handlers existentes (sem mudanca funcional)
+- Substituir apenas o JSX/layout dentro do DialogContent
+- Usar classes Tailwind para o design skeuomorfico (gradientes, sombras internas, bordas arredondadas)
+- Animacao sutil no LED (pulse) e transicoes nos inputs ao focar
+- Display LCD com fonte monospacada e cor cyan
+- Responsivo: em telas menores, o layout se adapta mantendo a estetica
+
+### Elementos de Design
+
+- **LED indicator**: Bolinha verde com animacao `animate-pulse` no header
+- **Card slot**: Barra fina com gradiente no topo simulando entrada do cartao
+- **Display**: `bg-slate-900` com `font-mono text-cyan-400` para efeito LCD
+- **Corpo**: `bg-gradient-to-b from-blue-800 to-blue-600` com `rounded-2xl`
+- **Inputs dentro do display**: Estilizados com fundo transparente e bordas cyan
+- **Botoes de parcelamento**: Cards compactos com hover effect tipo "tecla"
+- **Sombra interna**: `shadow-inner` no display para profundidade
 
 ### Arquivo modificado
 
-- `src/hooks/useDashboardData.ts` (unico arquivo)
+- `src/components/contas/TerminalFormModal.tsx` (unico arquivo, apenas mudanca visual)
 
