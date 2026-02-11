@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format, addMonths } from "date-fns";
 import { CalendarIcon, Loader2, User, Building2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,6 +52,7 @@ import type {
   CreditCard,
 } from "@/hooks/useTransactions";
 import { PaymentMethodFields } from "./PaymentMethodFields";
+import { CategorySelectWithCreate } from "./CategorySelectWithCreate";
 
 // Currency mask input for BRL
 function CurrencyInput({
@@ -281,6 +283,23 @@ export function TransactionFormModal({
   const [activeTab, setActiveTab] = useState<"receita" | "despesa" | "transferencia">("despesa");
   const [saving, setSaving] = useState(false);
   const [formCompanyId, setFormCompanyId] = useState<string | null>(null);
+  const [formCategories, setFormCategories] = useState<Category[]>([]);
+
+  const fetchFormCategories = useCallback(async () => {
+    if (!user) return;
+    let query = supabase.from("categories").select("*");
+    if (formCompanyId === null) {
+      query = query.is("company_id", null);
+    } else {
+      query = query.eq("company_id", formCompanyId);
+    }
+    const { data } = await query.order("name");
+    setFormCategories(data || []);
+  }, [user, formCompanyId]);
+
+  useEffect(() => {
+    if (open) fetchFormCategories();
+  }, [fetchFormCategories, open]);
 
   const isEditing = !!editTransaction;
   const formIsPersonal = formCompanyId === null;
@@ -382,11 +401,11 @@ export function TransactionFormModal({
     }
   };
 
-  const rootCategories = categories.filter((c) => !c.parent_id);
+  const rootCategories = formCategories.filter((c) => !c.parent_id);
   const watchCategory = form.watch("category");
   const watchSubcategory = form.watch("subcategory");
-  const subCategories = categories.filter((c) => c.parent_id === watchCategory);
-  const subSubCategories = categories.filter((c) => c.parent_id === watchSubcategory);
+  const subCategories = formCategories.filter((c) => c.parent_id === watchCategory);
+  const subSubCategories = formCategories.filter((c) => c.parent_id === watchSubcategory);
 
   const watchPaymentMethod = form.watch("payment_method");
 
@@ -648,6 +667,8 @@ export function TransactionFormModal({
               suppliers={suppliers}
               cardTerminals={cardTerminals}
               paymentDateManuallyEdited={paymentDateManuallyEdited}
+              formCompanyId={formCompanyId}
+              onCategoryCreated={fetchFormCategories}
             />
           </TabsContent>
 
@@ -669,6 +690,8 @@ export function TransactionFormModal({
               suppliers={suppliers}
               cardTerminals={cardTerminals}
               paymentDateManuallyEdited={paymentDateManuallyEdited}
+              formCompanyId={formCompanyId}
+              onCategoryCreated={fetchFormCategories}
             />
           </TabsContent>
 
@@ -822,6 +845,8 @@ interface MainFormContentProps {
   suppliers: { id: string; name: string }[];
   cardTerminals: CardTerminalInfo[];
   paymentDateManuallyEdited: React.MutableRefObject<boolean>;
+  formCompanyId: string | null;
+  onCategoryCreated: () => Promise<void>;
 }
 
 function MainFormContent({
@@ -841,6 +866,8 @@ function MainFormContent({
   suppliers,
   cardTerminals,
   paymentDateManuallyEdited,
+  formCompanyId,
+  onCategoryCreated,
 }: MainFormContentProps) {
   const watchInstallment = form.watch("is_installment");
   const watchRecurring = form.watch("is_recurring");
@@ -1062,27 +1089,26 @@ function MainFormContent({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Categoria *</FormLabel>
-                <Select
-                  onValueChange={(v) => {
-                    field.onChange(v);
-                    form.setValue("subcategory", "");
-                    form.setValue("subcategory2", "");
-                  }}
-                  value={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {rootCategories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <CategorySelectWithCreate
+                    categories={rootCategories}
+                    value={field.value}
+                    onChange={(v) => {
+                      field.onChange(v);
+                      form.setValue("subcategory", "");
+                      form.setValue("subcategory2", "");
+                    }}
+                    placeholder="Selecione"
+                    formCompanyId={formCompanyId}
+                    activeTab={activeTab}
+                    onCategoryCreated={async (newId) => {
+                      await onCategoryCreated();
+                      field.onChange(newId);
+                      form.setValue("subcategory", "");
+                      form.setValue("subcategory2", "");
+                    }}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -1094,26 +1120,25 @@ function MainFormContent({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Subcategoria</FormLabel>
-                  <Select
-                    onValueChange={(v) => {
-                      field.onChange(v);
-                      form.setValue("subcategory2", "");
-                    }}
-                    value={field.value || ""}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {subCategories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <CategorySelectWithCreate
+                      categories={subCategories}
+                      value={field.value || ""}
+                      onChange={(v) => {
+                        field.onChange(v);
+                        form.setValue("subcategory2", "");
+                      }}
+                      placeholder="Selecione"
+                      parentId={form.watch("category")}
+                      formCompanyId={formCompanyId}
+                      activeTab={activeTab}
+                      onCategoryCreated={async (newId) => {
+                        await onCategoryCreated();
+                        field.onChange(newId);
+                        form.setValue("subcategory2", "");
+                      }}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1126,20 +1151,21 @@ function MainFormContent({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Sub-subcategoria</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {subSubCategories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <CategorySelectWithCreate
+                      categories={subSubCategories}
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      placeholder="Selecione"
+                      parentId={form.watch("subcategory")}
+                      formCompanyId={formCompanyId}
+                      activeTab={activeTab}
+                      onCategoryCreated={async (newId) => {
+                        await onCategoryCreated();
+                        field.onChange(newId);
+                      }}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
