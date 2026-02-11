@@ -20,7 +20,7 @@ import {
 import { ptBR } from "date-fns/locale";
 
 export type PeriodKey = "today" | "week" | "month" | "year" | "custom";
-export type ProjectionDays = 30 | 60 | 90;
+export type ProjectionDays = 30 | 60 | 90 | 365;
 
 export interface DashboardFilters {
   period: PeriodKey;

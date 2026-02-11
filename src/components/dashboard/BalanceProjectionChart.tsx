@@ -24,6 +24,7 @@ const projectionOptions: { days: ProjectionDays; label: string }[] = [
   { days: 30, label: "30 dias" },
   { days: 60, label: "60 dias" },
   { days: 90, label: "90 dias" },
+  { days: 365, label: "Ano todo" },
 ];
 
 function formatCurrency(value: number): string {
