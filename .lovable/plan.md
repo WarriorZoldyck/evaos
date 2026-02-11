@@ -1,68 +1,37 @@
 
 
-## Redesign da Maquininha - Moldura Realista Estilo Ton/Moderninha
+## Correcao: Data de Vencimento do Cartao de Credito
 
-### Conceito
+### Problema
 
-Criar uma moldura CSS que simule o formato fisico real de uma maquininha de cartao, inspirada nos modelos Ton T2/T3 e Moderninha da imagem de referencia. O corpo tera formato retangular com cantos arredondados generosos, uma "tela" touchscreen destacada no topo, e um "teclado" numerico decorativo na parte inferior.
+Quando o usuario seleciona um cartao de credito em uma despesa, o sistema esta definindo a **data de pagamento** como o **dia de fechamento** (`closing_day`) em vez do **dia de vencimento** (`due_day`).
 
-### Estrutura Visual
+O codigo atual no arquivo `PaymentMethodFields.tsx` (linhas 71-86) calcula a data usando `selectedCreditCard.closing_day` e a salva diretamente como `payment_date`.
 
-```text
-         ___________________
-        /                   \        <- Topo arredondado
-       |  * LED              |
-       |  +-----------------+|
-       |  |                 ||       <- Tela/Display (conteudo principal)
-       |  |  Nome, Taxas,   ||
-       |  |  Conta, Serial  ||
-       |  |  Parcelamento   ||
-       |  |                 ||
-       |  +-----------------+|
-       |                     |
-       |  [1] [2abc] [3def]  |       <- Teclado decorativo (visual only)
-       |  [4ghi] [5jkl] [6] |
-       |  [7] [8tuv] [9wxyz]|
-       |  [*] [0   ] [#]    |
-       |                     |
-       |  [Cancelar] [OK >>] |       <- Botoes de acao
-       |                     |
-        \___________________/        <- Base arredondada
-```
+### Logica Correta
 
-### Mudancas Principais vs. Versao Atual
+A data de pagamento deve ser o **dia do vencimento** (`due_day`), calculada com base no ciclo de fechamento:
 
-1. **Moldura externa mais pronunciada**: Borda grossa com gradiente 3D, sombras laterais e `border-radius` grande para simular plastico moldado
-2. **Tela embutida**: A area de conteudo (inputs, selects) fica dentro de uma "tela" com borda fina e cantos arredondados, simulando um display touchscreen
-3. **Teclado decorativo**: Grid 3x4 de "teclas" puramente decorativas na parte inferior, dando o aspecto visual de maquininha real (nao interativas)
-4. **Alto-relevo e profundidade**: Uso de multiplas camadas de sombra (`box-shadow`) e bordas para dar sensacao de volume/3D
-5. **Conteudo visivel e agradavel**: Fundo da tela mais claro (nao preto puro), labels com bom contraste, inputs com fundo semi-transparente branco para legibilidade
+1. Se hoje esta **antes** do dia de fechamento, a fatura atual vence no **mes atual** no `due_day`
+2. Se hoje esta **no dia ou apos** o fechamento, a fatura vence no **proximo mes** no `due_day`
+3. Se o `due_day` for menor que o `closing_day` (ex: fecha dia 25, vence dia 5), o vencimento cai no mes seguinte ao fechamento
 
-### Paleta e Estetica
+### Exemplo
 
-- **Corpo/moldura**: Azul EVA OS com gradiente de `#1a3a6c` para `#2563eb`, com borda interna mais clara para efeito de chanfro
-- **Tela**: Fundo `#0c1829` com borda fina azul-clara, texto branco e labels em cyan claro
-- **Teclas decorativas**: Botoes pequenos com `bg-white/10`, bordas sutis, texto branco/cinza
-- **Slot do cartao**: Fenda horizontal no topo com sombra interna
-- **LED**: Verde pulsante como indicador de "ligada"
+- Cartao: Fechamento dia 25, Vencimento dia 5
+- Hoje: 11/02/2026 (antes do fechamento dia 25)
+- Fatura atual fecha em 25/02/2026
+- **Vencimento correto: 05/03/2026** (mes seguinte ao fechamento)
+- Atualmente o sistema coloca: 25/02/2026 (errado, usa o fechamento)
 
-### Visibilidade do Conteudo
+### Alteracao
 
-- Labels com tamanho `text-xs` e cor `text-cyan-300` (bom contraste no fundo escuro)
-- Inputs com fundo `bg-white/10` e texto branco, placeholder visivel
-- Secoes claramente separadas dentro da tela
-- Scroll interno apenas na area da tela, moldura fixa
+**Arquivo:** `src/components/lancamentos/PaymentMethodFields.tsx`
 
-### Detalhes Tecnicos
+Substituir o `useEffect` (linhas 71-86) para:
 
-**Arquivo modificado:** `src/components/contas/TerminalFormModal.tsx`
-
-- Logica de estado e handlers permanece identica
-- JSX completamente reescrito com a nova estrutura:
-  - Container externo com formato de maquininha (padding lateral grosso, bordas 3D)
-  - Area da "tela" com scroll interno contendo todos os campos do formulario
-  - Grid 3x4 de teclas decorativas abaixo da tela
-  - Botoes Cancelar/Salvar estilizados como botoes fisicos da maquininha
-- Tailwind CSS puro, sem dependencias extras
-- Efeito 3D via multiplas camadas de `box-shadow` e `border` com cores graduais
+1. Determinar o mes de fechamento da fatura atual
+2. Calcular a data de vencimento usando `due_day`
+3. Se `due_day` < `closing_day`, avancar um mes (vencimento cai no mes seguinte ao fechamento)
+4. Definir `payment_date` com a data de vencimento correta
 
