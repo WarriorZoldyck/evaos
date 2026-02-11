@@ -1,62 +1,72 @@
 
 
-## Dashboard - Correcoes e Previsao do Mes
+## Correcao do Faturamento - Usar Data de Competencia
 
-### Problema Atual
+### Problema Confirmado
 
-1. **Faturamento** e **Entradas** calculam o mesmo valor (ambos somam apenas receitas pagas). Faturamento deveria incluir **todas** as receitas do periodo (pagas + pendentes), pois representa o total faturado/emitido. Entradas deve ser apenas o que **efetivamente entrou no caixa** (status = Pago).
+O codigo atual tem **uma unica query** que filtra por `payment_date`:
 
-2. Nao existe uma visao de **Previsto vs Consolidado** no Dashboard.
+```text
+.gte("payment_date", startStr)
+.lte("payment_date", endStr)
+```
 
----
+Tanto `faturamento` quanto `previstoReceitas` sao calculados a partir dessa mesma query. Isso significa que:
+- Faturamento = receitas com **pagamento** no periodo (errado)
+- Deveria ser = receitas com **competencia** no periodo
 
-### Mudancas
+### Solucao
 
 **Arquivo: `src/hooks/useDashboardData.ts`**
 
-Ajustar o calculo do `summary`:
+1. Adicionar uma **segunda query** que filtra por `competence_date` no periodo selecionado
+2. Armazenar em um novo estado `competenceTransactions`
+3. Usar esse novo conjunto para calcular `faturamento`, `previstoReceitas` e `previstoSaidas`
+4. Manter `entradas`, `saidas`, `saldo`, `consolidadoReceitas` e `consolidadoSaidas` usando a query existente (por `payment_date`, status "Pago")
 
-| Card | Atual | Novo |
+### Calculo Final
+
+| Metrica | Fonte de dados | Filtro de status |
 |---|---|---|
-| Faturamento | Receitas pagas | **Todas** as receitas do periodo (Pago + Pendente) |
-| Entradas | Receitas pagas | Receitas pagas (sem mudanca) |
-| Saidas | Despesas pagas | Despesas pagas (sem mudanca) |
-| Saldo | entradas - saidas | entradas - saidas (sem mudanca) |
-
-Adicionar novos campos ao summary para a secao de previsao:
-
-- `previstoReceitas`: soma de todas as receitas do periodo (Pago + Pendente)
-- `previstoSaidas`: soma de todas as despesas do periodo (Pago + Pendente)
-- `consolidadoReceitas`: soma das receitas pagas (= entradas)
-- `consolidadoSaidas`: soma das despesas pagas (= saidas)
-
-**Arquivo: `src/components/dashboard/SummaryCards.tsx`**
-
-- Receber as novas props de previsao
-- Adicionar uma segunda linha de cards ou uma secao abaixo dos cards principais mostrando:
-  - **Previsto**: total de receitas e despesas esperadas no periodo (incluindo pendentes)
-  - **Consolidado**: total efetivamente pago no periodo
-  - **% Realizado**: percentual consolidado/previsto para receitas e despesas
-
-**Arquivo: `src/pages/Dashboard.tsx`**
-
-- Passar os novos campos do summary para o componente SummaryCards
+| Faturamento | `competence_date` no periodo | Todas receitas (Pago + Pendente) |
+| Entradas | `payment_date` no periodo | Receitas "Pago" |
+| Saidas | `payment_date` no periodo | Despesas "Pago" |
+| Saldo | `payment_date` no periodo | entradas - saidas |
+| Previsto Receitas | `competence_date` no periodo | Todas receitas |
+| Previsto Saidas | `competence_date` no periodo | Todas despesas |
+| Consolidado Receitas | `payment_date` no periodo | Receitas "Pago" |
+| Consolidado Saidas | `payment_date` no periodo | Despesas "Pago" |
 
 ### Detalhes Tecnicos
 
-No `useDashboardData.ts`, o calculo do summary ficara:
+Nova query no `useEffect` existente (ou em um novo `useEffect` paralelo):
 
 ```text
-faturamento = todas receitas (Pago + Pendente)
-entradas = receitas com status "Pago"
-saidas = despesas com status "Pago"
-saldo = entradas - saidas
-
-previstoReceitas = todas receitas (Pago + Pendente)
-previstoSaidas = todas despesas (Pago + Pendente)
-consolidadoReceitas = receitas "Pago"
-consolidadoSaidas = despesas "Pago"
+supabase.from("transactions")
+  .select(...)
+  .gte("competence_date", startStr)
+  .lte("competence_date", endStr)
+  .eq("company_id", ...) // ou .is("company_id", null)
 ```
 
-A secao de previsao sera exibida como um card com duas colunas (Receitas / Despesas), cada uma mostrando o valor previsto, o consolidado e uma barra de progresso indicando o percentual realizado.
+Novo estado:
+```text
+const [competenceTransactions, setCompetenceTransactions] = useState([]);
+```
+
+Calculo atualizado no `useMemo`:
+```text
+faturamento = competenceTransactions
+  .filter(t => t.type === "receita")
+  .reduce(sum)
+
+previstoReceitas = faturamento
+previstoSaidas = competenceTransactions
+  .filter(t => t.type === "despesa")
+  .reduce(sum)
+```
+
+### Arquivo modificado
+
+- `src/hooks/useDashboardData.ts` (unico arquivo)
 
