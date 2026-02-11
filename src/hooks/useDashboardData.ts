@@ -168,10 +168,19 @@ export function useDashboardData(filters: DashboardFilters) {
     const saidas = paidTransactions
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
-    const faturamento = entradas;
+    const faturamento = transactions
+      .filter((t) => t.type === "receita")
+      .reduce((acc, t) => acc + Number(t.amount), 0);
     const saldo = entradas - saidas;
 
-    return { faturamento, entradas, saidas, saldo };
+    const previstoReceitas = faturamento;
+    const previstoSaidas = transactions
+      .filter((t) => t.type === "despesa")
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+    const consolidadoReceitas = entradas;
+    const consolidadoSaidas = saidas;
+
+    return { faturamento, entradas, saidas, saldo, previstoReceitas, previstoSaidas, consolidadoReceitas, consolidadoSaidas };
   }, [transactions]);
 
   // Upcoming (Pendente) transactions
