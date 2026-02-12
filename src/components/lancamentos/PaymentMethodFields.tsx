@@ -53,7 +53,7 @@ export function PaymentMethodFields({
   const selectedTerminalId = form.watch("card_terminal_id");
   const selectedTerminal = cardTerminals.find((t) => t.id === selectedTerminalId);
   const amount = form.watch("amount");
-  const paymentDate = form.watch("payment_date");
+  const competenceDate = form.watch("competence_date");
   const installmentsCount = form.watch("installments_count");
   const isInstallment = form.watch("is_installment");
 
@@ -149,13 +149,13 @@ export function PaymentMethodFields({
           />
 
           {/* MDR info block */}
-          {selectedTerminal && amount > 0 && paymentDate && (
+          {selectedTerminal && amount > 0 && competenceDate && (
             <MdrInfoCard
               terminal={selectedTerminal}
               amount={amount}
               paymentMethod={paymentMethod}
               installmentsCount={isInstallment ? installmentsCount : undefined}
-              paymentDate={paymentDate instanceof Date ? paymentDate : new Date(paymentDate)}
+              paymentDate={competenceDate instanceof Date ? competenceDate : new Date(competenceDate)}
             />
           )}
         </>

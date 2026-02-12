@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { format, addMonths } from "date-fns";
+import { format, addMonths, addDays } from "date-fns";
 import { CalendarIcon, Loader2, User, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ptBR } from "date-fns/locale";
@@ -413,13 +413,52 @@ export function TransactionFormModal({
     if (!user) return;
     setSaving(true);
 
+    // --- Terminal MDR logic (receita via card terminal) ---
+    const isReceita = activeTab === "receita";
+    const isCardPayment = data.payment_method === "Cartão de Crédito" || data.payment_method === "Cartão de Débito";
+    const selectedTerminal = isReceita && isCardPayment && data.card_terminal_id
+      ? cardTerminals.find((t) => t.id === data.card_terminal_id)
+      : null;
+
+    let finalAmount = data.amount;
+    let originalAmount: number | null = null;
+    let finalPaymentDate = data.payment_date;
+
+    if (selectedTerminal) {
+      const isDebit = data.payment_method === "Cartão de Débito";
+
+      // Determine rate
+      let rate: number;
+      if (isDebit) {
+        rate = selectedTerminal.debit_rate ?? 0;
+      } else if (data.is_installment && data.installments_count && data.installments_count >= 2) {
+        const rates = selectedTerminal.rates_info ? (() => { try { const p = JSON.parse(selectedTerminal.rates_info!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
+        const found = rates.find((r: any) => r.installments === data.installments_count);
+        rate = found ? found.rate : (selectedTerminal.credit_rate ?? 0);
+      } else {
+        rate = selectedTerminal.credit_rate ?? 0;
+      }
+
+      // Calculate net amount
+      const feeAmount = Math.round(data.amount * (rate / 100) * 100) / 100;
+      finalAmount = Math.round((data.amount - feeAmount) * 100) / 100;
+      originalAmount = data.amount;
+
+      // Calculate settlement date (D+)
+      const settlementDays = isDebit
+        ? (selectedTerminal.settlement_days_debit ?? 1)
+        : (selectedTerminal.settlement_days_credit ?? 2);
+      finalPaymentDate = addDays(data.competence_date, settlementDays);
+    }
+
     const baseData: TransactionInsert = {
       user_id: user.id,
       company_id: formCompanyId,
       type: activeTab as "receita" | "despesa",
       description: data.description.trim(),
-      amount: data.amount,
-      payment_date: format(data.payment_date, "yyyy-MM-dd"),
+      amount: finalAmount,
+      original_amount: originalAmount,
+      payment_date: format(finalPaymentDate, "yyyy-MM-dd"),
       competence_date: format(data.competence_date, "yyyy-MM-dd"),
       status: data.status,
       category: data.category,
@@ -443,6 +482,13 @@ export function TransactionFormModal({
     if (isEditing) {
       const { user_id, company_id, ...updateData } = baseData;
       success = await onUpdate(editTransaction.id, updateData);
+    } else if (selectedTerminal) {
+      // Receita via terminal: ALWAYS save as single transaction (full net amount)
+      // Installments are the customer's concern, merchant receives total net
+      if (data.is_installment && data.installments_count && data.installments_count >= 2) {
+        baseData.installments = data.installments_count;
+      }
+      success = await onSave(baseData);
     } else if (data.is_installment && data.installments_count && data.installments_count >= 2) {
       const seriesId = crypto.randomUUID();
       const total = data.amount;
