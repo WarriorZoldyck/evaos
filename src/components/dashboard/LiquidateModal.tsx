@@ -40,6 +40,7 @@ interface Transaction {
 
 interface LiquidateModalProps {
   transaction: Transaction | null;
+  bulkTransactionIds?: string[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -49,7 +50,7 @@ interface BankAccount {
   name: string;
 }
 
-export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateModalProps) {
+export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuccess }: LiquidateModalProps) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
@@ -68,6 +69,8 @@ export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateMod
   const [parcelarFatura, setParcelarFatura] = useState(false);
   const [faturaInstallments, setFaturaInstallments] = useState("2");
   const [faturaInterest, setFaturaInterest] = useState("0");
+
+  const isBulk = bulkTransactionIds && bulkTransactionIds.length > 1;
 
   useEffect(() => {
     if (!transaction || !user) return;
@@ -103,8 +106,20 @@ export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateMod
     setSaving(true);
 
     try {
-      // 1. Liquidate the main transaction (or series)
-      if (transaction.series_id && seriesScope === "all") {
+      if (isBulk) {
+        // Bulk liquidate all transactions in the credit card bill
+        const { error } = await supabase
+          .from("transactions")
+          .update({
+            status: "Pago" as const,
+            payment_date: paymentDate,
+            bank_account_id: accountId || null,
+            liquidation_notes: notes || null,
+          })
+          .in("id", bulkTransactionIds!);
+
+        if (error) throw error;
+      } else if (transaction.series_id && seriesScope === "all") {
         // Liquidate all pending in series
         const { error } = await supabase
           .from("transactions")
@@ -134,8 +149,8 @@ export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateMod
         if (error) throw error;
       }
 
-      // 2. Create installment transactions if parcelar fatura
-      if (parcelarFatura && transaction.credit_card_id) {
+      // Create installment transactions if parcelar fatura
+      if (parcelarFatura && transaction.credit_card_id && !isBulk) {
         const parcelas = Number(faturaInstallments);
         const juros = Number(faturaInterest);
         const totalComJuros = Number(finalAmount) * (1 + juros / 100);
@@ -171,10 +186,12 @@ export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateMod
       }
 
       toast({
-        title: "Lançamento liquidado!",
-        description: seriesScope === "all"
-          ? `Todos os pendentes da série "${transaction.description}" foram liquidados.`
-          : `"${transaction.description}" marcado como pago.${parcelarFatura ? ` ${faturaInstallments} parcelas criadas.` : ""}`,
+        title: isBulk ? "Fatura liquidada!" : "Lançamento liquidado!",
+        description: isBulk
+          ? `${bulkTransactionIds!.length} lançamentos da fatura marcados como pagos.`
+          : seriesScope === "all"
+            ? `Todos os pendentes da série "${transaction.description}" foram liquidados.`
+            : `"${transaction.description}" marcado como pago.${parcelarFatura ? ` ${faturaInstallments} parcelas criadas.` : ""}`,
       });
       onSuccess();
     } catch (error: any) {
@@ -199,7 +216,7 @@ export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateMod
     <Dialog open={!!transaction} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Liquidar Lançamento</DialogTitle>
+          <DialogTitle>{isBulk ? "Liquidar Fatura" : "Liquidar Lançamento"}</DialogTitle>
           <DialogDescription>
             Confirme os dados para marcar como pago.
           </DialogDescription>
@@ -210,12 +227,14 @@ export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateMod
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-sm font-medium text-foreground">{transaction.description}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {transaction.type === "receita" ? "Receita" : "Despesa"}
+                {isBulk
+                  ? `${bulkTransactionIds!.length} lançamentos • Total: ${Number(transaction.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+                  : transaction.type === "receita" ? "Receita" : "Despesa"}
               </p>
             </div>
 
             {/* Series liquidation option */}
-            {transaction.series_id && (
+            {transaction.series_id && !isBulk && (
               <div className="rounded-lg border border-border p-3 space-y-3">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-primary" />
@@ -234,17 +253,19 @@ export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateMod
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="finalAmount">Valor Final (R$)</Label>
-              <Input
-                id="finalAmount"
-                type="number"
-                step="0.01"
-                value={finalAmount}
-                onChange={(e) => setFinalAmount(e.target.value)}
-                disabled={seriesScope === "all"}
-              />
-            </div>
+            {!isBulk && (
+              <div className="space-y-2">
+                <Label htmlFor="finalAmount">Valor Final (R$)</Label>
+                <Input
+                  id="finalAmount"
+                  type="number"
+                  step="0.01"
+                  value={finalAmount}
+                  onChange={(e) => setFinalAmount(e.target.value)}
+                  disabled={seriesScope === "all"}
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="paymentDate">Data de Pagamento</Label>
@@ -283,8 +304,8 @@ export function LiquidateModal({ transaction, onClose, onSuccess }: LiquidateMod
               />
             </div>
 
-            {/* Credit card bill installment */}
-            {transaction.credit_card_id && (
+            {/* Credit card bill installment - only for single transaction */}
+            {transaction.credit_card_id && !isBulk && (
               <div className="rounded-lg border border-border p-3 space-y-3">
                 <div className="flex items-center gap-3">
                   <Switch

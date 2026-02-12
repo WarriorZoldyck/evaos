@@ -1113,7 +1113,7 @@ function MainFormContent({
               </FormItem>
             )}
           />
-          {subCategories.length > 0 && (
+          {form.watch("category") && (
             <FormField
               control={form.control}
               name="subcategory"
@@ -1144,7 +1144,7 @@ function MainFormContent({
               )}
             />
           )}
-          {subSubCategories.length > 0 && (
+          {form.watch("subcategory") && (
             <FormField
               control={form.control}
               name="subcategory2"
