@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowDownCircle, ArrowUpCircle, CheckCircle2, Repeat } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, CheckCircle2, Repeat, CreditCard } from "lucide-react";
 import { LiquidateModal } from "./LiquidateModal";
+import type { CreditCardInfo } from "@/hooks/useDashboardData";
 
 interface Transaction {
   id: string;
@@ -25,6 +26,7 @@ interface Transaction {
 
 interface UpcomingTransactionsProps {
   transactions: Transaction[];
+  creditCards: CreditCardInfo[];
   loading: boolean;
   onLiquidated: () => void;
 }
@@ -36,8 +38,79 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function UpcomingTransactions({ transactions, loading, onLiquidated }: UpcomingTransactionsProps) {
+interface CreditCardBill {
+  cardId: string;
+  cardName: string;
+  lastFour: string | null;
+  billingMonth: string; // "YYYY-MM"
+  total: number;
+  transactions: Transaction[];
+  bankAccountId: string;
+}
+
+function getBillingMonth(paymentDate: string, closingDay: number): string {
+  const date = parseISO(paymentDate);
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0-indexed
+
+  // If the day is after closing, it belongs to next month's bill
+  if (day > closingDay) {
+    const nextMonth = month + 1;
+    if (nextMonth > 11) {
+      return `${year + 1}-01`;
+    }
+    return `${year}-${String(nextMonth + 1).padStart(2, "0")}`;
+  }
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+export function UpcomingTransactions({ transactions, creditCards, loading, onLiquidated }: UpcomingTransactionsProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [selectedBill, setSelectedBill] = useState<CreditCardBill | null>(null);
+
+  // Group credit card transactions into bills
+  const { regularTransactions, creditCardBills } = useMemo(() => {
+    const cardMap = new Map(creditCards.map((c) => [c.id, c]));
+    const billMap = new Map<string, CreditCardBill>();
+    const regular: Transaction[] = [];
+
+    transactions.forEach((t) => {
+      if (t.credit_card_id && cardMap.has(t.credit_card_id) && !t.isRecurring) {
+        const card = cardMap.get(t.credit_card_id)!;
+        const billingMonth = getBillingMonth(t.payment_date, card.closing_day);
+        const key = `${t.credit_card_id}:${billingMonth}`;
+
+        if (!billMap.has(key)) {
+          billMap.set(key, {
+            cardId: card.id,
+            cardName: card.name,
+            lastFour: card.last_four_digits,
+            billingMonth,
+            total: 0,
+            transactions: [],
+            bankAccountId: card.bank_account_id,
+          });
+        }
+        const bill = billMap.get(key)!;
+        bill.total += Number(t.amount);
+        bill.transactions.push(t);
+      } else {
+        regular.push(t);
+      }
+    });
+
+    return {
+      regularTransactions: regular,
+      creditCardBills: Array.from(billMap.values()).sort((a, b) => a.billingMonth.localeCompare(b.billingMonth)),
+    };
+  }, [transactions, creditCards]);
+
+  const formatBillingMonth = (ym: string) => {
+    const [y, m] = ym.split("-");
+    const date = new Date(Number(y), Number(m) - 1, 1);
+    return format(date, "MMM/yyyy", { locale: ptBR });
+  };
 
   return (
     <>
@@ -52,13 +125,51 @@ export function UpcomingTransactions({ transactions, loading, onLiquidated }: Up
                 <Skeleton key={i} className="h-14 w-full" />
               ))}
             </div>
-          ) : transactions.length === 0 ? (
+          ) : regularTransactions.length === 0 && creditCardBills.length === 0 ? (
             <div className="h-32 flex items-center justify-center text-muted-foreground text-sm">
               Nenhum lançamento pendente
             </div>
           ) : (
             <div className="space-y-2">
-              {transactions.map((t) => (
+              {/* Credit card bills grouped */}
+              {creditCardBills.map((bill) => (
+                <div
+                  key={`bill-${bill.cardId}-${bill.billingMonth}`}
+                  className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 hover:border-primary/20 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <CreditCard className="h-5 w-5 text-destructive shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        Fatura {bill.cardName}
+                        {bill.lastFour ? ` •••• ${bill.lastFour}` : ""}
+                      </p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="capitalize">{formatBillingMonth(bill.billingMonth)}</span>
+                        <span>·</span>
+                        <span>{bill.transactions.length} lançamento{bill.transactions.length !== 1 ? "s" : ""}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                    <span className="text-sm font-semibold text-destructive">
+                      - {formatCurrency(bill.total)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                      onClick={() => setSelectedBill(bill)}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Liquidar Fatura
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Regular transactions */}
+              {regularTransactions.map((t) => (
                 <div
                   key={t.id}
                   className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 hover:border-primary/20 transition-colors"
@@ -111,11 +222,32 @@ export function UpcomingTransactions({ transactions, loading, onLiquidated }: Up
         </CardContent>
       </Card>
 
+      {/* Single transaction liquidation */}
       <LiquidateModal
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
         onSuccess={() => {
           setSelectedTransaction(null);
+          onLiquidated();
+        }}
+      />
+
+      {/* Bulk credit card bill liquidation */}
+      <LiquidateModal
+        transaction={selectedBill ? {
+          id: selectedBill.transactions[0].id,
+          description: `Fatura ${selectedBill.cardName} - ${formatBillingMonth(selectedBill.billingMonth)}`,
+          amount: selectedBill.total,
+          type: "despesa",
+          payment_date: selectedBill.transactions[0].payment_date,
+          bank_account_id: selectedBill.bankAccountId,
+          series_id: null,
+          credit_card_id: selectedBill.cardId,
+        } : null}
+        bulkTransactionIds={selectedBill?.transactions.map((t) => t.id)}
+        onClose={() => setSelectedBill(null)}
+        onSuccess={() => {
+          setSelectedBill(null);
           onLiquidated();
         }}
       />

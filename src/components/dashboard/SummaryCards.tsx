@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Wallet, DollarSign, CheckCircle, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -7,10 +7,7 @@ interface SummaryCardsProps {
   entradas: number;
   saidas: number;
   saldo: number;
-  previstoReceitas: number;
-  previstoSaidas: number;
-  consolidadoReceitas: number;
-  consolidadoSaidas: number;
+  entradaPrevista: number;
   loading: boolean;
 }
 
@@ -61,77 +58,49 @@ function SummaryCard({ title, value, icon: Icon, trend, gradient, loading }: Car
   );
 }
 
-export function SummaryCards({ faturamento, entradas, saidas, saldo, previstoReceitas, previstoSaidas, consolidadoReceitas, consolidadoSaidas, loading }: SummaryCardsProps) {
+export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, loading }: SummaryCardsProps) {
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard
-          title="Faturamento"
-          value={faturamento}
-          icon={DollarSign}
-          trend="neutral"
-          gradient="bg-gradient-primary"
-          loading={loading}
-        />
-        <SummaryCard
-          title="Entradas"
-          value={entradas}
-          icon={TrendingUp}
-          trend="up"
-          gradient="bg-gradient-success"
-          loading={loading}
-        />
-        <SummaryCard
-          title="Saídas"
-          value={saidas}
-          icon={TrendingDown}
-          trend="down"
-          gradient="bg-gradient-destructive"
-          loading={loading}
-        />
-        <SummaryCard
-          title="Saldo do Período"
-          value={saldo}
-          icon={Wallet}
-          trend={saldo >= 0 ? "up" : "down"}
-          gradient={saldo >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
-          loading={loading}
-        />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard
-          title="Entrada Consolidada"
-          value={consolidadoReceitas}
-          icon={CheckCircle}
-          trend="up"
-          gradient="bg-gradient-success"
-          loading={loading}
-        />
-        <SummaryCard
-          title="Entrada Prevista"
-          value={previstoReceitas}
-          icon={Clock}
-          trend="neutral"
-          gradient="bg-gradient-primary"
-          loading={loading}
-        />
-        <SummaryCard
-          title="Saída Consolidada"
-          value={consolidadoSaidas}
-          icon={CheckCircle}
-          trend="down"
-          gradient="bg-gradient-destructive"
-          loading={loading}
-        />
-        <SummaryCard
-          title="Saída Prevista"
-          value={previstoSaidas}
-          icon={Clock}
-          trend="down"
-          gradient="bg-gradient-destructive"
-          loading={loading}
-        />
-      </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <SummaryCard
+        title="Faturamento"
+        value={faturamento}
+        icon={DollarSign}
+        trend="neutral"
+        gradient="bg-gradient-primary"
+        loading={loading}
+      />
+      <SummaryCard
+        title="Entradas"
+        value={entradas}
+        icon={TrendingUp}
+        trend="up"
+        gradient="bg-gradient-success"
+        loading={loading}
+      />
+      <SummaryCard
+        title="Saídas"
+        value={saidas}
+        icon={TrendingDown}
+        trend="down"
+        gradient="bg-gradient-destructive"
+        loading={loading}
+      />
+      <SummaryCard
+        title="Saldo do Período"
+        value={saldo}
+        icon={Wallet}
+        trend={saldo >= 0 ? "up" : "down"}
+        gradient={saldo >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
+        loading={loading}
+      />
+      <SummaryCard
+        title="Entrada Prevista"
+        value={entradaPrevista}
+        icon={Clock}
+        trend="neutral"
+        gradient="bg-gradient-primary"
+        loading={loading}
+      />
     </div>
   );
 }

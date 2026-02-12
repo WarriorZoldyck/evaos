@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useDashboardData, DashboardFilters } from "@/hooks/useDashboardData";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
@@ -7,16 +7,24 @@ import { BalanceProjectionChart } from "@/components/dashboard/BalanceProjection
 import { CategorySummaryCharts } from "@/components/dashboard/CategorySummaryCharts";
 import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransactions";
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
+import { useAccounts } from "@/hooks/useAccounts";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function Dashboard() {
   const { isPersonal, companies, selectedCompanyId } = useCompany();
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
   const contextLabel = isPersonal ? "Pessoal" : selectedCompany?.name;
+  const { bankAccounts } = useAccounts();
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Force re-fetch when liquidation happens
   const handleLiquidated = useCallback(() => {
     setRefreshKey((k) => k + 1);
   }, []);
@@ -27,6 +35,7 @@ export default function Dashboard() {
     categoryBreakdown,
     getProjectionData,
     performance,
+    creditCards,
     loading,
   } = useDashboardData(filters);
 
@@ -40,7 +49,27 @@ export default function Dashboard() {
             Visão geral — <span className="text-primary font-medium">{contextLabel}</span>
           </p>
         </div>
-        <PeriodFilter filters={filters} onChange={setFilters} />
+        <div className="flex items-center gap-3 flex-wrap">
+          <Select
+            value={filters.accountId || "__all__"}
+            onValueChange={(v) =>
+              setFilters((f) => ({ ...f, accountId: v === "__all__" ? null : v }))
+            }
+          >
+            <SelectTrigger className="w-[180px] h-8 text-xs">
+              <SelectValue placeholder="Todas as contas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todas as contas</SelectItem>
+              {bankAccounts.map((acc) => (
+                <SelectItem key={acc.id} value={acc.id}>
+                  {acc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <PeriodFilter filters={filters} onChange={(f) => setFilters((prev) => ({ ...prev, ...f }))} />
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -49,10 +78,7 @@ export default function Dashboard() {
         entradas={summary.entradas}
         saidas={summary.saidas}
         saldo={summary.saldo}
-        previstoReceitas={summary.previstoReceitas}
-        previstoSaidas={summary.previstoSaidas}
-        consolidadoReceitas={summary.consolidadoReceitas}
-        consolidadoSaidas={summary.consolidadoSaidas}
+        entradaPrevista={summary.entradaPrevista}
         loading={loading}
       />
 
@@ -74,6 +100,7 @@ export default function Dashboard() {
         <div className="lg:col-span-2">
           <UpcomingTransactions
             transactions={upcomingTransactions}
+            creditCards={creditCards}
             loading={loading}
             onLiquidated={handleLiquidated}
           />

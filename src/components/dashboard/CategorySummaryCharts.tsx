@@ -1,6 +1,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useNavigate } from "react-router-dom";
 import type { CategorySummary } from "@/hooks/useDashboardData";
 
 interface CategorySummaryChartsProps {
@@ -21,12 +22,23 @@ function DoughnutChart({
   title,
   emptyMessage,
   loading,
+  type,
 }: {
   data: CategorySummary[];
   title: string;
   emptyMessage: string;
   loading: boolean;
+  type: "receita" | "despesa";
 }) {
+  const navigate = useNavigate();
+
+  const handleClick = (_: any, index: number) => {
+    const category = data[index];
+    if (category) {
+      navigate(`/lancamentos?category=${encodeURIComponent(category.name)}&type=${type}`);
+    }
+  };
+
   return (
     <Card className="shadow-premium">
       <CardHeader>
@@ -52,6 +64,8 @@ function DoughnutChart({
                 dataKey="value"
                 nameKey="name"
                 strokeWidth={0}
+                onClick={handleClick}
+                className="cursor-pointer"
               >
                 {data.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -94,12 +108,14 @@ export function CategorySummaryCharts({
         title="Receitas por Categoria"
         emptyMessage="Nenhuma receita no período"
         loading={loading}
+        type="receita"
       />
       <DoughnutChart
         data={expenseCategories}
         title="Despesas por Categoria"
         emptyMessage="Nenhuma despesa no período"
         loading={loading}
+        type="despesa"
       />
     </div>
   );

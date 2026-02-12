@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, User, Building2, ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 type TabValue = "todos" | "realizado" | "projetado";
 
 export default function Lancamentos() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isPersonal, companies, selectedCompanyId, setSelectedCompanyId } = useCompany();
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
   const contextLabel = isPersonal ? "Pessoal" : selectedCompany?.name ?? "Pessoal";
@@ -55,6 +57,28 @@ export default function Lancamentos() {
   const [liquidateTarget, setLiquidateTarget] = useState<Transaction | null>(null);
   const [detailTarget, setDetailTarget] = useState<Transaction | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
+
+  // Read query params from dashboard category chart clicks
+  useEffect(() => {
+    const categoryParam = searchParams.get("category");
+    const typeParam = searchParams.get("type");
+    if (categoryParam || typeParam) {
+      // Find category by name to get its ID
+      const matchedCat = categories.find(
+        (c) => c.name === categoryParam && !c.parent_id
+      );
+      setFilters((prev) => ({
+        ...prev,
+        categoryId: matchedCat?.id || "",
+        type: (typeParam as "receita" | "despesa") || "todos",
+      }));
+      if (typeParam === "receita" || typeParam === "despesa") {
+        setActiveTab(typeParam === "receita" ? "realizado" : "realizado");
+      }
+      // Clear params after applying
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, categories]);
 
   const handleTabChange = (value: string) => {
     const tab = value as TabValue;

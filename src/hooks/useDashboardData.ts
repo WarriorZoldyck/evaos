@@ -26,6 +26,7 @@ export interface DashboardFilters {
   period: PeriodKey;
   customStart?: Date;
   customEnd?: Date;
+  accountId?: string | null;
 }
 
 interface Transaction {
@@ -47,6 +48,15 @@ interface Transaction {
   installment_number: number | null;
   installments_total: number | null;
   original_amount: number | null;
+}
+
+export interface CreditCardInfo {
+  id: string;
+  name: string;
+  closing_day: number;
+  due_day: number;
+  last_four_digits: string | null;
+  bank_account_id: string;
 }
 
 export interface CategorySummary {
@@ -102,11 +112,31 @@ export function useDashboardData(filters: DashboardFilters) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [competenceTransactions, setCompetenceTransactions] = useState<Transaction[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+  const [creditCards, setCreditCards] = useState<CreditCardInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   const { start, end } = getDateRange(filters);
   const startStr = format(start, "yyyy-MM-dd");
   const endStr = format(end, "yyyy-MM-dd");
+  const accountId = filters.accountId;
+
+  // Fetch credit cards
+  useEffect(() => {
+    if (!user) return;
+    const fetchCards = async () => {
+      let query = supabase
+        .from("credit_cards")
+        .select("id, name, closing_day, due_day, last_four_digits, bank_account_id");
+      if (isPersonal) {
+        query = query.is("company_id", null);
+      } else if (selectedCompanyId) {
+        query = query.eq("company_id", selectedCompanyId);
+      }
+      const { data } = await query;
+      if (data) setCreditCards(data);
+    };
+    fetchCards();
+  }, [user, selectedCompanyId, isPersonal]);
 
   // Fetch filtered transactions for the period
   useEffect(() => {
@@ -117,7 +147,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id")
         .gte("payment_date", startStr)
         .lte("payment_date", endStr);
 
@@ -125,6 +155,10 @@ export function useDashboardData(filters: DashboardFilters) {
         query = query.is("company_id", null);
       } else if (selectedCompanyId) {
         query = query.eq("company_id", selectedCompanyId);
+      }
+
+      if (accountId) {
+        query = query.eq("bank_account_id", accountId);
       }
 
       const { data, error } = await query.order("payment_date", { ascending: true });
@@ -148,6 +182,10 @@ export function useDashboardData(filters: DashboardFilters) {
         query = query.eq("company_id", selectedCompanyId);
       }
 
+      if (accountId) {
+        query = query.eq("bank_account_id", accountId);
+      }
+
       const { data, error } = await query;
 
       if (!error && data) {
@@ -157,7 +195,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
     fetchTransactions();
     fetchCompetenceTransactions();
-  }, [user, selectedCompanyId, isPersonal, startStr, endStr]);
+  }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId]);
 
   // Fetch all transactions for projections (no date filter)
   useEffect(() => {
@@ -174,6 +212,10 @@ export function useDashboardData(filters: DashboardFilters) {
         query = query.eq("company_id", selectedCompanyId);
       }
 
+      if (accountId) {
+        query = query.eq("bank_account_id", accountId);
+      }
+
       const { data, error } = await query.order("payment_date", { ascending: true });
 
       if (!error && data) {
@@ -182,7 +224,7 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     fetchAll();
-  }, [user, selectedCompanyId, isPersonal]);
+  }, [user, selectedCompanyId, isPersonal, accountId]);
 
   // Summary calculations
   const summary = useMemo(() => {
@@ -198,32 +240,30 @@ export function useDashboardData(filters: DashboardFilters) {
     const faturamento = competenceTransactions
       .filter((t) => t.type === "receita")
       .reduce((acc, t) => {
-        // Transação avulsa (sem série): usar amount normalmente
         if (!t.series_id) return acc + Number(t.amount);
-        // Parcela 1: usar valor bruto total (amount * installments_total)
         if (t.installment_number === 1) {
           const totalValue = t.original_amount
             ? Number(t.original_amount)
             : Number(t.amount) * (t.installments_total || 1);
           return acc + totalValue;
         }
-        // Parcelas 2+: ignorar (já contabilizado na parcela 1)
         return acc;
       }, 0);
 
     const saldo = entradas - saidas;
 
-    // Previsto: todas as transações por competência no período (soma real de cada parcela/transação)
+    // Previsto: todas as transações por competência no período
     const previstoReceitas = competenceTransactions
       .filter((t) => t.type === "receita")
       .reduce((acc, t) => acc + Number(t.amount), 0);
-    const previstoSaidas = competenceTransactions
-      .filter((t) => t.type === "despesa")
-      .reduce((acc, t) => acc + Number(t.amount), 0);
-    const consolidadoReceitas = entradas;
-    const consolidadoSaidas = saidas;
 
-    return { faturamento, entradas, saidas, saldo, previstoReceitas, previstoSaidas, consolidadoReceitas, consolidadoSaidas };
+    // Consolidado = pago (entradas)
+    const consolidadoReceitas = entradas;
+
+    // Entrada Prevista = previsto - consolidado (o que falta receber)
+    const entradaPrevista = Math.max(previstoReceitas - consolidadoReceitas, 0);
+
+    return { faturamento, entradas, saidas, saldo, entradaPrevista };
   }, [transactions, competenceTransactions]);
 
   // Upcoming (Pendente) transactions
@@ -240,7 +280,7 @@ export function useDashboardData(filters: DashboardFilters) {
     const combined = [...pending, ...recurringInPeriod];
     return combined
       .sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime())
-      .slice(0, 10);
+      .slice(0, 20);
   }, [transactions, recurringOccurrences, startStr, endStr]);
 
   // Category summary for doughnut charts
@@ -287,7 +327,8 @@ export function useDashboardData(filters: DashboardFilters) {
         return acc + (t.type === "receita" ? Number(t.amount) : -Number(t.amount));
       }, 0);
 
-      const futureEnd = addDays(today, days);
+      // "Ano todo" → até 31/12 do ano corrente
+      const futureEnd = days === 365 ? endOfYear(today) : addDays(today, days);
       const dateRange = eachDayOfInterval({ start: today, end: futureEnd });
 
       // Combine future real transactions + recurring occurrences
@@ -350,6 +391,7 @@ export function useDashboardData(filters: DashboardFilters) {
     categoryBreakdown,
     getProjectionData,
     performance,
+    creditCards,
     loading: loading || recurringLoading,
     refetchRecurring,
   };
