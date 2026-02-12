@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -13,6 +13,7 @@ import {
   startOfYear,
   endOfYear,
   addDays,
+  subYears,
   format,
   differenceInDays,
   eachDayOfInterval,
@@ -61,6 +62,7 @@ export interface CreditCardInfo {
 
 export interface CategorySummary {
   name: string;
+  id: string;
   value: number;
   fill: string;
 }
@@ -68,6 +70,12 @@ export interface CategorySummary {
 export interface ProjectionPoint {
   date: string;
   saldo: number;
+}
+
+interface CategoryRecord {
+  id: string;
+  name: string;
+  parent_id: string | null;
 }
 
 const CHART_COLORS = [
@@ -105,6 +113,21 @@ function getDateRange(filters: DashboardFilters): { start: Date; end: Date } {
   }
 }
 
+// Helper to apply account filter including linked credit cards
+function applyAccountFilter(
+  query: any,
+  accountId: string | null | undefined,
+  linkedCardIds: string[]
+) {
+  if (!accountId) return query;
+  if (linkedCardIds.length > 0) {
+    return query.or(
+      `bank_account_id.eq.${accountId},credit_card_id.in.(${linkedCardIds.join(",")})`
+    );
+  }
+  return query.eq("bank_account_id", accountId);
+}
+
 export function useDashboardData(filters: DashboardFilters) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
@@ -113,16 +136,32 @@ export function useDashboardData(filters: DashboardFilters) {
   const [competenceTransactions, setCompetenceTransactions] = useState<Transaction[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCardInfo[]>([]);
+  const [initialBalances, setInitialBalances] = useState<number>(0);
+  const [categoryRecords, setCategoryRecords] = useState<CategoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
 
   const { start, end } = getDateRange(filters);
   const startStr = format(start, "yyyy-MM-dd");
   const endStr = format(end, "yyyy-MM-dd");
   const accountId = filters.accountId;
 
-  // Fetch credit cards
+  // Derive linked card IDs from creditCards state
+  const linkedCardIds = useMemo(() => {
+    if (!accountId) return [];
+    return creditCards.filter((c) => c.bank_account_id === accountId).map((c) => c.id);
+  }, [accountId, creditCards]);
+
+  // Refetch function exposed to consumers
+  const refetch = useCallback(() => {
+    setFetchTrigger((k) => k + 1);
+    refetchRecurring();
+  }, [refetchRecurring]);
+
+  // Fetch credit cards + categories + initial balances
   useEffect(() => {
     if (!user) return;
+
     const fetchCards = async () => {
       let query = supabase
         .from("credit_cards")
@@ -135,8 +174,49 @@ export function useDashboardData(filters: DashboardFilters) {
       const { data } = await query;
       if (data) setCreditCards(data);
     };
+
+    const fetchCategories = async () => {
+      let query = supabase.from("categories").select("id, name, parent_id");
+      if (isPersonal) {
+        query = query.is("company_id", null);
+      } else if (selectedCompanyId) {
+        query = query.eq("company_id", selectedCompanyId);
+      }
+      const { data } = await query;
+      if (data) setCategoryRecords(data);
+    };
+
+    const fetchBalances = async () => {
+      // Bank accounts
+      let bankQuery = supabase.from("bank_accounts").select("initial_balance");
+      if (isPersonal) {
+        bankQuery = bankQuery.is("company_id", null);
+      } else if (selectedCompanyId) {
+        bankQuery = bankQuery.eq("company_id", selectedCompanyId);
+      }
+      if (accountId) {
+        bankQuery = bankQuery.eq("id", accountId);
+      }
+      const { data: bankData } = await bankQuery;
+
+      // Wallets
+      let walletQuery = supabase.from("wallets").select("initial_balance");
+      if (isPersonal) {
+        walletQuery = walletQuery.is("company_id", null);
+      } else if (selectedCompanyId) {
+        walletQuery = walletQuery.eq("company_id", selectedCompanyId);
+      }
+      const { data: walletData } = await walletQuery;
+
+      const bankSum = bankData?.reduce((s, a) => s + Number(a.initial_balance), 0) || 0;
+      const walletSum = accountId ? 0 : (walletData?.reduce((s, w) => s + Number(w.initial_balance), 0) || 0);
+      setInitialBalances(bankSum + walletSum);
+    };
+
     fetchCards();
-  }, [user, selectedCompanyId, isPersonal]);
+    fetchCategories();
+    fetchBalances();
+  }, [user, selectedCompanyId, isPersonal, accountId, fetchTrigger]);
 
   // Fetch filtered transactions for the period
   useEffect(() => {
@@ -147,7 +227,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("payment_date", startStr)
         .lte("payment_date", endStr);
 
@@ -157,9 +237,7 @@ export function useDashboardData(filters: DashboardFilters) {
         query = query.eq("company_id", selectedCompanyId);
       }
 
-      if (accountId) {
-        query = query.eq("bank_account_id", accountId);
-      }
+      query = applyAccountFilter(query, accountId, linkedCardIds);
 
       const { data, error } = await query.order("payment_date", { ascending: true });
 
@@ -182,9 +260,7 @@ export function useDashboardData(filters: DashboardFilters) {
         query = query.eq("company_id", selectedCompanyId);
       }
 
-      if (accountId) {
-        query = query.eq("bank_account_id", accountId);
-      }
+      query = applyAccountFilter(query, accountId, linkedCardIds);
 
       const { data, error } = await query;
 
@@ -195,16 +271,20 @@ export function useDashboardData(filters: DashboardFilters) {
 
     fetchTransactions();
     fetchCompetenceTransactions();
-  }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId]);
+  }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId, linkedCardIds, fetchTrigger]);
 
-  // Fetch all transactions for projections (no date filter)
+  // Fetch transactions for projections (limited to 2 years back)
   useEffect(() => {
     if (!user) return;
 
     const fetchAll = async () => {
+      const twoYearsAgo = format(subYears(new Date(), 2), "yyyy-MM-dd");
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name");
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name")
+        .gte("payment_date", twoYearsAgo)
+        .order("payment_date", { ascending: true })
+        .limit(5000);
 
       if (isPersonal) {
         query = query.is("company_id", null);
@@ -212,11 +292,9 @@ export function useDashboardData(filters: DashboardFilters) {
         query = query.eq("company_id", selectedCompanyId);
       }
 
-      if (accountId) {
-        query = query.eq("bank_account_id", accountId);
-      }
+      query = applyAccountFilter(query, accountId, linkedCardIds);
 
-      const { data, error } = await query.order("payment_date", { ascending: true });
+      const { data, error } = await query;
 
       if (!error && data) {
         setAllTransactions(data as Transaction[]);
@@ -224,7 +302,22 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     fetchAll();
-  }, [user, selectedCompanyId, isPersonal, accountId]);
+  }, [user, selectedCompanyId, isPersonal, accountId, linkedCardIds, fetchTrigger]);
+
+  // Category name resolver
+  const resolveCategoryName = useCallback(
+    (categoryValue: string): { name: string; id: string } => {
+      // Try to find by ID first (UUID format)
+      const byId = categoryRecords.find((c) => c.id === categoryValue);
+      if (byId) return { name: byId.name, id: byId.id };
+      // Try by name (legacy data)
+      const byName = categoryRecords.find((c) => c.name === categoryValue && !c.parent_id);
+      if (byName) return { name: byName.name, id: byName.id };
+      // Fallback
+      return { name: categoryValue, id: categoryValue };
+    },
+    [categoryRecords]
+  );
 
   // Summary calculations
   const summary = useMemo(() => {
@@ -252,15 +345,16 @@ export function useDashboardData(filters: DashboardFilters) {
 
     const saldo = entradas - saidas;
 
-    // Previsto: todas as transações por competência no período
+    // FIX #4: Both previsto and consolidado from competenceTransactions (same base)
     const previstoReceitas = competenceTransactions
       .filter((t) => t.type === "receita")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // Consolidado = pago (entradas)
-    const consolidadoReceitas = entradas;
+    const consolidadoReceitas = competenceTransactions
+      .filter((t) => t.type === "receita" && t.status === "Pago")
+      .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // Entrada Prevista = previsto - consolidado (o que falta receber)
+    // Entrada Prevista = o que falta receber (previsto - já pago na mesma base)
     const entradaPrevista = Math.max(previstoReceitas - consolidadoReceitas, 0);
 
     return { faturamento, entradas, saidas, saldo, entradaPrevista };
@@ -283,39 +377,47 @@ export function useDashboardData(filters: DashboardFilters) {
       .slice(0, 20);
   }, [transactions, recurringOccurrences, startStr, endStr]);
 
-  // Category summary for doughnut charts
+  // Category summary for doughnut charts - resolves UUID to name
   const categoryBreakdown = useMemo(() => {
     const paidInPeriod = transactions.filter((t) => t.status === "Pago");
 
-    const revenueByCategory = new Map<string, number>();
-    const expenseByCategory = new Map<string, number>();
+    const revenueByCategory = new Map<string, { name: string; id: string; value: number }>();
+    const expenseByCategory = new Map<string, { name: string; id: string; value: number }>();
 
     paidInPeriod.forEach((t) => {
       const map = t.type === "receita" ? revenueByCategory : expenseByCategory;
-      const current = map.get(t.category) || 0;
-      map.set(t.category, current + Number(t.amount));
+      const resolved = resolveCategoryName(t.category);
+      const key = resolved.id;
+      const current = map.get(key);
+      if (current) {
+        current.value += Number(t.amount);
+      } else {
+        map.set(key, { name: resolved.name, id: resolved.id, value: Number(t.amount) });
+      }
     });
 
-    const revenueCategories: CategorySummary[] = Array.from(revenueByCategory.entries()).map(
-      ([name, value], i) => ({
-        name,
-        value,
+    const revenueCategories: CategorySummary[] = Array.from(revenueByCategory.values()).map(
+      (entry, i) => ({
+        name: entry.name,
+        id: entry.id,
+        value: entry.value,
         fill: CHART_COLORS[i % CHART_COLORS.length],
       })
     );
 
-    const expenseCategories: CategorySummary[] = Array.from(expenseByCategory.entries()).map(
-      ([name, value], i) => ({
-        name,
-        value,
+    const expenseCategories: CategorySummary[] = Array.from(expenseByCategory.values()).map(
+      (entry, i) => ({
+        name: entry.name,
+        id: entry.id,
+        value: entry.value,
         fill: CHART_COLORS[i % CHART_COLORS.length],
       })
     );
 
     return { revenueCategories, expenseCategories };
-  }, [transactions]);
+  }, [transactions, resolveCategoryName]);
 
-  // Balance projection
+  // Balance projection - includes initial balances
   const getProjectionData = useMemo(() => {
     return (days: ProjectionDays): ProjectionPoint[] => {
       const today = new Date();
@@ -323,7 +425,8 @@ export function useDashboardData(filters: DashboardFilters) {
         (t) => t.status === "Pago" && new Date(t.payment_date) <= today
       );
 
-      let currentBalance = paidBefore.reduce((acc, t) => {
+      // FIX #10: Include initial balances of bank accounts + wallets
+      let currentBalance = initialBalances + paidBefore.reduce((acc, t) => {
         return acc + (t.type === "receita" ? Number(t.amount) : -Number(t.amount));
       }, 0);
 
@@ -370,7 +473,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
       return points;
     };
-  }, [allTransactions, recurringOccurrences]);
+  }, [allTransactions, recurringOccurrences, initialBalances]);
 
   // Performance: average daily spending
   const performance = useMemo(() => {
@@ -393,6 +496,6 @@ export function useDashboardData(filters: DashboardFilters) {
     performance,
     creditCards,
     loading: loading || recurringLoading,
-    refetchRecurring,
+    refetch,
   };
 }
