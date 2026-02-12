@@ -35,6 +35,7 @@ function DoughnutChart({
   const handleClick = (_: any, index: number) => {
     const category = data[index];
     if (category) {
+      // FIX #5: Pass category name + type (Lancamentos resolves by name)
       navigate(`/lancamentos?category=${encodeURIComponent(category.name)}&type=${type}`);
     }
   };

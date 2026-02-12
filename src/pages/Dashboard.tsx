@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useDashboardData, DashboardFilters } from "@/hooks/useDashboardData";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
@@ -23,11 +23,6 @@ export default function Dashboard() {
   const { bankAccounts } = useAccounts();
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const handleLiquidated = useCallback(() => {
-    setRefreshKey((k) => k + 1);
-  }, []);
 
   const {
     summary,
@@ -37,7 +32,13 @@ export default function Dashboard() {
     performance,
     creditCards,
     loading,
+    refetch,
   } = useDashboardData(filters);
+
+  // FIX #1: refetch triggers all queries inside the hook
+  const handleLiquidated = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   return (
     <div className="space-y-6 animate-fade-in">
