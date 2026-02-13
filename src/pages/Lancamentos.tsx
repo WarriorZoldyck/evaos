@@ -29,6 +29,7 @@ import { TransactionFormModal } from "@/components/lancamentos/TransactionFormMo
 import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
 import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
+import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
 
 type TabValue = "todos" | "realizado" | "projetado";
 
@@ -57,6 +58,7 @@ export default function Lancamentos() {
   const [liquidateTarget, setLiquidateTarget] = useState<Transaction | null>(null);
   const [detailTarget, setDetailTarget] = useState<Transaction | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
+  const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
 
   // Read query params from dashboard category chart clicks
   useEffect(() => {
@@ -224,7 +226,17 @@ export default function Lancamentos() {
             onEdit={handleEdit}
             onDuplicate={duplicateTransaction}
             onDelete={handleDelete}
-            onLiquidate={(t) => setLiquidateTarget(t)}
+            onLiquidate={(t) => {
+              // If it's a credit card transaction, open bill payment flow
+              if (t.credit_card_id) {
+                const card = creditCards.find((c) => c.id === t.credit_card_id);
+                if (card) {
+                  setBillPaymentCard(card);
+                  return;
+                }
+              }
+              setLiquidateTarget(t);
+            }}
             onViewDetails={(t) => setDetailTarget(t)}
           />
         </CardContent>
@@ -265,7 +277,14 @@ export default function Lancamentos() {
         clients={clients}
         onEdit={handleEdit}
         onDuplicate={duplicateTransaction}
-        onLiquidate={(t) => { setDetailTarget(null); setLiquidateTarget(t); }}
+        onLiquidate={(t) => {
+          setDetailTarget(null);
+          if (t.credit_card_id) {
+            const card = creditCards.find((c) => c.id === t.credit_card_id);
+            if (card) { setBillPaymentCard(card); return; }
+          }
+          setLiquidateTarget(t);
+        }}
         onDelete={handleDelete}
       />
 
@@ -324,6 +343,17 @@ export default function Lancamentos() {
         onClose={() => setLiquidateTarget(null)}
         onSuccess={() => {
           setLiquidateTarget(null);
+          fetchTransactions();
+        }}
+      />
+
+      {/* Credit Card Bill Payment */}
+      <CreditCardBillPaymentModal
+        open={!!billPaymentCard}
+        creditCard={billPaymentCard}
+        onClose={() => setBillPaymentCard(null)}
+        onSuccess={() => {
+          setBillPaymentCard(null);
           fetchTransactions();
         }}
       />
