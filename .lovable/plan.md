@@ -1,50 +1,74 @@
 
 
-## Correcao da Leitura de Taxas da Maquininha
+## Correção dos Lançamentos Existentes de Maquininha
 
-### Problema Raiz
+### Situação Atual
 
-O `MdrInfoCard` (preview em tempo real) e o `TransactionFormModal` (logica de salvamento) comparam o numero de parcelas para encontrar a taxa correta na tabela `rates_info`. O problema e uma **incompatibilidade de tipo** na comparacao:
+Analisei todas as transações vinculadas a terminais (maquininhas) no banco de dados. Os problemas encontrados:
 
-- `form.watch("installments_count")` retorna uma **string** (ex: `"3"`) porque vem diretamente do input HTML
-- `rates_info` armazena `installments` como **number** (ex: `3`)
-- A comparacao `r.installments === installmentsCount` usa `===` (igualdade estrita), entao `3 === "3"` retorna `false`
-- Resultado: a taxa especifica nunca e encontrada, e o sistema cai no fallback `credit_rate` (taxa de credito a vista)
+| Transação | Valor Atual | Original | Parcelas | Taxa Correta | Valor Correto | Status |
+|-----------|------------|----------|----------|-------------|--------------|--------|
+| Teste cartão D+2 | R$960 | R$1.000 | 2x (4%) | 4% | R$960 | OK |
+| hugo | R$9.671 | R$9.671 | 10x | 3.29% (sem taxa 10x) | R$9.352,82 | ERRADO |
+| paciente XYZ | R$9.356 | R$9.356 | 5x (6.44%) | 6.44% | R$8.753,48 | ERRADO |
+| Tancredo | R$3.868,40 | sem registro | 1x (3.29%) | 3.29% | R$3.741,12 | ERRADO |
+| Maria da Conceição | R$198,02 | R$198,02 | débito (0.99%) | 0.99% | R$196,06 | ERRADO |
+| teste 12/01 | R$947,60 | R$947,60 | 3x (5.24%) | 5.24% | R$897,95 | ERRADO |
+| E outros... | | | | | | |
 
-Exemplo real com o terminal "TESTE D+2" (2x=4%, 3x=5%, 4x=6%):
-- Usuario seleciona 3x parcelas
-- Sistema busca `rates.find(r => r.installments === "3")` -- nao encontra
-- Usa fallback `credit_rate = 3.29%` em vez de `5%`
+Além disso, algumas datas de pagamento (D+) também precisam ser recalculadas.
 
-### Correcoes
+---
 
-**Arquivo 1: `src/components/lancamentos/MdrInfoCard.tsx`**
-- Na funcao de busca de taxa, converter `installmentsCount` para numero antes de comparar:
-  `rates.find(r => r.installments === Number(installmentsCount))`
+### Plano de Correção
 
-**Arquivo 2: `src/components/lancamentos/TransactionFormModal.tsx`**
-- Na logica de salvamento (handleMainSubmit), tambem garantir conversao:
-  `rates.find((r: any) => r.installments === Number(data.installments_count))`
-- Embora o Zod faca coercao, e mais seguro forcar a conversao explicitamente
+Criar uma **Edge Function** temporária chamada `fix-terminal-transactions` que:
 
-**Arquivo 3: `src/components/lancamentos/PaymentMethodFields.tsx`**
-- Converter `installmentsCount` para numero antes de passar ao MdrInfoCard:
-  `installmentsCount={isInstallment ? Number(installmentsCount) : undefined}`
+1. Busca todas as transações com `card_terminal_id` preenchido
+2. Para cada transação, busca o terminal vinculado e suas taxas
+3. Determina a taxa correta:
+   - Débito: usa `debit_rate`
+   - Crédito à vista (1x): usa `credit_rate`
+   - Crédito parcelado: busca na tabela `rates_info` pelo número de parcelas; se não encontrar, usa `credit_rate`
+4. Recalcula:
+   - `original_amount` = valor atual (se ainda não preenchido)
+   - `amount` = original_amount - (original_amount * taxa / 100)
+   - `payment_date` = competence_date + settlement_days (débito ou crédito)
+5. Atualiza cada transação no banco
 
-### Detalhes Tecnicos
+A função será chamada uma única vez pelo usuário e poderá ser removida depois.
+
+---
+
+### Segurança
+
+- A função só atualiza transações que têm `card_terminal_id` preenchido
+- Preserva o `original_amount` (valor bruto) para referência
+- Transações já corrigidas (como "Teste cartão D+2") não serão afetadas porque a lógica detecta que `original_amount != amount`
+- Para transações sem `original_amount` (como "Tancredo"), o valor atual será tratado como bruto
+
+---
+
+### Detalhes Técnicos
 
 ```text
-Antes (falha silenciosa):
-  rates.find(r => r.installments === installmentsCount)
-  // installmentsCount = "3" (string do form.watch)
-  // r.installments = 3 (number do JSON)
-  // 3 === "3" -> false -> usa credit_rate base
+Lógica de decisão por transação:
 
-Depois (correto):
-  rates.find(r => r.installments === Number(installmentsCount))
-  // Number("3") = 3
-  // 3 === 3 -> true -> usa taxa correta (5%)
+SE original_amount é NULL:
+  original_amount = amount (valor atual é o bruto)
+
+SE original_amount == amount (taxa nunca foi aplicada):
+  Calcular taxa e atualizar amount para valor líquido
+
+SE original_amount != amount (já foi corrigido):
+  Pular (não mexer)
+
+Para TODAS com terminal:
+  Recalcular payment_date = competence_date + D+ dias
 ```
 
-Sao 3 linhas alteradas em 3 arquivos. Correcao cirurgica sem efeitos colaterais.
+### Arquivos
+
+1. **`supabase/functions/fix-terminal-transactions/index.ts`** - Edge Function que executa a correção
+2. Após execução bem-sucedida, a função pode ser removida
 
