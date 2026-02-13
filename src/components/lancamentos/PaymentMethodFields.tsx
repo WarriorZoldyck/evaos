@@ -154,7 +154,7 @@ export function PaymentMethodFields({
               terminal={selectedTerminal}
               amount={amount}
               paymentMethod={paymentMethod}
-              installmentsCount={isInstallment ? installmentsCount : undefined}
+              installmentsCount={isInstallment ? Number(installmentsCount) : undefined}
               paymentDate={competenceDate instanceof Date ? competenceDate : new Date(competenceDate)}
             />
           )}

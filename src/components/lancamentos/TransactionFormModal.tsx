@@ -433,7 +433,7 @@ export function TransactionFormModal({
         rate = selectedTerminal.debit_rate ?? 0;
       } else if (data.is_installment && data.installments_count && data.installments_count >= 2) {
         const rates = selectedTerminal.rates_info ? (() => { try { const p = JSON.parse(selectedTerminal.rates_info!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
-        const found = rates.find((r: any) => r.installments === data.installments_count);
+        const found = rates.find((r: any) => r.installments === Number(data.installments_count));
         rate = found ? found.rate : (selectedTerminal.credit_rate ?? 0);
       } else {
         rate = selectedTerminal.credit_rate ?? 0;
