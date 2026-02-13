@@ -52,7 +52,7 @@ export function MdrInfoCard({
       // Credit
       if (installmentsCount && installmentsCount >= 2) {
         const rates = parseRatesInfo(terminal.rates_info);
-        const found = rates.find((r) => r.installments === installmentsCount);
+        const found = rates.find((r) => r.installments === Number(installmentsCount));
         rate = found ? found.rate : (terminal.credit_rate ?? 0);
       } else {
         rate = terminal.credit_rate ?? 0;
