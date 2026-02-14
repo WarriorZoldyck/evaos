@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { addDays } from "date-fns";
+import { addBusinessDays } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -82,7 +82,7 @@ export function TransactionDetailModal({
   const grossAmount = t.original_amount || t.amount;
   const feeAmount = Math.round(grossAmount * (mdrRate / 100) * 100) / 100;
   const netAmount = Math.round((grossAmount - feeAmount) * 100) / 100;
-  const settlementDate = mdrDays > 0 ? addDays(new Date(t.payment_date + "T00:00:00"), mdrDays) : null;
+  const settlementDate = mdrDays > 0 ? addBusinessDays(new Date(t.payment_date + "T00:00:00"), mdrDays) : null;
 
   // Contact
   const supplierName = t.supplier_id ? suppliers.find((s) => s.id === t.supplier_id)?.name : null;
