@@ -73,17 +73,8 @@ export function TransactionDetailModal({
       mdrRate = terminal.debit_rate || 0;
       mdrDays = terminal.settlement_days_debit || 0;
     } else {
-      if (t.installments_total && t.installments_total >= 2) {
-        try {
-          const ratesArr = terminal.rates_info ? JSON.parse(terminal.rates_info) : [];
-          const matched = ratesArr.find((r: any) => r.installments === t.installments_total);
-          mdrRate = matched?.rate || terminal.credit_rate || 0;
-        } catch {
-          mdrRate = terminal.credit_rate || 0;
-        }
-      } else {
-        mdrRate = terminal.credit_rate || 0;
-      }
+      // Always use credit_rate (merchant receives based on à vista rate)
+      mdrRate = terminal.credit_rate || 0;
       mdrDays = terminal.settlement_days_credit || 0;
     }
   }
