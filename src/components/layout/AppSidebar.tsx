@@ -12,6 +12,9 @@ import {
   Building2,
   User,
   ChevronDown,
+  GraduationCap,
+  Target,
+  TrendingUp,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -53,6 +56,12 @@ const registrationMenuItems = [
   { title: "Contas & Cartões", url: "/contas", icon: CreditCard },
   { title: "Categorias", url: "/categorias", icon: FolderTree },
   { title: "Fornecedores e Clientes", url: "/contatos", icon: Users },
+];
+
+const comingSoonItems = [
+  { title: "EVA Kids", url: "/eva-kids", icon: GraduationCap },
+  { title: "Metas", url: "/metas", icon: Target },
+  { title: "Precificação V2", url: "/precificacao-v2", icon: TrendingUp },
 ];
 
 export function AppSidebar() {
@@ -175,6 +184,28 @@ export function AppSidebar() {
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Novidades</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {comingSoonItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild tooltip={item.title}>
+                    <NavLink
+                      to={item.url}
+                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      <span className="ml-auto text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">Em breve</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
