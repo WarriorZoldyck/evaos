@@ -507,7 +507,7 @@ export function TransactionFormModal({
       const installments: TransactionInsert[] = [];
       for (let i = 0; i < count; i++) {
         const payDate = addMonths(data.payment_date, i);
-        const compDate = addMonths(data.competence_date, i);
+        const compDate = data.competence_date;
         installments.push({
           ...baseData,
           amount: i === 0 ? firstAmount : restAmount,
