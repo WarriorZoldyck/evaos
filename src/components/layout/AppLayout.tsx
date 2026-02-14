@@ -30,8 +30,8 @@ export default function AppLayout() {
         <div className="min-h-screen flex w-full">
           <AppSidebar />
           <main className="flex-1 flex flex-col min-w-0">
-            <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 glass-strong">
-              <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors" />
+            <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
+              <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
               <ThemeToggle />
             </header>
             <div className="flex-1 overflow-auto p-4 md:p-6">
