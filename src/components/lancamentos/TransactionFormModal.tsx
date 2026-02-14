@@ -105,6 +105,10 @@ const PAYMENT_METHODS = [
   "Cartão de Crédito",
   "Cartão de Débito",
   "Transferência",
+  "Cheque",
+  "Depósito",
+  "Débito Automático",
+  "Outro",
 ] as const;
 
 const RECURRING_FREQUENCIES = [
@@ -1271,7 +1275,7 @@ function MainFormContent({
         )}
 
         {/* Installments / Recurring */}
-        {!isEditing && (show("installments") || show("recurring")) && (
+        {(show("installments") || show("recurring")) && (
           <div className="space-y-4 rounded-lg border border-border p-4">
             {show("installments") && (
             <div className="space-y-3">

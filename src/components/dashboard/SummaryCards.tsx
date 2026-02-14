@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { TrendingUp, TrendingDown, Wallet, DollarSign, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,6 +11,8 @@ interface SummaryCardsProps {
   entradaPrevista: number;
   saidaPrevista: number;
   loading: boolean;
+  dateFrom: string;
+  dateTo: string;
 }
 
 function formatCurrency(value: number): string {
@@ -26,9 +29,10 @@ interface CardItemProps {
   trend: "up" | "down" | "neutral";
   gradient: string;
   loading: boolean;
+  onClick?: () => void;
 }
 
-function SummaryCard({ title, value, icon: Icon, trend, gradient, loading }: CardItemProps) {
+function SummaryCard({ title, value, icon: Icon, trend, gradient, loading, onClick }: CardItemProps) {
   const trendColor =
     trend === "up"
       ? "text-success"
@@ -37,7 +41,10 @@ function SummaryCard({ title, value, icon: Icon, trend, gradient, loading }: Car
         : "text-primary";
 
   return (
-    <Card className="card-hover shadow-premium overflow-hidden relative group">
+    <Card
+      className="card-hover shadow-premium overflow-hidden relative group cursor-pointer"
+      onClick={onClick}
+    >
       <CardContent className="pt-6 relative z-10">
         <div className="flex items-center justify-between">
           <div className="space-y-1.5">
@@ -59,7 +66,17 @@ function SummaryCard({ title, value, icon: Icon, trend, gradient, loading }: Car
   );
 }
 
-export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, loading }: SummaryCardsProps) {
+export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, loading, dateFrom, dateTo }: SummaryCardsProps) {
+  const navigate = useNavigate();
+
+  const go = (params: Record<string, string>) => {
+    const sp = new URLSearchParams();
+    if (dateFrom) sp.set("dateFrom", dateFrom);
+    if (dateTo) sp.set("dateTo", dateTo);
+    Object.entries(params).forEach(([k, v]) => sp.set(k, v));
+    navigate(`/lancamentos?${sp.toString()}`);
+  };
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
       <SummaryCard
@@ -69,6 +86,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         trend="neutral"
         gradient="bg-gradient-primary"
         loading={loading}
+        onClick={() => go({ type: "receita" })}
       />
       <SummaryCard
         title="Entradas"
@@ -77,6 +95,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         trend="up"
         gradient="bg-gradient-success"
         loading={loading}
+        onClick={() => go({ type: "receita", status: "Pago" })}
       />
       <SummaryCard
         title="Saídas"
@@ -85,6 +104,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         trend="down"
         gradient="bg-gradient-destructive"
         loading={loading}
+        onClick={() => go({ type: "despesa", status: "Pago" })}
       />
       <SummaryCard
         title="Saldo do Período"
@@ -93,6 +113,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         trend={saldo >= 0 ? "up" : "down"}
         gradient={saldo >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
         loading={loading}
+        onClick={() => go({})}
       />
       <SummaryCard
         title="Entrada Prevista"
@@ -101,6 +122,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         trend="neutral"
         gradient="bg-gradient-primary"
         loading={loading}
+        onClick={() => go({ type: "receita", status: "Pendente" })}
       />
       <SummaryCard
         title="Saída Prevista"
@@ -109,6 +131,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         trend="neutral"
         gradient="bg-gradient-destructive"
         loading={loading}
+        onClick={() => go({ type: "despesa", status: "Pendente" })}
       />
     </div>
   );

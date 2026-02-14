@@ -43,7 +43,7 @@ export function PaymentMethodFields({
   const showTerminal = isReceita && isCard;
   const showCreditCardSelect = !isReceita && paymentMethod === "Cartão de Crédito";
   const showBankAccount =
-    (!isCard && ["PIX", "Boleto", "Transferência"].includes(paymentMethod || "")) ||
+    (!isCard && ["PIX", "Boleto", "Transferência", "Cheque", "Depósito", "Débito Automático"].includes(paymentMethod || "")) ||
     (!isReceita && paymentMethod === "Cartão de Débito");
   const showWallet =
     paymentMethod === "Dinheiro" ||

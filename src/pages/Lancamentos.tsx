@@ -62,23 +62,28 @@ export default function Lancamentos() {
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
   const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
 
-  // Read query params from dashboard category chart clicks
+  // Read query params from dashboard clicks
   useEffect(() => {
     const categoryParam = searchParams.get("category");
     const typeParam = searchParams.get("type");
-    if (categoryParam || typeParam) {
-      // Find category by name to get its ID
+    const statusParam = searchParams.get("status");
+    const dateFromParam = searchParams.get("dateFrom");
+    const dateToParam = searchParams.get("dateTo");
+
+    if (categoryParam || typeParam || statusParam || dateFromParam || dateToParam) {
       const matchedCat = categories.find(
         (c) => c.name === categoryParam && !c.parent_id
       );
       setFilters((prev) => ({
         ...prev,
-        categoryId: matchedCat?.id || "",
-        type: (typeParam as "receita" | "despesa") || "todos",
+        categoryId: matchedCat?.id || prev.categoryId,
+        type: (typeParam as "receita" | "despesa") || prev.type,
+        status: (statusParam as "Pago" | "Pendente") || prev.status,
+        dateFrom: dateFromParam || prev.dateFrom,
+        dateTo: dateToParam || prev.dateTo,
       }));
-      if (typeParam === "receita" || typeParam === "despesa") {
-        setActiveTab(typeParam === "receita" ? "realizado" : "realizado");
-      }
+      if (statusParam === "Pago") setActiveTab("realizado");
+      else if (statusParam === "Pendente") setActiveTab("projetado");
       // Clear params after applying
       setSearchParams({}, { replace: true });
     }
@@ -198,6 +203,8 @@ export default function Lancamentos() {
         filters={filters}
         onFiltersChange={setFilters}
         categories={categories}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
       />
 
       {/* Tabs + Table */}
