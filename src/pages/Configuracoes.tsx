@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Settings, Trash2, Building2, Plus, X } from "lucide-react";
+import { TransactionFieldsCard } from "@/components/configuracoes/TransactionFieldsCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -174,6 +175,10 @@ export default function Configuracoes() {
           ))}
         </CardContent>
       </Card>
+
+      {/* Transaction Form Fields Settings */}
+      <TransactionFieldsCard />
+
       <Card className="border-destructive/30">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2 text-destructive">

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
 import { Plus, User, Building2, ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ type TabValue = "todos" | "realizado" | "projetado";
 export default function Lancamentos() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isPersonal, companies, selectedCompanyId, setSelectedCompanyId } = useCompany();
+  const { settings: fieldSettings } = useFormFieldSettings();
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
   const contextLabel = isPersonal ? "Pessoal" : selectedCompany?.name ?? "Pessoal";
 
@@ -262,6 +264,7 @@ export default function Lancamentos() {
         cardTerminals={cardTerminals}
         allAccounts={allAccounts}
         companies={companies}
+        fieldSettings={fieldSettings}
       />
 
       {/* Detail Modal */}

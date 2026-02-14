@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import type { FormFieldSettings } from "@/hooks/useFormFieldSettings";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -259,6 +260,7 @@ interface TransactionFormModalProps {
   cardTerminals: CardTerminalInfo[];
   allAccounts?: AllAccounts;
   companies?: Company[];
+  fieldSettings?: FormFieldSettings;
 }
 
 export function TransactionFormModal({
@@ -277,6 +279,7 @@ export function TransactionFormModal({
   cardTerminals,
   allAccounts,
   companies = [],
+  fieldSettings,
 }: TransactionFormModalProps) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
@@ -713,6 +716,7 @@ export function TransactionFormModal({
               paymentDateManuallyEdited={paymentDateManuallyEdited}
               formCompanyId={formCompanyId}
               onCategoryCreated={fetchFormCategories}
+              fieldSettings={fieldSettings}
             />
           </TabsContent>
 
@@ -736,6 +740,7 @@ export function TransactionFormModal({
               paymentDateManuallyEdited={paymentDateManuallyEdited}
               formCompanyId={formCompanyId}
               onCategoryCreated={fetchFormCategories}
+              fieldSettings={fieldSettings}
             />
           </TabsContent>
 
@@ -891,6 +896,7 @@ interface MainFormContentProps {
   paymentDateManuallyEdited: React.MutableRefObject<boolean>;
   formCompanyId: string | null;
   onCategoryCreated: () => Promise<void>;
+  fieldSettings?: FormFieldSettings;
 }
 
 function MainFormContent({
@@ -912,10 +918,12 @@ function MainFormContent({
   paymentDateManuallyEdited,
   formCompanyId,
   onCategoryCreated,
+  fieldSettings,
 }: MainFormContentProps) {
   const watchInstallment = form.watch("is_installment");
   const watchRecurring = form.watch("is_recurring");
   const [customFirstInstallment, setCustomFirstInstallment] = useState(false);
+  const show = (key: keyof FormFieldSettings) => !fieldSettings || fieldSettings[key];
 
   return (
     <Form {...form}>
@@ -959,8 +967,9 @@ function MainFormContent({
         />
 
         {/* Fornecedor/Cliente */}
+        {(show("supplier_client") || show("contact_name")) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {activeTab === "despesa" ? (
+          {show("supplier_client") && (activeTab === "despesa" ? (
             <FormField
               control={form.control}
               name="supplier_id"
@@ -1010,7 +1019,8 @@ function MainFormContent({
                 </FormItem>
               )}
             />
-          )}
+          ))}
+          {show("contact_name") && (
           <FormField
             control={form.control}
             name="contact_name"
@@ -1024,7 +1034,9 @@ function MainFormContent({
               </FormItem>
             )}
           />
+          )}
         </div>
+        )}
 
         {/* Dates: Competência → Pagamento */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1157,7 +1169,7 @@ function MainFormContent({
               </FormItem>
             )}
           />
-          {form.watch("category") && (
+          {show("subcategories") && form.watch("category") && (
             <FormField
               control={form.control}
               name="subcategory"
@@ -1188,7 +1200,7 @@ function MainFormContent({
               )}
             />
           )}
-          {form.watch("subcategory") && (
+          {show("subcategories") && form.watch("subcategory") && (
             <FormField
               control={form.control}
               name="subcategory2"
@@ -1218,6 +1230,7 @@ function MainFormContent({
         </div>
 
         {/* Forma de pagamento */}
+        {show("payment_method") && (
         <FormField
           control={form.control}
           name="payment_method"
@@ -1242,8 +1255,10 @@ function MainFormContent({
             </FormItem>
           )}
         />
+        )}
 
         {/* Conta/Maquininha */}
+        {show("account_fields") && (
         <PaymentMethodFields
           form={form}
           activeTab={activeTab}
@@ -1253,10 +1268,12 @@ function MainFormContent({
           wallets={wallets}
           cardTerminals={cardTerminals}
         />
+        )}
 
         {/* Installments / Recurring */}
-        {!isEditing && (
+        {!isEditing && (show("installments") || show("recurring")) && (
           <div className="space-y-4 rounded-lg border border-border p-4">
+            {show("installments") && (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <Switch
@@ -1310,8 +1327,9 @@ function MainFormContent({
                 </div>
               )}
             </div>
+            )}
 
-            {!watchInstallment && (
+            {show("recurring") && !watchInstallment && (
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <Switch
@@ -1392,6 +1410,7 @@ function MainFormContent({
         )}
 
         {/* Observações */}
+        {show("notes") && (
         <FormField
           control={form.control}
           name="notes"
@@ -1405,8 +1424,11 @@ function MainFormContent({
             </FormItem>
           )}
         />
+        )}
 
+        {(show("barcode") || show("attachment_url")) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {show("barcode") && (
           <FormField
             control={form.control}
             name="barcode"
@@ -1420,6 +1442,8 @@ function MainFormContent({
               </FormItem>
             )}
           />
+          )}
+          {show("attachment_url") && (
           <FormField
             control={form.control}
             name="attachment_url"
@@ -1433,7 +1457,9 @@ function MainFormContent({
               </FormItem>
             )}
           />
+          )}
         </div>
+        )}
 
         <Button type="submit" className="w-full" disabled={saving}>
           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

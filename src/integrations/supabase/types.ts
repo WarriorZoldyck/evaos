@@ -360,6 +360,7 @@ export type Database = {
           cpf: string | null
           full_name: string | null
           id: string
+          transaction_form_fields: Json | null
           updated_at: string | null
           whatsapp_number: string | null
         }
@@ -368,6 +369,7 @@ export type Database = {
           cpf?: string | null
           full_name?: string | null
           id: string
+          transaction_form_fields?: Json | null
           updated_at?: string | null
           whatsapp_number?: string | null
         }
@@ -376,6 +378,7 @@ export type Database = {
           cpf?: string | null
           full_name?: string | null
           id?: string
+          transaction_form_fields?: Json | null
           updated_at?: string | null
           whatsapp_number?: string | null
         }
