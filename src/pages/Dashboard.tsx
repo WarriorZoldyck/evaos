@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { format } from "date-fns";
 import { useCompany } from "@/contexts/CompanyContext";
-import { useDashboardData, DashboardFilters } from "@/hooks/useDashboardData";
+import { useDashboardData, DashboardFilters, getDateRangeExported } from "@/hooks/useDashboardData";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { BalanceProjectionChart } from "@/components/dashboard/BalanceProjectionChart";
@@ -23,7 +24,7 @@ export default function Dashboard() {
   const { bankAccounts } = useAccounts();
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
-
+  const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
   const {
     summary,
     upcomingTransactions,
@@ -82,6 +83,8 @@ export default function Dashboard() {
         entradaPrevista={summary.entradaPrevista}
         saidaPrevista={summary.saidaPrevista}
         loading={loading}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
       />
 
       {/* Charts Row */}

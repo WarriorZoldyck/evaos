@@ -52,12 +52,16 @@ interface TransactionFiltersProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
   categories: Category[];
+  bankAccounts?: { id: string; name: string }[];
+  wallets?: { id: string; name: string }[];
 }
 
 export function TransactionFilters({
   filters,
   onFiltersChange,
   categories,
+  bankAccounts = [],
+  wallets = [],
 }: TransactionFiltersProps) {
   const rootCategories = categories.filter((c) => !c.parent_id);
   const [activePeriod, setActivePeriod] = useState<PeriodKey>("all");
@@ -173,6 +177,37 @@ export function TransactionFilters({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Account / Wallet filter */}
+        {(bankAccounts.length > 0 || wallets.length > 0) && (
+          <Select
+            value={filters.accountId || "todas"}
+            onValueChange={(value) =>
+              onFiltersChange({
+                ...filters,
+                accountId: value === "todas" ? "" : value,
+              })
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[200px]">
+              <SelectValue placeholder="Conta / Carteira" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas as contas</SelectItem>
+              {bankAccounts.map((acc) => (
+                <SelectItem key={`bank:${acc.id}`} value={`bank:${acc.id}`}>
+                  🏦 {acc.name}
+                </SelectItem>
+              ))}
+              {wallets.map((w) => (
+                <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
+                  👛 {w.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
       </div>
 
       {/* Period filter - same style as Dashboard */}

@@ -16,6 +16,7 @@ export interface TransactionFilters {
   dateFrom: string;
   dateTo: string;
   sortOrder: "desc" | "asc";
+  accountId: string;
 }
 
 interface BankAccount {
@@ -86,6 +87,7 @@ export function useTransactions() {
     dateFrom: "",
     dateTo: "",
     sortOrder: "desc",
+    accountId: "",
   });
 
   // Auxiliary data
@@ -207,6 +209,16 @@ export function useTransactions() {
     }
     if (filters.dateTo) {
       query = query.lte("payment_date", filters.dateTo);
+    }
+    if (filters.accountId) {
+      // Could be bank:id or wallet:id
+      const [accType, ...idParts] = filters.accountId.split(":");
+      const accId = idParts.join(":");
+      if (accType === "bank") {
+        query = query.eq("bank_account_id", accId);
+      } else if (accType === "wallet") {
+        query = query.eq("wallet_id", accId);
+      }
     }
 
     const from = page * PAGE_SIZE;

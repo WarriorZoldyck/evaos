@@ -89,6 +89,10 @@ const CHART_COLORS = [
   "hsl(160, 60%, 45%)",
 ];
 
+export function getDateRangeExported(filters: DashboardFilters): { start: Date; end: Date } {
+  return getDateRange(filters);
+}
+
 function getDateRange(filters: DashboardFilters): { start: Date; end: Date } {
   const now = new Date();
   switch (filters.period) {
