@@ -11,6 +11,19 @@ interface RateInfo {
   rate: number;
 }
 
+function addBusinessDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  let added = 0;
+  while (added < days) {
+    result.setDate(result.getDate() + 1);
+    const dow = result.getDay();
+    if (dow !== 0 && dow !== 6) {
+      added++;
+    }
+  }
+  return result;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -86,10 +99,10 @@ Deno.serve(async (req) => {
       const feeAmount = Math.round(originalAmount * (rate / 100) * 100) / 100;
       const netAmount = Math.round((originalAmount - feeAmount) * 100) / 100;
 
-      // Calculate settlement date
+      // Calculate settlement date using business days
       const competenceDate = new Date(tx.competence_date + "T00:00:00Z");
-      competenceDate.setUTCDate(competenceDate.getUTCDate() + settlementDays);
-      const newPaymentDate = competenceDate.toISOString().split("T")[0];
+      const settlementDateObj = addBusinessDays(competenceDate, settlementDays);
+      const newPaymentDate = settlementDateObj.toISOString().split("T")[0];
 
       // Build update
       const update: Record<string, unknown> = {

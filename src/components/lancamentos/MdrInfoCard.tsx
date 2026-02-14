@@ -1,7 +1,8 @@
 import { useMemo } from "react";
-import { format, addDays } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CreditCard as CreditCardIcon } from "lucide-react";
+import { addBusinessDays } from "@/lib/utils";
 import type { CardTerminalInfo } from "@/hooks/useTransactions";
 
 interface RateInfo {
@@ -56,7 +57,7 @@ export function MdrInfoCard({
 
     const feeAmount = Math.round(amount * (rate / 100) * 100) / 100;
     const netAmount = Math.round((amount - feeAmount) * 100) / 100;
-    const settlementDate = addDays(paymentDate, settlementDays);
+    const settlementDate = addBusinessDays(paymentDate, settlementDays);
 
     return { rate, feeAmount, netAmount, settlementDays, settlementDate };
   }, [terminal, amount, paymentMethod, installmentsCount, paymentDate]);

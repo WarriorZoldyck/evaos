@@ -6,7 +6,7 @@ import { format, addMonths, addDays } from "date-fns";
 import { CalendarIcon, Loader2, User, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ptBR } from "date-fns/locale";
-import { cn } from "@/lib/utils";
+import { cn, addBusinessDays } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany, type Company } from "@/contexts/CompanyContext";
 import {
@@ -445,7 +445,7 @@ export function TransactionFormModal({
       const settlementDays = isDebit
         ? (selectedTerminal.settlement_days_debit ?? 1)
         : (selectedTerminal.settlement_days_credit ?? 2);
-      finalPaymentDate = addDays(data.competence_date, settlementDays);
+      finalPaymentDate = addBusinessDays(data.competence_date, settlementDays);
     }
 
     const baseData: TransactionInsert = {
