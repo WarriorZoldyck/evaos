@@ -345,19 +345,17 @@ export function useDashboardData(filters: DashboardFilters) {
 
     const saldo = entradas - saidas;
 
-    // FIX #4: Both previsto and consolidado from competenceTransactions (same base)
-    const previstoReceitas = competenceTransactions
-      .filter((t) => t.type === "receita")
+    // Entrada Prevista = receitas pendentes no período (por payment_date)
+    const entradaPrevista = transactions
+      .filter((t) => t.type === "receita" && t.status === "Pendente")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    const consolidadoReceitas = competenceTransactions
-      .filter((t) => t.type === "receita" && t.status === "Pago")
+    // Saída Prevista = despesas pendentes no período (por payment_date)
+    const saidaPrevista = transactions
+      .filter((t) => t.type === "despesa" && t.status === "Pendente")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // Entrada Prevista = o que falta receber (previsto - já pago na mesma base)
-    const entradaPrevista = Math.max(previstoReceitas - consolidadoReceitas, 0);
-
-    return { faturamento, entradas, saidas, saldo, entradaPrevista };
+    return { faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista };
   }, [transactions, competenceTransactions]);
 
   // Upcoming (Pendente) transactions
