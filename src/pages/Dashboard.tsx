@@ -80,6 +80,7 @@ export default function Dashboard() {
         saidas={summary.saidas}
         saldo={summary.saldo}
         entradaPrevista={summary.entradaPrevista}
+        saidaPrevista={summary.saidaPrevista}
         loading={loading}
       />
 

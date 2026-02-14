@@ -8,6 +8,7 @@ interface SummaryCardsProps {
   saidas: number;
   saldo: number;
   entradaPrevista: number;
+  saidaPrevista: number;
   loading: boolean;
 }
 
@@ -58,9 +59,9 @@ function SummaryCard({ title, value, icon: Icon, trend, gradient, loading }: Car
   );
 }
 
-export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, loading }: SummaryCardsProps) {
+export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, loading }: SummaryCardsProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
       <SummaryCard
         title="Faturamento"
         value={faturamento}
@@ -99,6 +100,14 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         icon={Clock}
         trend="neutral"
         gradient="bg-gradient-primary"
+        loading={loading}
+      />
+      <SummaryCard
+        title="Saída Prevista"
+        value={saidaPrevista}
+        icon={Clock}
+        trend="neutral"
+        gradient="bg-gradient-destructive"
         loading={loading}
       />
     </div>
