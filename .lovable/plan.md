@@ -1,74 +1,46 @@
 
 
-## Correção dos Lançamentos Existentes de Maquininha
+## Correção do Dashboard: Entrada Prevista + Saída Prevista
 
-### Situação Atual
+### Problema 1: Entrada Prevista calculando errado
 
-Analisei todas as transações vinculadas a terminais (maquininhas) no banco de dados. Os problemas encontrados:
+**Causa raiz:** O cálculo atual usa `competenceTransactions` (filtradas por `competence_date`) para calcular o previsto e o consolidado. O correto, conforme a definição do sistema, e o que faz mais sentido pro usuario, e calcular como: **total de receitas Pendentes no periodo** (por data de pagamento).
 
-| Transação | Valor Atual | Original | Parcelas | Taxa Correta | Valor Correto | Status |
-|-----------|------------|----------|----------|-------------|--------------|--------|
-| Teste cartão D+2 | R$960 | R$1.000 | 2x (4%) | 4% | R$960 | OK |
-| hugo | R$9.671 | R$9.671 | 10x | 3.29% (sem taxa 10x) | R$9.352,82 | ERRADO |
-| paciente XYZ | R$9.356 | R$9.356 | 5x (6.44%) | 6.44% | R$8.753,48 | ERRADO |
-| Tancredo | R$3.868,40 | sem registro | 1x (3.29%) | 3.29% | R$3.741,12 | ERRADO |
-| Maria da Conceição | R$198,02 | R$198,02 | débito (0.99%) | 0.99% | R$196,06 | ERRADO |
-| teste 12/01 | R$947,60 | R$947,60 | 3x (5.24%) | 5.24% | R$897,95 | ERRADO |
-| E outros... | | | | | | |
+**Correção:** Entrada Prevista = soma de todas as transacoes do tipo "receita" com status "Pendente" no periodo (filtradas por `payment_date`, que ja estao no array `transactions`).
 
-Além disso, algumas datas de pagamento (D+) também precisam ser recalculadas.
+### Problema 2: Saída Prevista ausente
+
+Adicionar um novo card "Saida Prevista" seguindo a mesma logica: soma de todas as transacoes do tipo "despesa" com status "Pendente" no periodo.
 
 ---
 
-### Plano de Correção
+### Alteracoes
 
-Criar uma **Edge Function** temporária chamada `fix-terminal-transactions` que:
+**Arquivo 1: `src/hooks/useDashboardData.ts`**
+- Alterar o calculo de `entradaPrevista` para: soma de `transactions` onde `type === "receita"` e `status === "Pendente"`
+- Adicionar calculo de `saidaPrevista`: soma de `transactions` onde `type === "despesa"` e `status === "Pendente"`
+- Adicionar `saidaPrevista` ao objeto `summary` retornado
 
-1. Busca todas as transações com `card_terminal_id` preenchido
-2. Para cada transação, busca o terminal vinculado e suas taxas
-3. Determina a taxa correta:
-   - Débito: usa `debit_rate`
-   - Crédito à vista (1x): usa `credit_rate`
-   - Crédito parcelado: busca na tabela `rates_info` pelo número de parcelas; se não encontrar, usa `credit_rate`
-4. Recalcula:
-   - `original_amount` = valor atual (se ainda não preenchido)
-   - `amount` = original_amount - (original_amount * taxa / 100)
-   - `payment_date` = competence_date + settlement_days (débito ou crédito)
-5. Atualiza cada transação no banco
+**Arquivo 2: `src/components/dashboard/SummaryCards.tsx`**
+- Adicionar prop `saidaPrevista` ao componente
+- Adicionar o 6o card "Saida Prevista" com icone `Clock`, trend "neutral" e gradiente destrutivo
+- Ajustar o grid de 5 para 6 colunas (`lg:grid-cols-6`)
 
-A função será chamada uma única vez pelo usuário e poderá ser removida depois.
+**Arquivo 3: `src/pages/Dashboard.tsx`**
+- Passar `saidaPrevista` para o componente `SummaryCards`
 
 ---
 
-### Segurança
-
-- A função só atualiza transações que têm `card_terminal_id` preenchido
-- Preserva o `original_amount` (valor bruto) para referência
-- Transações já corrigidas (como "Teste cartão D+2") não serão afetadas porque a lógica detecta que `original_amount != amount`
-- Para transações sem `original_amount` (como "Tancredo"), o valor atual será tratado como bruto
-
----
-
-### Detalhes Técnicos
+### Detalhes Tecnicos
 
 ```text
-Lógica de decisão por transação:
+ANTES (errado):
+  entradaPrevista = competenceTransactions(receita, todas) - competenceTransactions(receita, Pago)
 
-SE original_amount é NULL:
-  original_amount = amount (valor atual é o bruto)
-
-SE original_amount == amount (taxa nunca foi aplicada):
-  Calcular taxa e atualizar amount para valor líquido
-
-SE original_amount != amount (já foi corrigido):
-  Pular (não mexer)
-
-Para TODAS com terminal:
-  Recalcular payment_date = competence_date + D+ dias
+DEPOIS (correto):
+  entradaPrevista = transactions.filter(receita + Pendente).sum(amount)
+  saidaPrevista   = transactions.filter(despesa + Pendente).sum(amount)
 ```
 
-### Arquivos
-
-1. **`supabase/functions/fix-terminal-transactions/index.ts`** - Edge Function que executa a correção
-2. Após execução bem-sucedida, a função pode ser removida
+Os arrays `transactions` ja estao filtrados por `payment_date` dentro do periodo selecionado e pelo filtro de conta, entao o calculo fica simples e correto.
 
