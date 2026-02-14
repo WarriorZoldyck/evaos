@@ -1,100 +1,68 @@
+## Melhorias nos Lancamentos e Dashboard
+
+### 1. Cards do Dashboard clicaveis (drill-down para Lancamentos)
+
+Ao clicar em cada card do Dashboard, o usuario sera redirecionado para a pagina de Lancamentos com filtros pre-aplicados:
 
 
-## Template de Lancamento: Campos Customizaveis
+| Card             | Filtros aplicados                                   |
+| ---------------- | --------------------------------------------------- |
+| Faturamento      | type=receita, periodo do dashboard                  |
+| Entradas         | type=receita, status=Pago, periodo do dashboard     |
+| Saidas           | type=despesa, status=Pago, periodo do dashboard     |
+| Saldo do Periodo | periodo do dashboard (sem filtro de tipo)           |
+| Entrada Prevista | type=receita, status=Pendente, periodo do dashboard |
+| Saida Prevista   | type=despesa, status=Pendente, periodo do dashboard |
 
-### Conceito
 
-Permitir que cada usuario configure quais campos opcionais aparecem no formulario de lancamentos. Campos obrigatorios (descricao, valor, data, categoria, status) permanecem sempre visiveis. Os demais podem ser ligados/desligados na pagina de Configuracoes.
+O componente `SummaryCards` recebera as datas do periodo e um `onClick` prop. A navegacao sera via query params na URL (`/lancamentos?type=receita&status=Pago&dateFrom=2026-02-01&dateTo=2026-02-28`).
 
-### Campos sempre visiveis (obrigatorios)
+A pagina `Lancamentos.tsx` ja le query params parcialmente -- sera expandida para ler `status`, `dateFrom` e `dateTo` tambem.
 
-- Status (Pendente/Pago)
-- Descricao
-- Data de Competencia
-- Data de Pagamento
-- Valor Bruto (R$)
-- Categoria
+### 2. Parcelas visiveis ao editar lancamento
 
-### Campos customizaveis (podem ser ocultados)
+Atualmente a secao de parcelamento/recorrencia so aparece para novos lancamentos (`!isEditing`). A correcao vai:
 
-| Campo | Padrao |
-|---|---|
-| Fornecedor / Cliente | Visivel |
-| Nome do contato (texto livre) | Oculto |
-| Subcategorias (2 niveis) | Visivel |
-| Forma de pagamento | Visivel |
-| Conta / Cartao / Carteira / Maquininha | Visivel |
-| Parcelamento | Visivel |
-| Recorrencia | Visivel |
-| Observacoes | Visivel |
-| Codigo de barras | Oculto |
-| Anexo (URL) | Oculto |
+- Remover a condicao `!isEditing` do bloco de parcelas
+- Manter os controles desabilitados quando editando uma transacao que ja faz parte de uma serie (para evitar re-parcelamento), mas permitir ativar parcelamento em transacoes avulsas sendo editadas
 
-### Onde o usuario configura
+### 3. Filtro por Conta/Carteira nos Lancamentos
 
-Na pagina **Configuracoes** (`src/pages/Configuracoes.tsx`), um novo card "Formulario de Lancamentos" com switches para cada campo opcional. As preferencias sao salvas na tabela `profiles` em uma coluna JSON `transaction_form_fields`.
+Adicionar um Select de conta bancaria/carteira na barra de filtros (`TransactionFilters.tsx`). O filtro sera aplicado no hook `useTransactions` via query params `bank_account_id` ou `wallet_id`.
+
+Alteracoes:
+
+- `**TransactionFilters**`: Novo Select com opcoes agrupadas (Contas Bancarias, Carteiras)
+- `**useTransactions**`: Nova propriedade `accountId` no tipo `TransactionFilters`, aplicada na query
+- `**Lancamentos.tsx**`: Passar listas de `bankAccounts` e `wallets` para o componente de filtros
+
+### 4. Novos metodos de pagamento
+
+Adicionar ao array `PAYMENT_METHODS` em `TransactionFormModal.tsx`:
+
+- **Cheque**
+- **Depósito**
+- **Débito Automático**
+- **Outro**
+
+Tambem ajustar `PaymentMethodFields.tsx` para que "Cheque" e "Deposito" mostrem o select de conta bancaria (mesma logica de Boleto/Transferencia).
+
+### 5. Verificacao do MDR (data de liquidacao)
+
+Ja verificado no codigo: `TransactionDetailModal.tsx` linha 85 usa `competence_date` como base para `addBusinessDays`, o que esta correto. O calculo no `TransactionFormModal.tsx` linha 451 tambem usa `competence_date`. Ambos estao consistentes.
+
+---
 
 ### Detalhes tecnicos
 
-**1. Migracao no banco** -- Adicionar coluna JSONB na tabela `profiles`:
+**Arquivos alterados:**
 
-```sql
-ALTER TABLE profiles
-ADD COLUMN transaction_form_fields jsonb DEFAULT '{
-  "supplier_client": true,
-  "contact_name": false,
-  "subcategories": true,
-  "payment_method": true,
-  "account_fields": true,
-  "installments": true,
-  "recurring": true,
-  "notes": true,
-  "barcode": false,
-  "attachment_url": false
-}'::jsonb;
-```
+1. `**src/components/dashboard/SummaryCards.tsx**` -- Adicionar `onClick` em cada card, receber props de periodo e usar `useNavigate`
+2. `**src/pages/Dashboard.tsx**` -- Passar datas do periodo para SummaryCards
+3. `**src/pages/Lancamentos.tsx**` -- Expandir leitura de query params (status, dateFrom, dateTo), passar bankAccounts/wallets para filtros
+4. `**src/hooks/useTransactions.ts**` -- Adicionar `accountId` ao tipo TransactionFilters e aplicar na query
+5. `**src/components/lancamentos/TransactionFilters.tsx**` -- Novo Select de conta/carteira
+6. `**src/components/lancamentos/TransactionFormModal.tsx**` -- Adicionar metodos de pagamento + remover `!isEditing` do bloco de parcelas
+7. `**src/components/lancamentos/PaymentMethodFields.tsx**` -- Ajustar logica de visibilidade para novos metodos
 
-**2. Hook `useFormFieldSettings`** -- Novo hook em `src/hooks/useFormFieldSettings.ts`:
-- Carrega as preferencias do perfil do usuario
-- Fornece funcao para atualizar campos individuais
-- Retorna objeto com visibilidade de cada campo
-- Valores padrao para usuarios que ainda nao configuraram
-
-**3. Pagina Configuracoes** -- Novo card com switches:
-- Titulo: "Campos do Formulario de Lancamentos"
-- Um Switch para cada campo customizavel
-- Salva automaticamente ao alternar (debounce)
-
-**4. TransactionFormModal** -- Condicionar renderizacao:
-- Receber props de visibilidade dos campos
-- Campos ocultos nao aparecem no form
-- Validacao Zod permanece `.optional()` para campos ocultos (ja e assim)
-- Valores ocultos sao enviados como `null` ao salvar
-
-**5. Fluxo de dados**:
-
-```text
-profiles.transaction_form_fields (JSONB)
-        |
-  useFormFieldSettings() hook
-        |
-  Configuracoes.tsx (switches)    +    Lancamentos.tsx (passa para o form)
-                                            |
-                                  TransactionFormModal (condiciona campos)
-```
-
-### Arquivos alterados/criados
-
-1. **Migracao SQL** -- Nova coluna `transaction_form_fields` em `profiles`
-2. **`src/hooks/useFormFieldSettings.ts`** -- Novo hook
-3. **`src/pages/Configuracoes.tsx`** -- Novo card com switches
-4. **`src/pages/Lancamentos.tsx`** -- Passa settings para o form modal
-5. **`src/components/lancamentos/TransactionFormModal.tsx`** -- Condiciona renderizacao dos campos opcionais
-
-### Nao altera
-
-- Logica de salvamento (campos ocultos vao como `null`)
-- Validacao Zod (campos opcionais ja sao `.optional()`)
-- Tabela `transactions` (estrutura permanece igual)
-- Dados existentes (nenhum dado e perdido)
-
+**Nenhuma alteracao no banco de dados necessaria.**
