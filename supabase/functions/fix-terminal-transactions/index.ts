@@ -31,13 +31,41 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Authenticate the caller
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(
+      authHeader.replace("Bearer ", "")
+    );
+    if (claimsError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const userId = claimsData.claims.sub as string;
+
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // 1. Fetch all transactions with a card terminal
+    // Only process transactions belonging to the authenticated user
     const { data: transactions, error: txError } = await supabase
       .from("transactions")
       .select("id, amount, original_amount, payment_method, installments, competence_date, payment_date, card_terminal_id, description")
+      .eq("user_id", userId)
       .not("card_terminal_id", "is", null);
 
     if (txError) throw txError;
