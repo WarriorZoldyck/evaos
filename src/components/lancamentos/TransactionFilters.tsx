@@ -1,6 +1,7 @@
-import { format } from "date-fns";
+import { useState } from "react";
+import { format, startOfMonth, endOfMonth, addMonths, subMonths, startOfWeek, endOfWeek, startOfDay, endOfDay, startOfYear, endOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, CalendarIcon, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ArrowUp, ArrowDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -17,8 +18,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { cn } from "@/lib/utils";
 import type { TransactionFilters as Filters, Category } from "@/hooks/useTransactions";
+
+type PeriodKey = "today" | "week" | "month" | "year" | "custom" | "all";
+
+const periodOptions: { key: PeriodKey; label: string }[] = [
+  { key: "all", label: "Tudo" },
+  { key: "today", label: "Hoje" },
+  { key: "week", label: "Semana" },
+  { key: "month", label: "Mês" },
+  { key: "year", label: "Ano" },
+];
+
+function getDateRange(period: PeriodKey, ref: Date): { from: string; to: string } {
+  const fmt = (d: Date) => format(d, "yyyy-MM-dd");
+  switch (period) {
+    case "today":
+      return { from: fmt(startOfDay(ref)), to: fmt(endOfDay(ref)) };
+    case "week":
+      return { from: fmt(startOfWeek(ref, { weekStartsOn: 0 })), to: fmt(endOfWeek(ref, { weekStartsOn: 0 })) };
+    case "month":
+      return { from: fmt(startOfMonth(ref)), to: fmt(endOfMonth(ref)) };
+    case "year":
+      return { from: fmt(startOfYear(ref)), to: fmt(endOfYear(ref)) };
+    case "all":
+      return { from: "", to: "" };
+    default:
+      return { from: fmt(startOfMonth(ref)), to: fmt(endOfMonth(ref)) };
+  }
+}
 
 interface TransactionFiltersProps {
   filters: Filters;
@@ -32,20 +60,34 @@ export function TransactionFilters({
   categories,
 }: TransactionFiltersProps) {
   const rootCategories = categories.filter((c) => !c.parent_id);
+  const [activePeriod, setActivePeriod] = useState<PeriodKey>("all");
+  const [navMonth, setNavMonth] = useState(new Date());
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
-  const handleDateFrom = (date: Date | undefined) => {
+  const handlePeriodClick = (key: PeriodKey) => {
+    setActivePeriod(key);
+    if (key === "all") {
+      onFiltersChange({ ...filters, dateFrom: "", dateTo: "" });
+    } else {
+      const now = new Date();
+      setNavMonth(now);
+      const range = getDateRange(key, now);
+      onFiltersChange({ ...filters, dateFrom: range.from, dateTo: range.to });
+    }
+  };
+
+  const navigateMonth = (direction: "prev" | "next") => {
+    const newMonth = direction === "prev" ? subMonths(navMonth, 1) : addMonths(navMonth, 1);
+    setNavMonth(newMonth);
+    setActivePeriod("custom");
     onFiltersChange({
       ...filters,
-      dateFrom: date ? format(date, "yyyy-MM-dd") : "",
+      dateFrom: format(startOfMonth(newMonth), "yyyy-MM-dd"),
+      dateTo: format(endOfMonth(newMonth), "yyyy-MM-dd"),
     });
   };
 
-  const handleDateTo = (date: Date | undefined) => {
-    onFiltersChange({
-      ...filters,
-      dateTo: date ? format(date, "yyyy-MM-dd") : "",
-    });
-  };
+  const monthLabel = format(navMonth, "MMM yyyy", { locale: ptBR });
 
   return (
     <div className="space-y-3">
@@ -133,86 +175,75 @@ export function TransactionFilters({
         </Select>
       </div>
 
-      {/* Date range */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className={cn(
-                "w-full sm:w-[180px] justify-start text-left font-normal",
-                !filters.dateFrom && "text-muted-foreground"
-              )}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {filters.dateFrom
-                ? format(
-                    new Date(filters.dateFrom + "T00:00:00"),
-                    "dd/MM/yyyy",
-                    { locale: ptBR }
-                  )
-                : "Data início"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={
-                filters.dateFrom
-                  ? new Date(filters.dateFrom + "T00:00:00")
-                  : undefined
-              }
-              onSelect={handleDateFrom}
-              locale={ptBR}
-            />
-          </PopoverContent>
-        </Popover>
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              className={cn(
-                "w-full sm:w-[180px] justify-start text-left font-normal",
-                !filters.dateTo && "text-muted-foreground"
-              )}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {filters.dateTo
-                ? format(
-                    new Date(filters.dateTo + "T00:00:00"),
-                    "dd/MM/yyyy",
-                    { locale: ptBR }
-                  )
-                : "Data fim"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={
-                filters.dateTo
-                  ? new Date(filters.dateTo + "T00:00:00")
-                  : undefined
-              }
-              onSelect={handleDateTo}
-              locale={ptBR}
-            />
-          </PopoverContent>
-        </Popover>
-
-        {(filters.dateFrom || filters.dateTo) && (
+      {/* Period filter - same style as Dashboard */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {periodOptions.map((opt) => (
           <Button
-            variant="ghost"
+            key={opt.key}
+            variant={activePeriod === opt.key ? "default" : "outline"}
             size="sm"
-            onClick={() =>
-              onFiltersChange({ ...filters, dateFrom: "", dateTo: "" })
-            }
-            className="text-xs"
+            className="text-xs h-8"
+            onClick={() => handlePeriodClick(opt.key)}
           >
-            Limpar datas
+            {opt.label}
           </Button>
-        )}
+        ))}
+
+        {/* Month navigation */}
+        <div className="flex items-center gap-0.5 ml-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => navigateMonth("prev")}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant={activePeriod === "custom" ? "default" : "outline"}
+                size="sm"
+                className="text-xs h-8 min-w-[90px] capitalize"
+              >
+                {monthLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="range"
+                locale={ptBR}
+                className="pointer-events-auto"
+                selected={{
+                  from: filters.dateFrom ? new Date(filters.dateFrom + "T00:00:00") : undefined,
+                  to: filters.dateTo ? new Date(filters.dateTo + "T00:00:00") : undefined,
+                }}
+                onSelect={(range) => {
+                  if (range?.from) {
+                    setActivePeriod("custom");
+                    onFiltersChange({
+                      ...filters,
+                      dateFrom: format(range.from, "yyyy-MM-dd"),
+                      dateTo: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
+                    });
+                    if (range.to) setCalendarOpen(false);
+                  }
+                }}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => navigateMonth("next")}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );
