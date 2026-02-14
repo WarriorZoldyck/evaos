@@ -431,11 +431,8 @@ export function TransactionFormModal({
       let rate: number;
       if (isDebit) {
         rate = selectedTerminal.debit_rate ?? 0;
-      } else if (data.is_installment && data.installments_count && data.installments_count >= 2) {
-        const rates = selectedTerminal.rates_info ? (() => { try { const p = JSON.parse(selectedTerminal.rates_info!); return Array.isArray(p) ? p : []; } catch { return []; } })() : [];
-        const found = rates.find((r: any) => r.installments === Number(data.installments_count));
-        rate = found ? found.rate : (selectedTerminal.credit_rate ?? 0);
       } else {
+        // Always use credit_rate for credit transactions (merchant receives based on à vista rate)
         rate = selectedTerminal.credit_rate ?? 0;
       }
 
@@ -487,6 +484,7 @@ export function TransactionFormModal({
       // Installments are the customer's concern, merchant receives total net
       if (data.is_installment && data.installments_count && data.installments_count >= 2) {
         baseData.installments = data.installments_count;
+        baseData.installments_total = data.installments_count;
       }
       success = await onSave(baseData);
     } else if (data.is_installment && data.installments_count && data.installments_count >= 2) {

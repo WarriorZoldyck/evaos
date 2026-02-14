@@ -49,14 +49,8 @@ export function MdrInfoCard({
       rate = terminal.debit_rate ?? 0;
       settlementDays = terminal.settlement_days_debit ?? 1;
     } else {
-      // Credit
-      if (installmentsCount && installmentsCount >= 2) {
-        const rates = parseRatesInfo(terminal.rates_info);
-        const found = rates.find((r) => r.installments === Number(installmentsCount));
-        rate = found ? found.rate : (terminal.credit_rate ?? 0);
-      } else {
-        rate = terminal.credit_rate ?? 0;
-      }
+      // Always use credit_rate (merchant receives based on à vista rate)
+      rate = terminal.credit_rate ?? 0;
       settlementDays = terminal.settlement_days_credit ?? 2;
     }
 
