@@ -1,40 +1,52 @@
 
 
-## Correção: Taxa MDR na criação de transações via maquininha
+## Correções: Valor líquido errado + Settlement em dias úteis
 
-### Problema
+### Problema 1: Transação existente com valor errado
+A transação teste foi salva com R$9.400 (taxa de 6% parcelado) antes da correção. O código já foi corrigido para usar `credit_rate` (3,29%), mas o dado existente no banco precisa ser atualizado manualmente.
 
-Ao salvar uma transação via maquininha com parcelamento, o sistema busca a taxa específica de parcelas (ex: 6% para 4x) e calcula o valor líquido como R$9.400. Mas o correto é usar a taxa de crédito à vista (3,29%), resultando em R$9.671.
+**Solução:** Executar via Cloud View > Run SQL (com ambiente **Test** selecionado):
 
-Para o lojista, o valor recebido da adquirente é baseado na taxa de crédito à vista, independente de como o cliente escolheu parcelar.
-
-### Alteração
-
-**Arquivo:** `src/components/lancamentos/TransactionFormModal.tsx` (linhas 430-440)
-
-Remover a busca de taxa por parcelas e sempre usar `credit_rate` para crédito:
-
-```text
-ANTES:
-  Se débito → usa debit_rate
-  Se crédito parcelado → busca rates_info por número de parcelas
-  Se crédito à vista → usa credit_rate
-
-DEPOIS:
-  Se débito → usa debit_rate
-  Se crédito (qualquer) → usa credit_rate
+```sql
+-- Recalcula o valor líquido de transações com terminal usando credit_rate
+UPDATE transactions t
+SET amount = ROUND(t.original_amount - (t.original_amount * ct.credit_rate / 100), 2),
+    installments_total = t.installments
+FROM card_terminals ct
+WHERE t.card_terminal_id = ct.id
+  AND t.original_amount IS NOT NULL
+  AND t.payment_method = 'Cartão de Crédito';
 ```
 
-Também salvar `installments_total` junto com `installments` (linhas 488-490), para que o modal de detalhes fique consistente.
+---
 
-**Mesma correção no MdrInfoCard e TransactionDetailModal**, que recalculam o MDR para exibição -- ambos devem usar a mesma lógica (crédito à vista sempre).
+### Problema 2: Settlement date conta dias corridos em vez de dias úteis
+
+Atualmente o sistema usa `addDays()` que conta dias corridos. Se uma venda é feita na sexta-feira com D+2, o sistema marca recebimento no domingo. O correto é pular fins de semana (sábado e domingo), marcando na terça-feira.
+
+**Solução:** Criar uma função utilitária `addBusinessDays` e usá-la nos 3 pontos que calculam a data de liquidação.
 
 ### Arquivos alterados
 
-1. `src/components/lancamentos/TransactionFormModal.tsx` -- lógica de cálculo ao salvar + salvar installments_total
-2. `src/components/lancamentos/MdrInfoCard.tsx` -- preview do MDR no formulário
-3. `src/components/lancamentos/TransactionDetailModal.tsx` -- exibição do MDR nos detalhes
+1. **`src/lib/utils.ts`** -- Nova função `addBusinessDays(date, days)` que pula sábados e domingos
+2. **`src/components/lancamentos/TransactionFormModal.tsx`** (linha 448) -- Trocar `addDays` por `addBusinessDays`
+3. **`src/components/lancamentos/MdrInfoCard.tsx`** (linha 59) -- Trocar `addDays` por `addBusinessDays`
+4. **`src/components/lancamentos/TransactionDetailModal.tsx`** (cálculo do `settlementDate`) -- Trocar `addDays` por `addBusinessDays`
+5. **`supabase/functions/fix-terminal-transactions/index.ts`** -- Mesma lógica na edge function
 
-### Dados existentes
+### Detalhes técnicos
 
-Transações já salvas com taxa errada podem ser corrigidas via Cloud View > Run SQL (opcional).
+**Nova função em `src/lib/utils.ts`:**
+```
+addBusinessDays(date: Date, days: number): Date
+  - Incrementa dia a dia
+  - Pula sábado (6) e domingo (0)
+  - Retorna a data após N dias úteis
+```
+
+**Exemplo:**
+- Venda sexta 13/02, D+2 → terça 17/02 (pula sáb e dom)
+- Venda segunda 09/02, D+2 → quarta 11/02 (sem mudança)
+
+Nota: Feriados nacionais não são considerados nesta implementação (exigiria uma tabela de feriados). Apenas fins de semana são pulados, que é o padrão das adquirentes para o cálculo D+.
+
