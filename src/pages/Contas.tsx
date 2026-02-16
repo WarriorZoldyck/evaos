@@ -25,6 +25,7 @@ import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet, Smartphone, Receipt
 import { useAccounts, type CardTerminal } from "@/hooks/useAccounts";
 import { useCompany } from "@/contexts/CompanyContext";
 import { AccountFormModal } from "@/components/contas/AccountFormModal";
+import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
 import { TerminalFormModal } from "@/components/contas/TerminalFormModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -352,9 +353,9 @@ export default function Contas() {
         </TabsContent>
       </Tabs>
 
-      {/* Account Form Modal (bank, card, wallet) */}
+      {/* Account Form Modal (bank, wallet) */}
       <AccountFormModal
-        open={formOpen}
+        open={formOpen && activeTab !== "card"}
         onClose={() => { setFormOpen(false); setEditData(null); }}
         tab={activeTab === "terminal" ? "bank" : activeTab}
         editData={editData}
@@ -362,6 +363,15 @@ export default function Contas() {
         onSaveBankAccount={handleSaveBankAccount}
         onSaveCreditCard={handleSaveCreditCard}
         onSaveWallet={handleSaveWallet}
+      />
+
+      {/* Credit Card 3D Form Modal */}
+      <CreditCardFormModal
+        open={formOpen && activeTab === "card"}
+        onClose={() => { setFormOpen(false); setEditData(null); }}
+        editData={editData}
+        bankAccounts={bankAccounts.map((a) => ({ id: a.id, name: a.name }))}
+        onSave={handleSaveCreditCard}
       />
 
       {/* Terminal Form Modal */}
