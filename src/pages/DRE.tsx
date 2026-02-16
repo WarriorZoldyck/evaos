@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText } from "lucide-react";
+import { FileText, Info } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
 import { CategoryReportTable } from "@/components/relatorios/CategoryReportTable";
 import { useCashFlowData } from "@/hooks/useCashFlowData";
@@ -25,7 +26,16 @@ export default function DRE() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-display text-foreground">DRE por Competência</h1>
-          <p className="text-muted-foreground text-sm mt-1">Regime de competência — todas as transações do período</p>
+           <p className="text-muted-foreground text-sm mt-1">Regime de competência — todas as transações do período</p>
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-primary hover:underline mt-1">
+              <Info className="h-3.5 w-3.5" />
+              Como funciona?
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed max-w-lg">
+              O <strong>DRE (Demonstrativo de Resultado)</strong> utiliza o <strong>regime de competência</strong>: considera <strong>todas as transações</strong> do período (pagas ou pendentes), agrupadas pela <strong>data de competência</strong>. Isso mostra o resultado econômico real, independente de quando o pagamento foi efetivamente realizado.
+            </CollapsibleContent>
+          </Collapsible>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <Select
