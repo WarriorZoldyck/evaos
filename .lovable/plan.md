@@ -1,77 +1,29 @@
 
-## Adicionar Campo de Juros ao Parcelamento de Lancamentos
+## Ocultar campo de juros manual para maquininhas e usar taxas por parcela
 
-Adicionar um campo de taxa de juros (%) ao formulario de lancamentos parcelados, para que o valor total com juros seja calculado automaticamente e distribuido entre as parcelas.
+### Problema
+Quando a forma de pagamento e cartao de credito via maquininha, o campo "Taxa de juros mensal (%)" aparece desnecessariamente, pois as taxas ja estao cadastradas na maquininha. Alem disso, o card de detalhes da maquininha (MdrInfoCard) sempre usa a taxa de credito a vista (`credit_rate`), ignorando as taxas por parcela (`rates_info`).
 
-### Experiencia do Usuario
+### Solucao
 
-Quando o usuario ativa "Parcelado?" e preenche o numero de parcelas, aparecera um novo campo opcional **"Taxa de juros (%)"**. Ao preencher (ex: 1.99%), o sistema calcula automaticamente:
+**1. Ocultar campo de juros quando houver maquininha selecionada**
 
-- O valor total com juros (usando juros compostos)
-- O valor de cada parcela
-- Exibe um resumo: "12x de R$ 95,40 = R$ 1.144,80 (juros: R$ 144,80)"
+No `MainFormContent` dentro de `TransactionFormModal.tsx`, verificar se o metodo de pagamento e cartao e se ha um terminal selecionado (`card_terminal_id`). Se sim, esconder o campo "Taxa de juros mensal (%)".
 
-Se o campo de juros ficar vazio ou zero, o comportamento atual e mantido (divisao simples sem juros).
+**2. Atualizar MdrInfoCard para usar taxa por parcela**
 
-### Calculo
+No `MdrInfoCard.tsx`, quando o pagamento for credito parcelado, buscar a taxa correta no `rates_info` do terminal de acordo com o numero de parcelas. Se nao encontrar uma taxa especifica para aquela quantidade de parcelas, usar a `credit_rate` como fallback.
 
-Sera usado o metodo **Price (parcelas fixas)** -- o padrao brasileiro para financiamentos e parcelamentos com juros:
+### Alteracoes tecnicas
 
-```text
-PMT = PV * [ i * (1+i)^n ] / [ (1+i)^n - 1 ]
+**Arquivo: `src/components/lancamentos/MdrInfoCard.tsx`**
+- Na logica de calculo do `useMemo`, quando `isCredit` e `installmentsCount >= 2`:
+  - Parsear `rates_info` do terminal
+  - Buscar a taxa correspondente ao numero de parcelas
+  - Usar essa taxa em vez de `credit_rate`
+  - Fallback para `credit_rate` se nao encontrar
 
-Onde:
-  PV = valor presente (amount digitado)
-  i  = taxa de juros mensal (ex: 1.99% = 0.0199)
-  n  = numero de parcelas
-  PMT = valor de cada parcela
-```
-
-### Alteracoes
-
-**Arquivo modificado: `src/components/lancamentos/TransactionFormModal.tsx`**
-
-1. **Schema**: Adicionar campo `interest_rate` ao `transactionSchema`:
-   - `interest_rate: z.coerce.number().min(0).max(100).optional()`
-
-2. **Default values**: Adicionar `interest_rate: 0` aos defaults do form
-
-3. **UI (area de parcelamento)**: Apos o campo "Numero de parcelas", adicionar:
-   - Input "Taxa de juros mensal (%)" com placeholder "Ex: 1.99"
-   - Resumo calculado em tempo real mostrando: valor da parcela, total com juros, total de juros cobrados
-
-4. **Logica de submit (handleMainSubmit)**: No bloco de criacao de parcelas (linha ~497):
-   - Se `interest_rate > 0`, calcular PMT usando formula Price
-   - `total_com_juros = PMT * n`
-   - Cada parcela recebe `amount = PMT`
-   - `original_amount` permanece como o valor original sem juros
-   - Se `interest_rate` for 0 ou vazio, manter logica atual (divisao simples)
-
-### Resumo visual no formulario
-
-Quando juros > 0:
-```text
-[x] Parcelado?
-  Numero de parcelas: [12]
-  Taxa de juros mensal (%): [1.99]
-  
-  12x de R$ 95,40 = R$ 1.144,80
-  Juros totais: R$ 144,80
-```
-
-Quando juros = 0 (comportamento atual mantido):
-```text
-[x] Parcelado?
-  Numero de parcelas: [12]
-  Taxa de juros mensal (%): [    ]
-  
-  12x de R$ 83,33 = R$ 1.000,00
-```
-
-### Detalhes tecnicos
-
-- A funcao Price sera implementada inline no componente (poucas linhas)
-- O campo `original_amount` ja existe na tabela e sera usado para guardar o valor original sem juros
-- Nenhuma alteracao no banco de dados necessaria
-- O campo "Valor da 1a parcela diferente" sera desabilitado quando juros > 0 (Price calcula parcelas fixas)
-- Compatibilidade total com o fluxo existente de edicao e exclusao de series
+**Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
+- No `MainFormContent`, observar `card_terminal_id` via `form.watch`
+- Condicionar a exibicao do campo `interest_rate` para aparecer apenas quando NAO houver terminal selecionado (ou seja, quando nao e uma venda via maquininha)
+- Quando houver terminal, o campo fica oculto e o valor de `interest_rate` permanece 0 (sem impacto no calculo de submit, pois o MDR ja e tratado separadamente)
