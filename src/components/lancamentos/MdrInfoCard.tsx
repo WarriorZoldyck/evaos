@@ -50,8 +50,15 @@ export function MdrInfoCard({
       rate = terminal.debit_rate ?? 0;
       settlementDays = terminal.settlement_days_debit ?? 1;
     } else {
-      // Always use credit_rate (merchant receives based on à vista rate)
-      rate = terminal.credit_rate ?? 0;
+      // For credit: use installment-specific rate from rates_info if available
+      const fallbackRate = terminal.credit_rate ?? 0;
+      if (installmentsCount && installmentsCount >= 2) {
+        const rates = parseRatesInfo(terminal.rates_info);
+        const match = rates.find((r) => r.installments === installmentsCount);
+        rate = match ? match.rate : fallbackRate;
+      } else {
+        rate = fallbackRate;
+      }
       settlementDays = terminal.settlement_days_credit ?? 2;
     }
 

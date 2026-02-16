@@ -1377,27 +1377,29 @@ function MainFormContent({
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="interest_rate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Taxa de juros mensal (%)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="100"
-                            placeholder="Ex: 1.99"
-                            {...field}
-                            value={field.value || ""}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {!form.watch("card_terminal_id") && (
+                    <FormField
+                      control={form.control}
+                      name="interest_rate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Taxa de juros mensal (%)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              placeholder="Ex: 1.99"
+                              {...field}
+                              value={field.value || ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   {interestPreview && (
                     <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1">
                       <p className="font-medium">
