@@ -1,10 +1,12 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { CompanyProvider } from "@/contexts/CompanyContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function AppLayout() {
   const { user, loading } = useAuth();
@@ -24,6 +26,23 @@ export default function AppLayout() {
     return <Navigate to="/auth" replace />;
   }
 
+  return <AppLayoutInner />;
+}
+
+function AppLayoutInner() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isOnLancamentos = location.pathname === "/lancamentos";
+
+  const handleNewTransaction = () => {
+    if (isOnLancamentos) {
+      // Dispatch a custom event so the Lancamentos page opens the modal
+      window.dispatchEvent(new CustomEvent("open-new-transaction"));
+    } else {
+      navigate("/lancamentos?new=true");
+    }
+  };
+
   return (
     <CompanyProvider>
       <SidebarProvider>
@@ -38,6 +57,22 @@ export default function AppLayout() {
               <Outlet />
             </div>
           </main>
+
+          {/* Floating Action Button - Novo Lançamento */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="icon"
+                className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all duration-200"
+                onClick={handleNewTransaction}
+              >
+                <Plus className="h-6 w-6" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p>Novo Lançamento</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </SidebarProvider>
     </CompanyProvider>

@@ -62,6 +62,26 @@ export default function Lancamentos() {
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
   const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
 
+  // Open modal from query param (?new=true) or custom event
+  useEffect(() => {
+    const newParam = searchParams.get("new");
+    if (newParam === "true") {
+      setEditingTransaction(null);
+      setFormOpen(true);
+      searchParams.delete("new");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const handler = () => {
+      setEditingTransaction(null);
+      setFormOpen(true);
+    };
+    window.addEventListener("open-new-transaction", handler);
+    return () => window.removeEventListener("open-new-transaction", handler);
+  }, []);
+
   // Read query params from dashboard clicks
   useEffect(() => {
     const categoryParam = searchParams.get("category");
@@ -84,7 +104,6 @@ export default function Lancamentos() {
       }));
       if (statusParam === "Pago") setActiveTab("realizado");
       else if (statusParam === "Pendente") setActiveTab("projetado");
-      // Clear params after applying
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, categories]);
