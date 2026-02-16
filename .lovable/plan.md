@@ -1,71 +1,108 @@
 
-## Cadastro Interativo de Cartao de Credito (Frente e Verso)
 
-Substituir o formulario generico atual do cartao de credito por um componente skeuomorfico 3D que simula um cartao fisico real, com animacao de flip (frente/verso) conforme o usuario preenche os campos.
+## Fluxo de Caixa e DRE -- Implementacao Completa
 
-### Experiencia do Usuario
+Transformar as paginas placeholder "Plano de Caixa" e "DRE" em relatorios financeiros funcionais com dados reais do banco de dados.
 
-O usuario vera um cartao de credito 3D centralizado no modal. Conforme preenche os campos, o cartao atualiza em tempo real. Ao completar os campos da frente, o cartao vira automaticamente para o verso com uma animacao CSS 3D flip. O usuario tambem pode clicar para virar manualmente.
+### Conceitos
 
-**Frente do cartao:**
-- Nome do cartao (ex: "Nubank Platinum") -- campo editavel inline
-- Ultimos 4 digitos formatados como "**** **** **** 1234"
-- Chip decorativo (SVG/CSS)
-- Bandeira/logo decorativo
-- Gradiente de fundo estilizado
+- **Plano de Caixa**: Relatorio por **regime de caixa** (data de pagamento). Mostra o dinheiro que de fato entrou e saiu.
+- **DRE por Competencia**: Relatorio por **regime de competencia** (data de competencia). Mostra receitas e despesas reconhecidas no periodo, independente de quando foram pagas.
 
-**Verso do cartao:**
-- Tarja magnetica decorativa (faixa preta)
-- Dia de fechamento
-- Dia de vencimento
-- Limite (R$)
-- Conta bancaria vinculada (select)
+Ambos compartilham a mesma estrutura visual: categorias hierarquicas agrupadas (pai > filhos), com totalizadores.
 
-### Interatividade
+---
 
-1. Modal abre com o cartao na frente
-2. Usuario digita o nome do cartao e os 4 digitos -- aparecem no cartao em tempo real
-3. Ao preencher os 4 digitos (ou clicar no botao "Virar"), o cartao faz flip 3D para o verso
-4. No verso, usuario preenche fechamento, vencimento, limite e conta vinculada
-5. Botoes "Cancelar" e "Salvar" ficam abaixo do cartao
-
-### Detalhes Tecnicos
-
-**Arquivo criado:**
-- `src/components/contas/CreditCardFormModal.tsx` -- Novo componente dedicado para o cartao
-
-**Arquivo modificado:**
-- `src/pages/Contas.tsx` -- Importar e usar `CreditCardFormModal` quando `activeTab === "card"` em vez do `AccountFormModal`
-- `src/components/contas/AccountFormModal.tsx` -- Remover a secao `tab === "card"` (opcional, pois nao sera mais chamado para cards)
-
-**Tecnicas CSS utilizadas:**
-- `perspective` e `transform: rotateY(180deg)` para o flip 3D
-- `backface-visibility: hidden` para esconder o lado oposto
-- `transition: transform 0.6s` para animacao suave
-- Gradiente de fundo inspirado em cartoes reais (tons escuros com brilho metalico)
-- Chip dourado em CSS puro (retangulo arredondado com gradiente gold)
-
-**Estrutura do componente:**
+### Estrutura Visual (ambos os relatorios)
 
 ```text
-+------------------------------------------+
-|  Dialog (bg transparente, sem bordas)    |
-|                                          |
-|  +------------------------------------+  |
-|  |  CARTAO 3D (container perspective) |  |
-|  |                                    |  |
-|  |  [FRENTE]         [VERSO]          |  |
-|  |  - Chip dourado   - Tarja preta    |  |
-|  |  - Nome cartao    - Fechamento     |  |
-|  |  - **** 1234      - Vencimento     |  |
-|  |  - Bandeira       - Limite         |  |
-|  |                   - Conta vinculada|  |
-|  +------------------------------------+  |
-|                                          |
-|  [Virar]   [Cancelar]   [Salvar]        |
-+------------------------------------------+
++--------------------------------------------------+
+| Titulo + Filtro de Periodo (PeriodFilter)        |
++--------------------------------------------------+
+| RECEITAS                              | Total R$ |
+|   Categoria Pai 1                     |   X.XXX  |
+|     Subcategoria A                    |     XXX  |
+|     Subcategoria B                    |     XXX  |
+|   Categoria Pai 2                     |   X.XXX  |
+| TOTAL RECEITAS                        |  XX.XXX  |
++--------------------------------------------------+
+| DESPESAS                              | Total R$ |
+|   Categoria Pai 1                     |   X.XXX  |
+|     Subcategoria A                    |     XXX  |
+|   Categoria Pai 2                     |   X.XXX  |
+| TOTAL DESPESAS                        |  XX.XXX  |
++--------------------------------------------------+
+| RESULTADO (Receitas - Despesas)       |  XX.XXX  |
++--------------------------------------------------+
 ```
 
-**Props:** Mesmo contrato do formulario atual (`editData`, `onSave`, `bankAccounts`, etc.) para manter compatibilidade total.
+Categorias colapsaveis: clicar na categoria pai expande/colapsa as subcategorias.
 
-**Dados salvos:** Identicos ao formulario atual -- `name`, `bank_account_id`, `closing_day`, `due_day`, `limit`, `last_four_digits`.
+---
+
+### Diferenca entre os dois relatorios
+
+| Aspecto | Plano de Caixa | DRE |
+|---|---|---|
+| Data filtrada | `payment_date` | `competence_date` |
+| Status incluido | Apenas `Pago` | Todos (Pago + Pendente) |
+| Titulo | "Plano de Caixa" | "DRE por Competencia" |
+| Subtitulo | "Regime de caixa" | "Regime de competencia" |
+
+---
+
+### Arquivos criados/modificados
+
+1. **`src/hooks/useCashFlowData.ts`** (novo)
+   - Hook reutilizavel que recebe o modo (`caixa` ou `competencia`) e os filtros de periodo
+   - Busca transacoes filtradas pela data correta (payment_date ou competence_date)
+   - Busca categorias e monta a arvore hierarquica
+   - Agrupa valores por categoria pai e filhos
+   - Retorna: receitas por categoria, despesas por categoria, totais, loading
+
+2. **`src/components/relatorios/CategoryReportTable.tsx`** (novo)
+   - Componente de tabela reutilizavel para ambos os relatorios
+   - Recebe dados agrupados por categoria (receitas e despesas)
+   - Linhas colapsaveis para categorias pai
+   - Formatacao em Reais (R$)
+   - Linha de total receitas, total despesas e resultado final
+   - Cores: receitas em verde, despesas em vermelho, resultado conforme positivo/negativo
+
+3. **`src/pages/PlanoDeCaixa.tsx`** (reescrito)
+   - Usa `useCashFlowData("caixa", filters)`
+   - Inclui PeriodFilter e filtro por conta bancaria
+   - Renderiza `CategoryReportTable`
+
+4. **`src/pages/DRE.tsx`** (reescrito)
+   - Usa `useCashFlowData("competencia", filters)`
+   - Inclui PeriodFilter e filtro por conta bancaria
+   - Renderiza `CategoryReportTable`
+
+---
+
+### Detalhes tecnicos
+
+**Hook `useCashFlowData`:**
+- Recebe `mode: "caixa" | "competencia"` e `filters: DashboardFilters`
+- Modo "caixa": filtra por `payment_date`, somente status `Pago`
+- Modo "competencia": filtra por `competence_date`, todos os status
+- Busca categorias do contexto atual (empresa/pessoal) para montar a hierarquia
+- Agrupa transacoes por `category` (UUID), resolve nome via tabela de categorias
+- Monta estrutura: `{ categoryId, categoryName, total, children: [{ name, total }] }`
+- Aplica filtro por conta bancaria (incluindo cartoes vinculados, como no Dashboard)
+- Respeita contexto empresa/pessoal via `companyFilter`
+
+**Componente `CategoryReportTable`:**
+- Props: `revenueGroups`, `expenseGroups`, `loading`
+- Cada grupo pai e clicavel (toggle expand/collapse usando estado local)
+- Subcategorias indentadas com padding-left
+- Linhas de total com fundo destacado e fonte bold
+- Linha de resultado final com cor dinamica (verde se positivo, vermelho se negativo)
+
+**Reutilizacao:**
+- `PeriodFilter` ja existente, reutilizado diretamente
+- Filtro de conta bancaria igual ao Dashboard
+- Patterns de company filter ja existentes no codebase
+
+Nenhuma alteracao no banco de dados e necessaria.
+
