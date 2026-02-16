@@ -1,108 +1,77 @@
 
+## Adicionar Campo de Juros ao Parcelamento de Lancamentos
 
-## Fluxo de Caixa e DRE -- Implementacao Completa
+Adicionar um campo de taxa de juros (%) ao formulario de lancamentos parcelados, para que o valor total com juros seja calculado automaticamente e distribuido entre as parcelas.
 
-Transformar as paginas placeholder "Plano de Caixa" e "DRE" em relatorios financeiros funcionais com dados reais do banco de dados.
+### Experiencia do Usuario
 
-### Conceitos
+Quando o usuario ativa "Parcelado?" e preenche o numero de parcelas, aparecera um novo campo opcional **"Taxa de juros (%)"**. Ao preencher (ex: 1.99%), o sistema calcula automaticamente:
 
-- **Plano de Caixa**: Relatorio por **regime de caixa** (data de pagamento). Mostra o dinheiro que de fato entrou e saiu.
-- **DRE por Competencia**: Relatorio por **regime de competencia** (data de competencia). Mostra receitas e despesas reconhecidas no periodo, independente de quando foram pagas.
+- O valor total com juros (usando juros compostos)
+- O valor de cada parcela
+- Exibe um resumo: "12x de R$ 95,40 = R$ 1.144,80 (juros: R$ 144,80)"
 
-Ambos compartilham a mesma estrutura visual: categorias hierarquicas agrupadas (pai > filhos), com totalizadores.
+Se o campo de juros ficar vazio ou zero, o comportamento atual e mantido (divisao simples sem juros).
 
----
+### Calculo
 
-### Estrutura Visual (ambos os relatorios)
+Sera usado o metodo **Price (parcelas fixas)** -- o padrao brasileiro para financiamentos e parcelamentos com juros:
 
 ```text
-+--------------------------------------------------+
-| Titulo + Filtro de Periodo (PeriodFilter)        |
-+--------------------------------------------------+
-| RECEITAS                              | Total R$ |
-|   Categoria Pai 1                     |   X.XXX  |
-|     Subcategoria A                    |     XXX  |
-|     Subcategoria B                    |     XXX  |
-|   Categoria Pai 2                     |   X.XXX  |
-| TOTAL RECEITAS                        |  XX.XXX  |
-+--------------------------------------------------+
-| DESPESAS                              | Total R$ |
-|   Categoria Pai 1                     |   X.XXX  |
-|     Subcategoria A                    |     XXX  |
-|   Categoria Pai 2                     |   X.XXX  |
-| TOTAL DESPESAS                        |  XX.XXX  |
-+--------------------------------------------------+
-| RESULTADO (Receitas - Despesas)       |  XX.XXX  |
-+--------------------------------------------------+
+PMT = PV * [ i * (1+i)^n ] / [ (1+i)^n - 1 ]
+
+Onde:
+  PV = valor presente (amount digitado)
+  i  = taxa de juros mensal (ex: 1.99% = 0.0199)
+  n  = numero de parcelas
+  PMT = valor de cada parcela
 ```
 
-Categorias colapsaveis: clicar na categoria pai expande/colapsa as subcategorias.
+### Alteracoes
 
----
+**Arquivo modificado: `src/components/lancamentos/TransactionFormModal.tsx`**
 
-### Diferenca entre os dois relatorios
+1. **Schema**: Adicionar campo `interest_rate` ao `transactionSchema`:
+   - `interest_rate: z.coerce.number().min(0).max(100).optional()`
 
-| Aspecto | Plano de Caixa | DRE |
-|---|---|---|
-| Data filtrada | `payment_date` | `competence_date` |
-| Status incluido | Apenas `Pago` | Todos (Pago + Pendente) |
-| Titulo | "Plano de Caixa" | "DRE por Competencia" |
-| Subtitulo | "Regime de caixa" | "Regime de competencia" |
+2. **Default values**: Adicionar `interest_rate: 0` aos defaults do form
 
----
+3. **UI (area de parcelamento)**: Apos o campo "Numero de parcelas", adicionar:
+   - Input "Taxa de juros mensal (%)" com placeholder "Ex: 1.99"
+   - Resumo calculado em tempo real mostrando: valor da parcela, total com juros, total de juros cobrados
 
-### Arquivos criados/modificados
+4. **Logica de submit (handleMainSubmit)**: No bloco de criacao de parcelas (linha ~497):
+   - Se `interest_rate > 0`, calcular PMT usando formula Price
+   - `total_com_juros = PMT * n`
+   - Cada parcela recebe `amount = PMT`
+   - `original_amount` permanece como o valor original sem juros
+   - Se `interest_rate` for 0 ou vazio, manter logica atual (divisao simples)
 
-1. **`src/hooks/useCashFlowData.ts`** (novo)
-   - Hook reutilizavel que recebe o modo (`caixa` ou `competencia`) e os filtros de periodo
-   - Busca transacoes filtradas pela data correta (payment_date ou competence_date)
-   - Busca categorias e monta a arvore hierarquica
-   - Agrupa valores por categoria pai e filhos
-   - Retorna: receitas por categoria, despesas por categoria, totais, loading
+### Resumo visual no formulario
 
-2. **`src/components/relatorios/CategoryReportTable.tsx`** (novo)
-   - Componente de tabela reutilizavel para ambos os relatorios
-   - Recebe dados agrupados por categoria (receitas e despesas)
-   - Linhas colapsaveis para categorias pai
-   - Formatacao em Reais (R$)
-   - Linha de total receitas, total despesas e resultado final
-   - Cores: receitas em verde, despesas em vermelho, resultado conforme positivo/negativo
+Quando juros > 0:
+```text
+[x] Parcelado?
+  Numero de parcelas: [12]
+  Taxa de juros mensal (%): [1.99]
+  
+  12x de R$ 95,40 = R$ 1.144,80
+  Juros totais: R$ 144,80
+```
 
-3. **`src/pages/PlanoDeCaixa.tsx`** (reescrito)
-   - Usa `useCashFlowData("caixa", filters)`
-   - Inclui PeriodFilter e filtro por conta bancaria
-   - Renderiza `CategoryReportTable`
-
-4. **`src/pages/DRE.tsx`** (reescrito)
-   - Usa `useCashFlowData("competencia", filters)`
-   - Inclui PeriodFilter e filtro por conta bancaria
-   - Renderiza `CategoryReportTable`
-
----
+Quando juros = 0 (comportamento atual mantido):
+```text
+[x] Parcelado?
+  Numero de parcelas: [12]
+  Taxa de juros mensal (%): [    ]
+  
+  12x de R$ 83,33 = R$ 1.000,00
+```
 
 ### Detalhes tecnicos
 
-**Hook `useCashFlowData`:**
-- Recebe `mode: "caixa" | "competencia"` e `filters: DashboardFilters`
-- Modo "caixa": filtra por `payment_date`, somente status `Pago`
-- Modo "competencia": filtra por `competence_date`, todos os status
-- Busca categorias do contexto atual (empresa/pessoal) para montar a hierarquia
-- Agrupa transacoes por `category` (UUID), resolve nome via tabela de categorias
-- Monta estrutura: `{ categoryId, categoryName, total, children: [{ name, total }] }`
-- Aplica filtro por conta bancaria (incluindo cartoes vinculados, como no Dashboard)
-- Respeita contexto empresa/pessoal via `companyFilter`
-
-**Componente `CategoryReportTable`:**
-- Props: `revenueGroups`, `expenseGroups`, `loading`
-- Cada grupo pai e clicavel (toggle expand/collapse usando estado local)
-- Subcategorias indentadas com padding-left
-- Linhas de total com fundo destacado e fonte bold
-- Linha de resultado final com cor dinamica (verde se positivo, vermelho se negativo)
-
-**Reutilizacao:**
-- `PeriodFilter` ja existente, reutilizado diretamente
-- Filtro de conta bancaria igual ao Dashboard
-- Patterns de company filter ja existentes no codebase
-
-Nenhuma alteracao no banco de dados e necessaria.
-
+- A funcao Price sera implementada inline no componente (poucas linhas)
+- O campo `original_amount` ja existe na tabela e sera usado para guardar o valor original sem juros
+- Nenhuma alteracao no banco de dados necessaria
+- O campo "Valor da 1a parcela diferente" sera desabilitado quando juros > 0 (Price calcula parcelas fixas)
+- Compatibilidade total com o fluxo existente de edicao e exclusao de series
