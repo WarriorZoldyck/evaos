@@ -409,6 +409,11 @@ export function TransactionFormModal({
     if (!isEditing) {
       setActiveTab(companyId === null ? "despesa" : "receita");
     }
+    // Clear account selections when context changes
+    form.setValue("bank_account_id", "");
+    form.setValue("credit_card_id", "");
+    form.setValue("wallet_id", "");
+    form.setValue("card_terminal_id", "");
   };
 
   const rootCategories = formCategories.filter((c) => !c.parent_id);
@@ -416,6 +421,26 @@ export function TransactionFormModal({
   const watchSubcategory = form.watch("subcategory");
   const subCategories = formCategories.filter((c) => c.parent_id === watchCategory);
   const subSubCategories = formCategories.filter((c) => c.parent_id === watchSubcategory);
+
+  // Filter accounts by form context (formCompanyId)
+  const filteredBankAccounts = allAccounts
+    ? allAccounts.bankAccounts
+        .filter((a) => formCompanyId === null ? a.company_id === null : a.company_id === formCompanyId)
+        .map(({ id, name }) => ({ id, name }))
+    : bankAccounts;
+  const filteredWallets = allAccounts
+    ? allAccounts.wallets
+        .filter((w) => formCompanyId === null ? w.company_id === null : w.company_id === formCompanyId)
+        .map(({ id, name }) => ({ id, name }))
+    : wallets;
+  const filteredCreditCards = allAccounts
+    ? allAccounts.creditCards
+        .filter((c) => formCompanyId === null ? c.company_id === null : c.company_id === formCompanyId)
+        .map((c) => {
+          const full = creditCards.find((cc) => cc.id === c.id);
+          return full || { id: c.id, name: c.name, last_four_digits: c.last_four_digits, closing_day: 0, due_day: 0, bank_account_id: "" };
+        })
+    : creditCards;
 
   const watchPaymentMethod = form.watch("payment_method");
 
@@ -738,9 +763,9 @@ export function TransactionFormModal({
               subCategories={subCategories}
               subSubCategories={subSubCategories}
               watchPaymentMethod={watchPaymentMethod}
-              bankAccounts={bankAccounts}
-              creditCards={creditCards}
-              wallets={wallets}
+              bankAccounts={filteredBankAccounts}
+              creditCards={filteredCreditCards}
+              wallets={filteredWallets}
               clients={clients}
               suppliers={suppliers}
               cardTerminals={cardTerminals}
@@ -762,9 +787,9 @@ export function TransactionFormModal({
               subCategories={subCategories}
               subSubCategories={subSubCategories}
               watchPaymentMethod={watchPaymentMethod}
-              bankAccounts={bankAccounts}
-              creditCards={creditCards}
-              wallets={wallets}
+              bankAccounts={filteredBankAccounts}
+              creditCards={filteredCreditCards}
+              wallets={filteredWallets}
               clients={clients}
               suppliers={suppliers}
               cardTerminals={cardTerminals}
