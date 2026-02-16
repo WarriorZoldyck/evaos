@@ -140,6 +140,7 @@ const transactionSchema = z.object({
   attachment_url: z.string().url("URL inválida").max(500).or(z.literal("")).optional(),
   is_installment: z.boolean().default(false),
   installments_count: z.coerce.number().int().min(2).max(120).optional(),
+  interest_rate: z.coerce.number().min(0).max(100).optional(),
   first_installment_amount: z.coerce.number().positive().optional(),
   is_recurring: z.boolean().default(false),
   recurring_frequency: z.string().optional(),
@@ -334,6 +335,7 @@ export function TransactionFormModal({
       attachment_url: "",
       is_installment: false,
       installments_count: 2,
+      interest_rate: 0,
       first_installment_amount: undefined,
       is_recurring: false,
       recurring_frequency: "monthly",
@@ -389,6 +391,7 @@ export function TransactionFormModal({
           is_installment: false,
           is_recurring: false,
           recurring_frequency: "monthly",
+          interest_rate: 0,
           first_installment_amount: undefined,
         });
         paymentDateManuallyEdited.current = true;
@@ -498,29 +501,53 @@ export function TransactionFormModal({
       const seriesId = crypto.randomUUID();
       const total = data.amount;
       const count = data.installments_count;
-      let firstAmount: number;
-      let restAmount: number;
+      const interestRate = data.interest_rate || 0;
+      let installmentAmount: number;
 
-      if (data.first_installment_amount && data.first_installment_amount > 0 && data.first_installment_amount < total) {
-        firstAmount = Math.round(data.first_installment_amount * 100) / 100;
-        restAmount = Math.round(((total - firstAmount) / (count - 1)) * 100) / 100;
+      if (interestRate > 0) {
+        // Price table (French system) - fixed installments with compound interest
+        const i = interestRate / 100;
+        installmentAmount = Math.round(total * (i * Math.pow(1 + i, count)) / (Math.pow(1 + i, count) - 1) * 100) / 100;
+      } else if (data.first_installment_amount && data.first_installment_amount > 0 && data.first_installment_amount < total) {
+        // Custom first installment (only when no interest)
+        const firstAmt = Math.round(data.first_installment_amount * 100) / 100;
+        const restAmt = Math.round(((total - firstAmt) / (count - 1)) * 100) / 100;
+
+        const installments: TransactionInsert[] = [];
+        for (let idx = 0; idx < count; idx++) {
+          const payDate = addMonths(data.payment_date, idx);
+          const compDate = data.competence_date;
+          installments.push({
+            ...baseData,
+            amount: idx === 0 ? firstAmt : restAmt,
+            original_amount: total,
+            payment_date: format(payDate, "yyyy-MM-dd"),
+            competence_date: format(compDate, "yyyy-MM-dd"),
+            series_id: seriesId,
+            installment_number: idx + 1,
+            installments_total: count,
+          });
+        }
+        success = await onSaveMultiple(installments);
+        setSaving(false);
+        if (success) onClose();
+        return;
       } else {
-        firstAmount = Math.round((total / count) * 100) / 100;
-        restAmount = firstAmount;
+        installmentAmount = Math.round((total / count) * 100) / 100;
       }
 
       const installments: TransactionInsert[] = [];
-      for (let i = 0; i < count; i++) {
-        const payDate = addMonths(data.payment_date, i);
+      for (let idx = 0; idx < count; idx++) {
+        const payDate = addMonths(data.payment_date, idx);
         const compDate = data.competence_date;
         installments.push({
           ...baseData,
-          amount: i === 0 ? firstAmount : restAmount,
+          amount: installmentAmount,
           original_amount: total,
           payment_date: format(payDate, "yyyy-MM-dd"),
           competence_date: format(compDate, "yyyy-MM-dd"),
           series_id: seriesId,
-          installment_number: i + 1,
+          installment_number: idx + 1,
           installments_total: count,
         });
       }
@@ -926,7 +953,27 @@ function MainFormContent({
 }: MainFormContentProps) {
   const watchInstallment = form.watch("is_installment");
   const watchRecurring = form.watch("is_recurring");
+  const watchAmount = form.watch("amount");
+  const watchInstallmentsCount = form.watch("installments_count");
+  const watchInterestRate = form.watch("interest_rate");
   const [customFirstInstallment, setCustomFirstInstallment] = useState(false);
+
+  // Calculate Price table installment preview
+  const interestPreview = (() => {
+    if (!watchInstallment || !watchAmount || !watchInstallmentsCount || watchInstallmentsCount < 2) return null;
+    const rate = watchInterestRate || 0;
+    const n = watchInstallmentsCount;
+    const pv = watchAmount;
+    if (rate > 0) {
+      const i = rate / 100;
+      const pmt = Math.round(pv * (i * Math.pow(1 + i, n)) / (Math.pow(1 + i, n) - 1) * 100) / 100;
+      const totalWithInterest = Math.round(pmt * n * 100) / 100;
+      const totalInterest = Math.round((totalWithInterest - pv) * 100) / 100;
+      return { pmt, totalWithInterest, totalInterest };
+    }
+    const pmt = Math.round((pv / n) * 100) / 100;
+    return { pmt, totalWithInterest: Math.round(pmt * n * 100) / 100, totalInterest: 0 };
+  })();
   const show = (key: keyof FormFieldSettings) => !fieldSettings || fieldSettings[key];
 
   return (
@@ -1305,28 +1352,65 @@ function MainFormContent({
                       </FormItem>
                     )}
                   />
-                  <div className="flex items-center gap-3">
-                    <Switch
-                      id="custom-first"
-                      checked={customFirstInstallment}
-                      onCheckedChange={setCustomFirstInstallment}
-                    />
-                    <Label htmlFor="custom-first" className="text-sm">Valor da 1ª parcela diferente?</Label>
-                  </div>
-                  {customFirstInstallment && (
-                    <FormField
-                      control={form.control}
-                      name="first_installment_amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Valor da 1ª parcela (R$)</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" min="0" placeholder="Ex: 150.00" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
+                  <FormField
+                    control={form.control}
+                    name="interest_rate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Taxa de juros mensal (%)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            placeholder="Ex: 1.99"
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {interestPreview && (
+                    <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1">
+                      <p className="font-medium">
+                        {watchInstallmentsCount}x de R$ {interestPreview.pmt.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} = R$ {interestPreview.totalWithInterest.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </p>
+                      {interestPreview.totalInterest > 0 && (
+                        <p className="text-muted-foreground">
+                          Juros totais: R$ {interestPreview.totalInterest.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </p>
                       )}
-                    />
+                    </div>
+                  )}
+                  {(!watchInterestRate || watchInterestRate <= 0) && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          id="custom-first"
+                          checked={customFirstInstallment}
+                          onCheckedChange={setCustomFirstInstallment}
+                        />
+                        <Label htmlFor="custom-first" className="text-sm">Valor da 1ª parcela diferente?</Label>
+                      </div>
+                      {customFirstInstallment && (
+                        <FormField
+                          control={form.control}
+                          name="first_installment_amount"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Valor da 1ª parcela (R$)</FormLabel>
+                              <FormControl>
+                                <Input type="number" step="0.01" min="0" placeholder="Ex: 150.00" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
               )}
