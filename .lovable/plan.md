@@ -1,79 +1,62 @@
 
 
-## Liquidacao inteligente com tratamento de diferenca e redistribuicao de parcelas
+## Botao global de Novo Lancamento como modal direto + limpeza de contexto
 
-### Contexto
+### Resumo das alteracoes
 
-Atualmente, ao liquidar um lancamento e alterar o valor, o sistema simplesmente salva o novo valor sem questionar o que acontece com a diferenca. O usuario precisa de um fluxo similar ao pagamento de fatura de cartao de credito, onde:
+1. **Esconder botao "Novo Lancamento" do header quando estiver em /lancamentos** (ja tem o proprio botao na pagina)
+2. **Abrir o modal diretamente de qualquer pagina** sem redirecionar para /lancamentos — renderizar o `TransactionFormModal` no `AppLayout`
+3. **Remover o seletor de contexto do header da pagina Lancamentos** (fica apenas no menu lateral e no modal)
+4. **Garantir que o modal use seu proprio contexto interno** (`formCompanyId`) independente da pagina
 
-1. Se pagar **menos** que o previsto: perguntar o que fazer com o saldo restante
-2. Se pagar **mais** que o previsto: perguntar como registrar o excedente
-3. Em **series parceladas**: ao alterar o valor de uma parcela, redistribuir automaticamente o restante entre as demais parcelas pendentes
+### Detalhes tecnicos
 
-### Alteracoes
+**`src/components/layout/AppLayout.tsx`**
 
-**1. Reformular `src/components/dashboard/LiquidateModal.tsx`**
+- Condicionar o botao "Novo Lancamento" para aparecer somente quando `location.pathname !== "/lancamentos"`
+- Adicionar estado local `formOpen` para controlar o modal
+- Renderizar `TransactionFormModal` diretamente no layout (precisa buscar os dados necessarios)
+- Criar um novo hook leve ou reutilizar dados existentes para alimentar o modal (bankAccounts, categories, etc.)
+- Como o modal precisa de muitos dados (contas, categorias, cartoes, etc.), a melhor abordagem e criar um componente wrapper `GlobalTransactionModal` que internamente usa os hooks necessarios
 
-Adicionar um fluxo em etapas quando o valor final difere do valor original:
+**Novo componente: `src/components/layout/GlobalTransactionModal.tsx`**
 
-- **Etapa 1 (atual)**: Dados da liquidacao (valor, data, conta, observacoes)
-- **Etapa 2 (nova - so aparece se valor mudou)**: Tratamento da diferenca
+Componente que:
+- Recebe apenas `open` e `onClose`
+- Internamente usa `useTransactions` (ou queries diretas mais leves) para buscar bankAccounts, creditCards, wallets, suppliers, clients, categories, cardTerminals, allAccounts
+- Renderiza o `TransactionFormModal` com todos os dados
+- Ao salvar com sucesso, dispara um evento customizado para que a pagina de Lancamentos (se estiver aberta) atualize sua lista
 
-Quando o valor e **menor** (pagamento parcial):
-- "Descartar a diferenca" (apenas registra o valor menor)
-- "Criar lancamento pendente com o saldo restante" (cria um novo lancamento pendente com o valor da diferenca, na mesma categoria)
-- "Aplicar juros/multa sobre o saldo" (cria lancamento pendente com juros configuravel)
-- Para series: "Redistribuir saldo entre parcelas restantes" (divide a diferenca pelas proximas parcelas pendentes da serie)
+**`src/pages/Lancamentos.tsx`**
 
-Quando o valor e **maior** (pagamento com acrescimo):
-- "Registrar apenas o valor pago" (salva o valor maior, sem acao extra)
-- "Criar lancamento separado para o excedente" (ex: juros, multa) com campo para descricao e categoria
+- Remover o bloco do `DropdownMenu` de contexto (Pessoal/Empresa) do header da pagina (linhas 178-206)
+- Remover imports relacionados: `useCompany`, `User`, `Building2`, `ChevronDown`, `DropdownMenu*`
+- Manter o botao "Novo Lancamento" proprio da pagina (que abre o modal local)
 
-**2. Redistribuicao de parcelas em series (`LiquidateModal` + `useTransactions`)**
+**`src/components/layout/AppLayout.tsx` (atualizacao)**
 
-Quando o lancamento faz parte de uma serie (`series_id` preenchido) e o valor e alterado:
-- Buscar todas as parcelas pendentes restantes da serie
-- Calcular o novo saldo total (original_amount - soma dos valores ja liquidados - novo valor)
-- Distribuir o saldo igualmente entre as parcelas pendentes restantes
-- Atualizar os valores das parcelas via `updateTransaction`
+- Importar e renderizar `GlobalTransactionModal`
+- O botao do header chama `setGlobalFormOpen(true)` em vez de navegar
+- Remover `useNavigate` e a logica de `navigate("/lancamentos?new=true")`
+- Manter o evento customizado `open-new-transaction` para quando estiver na pagina de lancamentos (nao sera mais necessario pois o botao nao aparece la)
 
-Exemplo pratico:
-- Serie de R$ 1.000 em 4x de R$ 250
-- Parcela 1: cliente paga R$ 400 de entrada
-- Sistema redistribui: parcelas 2, 3, 4 ficam R$ 200 cada
-
-**3. Novo metodo no hook `src/hooks/useTransactions.ts`**
-
-Adicionar `redistributeSeriesAmounts`:
-```typescript
-const redistributeSeriesAmounts = async (
-  seriesId: string,
-  excludeId: string,
-  newTotalRemaining: number
-) => {
-  // Busca parcelas pendentes da serie (exceto a atual)
-  // Divide newTotalRemaining igualmente entre elas
-  // Atualiza cada uma
-};
-```
-
-### Fluxo visual da liquidacao reformulada
+### Fluxo resultante
 
 ```text
-[Valor original: R$ 500,00]
-[Valor final: R$ 350,00]  --> detecta diferenca de R$ 150,00
+Pagina de Lancamentos:
+  Header: [titulo] [contagem]  ............  [Novo Lancamento]
+  (sem seletor de contexto no header — usa o do sidebar)
+  (modal abre localmente com dados ja carregados)
 
---> "O valor e menor que o previsto. O que fazer com os R$ 150,00 restantes?"
-
-( ) Descartar - registrar apenas R$ 350,00
-( ) Criar lancamento pendente com R$ 150,00
-( ) Aplicar juros/multa: [__]% --> R$ 150,00 + juros = R$ ___
-( ) Redistribuir entre parcelas restantes (so aparece se for serie)
-    --> Parcelas 3, 4, 5 passam de R$ 500 para R$ 550 cada
+Qualquer outra pagina:
+  Header global: [sidebar trigger] ...... [Novo Lancamento] [theme]
+  (clique abre modal diretamente, sem redirecionar)
+  (modal carrega seus proprios dados via GlobalTransactionModal)
 ```
 
-### Arquivos modificados
+### Arquivos
 
-- `src/components/dashboard/LiquidateModal.tsx` -- fluxo em etapas com tratamento de diferenca
-- `src/hooks/useTransactions.ts` -- novo metodo `redistributeSeriesAmounts`
+- **Criar**: `src/components/layout/GlobalTransactionModal.tsx`
+- **Modificar**: `src/components/layout/AppLayout.tsx`
+- **Modificar**: `src/pages/Lancamentos.tsx`
 
