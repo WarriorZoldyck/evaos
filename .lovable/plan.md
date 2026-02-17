@@ -1,91 +1,79 @@
 
 
-## Reestruturar DRE para formato multi-colunas mensais
+## Liquidacao inteligente com tratamento de diferenca e redistribuicao de parcelas
 
-### O que muda
+### Contexto
 
-Atualmente o DRE mostra apenas 1 coluna de valor (total do periodo selecionado). A referencia mostra um formato de tabela onde:
-- Cada **coluna** e um mes (Janeiro, Fevereiro, Marco...)
-- Cada **linha** e uma categoria, expandivel para subcategorias
-- O filtro controla o **ano** e a **granularidade** (Mensal/Trimestral/Semestral)
-- Linhas de totalizacao intermediarias (Receita Bruta, Lucro Bruto, Resultado) ficam entre as categorias
+Atualmente, ao liquidar um lancamento e alterar o valor, o sistema simplesmente salva o novo valor sem questionar o que acontece com a diferenca. O usuario precisa de um fluxo similar ao pagamento de fatura de cartao de credito, onde:
 
-### Layout proposto
+1. Se pagar **menos** que o previsto: perguntar o que fazer com o saldo restante
+2. Se pagar **mais** que o previsto: perguntar como registrar o excedente
+3. Em **series parceladas**: ao alterar o valor de uma parcela, redistribuir automaticamente o restante entre as demais parcelas pendentes
+
+### Alteracoes
+
+**1. Reformular `src/components/dashboard/LiquidateModal.tsx`**
+
+Adicionar um fluxo em etapas quando o valor final difere do valor original:
+
+- **Etapa 1 (atual)**: Dados da liquidacao (valor, data, conta, observacoes)
+- **Etapa 2 (nova - so aparece se valor mudou)**: Tratamento da diferenca
+
+Quando o valor e **menor** (pagamento parcial):
+- "Descartar a diferenca" (apenas registra o valor menor)
+- "Criar lancamento pendente com o saldo restante" (cria um novo lancamento pendente com o valor da diferenca, na mesma categoria)
+- "Aplicar juros/multa sobre o saldo" (cria lancamento pendente com juros configuravel)
+- Para series: "Redistribuir saldo entre parcelas restantes" (divide a diferenca pelas proximas parcelas pendentes da serie)
+
+Quando o valor e **maior** (pagamento com acrescimo):
+- "Registrar apenas o valor pago" (salva o valor maior, sem acao extra)
+- "Criar lancamento separado para o excedente" (ex: juros, multa) com campo para descricao e categoria
+
+**2. Redistribuicao de parcelas em series (`LiquidateModal` + `useTransactions`)**
+
+Quando o lancamento faz parte de uma serie (`series_id` preenchido) e o valor e alterado:
+- Buscar todas as parcelas pendentes restantes da serie
+- Calcular o novo saldo total (original_amount - soma dos valores ja liquidados - novo valor)
+- Distribuir o saldo igualmente entre as parcelas pendentes restantes
+- Atualizar os valores das parcelas via `updateTransaction`
+
+Exemplo pratico:
+- Serie de R$ 1.000 em 4x de R$ 250
+- Parcela 1: cliente paga R$ 400 de entrada
+- Sistema redistribui: parcelas 2, 3, 4 ficam R$ 200 cada
+
+**3. Novo metodo no hook `src/hooks/useTransactions.ts`**
+
+Adicionar `redistributeSeriesAmounts`:
+```typescript
+const redistributeSeriesAmounts = async (
+  seriesId: string,
+  excludeId: string,
+  newTotalRemaining: number
+) => {
+  // Busca parcelas pendentes da serie (exceto a atual)
+  // Divide newTotalRemaining igualmente entre elas
+  // Atualiza cada uma
+};
+```
+
+### Fluxo visual da liquidacao reformulada
 
 ```text
-Filtros: [Conta v] [Mensal v]  < 2026 >  [Gerar relatorio]
+[Valor original: R$ 500,00]
+[Valor final: R$ 350,00]  --> detecta diferenca de R$ 150,00
 
-| Categoria                    | Jan     | Fev     | Mar     | Abr     | Mai     | Jun     |
-|------------------------------|---------|---------|---------|---------|---------|---------|
-| + Receitas                   | 1.000   | 2.000   | 1.500   |   800   | 1.200   | 3.000   |
-|     Vendas                   |   800   | 1.500   | 1.000   |   500   |   900   | 2.500   |
-|     Servicos                 |   200   |   500   |   500   |   300   |   300   |   500   |
-| + Despesas                   |  -600   |  -800   |  -700   |  -400   |  -500   |  -900   |
-|     Aluguel                  |  -300   |  -300   |  -300   |  -300   |  -300   |  -300   |
-|     Marketing                |  -300   |  -500   |  -400   |  -100   |  -200   |  -600   |
-| = RESULTADO                  |   400   | 1.200   |   800   |   400   |   700   | 2.100   |
+--> "O valor e menor que o previsto. O que fazer com os R$ 150,00 restantes?"
+
+( ) Descartar - registrar apenas R$ 350,00
+( ) Criar lancamento pendente com R$ 150,00
+( ) Aplicar juros/multa: [__]% --> R$ 150,00 + juros = R$ ___
+( ) Redistribuir entre parcelas restantes (so aparece se for serie)
+    --> Parcelas 3, 4, 5 passam de R$ 500 para R$ 550 cada
 ```
 
-### Alteracoes tecnicas
+### Arquivos modificados
 
-**1. Novo filtro de periodo para DRE (`src/components/relatorios/DREPeriodFilter.tsx`)**
-
-Substituir o `PeriodFilter` atual por um filtro especifico:
-- Seletor de granularidade: Mensal (padrao)
-- Navegacao por ano: setas `<` `2026` `>` com dropdown
-- Seletor de conta bancaria (ja existe)
-- O filtro define: ano selecionado + granularidade
-
-**2. Novo hook `src/hooks/useDREData.ts`**
-
-Hook dedicado que:
-- Recebe: ano, granularidade, accountId
-- Busca todas as transacoes do ano inteiro de uma vez (competence_date entre 01/jan e 31/dez)
-- Busca categorias (como ja faz)
-- Agrupa transacoes por mes E por categoria hierarquica
-- Retorna uma estrutura tipo:
-
-```typescript
-interface DRECategoryRow {
-  categoryId: string;
-  categoryName: string;
-  monthlyTotals: Record<string, number>; // chave = "2026-01", "2026-02", etc.
-  children: DRECategoryRow[];
-}
-
-interface DREData {
-  months: string[]; // ["2026-01", "2026-02", ...]
-  revenueRows: DRECategoryRow[];
-  expenseRows: DRECategoryRow[];
-  monthlyRevenueTotals: Record<string, number>;
-  monthlyExpenseTotals: Record<string, number>;
-  monthlyResults: Record<string, number>;
-  loading: boolean;
-}
-```
-
-**3. Novo componente de tabela `src/components/relatorios/DRETable.tsx`**
-
-Tabela com:
-- Header fixo: Categoria | Jan | Fev | Mar | ... | Jun (6 meses por semestre, ou 12 por ano)
-- Scroll horizontal se necessario
-- Linhas de categoria expandiveis (recursivo, como ja implementado)
-- Linhas de totalizacao com background destacado (Receitas, Despesas, Resultado)
-- Valores formatados em BRL
-- Cores: verde para receitas, vermelho para despesas, cor condicional para resultado
-
-**4. Atualizar `src/pages/DRE.tsx`**
-
-- Substituir `PeriodFilter` pelo novo `DREPeriodFilter`
-- Substituir `CategoryReportTable` pela nova `DRETable`
-- Usar o novo hook `useDREData` em vez de `useCashFlowData`
-- Manter a secao "Como funciona?" existente
-
-### Arquivos
-
-- **Criar**: `src/hooks/useDREData.ts`
-- **Criar**: `src/components/relatorios/DREPeriodFilter.tsx`
-- **Criar**: `src/components/relatorios/DRETable.tsx`
-- **Modificar**: `src/pages/DRE.tsx`
-- **Manter sem alteracao**: `src/hooks/useCashFlowData.ts` e `CategoryReportTable.tsx` (usados pelo Plano de Caixa)
+- `src/components/dashboard/LiquidateModal.tsx` -- fluxo em etapas com tratamento de diferenca
+- `src/hooks/useTransactions.ts` -- novo metodo `redistributeSeriesAmounts`
 
