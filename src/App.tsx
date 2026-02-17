@@ -18,6 +18,7 @@ import Contatos from "@/pages/Contatos";
 import Configuracoes from "@/pages/Configuracoes";
 import NotFound from "@/pages/NotFound";
 import ComingSoon from "@/pages/ComingSoon";
+import Docs from "@/pages/Docs";
 import { GraduationCap, Target, TrendingUp } from "lucide-react";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const App = () => (
                 <Route path="/categorias" element={<Categorias />} />
                 <Route path="/contatos" element={<Contatos />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />
+                <Route path="/docs" element={<Docs />} />
                 <Route path="/eva-kids" element={<ComingSoon title="EVA Kids" description="Educação financeira para crianças. Em breve!" icon={GraduationCap} />} />
                 <Route path="/metas" element={<ComingSoon title="Metas" description="Defina e acompanhe suas metas financeiras." icon={Target} />} />
                 <Route path="/precificacao-v2" element={<ComingSoon title="Precificação V2" description="FHC completo com custo de vida pessoal integrado." icon={TrendingUp} />} />

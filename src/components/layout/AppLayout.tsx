@@ -6,6 +6,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GlobalTransactionModal } from "./GlobalTransactionModal";
+import { OnboardingGuide } from "@/components/onboarding/OnboardingGuide";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -67,6 +68,7 @@ function AppLayoutInner() {
           open={globalFormOpen}
           onClose={() => setGlobalFormOpen(false)}
         />
+        <OnboardingGuide />
       </SidebarProvider>
     </CompanyProvider>
   );

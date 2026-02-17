@@ -15,6 +15,7 @@ import {
   GraduationCap,
   Target,
   TrendingUp,
+  BookOpen,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -217,6 +218,18 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Documentação">
+              <NavLink
+                to="/docs"
+                className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Documentação</span>
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Configurações">
               <NavLink
