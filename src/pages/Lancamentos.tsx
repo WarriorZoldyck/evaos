@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
-import { Plus, CreditCard } from "lucide-react";
+import { Plus, CreditCard, Upload } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,6 +24,7 @@ import { TransactionDetailModal } from "@/components/lancamentos/TransactionDeta
 import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
+import { ImportStatementModal } from "@/components/lancamentos/ImportStatementModal";
 
 type TabValue = "todos" | "realizado" | "projetado";
 
@@ -52,6 +53,7 @@ export default function Lancamentos() {
   const [detailTarget, setDetailTarget] = useState<Transaction | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
   const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Open modal from query param (?new=true) or custom event
   useEffect(() => {
@@ -188,6 +190,14 @@ export default function Lancamentos() {
             ) : null;
           })()}
           <Button
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+            className="gap-2"
+          >
+            <Upload className="h-4 w-4" />
+            Importar Extrato
+          </Button>
+          <Button
             onClick={() => {
               setEditingTransaction(null);
               setFormOpen(true);
@@ -208,6 +218,8 @@ export default function Lancamentos() {
         bankAccounts={bankAccounts}
         wallets={wallets}
         creditCards={creditCards}
+        suppliers={suppliers}
+        clients={clients}
       />
 
       {/* Tabs + Table */}
@@ -375,6 +387,16 @@ export default function Lancamentos() {
           setBillPaymentCard(null);
           fetchTransactions();
         }}
+      />
+
+      {/* Import Statement */}
+      <ImportStatementModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImport={createMultipleTransactions}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        categories={categories}
       />
     </div>
   );

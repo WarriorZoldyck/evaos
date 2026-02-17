@@ -21,13 +21,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet, Smartphone, Receipt } from "lucide-react";
+import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet, Smartphone, Receipt, FileText } from "lucide-react";
 import { useAccounts, type CardTerminal } from "@/hooks/useAccounts";
 import { useCompany } from "@/contexts/CompanyContext";
 import { AccountFormModal } from "@/components/contas/AccountFormModal";
 import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
 import { TerminalFormModal } from "@/components/contas/TerminalFormModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
+import { AccountStatementModal } from "@/components/contas/AccountStatementModal";
 import { Skeleton } from "@/components/ui/skeleton";
 
 type AccountTab = "bank" | "card" | "wallet" | "terminal";
@@ -52,6 +53,9 @@ export default function Contas() {
   const [terminalEditData, setTerminalEditData] = useState<CardTerminal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; tab: AccountTab } | null>(null);
   const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
+  const [statementTarget, setStatementTarget] = useState<{
+    id: string; type: "bank" | "wallet" | "card"; name: string; initialBalance?: number;
+  } | null>(null);
 
   const openCreate = () => {
     if (activeTab === "terminal") {
@@ -186,6 +190,7 @@ export default function Contas() {
                         <TableCell className="text-right font-mono">{formatCurrency(a.initial_balance)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: a.id, type: "bank", name: a.name, initialBalance: a.initial_balance })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" onClick={() => openEdit(a)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: a.id, name: a.name, tab: "bank" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                           </div>
@@ -232,6 +237,7 @@ export default function Contas() {
                         <TableCell className="text-right font-mono">{formatCurrency(c.limit)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: c.id, type: "card", name: c.name })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="sm" onClick={() => setBillPaymentCard(c)} className="h-8 gap-1 text-xs"><Receipt className="h-3.5 w-3.5" />Pagar Fatura</Button>
                             <Button variant="ghost" size="icon" onClick={() => openEdit(c)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: c.id, name: c.name, tab: "card" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
@@ -273,6 +279,7 @@ export default function Contas() {
                         <TableCell className="text-right font-mono">{formatCurrency(w.initial_balance)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: w.id, type: "wallet", name: w.name, initialBalance: w.initial_balance })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" onClick={() => openEdit(w)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: w.id, name: w.name, tab: "wallet" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                           </div>
@@ -407,6 +414,18 @@ export default function Contas() {
         onClose={() => setBillPaymentCard(null)}
         onSuccess={() => setBillPaymentCard(null)}
       />
+
+      {/* Account Statement */}
+      {statementTarget && (
+        <AccountStatementModal
+          open={!!statementTarget}
+          onClose={() => setStatementTarget(null)}
+          accountId={statementTarget.id}
+          accountType={statementTarget.type}
+          accountName={statementTarget.name}
+          initialBalance={statementTarget.initialBalance}
+        />
+      )}
     </div>
   );
 }

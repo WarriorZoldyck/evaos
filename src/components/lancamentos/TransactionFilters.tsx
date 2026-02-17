@@ -55,6 +55,8 @@ interface TransactionFiltersProps {
   bankAccounts?: { id: string; name: string }[];
   wallets?: { id: string; name: string }[];
   creditCards?: { id: string; name: string; last_four_digits: string | null }[];
+  suppliers?: { id: string; name: string }[];
+  clients?: { id: string; name: string }[];
 }
 
 export function TransactionFilters({
@@ -64,6 +66,8 @@ export function TransactionFilters({
   bankAccounts = [],
   wallets = [],
   creditCards = [],
+  suppliers = [],
+  clients = [],
 }: TransactionFiltersProps) {
   const rootCategories = categories.filter((c) => !c.parent_id);
   const [activePeriod, setActivePeriod] = useState<PeriodKey>("all");
@@ -209,6 +213,56 @@ export function TransactionFilters({
               {creditCards.map((cc) => (
                 <SelectItem key={`card:${cc.id}`} value={`card:${cc.id}`}>
                   💳 {cc.name}{cc.last_four_digits ? ` •${cc.last_four_digits}` : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Supplier filter */}
+        {suppliers.length > 0 && (
+          <Select
+            value={filters.supplierId || "todos"}
+            onValueChange={(value) =>
+              onFiltersChange({
+                ...filters,
+                supplierId: value === "todos" ? "" : value,
+              })
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Fornecedor" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos fornecedores</SelectItem>
+              {suppliers.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        {/* Client filter */}
+        {clients.length > 0 && (
+          <Select
+            value={filters.clientId || "todos"}
+            onValueChange={(value) =>
+              onFiltersChange({
+                ...filters,
+                clientId: value === "todos" ? "" : value,
+              })
+            }
+          >
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Cliente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos clientes</SelectItem>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
                 </SelectItem>
               ))}
             </SelectContent>
