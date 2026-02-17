@@ -18,7 +18,7 @@ export interface CategoryGroup {
   categoryId: string;
   categoryName: string;
   total: number;
-  children: { categoryId: string; name: string; total: number }[];
+  children: CategoryGroup[];
 }
 
 export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
@@ -104,81 +104,63 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
     fetch();
   }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId, linkedCardIds, mode]);
 
-  // Resolve category: find root parent
-  const resolveToRoot = useCallback(
-    (categoryValue: string): { rootId: string; rootName: string; childId: string | null; childName: string | null } => {
-      // Find by ID
+  // Resolve category to its full ancestor chain [root, ..., leaf]
+  const resolveChain = useCallback(
+    (categoryValue: string): { id: string; name: string }[] => {
       let cat = categories.find((c) => c.id === categoryValue);
-      // Fallback: find by name
       if (!cat) cat = categories.find((c) => c.name === categoryValue);
-      if (!cat) return { rootId: categoryValue, rootName: categoryValue, childId: null, childName: null };
+      if (!cat) return [{ id: categoryValue, name: categoryValue }];
 
-      // Walk up to root
-      let current = cat;
-      let child: CategoryRecord | null = null;
-      while (current.parent_id) {
-        child = current;
-        const parent = categories.find((c) => c.id === current.parent_id);
-        if (!parent) break;
-        current = parent;
+      // Build chain from leaf to root
+      const chain: { id: string; name: string }[] = [];
+      let current: CategoryRecord | undefined = cat;
+      while (current) {
+        chain.unshift({ id: current.id, name: current.name });
+        current = current.parent_id
+          ? categories.find((c) => c.id === current!.parent_id)
+          : undefined;
       }
-
-      // If the category IS the root, check if the original category is a child
-      if (current.id === cat.id) {
-        return { rootId: current.id, rootName: current.name, childId: null, childName: null };
-      }
-
-      return {
-        rootId: current.id,
-        rootName: current.name,
-        childId: cat.id,
-        childName: cat.name,
-      };
+      return chain;
     },
     [categories]
   );
 
-  // Build grouped data
+  // Build grouped data as recursive tree
   const { revenueGroups, expenseGroups, totalRevenue, totalExpense } = useMemo(() => {
-    const revenueMap = new Map<string, { name: string; total: number; children: Map<string, { name: string; total: number }> }>();
-    const expenseMap = new Map<string, { name: string; total: number; children: Map<string, { name: string; total: number }> }>();
+    type TreeNode = { name: string; total: number; children: Map<string, TreeNode> };
+    const revenueTree = new Map<string, TreeNode>();
+    const expenseTree = new Map<string, TreeNode>();
 
     transactions.forEach((t) => {
-      const map = t.type === "receita" ? revenueMap : expenseMap;
+      const tree = t.type === "receita" ? revenueTree : expenseTree;
       const amount = Number(t.amount);
-      const resolved = resolveToRoot(t.category);
+      const chain = resolveChain(t.category);
 
-      let group = map.get(resolved.rootId);
-      if (!group) {
-        group = { name: resolved.rootName, total: 0, children: new Map() };
-        map.set(resolved.rootId, group);
-      }
-      group.total += amount;
-
-      if (resolved.childId && resolved.childName) {
-        const child = group.children.get(resolved.childId);
-        if (child) {
-          child.total += amount;
-        } else {
-          group.children.set(resolved.childId, { name: resolved.childName, total: amount });
+      let currentLevel = tree;
+      for (let i = 0; i < chain.length; i++) {
+        const { id, name } = chain[i];
+        let node = currentLevel.get(id);
+        if (!node) {
+          node = { name, total: 0, children: new Map() };
+          currentLevel.set(id, node);
         }
+        node.total += amount;
+        currentLevel = node.children;
       }
     });
 
-    const toGroups = (m: typeof revenueMap): CategoryGroup[] =>
+    const toGroups = (m: Map<string, TreeNode>): CategoryGroup[] =>
       Array.from(m.entries())
-        .map(([id, g]) => ({
+        .map(([id, node]) => ({
           categoryId: id,
-          categoryName: g.name,
-          total: g.total,
-          children: Array.from(g.children.entries())
-            .map(([cid, c]) => ({ categoryId: cid, name: c.name, total: c.total }))
-            .sort((a, b) => b.total - a.total),
+          categoryName: node.name,
+          total: node.total,
+          children: toGroups(node.children),
         }))
         .sort((a, b) => b.total - a.total);
 
-    const rev = toGroups(revenueMap);
-    const exp = toGroups(expenseMap);
+    const rev = toGroups(revenueTree);
+    const exp = toGroups(expenseTree);
 
     return {
       revenueGroups: rev,
@@ -186,7 +168,7 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
       totalRevenue: rev.reduce((s, g) => s + g.total, 0),
       totalExpense: exp.reduce((s, g) => s + g.total, 0),
     };
-  }, [transactions, resolveToRoot]);
+  }, [transactions, resolveChain]);
 
   return {
     revenueGroups,
