@@ -54,6 +54,7 @@ interface TransactionFiltersProps {
   categories: Category[];
   bankAccounts?: { id: string; name: string }[];
   wallets?: { id: string; name: string }[];
+  creditCards?: { id: string; name: string; last_four_digits: string | null }[];
 }
 
 export function TransactionFilters({
@@ -62,6 +63,7 @@ export function TransactionFilters({
   categories,
   bankAccounts = [],
   wallets = [],
+  creditCards = [],
 }: TransactionFiltersProps) {
   const rootCategories = categories.filter((c) => !c.parent_id);
   const [activePeriod, setActivePeriod] = useState<PeriodKey>("all");
@@ -179,7 +181,7 @@ export function TransactionFilters({
         </Select>
 
         {/* Account / Wallet filter */}
-        {(bankAccounts.length > 0 || wallets.length > 0) && (
+        {(bankAccounts.length > 0 || wallets.length > 0 || creditCards.length > 0) && (
           <Select
             value={filters.accountId || "todas"}
             onValueChange={(value) =>
@@ -202,6 +204,11 @@ export function TransactionFilters({
               {wallets.map((w) => (
                 <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
                   👛 {w.name}
+                </SelectItem>
+              ))}
+              {creditCards.map((cc) => (
+                <SelectItem key={`card:${cc.id}`} value={`card:${cc.id}`}>
+                  💳 {cc.name}{cc.last_four_digits ? ` •${cc.last_four_digits}` : ""}
                 </SelectItem>
               ))}
             </SelectContent>

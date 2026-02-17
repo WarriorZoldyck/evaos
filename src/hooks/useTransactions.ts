@@ -218,6 +218,8 @@ export function useTransactions() {
         query = query.eq("bank_account_id", accId);
       } else if (accType === "wallet") {
         query = query.eq("wallet_id", accId);
+      } else if (accType === "card") {
+        query = query.eq("credit_card_id", accId);
       }
     }
 
