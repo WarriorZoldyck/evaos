@@ -1,6 +1,5 @@
 import { useState, useRef, Fragment } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { DRECategoryRow } from "@/hooks/useDREData";
@@ -49,15 +48,15 @@ function CategoryRows({
 
         return (
           <Fragment key={row.categoryId}>
-            <TableRow
+            <tr
               className={cn(
                 hasChildren ? "cursor-pointer font-medium" : "cursor-default",
                 isEven ? "bg-muted/30" : "",
-                "hover:bg-muted/50"
+                "hover:bg-muted/50 border-b border-border/30"
               )}
               onClick={() => hasChildren && toggle(row.categoryId)}
             >
-              <TableCell
+              <td
                 className="whitespace-nowrap text-xs py-2"
                 style={{ paddingLeft: 12 + level * INDENT_PX }}
               >
@@ -69,16 +68,16 @@ function CategoryRows({
                   )}
                   {row.categoryName}
                 </span>
-              </TableCell>
+              </td>
               {periods.map((p) => (
-                <TableCell key={p} className={cn("text-right text-xs py-2 tabular-nums", colorClass)}>
+                <td key={p} className={cn("text-right text-xs py-2 tabular-nums", colorClass)}>
                   {fmt(row.monthlyTotals[p] || 0)}
-                </TableCell>
+                </td>
               ))}
-              <TableCell className={cn("text-right text-xs py-2 font-semibold tabular-nums", colorClass)}>
+              <td className={cn("text-right text-xs py-2 pr-3 font-semibold tabular-nums", colorClass)}>
                 {fmt(total)}
-              </TableCell>
-            </TableRow>
+              </td>
+            </tr>
             {hasChildren && isOpen && (
               <CategoryRows
                 rows={row.children}
@@ -128,23 +127,23 @@ function SectionBlock({
 
   return (
     <>
-      <TableRow
-        className={cn("font-bold cursor-pointer", sectionClassName)}
+      <tr
+        className={cn("font-bold cursor-pointer border-b", sectionClassName)}
         onClick={() => toggleSection(sectionId)}
       >
-        <TableCell className="text-xs py-2 pl-3 whitespace-nowrap">
+        <td className="text-xs py-2 pl-3 whitespace-nowrap">
           <span className="flex items-center gap-1">
             {isSectionOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
             {label}
           </span>
-        </TableCell>
+        </td>
         {periods.map((p) => (
-          <TableCell key={p} className="text-right text-xs py-2 tabular-nums">
+          <td key={p} className="text-right text-xs py-2 tabular-nums">
             {fmt(totals[p] || 0)}
-          </TableCell>
+          </td>
         ))}
-        <TableCell className="text-right text-xs py-2 tabular-nums font-bold">{fmt(grand)}</TableCell>
-      </TableRow>
+        <td className="text-right text-xs py-2 pr-3 tabular-nums font-bold">{fmt(grand)}</td>
+      </tr>
       {isSectionOpen && (
         <CategoryRows
           rows={rows}
@@ -173,15 +172,15 @@ function TotalRow({
 }) {
   const grand = Object.values(totals).reduce((s, v) => s + v, 0);
   return (
-    <TableRow className={cn("font-bold", className)}>
-      <TableCell className="text-xs py-2 pl-3 whitespace-nowrap">{label}</TableCell>
+    <tr className={cn("font-bold border-b", className)}>
+      <td className="text-xs py-2 pl-3 whitespace-nowrap">{label}</td>
       {periods.map((p) => (
-        <TableCell key={p} className="text-right text-xs py-2 tabular-nums">
+        <td key={p} className="text-right text-xs py-2 tabular-nums">
           {fmt(totals[p] || 0)}
-        </TableCell>
+        </td>
       ))}
-      <TableCell className="text-right text-xs py-2 tabular-nums font-bold">{fmt(grand)}</TableCell>
-    </TableRow>
+      <td className="text-right text-xs py-2 pr-3 tabular-nums font-bold">{fmt(grand)}</td>
+    </tr>
   );
 }
 
@@ -227,21 +226,23 @@ export function DRETable({
 
   const negExpTotals = Object.fromEntries(periods.map((p) => [p, -(monthlyExpenseTotals[p] || 0)]));
 
+  const colCount = periods.length + 2; // category + periods + total
+
   return (
     <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/50">
-            <TableHead className="min-w-[200px] text-xs">Categoria</TableHead>
+      <table className="w-full text-sm border-collapse table-fixed" style={{ minWidth: `${200 + (colCount - 1) * 110}px` }}>
+        <thead>
+          <tr className="bg-muted/50 border-b">
+            <th className="text-left text-xs font-medium text-muted-foreground p-2 pl-3" style={{ width: 200 }}>Categoria</th>
             {periods.map((p) => (
-              <TableHead key={p} className="text-right text-xs min-w-[100px]">
+              <th key={p} className="text-right text-xs font-medium text-muted-foreground p-2" style={{ width: 110 }}>
                 {getPeriodLabel(p)}
-              </TableHead>
+              </th>
             ))}
-            <TableHead className="text-right text-xs min-w-[110px] font-bold">Total</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+            <th className="text-right text-xs font-bold text-muted-foreground p-2 pr-3" style={{ width: 120 }}>Total</th>
+          </tr>
+        </thead>
+        <tbody>
           {/* Revenue section - collapsible */}
           <SectionBlock
             sectionId="__revenue__"
@@ -284,8 +285,8 @@ export function DRETable({
                 : "bg-destructive/10 text-destructive"
             )}
           />
-        </TableBody>
-      </Table>
+        </tbody>
+      </table>
     </div>
   );
 }
