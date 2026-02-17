@@ -102,6 +102,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
 
   // Series info for redistribution preview
   const [pendingInstallmentsCount, setPendingInstallmentsCount] = useState(0);
+  const [pendingInstallments, setPendingInstallments] = useState<Array<{ id: string; installment_number: number | null; amount: number; payment_date: string }>>([]);
 
   const isBulk = bulkTransactionIds && bulkTransactionIds.length > 1;
 
@@ -122,7 +123,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
     setExcessAction("register_as_is");
     setExcessDescription("");
     setPendingInstallmentsCount(0);
-
+    setPendingInstallments([]);
     const fetchAccounts = async () => {
       let query = supabase.from("bank_accounts").select("id, name");
       if (isPersonal) {
@@ -136,16 +137,18 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
 
     fetchAccounts();
 
-    // If part of a series, count pending installments
+    // If part of a series, fetch pending installments with details
     if (transaction.series_id) {
       supabase
         .from("transactions")
-        .select("id", { count: "exact" })
+        .select("id, installment_number, amount, payment_date")
         .eq("series_id", transaction.series_id)
         .eq("status", "Pendente")
         .neq("id", transaction.id)
-        .then(({ count }) => {
-          setPendingInstallmentsCount(count || 0);
+        .order("installment_number", { ascending: true })
+        .then(({ data, count }) => {
+          setPendingInstallmentsCount(data?.length || 0);
+          setPendingInstallments(data || []);
         });
     }
   }, [transaction, user, selectedCompanyId, isPersonal]);
@@ -660,10 +663,39 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
                           Dividir {formatCurrency(absDifference)} entre {pendingInstallmentsCount} parcela{pendingInstallmentsCount > 1 ? "s" : ""} pendente{pendingInstallmentsCount > 1 ? "s" : ""}
                         </p>
                         {differenceAction === "redistribute" && (
-                          <div className="rounded bg-muted/50 p-2 mt-2 text-xs">
+                          <div className="rounded bg-muted/50 p-2 mt-2 text-xs space-y-2">
                             <p className="text-muted-foreground">
                               Cada parcela receberá +{formatCurrency(Math.round((absDifference / pendingInstallmentsCount) * 100) / 100)} adicional
                             </p>
+                            {pendingInstallments.length > 0 && (
+                              <div className="border rounded border-border overflow-hidden">
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="bg-muted/50">
+                                      <th className="text-left px-2 py-1 font-medium text-muted-foreground">Parcela</th>
+                                      <th className="text-right px-2 py-1 font-medium text-muted-foreground">Atual</th>
+                                      <th className="text-right px-2 py-1 font-medium text-muted-foreground">Novo</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {pendingInstallments.map((inst) => {
+                                      const currentTotal = pendingInstallments.reduce((s, p) => s + p.amount, 0);
+                                      const newTotal = currentTotal + absDifference;
+                                      const newAmount = Math.round((newTotal / pendingInstallments.length) * 100) / 100;
+                                      return (
+                                        <tr key={inst.id} className="border-t border-border">
+                                          <td className="px-2 py-1">
+                                            {inst.installment_number ? `#${inst.installment_number}` : format(new Date(inst.payment_date + "T00:00:00"), "dd/MM")}
+                                          </td>
+                                          <td className="text-right px-2 py-1 text-muted-foreground">{formatCurrency(inst.amount)}</td>
+                                          <td className="text-right px-2 py-1 font-medium">{formatCurrency(newAmount)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

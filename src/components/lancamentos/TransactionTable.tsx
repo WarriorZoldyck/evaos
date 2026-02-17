@@ -4,6 +4,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Edit, Copy, Trash2, CheckCircle2, MoreHorizontal, Loader2,
   Landmark, Wallet, CreditCard, HelpCircle, Eye, Repeat,
+  ChevronDown, ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,28 +36,12 @@ interface TransactionTableProps {
   onViewDetails: (transaction: Transaction) => void;
 }
 
-export function TransactionTable({
-  transactions,
-  loading,
-  categories,
-  bankAccounts,
-  wallets,
-  creditCards,
-  suppliers,
-  clients,
-  page,
-  totalPages,
-  totalCount,
-  onPageChange,
-  onEdit,
-  onDuplicate,
-  onDelete,
-  onLiquidate,
-  onViewDetails,
-}: TransactionTableProps) {
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount);
+// ── Helpers ──────────────────────────────────────────────
 
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount);
+
+function useCategoryHelpers(categories: Category[]) {
   const findCategory = (value: string | null | undefined) => {
     if (!value) return null;
     return categories.find((c) => c.id === value || c.name === value) ?? null;
@@ -76,33 +61,353 @@ export function TransactionTable({
     return parts;
   };
 
-  const getInstallmentLabel = (t: Transaction) => {
-    if (t.installment_number && t.installments_total) {
-      return `${t.installment_number}/${t.installments_total}`;
+  return { findCategory, getCategoryHierarchy };
+}
+
+function getInstallmentLabel(t: Transaction) {
+  if (t.installment_number && t.installments_total) {
+    return `${t.installment_number}/${t.installments_total}`;
+  }
+  return null;
+}
+
+function getAccountName(
+  t: Transaction,
+  bankAccounts: { id: string; name: string }[],
+  wallets: { id: string; name: string }[],
+  creditCards: { id: string; name: string }[],
+) {
+  if (t.bank_account_id) return bankAccounts.find((a) => a.id === t.bank_account_id)?.name;
+  if (t.wallet_id) return wallets.find((w) => w.id === t.wallet_id)?.name;
+  if (t.credit_card_id) return creditCards.find((c) => c.id === t.credit_card_id)?.name;
+  return null;
+}
+
+function getAccountIcon(t: Transaction) {
+  if (t.bank_account_id) return <Landmark className="h-3 w-3" />;
+  if (t.wallet_id) return <Wallet className="h-3 w-3" />;
+  if (t.credit_card_id) return <CreditCard className="h-3 w-3" />;
+  return null;
+}
+
+function getContactName(
+  t: Transaction,
+  suppliers: { id: string; name: string }[],
+  clients: { id: string; name: string }[],
+) {
+  if (t.contact_name) return t.contact_name;
+  if (t.supplier_id) return suppliers.find((s) => s.id === t.supplier_id)?.name || null;
+  if (t.client_id) return clients.find((c) => c.id === t.client_id)?.name || null;
+  return null;
+}
+
+// ── Single Transaction Row ──────────────────────────────
+
+interface TransactionRowProps {
+  t: Transaction;
+  categories: Category[];
+  bankAccounts: { id: string; name: string }[];
+  wallets: { id: string; name: string }[];
+  creditCards: { id: string; name: string }[];
+  suppliers: { id: string; name: string }[];
+  clients: { id: string; name: string }[];
+  onEdit: (t: Transaction) => void;
+  onDuplicate: (t: Transaction) => void;
+  onDelete: (t: Transaction) => void;
+  onLiquidate: (t: Transaction) => void;
+  onViewDetails: (t: Transaction) => void;
+  indented?: boolean;
+}
+
+function TransactionRow({
+  t, categories, bankAccounts, wallets, creditCards, suppliers, clients,
+  onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, indented,
+}: TransactionRowProps) {
+  const { getCategoryHierarchy } = useCategoryHelpers(categories);
+  const installment = getInstallmentLabel(t);
+  const categoryParts = getCategoryHierarchy(t);
+  const accountName = getAccountName(t, bankAccounts, wallets, creditCards);
+  const accountIcon = getAccountIcon(t);
+  const contactName = getContactName(t, suppliers, clients);
+
+  return (
+    <div
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group cursor-pointer ${indented ? "pl-10" : ""}`}
+      onClick={() => onViewDetails(t)}
+    >
+      {/* Date */}
+      <div className="text-center shrink-0 w-12">
+        <div className="text-lg font-bold leading-tight text-foreground">
+          {format(new Date(t.payment_date + "T00:00:00"), "dd")}
+        </div>
+        <div className="text-[10px] uppercase text-muted-foreground leading-tight">
+          {format(new Date(t.payment_date + "T00:00:00"), "MMM", { locale: ptBR })}
+        </div>
+      </div>
+
+      {/* Description + Category + Account + Contact */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-foreground truncate">
+            {t.description}
+          </span>
+          {(t as any).isRecurring && (
+            <Badge variant="outline" className="text-[10px] shrink-0 gap-0.5 border-primary/30 text-primary">
+              <Repeat className="h-2.5 w-2.5" />
+              Recorrente
+            </Badge>
+          )}
+          {t.series_id && !installment && !(t as any).isRecurring && (
+            <Badge variant="outline" className="text-[10px] shrink-0">
+              FIXO
+            </Badge>
+          )}
+          {installment && (
+            <Badge variant="outline" className="text-[10px] shrink-0">
+              {installment}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-0.5">
+          {categoryParts.length > 0 && (
+            <p className="text-xs text-muted-foreground truncate">
+              {categoryParts.join(" › ")}
+            </p>
+          )}
+          {accountName && !indented && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 shrink-0">
+              {accountIcon}
+              {accountName}
+            </span>
+          )}
+        </div>
+        {contactName && (
+          <p className="text-xs text-muted-foreground/70 truncate">
+            {contactName}
+          </p>
+        )}
+      </div>
+
+      {/* Value */}
+      <div className="text-right shrink-0">
+        <span
+          className={`text-sm font-semibold ${
+            t.type === "receita"
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-red-600 dark:text-red-400"
+          }`}
+        >
+          {t.type === "receita" ? "+" : "-"} {formatCurrency(t.amount)}
+        </span>
+      </div>
+
+      {/* Status */}
+      <Badge
+        variant={t.status === "Pago" ? "default" : "secondary"}
+        className="text-[10px] shrink-0 hidden sm:inline-flex"
+      >
+        {t.status === "Pago" ? "Liquidado" : "Pendente"}
+      </Badge>
+
+      {/* Actions */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(t); }}>
+            <Eye className="mr-2 h-4 w-4" />
+            Ver Detalhes
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(t); }}>
+            <Edit className="mr-2 h-4 w-4" />
+            Editar
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onDuplicate(t)}>
+            <Copy className="mr-2 h-4 w-4" />
+            Duplicar
+          </DropdownMenuItem>
+          {t.status === "Pendente" && (
+            <DropdownMenuItem onClick={() => onLiquidate(t)}>
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Liquidar
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            onClick={() => onDelete(t)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Excluir
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+// ── Card Group Header ───────────────────────────────────
+
+interface CardGroupItem {
+  cardId: string;
+  cardName: string;
+  transactions: Transaction[];
+  totalAmount: number;
+  pendingCount: number;
+  firstDate: string;
+}
+
+function CardGroupHeader({
+  group,
+  isOpen,
+  onToggle,
+  onLiquidate,
+}: {
+  group: CardGroupItem;
+  isOpen: boolean;
+  onToggle: () => void;
+  onLiquidate: () => void;
+}) {
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer bg-muted/20"
+      onClick={onToggle}
+    >
+      <div className="shrink-0 w-12 flex items-center justify-center">
+        {isOpen ? (
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
+          <span className="text-sm font-semibold text-foreground truncate">
+            {group.cardName}
+          </span>
+          <Badge variant="secondary" className="text-[10px] shrink-0">
+            {group.transactions.length} lançamento{group.transactions.length !== 1 ? "s" : ""}
+          </Badge>
+        </div>
+      </div>
+
+      <div className="text-right shrink-0">
+        <span className="text-sm font-semibold text-red-600 dark:text-red-400">
+          - {formatCurrency(group.totalAmount)}
+        </span>
+      </div>
+
+      {group.pendingCount > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 text-xs gap-1 hidden sm:inline-flex"
+          onClick={(e) => {
+            e.stopPropagation();
+            onLiquidate();
+          }}
+        >
+          <CheckCircle2 className="h-3 w-3" />
+          Pagar Fatura
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────
+
+export function TransactionTable({
+  transactions,
+  loading,
+  categories,
+  bankAccounts,
+  wallets,
+  creditCards,
+  suppliers,
+  clients,
+  page,
+  totalPages,
+  totalCount,
+  onPageChange,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onLiquidate,
+  onViewDetails,
+}: TransactionTableProps) {
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+  const toggleCard = (cardId: string) => {
+    setExpandedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
+      return next;
+    });
+  };
+
+  // Build ordered render list: group card transactions, keep others inline
+  const renderItems = useMemo(() => {
+    const items: Array<{ type: "transaction"; data: Transaction } | { type: "cardGroup"; data: CardGroupItem }> = [];
+    const cardGroups = new Map<string, Transaction[]>();
+    const nonCardTransactions: Array<{ index: number; t: Transaction }> = [];
+
+    transactions.forEach((t, i) => {
+      if (t.credit_card_id) {
+        const existing = cardGroups.get(t.credit_card_id);
+        if (existing) {
+          existing.push(t);
+        } else {
+          cardGroups.set(t.credit_card_id, [t]);
+          // Mark position of first occurrence
+          nonCardTransactions.push({ index: i, t: { ...t, __cardGroupMarker: true } as any });
+        }
+      } else {
+        nonCardTransactions.push({ index: i, t });
+      }
+    });
+
+    // Re-assemble in order
+    for (const { t } of nonCardTransactions) {
+      if ((t as any).__cardGroupMarker && t.credit_card_id) {
+        const cardTxns = cardGroups.get(t.credit_card_id)!;
+        const cardName = creditCards.find((c) => c.id === t.credit_card_id)?.name || "Cartão";
+        const totalAmount = cardTxns.reduce((s, tx) => s + tx.amount, 0);
+        const pendingCount = cardTxns.filter((tx) => tx.status === "Pendente").length;
+
+        if (cardTxns.length === 1) {
+          // Single card transaction — render as normal row
+          items.push({ type: "transaction", data: cardTxns[0] });
+        } else {
+          items.push({
+            type: "cardGroup",
+            data: {
+              cardId: t.credit_card_id!,
+              cardName,
+              transactions: cardTxns,
+              totalAmount,
+              pendingCount,
+              firstDate: cardTxns[0].payment_date,
+            },
+          });
+        }
+      } else {
+        items.push({ type: "transaction", data: t });
+      }
     }
-    return null;
-  };
 
-  const getAccountName = (t: Transaction) => {
-    if (t.bank_account_id) return bankAccounts.find((a) => a.id === t.bank_account_id)?.name;
-    if (t.wallet_id) return wallets.find((w) => w.id === t.wallet_id)?.name;
-    if (t.credit_card_id) return creditCards.find((c) => c.id === t.credit_card_id)?.name;
-    return null;
-  };
-
-  const getAccountIcon = (t: Transaction) => {
-    if (t.bank_account_id) return <Landmark className="h-3 w-3" />;
-    if (t.wallet_id) return <Wallet className="h-3 w-3" />;
-    if (t.credit_card_id) return <CreditCard className="h-3 w-3" />;
-    return null;
-  };
-
-  const getContactName = (t: Transaction) => {
-    if (t.contact_name) return t.contact_name;
-    if (t.supplier_id) return suppliers.find((s) => s.id === t.supplier_id)?.name || null;
-    if (t.client_id) return clients.find((c) => c.id === t.client_id)?.name || null;
-    return null;
-  };
+    return items;
+  }, [transactions, creditCards]);
 
   if (loading) {
     return (
@@ -121,135 +426,39 @@ export function TransactionTable({
     );
   }
 
+  const rowProps = { categories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails };
+
   return (
     <div className="space-y-0 divide-y divide-border">
-      {transactions.map((t) => {
-        const installment = getInstallmentLabel(t);
-        const categoryParts = getCategoryHierarchy(t);
-        const accountName = getAccountName(t);
-        const accountIcon = getAccountIcon(t);
-        const contactName = getContactName(t);
+      {renderItems.map((item) => {
+        if (item.type === "transaction") {
+          return (
+            <TransactionRow key={item.data.id} t={item.data} {...rowProps} />
+          );
+        }
+
+        const group = item.data;
+        const isOpen = expandedCards.has(group.cardId);
 
         return (
-          <div
-            key={t.id}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group cursor-pointer"
-            onClick={() => onViewDetails(t)}
-          >
-            {/* Date */}
-            <div className="text-center shrink-0 w-12">
-              <div className="text-lg font-bold leading-tight text-foreground">
-                {format(new Date(t.payment_date + "T00:00:00"), "dd")}
+          <div key={`card-group-${group.cardId}`}>
+            <CardGroupHeader
+              group={group}
+              isOpen={isOpen}
+              onToggle={() => toggleCard(group.cardId)}
+              onLiquidate={() => {
+                // Use the first pending transaction to trigger card bill payment
+                const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
+                if (firstPending) onLiquidate(firstPending);
+              }}
+            />
+            {isOpen && (
+              <div className="border-l-2 border-primary/20 ml-6">
+                {group.transactions.map((t) => (
+                  <TransactionRow key={t.id} t={t} {...rowProps} indented />
+                ))}
               </div>
-              <div className="text-[10px] uppercase text-muted-foreground leading-tight">
-                {format(new Date(t.payment_date + "T00:00:00"), "MMM", { locale: ptBR })}
-              </div>
-            </div>
-
-            {/* Description + Category + Account + Contact */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-foreground truncate">
-                  {t.description}
-                </span>
-                {(t as any).isRecurring && (
-                  <Badge variant="outline" className="text-[10px] shrink-0 gap-0.5 border-primary/30 text-primary">
-                    <Repeat className="h-2.5 w-2.5" />
-                    Recorrente
-                  </Badge>
-                )}
-                {t.series_id && !installment && !(t as any).isRecurring && (
-                  <Badge variant="outline" className="text-[10px] shrink-0">
-                    FIXO
-                  </Badge>
-                )}
-                {installment && (
-                  <Badge variant="outline" className="text-[10px] shrink-0">
-                    {installment}
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                {categoryParts.length > 0 && (
-                  <p className="text-xs text-muted-foreground truncate">
-                    {categoryParts.join(" › ")}
-                  </p>
-                )}
-                {accountName && (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 shrink-0">
-                    {accountIcon}
-                    {accountName}
-                  </span>
-                )}
-              </div>
-              {contactName && (
-                <p className="text-xs text-muted-foreground/70 truncate">
-                  {contactName}
-                </p>
-              )}
-            </div>
-
-            {/* Value */}
-            <div className="text-right shrink-0">
-              <span
-                className={`text-sm font-semibold ${
-                  t.type === "receita"
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-red-600 dark:text-red-400"
-                }`}
-              >
-                {t.type === "receita" ? "+" : "-"} {formatCurrency(t.amount)}
-              </span>
-            </div>
-
-            {/* Status */}
-            <Badge
-              variant={t.status === "Pago" ? "default" : "secondary"}
-              className="text-[10px] shrink-0 hidden sm:inline-flex"
-            >
-              {t.status === "Pago" ? "Liquidado" : "Pendente"}
-            </Badge>
-
-            {/* Actions */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onViewDetails(t); }}>
-                  <Eye className="mr-2 h-4 w-4" />
-                  Ver Detalhes
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(t); }}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  Editar
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onDuplicate(t)}>
-                  <Copy className="mr-2 h-4 w-4" />
-                  Duplicar
-                </DropdownMenuItem>
-                {t.status === "Pendente" && (
-                  <DropdownMenuItem onClick={() => onLiquidate(t)}>
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Liquidar
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  onClick={() => onDelete(t)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Excluir
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            )}
           </div>
         );
       })}
