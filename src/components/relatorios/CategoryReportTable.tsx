@@ -17,6 +17,69 @@ function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+const INDENT_PX = 24;
+
+function CategoryRows({
+  groups,
+  level,
+  colorClass,
+  expanded,
+  toggle,
+}: {
+  groups: CategoryGroup[];
+  level: number;
+  colorClass: string;
+  expanded: Set<string>;
+  toggle: (id: string) => void;
+}) {
+  return (
+    <>
+      {groups.map((g) => {
+        const isOpen = expanded.has(g.categoryId);
+        const hasChildren = g.children.length > 0;
+        const paddingLeft = 24 + level * INDENT_PX;
+
+        return (
+          <span key={g.categoryId}>
+            <TableRow
+              className={hasChildren ? "cursor-pointer" : ""}
+              onClick={() => hasChildren && toggle(g.categoryId)}
+            >
+              <TableCell className="py-1.5" style={{ paddingLeft }}>
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  {hasChildren ? (
+                    isOpen ? (
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    )
+                  ) : (
+                    <span className="w-3.5" />
+                  )}
+                  {g.categoryName}
+                </span>
+              </TableCell>
+              <TableCell className={`text-right py-1.5 text-sm font-medium ${colorClass}`}>
+                {formatBRL(g.total)}
+              </TableCell>
+            </TableRow>
+
+            {isOpen && (
+              <CategoryRows
+                groups={g.children}
+                level={level + 1}
+                colorClass={colorClass}
+                expanded={expanded}
+                toggle={toggle}
+              />
+            )}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 function SectionRows({
   groups,
   label,
@@ -41,55 +104,18 @@ function SectionRows({
 
   return (
     <>
-      {/* Section header */}
       <TableRow className="bg-muted/60 hover:bg-muted/60">
         <TableCell className="font-bold text-xs uppercase tracking-wider py-2">{label}</TableCell>
         <TableCell className={`text-right font-bold py-2 ${colorClass}`}>{formatBRL(total)}</TableCell>
       </TableRow>
 
-      {groups.map((g) => {
-        const isOpen = expanded.has(g.categoryId);
-        const hasChildren = g.children.length > 0;
-
-        return (
-          <span key={g.categoryId}>
-            {/* Parent category row */}
-            <TableRow
-              className={hasChildren ? "cursor-pointer" : ""}
-              onClick={() => hasChildren && toggle(g.categoryId)}
-            >
-              <TableCell className="py-1.5 pl-6">
-                <span className="flex items-center gap-1.5 text-sm font-medium">
-                  {hasChildren &&
-                    (isOpen ? (
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    ))}
-                  {!hasChildren && <span className="w-3.5" />}
-                  {g.categoryName}
-                </span>
-              </TableCell>
-              <TableCell className={`text-right py-1.5 text-sm font-medium ${colorClass}`}>
-                {formatBRL(g.total)}
-              </TableCell>
-            </TableRow>
-
-            {/* Children rows */}
-            {isOpen &&
-              g.children.map((child) => (
-                <TableRow key={child.categoryId} className="hover:bg-muted/30">
-                  <TableCell className="py-1 pl-14 text-sm text-muted-foreground">
-                    {child.name}
-                  </TableCell>
-                  <TableCell className={`text-right py-1 text-sm ${colorClass} opacity-80`}>
-                    {formatBRL(child.total)}
-                  </TableCell>
-                </TableRow>
-              ))}
-          </span>
-        );
-      })}
+      <CategoryRows
+        groups={groups}
+        level={0}
+        colorClass={colorClass}
+        expanded={expanded}
+        toggle={toggle}
+      />
 
       {groups.length === 0 && (
         <TableRow>
@@ -123,7 +149,6 @@ export function CategoryReportTable({ revenueGroups, expenseGroups, totalRevenue
           colorClass="text-emerald-600 dark:text-emerald-400"
         />
 
-        {/* Spacer */}
         <TableRow className="hover:bg-transparent">
           <TableCell colSpan={2} className="py-1" />
         </TableRow>
@@ -135,7 +160,6 @@ export function CategoryReportTable({ revenueGroups, expenseGroups, totalRevenue
           colorClass="text-red-600 dark:text-red-400"
         />
 
-        {/* Result row */}
         <TableRow className="bg-muted hover:bg-muted border-t-2">
           <TableCell className="font-bold py-3">RESULTADO</TableCell>
           <TableCell
