@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
-import { Plus } from "lucide-react";
+import { Plus, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -172,16 +172,32 @@ export default function Lancamentos() {
             {totalCount} lançamento{totalCount !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditingTransaction(null);
-            setFormOpen(true);
-          }}
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          Novo Lançamento
-        </Button>
+        <div className="flex items-center gap-2">
+          {filters.accountId.startsWith("card:") && (() => {
+            const cardId = filters.accountId.split(":").slice(1).join(":");
+            const card = creditCards.find((c) => c.id === cardId);
+            return card ? (
+              <Button
+                variant="outline"
+                onClick={() => setBillPaymentCard(card)}
+                className="gap-2"
+              >
+                <CreditCard className="h-4 w-4" />
+                Pagar Fatura
+              </Button>
+            ) : null;
+          })()}
+          <Button
+            onClick={() => {
+              setEditingTransaction(null);
+              setFormOpen(true);
+            }}
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Novo Lançamento
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -191,6 +207,7 @@ export default function Lancamentos() {
         categories={categories}
         bankAccounts={bankAccounts}
         wallets={wallets}
+        creditCards={creditCards}
       />
 
       {/* Tabs + Table */}
