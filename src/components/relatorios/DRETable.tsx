@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -28,6 +28,7 @@ function CategoryRows({
   expanded,
   toggle,
   colorClass,
+  rowCounter,
 }: {
   rows: DRECategoryRow[];
   periods: string[];
@@ -35,6 +36,7 @@ function CategoryRows({
   expanded: Set<string>;
   toggle: (id: string) => void;
   colorClass: string;
+  rowCounter: { current: number };
 }) {
   return (
     <>
@@ -42,11 +44,17 @@ function CategoryRows({
         const hasChildren = row.children.length > 0;
         const isOpen = expanded.has(row.categoryId);
         const total = Object.values(row.monthlyTotals).reduce((s, v) => s + v, 0);
+        const idx = rowCounter.current++;
+        const isEven = idx % 2 === 0;
 
         return (
           <span key={row.categoryId}>
             <TableRow
-              className={cn("cursor-pointer hover:bg-muted/50", hasChildren && "font-medium")}
+              className={cn(
+                hasChildren ? "cursor-pointer font-medium" : "cursor-default",
+                isEven ? "bg-muted/30" : "",
+                "hover:bg-muted/50"
+              )}
               onClick={() => hasChildren && toggle(row.categoryId)}
             >
               <TableCell
@@ -79,11 +87,75 @@ function CategoryRows({
                 expanded={expanded}
                 toggle={toggle}
                 colorClass={colorClass}
+                rowCounter={rowCounter}
               />
             )}
           </span>
         );
       })}
+    </>
+  );
+}
+
+function SectionBlock({
+  sectionId,
+  label,
+  totals,
+  rows,
+  periods,
+  expanded,
+  toggle,
+  toggleSection,
+  isSectionOpen,
+  sectionClassName,
+  colorClass,
+}: {
+  sectionId: string;
+  label: string;
+  totals: Record<string, number>;
+  rows: DRECategoryRow[];
+  periods: string[];
+  expanded: Set<string>;
+  toggle: (id: string) => void;
+  toggleSection: (id: string) => void;
+  isSectionOpen: boolean;
+  sectionClassName: string;
+  colorClass: string;
+}) {
+  const grand = Object.values(totals).reduce((s, v) => s + v, 0);
+  const rowCounter = useRef(0);
+  rowCounter.current = 0;
+
+  return (
+    <>
+      <TableRow
+        className={cn("font-bold cursor-pointer", sectionClassName)}
+        onClick={() => toggleSection(sectionId)}
+      >
+        <TableCell className="text-xs py-2 pl-3 whitespace-nowrap">
+          <span className="flex items-center gap-1">
+            {isSectionOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+            {label}
+          </span>
+        </TableCell>
+        {periods.map((p) => (
+          <TableCell key={p} className="text-right text-xs py-2 tabular-nums">
+            {fmt(totals[p] || 0)}
+          </TableCell>
+        ))}
+        <TableCell className="text-right text-xs py-2 tabular-nums font-bold">{fmt(grand)}</TableCell>
+      </TableRow>
+      {isSectionOpen && (
+        <CategoryRows
+          rows={rows}
+          periods={periods}
+          level={1}
+          expanded={expanded}
+          toggle={toggle}
+          colorClass={colorClass}
+          rowCounter={rowCounter}
+        />
+      )}
     </>
   );
 }
@@ -123,9 +195,19 @@ export function DRETable({
   loading,
 }: DRETableProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [sections, setSections] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSection = (id: string) => {
+    setSections((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -143,11 +225,13 @@ export function DRETable({
     );
   }
 
+  const negExpTotals = Object.fromEntries(periods.map((p) => [p, -(monthlyExpenseTotals[p] || 0)]));
+
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow className="bg-muted/50">
             <TableHead className="min-w-[200px] text-xs">Categoria</TableHead>
             {periods.map((p) => (
               <TableHead key={p} className="text-right text-xs min-w-[100px]">
@@ -158,35 +242,33 @@ export function DRETable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {/* Revenue section */}
-          <TotalRow
+          {/* Revenue section - collapsible */}
+          <SectionBlock
+            sectionId="__revenue__"
             label="(+) RECEITAS"
             totals={monthlyRevenueTotals}
-            periods={periods}
-            className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-          />
-          <CategoryRows
             rows={revenueRows}
             periods={periods}
-            level={1}
             expanded={expanded}
             toggle={toggle}
+            toggleSection={toggleSection}
+            isSectionOpen={sections.has("__revenue__")}
+            sectionClassName="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-b"
             colorClass="text-emerald-700 dark:text-emerald-400"
           />
 
-          {/* Expense section */}
-          <TotalRow
+          {/* Expense section - collapsible */}
+          <SectionBlock
+            sectionId="__expense__"
             label="(-) DESPESAS"
-            totals={Object.fromEntries(periods.map((p) => [p, -(monthlyExpenseTotals[p] || 0)]))}
-            periods={periods}
-            className="bg-destructive/10 text-destructive"
-          />
-          <CategoryRows
+            totals={negExpTotals}
             rows={expenseRows}
             periods={periods}
-            level={1}
             expanded={expanded}
             toggle={toggle}
+            toggleSection={toggleSection}
+            isSectionOpen={sections.has("__expense__")}
+            sectionClassName="bg-destructive/10 text-destructive border-b"
             colorClass="text-destructive"
           />
 
