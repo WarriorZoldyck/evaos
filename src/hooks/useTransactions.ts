@@ -17,6 +17,8 @@ export interface TransactionFilters {
   dateTo: string;
   sortOrder: "desc" | "asc";
   accountId: string;
+  supplierId: string;
+  clientId: string;
 }
 
 interface BankAccount {
@@ -88,6 +90,8 @@ export function useTransactions() {
     dateTo: "",
     sortOrder: "desc",
     accountId: "",
+    supplierId: "",
+    clientId: "",
   });
 
   // Auxiliary data
@@ -221,6 +225,12 @@ export function useTransactions() {
       } else if (accType === "card") {
         query = query.eq("credit_card_id", accId);
       }
+    }
+    if (filters.supplierId) {
+      query = query.eq("supplier_id", filters.supplierId);
+    }
+    if (filters.clientId) {
+      query = query.eq("client_id", filters.clientId);
     }
 
     const from = page * PAGE_SIZE;
