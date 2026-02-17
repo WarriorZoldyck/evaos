@@ -1,54 +1,91 @@
 
 
-## Tornar a tabela do DRE e Plano de Caixa recursiva (N niveis de subcategorias)
+## Reestruturar DRE para formato multi-colunas mensais
 
-### Problema atual
-A estrutura de dados e a renderizacao atual suportam apenas 2 niveis (categoria raiz e filhos diretos). O sistema de categorias suporta 3 niveis (e potencialmente mais), mas o DRE/Plano de Caixa "achata" tudo -- caminha ate a raiz e agrupa o valor so no filho imediato da raiz, perdendo a hierarquia intermediaria.
+### O que muda
 
-### Solucao
+Atualmente o DRE mostra apenas 1 coluna de valor (total do periodo selecionado). A referencia mostra um formato de tabela onde:
+- Cada **coluna** e um mes (Janeiro, Fevereiro, Marco...)
+- Cada **linha** e uma categoria, expandivel para subcategorias
+- O filtro controla o **ano** e a **granularidade** (Mensal/Trimestral/Semestral)
+- Linhas de totalizacao intermediarias (Receita Bruta, Lucro Bruto, Resultado) ficam entre as categorias
 
-Transformar tanto a estrutura de dados (`CategoryGroup`) quanto o componente de renderizacao (`CategoryReportTable`) para serem recursivos, permitindo expandir sub da sub em qualquer profundidade.
+### Layout proposto
+
+```text
+Filtros: [Conta v] [Mensal v]  < 2026 >  [Gerar relatorio]
+
+| Categoria                    | Jan     | Fev     | Mar     | Abr     | Mai     | Jun     |
+|------------------------------|---------|---------|---------|---------|---------|---------|
+| + Receitas                   | 1.000   | 2.000   | 1.500   |   800   | 1.200   | 3.000   |
+|     Vendas                   |   800   | 1.500   | 1.000   |   500   |   900   | 2.500   |
+|     Servicos                 |   200   |   500   |   500   |   300   |   300   |   500   |
+| + Despesas                   |  -600   |  -800   |  -700   |  -400   |  -500   |  -900   |
+|     Aluguel                  |  -300   |  -300   |  -300   |  -300   |  -300   |  -300   |
+|     Marketing                |  -300   |  -500   |  -400   |  -100   |  -200   |  -600   |
+| = RESULTADO                  |   400   | 1.200   |   800   |   400   |   700   | 2.100   |
+```
 
 ### Alteracoes tecnicas
 
-**1. `src/hooks/useCashFlowData.ts` -- Estrutura de dados recursiva**
+**1. Novo filtro de periodo para DRE (`src/components/relatorios/DREPeriodFilter.tsx`)**
 
-Alterar a interface `CategoryGroup` para que `children` tambem seja do tipo `CategoryGroup[]` (recursivo):
+Substituir o `PeriodFilter` atual por um filtro especifico:
+- Seletor de granularidade: Mensal (padrao)
+- Navegacao por ano: setas `<` `2026` `>` com dropdown
+- Seletor de conta bancaria (ja existe)
+- O filtro define: ano selecionado + granularidade
+
+**2. Novo hook `src/hooks/useDREData.ts`**
+
+Hook dedicado que:
+- Recebe: ano, granularidade, accountId
+- Busca todas as transacoes do ano inteiro de uma vez (competence_date entre 01/jan e 31/dez)
+- Busca categorias (como ja faz)
+- Agrupa transacoes por mes E por categoria hierarquica
+- Retorna uma estrutura tipo:
 
 ```typescript
-export interface CategoryGroup {
+interface DRECategoryRow {
   categoryId: string;
   categoryName: string;
-  total: number;
-  children: CategoryGroup[];  // recursivo em vez de { categoryId, name, total }[]
+  monthlyTotals: Record<string, number>; // chave = "2026-01", "2026-02", etc.
+  children: DRECategoryRow[];
+}
+
+interface DREData {
+  months: string[]; // ["2026-01", "2026-02", ...]
+  revenueRows: DRECategoryRow[];
+  expenseRows: DRECategoryRow[];
+  monthlyRevenueTotals: Record<string, number>;
+  monthlyExpenseTotals: Record<string, number>;
+  monthlyResults: Record<string, number>;
+  loading: boolean;
 }
 ```
 
-Refatorar o `useMemo` que agrupa transacoes:
-- Em vez de resolver ate a raiz e agrupar so no filho direto, resolver a cadeia completa de ancestrais (ex: `[Raiz, SubA, SubB]`)
-- Inserir o valor em cada nivel da arvore, criando nos intermediarios conforme necessario
-- Manter a soma acumulada em cada nivel (pai inclui totais dos filhos)
+**3. Novo componente de tabela `src/components/relatorios/DRETable.tsx`**
 
-**2. `src/components/relatorios/CategoryReportTable.tsx` -- Renderizacao recursiva**
+Tabela com:
+- Header fixo: Categoria | Jan | Fev | Mar | ... | Jun (6 meses por semestre, ou 12 por ano)
+- Scroll horizontal se necessario
+- Linhas de categoria expandiveis (recursivo, como ja implementado)
+- Linhas de totalizacao com background destacado (Receitas, Despesas, Resultado)
+- Valores formatados em BRL
+- Cores: verde para receitas, vermelho para despesas, cor condicional para resultado
 
-Criar um componente recursivo `CategoryRow` que:
-- Recebe um `CategoryGroup` e o `level` (profundidade)
-- Mostra o chevron de expandir/colapsar se tiver filhos
-- Ao expandir, renderiza os filhos como `CategoryRow` com `level + 1`
-- O padding-left aumenta conforme o level (ex: `pl-6`, `pl-12`, `pl-18`)
-- O estado de expansao (`expanded`) e gerenciado por um unico `Set<string>` no componente `SectionRows`
+**4. Atualizar `src/pages/DRE.tsx`**
 
-O resultado visual sera:
-```text
-RECEITAS                    R$ 10.000
-  > Vendas                   R$ 8.000
-      > Produtos              R$ 5.000
-          Eletronicos          R$ 3.000
-          Acessorios           R$ 2.000
-      > Servicos              R$ 3.000
-  > Investimentos            R$ 2.000
-```
+- Substituir `PeriodFilter` pelo novo `DREPeriodFilter`
+- Substituir `CategoryReportTable` pela nova `DRETable`
+- Usar o novo hook `useDREData` em vez de `useCashFlowData`
+- Manter a secao "Como funciona?" existente
 
-### Arquivos modificados
-- `src/hooks/useCashFlowData.ts` -- interface e logica de agrupamento
-- `src/components/relatorios/CategoryReportTable.tsx` -- renderizacao recursiva
+### Arquivos
+
+- **Criar**: `src/hooks/useDREData.ts`
+- **Criar**: `src/components/relatorios/DREPeriodFilter.tsx`
+- **Criar**: `src/components/relatorios/DRETable.tsx`
+- **Modificar**: `src/pages/DRE.tsx`
+- **Manter sem alteracao**: `src/hooks/useCashFlowData.ts` e `CategoryReportTable.tsx` (usados pelo Plano de Caixa)
+
