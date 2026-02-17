@@ -1,29 +1,54 @@
 
-## Ocultar campo de juros manual para maquininhas e usar taxas por parcela
 
-### Problema
-Quando a forma de pagamento e cartao de credito via maquininha, o campo "Taxa de juros mensal (%)" aparece desnecessariamente, pois as taxas ja estao cadastradas na maquininha. Alem disso, o card de detalhes da maquininha (MdrInfoCard) sempre usa a taxa de credito a vista (`credit_rate`), ignorando as taxas por parcela (`rates_info`).
+## Tornar a tabela do DRE e Plano de Caixa recursiva (N niveis de subcategorias)
+
+### Problema atual
+A estrutura de dados e a renderizacao atual suportam apenas 2 niveis (categoria raiz e filhos diretos). O sistema de categorias suporta 3 niveis (e potencialmente mais), mas o DRE/Plano de Caixa "achata" tudo -- caminha ate a raiz e agrupa o valor so no filho imediato da raiz, perdendo a hierarquia intermediaria.
 
 ### Solucao
 
-**1. Ocultar campo de juros quando houver maquininha selecionada**
-
-No `MainFormContent` dentro de `TransactionFormModal.tsx`, verificar se o metodo de pagamento e cartao e se ha um terminal selecionado (`card_terminal_id`). Se sim, esconder o campo "Taxa de juros mensal (%)".
-
-**2. Atualizar MdrInfoCard para usar taxa por parcela**
-
-No `MdrInfoCard.tsx`, quando o pagamento for credito parcelado, buscar a taxa correta no `rates_info` do terminal de acordo com o numero de parcelas. Se nao encontrar uma taxa especifica para aquela quantidade de parcelas, usar a `credit_rate` como fallback.
+Transformar tanto a estrutura de dados (`CategoryGroup`) quanto o componente de renderizacao (`CategoryReportTable`) para serem recursivos, permitindo expandir sub da sub em qualquer profundidade.
 
 ### Alteracoes tecnicas
 
-**Arquivo: `src/components/lancamentos/MdrInfoCard.tsx`**
-- Na logica de calculo do `useMemo`, quando `isCredit` e `installmentsCount >= 2`:
-  - Parsear `rates_info` do terminal
-  - Buscar a taxa correspondente ao numero de parcelas
-  - Usar essa taxa em vez de `credit_rate`
-  - Fallback para `credit_rate` se nao encontrar
+**1. `src/hooks/useCashFlowData.ts` -- Estrutura de dados recursiva**
 
-**Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
-- No `MainFormContent`, observar `card_terminal_id` via `form.watch`
-- Condicionar a exibicao do campo `interest_rate` para aparecer apenas quando NAO houver terminal selecionado (ou seja, quando nao e uma venda via maquininha)
-- Quando houver terminal, o campo fica oculto e o valor de `interest_rate` permanece 0 (sem impacto no calculo de submit, pois o MDR ja e tratado separadamente)
+Alterar a interface `CategoryGroup` para que `children` tambem seja do tipo `CategoryGroup[]` (recursivo):
+
+```typescript
+export interface CategoryGroup {
+  categoryId: string;
+  categoryName: string;
+  total: number;
+  children: CategoryGroup[];  // recursivo em vez de { categoryId, name, total }[]
+}
+```
+
+Refatorar o `useMemo` que agrupa transacoes:
+- Em vez de resolver ate a raiz e agrupar so no filho direto, resolver a cadeia completa de ancestrais (ex: `[Raiz, SubA, SubB]`)
+- Inserir o valor em cada nivel da arvore, criando nos intermediarios conforme necessario
+- Manter a soma acumulada em cada nivel (pai inclui totais dos filhos)
+
+**2. `src/components/relatorios/CategoryReportTable.tsx` -- Renderizacao recursiva**
+
+Criar um componente recursivo `CategoryRow` que:
+- Recebe um `CategoryGroup` e o `level` (profundidade)
+- Mostra o chevron de expandir/colapsar se tiver filhos
+- Ao expandir, renderiza os filhos como `CategoryRow` com `level + 1`
+- O padding-left aumenta conforme o level (ex: `pl-6`, `pl-12`, `pl-18`)
+- O estado de expansao (`expanded`) e gerenciado por um unico `Set<string>` no componente `SectionRows`
+
+O resultado visual sera:
+```text
+RECEITAS                    R$ 10.000
+  > Vendas                   R$ 8.000
+      > Produtos              R$ 5.000
+          Eletronicos          R$ 3.000
+          Acessorios           R$ 2.000
+      > Servicos              R$ 3.000
+  > Investimentos            R$ 2.000
+```
+
+### Arquivos modificados
+- `src/hooks/useCashFlowData.ts` -- interface e logica de agrupamento
+- `src/components/relatorios/CategoryReportTable.tsx` -- renderizacao recursiva
