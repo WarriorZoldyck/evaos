@@ -366,6 +366,12 @@ export default function Lancamentos() {
                 bank_account_id: liquidateTarget.bank_account_id,
                 series_id: liquidateTarget.series_id,
                 credit_card_id: liquidateTarget.credit_card_id,
+                category: liquidateTarget.category,
+                subcategory: liquidateTarget.subcategory,
+                subcategory2: liquidateTarget.subcategory2,
+                installment_number: liquidateTarget.installment_number,
+                installments_total: liquidateTarget.installments_total,
+                original_amount: liquidateTarget.original_amount,
               }
             : null
         }
