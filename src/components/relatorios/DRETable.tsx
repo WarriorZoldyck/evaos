@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, Fragment } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,7 +48,7 @@ function CategoryRows({
         const isEven = idx % 2 === 0;
 
         return (
-          <span key={row.categoryId}>
+          <Fragment key={row.categoryId}>
             <TableRow
               className={cn(
                 hasChildren ? "cursor-pointer font-medium" : "cursor-default",
@@ -90,7 +90,7 @@ function CategoryRows({
                 rowCounter={rowCounter}
               />
             )}
-          </span>
+          </Fragment>
         );
       })}
     </>
