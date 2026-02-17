@@ -355,6 +355,46 @@ export function useTransactions() {
     return createTransaction(newData);
   };
 
+  const redistributeSeriesAmounts = async (
+    seriesId: string,
+    excludeId: string,
+    newTotalRemaining: number
+  ) => {
+    // Fetch pending installments in this series (excluding the current one)
+    const { data: pendingInstallments, error } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("series_id", seriesId)
+      .eq("status", "Pendente")
+      .neq("id", excludeId)
+      .order("installment_number", { ascending: true });
+
+    if (error || !pendingInstallments || pendingInstallments.length === 0) {
+      return { success: false, count: 0 };
+    }
+
+    const count = pendingInstallments.length;
+    const amountPerInstallment = Math.round((newTotalRemaining / count) * 100) / 100;
+
+    // Update each pending installment
+    const ids = pendingInstallments.map((p) => p.id);
+    const { error: updateError } = await supabase
+      .from("transactions")
+      .update({ amount: amountPerInstallment })
+      .in("id", ids);
+
+    if (updateError) {
+      toast({
+        title: "Erro ao redistribuir parcelas",
+        description: updateError.message,
+        variant: "destructive",
+      });
+      return { success: false, count: 0 };
+    }
+
+    return { success: true, count };
+  };
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return {
@@ -373,6 +413,7 @@ export function useTransactions() {
     deleteTransaction,
     deleteSeriesTransactions,
     duplicateTransaction,
+    redistributeSeriesAmounts,
     // Auxiliary data
     bankAccounts,
     creditCards,

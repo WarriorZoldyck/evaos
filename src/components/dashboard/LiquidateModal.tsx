@@ -25,7 +25,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 interface Transaction {
   id: string;
@@ -36,6 +37,12 @@ interface Transaction {
   bank_account_id: string | null;
   series_id: string | null;
   credit_card_id: string | null;
+  category?: string;
+  subcategory?: string | null;
+  subcategory2?: string | null;
+  installment_number?: number | null;
+  installments_total?: number | null;
+  original_amount?: number | null;
 }
 
 interface LiquidateModalProps {
@@ -50,11 +57,25 @@ interface BankAccount {
   name: string;
 }
 
+type DifferenceAction =
+  | "discard"
+  | "create_pending"
+  | "apply_interest"
+  | "redistribute";
+
+type ExcessAction =
+  | "register_as_is"
+  | "create_separate";
+
+const formatCurrency = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuccess }: LiquidateModalProps) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
+  // Step 1 fields
   const [finalAmount, setFinalAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -62,13 +83,25 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Series liquidation
+  // Series liquidation scope
   const [seriesScope, setSeriesScope] = useState<"only" | "all">("only");
 
   // Credit card bill installment
   const [parcelarFatura, setParcelarFatura] = useState(false);
   const [faturaInstallments, setFaturaInstallments] = useState("2");
   const [faturaInterest, setFaturaInterest] = useState("0");
+
+  // Step management
+  const [step, setStep] = useState(1);
+
+  // Step 2: difference handling
+  const [differenceAction, setDifferenceAction] = useState<DifferenceAction>("discard");
+  const [interestRate, setInterestRate] = useState("0");
+  const [excessAction, setExcessAction] = useState<ExcessAction>("register_as_is");
+  const [excessDescription, setExcessDescription] = useState("");
+
+  // Series info for redistribution preview
+  const [pendingInstallmentsCount, setPendingInstallmentsCount] = useState(0);
 
   const isBulk = bulkTransactionIds && bulkTransactionIds.length > 1;
 
@@ -83,22 +116,67 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
     setParcelarFatura(false);
     setFaturaInstallments("2");
     setFaturaInterest("0");
+    setStep(1);
+    setDifferenceAction("discard");
+    setInterestRate("0");
+    setExcessAction("register_as_is");
+    setExcessDescription("");
+    setPendingInstallmentsCount(0);
 
     const fetchAccounts = async () => {
       let query = supabase.from("bank_accounts").select("id, name");
-
       if (isPersonal) {
         query = query.is("company_id", null);
       } else if (selectedCompanyId) {
         query = query.eq("company_id", selectedCompanyId);
       }
-
       const { data } = await query.order("name");
       if (data) setAccounts(data);
     };
 
     fetchAccounts();
+
+    // If part of a series, count pending installments
+    if (transaction.series_id) {
+      supabase
+        .from("transactions")
+        .select("id", { count: "exact" })
+        .eq("series_id", transaction.series_id)
+        .eq("status", "Pendente")
+        .neq("id", transaction.id)
+        .then(({ count }) => {
+          setPendingInstallmentsCount(count || 0);
+        });
+    }
   }, [transaction, user, selectedCompanyId, isPersonal]);
+
+  const originalAmount = transaction?.amount || 0;
+  const finalAmountNum = Number(finalAmount) || 0;
+  const difference = Math.round((originalAmount - finalAmountNum) * 100) / 100;
+  const hasDifference = seriesScope === "only" && !isBulk && Math.abs(difference) >= 0.01;
+  const isUnderpayment = difference > 0;
+  const isOverpayment = difference < 0;
+  const absDifference = Math.abs(difference);
+
+  const hasSeries = !!transaction?.series_id && pendingInstallmentsCount > 0;
+
+  // Interest calculation for underpayment
+  const interestRateNum = Number(interestRate) || 0;
+  const interestAmount = Math.round(absDifference * (interestRateNum / 100) * 100) / 100;
+  const totalWithInterest = Math.round((absDifference + interestAmount) * 100) / 100;
+
+  // Redistribution preview
+  const newAmountPerInstallment = hasSeries && pendingInstallmentsCount > 0
+    ? Math.round(((originalAmount * pendingInstallmentsCount + difference) / pendingInstallmentsCount) * 100) / 100
+    : 0;
+
+  const handleNext = () => {
+    if (hasDifference) {
+      setStep(2);
+    } else {
+      handleLiquidate();
+    }
+  };
 
   const handleLiquidate = async () => {
     if (!transaction || !user) return;
@@ -107,7 +185,6 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
 
     try {
       if (isBulk) {
-        // Bulk liquidate all transactions in the credit card bill
         const { error } = await supabase
           .from("transactions")
           .update({
@@ -117,10 +194,8 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
             liquidation_notes: notes || null,
           })
           .in("id", bulkTransactionIds!);
-
         if (error) throw error;
       } else if (transaction.series_id && seriesScope === "all") {
-        // Liquidate all pending in series
         const { error } = await supabase
           .from("transactions")
           .update({
@@ -131,29 +206,34 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
           })
           .eq("series_id", transaction.series_id)
           .eq("status", "Pendente");
-
         if (error) throw error;
       } else {
-        // Liquidate only this one
+        // Liquidate this single transaction
         const { error } = await supabase
           .from("transactions")
           .update({
             status: "Pago" as const,
-            amount: Number(finalAmount),
+            amount: finalAmountNum,
             payment_date: paymentDate,
             bank_account_id: accountId || null,
             liquidation_notes: notes || null,
           })
           .eq("id", transaction.id);
-
         if (error) throw error;
+
+        // Handle difference actions
+        if (hasDifference && isUnderpayment) {
+          await handleUnderpaymentAction(transaction);
+        } else if (hasDifference && isOverpayment) {
+          await handleOverpaymentAction(transaction);
+        }
       }
 
       // Create installment transactions if parcelar fatura
       if (parcelarFatura && transaction.credit_card_id && !isBulk) {
         const parcelas = Number(faturaInstallments);
         const juros = Number(faturaInterest);
-        const totalComJuros = Number(finalAmount) * (1 + juros / 100);
+        const totalComJuros = finalAmountNum * (1 + juros / 100);
         const valorParcela = Math.round((totalComJuros / parcelas) * 100) / 100;
         const seriesId = crypto.randomUUID();
 
@@ -187,11 +267,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
 
       toast({
         title: isBulk ? "Fatura liquidada!" : "Lançamento liquidado!",
-        description: isBulk
-          ? `${bulkTransactionIds!.length} lançamentos da fatura marcados como pagos.`
-          : seriesScope === "all"
-            ? `Todos os pendentes da série "${transaction.description}" foram liquidados.`
-            : `"${transaction.description}" marcado como pago.${parcelarFatura ? ` ${faturaInstallments} parcelas criadas.` : ""}`,
+        description: buildSuccessDescription(transaction),
       });
       onSuccess();
     } catch (error: any) {
@@ -205,8 +281,122 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
     }
   };
 
+  const handleUnderpaymentAction = async (t: Transaction) => {
+    if (!user) return;
+
+    switch (differenceAction) {
+      case "discard":
+        // Nothing extra to do
+        break;
+
+      case "create_pending": {
+        const { error } = await supabase.from("transactions").insert({
+          user_id: user.id,
+          company_id: isPersonal ? null : selectedCompanyId,
+          type: t.type,
+          description: `${t.description} (Saldo restante)`,
+          amount: absDifference,
+          payment_date: t.payment_date,
+          competence_date: t.payment_date,
+          status: "Pendente" as const,
+          category: t.category || "Outros",
+          subcategory: t.subcategory || null,
+          subcategory2: t.subcategory2 || null,
+          bank_account_id: accountId || null,
+        });
+        if (error) throw error;
+        break;
+      }
+
+      case "apply_interest": {
+        const { error } = await supabase.from("transactions").insert({
+          user_id: user.id,
+          company_id: isPersonal ? null : selectedCompanyId,
+          type: t.type,
+          description: `${t.description} (Saldo + juros ${interestRate}%)`,
+          amount: totalWithInterest,
+          payment_date: t.payment_date,
+          competence_date: t.payment_date,
+          status: "Pendente" as const,
+          category: t.category || "Outros",
+          subcategory: t.subcategory || null,
+          subcategory2: t.subcategory2 || null,
+          bank_account_id: accountId || null,
+        });
+        if (error) throw error;
+        break;
+      }
+
+      case "redistribute": {
+        if (!t.series_id) break;
+        // Calculate what the remaining installments should total
+        // The difference is the amount NOT paid on this installment
+        // Add it evenly to the pending ones
+        const { data: pending } = await supabase
+          .from("transactions")
+          .select("id, amount")
+          .eq("series_id", t.series_id)
+          .eq("status", "Pendente")
+          .neq("id", t.id)
+          .order("installment_number", { ascending: true });
+
+        if (pending && pending.length > 0) {
+          const currentTotal = pending.reduce((sum, p) => sum + p.amount, 0);
+          const newTotal = currentTotal + absDifference;
+          const perInstallment = Math.round((newTotal / pending.length) * 100) / 100;
+
+          const ids = pending.map((p) => p.id);
+          const { error } = await supabase
+            .from("transactions")
+            .update({ amount: perInstallment })
+            .in("id", ids);
+          if (error) throw error;
+        }
+        break;
+      }
+    }
+  };
+
+  const handleOverpaymentAction = async (t: Transaction) => {
+    if (!user) return;
+
+    if (excessAction === "create_separate") {
+      const { error } = await supabase.from("transactions").insert({
+        user_id: user.id,
+        company_id: isPersonal ? null : selectedCompanyId,
+        type: t.type,
+        description: excessDescription || `${t.description} (Excedente)`,
+        amount: absDifference,
+        payment_date: paymentDate,
+        competence_date: paymentDate,
+        status: "Pago" as const,
+        category: t.category || "Outros",
+        bank_account_id: accountId || null,
+      });
+      if (error) throw error;
+    }
+    // "register_as_is" — nothing extra
+  };
+
+  const buildSuccessDescription = (t: Transaction) => {
+    if (isBulk) return `${bulkTransactionIds!.length} lançamentos da fatura marcados como pagos.`;
+    if (seriesScope === "all") return `Todos os pendentes da série "${t.description}" foram liquidados.`;
+
+    let msg = `"${t.description}" marcado como pago.`;
+    if (parcelarFatura) msg += ` ${faturaInstallments} parcelas criadas.`;
+    if (hasDifference && isUnderpayment) {
+      if (differenceAction === "create_pending") msg += ` Lançamento pendente de ${formatCurrency(absDifference)} criado.`;
+      if (differenceAction === "apply_interest") msg += ` Lançamento com juros de ${formatCurrency(totalWithInterest)} criado.`;
+      if (differenceAction === "redistribute") msg += ` Saldo redistribuído entre ${pendingInstallmentsCount} parcelas.`;
+    }
+    if (hasDifference && isOverpayment && excessAction === "create_separate") {
+      msg += ` Excedente de ${formatCurrency(absDifference)} registrado separadamente.`;
+    }
+    return msg;
+  };
+
   const totalComJuros = parcelarFatura
-    ? Number(finalAmount) * (1 + Number(faturaInterest) / 100)
+    ? finalAmountNum * (1 + Number(faturaInterest) / 100)
     : 0;
   const valorParcela = parcelarFatura && Number(faturaInstallments) > 0
     ? Math.round((totalComJuros / Number(faturaInstallments)) * 100) / 100
@@ -218,17 +408,21 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
         <DialogHeader>
           <DialogTitle>{isBulk ? "Liquidar Fatura" : "Liquidar Lançamento"}</DialogTitle>
           <DialogDescription>
-            Confirme os dados para marcar como pago.
+            {step === 1
+              ? "Confirme os dados para marcar como pago."
+              : isUnderpayment
+                ? "O valor é menor que o previsto. O que fazer com a diferença?"
+                : "O valor é maior que o previsto. Como registrar o excedente?"}
           </DialogDescription>
         </DialogHeader>
 
-        {transaction && (
+        {transaction && step === 1 && (
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-sm font-medium text-foreground">{transaction.description}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isBulk
-                  ? `${bulkTransactionIds!.length} lançamentos • Total: ${Number(transaction.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+                  ? `${bulkTransactionIds!.length} lançamentos • Total: ${formatCurrency(transaction.amount)}`
                   : transaction.type === "receita" ? "Receita" : "Despesa"}
               </p>
             </div>
@@ -264,6 +458,13 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
                   onChange={(e) => setFinalAmount(e.target.value)}
                   disabled={seriesScope === "all"}
                 />
+                {hasDifference && (
+                  <p className={`text-xs ${isUnderpayment ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`}>
+                    {isUnderpayment
+                      ? `Pagamento parcial: ${formatCurrency(absDifference)} a menos`
+                      : `Pagamento excedente: ${formatCurrency(absDifference)} a mais`}
+                  </p>
+                )}
               </div>
             )}
 
@@ -278,7 +479,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="account">Conta de Saída</Label>
+              <Label htmlFor="account">Conta</Label>
               <Select value={accountId} onValueChange={setAccountId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma conta" />
@@ -304,7 +505,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
               />
             </div>
 
-            {/* Credit card bill installment - only for single transaction */}
+            {/* Credit card bill installment */}
             {transaction.credit_card_id && !isBulk && (
               <div className="rounded-lg border border-border p-3 space-y-3">
                 <div className="flex items-center gap-3">
@@ -347,21 +548,21 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
                       <div className="rounded bg-muted/50 p-2 space-y-1 text-xs">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Valor original</span>
-                          <span>{Number(finalAmount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                          <span>{formatCurrency(finalAmountNum)}</span>
                         </div>
                         {Number(faturaInterest) > 0 && (
                           <div className="flex justify-between text-destructive">
                             <span>Juros ({faturaInterest}%)</span>
-                            <span>+{(totalComJuros - Number(finalAmount)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                            <span>+{formatCurrency(totalComJuros - finalAmountNum)}</span>
                           </div>
                         )}
                         <div className="flex justify-between font-semibold border-t pt-1">
                           <span>Total ({faturaInstallments}x)</span>
-                          <span>{totalComJuros.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                          <span>{formatCurrency(totalComJuros)}</span>
                         </div>
                         <div className="flex justify-between text-muted-foreground">
                           <span>Valor da parcela</span>
-                          <span>{valorParcela.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
+                          <span>{formatCurrency(valorParcela)}</span>
                         </div>
                       </div>
                     )}
@@ -372,14 +573,175 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
           </div>
         )}
 
+        {/* Step 2: Difference handling */}
+        {transaction && step === 2 && (
+          <div className="space-y-4">
+            {/* Summary */}
+            <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Valor original</span>
+                <span className="font-medium">{formatCurrency(originalAmount)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Valor pago</span>
+                <span className="font-medium">{formatCurrency(finalAmountNum)}</span>
+              </div>
+              <Separator />
+              <div className={`flex justify-between text-sm font-semibold ${isUnderpayment ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`}>
+                <span>{isUnderpayment ? "Saldo restante" : "Excedente"}</span>
+                <span>{formatCurrency(absDifference)}</span>
+              </div>
+            </div>
+
+            {isUnderpayment && (
+              <RadioGroup value={differenceAction} onValueChange={(v) => setDifferenceAction(v as DifferenceAction)}>
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-2">
+                    <RadioGroupItem value="discard" id="diff-discard" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="diff-discard" className="text-sm font-medium">Descartar a diferença</Label>
+                      <p className="text-xs text-muted-foreground">Registrar apenas {formatCurrency(finalAmountNum)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <RadioGroupItem value="create_pending" id="diff-pending" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="diff-pending" className="text-sm font-medium">Criar lançamento pendente</Label>
+                      <p className="text-xs text-muted-foreground">Novo lançamento de {formatCurrency(absDifference)} pendente na mesma categoria</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <RadioGroupItem value="apply_interest" id="diff-interest" className="mt-0.5" />
+                    <div className="flex-1">
+                      <Label htmlFor="diff-interest" className="text-sm font-medium">Aplicar juros/multa sobre o saldo</Label>
+                      <p className="text-xs text-muted-foreground mb-2">Criar lançamento pendente com juros</p>
+                      {differenceAction === "apply_interest" && (
+                        <div className="space-y-2 pl-2 border-l-2 border-primary/20">
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs whitespace-nowrap">Taxa (%)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={interestRate}
+                              onChange={(e) => setInterestRate(e.target.value)}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div className="rounded bg-muted/50 p-2 text-xs space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Saldo</span>
+                              <span>{formatCurrency(absDifference)}</span>
+                            </div>
+                            {interestRateNum > 0 && (
+                              <div className="flex justify-between text-destructive">
+                                <span>Juros ({interestRate}%)</span>
+                                <span>+{formatCurrency(interestAmount)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between font-semibold border-t pt-1">
+                              <span>Total pendente</span>
+                              <span>{formatCurrency(totalWithInterest)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {hasSeries && (
+                    <div className="flex items-start space-x-2">
+                      <RadioGroupItem value="redistribute" id="diff-redistribute" className="mt-0.5" />
+                      <div>
+                        <Label htmlFor="diff-redistribute" className="text-sm font-medium">Redistribuir entre parcelas restantes</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Dividir {formatCurrency(absDifference)} entre {pendingInstallmentsCount} parcela{pendingInstallmentsCount > 1 ? "s" : ""} pendente{pendingInstallmentsCount > 1 ? "s" : ""}
+                        </p>
+                        {differenceAction === "redistribute" && (
+                          <div className="rounded bg-muted/50 p-2 mt-2 text-xs">
+                            <p className="text-muted-foreground">
+                              Cada parcela receberá +{formatCurrency(Math.round((absDifference / pendingInstallmentsCount) * 100) / 100)} adicional
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </RadioGroup>
+            )}
+
+            {isOverpayment && (
+              <RadioGroup value={excessAction} onValueChange={(v) => setExcessAction(v as ExcessAction)}>
+                <div className="space-y-3">
+                  <div className="flex items-start space-x-2">
+                    <RadioGroupItem value="register_as_is" id="excess-as-is" className="mt-0.5" />
+                    <div>
+                      <Label htmlFor="excess-as-is" className="text-sm font-medium">Registrar apenas o valor pago</Label>
+                      <p className="text-xs text-muted-foreground">Salvar {formatCurrency(finalAmountNum)} sem ação extra</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <RadioGroupItem value="create_separate" id="excess-separate" className="mt-0.5" />
+                    <div className="flex-1">
+                      <Label htmlFor="excess-separate" className="text-sm font-medium">Criar lançamento separado para o excedente</Label>
+                      <p className="text-xs text-muted-foreground mb-2">Ex: juros, multa, acréscimo</p>
+                      {excessAction === "create_separate" && (
+                        <div className="space-y-2 pl-2 border-l-2 border-primary/20">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Descrição do excedente</Label>
+                            <Input
+                              value={excessDescription}
+                              onChange={(e) => setExcessDescription(e.target.value)}
+                              placeholder="Ex: Juros por atraso"
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div className="rounded bg-muted/50 p-2 text-xs">
+                            <div className="flex justify-between font-semibold">
+                              <span>Valor do lançamento separado</span>
+                              <span>{formatCurrency(absDifference)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </RadioGroup>
+            )}
+          </div>
+        )}
+
         <DialogFooter>
+          {step === 2 && (
+            <Button variant="outline" onClick={() => setStep(1)} disabled={saving} className="gap-1.5 mr-auto">
+              <ArrowLeft className="h-3.5 w-3.5" /> Voltar
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={handleLiquidate} disabled={saving}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Confirmar Liquidação
-          </Button>
+          {step === 1 ? (
+            <Button onClick={handleNext} disabled={saving} className="gap-1.5">
+              {hasDifference ? (
+                <>Próximo <ArrowRight className="h-3.5 w-3.5" /></>
+              ) : (
+                <>
+                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Confirmar Liquidação
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button onClick={handleLiquidate} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmar Liquidação
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
