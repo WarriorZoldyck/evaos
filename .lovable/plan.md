@@ -1,80 +1,53 @@
 
 
-## Correção do DRE + Agrupamento por Cartão em Lançamentos
+## Adicionar filtro por Cartao de Credito em Lancamentos + Liquidacao da fatura pelo filtro
 
-### 1. Correção do alinhamento no DRE
+### Contexto
 
-**Problema**: As linhas de categoria estão envolvidas por `<span>` (linhas 51 e 93 de `DRETable.tsx`), o que quebra a estrutura de tabela HTML. O `<tbody>` espera `<tr>` como filhos diretos -- um `<span>` intermediário faz o navegador "desmontar" o layout da tabela, desalinhando os valores das datas.
+Atualmente, o filtro de contas em Lancamentos permite filtrar por conta bancaria e carteira, mas nao por cartao de credito. O usuario precisa poder filtrar por cartao para ver todas as transacoes daquele cartao, ver o valor total da fatura, e liquidar o cartao inteiro de uma vez.
 
-**Solução**: Trocar `<span key={...}>` por React Fragment `<Fragment key={...}>` (ou a forma curta com key usando `Fragment` importado do React).
+### Alteracoes
 
-**Arquivo**: `src/components/relatorios/DRETable.tsx`
-- Linha 51: `<span key={row.categoryId}>` vira `<Fragment key={row.categoryId}>`
-- Linha 93: `</span>` vira `</Fragment>`
+**1. Adicionar cartoes de credito no filtro de contas (`src/components/lancamentos/TransactionFilters.tsx`)**
 
----
+- Receber `creditCards` como nova prop (lista de `{ id: string; name: string }[]`)
+- No `Select` de "Conta / Carteira", adicionar os cartoes de credito como opcoes com prefixo `card:` (ex: `card:uuid`)
+- Exibir com icone de cartao (emoji ou texto "Cartao")
+- Condicionar a visibilidade do select para incluir cartoes: `bankAccounts.length > 0 || wallets.length > 0 || creditCards.length > 0`
 
-### 2. Agrupamento de transacoes por cartao de credito na listagem
+**2. Suportar filtro `card:id` no hook (`src/hooks/useTransactions.ts`)**
 
-**Objetivo**: Em vez de listar cada parcela de cartao como lancamento individual, agrupar transacoes do mesmo cartao de credito em uma linha-resumo (mostrando o total do cartao), e ao clicar, expandir para ver as parcelas individuais.
-
-**Arquivo principal**: `src/components/lancamentos/TransactionTable.tsx`
-
-Alteracoes:
-- Antes de renderizar, agrupar transacoes que possuem `credit_card_id` por cartao
-- Criar uma linha-grupo colapsavel para cada cartao, exibindo:
-  - Icone de cartao + nome do cartao
-  - Quantidade de lancamentos agrupados
-  - Soma total dos valores
-  - Chevron para expandir/colapsar
-- Ao expandir, exibir as transacoes individuais daquele cartao com indentacao visual
-- Transacoes sem cartao (banco, carteira) continuam listadas individualmente como hoje
-- Manter a opcao de "Liquidar" no nivel do grupo (liquidar toda a fatura do cartao de uma vez, abrindo o `CreditCardBillPaymentModal`)
-- Manter acoes individuais (editar, duplicar, excluir, liquidar) em cada parcela expandida
-
-Logica de agrupamento:
-```text
-transactions.forEach(t => {
-  if (t.credit_card_id) {
-    groups[t.credit_card_id].push(t)
-  } else {
-    directList.push(t)
+- No bloco de `filters.accountId` (onde ja trata `bank:` e `wallet:`), adicionar suporte para `card:`:
+  ```
+  } else if (accType === "card") {
+    query = query.eq("credit_card_id", accId);
   }
-})
+  ```
 
-Renderizar intercalado na ordem cronologica:
-- Linha de grupo do cartao (primeiro payment_date do grupo)
-- Linhas individuais sem cartao
+**3. Passar `creditCards` ao componente de filtros (`src/pages/Lancamentos.tsx`)**
+
+- Adicionar prop `creditCards={creditCards}` ao `<TransactionFilters />`
+- Quando o filtro ativo for um cartao (`filters.accountId` comeca com `card:`), exibir um botao "Pagar Fatura" ao lado do filtro ou no header, que abre o `CreditCardBillPaymentModal` para aquele cartao
+
+**4. Botao "Pagar Fatura" contextual na pagina de Lancamentos**
+
+- Quando `filters.accountId` comeca com `card:`, mostrar um botao "Pagar Fatura" no header da pagina (ao lado de "Novo Lancamento")
+- Ao clicar, abre o `CreditCardBillPaymentModal` pre-selecionado com o cartao filtrado
+- Isso permite ao usuario: filtrar pelo cartao, ver todas as parcelas, e dar baixa na fatura inteira
+
+### Fluxo do usuario
+
+```text
+1. Filtros > Seleciona "Cartao Nubank" no select de contas
+2. Lista mostra apenas transacoes daquele cartao
+3. Aparece botao "Pagar Fatura" no header
+4. Clica em "Pagar Fatura" --> abre CreditCardBillPaymentModal
+5. Revisa a fatura, escolhe valor, paga integral ou parcial
 ```
 
----
+### Arquivos modificados
 
-### 3. Sobre a edicao de parcelas com redistribuicao
-
-**Status atual**: A funcionalidade de redistribuicao ja foi implementada no `LiquidateModal` -- ao liquidar com valor diferente, o sistema pergunta o que fazer com a diferenca, incluindo a opcao "Redistribuir entre parcelas restantes".
-
-**Melhoria proposta**: Adicionar uma previa visual das parcelas afetadas no Step 2 do `LiquidateModal`, quando a opcao "redistribute" estiver selecionada. Atualmente so mostra "X parcelas serao atualizadas para R$ Y cada". A melhoria:
-
-- Buscar e exibir a lista completa das parcelas pendentes da serie
-- Mostrar uma mini-tabela com:
-  - Numero da parcela
-  - Valor atual
-  - Novo valor (apos redistribuicao)
-- Isso da visibilidade total ao usuario antes de confirmar
-
-**Arquivo**: `src/components/dashboard/LiquidateModal.tsx`
-
-Alteracoes:
-- No `useEffect` que busca `pendingInstallmentsCount`, buscar tambem os dados completos das parcelas pendentes (id, installment_number, amount, payment_date)
-- Armazenar em um novo estado `pendingInstallments`
-- Quando `differenceAction === "redistribute"`, renderizar uma mini-tabela mostrando cada parcela com valor atual vs. novo valor
-- Calcular o novo valor em tempo real conforme o usuario altera o `finalAmount`
-
----
-
-### Arquivos a modificar
-
-1. `src/components/relatorios/DRETable.tsx` -- corrigir span para Fragment
-2. `src/components/lancamentos/TransactionTable.tsx` -- agrupamento por cartao
-3. `src/components/dashboard/LiquidateModal.tsx` -- preview das parcelas na redistribuicao
+1. `src/components/lancamentos/TransactionFilters.tsx` -- adicionar creditCards como prop e opcoes no select
+2. `src/hooks/useTransactions.ts` -- suportar filtro `card:id`
+3. `src/pages/Lancamentos.tsx` -- passar creditCards ao filtro + botao "Pagar Fatura" contextual
 
