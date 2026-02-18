@@ -206,16 +206,16 @@ export function ImportStatementModal({
                 <>
                   <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm font-medium">Clique para selecionar um arquivo</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Formatos aceitos: OFX, CSV, TXT
-                  </p>
+                   <p className="text-xs text-muted-foreground mt-1">
+                     Formatos aceitos: OFX, CSV, TXT, PDF
+                   </p>
                 </>
               )}
             </div>
             <input
               ref={fileRef}
               type="file"
-              accept=".ofx,.qfx,.csv,.txt"
+              accept=".ofx,.qfx,.csv,.txt,.pdf"
               className="hidden"
               onChange={handleFileChange}
             />

@@ -50,11 +50,9 @@ function parseCSV(content: string): ParsedTransaction[] {
   const transactions: ParsedTransaction[] = [];
   const header = lines[0].toLowerCase();
 
-  // Try to detect separator
   const sep = header.includes(";") ? ";" : ",";
   const cols = header.split(sep).map((c) => c.trim().replace(/"/g, ""));
 
-  // Find relevant column indices
   const dateIdx = cols.findIndex((c) => /data|date/.test(c));
   const descIdx = cols.findIndex((c) => /descri|hist|memo|name/.test(c));
   const valueIdx = cols.findIndex((c) => /valor|value|amount|quantia/.test(c));
@@ -86,7 +84,6 @@ function parseCSV(content: string): ParsedTransaction[] {
 
     if (amount === 0 && !description) continue;
 
-    // Parse date (try dd/mm/yyyy, yyyy-mm-dd)
     let date = rawDate;
     const brMatch = rawDate.match(/(\d{2})[\/\-](\d{2})[\/\-](\d{4})/);
     if (brMatch) {
@@ -97,6 +94,95 @@ function parseCSV(content: string): ParsedTransaction[] {
   }
 
   return transactions;
+}
+
+async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[]> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  // Convert PDF bytes to base64 for the AI
+  const base64 = btoa(String.fromCharCode(...fileBytes));
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "system",
+          content: `You are a bank statement parser. Extract all transactions from the provided PDF bank statement.
+Return ONLY a valid JSON array of objects with these exact fields:
+- "date": string in "YYYY-MM-DD" format
+- "description": string with the transaction description
+- "amount": number (always positive)
+- "type": "receita" for credits/deposits/income, "despesa" for debits/withdrawals/expenses
+
+Rules:
+- Parse ALL transactions found in the document
+- Convert dates from any format (dd/mm/yyyy, etc.) to YYYY-MM-DD
+- Amount must always be a positive number
+- Determine type based on credit/debit indicators in the statement
+- Do NOT include opening/closing balances as transactions
+- Return ONLY the JSON array, no markdown, no explanation`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "file",
+              file: {
+                filename: "statement.pdf",
+                file_data: `data:application/pdf;base64,${base64}`,
+              },
+            },
+            {
+              type: "text",
+              text: "Extract all transactions from this bank statement PDF. Return only the JSON array."
+            }
+          ],
+        },
+      ],
+      temperature: 0,
+      max_tokens: 16000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error("AI Gateway error:", errText);
+    throw new Error(`AI processing failed: ${response.status}`);
+  }
+
+  const result = await response.json();
+  const content = result.choices?.[0]?.message?.content || "";
+
+  // Extract JSON from the response (handle markdown code blocks)
+  let jsonStr = content.trim();
+  const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    jsonStr = jsonMatch[1].trim();
+  }
+
+  try {
+    const parsed = JSON.parse(jsonStr);
+    if (!Array.isArray(parsed)) throw new Error("Expected array");
+    
+    return parsed.map((t: any) => ({
+      date: String(t.date || ""),
+      description: String(t.description || "Sem descrição"),
+      amount: Math.abs(Number(t.amount) || 0),
+      type: t.type === "receita" ? "receita" as const : "despesa" as const,
+    })).filter((t: ParsedTransaction) => t.amount > 0 && t.date);
+  } catch (e) {
+    console.error("Failed to parse AI response:", content);
+    throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
+  }
 }
 
 serve(async (req) => {
@@ -115,19 +201,24 @@ serve(async (req) => {
       });
     }
 
-    const content = await file.text();
     const fileName = file.name.toLowerCase();
     let transactions: ParsedTransaction[] = [];
 
-    if (fileName.endsWith(".ofx") || fileName.endsWith(".qfx")) {
-      transactions = parseOFX(content);
-    } else if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
-      transactions = parseCSV(content);
+    if (fileName.endsWith(".pdf")) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      transactions = await parsePDFWithAI(bytes);
     } else {
-      return new Response(
-        JSON.stringify({ error: "Formato não suportado. Use OFX, CSV ou TXT." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      const content = await file.text();
+      if (fileName.endsWith(".ofx") || fileName.endsWith(".qfx")) {
+        transactions = parseOFX(content);
+      } else if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
+        transactions = parseCSV(content);
+      } else {
+        return new Response(
+          JSON.stringify({ error: "Formato não suportado. Use OFX, CSV, TXT ou PDF." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     return new Response(
