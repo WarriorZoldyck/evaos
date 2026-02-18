@@ -382,7 +382,7 @@ export function useDashboardData(filters: DashboardFilters) {
         ...t,
         category: resolveCategoryName(t.category).name,
       }));
-  }, [transactions, recurringOccurrences, startStr, endStr]);
+  }, [transactions, recurringOccurrences, startStr, endStr, resolveCategoryName]);
 
   // Category summary for doughnut charts - resolves UUID to name
   const categoryBreakdown = useMemo(() => {
