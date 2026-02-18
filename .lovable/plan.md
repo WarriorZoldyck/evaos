@@ -1,65 +1,37 @@
 
 
-## Correção da Projeção de Saldo e Consistência dos Cards
+## Correções no "Próximos Lançamentos" do Dashboard
 
-### Problemas Identificados
+### 3 Problemas Identificados
 
-**1. Duplicidade de recorrentes na projeção**
-A projeção soma transações futuras reais (`allTransactions`) + ocorrências virtuais de recorrentes (`recurringOccurrences`) sem verificar se a recorrente já foi materializada como transação real. Isso causa valores duplicados.
+**1. Categoria mostrando UUID/código ao invés do nome**
+O `upcomingTransactions` no hook `useDashboardData.ts` passa o campo `category` bruto da tabela (que pode ser um UUID). A função `resolveCategoryName` já existe no hook mas não é aplicada nos dados de "Próximos Lançamentos".
 
-**2. Transações futuras "Pagas" inflam a projeção**
-O filtro `futureTransactions` (linha 440) não distingue status -- inclui tanto "Pago" quanto "Pendente". Uma transação futura já marcada como "Pago" é contada no saldo inicial (`paidBefore` filtra `payment_date <= today`) E novamente na projeção futura se `payment_date > today`. Isso não acontece hoje porque `paidBefore` usa `<= today`, mas transações com data futura e status "Pago" podem surgir (ex: agendamentos liquidados antecipadamente).
+**2. Lançamentos do dia sem botão de Liquidar/Excluir**
+A condição `!t.isRecurring` no componente `UpcomingTransactions.tsx` (linha 206) esconde o botão "Liquidar" para transações recorrentes. Mas transações normais do dia (não recorrentes) que aparecem como pendentes deveriam mostrar os botões de Liquidar e Excluir -- e atualmente só mostram Liquidar.
 
-**3. Filtro de conta inconsistente nos saldos iniciais**
-Quando `accountId` está definido, o `walletSum` é zerado (linha 216), mas as transações de carteira continuam sendo incluídas em `allTransactions` (a query filtra apenas por `bank_account_id`). Isso distorce o saldo.
-
-**4. O gráfico achata no longo prazo**
-Com "Ano todo" selecionado, a projeção só considera transações já cadastradas e recorrentes de 90 dias. Após esse horizonte, o saldo fica "flat" até dezembro -- dando impressão de estabilidade falsa.
+**3. Fatura sem opção de liquidação parcial**
+A fatura já usa o `LiquidateModal` que suporta pagamento parcial (etapa 2 com tratamento de diferença). O fluxo já funciona -- o usuário pode alterar o valor na etapa 1 e o modal avança para a etapa 2 automaticamente. Não há bug aqui, mas o botão diz apenas "Liquidar Fatura", o que pode dar a impressão de que não há opção parcial. Vou melhorar o label para deixar claro.
 
 ---
 
-### Correções Propostas
+### Alterações Planejadas
 
-Arquivo modificado: `src/hooks/useDashboardData.ts`
+**Arquivo: `src/hooks/useDashboardData.ts`**
+- Na construção de `upcomingTransactions` (linhas 367-381), aplicar `resolveCategoryName` no campo `category` de cada transação antes de retornar, garantindo que sempre exiba o nome da categoria ao invés do UUID.
 
-**Correção A -- Deduplicar recorrentes**
-Antes de adicionar ocorrências virtuais à projeção, filtrar as que já possuem transação real correspondente (mesmo `description` + `payment_date` + `amount`), evitando contagem dupla.
+**Arquivo: `src/components/dashboard/UpcomingTransactions.tsx`**
+- Remover a condição `!t.isRecurring` que esconde o botão Liquidar (linha 206), permitindo que TODOS os lançamentos pendentes tenham o botão.
+- Adicionar botão "Excluir" ao lado de "Liquidar" para transações normais (não recorrentes), com confirmação antes de deletar.
+- Receber uma prop `onDelete` para executar a exclusão via Supabase.
+- Para a fatura, manter o fluxo atual (já suporta parcial) mas ajustar o texto do botão para "Pagar Fatura" para ficar mais claro.
 
-**Correção B -- Separar futuros por status**
-Na projeção, tratar transações futuras "Pago" como certas e "Pendente" como projetadas. Ambas entram no saldo, mas transações futuras "Pago" não devem ser contadas no `paidBefore` (que deve filtrar `payment_date <= today`). Verificar que a fronteira está correta.
-
-**Correção C -- Consistência do filtro de conta**
-Quando `accountId` está ativo, garantir que `allTransactions` também exclua transações de carteiras (`wallet_id`) que não pertencem à conta filtrada.
-
-**Correção D -- Indicador visual de horizonte de projeção**
-Adicionar uma linha vertical tracejada ou mudança de opacidade no gráfico para indicar onde terminam os dados reais e começa a projeção sem dados (área "flat"). Isso dá contexto visual ao usuário.
-
----
+**Arquivo: `src/pages/Dashboard.tsx`**
+- Passar a função de exclusão (`onDelete`) para o componente `UpcomingTransactions`.
 
 ### Detalhes Técnicos
 
-```text
-Fluxo corrigido da projeção:
+- A resolução de categoria usa a função `resolveCategoryName` já existente que busca por UUID na lista de `categoryRecords` e retorna o nome legível.
+- A exclusão de transações usará `supabase.from("transactions").delete().eq("id", id)` diretamente no componente, com um `AlertDialog` de confirmação.
+- Nenhuma alteração no banco de dados é necessária.
 
-1. currentBalance = initialBalances + SUM(transações pagas com payment_date <= hoje)
-2. futureTransactions = transações com payment_date > hoje E payment_date <= futureEnd
-3. futureRecurring = ocorrências virtuais NO MESMO intervalo, EXCLUINDO as que já existem como transação real
-4. Para cada dia no intervalo:
-   - runningBalance += soma do dia (futureTransactions + futureRecurring)
-   - gerar ponto no gráfico
-```
-
-Mudanças no código (todas em `useDashboardData.ts`):
-
-- Linhas 426-433: Garantir que `paidBefore` filtra estritamente `payment_date <= today` E `status === "Pago"` (já faz isso -- OK)
-- Linhas 440-442: Manter futureTransactions sem filtro de status (projeção inclui tudo futuro)  
-- Linhas 453-461: Adicionar deduplicação -- criar um Set de chaves `${payment_date}_${amount}_${description}` das transações reais e pular recorrentes que colidem
-- Linha 216: Quando `accountId` ativo, filtrar também `allTransactions` para excluir wallet_id
-
-Arquivo modificado: `src/components/dashboard/BalanceProjectionChart.tsx`
-- Adicionar `ReferenceLine` vertical no dia de hoje para separar visualmente "realizado" de "projetado"
-
-### Impacto
-- Zero alteração no banco de dados
-- Não afeta outros componentes (cards, categorias, etc.)
-- Os cards de sumário estão corretos (Entradas - Saídas = Saldo do Período confere)
