@@ -98,7 +98,7 @@ export function useDREData(filters: DREFilters) {
       setLoading(true);
       let q = supabase
         .from("transactions")
-        .select("id, amount, type, category, competence_date, bank_account_id, credit_card_id")
+        .select("id, amount, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr);
 
@@ -113,27 +113,79 @@ export function useDREData(filters: DREFilters) {
         }
       }
 
-      const { data } = await q;
-      setTransactions(data || []);
+      // Paginate to avoid Supabase's default 1000 row limit
+      const allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data } = await q.range(page * pageSize, (page + 1) * pageSize - 1);
+        if (!data || data.length === 0) break;
+        allData.push(...data);
+        if (data.length < pageSize) break;
+        page++;
+      }
+
+      setTransactions(allData);
       setLoading(false);
     };
     fetchTx();
   }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId, linkedCardIds]);
 
-  const resolveChain = useCallback(
-    (categoryValue: string): { id: string; name: string }[] => {
-      let cat = categories.find((c) => c.id === categoryValue);
-      if (!cat) cat = categories.find((c) => c.name === categoryValue);
-      if (!cat) return [{ id: categoryValue, name: categoryValue }];
-      const chain: { id: string; name: string }[] = [];
-      let current: CategoryRecord | undefined = cat;
-      while (current) {
-        chain.unshift({ id: current.id, name: current.name });
-        current = current.parent_id ? categories.find((c) => c.id === current!.parent_id) : undefined;
-      }
-      return chain;
+  const resolveName = useCallback(
+    (value: string | null | undefined): { id: string; name: string } | null => {
+      if (!value) return null;
+      let cat = categories.find((c) => c.id === value);
+      if (!cat) cat = categories.find((c) => c.name.toLowerCase() === value.toLowerCase());
+      if (cat) return { id: cat.id, name: cat.name };
+      return { id: value, name: value };
     },
     [categories]
+  );
+
+  const buildChain = useCallback(
+    (category: string, subcategory?: string | null, subcategory2?: string | null): { id: string; name: string }[] => {
+      const chain: { id: string; name: string }[] = [];
+
+      // Try to resolve category via parent chain first (if it's a leaf UUID, walk up)
+      let cat = categories.find((c) => c.id === category);
+      if (!cat) cat = categories.find((c) => c.name.toLowerCase() === category.toLowerCase());
+
+      if (cat && cat.parent_id) {
+        // This category has a parent, so resolve the full chain upward
+        const fullChain: { id: string; name: string }[] = [];
+        let current: CategoryRecord | undefined = cat;
+        while (current) {
+          fullChain.unshift({ id: current.id, name: current.name });
+          current = current.parent_id ? categories.find((c) => c.id === current!.parent_id) : undefined;
+        }
+        // If we already have the full chain from the UUID, use it
+        // and then append subcategory/subcategory2 if they add more depth
+        chain.push(...fullChain);
+      } else {
+        // Root-level category or name-based
+        const resolved = resolveName(category);
+        if (resolved) chain.push(resolved);
+      }
+
+      // Add subcategory if it's a different level
+      if (subcategory) {
+        const sub = resolveName(subcategory);
+        if (sub && !chain.some((c) => c.id === sub.id)) {
+          chain.push(sub);
+        }
+      }
+
+      // Add subcategory2 if it's a different level
+      if (subcategory2) {
+        const sub2 = resolveName(subcategory2);
+        if (sub2 && !chain.some((c) => c.id === sub2.id)) {
+          chain.push(sub2);
+        }
+      }
+
+      return chain.length > 0 ? chain : [{ id: category, name: category }];
+    },
+    [categories, resolveName]
   );
 
   const periods = useMemo(() => buildPeriodKeys(year, granularity), [year, granularity]);
@@ -151,7 +203,7 @@ export function useDREData(filters: DREFilters) {
       const pKey = dateToPeriodKey(t.competence_date, granularity);
       if (!periods.includes(pKey)) return;
 
-      const chain = resolveChain(t.category);
+      const chain = buildChain(t.category, t.subcategory, t.subcategory2);
       let currentLevel = tree;
       for (const { id, name } of chain) {
         let node = currentLevel.get(id);
@@ -193,7 +245,7 @@ export function useDREData(filters: DREFilters) {
     periods.forEach((p) => (mr[p] = mrt[p] - met[p]));
 
     return { revenueRows: revRows, expenseRows: expRows, monthlyRevenueTotals: mrt, monthlyExpenseTotals: met, monthlyResults: mr };
-  }, [transactions, resolveChain, periods, granularity]);
+  }, [transactions, buildChain, periods, granularity]);
 
   return { periods, revenueRows, expenseRows, monthlyRevenueTotals, monthlyExpenseTotals, monthlyResults, loading };
 }
