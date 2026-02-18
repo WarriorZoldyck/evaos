@@ -114,6 +114,9 @@ export function useTransactions() {
     creditCards: { id: string; name: string; last_four_digits: string | null; company_id: string | null; company_name: string }[];
   }>({ bankAccounts: [], wallets: [], creditCards: [] });
 
+  // All card terminals across all contexts (for context switching in modal)
+  const [allCardTerminals, setAllCardTerminals] = useState<(CardTerminalInfo & { company_id: string | null })[]>([]);
+
   const companyFilter = useCallback(
     (query: any) => {
       if (isPersonal) {
@@ -155,11 +158,12 @@ export function useTransactions() {
 
     // Fetch ALL accounts (no company filter) for transfers
     const fetchAllAccounts = async () => {
-      const [allAccRes, allWalletRes, allCardRes, companiesRes] = await Promise.all([
+      const [allAccRes, allWalletRes, allCardRes, companiesRes, allTermRes] = await Promise.all([
         supabase.from("bank_accounts").select("id, name, company_id").order("name"),
         supabase.from("wallets").select("id, name, company_id").order("name"),
         supabase.from("credit_cards").select("id, name, last_four_digits, company_id").order("name"),
         supabase.from("companies").select("id, name").order("name"),
+        supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, company_id").order("name"),
       ]);
 
       const companyMap = new Map<string, string>();
@@ -184,6 +188,11 @@ export function useTransactions() {
           company_name: getCompanyName(c.company_id),
         })),
       });
+
+      // Store all terminals with company_id for context filtering
+      if (allTermRes.data) {
+        setAllCardTerminals(allTermRes.data as (CardTerminalInfo & { company_id: string | null })[]);
+      }
     };
 
     fetchAllAccounts();
@@ -438,6 +447,7 @@ export function useTransactions() {
     clients,
     categories,
     cardTerminals,
+    allCardTerminals,
     allAccounts,
   };
 }
