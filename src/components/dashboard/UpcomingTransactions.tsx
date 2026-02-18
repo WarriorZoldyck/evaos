@@ -17,6 +17,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import type { CreditCardInfo } from "@/hooks/useDashboardData";
 
@@ -33,6 +35,12 @@ interface Transaction {
   series_id: string | null;
   credit_card_id: string | null;
   isRecurring?: boolean;
+  // Fields from recurring occurrences
+  competence_date?: string;
+  subcategory?: string | null;
+  wallet_id?: string | null;
+  company_id?: string | null;
+  payment_method?: string | null;
 }
 
 interface UpcomingTransactionsProps {
@@ -75,11 +83,19 @@ function getBillingMonth(paymentDate: string, closingDay: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}`;
 }
 
+/** Extract the real recurring_transactions UUID from synthetic ID like rec_UUID_2026-02-18 */
+function extractRecurringId(syntheticId: string): string {
+  return syntheticId.replace(/^rec_/, "").replace(/_\d{4}-\d{2}-\d{2}$/, "");
+}
+
 export function UpcomingTransactions({ transactions, creditCards, loading, onLiquidated }: UpcomingTransactionsProps) {
+  const { user } = useAuth();
+  const { selectedCompanyId, isPersonal } = useCompany();
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [selectedBill, setSelectedBill] = useState<CreditCardBill | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [materializing, setMaterializing] = useState(false);
 
   const { regularTransactions, creditCardBills } = useMemo(() => {
     const cardMap = new Map(creditCards.map((c) => [c.id, c]));
@@ -126,15 +142,73 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-    const { error } = await supabase.from("transactions").delete().eq("id", deleteTarget.id);
-    setDeleting(false);
-    if (error) {
-      toast.error("Erro ao excluir lançamento");
+
+    if (deleteTarget.isRecurring) {
+      // Delete from recurring_transactions table
+      const realId = extractRecurringId(deleteTarget.id);
+      const { error } = await supabase.from("recurring_transactions").delete().eq("id", realId);
+      setDeleting(false);
+      if (error) {
+        toast.error("Erro ao excluir lançamento recorrente");
+      } else {
+        toast.success("Lançamento recorrente excluído");
+        setDeleteTarget(null);
+        onLiquidated();
+      }
     } else {
-      toast.success("Lançamento excluído");
-      setDeleteTarget(null);
-      onLiquidated();
+      const { error } = await supabase.from("transactions").delete().eq("id", deleteTarget.id);
+      setDeleting(false);
+      if (error) {
+        toast.error("Erro ao excluir lançamento");
+      } else {
+        toast.success("Lançamento excluído");
+        setDeleteTarget(null);
+        onLiquidated();
+      }
     }
+  };
+
+  /** Materialize a recurring occurrence into a real transaction, then open LiquidateModal */
+  const handleLiquidateRecurring = async (t: Transaction) => {
+    if (!user) return;
+    setMaterializing(true);
+
+    const { data, error } = await supabase
+      .from("transactions")
+      .insert({
+        description: t.description,
+        amount: t.amount,
+        type: t.type,
+        status: "Pendente" as const,
+        payment_date: t.payment_date,
+        competence_date: t.competence_date || t.payment_date,
+        category: t.category,
+        subcategory: t.subcategory || null,
+        bank_account_id: t.bank_account_id,
+        credit_card_id: t.credit_card_id,
+        wallet_id: t.wallet_id || null,
+        company_id: isPersonal ? null : (t.company_id || selectedCompanyId || null),
+        contact_name: t.contact_name,
+        series_id: t.series_id,
+        payment_method: t.payment_method || null,
+        user_id: user.id,
+      })
+      .select("id")
+      .single();
+
+    setMaterializing(false);
+
+    if (error || !data) {
+      toast.error("Erro ao preparar lançamento para liquidação");
+      return;
+    }
+
+    // Open liquidate modal with the newly created real transaction
+    setSelectedTransaction({
+      ...t,
+      id: data.id,
+      isRecurring: false,
+    });
   };
 
   return (
@@ -228,21 +302,26 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
                       {t.type === "despesa" ? "- " : "+ "}
                       {formatCurrency(t.amount)}
                     </span>
-                    {!t.isRecurring && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => setDeleteTarget(t)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => setDeleteTarget(t)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-8 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
-                      onClick={() => setSelectedTransaction(t)}
+                      disabled={materializing}
+                      onClick={() => {
+                        if (t.isRecurring) {
+                          handleLiquidateRecurring(t);
+                        } else {
+                          setSelectedTransaction(t);
+                        }
+                      }}
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Liquidar
@@ -289,9 +368,13 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir lançamento</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deleteTarget?.isRecurring ? "Excluir lançamento recorrente" : "Excluir lançamento"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir "{deleteTarget?.description}"? Esta ação não pode ser desfeita.
+              {deleteTarget?.isRecurring
+                ? `Tem certeza que deseja excluir a recorrência "${deleteTarget?.description}"? Todas as ocorrências futuras serão removidas.`
+                : `Tem certeza que deseja excluir "${deleteTarget?.description}"? Esta ação não pode ser desfeita.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
