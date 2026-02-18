@@ -382,6 +382,7 @@ export function TransactionFormModal({
           bank_account_id: editTransaction.bank_account_id || "",
           credit_card_id: editTransaction.credit_card_id || "",
           wallet_id: editTransaction.wallet_id || "",
+          card_terminal_id: editTransaction.card_terminal_id || "",
           supplier_id: editTransaction.supplier_id || "",
           client_id: editTransaction.client_id || "",
           contact_name: editTransaction.contact_name || "",
@@ -405,10 +406,9 @@ export function TransactionFormModal({
   }, [editTransaction, open]);
 
   const handleContextChange = (companyId: string | null) => {
+    if (isEditing) return; // Block context change during editing to preserve account fields
     setFormCompanyId(companyId);
-    if (!isEditing) {
-      setActiveTab(companyId === null ? "despesa" : "receita");
-    }
+    setActiveTab(companyId === null ? "despesa" : "receita");
     // Clear account selections when context changes
     form.setValue("bank_account_id", "");
     form.setValue("credit_card_id", "");
@@ -513,6 +513,10 @@ export function TransactionFormModal({
 
     if (isEditing) {
       const { user_id, company_id, ...updateData } = baseData;
+      // Preserve original type and status to prevent race conditions
+      // (activeTab defaults to "despesa" and status defaults to "Pendente" before async reset)
+      updateData.type = editTransaction.type;
+      updateData.status = editTransaction.status;
       success = await onUpdate(editTransaction.id, updateData);
     } else if (selectedTerminal) {
       // Receita via terminal: ALWAYS save as single transaction (full net amount)
