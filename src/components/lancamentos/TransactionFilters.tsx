@@ -70,7 +70,7 @@ export function TransactionFilters({
   clients = [],
 }: TransactionFiltersProps) {
   const rootCategories = categories.filter((c) => !c.parent_id);
-  const [activePeriod, setActivePeriod] = useState<PeriodKey>("all");
+  const [activePeriod, setActivePeriod] = useState<PeriodKey>("month");
   const [navMonth, setNavMonth] = useState(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
 

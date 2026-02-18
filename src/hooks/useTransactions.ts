@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -81,17 +82,20 @@ export function useTransactions() {
   const [loading, setLoading] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
-  const [filters, setFilters] = useState<TransactionFilters>({
-    type: "todos",
-    status: "todos",
-    search: "",
-    categoryId: "",
-    dateFrom: "",
-    dateTo: "",
-    sortOrder: "desc",
-    accountId: "",
-    supplierId: "",
-    clientId: "",
+  const [filters, setFilters] = useState<TransactionFilters>(() => {
+    const now = new Date();
+    return {
+      type: "todos",
+      status: "todos",
+      search: "",
+      categoryId: "",
+      dateFrom: format(startOfMonth(now), "yyyy-MM-dd"),
+      dateTo: format(endOfMonth(now), "yyyy-MM-dd"),
+      sortOrder: "desc",
+      accountId: "",
+      supplierId: "",
+      clientId: "",
+    };
   });
 
   // Auxiliary data
