@@ -40,7 +40,7 @@ export default function Lancamentos() {
     deleteTransaction, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
-    cardTerminals, allAccounts,
+    cardTerminals, allCardTerminals, allAccounts,
   } = useTransactions();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -284,6 +284,7 @@ export default function Lancamentos() {
         clients={clients}
         categories={categories}
         cardTerminals={cardTerminals}
+        allCardTerminals={allCardTerminals}
         allAccounts={allAccounts}
         companies={companies}
         fieldSettings={fieldSettings}

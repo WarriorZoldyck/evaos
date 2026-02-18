@@ -23,6 +23,7 @@ export function GlobalTransactionModal({ open, onClose }: GlobalTransactionModal
     clients,
     categories,
     cardTerminals,
+    allCardTerminals,
     allAccounts,
   } = useTransactions();
 
@@ -64,6 +65,7 @@ export function GlobalTransactionModal({ open, onClose }: GlobalTransactionModal
       clients={clients}
       categories={categories}
       cardTerminals={cardTerminals}
+      allCardTerminals={allCardTerminals}
       allAccounts={allAccounts}
       companies={companies}
       fieldSettings={fieldSettings}

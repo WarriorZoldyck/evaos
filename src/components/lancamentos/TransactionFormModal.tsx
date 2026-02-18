@@ -55,6 +55,22 @@ import type {
 import { PaymentMethodFields } from "./PaymentMethodFields";
 import { CategorySelectWithCreate } from "./CategorySelectWithCreate";
 
+interface RateInfo {
+  installments: number;
+  rate: number;
+}
+
+function parseRatesInfo(ratesInfo: string | null): RateInfo[] {
+  if (!ratesInfo) return [];
+  try {
+    const parsed = JSON.parse(ratesInfo);
+    if (Array.isArray(parsed)) return parsed;
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 // Currency mask input for BRL
 function CurrencyInput({
   value,
@@ -263,6 +279,7 @@ interface TransactionFormModalProps {
   clients: { id: string; name: string }[];
   categories: Category[];
   cardTerminals: CardTerminalInfo[];
+  allCardTerminals?: (CardTerminalInfo & { company_id: string | null })[];
   allAccounts?: AllAccounts;
   companies?: Company[];
   fieldSettings?: FormFieldSettings;
@@ -282,6 +299,7 @@ export function TransactionFormModal({
   clients,
   categories,
   cardTerminals,
+  allCardTerminals,
   allAccounts,
   companies = [],
   fieldSettings,
@@ -442,6 +460,13 @@ export function TransactionFormModal({
         })
     : creditCards;
 
+  // Filter card terminals by form context
+  const filteredCardTerminals = allCardTerminals
+    ? allCardTerminals
+        .filter((t) => formCompanyId === null ? t.company_id === null : t.company_id === formCompanyId)
+        .map(({ company_id, ...rest }) => rest as CardTerminalInfo)
+    : cardTerminals;
+
   const watchPaymentMethod = form.watch("payment_method");
 
   const handleMainSubmit = async (data: FormData) => {
@@ -452,7 +477,7 @@ export function TransactionFormModal({
     const isReceita = activeTab === "receita";
     const isCardPayment = data.payment_method === "Cartão de Crédito" || data.payment_method === "Cartão de Débito";
     const selectedTerminal = isReceita && isCardPayment && data.card_terminal_id
-      ? cardTerminals.find((t) => t.id === data.card_terminal_id)
+      ? filteredCardTerminals.find((t) => t.id === data.card_terminal_id)
       : null;
 
     let finalAmount = data.amount;
@@ -467,8 +492,15 @@ export function TransactionFormModal({
       if (isDebit) {
         rate = selectedTerminal.debit_rate ?? 0;
       } else {
-        // Always use credit_rate for credit transactions (merchant receives based on à vista rate)
-        rate = selectedTerminal.credit_rate ?? 0;
+        // Check installment-specific rate from rates_info
+        const fallbackRate = selectedTerminal.credit_rate ?? 0;
+        if (data.is_installment && data.installments_count && data.installments_count >= 2) {
+          const rates = parseRatesInfo(selectedTerminal.rates_info);
+          const match = rates.find((r) => r.installments === data.installments_count);
+          rate = match ? match.rate : fallbackRate;
+        } else {
+          rate = fallbackRate;
+        }
       }
 
       // Calculate net amount
@@ -772,7 +804,7 @@ export function TransactionFormModal({
               wallets={filteredWallets}
               clients={clients}
               suppliers={suppliers}
-              cardTerminals={cardTerminals}
+               cardTerminals={filteredCardTerminals}
               paymentDateManuallyEdited={paymentDateManuallyEdited}
               formCompanyId={formCompanyId}
               onCategoryCreated={fetchFormCategories}
@@ -796,7 +828,7 @@ export function TransactionFormModal({
               wallets={filteredWallets}
               clients={clients}
               suppliers={suppliers}
-              cardTerminals={cardTerminals}
+               cardTerminals={filteredCardTerminals}
               paymentDateManuallyEdited={paymentDateManuallyEdited}
               formCompanyId={formCompanyId}
               onCategoryCreated={fetchFormCategories}
@@ -1346,7 +1378,7 @@ function MainFormContent({
           bankAccounts={bankAccounts}
           creditCards={creditCards}
           wallets={wallets}
-          cardTerminals={cardTerminals}
+           cardTerminals={cardTerminals}
         />
         )}
 
