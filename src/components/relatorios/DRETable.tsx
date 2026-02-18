@@ -66,7 +66,7 @@ function CategoryRows({
                   ) : (
                     <span className="w-3.5 shrink-0" />
                   )}
-                  {row.categoryName}
+                  {row.categoryName.toUpperCase()}
                 </span>
               </td>
               {periods.map((p) => (
