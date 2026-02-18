@@ -377,7 +377,11 @@ export function useDashboardData(filters: DashboardFilters) {
     const combined = [...pending, ...recurringInPeriod];
     return combined
       .sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime())
-      .slice(0, 20);
+      .slice(0, 20)
+      .map((t) => ({
+        ...t,
+        category: resolveCategoryName(t.category).name,
+      }));
   }, [transactions, recurringOccurrences, startStr, endStr]);
 
   // Category summary for doughnut charts - resolves UUID to name

@@ -3,10 +3,21 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowDownCircle, ArrowUpCircle, CheckCircle2, Repeat, CreditCard } from "lucide-react";
+import { ArrowDownCircle, ArrowUpCircle, CheckCircle2, Repeat, CreditCard, Trash2 } from "lucide-react";
 import { LiquidateModal } from "./LiquidateModal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { CreditCardInfo } from "@/hooks/useDashboardData";
 
 interface Transaction {
@@ -42,7 +53,7 @@ interface CreditCardBill {
   cardId: string;
   cardName: string;
   lastFour: string | null;
-  billingMonth: string; // "YYYY-MM"
+  billingMonth: string;
   total: number;
   transactions: Transaction[];
   bankAccountId: string;
@@ -52,9 +63,8 @@ function getBillingMonth(paymentDate: string, closingDay: number): string {
   const date = parseISO(paymentDate);
   const day = date.getDate();
   const year = date.getFullYear();
-  const month = date.getMonth(); // 0-indexed
+  const month = date.getMonth();
 
-  // If the day is after closing, it belongs to next month's bill
   if (day > closingDay) {
     const nextMonth = month + 1;
     if (nextMonth > 11) {
@@ -68,8 +78,9 @@ function getBillingMonth(paymentDate: string, closingDay: number): string {
 export function UpcomingTransactions({ transactions, creditCards, loading, onLiquidated }: UpcomingTransactionsProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [selectedBill, setSelectedBill] = useState<CreditCardBill | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  // Group credit card transactions into bills
   const { regularTransactions, creditCardBills } = useMemo(() => {
     const cardMap = new Map(creditCards.map((c) => [c.id, c]));
     const billMap = new Map<string, CreditCardBill>();
@@ -110,6 +121,20 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
     const [y, m] = ym.split("-");
     const date = new Date(Number(y), Number(m) - 1, 1);
     return format(date, "MMM/yyyy", { locale: ptBR });
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { error } = await supabase.from("transactions").delete().eq("id", deleteTarget.id);
+    setDeleting(false);
+    if (error) {
+      toast.error("Erro ao excluir lançamento");
+    } else {
+      toast.success("Lançamento excluído");
+      setDeleteTarget(null);
+      onLiquidated();
+    }
   };
 
   return (
@@ -162,7 +187,7 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
                       onClick={() => setSelectedBill(bill)}
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      Liquidar Fatura
+                      Pagar Fatura
                     </Button>
                   </div>
                 </div>
@@ -194,7 +219,7 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                  <div className="flex items-center gap-2 shrink-0 ml-3">
                     <span
                       className={`text-sm font-semibold ${
                         t.type === "receita" ? "text-success" : "text-destructive"
@@ -206,14 +231,22 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
                     {!t.isRecurring && (
                       <Button
                         variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
-                        onClick={() => setSelectedTransaction(t)}
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeleteTarget(t)}
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Liquidar
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs gap-1 text-primary hover:text-primary hover:bg-primary/10"
+                      onClick={() => setSelectedTransaction(t)}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Liquidar
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -251,6 +284,28 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
           onLiquidated();
         }}
       />
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir "{deleteTarget?.description}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
