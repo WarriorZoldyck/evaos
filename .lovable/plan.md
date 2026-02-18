@@ -1,47 +1,58 @@
 
-## Correção: Lançamentos Liquidados Desaparecem Após Edição
 
-### Causa Raiz Identificada
+## Correções no "Próximos Lançamentos" do Dashboard
 
-Ao analisar o código do `TransactionFormModal.tsx`, encontrei dois problemas que causam a perda de dados durante a edição:
+### Problemas Identificados no Vídeo
 
-**Problema 1: `card_terminal_id` não é preservado no reset do formulário (linha 372-396)**
-Quando o formulário é aberto para edição, o `form.reset()` define todos os campos do lançamento original, EXCETO `card_terminal_id`. O campo fica com o valor padrão `""`, que no submit vira `null`. Isso apaga a informação da maquininha e o cálculo MDR do lançamento.
+**1. Categorias mostrando UUID para lançamentos feitos hoje**
+O `useMemo` de `upcomingTransactions` (linha 385) não inclui `resolveCategoryName` nas dependências. Quando as categorias carregam depois das transações, o memo não recalcula e o UUID bruto permanece visível.
 
-**Problema 2: O update envia TODOS os campos, incluindo `status` e `type` que dependem de state assíncrono**
-Na linha 514-516, o update envia todos os campos de `baseData`, incluindo:
-- `type: activeTab` (linha 489) -- o `activeTab` é setado via `useEffect` (assíncrono). O valor default é `"despesa"`. Se houver qualquer re-render antes do efeito rodar, um lançamento de "receita" pode ser salvo como "despesa", sumindo da view se o usuário filtra por tipo.
-- `status: data.status` -- vem do form cujo default é `"Pendente"`. O `form.reset()` corrige para `"Pago"`, mas em edge cases (React Strict Mode, re-renders rápidos), o default pode prevalecer. Um lançamento "Pago" viraria "Pendente" e sumiria da aba "Realizado".
+**2. Transações recorrentes (legadas) sem botão de Liquidar funcional**
+As ocorrências recorrentes são virtuais -- possuem IDs sintéticos como `rec_xxx_2026-02-18`. O botão "Liquidar" aparece, mas o `LiquidateModal` tenta atualizar um registro inexistente no banco. O usuário precisa poder liquidar (materializando a ocorrência) ou excluir essas recorrentes.
 
-**Problema 3: Campos de conta podem ser zerados**
-Se o usuário alterar o "Contexto" (empresa) durante a edição, `handleContextChange` (linha 407-417) limpa `bank_account_id`, `wallet_id`, `credit_card_id` e `card_terminal_id`. Se havia um filtro por conta ativo na listagem, o lançamento perde a conta e sai do filtro.
+**3. Transações recorrentes sem botão de Excluir**
+O botão de exclusão é escondido quando `isRecurring === true` (linha 231). O usuário quer poder excluir a transação recorrente da lista (apagar o registro na tabela `recurring_transactions`).
 
 ---
 
 ### Correções Propostas
 
-**Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
+**Arquivo: `src/hooks/useDashboardData.ts`**
+- Adicionar `resolveCategoryName` à lista de dependências do `useMemo` de `upcomingTransactions` (linha 385), garantindo que a resolução de nomes ocorra mesmo quando as categorias carregam após as transações.
 
-1. **Incluir `card_terminal_id` no `form.reset()` durante edição** (linha 372-396) para que o campo seja preservado.
+**Arquivo: `src/components/dashboard/UpcomingTransactions.tsx`**
+1. **Habilitar exclusão de recorrentes**: Mostrar o botão "Excluir" para TODAS as transações (remover o guard `!t.isRecurring`). Para transações recorrentes, a exclusão vai operar na tabela `recurring_transactions` usando o ID real extraído do ID sintético (`rec_{realId}_{date}` -> `realId`).
 
-2. **Proteger `status` e `type` durante edição** -- Na submissão (linha 514-516), quando `isEditing`, forçar o uso de `editTransaction.type` e `editTransaction.status` ao invés de depender do `activeTab` e do valor do formulário. Isso elimina qualquer race condition:
+2. **Corrigir liquidação de recorrentes**: Quando o usuário clicar "Liquidar" em uma recorrente, primeiro materializar a ocorrência como uma transação real na tabela `transactions` (INSERT com os dados da ocorrência), e então abrir o `LiquidateModal` com o ID real recém-criado.
 
+**Arquivo: `src/pages/Dashboard.tsx`**
+- Nenhuma alteração necessária -- o callback `onLiquidated` já faz refetch dos dados.
+
+### Detalhes Técnicos
+
+**Exclusão de recorrentes:**
+```text
+ID sintético: "rec_UUID-REAL_2026-02-18"
+Extração: id.replace("rec_", "").replace(/_\d{4}-\d{2}-\d{2}$/, "")
+DELETE FROM recurring_transactions WHERE id = realId
 ```
-if (isEditing) {
-  const { user_id, company_id, ...updateData } = baseData;
-  // Forçar type e status do lançamento original
-  updateData.type = editTransaction.type;
-  updateData.status = editTransaction.status;
-  success = await onUpdate(editTransaction.id, updateData);
-}
+
+**Materialização para liquidação:**
+```text
+1. Extrair dados da ocorrência virtual
+2. INSERT INTO transactions (description, amount, type, status, payment_date, category, ...)
+3. Obter o ID real do registro inserido
+4. Abrir LiquidateModal com esse ID
 ```
 
-Nota: o campo `status` não possui controle visual no formulário de edição, então o usuário não tem como alterá-lo intencionalmente. Se no futuro quisermos permitir mudança de status na edição, adicionaremos um switch explícito.
-
-3. **Bloquear mudança de contexto durante edição** -- Desabilitar o seletor de contexto (empresa) quando `isEditing` é true, ou pelo menos não limpar os campos de conta.
+**Dependência do useMemo:**
+```text
+Atual:  [transactions, recurringOccurrences, startStr, endStr]
+Corrigido: [transactions, recurringOccurrences, startStr, endStr, resolveCategoryName]
+```
 
 ### Impacto
-- Zero alteração no banco de dados
-- Corrige a causa raiz da "perda" de lançamentos liquidados
-- Preserva dados de MDR/maquininha que antes eram apagados silenciosamente
-- Sem risco de quebrar funcionalidades existentes
+- Zero alteração no schema do banco de dados
+- Categorias sempre exibidas como nomes legíveis
+- Recorrentes podem ser excluídas permanentemente
+- Recorrentes podem ser liquidadas (materializadas como transação real)
