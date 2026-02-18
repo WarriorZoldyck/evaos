@@ -102,8 +102,13 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
     throw new Error("LOVABLE_API_KEY not configured");
   }
 
-  // Convert PDF bytes to base64 for the AI
-  const base64 = btoa(String.fromCharCode(...fileBytes));
+  // Convert PDF bytes to base64 for the AI (chunk to avoid stack overflow)
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < fileBytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...fileBytes.subarray(i, i + chunkSize));
+  }
+  const base64 = btoa(binary);
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
