@@ -70,6 +70,7 @@ export interface CategorySummary {
 export interface ProjectionPoint {
   date: string;
   saldo: number;
+  fullDate?: string;
 }
 
 interface CategoryRecord {
@@ -423,22 +424,25 @@ export function useDashboardData(filters: DashboardFilters) {
   const getProjectionData = useMemo(() => {
     return (days: ProjectionDays): ProjectionPoint[] => {
       const today = new Date();
+      const todayStr = format(today, "yyyy-MM-dd");
+
+      // Correção B: Only count paid transactions with payment_date <= today in base balance
       const paidBefore = allTransactions.filter(
-        (t) => t.status === "Pago" && new Date(t.payment_date) <= today
+        (t) => t.status === "Pago" && t.payment_date <= todayStr
       );
 
-      // FIX #10: Include initial balances of bank accounts + wallets
       let currentBalance = initialBalances + paidBefore.reduce((acc, t) => {
         return acc + (t.type === "receita" ? Number(t.amount) : -Number(t.amount));
       }, 0);
 
       // "Ano todo" → até 31/12 do ano corrente
       const futureEnd = days === 365 ? endOfYear(today) : addDays(today, days);
+      const futureEndStr = format(futureEnd, "yyyy-MM-dd");
       const dateRange = eachDayOfInterval({ start: today, end: futureEnd });
 
-      // Combine future real transactions + recurring occurrences
+      // Future transactions: all with payment_date > today (both Pago and Pendente)
       const futureTransactions = allTransactions.filter(
-        (t) => new Date(t.payment_date) > today && new Date(t.payment_date) <= futureEnd
+        (t) => t.payment_date > todayStr && t.payment_date <= futureEndStr
       );
 
       const futureByDate = new Map<string, number>();
@@ -449,10 +453,23 @@ export function useDashboardData(filters: DashboardFilters) {
         futureByDate.set(dateKey, current + amount);
       });
 
-      // Add recurring occurrences to projection
+      // Correção A: Build dedup set from real future transactions to avoid double-counting recurring
+      const realTransactionKeys = new Set<string>();
+      futureTransactions.forEach((t) => {
+        realTransactionKeys.add(`${t.payment_date}_${Number(t.amount)}_${t.description}`);
+      });
+
+      // Add recurring occurrences, skipping duplicates
       recurringOccurrences.forEach((r) => {
-        const rDate = new Date(r.payment_date + "T00:00:00");
-        if (rDate > today && rDate <= futureEnd) {
+        if (r.payment_date > todayStr && r.payment_date <= futureEndStr) {
+          const dedupKey = `${r.payment_date}_${Number(r.amount)}_${r.description}`;
+          if (realTransactionKeys.has(dedupKey)) return; // already counted as real transaction
+
+          // Correção C: When filtering by account, skip recurring that don't belong
+          if (accountId && r.bank_account_id !== accountId && !linkedCardIds.includes(r.credit_card_id || "")) {
+            return;
+          }
+
           const dateKey = r.payment_date;
           const current = futureByDate.get(dateKey) || 0;
           const amount = r.type === "receita" ? Number(r.amount) : -Number(r.amount);
@@ -470,12 +487,13 @@ export function useDashboardData(filters: DashboardFilters) {
         points.push({
           date: format(date, "dd/MM", { locale: ptBR }),
           saldo: runningBalance,
+          fullDate: dateKey,
         });
       });
 
       return points;
     };
-  }, [allTransactions, recurringOccurrences, initialBalances]);
+  }, [allTransactions, recurringOccurrences, initialBalances, accountId, linkedCardIds]);
 
   // Performance: average daily spending
   const performance = useMemo(() => {

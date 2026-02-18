@@ -1,7 +1,5 @@
 import { useState } from "react";
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -9,6 +7,7 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
+  ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +37,7 @@ function formatCurrency(value: number): string {
 export function BalanceProjectionChart({ getProjectionData, loading }: BalanceProjectionChartProps) {
   const [selectedDays, setSelectedDays] = useState<ProjectionDays>(30);
   const data = getProjectionData(selectedDays);
+  const todayLabel = data.length > 0 ? data[0].date : null;
 
   return (
     <Card className="shadow-premium">
@@ -110,6 +110,14 @@ export function BalanceProjectionChart({ getProjectionData, loading }: BalancePr
                 dot={false}
                 activeDot={{ r: 4, fill: "hsl(195, 100%, 50%)", stroke: "hsl(195, 100%, 70%)", strokeWidth: 2 }}
               />
+              {todayLabel && (
+                <ReferenceLine
+                  x={todayLabel}
+                  stroke="hsl(215, 18%, 45%)"
+                  strokeDasharray="4 4"
+                  label={{ value: "Hoje", position: "top", fill: "hsl(215, 18%, 55%)", fontSize: 10 }}
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         )}
