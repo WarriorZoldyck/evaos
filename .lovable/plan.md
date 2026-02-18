@@ -1,37 +1,47 @@
 
+## Correção: Lançamentos Liquidados Desaparecem Após Edição
 
-## Correções no "Próximos Lançamentos" do Dashboard
+### Causa Raiz Identificada
 
-### 3 Problemas Identificados
+Ao analisar o código do `TransactionFormModal.tsx`, encontrei dois problemas que causam a perda de dados durante a edição:
 
-**1. Categoria mostrando UUID/código ao invés do nome**
-O `upcomingTransactions` no hook `useDashboardData.ts` passa o campo `category` bruto da tabela (que pode ser um UUID). A função `resolveCategoryName` já existe no hook mas não é aplicada nos dados de "Próximos Lançamentos".
+**Problema 1: `card_terminal_id` não é preservado no reset do formulário (linha 372-396)**
+Quando o formulário é aberto para edição, o `form.reset()` define todos os campos do lançamento original, EXCETO `card_terminal_id`. O campo fica com o valor padrão `""`, que no submit vira `null`. Isso apaga a informação da maquininha e o cálculo MDR do lançamento.
 
-**2. Lançamentos do dia sem botão de Liquidar/Excluir**
-A condição `!t.isRecurring` no componente `UpcomingTransactions.tsx` (linha 206) esconde o botão "Liquidar" para transações recorrentes. Mas transações normais do dia (não recorrentes) que aparecem como pendentes deveriam mostrar os botões de Liquidar e Excluir -- e atualmente só mostram Liquidar.
+**Problema 2: O update envia TODOS os campos, incluindo `status` e `type` que dependem de state assíncrono**
+Na linha 514-516, o update envia todos os campos de `baseData`, incluindo:
+- `type: activeTab` (linha 489) -- o `activeTab` é setado via `useEffect` (assíncrono). O valor default é `"despesa"`. Se houver qualquer re-render antes do efeito rodar, um lançamento de "receita" pode ser salvo como "despesa", sumindo da view se o usuário filtra por tipo.
+- `status: data.status` -- vem do form cujo default é `"Pendente"`. O `form.reset()` corrige para `"Pago"`, mas em edge cases (React Strict Mode, re-renders rápidos), o default pode prevalecer. Um lançamento "Pago" viraria "Pendente" e sumiria da aba "Realizado".
 
-**3. Fatura sem opção de liquidação parcial**
-A fatura já usa o `LiquidateModal` que suporta pagamento parcial (etapa 2 com tratamento de diferença). O fluxo já funciona -- o usuário pode alterar o valor na etapa 1 e o modal avança para a etapa 2 automaticamente. Não há bug aqui, mas o botão diz apenas "Liquidar Fatura", o que pode dar a impressão de que não há opção parcial. Vou melhorar o label para deixar claro.
+**Problema 3: Campos de conta podem ser zerados**
+Se o usuário alterar o "Contexto" (empresa) durante a edição, `handleContextChange` (linha 407-417) limpa `bank_account_id`, `wallet_id`, `credit_card_id` e `card_terminal_id`. Se havia um filtro por conta ativo na listagem, o lançamento perde a conta e sai do filtro.
 
 ---
 
-### Alterações Planejadas
+### Correções Propostas
 
-**Arquivo: `src/hooks/useDashboardData.ts`**
-- Na construção de `upcomingTransactions` (linhas 367-381), aplicar `resolveCategoryName` no campo `category` de cada transação antes de retornar, garantindo que sempre exiba o nome da categoria ao invés do UUID.
+**Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
 
-**Arquivo: `src/components/dashboard/UpcomingTransactions.tsx`**
-- Remover a condição `!t.isRecurring` que esconde o botão Liquidar (linha 206), permitindo que TODOS os lançamentos pendentes tenham o botão.
-- Adicionar botão "Excluir" ao lado de "Liquidar" para transações normais (não recorrentes), com confirmação antes de deletar.
-- Receber uma prop `onDelete` para executar a exclusão via Supabase.
-- Para a fatura, manter o fluxo atual (já suporta parcial) mas ajustar o texto do botão para "Pagar Fatura" para ficar mais claro.
+1. **Incluir `card_terminal_id` no `form.reset()` durante edição** (linha 372-396) para que o campo seja preservado.
 
-**Arquivo: `src/pages/Dashboard.tsx`**
-- Passar a função de exclusão (`onDelete`) para o componente `UpcomingTransactions`.
+2. **Proteger `status` e `type` durante edição** -- Na submissão (linha 514-516), quando `isEditing`, forçar o uso de `editTransaction.type` e `editTransaction.status` ao invés de depender do `activeTab` e do valor do formulário. Isso elimina qualquer race condition:
 
-### Detalhes Técnicos
+```
+if (isEditing) {
+  const { user_id, company_id, ...updateData } = baseData;
+  // Forçar type e status do lançamento original
+  updateData.type = editTransaction.type;
+  updateData.status = editTransaction.status;
+  success = await onUpdate(editTransaction.id, updateData);
+}
+```
 
-- A resolução de categoria usa a função `resolveCategoryName` já existente que busca por UUID na lista de `categoryRecords` e retorna o nome legível.
-- A exclusão de transações usará `supabase.from("transactions").delete().eq("id", id)` diretamente no componente, com um `AlertDialog` de confirmação.
-- Nenhuma alteração no banco de dados é necessária.
+Nota: o campo `status` não possui controle visual no formulário de edição, então o usuário não tem como alterá-lo intencionalmente. Se no futuro quisermos permitir mudança de status na edição, adicionaremos um switch explícito.
 
+3. **Bloquear mudança de contexto durante edição** -- Desabilitar o seletor de contexto (empresa) quando `isEditing` é true, ou pelo menos não limpar os campos de conta.
+
+### Impacto
+- Zero alteração no banco de dados
+- Corrige a causa raiz da "perda" de lançamentos liquidados
+- Preserva dados de MDR/maquininha que antes eram apagados silenciosamente
+- Sem risco de quebrar funcionalidades existentes
