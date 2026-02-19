@@ -131,6 +131,7 @@ const RECURRING_FREQUENCIES = [
   { value: "monthly", label: "Mensal" },
   { value: "weekly", label: "Semanal" },
   { value: "biweekly", label: "Quinzenal" },
+  { value: "custom_days", label: "A cada X dias" },
   { value: "yearly", label: "Anual" },
 ] as const;
 
@@ -160,6 +161,7 @@ const transactionSchema = z.object({
   first_installment_amount: z.coerce.number().positive().optional(),
   is_recurring: z.boolean().default(false),
   recurring_frequency: z.string().optional(),
+  recurring_custom_days: z.coerce.number().int().min(1).max(365).optional(),
   recurring_end_date: z.date().optional(),
 });
 
@@ -618,6 +620,8 @@ export function TransactionFormModal({
       const frequency = data.recurring_frequency;
       const endDate = data.recurring_end_date;
 
+      const customDaysInterval = data.recurring_custom_days || 30;
+
       const getNextDate = (base: Date, index: number): Date => {
         switch (frequency) {
           case "weekly": {
@@ -630,6 +634,11 @@ export function TransactionFormModal({
             d.setDate(d.getDate() + index * 14);
             return d;
           }
+          case "custom_days": {
+            const d = new Date(base);
+            d.setDate(d.getDate() + index * customDaysInterval);
+            return d;
+          }
           case "yearly":
             return addMonths(base, index * 12);
           default:
@@ -637,7 +646,7 @@ export function TransactionFormModal({
         }
       };
 
-      const maxOccurrences = frequency === "weekly" ? 52 : frequency === "biweekly" ? 26 : frequency === "yearly" ? 5 : 12;
+      const maxOccurrences = frequency === "weekly" ? 52 : frequency === "biweekly" ? 26 : frequency === "custom_days" ? Math.floor(365 / customDaysInterval) : frequency === "yearly" ? 5 : 12;
       const recurrings: TransactionInsert[] = [];
 
       for (let i = 0; i < maxOccurrences; i++) {
@@ -1517,6 +1526,21 @@ function MainFormContent({
                         </FormItem>
                       )}
                     />
+                    {form.watch("recurring_frequency") === "custom_days" && (
+                      <FormField
+                        control={form.control}
+                        name="recurring_custom_days"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Intervalo em dias</FormLabel>
+                            <FormControl>
+                              <Input type="number" min={1} max={365} placeholder="Ex: 15" {...field} value={field.value || ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
                     <FormField
                       control={form.control}
                       name="recurring_end_date"
