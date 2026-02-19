@@ -1,65 +1,48 @@
 
 
-## Correção de 2 Bugs no Modal de Lançamentos
+## Correção: Juros em Lançamentos de Cartão de Crédito
 
-### Bug 1: Maquininhas nao atualizam ao trocar contexto dentro do modal
+### Diagnóstico
 
-**Problema:** Quando o usuario troca o contexto (Pessoal -> Empresa) dentro do modal, as contas bancarias, carteiras e cartoes sao filtrados corretamente pelo `formCompanyId`, mas as **maquininhas (cardTerminals)** continuam mostrando as do contexto global anterior. Isso acontece porque o codigo filtra `bankAccounts`, `wallets` e `creditCards` a partir de `allAccounts`, mas nao faz o mesmo para `cardTerminals`.
+O formulário de lançamentos possui o campo "Taxa de juros mensal (%)" que aparece ao ativar "Parcelado" (quando não há maquininha selecionada). A lógica de cálculo Price (Sistema Francês) existe no submit e parece correta em teoria. No entanto, há um problema sutil com o tratamento do campo `interest_rate` pelo Zod + React Hook Form:
 
-**Solucao:**
-- No `useTransactions.ts`: buscar **todas** as maquininhas (sem filtro de empresa) no `fetchAllAccounts`, similar ao que ja e feito para contas/carteiras/cartoes, armazenando em `allCardTerminals`.
-- No `TransactionFormModal.tsx`: filtrar `cardTerminals` pelo `formCompanyId` da mesma forma que ja se faz com `filteredBankAccounts`, `filteredWallets` e `filteredCreditCards`. Passar o resultado filtrado para o componente `PaymentMethodFields`.
+**Problema identificado:** O campo `interest_rate` usa `z.coerce.number().min(0).max(100).optional()`. Com `<Input type="number" />` e React Hook Form, o valor pode não ser coercionado corretamente no momento do submit dependendo do estado interno do campo. Além disso, a condição `data.interest_rate || 0` trata o valor `undefined` mas pode mascarar cenários onde o valor chega como string.
 
-**Arquivo: `src/hooks/useTransactions.ts`**
-- Adicionar fetch de todos os `card_terminals` (sem company filter) no `fetchAllAccounts`
-- Expor `allCardTerminals` no retorno do hook
+### Alterações Planejadas
 
 **Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
-- Criar `filteredCardTerminals` filtrando `allCardTerminals` pelo `formCompanyId`
-- Passar `filteredCardTerminals` para `PaymentMethodFields` e para a logica de submit
 
----
+1. Tornar a coerção do `interest_rate` mais robusta no schema Zod, usando `.default(0)` em vez de `.optional()` para garantir que sempre seja um número.
 
-### Bug 2: Valor liquido salvo ignora taxa de parcelamento (rates_info)
+2. Na função `handleMainSubmit`, tornar a leitura do interesse mais explícita:
+   - Usar `Number(data.interest_rate)` para garantir que é um número
+   - Adicionar log de debug temporário para validar o fluxo
 
-**Problema:** O `MdrInfoCard` (UI) busca corretamente a taxa por numero de parcelas em `rates_info`, mas a logica de submit (linhas 462-484) sempre usa `credit_rate` (taxa a vista). Isso faz com que o valor liquido salvo no banco use a taxa errada.
+3. Garantir que o `original_amount` é salvo corretamente (valor sem juros) e o `amount` de cada parcela inclui os juros (PMT da tabela Price).
 
-**Solucao:**
-- Na funcao `handleMainSubmit`, replicar a mesma logica do `MdrInfoCard`: quando a transacao e parcelada, buscar a taxa correspondente em `rates_info` do terminal. Usar `credit_rate` apenas como fallback.
+4. Na preview de parcelas (já funciona na UI), manter a mesma lógica para consistência.
 
-**Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
-- Na secao de calculo de taxa MDR (linhas 462-484), adicionar:
-  - Verificar se `is_installment` e `installments_count >= 2`
-  - Parsear `rates_info` do terminal selecionado
-  - Buscar a taxa correspondente ao numero de parcelas
-  - Usar `credit_rate` como fallback caso nao encontre
+### Detalhes Técnicos
 
-Trecho de logica atualizado:
+Mudança no schema:
 ```text
-if (isDebit) {
-  rate = selectedTerminal.debit_rate ?? 0;
-} else {
-  // Check installment-specific rate from rates_info
-  const fallbackRate = selectedTerminal.credit_rate ?? 0;
-  if (data.is_installment && data.installments_count && data.installments_count >= 2) {
-    const rates = parseRatesInfo(selectedTerminal.rates_info);
-    const match = rates.find(r => r.installments === data.installments_count);
-    rate = match ? match.rate : fallbackRate;
-  } else {
-    rate = fallbackRate;
-  }
-}
+// De:
+interest_rate: z.coerce.number().min(0).max(100).optional(),
+
+// Para:
+interest_rate: z.coerce.number().min(0).max(100).default(0),
 ```
 
-- Adicionar (ou importar) a funcao `parseRatesInfo` no arquivo do modal.
+Mudança no submit (linha ~565):
+```text
+const interestRate = Number(data.interest_rate) || 0;
+```
 
----
+Isso garante que mesmo se o valor chegar como string ou undefined, será tratado como número. A lógica de cálculo Price já existente permanece a mesma, apenas a leitura do valor fica mais defensiva.
 
-### Resumo das alteracoes
+### Escopo
 
-| Arquivo | Alteracao |
-|---|---|
-| `src/hooks/useTransactions.ts` | Buscar todas as maquininhas sem filtro de empresa e expor `allCardTerminals` |
-| `src/components/lancamentos/TransactionFormModal.tsx` | Filtrar maquininhas por `formCompanyId`; usar taxa de `rates_info` no submit |
-| `src/components/layout/GlobalTransactionModal.tsx` | Passar `allCardTerminals` como prop |
+- Apenas novos lançamentos serão afetados (conforme solicitado)
+- Nenhuma migração de dados existentes
+- Nenhuma alteração no banco de dados
 
