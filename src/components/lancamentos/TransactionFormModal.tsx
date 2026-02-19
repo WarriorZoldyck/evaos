@@ -156,7 +156,7 @@ const transactionSchema = z.object({
   attachment_url: z.string().url("URL inválida").max(500).or(z.literal("")).optional(),
   is_installment: z.boolean().default(false),
   installments_count: z.coerce.number().int().min(2).max(120).optional(),
-  interest_rate: z.coerce.number().min(0).max(100).optional(),
+  interest_rate: z.coerce.number().min(0).max(100).default(0),
   first_installment_amount: z.coerce.number().positive().optional(),
   is_recurring: z.boolean().default(false),
   recurring_frequency: z.string().optional(),
@@ -562,7 +562,7 @@ export function TransactionFormModal({
       const seriesId = crypto.randomUUID();
       const total = data.amount;
       const count = data.installments_count;
-      const interestRate = data.interest_rate || 0;
+      const interestRate = Number(data.interest_rate) || 0;
       let installmentAmount: number;
 
       if (interestRate > 0) {
