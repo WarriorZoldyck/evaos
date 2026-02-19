@@ -1,48 +1,67 @@
 
 
-## Correção: Juros em Lançamentos de Cartão de Crédito
+## Adicionar opção "A cada X dias" nas frequências de recorrência
 
-### Diagnóstico
+### O que muda
 
-O formulário de lançamentos possui o campo "Taxa de juros mensal (%)" que aparece ao ativar "Parcelado" (quando não há maquininha selecionada). A lógica de cálculo Price (Sistema Francês) existe no submit e parece correta em teoria. No entanto, há um problema sutil com o tratamento do campo `interest_rate` pelo Zod + React Hook Form:
+Adicionar uma nova opção de frequência "A cada X dias" no formulário de lançamento recorrente, permitindo que o usuário defina um intervalo personalizado em dias (ex: a cada 3 dias, a cada 10 dias, etc.).
 
-**Problema identificado:** O campo `interest_rate` usa `z.coerce.number().min(0).max(100).optional()`. Com `<Input type="number" />` e React Hook Form, o valor pode não ser coercionado corretamente no momento do submit dependendo do estado interno do campo. Além disso, a condição `data.interest_rate || 0` trata o valor `undefined` mas pode mascarar cenários onde o valor chega como string.
-
-### Alterações Planejadas
+### Alterações
 
 **Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
 
-1. Tornar a coerção do `interest_rate` mais robusta no schema Zod, usando `.default(0)` em vez de `.optional()` para garantir que sempre seja um número.
+1. **Adicionar frequência na lista `RECURRING_FREQUENCIES`:**
+   - Nova opção: `{ value: "custom_days", label: "A cada X dias" }`
 
-2. Na função `handleMainSubmit`, tornar a leitura do interesse mais explícita:
-   - Usar `Number(data.interest_rate)` para garantir que é um número
-   - Adicionar log de debug temporário para validar o fluxo
+2. **Adicionar campo no schema Zod:**
+   - `recurring_custom_days: z.coerce.number().int().min(1).max(365).optional()`
 
-3. Garantir que o `original_amount` é salvo corretamente (valor sem juros) e o `amount` de cada parcela inclui os juros (PMT da tabela Price).
+3. **Adicionar campo de input condicional na UI:**
+   - Quando a frequência selecionada for `"custom_days"`, exibir um campo numérico "Intervalo em dias" logo abaixo do seletor de frequência
+   - Campo com mínimo 1 e máximo 365
 
-4. Na preview de parcelas (já funciona na UI), manter a mesma lógica para consistência.
+4. **Atualizar a lógica de submit (`getNextDate` e `maxOccurrences`):**
+   - Adicionar case `"custom_days"` no switch que calcula a próxima data, usando `data.recurring_custom_days` como intervalo
+   - Calcular `maxOccurrences` dinamicamente: `Math.floor(365 / customDays)` (limitado a 365 ocorrências)
 
-### Detalhes Técnicos
+5. **Atualizar valores padrão do formulário:**
+   - Incluir `recurring_custom_days: undefined` nos defaults e no reset
 
-Mudança no schema:
+**Arquivo: `src/hooks/useRecurringTransactions.ts`**
+
+6. **Suportar frequência `custom_days` na geração de ocorrências virtuais:**
+   - Buscar um campo que indique o intervalo personalizado (pode ser o `day_of_month` reutilizado, já que não faz sentido para frequência custom_days)
+   - Adicionar `else if (rec.frequency === "custom_days")` no loop de geração, usando `addDays(current, rec.day_of_month || 1)`
+
+### Detalhes técnicos
+
+Trecho da UI (condicional ao selecionar "A cada X dias"):
 ```text
-// De:
-interest_rate: z.coerce.number().min(0).max(100).optional(),
-
-// Para:
-interest_rate: z.coerce.number().min(0).max(100).default(0),
+{watchRecurringFrequency === "custom_days" && (
+  <FormField
+    name="recurring_custom_days"
+    render={({ field }) => (
+      <FormItem>
+        <FormLabel>Intervalo em dias</FormLabel>
+        <Input type="number" min={1} max={365} placeholder="Ex: 15" {...field} />
+      </FormItem>
+    )}
+  />
+)}
 ```
 
-Mudança no submit (linha ~565):
+Trecho do submit:
 ```text
-const interestRate = Number(data.interest_rate) || 0;
+case "custom_days": {
+  const interval = data.recurring_custom_days || 30;
+  const d = new Date(base);
+  d.setDate(d.getDate() + index * interval);
+  return d;
+}
 ```
 
-Isso garante que mesmo se o valor chegar como string ou undefined, será tratado como número. A lógica de cálculo Price já existente permanece a mesma, apenas a leitura do valor fica mais defensiva.
-
-### Escopo
-
-- Apenas novos lançamentos serão afetados (conforme solicitado)
-- Nenhuma migração de dados existentes
-- Nenhuma alteração no banco de dados
-
+maxOccurrences para custom_days:
+```text
+const customDays = data.recurring_custom_days || 30;
+const maxOcc = frequency === "custom_days" ? Math.floor(365 / customDays) : ...;
+```
