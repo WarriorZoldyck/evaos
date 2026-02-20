@@ -1,90 +1,53 @@
 
+## Tabela de Preview de Parcelas no Formulario
 
-## Correções: Categorias por Contexto + Parcelamento "A cada X dias"
+### Resumo
+Adicionar uma tabela visual de preview das parcelas que aparece **abaixo** dos campos de parcelamento ja existentes (numero de parcelas, intervalo, juros). Nada do que existe hoje sera removido ou alterado -- a tabela e um complemento que mostra cada parcela com data e valor, permitindo editar o valor da 1a parcela e escolher se distribui a diferenca entre as demais.
 
-### Problema 1: Categorias não atualizam ao trocar contexto
+### O que muda na pratica
 
-**Causa raiz:** A funcao `handleContextChange` (linha 428) chama `setFormCompanyId(companyId)`, mas a busca de categorias depende de um `useEffect` que observa `fetchFormCategories` (um `useCallback` que depende de `formCompanyId`). Como o `setState` do React eh assincrono, o `useCallback` ainda nao foi recriado no momento em que o `useEffect` roda, causando a necessidade de trocar o contexto duas vezes.
+Quando o parcelamento estiver ativo e o valor + quantidade de parcelas forem validos, uma tabela aparece mostrando:
 
-**Solucao:** Adicionar `formCompanyId` diretamente como dependencia do `useEffect` que busca categorias (linha 328), garantindo que a busca seja disparada sempre que o contexto mudar:
+| N | Vencimento | Valor (R$) |
+|---|------------|------------|
+| 1 | 20/02/2026 | *editavel* |
+| 2 | 20/03/2026 | 250,00 |
+| 3 | 20/04/2026 | 250,00 |
+| **Total** | | **750,00** |
 
-```text
-// De:
-useEffect(() => {
-  if (open) fetchFormCategories();
-}, [fetchFormCategories, open]);
+- O valor da 1a parcela pode ser editado diretamente na tabela (campo inline)
+- Ao alterar, aparece uma opcao "Distribuir diferenca nas demais parcelas" (marcada por padrao)
+  - Se marcada: o saldo restante e dividido igualmente entre as parcelas 2..N
+  - Se desmarcada: as demais parcelas mantem o valor original (divisao simples do total)
+- Quando tem juros (taxa > 0), os valores sao fixos (Price) e nao permite edicao da 1a parcela
+- A tabela substitui o bloco atual de preview simples ("Nx de R$ X") e o toggle "Valor da 1a parcela diferente?" -- mesma funcionalidade, mas agora visual e integrada
 
-// Para:
-useEffect(() => {
-  if (open) fetchFormCategories();
-}, [fetchFormCategories, open, formCompanyId]);
-```
+### Detalhes tecnicos
 
-Alem disso, limpar as selecoes de categoria ao trocar contexto no `handleContextChange`:
+**Novo componente:** `src/components/lancamentos/InstallmentPreviewTable.tsx`
 
-```text
-form.setValue("category", "");
-form.setValue("subcategory", "");
-form.setValue("subcategory2", "");
-```
+Recebe como props:
+- `totalAmount`, `installmentsCount`, `paymentDate`
+- `intervalType` ("monthly" | "custom_days"), `customDays`
+- `interestRate`
+- `firstInstallmentAmount`, `onFirstInstallmentChange`
 
----
+Logica interna:
+- Calcula datas com `addMonths` ou `addDays` conforme intervalo
+- Se juros > 0: mostra parcelas Price (somente leitura)
+- Se juros = 0: permite editar a 1a parcela; checkbox "Distribuir diferenca" controla se as demais recebem o saldo restante ou mantem valor padrao
 
-### Problema 2: "A cada X dias" no parcelamento
+**Alteracao em `TransactionFormModal.tsx`:**
+- Substituir o bloco de preview (linhas ~1533-1571) pelo novo `InstallmentPreviewTable`
+- Remover o state `customFirstInstallment` (o toggle antigo) -- a funcionalidade agora esta dentro da tabela
+- O campo `first_installment_amount` do form continua sendo usado, mas controlado pela tabela via callback
+- Nenhuma alteracao na logica de submit (ja suporta `first_installment_amount`)
 
-Hoje, parcelas sempre usam `addMonths` para calcular datas. O usuario quer poder definir um intervalo em dias tambem para parcelas (nao so recorrencia).
+**Componentes usados:** `Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell` (ja existentes), `Input`, `Checkbox`, `Label`
 
-**Solucao:**
+### Arquivos
 
-1. Adicionar um campo `installment_interval_type` ao schema Zod com opcoes `"monthly"` e `"custom_days"`, e um campo `installment_custom_days` (inteiro, 1-365).
-
-2. Na UI da secao "Parcelado", adicionar um seletor de intervalo (Mensal / A cada X dias) abaixo do numero de parcelas, e um campo numerico condicional para o intervalo em dias.
-
-3. Na logica de submit (linha 603), substituir `addMonths(data.payment_date, idx)` por logica condicional:
-   - Se `monthly`: manter `addMonths`
-   - Se `custom_days`: usar `addDays(data.payment_date, idx * interval)`
-
-4. Garantir que as datas calculadas sao salvas corretamente ja na primeira gravacao (sem necessidade de editar depois).
-
-**Arquivo: `src/components/lancamentos/TransactionFormModal.tsx`**
-
-Mudancas no schema:
-```text
-installment_interval_type: z.enum(["monthly", "custom_days"]).default("monthly"),
-installment_custom_days: z.coerce.number().int().min(1).max(365).optional(),
-```
-
-Mudanca na UI (dentro do bloco `watchInstallment`):
-```text
-<FormField name="installment_interval_type" ...>
-  <Select> Mensal | A cada X dias </Select>
-</FormField>
-{watchIntervalType === "custom_days" && (
-  <FormField name="installment_custom_days" ...>
-    <Input type="number" placeholder="Ex: 15" />
-  </FormField>
-)}
-```
-
-Mudanca no submit:
-```text
-const intervalType = data.installment_interval_type || "monthly";
-const customDays = data.installment_custom_days || 30;
-
-for (let idx = 0; idx < count; idx++) {
-  const payDate = intervalType === "custom_days"
-    ? addDays(data.payment_date, idx * customDays)
-    : addMonths(data.payment_date, idx);
-  // ...
-}
-```
-
----
-
-### Resumo de alteracoes
-
-| Arquivo | O que muda |
-|---------|-----------|
-| `TransactionFormModal.tsx` | Corrigir useEffect de categorias; limpar selecao de categoria ao trocar contexto; adicionar campos e logica de intervalo no parcelamento |
-
-Nenhuma alteracao no banco de dados necessaria.
+| Arquivo | Acao |
+|---------|------|
+| `src/components/lancamentos/InstallmentPreviewTable.tsx` | Criar (novo componente) |
+| `src/components/lancamentos/TransactionFormModal.tsx` | Alterar (substituir preview simples + toggle pela tabela) |
