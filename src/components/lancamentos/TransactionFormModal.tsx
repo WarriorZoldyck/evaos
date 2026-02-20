@@ -53,6 +53,7 @@ import type {
   CreditCard,
 } from "@/hooks/useTransactions";
 import { PaymentMethodFields } from "./PaymentMethodFields";
+import { InstallmentPreviewTable } from "./InstallmentPreviewTable";
 import { CategorySelectWithCreate } from "./CategorySelectWithCreate";
 
 interface RateInfo {
@@ -1075,7 +1076,9 @@ function MainFormContent({
   const watchAmount = form.watch("amount");
   const watchInstallmentsCount = form.watch("installments_count");
   const watchInterestRate = form.watch("interest_rate");
-  const [customFirstInstallment, setCustomFirstInstallment] = useState(false);
+  const watchPaymentDate = form.watch("payment_date");
+  const watchIntervalType = form.watch("installment_interval_type");
+  const watchCustomDays = form.watch("installment_custom_days");
 
   // Calculate Price table installment preview
   const interestPreview = (() => {
@@ -1530,44 +1533,19 @@ function MainFormContent({
                       )}
                     />
                   )}
-                  {interestPreview && (
-                    <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1">
-                      <p className="font-medium">
-                        {watchInstallmentsCount}x de R$ {interestPreview.pmt.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} = R$ {interestPreview.totalWithInterest.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                      </p>
-                      {interestPreview.totalInterest > 0 && (
-                        <p className="text-muted-foreground">
-                          Juros totais: R$ {interestPreview.totalInterest.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  {(!watchInterestRate || watchInterestRate <= 0) && (
-                    <>
-                      <div className="flex items-center gap-3">
-                        <Switch
-                          id="custom-first"
-                          checked={customFirstInstallment}
-                          onCheckedChange={setCustomFirstInstallment}
-                        />
-                        <Label htmlFor="custom-first" className="text-sm">Valor da 1ª parcela diferente?</Label>
-                      </div>
-                      {customFirstInstallment && (
-                        <FormField
-                          control={form.control}
-                          name="first_installment_amount"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Valor da 1ª parcela (R$)</FormLabel>
-                              <FormControl>
-                                <Input type="number" step="0.01" min="0" placeholder="Ex: 150.00" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </>
+                  {interestPreview && watchPaymentDate && (
+                    <InstallmentPreviewTable
+                      totalAmount={watchAmount}
+                      installmentsCount={watchInstallmentsCount}
+                      paymentDate={watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate)}
+                      intervalType={(watchIntervalType as "monthly" | "custom_days") || "monthly"}
+                      customDays={watchCustomDays ? Number(watchCustomDays) : undefined}
+                      interestRate={watchInterestRate || 0}
+                      firstInstallmentAmount={form.watch("first_installment_amount") ? Number(form.watch("first_installment_amount")) : undefined}
+                      onFirstInstallmentChange={(val) => {
+                        form.setValue("first_installment_amount", val ?? 0);
+                      }}
+                    />
                   )}
                 </div>
               )}
