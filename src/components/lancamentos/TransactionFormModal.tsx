@@ -421,8 +421,44 @@ export function TransactionFormModal({
       } else {
         setFormCompanyId(selectedCompanyId);
         setActiveTab(isPersonal ? "despesa" : "receita");
-        form.reset();
-        transferForm.reset();
+        form.reset({
+          description: "",
+          amount: 0,
+          payment_date: new Date(),
+          competence_date: new Date(),
+          status: "Pendente",
+          category: "",
+          subcategory: "",
+          subcategory2: "",
+          payment_method: "",
+          bank_account_id: "",
+          credit_card_id: "",
+          wallet_id: "",
+          card_terminal_id: "",
+          supplier_id: "",
+          client_id: "",
+          contact_name: "",
+          notes: "",
+          barcode: "",
+          attachment_url: "",
+          is_installment: false,
+          installments_count: 2,
+          interest_rate: 0,
+          first_installment_amount: undefined,
+          installment_interval_type: "monthly",
+          installment_custom_days: undefined,
+          is_recurring: false,
+          recurring_frequency: "monthly",
+          recurring_custom_days: undefined,
+          recurring_end_date: undefined,
+        });
+        transferForm.reset({
+          description: "",
+          amount: 0,
+          payment_date: new Date(),
+          source_account_id: "",
+          dest_account_id: "",
+        });
       }
     }
   }, [editTransaction, open]);
