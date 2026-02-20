@@ -159,6 +159,8 @@ const transactionSchema = z.object({
   installments_count: z.coerce.number().int().min(2).max(120).optional(),
   interest_rate: z.coerce.number().min(0).max(100).default(0),
   first_installment_amount: z.coerce.number().positive().optional(),
+  installment_interval_type: z.enum(["monthly", "custom_days"]).default("monthly"),
+  installment_custom_days: z.coerce.number().int().min(1).max(365).optional(),
   is_recurring: z.boolean().default(false),
   recurring_frequency: z.string().optional(),
   recurring_custom_days: z.coerce.number().int().min(1).max(365).optional(),
@@ -327,7 +329,7 @@ export function TransactionFormModal({
 
   useEffect(() => {
     if (open) fetchFormCategories();
-  }, [fetchFormCategories, open]);
+  }, [fetchFormCategories, open, formCompanyId]);
 
   const isEditing = !!editTransaction;
   const formIsPersonal = formCompanyId === null;
@@ -429,11 +431,14 @@ export function TransactionFormModal({
     if (isEditing) return; // Block context change during editing to preserve account fields
     setFormCompanyId(companyId);
     setActiveTab(companyId === null ? "despesa" : "receita");
-    // Clear account selections when context changes
+    // Clear account and category selections when context changes
     form.setValue("bank_account_id", "");
     form.setValue("credit_card_id", "");
     form.setValue("wallet_id", "");
     form.setValue("card_terminal_id", "");
+    form.setValue("category", "");
+    form.setValue("subcategory", "");
+    form.setValue("subcategory2", "");
   };
 
   const rootCategories = formCategories.filter((c) => !c.parent_id);
@@ -576,9 +581,13 @@ export function TransactionFormModal({
         const firstAmt = Math.round(data.first_installment_amount * 100) / 100;
         const restAmt = Math.round(((total - firstAmt) / (count - 1)) * 100) / 100;
 
+        const instIntervalType = data.installment_interval_type || "monthly";
+        const instCustomDays = data.installment_custom_days || 30;
         const installments: TransactionInsert[] = [];
         for (let idx = 0; idx < count; idx++) {
-          const payDate = addMonths(data.payment_date, idx);
+          const payDate = instIntervalType === "custom_days"
+            ? addDays(data.payment_date, idx * instCustomDays)
+            : addMonths(data.payment_date, idx);
           const compDate = data.competence_date;
           installments.push({
             ...baseData,
@@ -599,9 +608,13 @@ export function TransactionFormModal({
         installmentAmount = Math.round((total / count) * 100) / 100;
       }
 
+      const instIntervalType2 = data.installment_interval_type || "monthly";
+      const instCustomDays2 = data.installment_custom_days || 30;
       const installments: TransactionInsert[] = [];
       for (let idx = 0; idx < count; idx++) {
-        const payDate = addMonths(data.payment_date, idx);
+        const payDate = instIntervalType2 === "custom_days"
+          ? addDays(data.payment_date, idx * instCustomDays2)
+          : addMonths(data.payment_date, idx);
         const compDate = data.competence_date;
         installments.push({
           ...baseData,
@@ -1422,6 +1435,42 @@ function MainFormContent({
                       </FormItem>
                     )}
                   />
+                  <FormField
+                    control={form.control}
+                    name="installment_interval_type"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Intervalo entre parcelas</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || "monthly"}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="monthly">Mensal</SelectItem>
+                            <SelectItem value="custom_days">A cada X dias</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {form.watch("installment_interval_type") === "custom_days" && (
+                    <FormField
+                      control={form.control}
+                      name="installment_custom_days"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Intervalo em dias</FormLabel>
+                          <FormControl>
+                            <Input type="number" min={1} max={365} placeholder="Ex: 15" {...field} value={field.value || ""} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   {!form.watch("card_terminal_id") && (
                     <FormField
                       control={form.control}
