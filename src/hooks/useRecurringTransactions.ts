@@ -113,10 +113,13 @@ function generateOccurrences(
       current = addDays(current, 1);
     } else if (rec.frequency === "weekly") {
       current = addDays(current, 7);
+    } else if (rec.frequency === "biweekly") {
+      current = addDays(current, 14);
     } else if (rec.frequency === "custom_days") {
       current = addDays(current, rec.day_of_month || 1);
+    } else if (rec.frequency === "yearly") {
+      current = addMonths(current, 12);
     } else {
-      // yearly or unknown - skip
       break;
     }
   }
