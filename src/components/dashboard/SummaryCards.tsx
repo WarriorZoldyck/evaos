@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Clock, Equal } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -77,62 +77,80 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
     navigate(`/lancamentos?${sp.toString()}`);
   };
 
+  const saldoPrevisto = entradaPrevista - saidaPrevista;
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
-      <SummaryCard
-        title="Faturamento"
-        value={faturamento}
-        icon={DollarSign}
-        trend="neutral"
-        gradient="bg-gradient-primary"
-        loading={loading}
-        onClick={() => go({ type: "receita" })}
-      />
-      <SummaryCard
-        title="Entradas"
-        value={entradas}
-        icon={TrendingUp}
-        trend="up"
-        gradient="bg-gradient-success"
-        loading={loading}
-        onClick={() => go({ type: "receita", status: "Pago" })}
-      />
-      <SummaryCard
-        title="Saídas"
-        value={saidas}
-        icon={TrendingDown}
-        trend="down"
-        gradient="bg-gradient-destructive"
-        loading={loading}
-        onClick={() => go({ type: "despesa", status: "Pago" })}
-      />
-      <SummaryCard
-        title="Saldo do Período"
-        value={saldo}
-        icon={Wallet}
-        trend={saldo >= 0 ? "up" : "down"}
-        gradient={saldo >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
-        loading={loading}
-        onClick={() => go({})}
-      />
-      <SummaryCard
-        title="Entrada Prevista"
-        value={entradaPrevista}
-        icon={Clock}
-        trend="neutral"
-        gradient="bg-gradient-primary"
-        loading={loading}
-        onClick={() => go({ type: "receita", status: "Pendente" })}
-      />
-      <SummaryCard
-        title="Saída Prevista"
-        value={saidaPrevista}
-        icon={Clock}
-        trend="neutral"
-        gradient="bg-gradient-destructive"
-        loading={loading}
-        onClick={() => go({ type: "despesa", status: "Pendente" })}
-      />
+    <div className="space-y-4">
+      {/* Main cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <SummaryCard
+          title="Faturamento"
+          value={faturamento}
+          icon={DollarSign}
+          trend="neutral"
+          gradient="bg-gradient-primary"
+          loading={loading}
+          onClick={() => go({ type: "receita" })}
+        />
+        <SummaryCard
+          title="Entradas"
+          value={entradas}
+          icon={TrendingUp}
+          trend="up"
+          gradient="bg-gradient-success"
+          loading={loading}
+          onClick={() => go({ type: "receita", status: "Pago" })}
+        />
+        <SummaryCard
+          title="Saídas"
+          value={saidas}
+          icon={TrendingDown}
+          trend="down"
+          gradient="bg-gradient-destructive"
+          loading={loading}
+          onClick={() => go({ type: "despesa", status: "Pago" })}
+        />
+        <SummaryCard
+          title="Saldo do Período"
+          value={saldo}
+          icon={Wallet}
+          trend={saldo >= 0 ? "up" : "down"}
+          gradient={saldo >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
+          loading={loading}
+          onClick={() => go({})}
+        />
+      </div>
+
+      {/* Forecast cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <SummaryCard
+          title="Entrada Prevista"
+          value={entradaPrevista}
+          icon={Clock}
+          trend="neutral"
+          gradient="bg-gradient-primary"
+          loading={loading}
+          onClick={() => go({ type: "receita", status: "Pendente" })}
+        />
+        <SummaryCard
+          title="Saída Prevista"
+          value={saidaPrevista}
+          icon={Clock}
+          trend="neutral"
+          gradient="bg-gradient-destructive"
+          loading={loading}
+          onClick={() => go({ type: "despesa", status: "Pendente" })}
+        />
+        <SummaryCard
+          title="Saldo Previsto"
+          value={saldoPrevisto}
+          icon={Equal}
+          trend={saldoPrevisto >= 0 ? "up" : "down"}
+          gradient={saldoPrevisto >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
+          loading={loading}
+          onClick={() => go({ status: "Pendente" })}
+        />
+      </div>
     </div>
   );
 }
