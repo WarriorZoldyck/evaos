@@ -64,19 +64,20 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
     fetchCards();
   }, [user, selectedCompanyId, isPersonal]);
 
-  // Fetch transactions
+  // Fetch transactions with pagination and transfer filter
   useEffect(() => {
     if (!user) return;
 
-    const fetch = async () => {
+    const fetchTx = async () => {
       setLoading(true);
       const dateField = mode === "caixa" ? "payment_date" : "competence_date";
 
       let query = supabase
         .from("transactions")
-        .select("id, amount, type, status, category, subcategory, bank_account_id, credit_card_id")
+        .select("id, amount, type, status, category, subcategory, subcategory2, bank_account_id, credit_card_id, transfer_id")
         .gte(dateField, startStr)
-        .lte(dateField, endStr);
+        .lte(dateField, endStr)
+        .is("transfer_id", null);
 
       if (mode === "caixa") {
         query = query.eq("status", "Pago");
@@ -96,33 +97,75 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
         }
       }
 
-      const { data } = await query;
-      setTransactions(data || []);
+      // Paginate to avoid Supabase's default 1000 row limit
+      const allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
+        if (!data || data.length === 0) break;
+        allData.push(...data);
+        if (data.length < pageSize) break;
+        page++;
+      }
+
+      setTransactions(allData);
       setLoading(false);
     };
 
-    fetch();
+    fetchTx();
   }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId, linkedCardIds, mode]);
 
-  // Resolve category to its full ancestor chain [root, ..., leaf]
-  const resolveChain = useCallback(
-    (categoryValue: string): { id: string; name: string }[] => {
-      let cat = categories.find((c) => c.id === categoryValue);
-      if (!cat) cat = categories.find((c) => c.name === categoryValue);
-      if (!cat) return [{ id: categoryValue, name: categoryValue }];
-
-      // Build chain from leaf to root
-      const chain: { id: string; name: string }[] = [];
-      let current: CategoryRecord | undefined = cat;
-      while (current) {
-        chain.unshift({ id: current.id, name: current.name });
-        current = current.parent_id
-          ? categories.find((c) => c.id === current!.parent_id)
-          : undefined;
-      }
-      return chain;
+  // Resolve a category name/id to its display name
+  const resolveName = useCallback(
+    (value: string | null | undefined): { id: string; name: string } | null => {
+      if (!value) return null;
+      let cat = categories.find((c) => c.id === value);
+      if (!cat) cat = categories.find((c) => c.name.toLowerCase() === value.toLowerCase());
+      if (cat) return { id: cat.id, name: cat.name };
+      return { id: value, name: value };
     },
     [categories]
+  );
+
+  // Build 3-level category chain (same logic as DRE)
+  const buildChain = useCallback(
+    (category: string, subcategory?: string | null, subcategory2?: string | null): { id: string; name: string }[] => {
+      const chain: { id: string; name: string }[] = [];
+
+      let cat = categories.find((c) => c.id === category);
+      if (!cat) cat = categories.find((c) => c.name.toLowerCase() === category.toLowerCase());
+
+      if (cat && cat.parent_id) {
+        const fullChain: { id: string; name: string }[] = [];
+        let current: CategoryRecord | undefined = cat;
+        while (current) {
+          fullChain.unshift({ id: current.id, name: current.name });
+          current = current.parent_id ? categories.find((c) => c.id === current!.parent_id) : undefined;
+        }
+        chain.push(...fullChain);
+      } else {
+        const resolved = resolveName(category);
+        if (resolved) chain.push(resolved);
+      }
+
+      if (subcategory) {
+        const sub = resolveName(subcategory);
+        if (sub && !chain.some((c) => c.id === sub.id)) {
+          chain.push(sub);
+        }
+      }
+
+      if (subcategory2) {
+        const sub2 = resolveName(subcategory2);
+        if (sub2 && !chain.some((c) => c.id === sub2.id)) {
+          chain.push(sub2);
+        }
+      }
+
+      return chain.length > 0 ? chain : [{ id: category, name: category }];
+    },
+    [categories, resolveName]
   );
 
   // Build grouped data as recursive tree
@@ -134,7 +177,7 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
     transactions.forEach((t) => {
       const tree = t.type === "receita" ? revenueTree : expenseTree;
       const amount = Number(t.amount);
-      const chain = resolveChain(t.category);
+      const chain = buildChain(t.category, t.subcategory, t.subcategory2);
 
       let currentLevel = tree;
       for (let i = 0; i < chain.length; i++) {
@@ -168,7 +211,7 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
       totalRevenue: rev.reduce((s, g) => s + g.total, 0),
       totalExpense: exp.reduce((s, g) => s + g.total, 0),
     };
-  }, [transactions, resolveChain]);
+  }, [transactions, buildChain]);
 
   return {
     revenueGroups,
