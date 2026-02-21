@@ -63,6 +63,7 @@ export function TerminalFormModal({
   const [saving, setSaving] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const fieldSetters: Record<string, [string, (v: string) => void]> = {
     settlementDaysDebit: [settlementDaysDebit, setSettlementDaysDebit],
@@ -74,6 +75,7 @@ export function TerminalFormModal({
   useEffect(() => {
     if (!open) return;
     setActiveField(null);
+    setErrors({});
     if (editData) {
       setName(editData.name || "");
       setAcquirer(editData.acquirer || "");
@@ -121,7 +123,12 @@ export function TerminalFormModal({
   }, [activeField, fieldSetters]);
 
   const handleSave = async () => {
-    if (!name.trim() || !bankAccountId) return;
+    const newErrors: Record<string, string> = {};
+    if (!name.trim()) newErrors.name = "Nome é obrigatório";
+    if (!bankAccountId) newErrors.bankAccountId = "Conta é obrigatória";
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
     setSaving(true);
     const data: any = {
       name: name.trim(),
@@ -206,12 +213,19 @@ export function TerminalFormModal({
             >
               <div className="max-h-[340px] overflow-y-auto p-4 space-y-4 scrollbar-thin">
                 {/* Name */}
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="NOME DA MAQUININHA"
-                  className="w-full bg-transparent text-white font-bold text-base tracking-wide placeholder:text-white/25 border-none outline-none"
-                />
+                <div className="space-y-1">
+                  <input
+                    value={name}
+                    onChange={(e) => { setName(e.target.value); setErrors((prev) => ({ ...prev, name: "" })); }}
+                    placeholder="NOME DA MAQUININHA *"
+                    className={`w-full bg-transparent text-white font-bold text-base tracking-wide placeholder:text-white/25 border-b outline-none pb-1 transition-colors ${
+                      errors.name ? "border-red-400" : "border-transparent"
+                    }`}
+                  />
+                  {errors.name && (
+                    <p className="text-[10px] font-mono text-red-400">{errors.name}</p>
+                  )}
+                </div>
 
                 {/* Acquirer */}
                 <input
@@ -252,9 +266,11 @@ export function TerminalFormModal({
 
                 {/* Account select */}
                 <div className="space-y-1.5">
-                  <label className="text-[9px] font-mono text-cyan-400/80 uppercase tracking-wider">Conta de Recebimento</label>
-                  <Select value={bankAccountId} onValueChange={setBankAccountId}>
-                    <SelectTrigger className={bodyInputClass + " [&>span]:text-white"}>
+                  <label className="text-[9px] font-mono text-cyan-400/80 uppercase tracking-wider">
+                    Conta de Recebimento <span className="text-red-400">*</span>
+                  </label>
+                  <Select value={bankAccountId} onValueChange={(v) => { setBankAccountId(v); setErrors((prev) => ({ ...prev, bankAccountId: "" })); }}>
+                    <SelectTrigger className={`${bodyInputClass} [&>span]:text-white ${errors.bankAccountId ? "border-red-400 ring-1 ring-red-400/40" : ""}`}>
                       <SelectValue placeholder="Selecione a conta" />
                     </SelectTrigger>
                     <SelectContent>
@@ -263,6 +279,9 @@ export function TerminalFormModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.bankAccountId && (
+                    <p className="text-[10px] font-mono text-red-400">{errors.bankAccountId}</p>
+                  )}
                 </div>
 
                 {/* Serial */}
@@ -347,7 +366,7 @@ export function TerminalFormModal({
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={saving || !name.trim() || !bankAccountId}
+                disabled={saving}
                 className="bg-green-500 hover:bg-green-400 text-white font-bold shadow-lg shadow-green-500/30 rounded-xl text-xs h-10 px-5 transition-all hover:shadow-green-400/40"
               >
                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
