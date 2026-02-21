@@ -23,10 +23,11 @@ interface CategoryFormModalProps {
   onClose: () => void;
   parentName?: string;
   editData?: { id: string; name: string; type: string | null } | null;
+  defaultType?: string;
   onSave: (data: { name: string; type?: string }) => Promise<boolean>;
 }
 
-export function CategoryFormModal({ open, onClose, parentName, editData, onSave }: CategoryFormModalProps) {
+export function CategoryFormModal({ open, onClose, parentName, editData, defaultType, onSave }: CategoryFormModalProps) {
   const [name, setName] = useState("");
   const [type, setType] = useState("ambos");
   const [saving, setSaving] = useState(false);
@@ -34,9 +35,9 @@ export function CategoryFormModal({ open, onClose, parentName, editData, onSave 
   useEffect(() => {
     if (open) {
       setName(editData?.name || "");
-      setType(editData?.type || "ambos");
+      setType(editData?.type || defaultType || "ambos");
     }
-  }, [open, editData]);
+  }, [open, editData, defaultType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
