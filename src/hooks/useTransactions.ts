@@ -129,31 +129,30 @@ export function useTransactions() {
     [isPersonal, selectedCompanyId]
   );
 
-  // Fetch auxiliary data
-  useEffect(() => {
+  // Fetch auxiliary data (extracted so it can be called on demand)
+  const fetchAux = useCallback(async () => {
     if (!user) return;
+    const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes, termRes] =
+      await Promise.all([
+        companyFilter(supabase.from("bank_accounts").select("id, name, type")).order("name"),
+        companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, bank_account_id")).order("name"),
+        companyFilter(supabase.from("wallets").select("id, name")).order("name"),
+        supabase.from("suppliers").select("id, name").order("name"),
+        supabase.from("clients").select("id, name").order("name"),
+        companyFilter(supabase.from("categories").select("id, name, parent_id, type")).order("name"),
+        companyFilter(supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info")).order("name"),
+      ]);
 
-    const fetchAux = async () => {
-      const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes, termRes] =
-        await Promise.all([
-          companyFilter(supabase.from("bank_accounts").select("id, name, type")).order("name"),
-          companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, bank_account_id")).order("name"),
-          companyFilter(supabase.from("wallets").select("id, name")).order("name"),
-          supabase.from("suppliers").select("id, name").order("name"),
-          supabase.from("clients").select("id, name").order("name"),
-          companyFilter(supabase.from("categories").select("id, name, parent_id, type")).order("name"),
-          companyFilter(supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info")).order("name"),
-        ]);
+    if (accRes.data) setBankAccounts(accRes.data);
+    if (cardRes.data) setCreditCards(cardRes.data);
+    if (walletRes.data) setWallets(walletRes.data);
+    if (supplierRes.data) setSuppliers(supplierRes.data);
+    if (clientRes.data) setClients(clientRes.data);
+    if (catRes.data) setCategories(catRes.data);
+    if (termRes.data) setCardTerminals(termRes.data as CardTerminalInfo[]);
+  }, [user, companyFilter]);
 
-      if (accRes.data) setBankAccounts(accRes.data);
-      if (cardRes.data) setCreditCards(cardRes.data);
-      if (walletRes.data) setWallets(walletRes.data);
-      if (supplierRes.data) setSuppliers(supplierRes.data);
-      if (clientRes.data) setClients(clientRes.data);
-      if (catRes.data) setCategories(catRes.data);
-      if (termRes.data) setCardTerminals(termRes.data as CardTerminalInfo[]);
-    };
-
+  useEffect(() => {
     fetchAux();
 
     // Fetch ALL accounts (no company filter) for transfers
@@ -290,6 +289,7 @@ export function useTransactions() {
     }
     toast({ title: "Lançamento criado com sucesso!" });
     fetchTransactions();
+    fetchAux();
     return true;
   };
 
@@ -305,6 +305,7 @@ export function useTransactions() {
     }
     toast({ title: `${data.length} lançamentos criados com sucesso!` });
     fetchTransactions();
+    fetchAux();
     return true;
   };
 
@@ -323,6 +324,7 @@ export function useTransactions() {
     }
     toast({ title: "Lançamento atualizado!" });
     fetchTransactions();
+    fetchAux();
     return true;
   };
 
@@ -453,6 +455,7 @@ export function useTransactions() {
     filters,
     setFilters,
     fetchTransactions,
+    refetchCategories: fetchAux,
     createTransaction,
     createMultipleTransactions,
     updateTransaction,

@@ -55,6 +55,13 @@ export function CategorySelectWithCreate({
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [localExtras, setLocalExtras] = useState<CategoryOption[]>([]);
+
+  // Merge passed categories with locally created ones (dedup by id)
+  const mergedCategories = (() => {
+    const ids = new Set(categories.map((c) => c.id));
+    return [...categories, ...localExtras.filter((e) => !ids.has(e.id))];
+  })();
 
   const handleSelectChange = (v: string) => {
     if (v === "__create_new__") {
@@ -90,6 +97,8 @@ export function CategorySelectWithCreate({
     }
 
     toast({ title: "Categoria criada!" });
+    // Inject locally so the Select shows the name immediately
+    setLocalExtras((prev) => [...prev, { id: data.id, name: newName.trim() }]);
     setNewName("");
     setCreateOpen(false);
     onCategoryCreated(data.id);
@@ -102,7 +111,7 @@ export function CategorySelectWithCreate({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
-          {categories.map((c) => (
+          {mergedCategories.map((c) => (
             <SelectItem key={c.id} value={c.id}>
               {c.name}
             </SelectItem>
