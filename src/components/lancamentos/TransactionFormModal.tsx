@@ -278,7 +278,7 @@ interface TransactionFormModalProps {
   onSave: (data: TransactionInsert) => Promise<boolean>;
   onSaveMultiple: (data: TransactionInsert[]) => Promise<boolean>;
   onUpdate: (id: string, data: Partial<Transaction>) => Promise<boolean>;
-  onUpdateMultiple?: (updates: Array<{ id: string; amount: number }>) => Promise<boolean>;
+  onUpdateMultiple?: (updates: Array<{ id: string; amount: number; payment_date?: string }>) => Promise<boolean>;
   bankAccounts: { id: string; name: string }[];
   creditCards: CreditCard[];
   wallets: { id: string; name: string }[];
@@ -319,7 +319,8 @@ export function TransactionFormModal({
   const [formCompanyId, setFormCompanyId] = useState<string | null>(null);
   const [formCategories, setFormCategories] = useState<Category[]>([]);
   const [customInstallmentAmounts, setCustomInstallmentAmounts] = useState<Record<number, number>>({});
-  const [seriesUpdates, setSeriesUpdates] = useState<Array<{ id: string; amount: number }>>([]);
+  const [customInstallmentDates, setCustomInstallmentDates] = useState<Record<number, Date>>({});
+  const [seriesUpdates, setSeriesUpdates] = useState<Array<{ id: string; amount: number; payment_date?: string }>>([]);
 
   const fetchFormCategories = useCallback(async () => {
     if (!user) return;
@@ -395,6 +396,7 @@ export function TransactionFormModal({
     if (open) {
       paymentDateManuallyEdited.current = false;
       setCustomInstallmentAmounts({});
+      setCustomInstallmentDates({});
       setSeriesUpdates([]);
       if (editTransaction) {
         setFormCompanyId(editTransaction.company_id ?? null);
@@ -633,9 +635,10 @@ export function TransactionFormModal({
       const installments: TransactionInsert[] = [];
 
       for (let idx = 0; idx < count; idx++) {
-        const payDate = instIntervalType === "custom_days"
+        const defaultPayDate = instIntervalType === "custom_days"
           ? addDays(data.payment_date, idx * instCustomDays)
           : addMonths(data.payment_date, idx);
+        const payDate = customInstallmentDates[idx + 1] ?? defaultPayDate;
         const compDate = data.competence_date;
         const instNum = idx + 1;
 
@@ -870,6 +873,8 @@ export function TransactionFormModal({
               fieldSettings={fieldSettings}
               customInstallmentAmounts={customInstallmentAmounts}
               onCustomInstallmentAmountsChange={setCustomInstallmentAmounts}
+              customInstallmentDates={customInstallmentDates}
+              onCustomInstallmentDatesChange={setCustomInstallmentDates}
               editTransaction={editTransaction}
               onSeriesUpdatesChange={setSeriesUpdates}
             />
@@ -898,6 +903,8 @@ export function TransactionFormModal({
               fieldSettings={fieldSettings}
               customInstallmentAmounts={customInstallmentAmounts}
               onCustomInstallmentAmountsChange={setCustomInstallmentAmounts}
+              customInstallmentDates={customInstallmentDates}
+              onCustomInstallmentDatesChange={setCustomInstallmentDates}
               editTransaction={editTransaction}
               onSeriesUpdatesChange={setSeriesUpdates}
             />
@@ -1058,8 +1065,10 @@ interface MainFormContentProps {
   fieldSettings?: FormFieldSettings;
   customInstallmentAmounts: Record<number, number>;
   onCustomInstallmentAmountsChange: (amounts: Record<number, number>) => void;
+  customInstallmentDates: Record<number, Date>;
+  onCustomInstallmentDatesChange: (dates: Record<number, Date>) => void;
   editTransaction?: Transaction | null;
-  onSeriesUpdatesChange: (updates: Array<{ id: string; amount: number }>) => void;
+  onSeriesUpdatesChange: (updates: Array<{ id: string; amount: number; payment_date?: string }>) => void;
 }
 
 function MainFormContent({
@@ -1084,6 +1093,8 @@ function MainFormContent({
   fieldSettings,
   customInstallmentAmounts,
   onCustomInstallmentAmountsChange,
+  customInstallmentDates,
+  onCustomInstallmentDatesChange,
   editTransaction,
   onSeriesUpdatesChange,
 }: MainFormContentProps) {
@@ -1559,6 +1570,9 @@ function MainFormContent({
                       interestRate={watchInterestRate || 0}
                       customAmounts={customInstallmentAmounts}
                       onCustomAmountsChange={onCustomInstallmentAmountsChange}
+                      customDates={customInstallmentDates}
+                      onCustomDatesChange={onCustomInstallmentDatesChange}
+                      onUpdateTotalAmount={(newTotal) => form.setValue("amount", newTotal)}
                     />
                   )}
                   {/* Series installment table for editing existing series */}
