@@ -98,9 +98,10 @@ export function useDREData(filters: DREFilters) {
       setLoading(true);
       let q = supabase
         .from("transactions")
-        .select("id, amount, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id")
+        .select("id, amount, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id, transfer_id")
         .gte("competence_date", startStr)
-        .lte("competence_date", endStr);
+        .lte("competence_date", endStr)
+        .is("transfer_id", null);
 
       if (isPersonal) q = q.is("company_id", null);
       else if (selectedCompanyId) q = q.eq("company_id", selectedCompanyId);
