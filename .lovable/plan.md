@@ -1,70 +1,160 @@
 
 
-## Corrigir dados do DRE e Fluxo de Caixa
+## Precificacao V2 - FHC Completo com Custo de Vida
 
-Foram identificados 3 problemas que causam divergencia entre os relatorios e os dados reais do sistema.
-
-### Problema 1: Fluxo de Caixa truncando dados em 1000 registros
-
-O hook `useCashFlowData` nao implementa paginacao. O Supabase limita retornos a 1000 linhas por padrao. Com mais de 1000 transacoes no banco, o relatorio pode estar incompleto.
-
-**Solucao**: Adicionar o mesmo loop de paginacao que ja existe no `useDREData`.
-
-### Problema 2: Transferencias entre contas inflando receitas e despesas
-
-Transferencias internas geram 2 registros (1 receita + 1 despesa) com `transfer_id` preenchido. Ambos aparecem nos relatorios, inflando os totais de receita e despesa artificialmente.
-
-**Solucao**: Excluir transacoes com `transfer_id IS NOT NULL` das queries do DRE e do Fluxo de Caixa.
-
-### Problema 3: Fluxo de Caixa sem subcategory2
-
-O Fluxo de Caixa nao busca o campo `subcategory2` no select, podendo agrupar incorretamente transacoes com 3 niveis de categoria.
-
-**Solucao**: Adicionar `subcategory2` ao select e usar a mesma logica de `buildChain` com 3 niveis.
+Transformar a pagina placeholder "Precificacao V2" em um modulo completo, baseado na planilha FHC que inclui **custo de vida pessoal** integrado ao calculo. A diferenca principal do V1 e que aqui o usuario cadastra **todos** os custos manualmente (nao puxa do banco de transacoes), e o calculo inclui impostos (NF) e metricas de lucratividade.
 
 ---
 
-### Alteracoes por arquivo
+### Estrutura da Planilha (resumo)
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `src/hooks/useCashFlowData.ts` | Adicionar paginacao, filtrar `transfer_id`, incluir `subcategory2`, usar `buildChain` com 3 niveis |
-| `src/hooks/useDREData.ts` | Filtrar `transfer_id IS NULL` na query |
+A planilha organiza os custos em 3 grandes grupos:
 
-### Detalhes tecnicos
-
-**`useCashFlowData.ts`** - Query com paginacao e filtro de transferencia:
-```typescript
-let q = supabase
-  .from("transactions")
-  .select("id, amount, type, status, category, subcategory, subcategory2, bank_account_id, credit_card_id, transfer_id")
-  .gte(dateField, startStr)
-  .lte(dateField, endStr)
-  .is("transfer_id", null); // excluir transferencias
-
-// Paginacao
-const allData: any[] = [];
-let page = 0;
-const pageSize = 1000;
-while (true) {
-  const { data } = await q.range(page * pageSize, (page + 1) * pageSize - 1);
-  if (!data || data.length === 0) break;
-  allData.push(...data);
-  if (data.length < pageSize) break;
-  page++;
-}
+```text
++---------------------------+-----------------------------+---------------------------+
+| Despesas Fixas Clinica    | Despesas Variaveis Clinica  | Despesas Casa (Pessoais)  |
++---------------------------+-----------------------------+---------------------------+
+| Prediais                  | Dentais                     | Educacao                  |
+| Salarios                  | Salario (parceiros)         | Moradia                   |
+| Administrativos           | Laboratorio                 | Salarios (baba etc)       |
+| Outros                    | Honorarios                  | Lazer                     |
+|                           | Implantes                   | Planejamento              |
+|                           | Administrativo              | Vestuario                 |
+|                           | Diversos                    | Superfluos                |
+|                           |                             | Alimentacao               |
+|                           |                             | Transporte                |
+|                           |                             | Saude                     |
+|                           |                             | Outros                    |
++---------------------------+-----------------------------+---------------------------+
 ```
 
-**`useDREData.ts`** - Adicionar filtro de transferencia:
-```typescript
-let q = supabase
-  .from("transactions")
-  .select("id, amount, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id, transfer_id")
-  .gte("competence_date", startStr)
-  .lte("competence_date", endStr)
-  .is("transfer_id", null); // excluir transferencias
-```
+Cada item tem: descricao, valor e frequencia (Mensal ou Anual). Itens anuais sao divididos por 12 para o calculo mensal.
 
-**`useCashFlowData.ts`** - Substituir `resolveChain` por `buildChain` com 3 niveis (mesma logica do DRE), usando `category`, `subcategory` e `subcategory2`.
+O calculo final do procedimento:
+- **CF** (custo fixo) = Custo/Hora x Tempo
+- **CV** (custo variavel) = soma dos materiais
+- **NF** (imposto) = Valor cobrado x Aliquota IR
+- **Lucro** = Valor cobrado - CF - CV - NF
+- **Lucratividade/h** = Lucro / Tempo
+- **Lucratividade %** = Lucro / Valor cobrado
 
-Estas correcoes se aplicam a todos os usuarios automaticamente pois sao mudancas no frontend.
+Inclui tambem: **Quantidade de Salas** e calculo de **FMM/sala** (Faturamento Minimo Mensal por sala).
+
+---
+
+### Plano de Implementacao
+
+#### 1. Novas tabelas no Supabase
+
+**`pricing_v2_configurations`**
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | |
+| user_id | uuid | FK auth.users |
+| hours_per_month | integer | Horas trabalhadas/mes (default 160) |
+| num_rooms | integer | Quantidade de salas (default 1) |
+| tax_rate | numeric | Aliquota IR em % (default 8.44) |
+| updated_at | timestamptz | |
+
+**`pricing_v2_cost_items`**
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | |
+| config_id | uuid | FK pricing_v2_configurations |
+| user_id | uuid | Para RLS |
+| group | text | "fixos_clinica", "variaveis_clinica" ou "pessoais" |
+| category | text | Ex: "Prediais", "Educacao" |
+| description | text | Ex: "Aluguel", "Escola Anna" |
+| value | numeric | Valor em R$ |
+| frequency | text | "M" (mensal) ou "A" (anual) |
+
+**`pricing_v2_procedures`**
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | |
+| user_id | uuid | |
+| name | text | Nome do procedimento |
+| execution_time | numeric | Tempo em horas |
+| desired_price | numeric | Valor cobrado |
+| created_at | timestamptz | |
+
+**`pricing_v2_procedure_items`**
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | |
+| procedure_id | uuid | FK pricing_v2_procedures |
+| description | text | Material/insumo |
+| value | numeric | Custo unitario |
+
+RLS em todas: `auth.uid() = user_id` (ou via join para items).
+
+#### 2. Hook `usePricingV2`
+
+Similar ao `usePricing`, mas:
+- Busca `pricing_v2_configurations` + `pricing_v2_cost_items`
+- Calcula custos mensais somando itens (A dividido por 12, M direto)
+- Agrupa por `group` para mostrar totais por grupo
+- Calcula Custo/Hora = (Total Fixos Clinica + Total Var Clinica + Total Pessoais) / horas_per_month
+- Calcula FMM = Total de todos custos mensais
+- Calcula FMM/sala = FMM / num_rooms
+- Calcula CF/H/sala = Custo/Hora / num_rooms
+- Procedimentos: Lucro = desired_price - CF - CV - (desired_price x tax_rate/100)
+
+#### 3. Pagina `PrecificacaoV2.tsx`
+
+Layout em 4 secoes (abas ou scroll):
+
+**Secao 1 - Configuracao Geral**
+- Horas/mes, Quantidade de salas, Aliquota IR (%)
+- Botao Salvar
+
+**Secao 2 - Despesas (3 grupos em Tabs)**
+- Tab "Fixos Clinica" | Tab "Variaveis Clinica" | Tab "Pessoais"
+- Cada tab: tabela editavel com Categoria, Descricao, Valor, Frequencia (M/A)
+- Botao "+ Adicionar item" por tab
+- Subtotal por categoria e total do grupo
+
+**Secao 3 - Resumo de Custos**
+- Cards com: Total Fixos Clinica, Total Var Clinica, Total Pessoais
+- Cards destaque: Custo/Hora, FMM, FMM/sala, CF/H/sala
+- Grafico de pizza com % de cada grupo/categoria
+
+**Secao 4 - Procedimentos**
+- Mesma tabela do V1 mas com colunas extras: CF, CV, NF, Lucro, Lucratividade/h, Lucratividade %
+- Modal de criacao/edicao similar ao V1
+- Decomposicao com imposto incluso
+
+#### 4. Componentes novos
+
+| Componente | Descricao |
+|------------|-----------|
+| `src/pages/PrecificacaoV2.tsx` | Pagina principal substituindo o placeholder |
+| `src/hooks/usePricingV2.ts` | Hook de dados e logica |
+| `src/components/precificacao-v2/CostItemsTab.tsx` | Tabela editavel de itens de custo por grupo |
+| `src/components/precificacao-v2/ConfigCard.tsx` | Card de configuracao (horas, salas, aliquota) |
+| `src/components/precificacao-v2/CostSummaryCards.tsx` | Cards resumo + grafico |
+| `src/components/precificacao-v2/ProcedureTableV2.tsx` | Tabela de procedimentos com metricas extras |
+| `src/components/precificacao-v2/ProcedureFormModalV2.tsx` | Modal criar/editar procedimento |
+| `src/components/precificacao-v2/ProcedureBreakdownV2.tsx` | Decomposicao detalhada |
+
+#### 5. Atualizacao do roteamento
+
+- Em `App.tsx`: substituir o `<ComingSoon>` da rota `/precificacao-v2` pelo novo componente `<PrecificacaoV2 />`
+
+#### 6. Migracao SQL
+
+Uma unica migracao criando as 4 tabelas com RLS habilitado e politicas de acesso por `user_id`.
+
+---
+
+### Diferenca V1 vs V2
+
+| Aspecto | V1 | V2 |
+|---------|----|----|
+| Fonte de custos | Transacoes reais (12 meses) | Cadastro manual pelo usuario |
+| Grupos de custo | 2 (Fixos Clinica + Pessoais) | 3 (Fixos + Variaveis Clinica + Pessoais) |
+| Impostos | Nao considera | Aliquota IR aplicada no preco |
+| Salas | Nao tem | Calculo por sala |
+| Metricas | Preco sugerido | Lucro, Lucratividade/h, Lucratividade % |
+| Frequencia | Nao aplica (media automatica) | Mensal ou Anual por item |
+
