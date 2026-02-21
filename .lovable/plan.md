@@ -1,53 +1,56 @@
 
-## Tabela de Preview de Parcelas no Formulario
+## Edicao de Parcelas Individuais -- Criacao e Edicao
 
 ### Resumo
-Adicionar uma tabela visual de preview das parcelas que aparece **abaixo** dos campos de parcelamento ja existentes (numero de parcelas, intervalo, juros). Nada do que existe hoje sera removido ou alterado -- a tabela e um complemento que mostra cada parcela com data e valor, permitindo editar o valor da 1a parcela e escolher se distribui a diferenca entre as demais.
+Expandir o sistema de parcelas para permitir editar o valor de **qualquer** parcela (nao so a primeira), tanto na criacao quanto na edicao de lancamentos. Ao alterar qualquer valor, perguntar se quer distribuir a diferenca entre as demais parcelas.
 
-### O que muda na pratica
+### 1. InstallmentPreviewTable (criacao) -- todas as parcelas editaveis
 
-Quando o parcelamento estiver ativo e o valor + quantidade de parcelas forem validos, uma tabela aparece mostrando:
+**Arquivo:** `src/components/lancamentos/InstallmentPreviewTable.tsx` (alterar)
 
-| N | Vencimento | Valor (R$) |
-|---|------------|------------|
-| 1 | 20/02/2026 | *editavel* |
-| 2 | 20/03/2026 | 250,00 |
-| 3 | 20/04/2026 | 250,00 |
-| **Total** | | **750,00** |
+Mudancas:
+- Trocar props `firstInstallmentAmount` / `onFirstInstallmentChange` por `customAmounts: Record<number, number>` e `onCustomAmountsChange`
+- Quando juros = 0, TODAS as parcelas terao Input editavel (nao so a 1a)
+- Ao editar qualquer parcela, checkbox "Distribuir diferenca nas demais parcelas" aparece
+- Se distribuir marcado: recalcula as parcelas nao editadas para que o total bata
+- Se desmarcado: demais mantem valor padrao (total / n)
 
-- O valor da 1a parcela pode ser editado diretamente na tabela (campo inline)
-- Ao alterar, aparece uma opcao "Distribuir diferenca nas demais parcelas" (marcada por padrao)
-  - Se marcada: o saldo restante e dividido igualmente entre as parcelas 2..N
-  - Se desmarcada: as demais parcelas mantem o valor original (divisao simples do total)
-- Quando tem juros (taxa > 0), os valores sao fixos (Price) e nao permite edicao da 1a parcela
-- A tabela substitui o bloco atual de preview simples ("Nx de R$ X") e o toggle "Valor da 1a parcela diferente?" -- mesma funcionalidade, mas agora visual e integrada
+### 2. SeriesInstallmentTable (edicao de serie existente) -- novo componente
 
-### Detalhes tecnicos
+**Arquivo:** `src/components/lancamentos/SeriesInstallmentTable.tsx` (criar)
 
-**Novo componente:** `src/components/lancamentos/InstallmentPreviewTable.tsx`
+- Recebe `seriesId` e busca todas as transacoes da serie no banco via Supabase
+- Exibe tabela: N, Vencimento, Valor, Status (Pago/Pendente)
+- Parcelas "Pago": valor somente leitura, fundo diferenciado
+- Parcelas "Pendente": valor editavel via Input inline
+- Checkbox "Distribuir diferenca nas demais parcelas pendentes" ao alterar qualquer valor
+- Comunica alteracoes via callback `onAmountsChanged: (updates: Array<{ id: string; amount: number }>) => void`
 
-Recebe como props:
-- `totalAmount`, `installmentsCount`, `paymentDate`
-- `intervalType` ("monthly" | "custom_days"), `customDays`
-- `interestRate`
-- `firstInstallmentAmount`, `onFirstInstallmentChange`
+### 3. TransactionFormModal -- integracao
 
-Logica interna:
-- Calcula datas com `addMonths` ou `addDays` conforme intervalo
-- Se juros > 0: mostra parcelas Price (somente leitura)
-- Se juros = 0: permite editar a 1a parcela; checkbox "Distribuir diferenca" controla se as demais recebem o saldo restante ou mantem valor padrao
+**Arquivo:** `src/components/lancamentos/TransactionFormModal.tsx` (alterar)
 
-**Alteracao em `TransactionFormModal.tsx`:**
-- Substituir o bloco de preview (linhas ~1533-1571) pelo novo `InstallmentPreviewTable`
-- Remover o state `customFirstInstallment` (o toggle antigo) -- a funcionalidade agora esta dentro da tabela
-- O campo `first_installment_amount` do form continua sendo usado, mas controlado pela tabela via callback
-- Nenhuma alteracao na logica de submit (ja suporta `first_installment_amount`)
+- **Criacao**: adaptar integracao com `InstallmentPreviewTable` para usar `customAmounts` (mapa) em vez de `firstInstallmentAmount` (valor unico). Ajustar submit para gerar parcelas com valores individuais do mapa
+- **Edicao**: quando a transacao tem `series_id` e `installments_total > 1`, mostrar `SeriesInstallmentTable` na secao de parcelamento. No submit, chamar `updateMultipleTransactions` com as parcelas modificadas
 
-**Componentes usados:** `Table`, `TableHeader`, `TableBody`, `TableRow`, `TableHead`, `TableCell` (ja existentes), `Input`, `Checkbox`, `Label`
+### 4. useTransactions -- funcao de update em lote
+
+**Arquivo:** `src/hooks/useTransactions.ts` (alterar)
+
+- Adicionar `updateMultipleTransactions(updates: Array<{ id: string; amount: number }>)` que atualiza o campo `amount` de multiplas transacoes de uma vez via Supabase
+
+### 5. Lancamentos -- passar handler
+
+**Arquivo:** `src/pages/Lancamentos.tsx` (alterar)
+
+- Passar `updateMultipleTransactions` como prop para o `TransactionFormModal`
 
 ### Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/lancamentos/InstallmentPreviewTable.tsx` | Criar (novo componente) |
-| `src/components/lancamentos/TransactionFormModal.tsx` | Alterar (substituir preview simples + toggle pela tabela) |
+| `src/components/lancamentos/InstallmentPreviewTable.tsx` | Alterar (todas parcelas editaveis, novo formato customAmounts) |
+| `src/components/lancamentos/SeriesInstallmentTable.tsx` | Criar (tabela de edicao de serie existente) |
+| `src/components/lancamentos/TransactionFormModal.tsx` | Alterar (integrar ambos componentes) |
+| `src/hooks/useTransactions.ts` | Alterar (adicionar updateMultipleTransactions) |
+| `src/pages/Lancamentos.tsx` | Alterar (passar nova funcao ao modal) |
