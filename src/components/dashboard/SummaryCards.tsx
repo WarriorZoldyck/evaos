@@ -45,20 +45,20 @@ function SummaryCard({ title, value, icon: Icon, trend, gradient, loading, onCli
       className="card-hover shadow-premium overflow-hidden relative group cursor-pointer"
       onClick={onClick}
     >
-      <CardContent className="pt-6 relative z-10">
+      <CardContent className="p-5 relative z-10">
         <div className="flex items-center justify-between">
-          <div className="space-y-1.5">
-            <p className="text-sm text-muted-foreground font-medium">{title}</p>
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground font-medium">{title}</p>
             {loading ? (
-              <Skeleton className="h-8 w-28" />
+              <Skeleton className="h-7 w-28" />
             ) : (
-              <p className={`text-2xl font-bold font-display ${trendColor}`}>
+              <p className={`text-xl font-bold font-display ${trendColor}`}>
                 {formatCurrency(value)}
               </p>
             )}
           </div>
-          <div className={`h-11 w-11 rounded-xl flex items-center justify-center ${gradient} text-white shadow-lg transition-transform duration-300 group-hover:scale-110`}>
-            <Icon className="h-5 w-5" />
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${gradient} text-white shadow-lg transition-transform duration-300 group-hover:scale-110`}>
+            <Icon className="h-4.5 w-4.5" />
           </div>
         </div>
       </CardContent>
@@ -79,7 +79,7 @@ interface ForecastCardProps {
 function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName, loading, onClick }: ForecastCardProps) {
   return (
     <Card className="cursor-pointer hover:border-primary/20 transition-colors" onClick={onClick}>
-      <CardContent className="p-4 flex items-center gap-3">
+      <CardContent className="p-5 flex items-center gap-3">
         <Icon className={`h-8 w-8 shrink-0 ${iconClassName}`} />
         <div>
           <p className="text-xs text-muted-foreground">{title}</p>
