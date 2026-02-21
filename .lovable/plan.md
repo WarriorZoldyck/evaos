@@ -1,56 +1,33 @@
 
-## Edicao de Parcelas Individuais -- Criacao e Edicao
 
-### Resumo
-Expandir o sistema de parcelas para permitir editar o valor de **qualquer** parcela (nao so a primeira), tanto na criacao quanto na edicao de lancamentos. Ao alterar qualquer valor, perguntar se quer distribuir a diferenca entre as demais parcelas.
+## Correcao: Categorias mostrando ID em vez do nome
 
-### 1. InstallmentPreviewTable (criacao) -- todas as parcelas editaveis
+### Problema
+Ao criar uma subcategoria ou sub-subcategoria inline no formulario de lancamentos (via "Criar nova"), o sistema salva o UUID da categoria no campo do formulario, mas a lista de categorias ainda nao foi atualizada -- causando dois problemas:
 
-**Arquivo:** `src/components/lancamentos/InstallmentPreviewTable.tsx` (alterar)
+1. **No Select do formulario**: Apos criar, o dropdown mostra o UUID em vez do nome, porque o `fetchFormCategories()` e assincrono e o React ainda nao re-renderizou com a lista atualizada
+2. **Na tabela de lancamentos**: Depois de salvar a transacao, a tabela mostra o UUID porque o `useTransactions` carrega categorias apenas uma vez (no mount) e nao recarrega apos criar novas
 
-Mudancas:
-- Trocar props `firstInstallmentAmount` / `onFirstInstallmentChange` por `customAmounts: Record<number, number>` e `onCustomAmountsChange`
-- Quando juros = 0, TODAS as parcelas terao Input editavel (nao so a 1a)
-- Ao editar qualquer parcela, checkbox "Distribuir diferenca nas demais parcelas" aparece
-- Se distribuir marcado: recalcula as parcelas nao editadas para que o total bata
-- Se desmarcado: demais mantem valor padrao (total / n)
+### Correcao
 
-### 2. SeriesInstallmentTable (edicao de serie existente) -- novo componente
+**Arquivo 1: `src/components/lancamentos/CategorySelectWithCreate.tsx`**
 
-**Arquivo:** `src/components/lancamentos/SeriesInstallmentTable.tsx` (criar)
+O componente cria a categoria e chama `onCategoryCreated(data.id)`. O pai faz `await onCategoryCreated()` (fetchFormCategories) e depois `field.onChange(newId)`. Porem o estado ainda nao atualizou quando o Select tenta renderizar o valor.
 
-- Recebe `seriesId` e busca todas as transacoes da serie no banco via Supabase
-- Exibe tabela: N, Vencimento, Valor, Status (Pago/Pendente)
-- Parcelas "Pago": valor somente leitura, fundo diferenciado
-- Parcelas "Pendente": valor editavel via Input inline
-- Checkbox "Distribuir diferenca nas demais parcelas pendentes" ao alterar qualquer valor
-- Comunica alteracoes via callback `onAmountsChanged: (updates: Array<{ id: string; amount: number }>) => void`
+Correcao: O proprio `CategorySelectWithCreate` deve adicionar a nova categoria localmente na lista de opcoes ate que o pai atualize. Apos criar com sucesso, inserir o novo item (`{ id: data.id, name: newName }`) na lista local `categories` antes de chamar o callback. Isso elimina a janela onde o Select nao encontra o item.
 
-### 3. TransactionFormModal -- integracao
+**Arquivo 2: `src/hooks/useTransactions.ts`**
 
-**Arquivo:** `src/components/lancamentos/TransactionFormModal.tsx` (alterar)
+Extrair `fetchAux` para fora do `useEffect` como funcao standalone (similar ao `fetchTransactions`). Expor uma funcao `refetchAux` ou `refetchCategories`. Chamar `fetchAux` dentro dos callbacks `createTransaction`, `createMultipleTransactions` e `updateTransaction` alem do `fetchTransactions` ja existente, para que a tabela tenha as categorias atualizadas.
 
-- **Criacao**: adaptar integracao com `InstallmentPreviewTable` para usar `customAmounts` (mapa) em vez de `firstInstallmentAmount` (valor unico). Ajustar submit para gerar parcelas com valores individuais do mapa
-- **Edicao**: quando a transacao tem `series_id` e `installments_total > 1`, mostrar `SeriesInstallmentTable` na secao de parcelamento. No submit, chamar `updateMultipleTransactions` com as parcelas modificadas
+**Arquivo 3: `src/pages/Lancamentos.tsx`**
 
-### 4. useTransactions -- funcao de update em lote
-
-**Arquivo:** `src/hooks/useTransactions.ts` (alterar)
-
-- Adicionar `updateMultipleTransactions(updates: Array<{ id: string; amount: number }>)` que atualiza o campo `amount` de multiplas transacoes de uma vez via Supabase
-
-### 5. Lancamentos -- passar handler
-
-**Arquivo:** `src/pages/Lancamentos.tsx` (alterar)
-
-- Passar `updateMultipleTransactions` como prop para o `TransactionFormModal`
+Chamar `refetchCategories` (ou garantir que `refetchAux` e chamado) apos o modal de transacao fechar com sucesso, para que a tabela renderize nomes em vez de UUIDs.
 
 ### Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/lancamentos/InstallmentPreviewTable.tsx` | Alterar (todas parcelas editaveis, novo formato customAmounts) |
-| `src/components/lancamentos/SeriesInstallmentTable.tsx` | Criar (tabela de edicao de serie existente) |
-| `src/components/lancamentos/TransactionFormModal.tsx` | Alterar (integrar ambos componentes) |
-| `src/hooks/useTransactions.ts` | Alterar (adicionar updateMultipleTransactions) |
-| `src/pages/Lancamentos.tsx` | Alterar (passar nova funcao ao modal) |
+| `src/components/lancamentos/CategorySelectWithCreate.tsx` | Alterar: adicionar nova categoria localmente apos criar |
+| `src/hooks/useTransactions.ts` | Alterar: expor refetchCategories, chamar apos save/update |
+| `src/pages/Lancamentos.tsx` | Alterar: chamar refetchCategories ao fechar modal |
