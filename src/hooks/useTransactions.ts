@@ -420,6 +420,27 @@ export function useTransactions() {
     return { success: true, count };
   };
 
+  const updateMultipleTransactions = async (updates: Array<{ id: string; amount: number }>) => {
+    if (updates.length === 0) return true;
+    // Update each transaction individually (Supabase doesn't support batch update with different values)
+    const promises = updates.map((u) =>
+      supabase.from("transactions").update({ amount: u.amount }).eq("id", u.id)
+    );
+    const results = await Promise.all(promises);
+    const failed = results.find((r) => r.error);
+    if (failed?.error) {
+      toast({
+        title: "Erro ao atualizar parcelas",
+        description: failed.error.message,
+        variant: "destructive",
+      });
+      return false;
+    }
+    toast({ title: `${updates.length} parcela(s) atualizada(s)!` });
+    fetchTransactions();
+    return true;
+  };
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return {
@@ -439,6 +460,7 @@ export function useTransactions() {
     deleteSeriesTransactions,
     duplicateTransaction,
     redistributeSeriesAmounts,
+    updateMultipleTransactions,
     // Auxiliary data
     bankAccounts,
     creditCards,

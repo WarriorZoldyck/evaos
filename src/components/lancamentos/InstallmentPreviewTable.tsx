@@ -20,8 +20,8 @@ interface InstallmentPreviewTableProps {
   intervalType: "monthly" | "custom_days";
   customDays?: number;
   interestRate: number;
-  firstInstallmentAmount?: number;
-  onFirstInstallmentChange: (value: number | undefined) => void;
+  customAmounts: Record<number, number>;
+  onCustomAmountsChange: (amounts: Record<number, number>) => void;
 }
 
 export function InstallmentPreviewTable({
@@ -31,15 +31,15 @@ export function InstallmentPreviewTable({
   intervalType,
   customDays,
   interestRate,
-  firstInstallmentAmount,
-  onFirstInstallmentChange,
+  customAmounts,
+  onCustomAmountsChange,
 }: InstallmentPreviewTableProps) {
   const [distribute, setDistribute] = useState(true);
 
   const hasInterest = interestRate > 0;
+  const n = installmentsCount;
 
   const installments = useMemo(() => {
-    const n = installmentsCount;
     const result: { number: number; date: Date; amount: number }[] = [];
 
     if (hasInterest) {
@@ -60,40 +60,41 @@ export function InstallmentPreviewTable({
         result.push({ number: idx + 1, date, amount: pmt });
       }
     } else {
-      // No interest — allow editing 1st installment
       const defaultPmt = Math.round((totalAmount / n) * 100) / 100;
-      const first = firstInstallmentAmount ?? defaultPmt;
+      const editedIndices = Object.keys(customAmounts).map(Number);
+      const hasEdits = editedIndices.length > 0;
 
-      for (let idx = 0; idx < n; idx++) {
-        const date =
-          intervalType === "custom_days" && customDays
-            ? addDays(paymentDate, idx * customDays)
-            : addMonths(paymentDate, idx);
+      if (hasEdits && distribute) {
+        // Sum of custom amounts
+        const customSum = editedIndices.reduce((sum, idx) => sum + (customAmounts[idx] || 0), 0);
+        const remaining = totalAmount - customSum;
+        const nonEditedCount = n - editedIndices.length;
+        const otherAmount = nonEditedCount > 0 ? Math.round((remaining / nonEditedCount) * 100) / 100 : 0;
 
-        if (idx === 0) {
-          result.push({ number: 1, date, amount: first });
-        } else {
-          const remaining = totalAmount - first;
-          const otherAmount = distribute
-            ? Math.round((remaining / (n - 1)) * 100) / 100
-            : defaultPmt;
-          result.push({ number: idx + 1, date, amount: otherAmount });
+        for (let idx = 0; idx < n; idx++) {
+          const date =
+            intervalType === "custom_days" && customDays
+              ? addDays(paymentDate, idx * customDays)
+              : addMonths(paymentDate, idx);
+          const instNum = idx + 1;
+          const amount = customAmounts[instNum] !== undefined ? customAmounts[instNum] : otherAmount;
+          result.push({ number: instNum, date, amount });
+        }
+      } else {
+        for (let idx = 0; idx < n; idx++) {
+          const date =
+            intervalType === "custom_days" && customDays
+              ? addDays(paymentDate, idx * customDays)
+              : addMonths(paymentDate, idx);
+          const instNum = idx + 1;
+          const amount = customAmounts[instNum] !== undefined ? customAmounts[instNum] : defaultPmt;
+          result.push({ number: instNum, date, amount });
         }
       }
     }
 
     return result;
-  }, [
-    totalAmount,
-    installmentsCount,
-    paymentDate,
-    intervalType,
-    customDays,
-    interestRate,
-    hasInterest,
-    firstInstallmentAmount,
-    distribute,
-  ]);
+  }, [totalAmount, n, paymentDate, intervalType, customDays, interestRate, hasInterest, customAmounts, distribute]);
 
   const total = useMemo(
     () => installments.reduce((sum, inst) => sum + inst.amount, 0),
@@ -102,9 +103,7 @@ export function InstallmentPreviewTable({
 
   const totalInterest = hasInterest ? Math.round((total - totalAmount) * 100) / 100 : 0;
 
-  const isFirstEdited =
-    firstInstallmentAmount !== undefined &&
-    firstInstallmentAmount !== Math.round((totalAmount / installmentsCount) * 100) / 100;
+  const hasEdits = Object.keys(customAmounts).length > 0;
 
   function formatCurrency(value: number) {
     return value.toLocaleString("pt-BR", {
@@ -112,6 +111,17 @@ export function InstallmentPreviewTable({
       maximumFractionDigits: 2,
     });
   }
+
+  const handleAmountChange = (instNumber: number, value: string) => {
+    const val = parseFloat(value);
+    if (isNaN(val) || val === 0) {
+      const next = { ...customAmounts };
+      delete next[instNumber];
+      onCustomAmountsChange(next);
+    } else {
+      onCustomAmountsChange({ ...customAmounts, [instNumber]: val });
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -136,7 +146,7 @@ export function InstallmentPreviewTable({
                   {format(inst.date, "dd/MM/yyyy", { locale: ptBR })}
                 </TableCell>
                 <TableCell className="py-1.5 px-3 text-right">
-                  {inst.number === 1 && !hasInterest ? (
+                  {!hasInterest ? (
                     <Input
                       type="number"
                       step="0.01"
@@ -144,18 +154,10 @@ export function InstallmentPreviewTable({
                       max={totalAmount}
                       className="h-7 w-28 text-xs text-right ml-auto"
                       value={
-                        firstInstallmentAmount ??
-                        Math.round((totalAmount / installmentsCount) * 100) /
-                          100
+                        customAmounts[inst.number] ??
+                        Math.round((totalAmount / n) * 100) / 100
                       }
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (isNaN(val) || val === 0) {
-                          onFirstInstallmentChange(undefined);
-                        } else {
-                          onFirstInstallmentChange(val);
-                        }
-                      }}
+                      onChange={(e) => handleAmountChange(inst.number, e.target.value)}
                     />
                   ) : (
                     <span className="text-xs">
@@ -183,8 +185,8 @@ export function InstallmentPreviewTable({
         </Table>
       </div>
 
-      {/* Distribute checkbox — only when first installment was edited and no interest */}
-      {!hasInterest && isFirstEdited && (
+      {/* Distribute checkbox — only when any installment was edited and no interest */}
+      {!hasInterest && hasEdits && (
         <div className="flex items-center gap-2">
           <Checkbox
             id="distribute-diff"
