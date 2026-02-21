@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -89,6 +90,7 @@ function extractRecurringId(syntheticId: string): string {
 }
 
 export function UpcomingTransactions({ transactions, creditCards, loading, onLiquidated }: UpcomingTransactionsProps) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -271,7 +273,12 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
               {regularTransactions.map((t) => (
                 <div
                   key={t.id}
-                  className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 hover:border-primary/20 transition-colors"
+                  className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2.5 hover:border-primary/20 transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (!t.isRecurring) {
+                      navigate(`/lancamentos?search=${encodeURIComponent(t.description)}&dateFrom=${t.payment_date}&dateTo=${t.payment_date}`);
+                    }
+                  }}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {t.type === "receita" ? (
@@ -293,7 +300,7 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 ml-3">
+                  <div className="flex items-center gap-2 shrink-0 ml-3" onClick={(e) => e.stopPropagation()}>
                     <span
                       className={`text-sm font-semibold ${
                         t.type === "receita" ? "text-success" : "text-destructive"
