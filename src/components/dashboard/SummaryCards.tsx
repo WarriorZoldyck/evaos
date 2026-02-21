@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, Clock, Equal } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -66,6 +66,36 @@ function SummaryCard({ title, value, icon: Icon, trend, gradient, loading, onCli
   );
 }
 
+interface ForecastCardProps {
+  title: string;
+  value: number;
+  icon: React.ElementType;
+  iconClassName: string;
+  valueClassName?: string;
+  loading: boolean;
+  onClick?: () => void;
+}
+
+function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName, loading, onClick }: ForecastCardProps) {
+  return (
+    <Card className="cursor-pointer hover:border-primary/20 transition-colors" onClick={onClick}>
+      <CardContent className="p-4 flex items-center gap-3">
+        <Icon className={`h-8 w-8 shrink-0 ${iconClassName}`} />
+        <div>
+          <p className="text-xs text-muted-foreground">{title}</p>
+          {loading ? (
+            <Skeleton className="h-6 w-24 mt-0.5" />
+          ) : (
+            <p className={`text-lg font-bold font-mono ${valueClassName || ""}`}>
+              {formatCurrency(value)}
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, loading, dateFrom, dateTo }: SummaryCardsProps) {
   const navigate = useNavigate();
 
@@ -121,32 +151,34 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         />
       </div>
 
-      {/* Forecast cards */}
+      {/* Forecast cards — clean style like Agenda */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <SummaryCard
-          title="Entrada Prevista"
+        <ForecastCard
+          title="Entradas previstas"
           value={entradaPrevista}
-          icon={Clock}
-          trend="neutral"
-          gradient="bg-gradient-primary"
+          icon={ArrowUpCircle}
+          iconClassName="text-success"
           loading={loading}
           onClick={() => go({ type: "receita", status: "Pendente" })}
         />
-        <SummaryCard
-          title="Saída Prevista"
+        <ForecastCard
+          title="Saídas previstas"
           value={saidaPrevista}
-          icon={Clock}
-          trend="neutral"
-          gradient="bg-gradient-destructive"
+          icon={ArrowDownCircle}
+          iconClassName="text-destructive"
           loading={loading}
           onClick={() => go({ type: "despesa", status: "Pendente" })}
         />
-        <SummaryCard
-          title="Saldo Previsto"
+        <ForecastCard
+          title="Saldo previsto"
           value={saldoPrevisto}
-          icon={Equal}
-          trend={saldoPrevisto >= 0 ? "up" : "down"}
-          gradient={saldoPrevisto >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
+          icon={({ className }: { className?: string }) => (
+            <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${saldoPrevisto >= 0 ? "bg-success/10" : "bg-destructive/10"}`}>
+              <span className="text-sm font-bold">=</span>
+            </div>
+          )}
+          iconClassName=""
+          valueClassName={saldoPrevisto >= 0 ? "text-success" : "text-destructive"}
           loading={loading}
           onClick={() => go({ status: "Pendente" })}
         />
