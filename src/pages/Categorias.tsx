@@ -38,6 +38,15 @@ export default function Categorias() {
   const [parentName, setParentName] = useState<string | undefined>();
   const [editData, setEditData] = useState<{ id: string; name: string; type: string | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+  const [defaultType, setDefaultType] = useState("receita");
+
+  const openCreateRoot = (type: string) => {
+    setParentId(null);
+    setParentName(undefined);
+    setEditData(null);
+    setDefaultType(type);
+    setFormOpen(true);
+  };
 
   // Inline add
   const [inlineType, setInlineType] = useState<string>("receita");
@@ -145,7 +154,11 @@ export default function Categorias() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <div
+                  className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center cursor-pointer hover:bg-emerald-500/20 transition-colors"
+                  onClick={() => openCreateRoot("receita")}
+                  title="Criar categoria de receita"
+                >
                   <TrendingUp className="h-4 w-4 text-emerald-500" />
                 </div>
                 Canais de Receita
@@ -182,7 +195,11 @@ export default function Categorias() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base">
-                <div className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                <div
+                  className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center cursor-pointer hover:bg-red-500/20 transition-colors"
+                  onClick={() => openCreateRoot("despesa")}
+                  title="Criar categoria de despesa"
+                >
                   <TrendingDown className="h-4 w-4 text-red-500" />
                 </div>
                 Centros de Despesa
@@ -223,6 +240,7 @@ export default function Categorias() {
         onClose={() => setFormOpen(false)}
         parentName={parentName}
         editData={editData}
+        defaultType={defaultType}
         onSave={handleSave}
       />
 
