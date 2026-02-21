@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Loader2 } from "lucide-react";
+import { Loader2, CalendarIcon, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
@@ -15,6 +16,14 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SeriesTransaction {
   id: string;
@@ -27,7 +36,7 @@ interface SeriesTransaction {
 
 interface SeriesInstallmentTableProps {
   seriesId: string;
-  onAmountsChanged: (updates: Array<{ id: string; amount: number }>) => void;
+  onAmountsChanged: (updates: Array<{ id: string; amount: number; payment_date?: string }>) => void;
 }
 
 export function SeriesInstallmentTable({
@@ -37,6 +46,7 @@ export function SeriesInstallmentTable({
   const [installments, setInstallments] = useState<SeriesTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [customAmounts, setCustomAmounts] = useState<Record<string, number>>({});
+  const [customDates, setCustomDates] = useState<Record<string, string>>({});
   const [distribute, setDistribute] = useState(true);
 
   useEffect(() => {
@@ -49,6 +59,7 @@ export function SeriesInstallmentTable({
         .order("installment_number", { ascending: true });
       setInstallments((data as SeriesTransaction[]) || []);
       setCustomAmounts({});
+      setCustomDates({});
       setLoading(false);
     };
     fetchSeries();
@@ -61,7 +72,6 @@ export function SeriesInstallmentTable({
 
   const originalTotal = useMemo(() => {
     if (installments.length === 0) return 0;
-    // Use original_amount from any installment, or sum all amounts
     const oa = installments[0]?.original_amount;
     return oa ?? installments.reduce((s, i) => s + i.amount, 0);
   }, [installments]);
@@ -73,13 +83,10 @@ export function SeriesInstallmentTable({
     const hasEdits = editedIds.length > 0;
 
     if (hasEdits && distribute) {
-      // Sum paid amounts
       const paidSum = installments
         .filter((i) => i.status === "Pago")
         .reduce((s, i) => s + i.amount, 0);
-      // Sum custom edited amounts
       const customSum = editedIds.reduce((s, id) => s + (customAmounts[id] || 0), 0);
-      // Remaining for non-edited pending
       const nonEditedPending = pendingInstallments.filter((i) => customAmounts[i.id] === undefined);
       const remaining = originalTotal - paidSum - customSum;
       const perNonEdited = nonEditedPending.length > 0
@@ -106,17 +113,24 @@ export function SeriesInstallmentTable({
 
   // Notify parent of changes
   useEffect(() => {
-    const updates: Array<{ id: string; amount: number }> = [];
+    const updates: Array<{ id: string; amount: number; payment_date?: string }> = [];
     installments.forEach((inst) => {
       if (inst.status === "Pendente") {
         const displayed = displayAmounts[inst.id];
-        if (displayed !== undefined && displayed !== inst.amount) {
-          updates.push({ id: inst.id, amount: displayed });
+        const newDate = customDates[inst.id];
+        const amountChanged = displayed !== undefined && displayed !== inst.amount;
+        const dateChanged = newDate !== undefined && newDate !== inst.payment_date;
+        if (amountChanged || dateChanged) {
+          updates.push({
+            id: inst.id,
+            amount: displayed ?? inst.amount,
+            ...(dateChanged ? { payment_date: newDate } : {}),
+          });
         }
       }
     });
     onAmountsChanged(updates);
-  }, [displayAmounts, installments]);
+  }, [displayAmounts, customDates, installments]);
 
   const total = useMemo(
     () => Object.values(displayAmounts).reduce((s, v) => s + v, 0),
@@ -124,6 +138,7 @@ export function SeriesInstallmentTable({
   );
 
   const hasEdits = Object.keys(customAmounts).length > 0;
+  const exceeds = total > originalTotal + 0.01;
 
   function formatCurrency(value: number) {
     return value.toLocaleString("pt-BR", {
@@ -159,6 +174,7 @@ export function SeriesInstallmentTable({
           <TableBody>
             {installments.map((inst) => {
               const isPaid = inst.status === "Pago";
+              const displayDate = customDates[inst.id] || inst.payment_date;
               return (
                 <TableRow
                   key={inst.id}
@@ -168,7 +184,35 @@ export function SeriesInstallmentTable({
                     {inst.installment_number ?? "-"}
                   </TableCell>
                   <TableCell className="py-1.5 px-3 text-xs">
-                    {format(new Date(inst.payment_date + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })}
+                    {isPaid ? (
+                      format(new Date(inst.payment_date + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })
+                    ) : (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="h-7 px-2 text-xs font-normal"
+                          >
+                            {format(new Date(displayDate + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })}
+                            <CalendarIcon className="ml-1 h-3 w-3 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={new Date(displayDate + "T00:00:00")}
+                            onSelect={(d) => {
+                              if (d) {
+                                const formatted = format(d, "yyyy-MM-dd");
+                                setCustomDates({ ...customDates, [inst.id]: formatted });
+                              }
+                            }}
+                            locale={ptBR}
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    )}
                   </TableCell>
                   <TableCell className="py-1.5 px-3 text-center">
                     <Badge
@@ -218,6 +262,16 @@ export function SeriesInstallmentTable({
           </TableBody>
         </Table>
       </div>
+
+      {/* Exceed warning */}
+      {exceeds && (
+        <Alert variant="destructive" className="py-2">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="text-xs">
+            Total das parcelas (R$ {formatCurrency(total)}) excede o valor original (R$ {formatCurrency(originalTotal)}).
+          </AlertDescription>
+        </Alert>
+      )}
 
       {hasEdits && (
         <div className="flex items-center gap-2">

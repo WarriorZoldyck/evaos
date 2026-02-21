@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
 import { addMonths, addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { CalendarIcon, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableHeader,
@@ -12,6 +14,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface InstallmentPreviewTableProps {
   totalAmount: number;
@@ -22,6 +32,9 @@ interface InstallmentPreviewTableProps {
   interestRate: number;
   customAmounts: Record<number, number>;
   onCustomAmountsChange: (amounts: Record<number, number>) => void;
+  customDates?: Record<number, Date>;
+  onCustomDatesChange?: (dates: Record<number, Date>) => void;
+  onUpdateTotalAmount?: (newTotal: number) => void;
 }
 
 export function InstallmentPreviewTable({
@@ -33,6 +46,9 @@ export function InstallmentPreviewTable({
   interestRate,
   customAmounts,
   onCustomAmountsChange,
+  customDates = {},
+  onCustomDatesChange,
+  onUpdateTotalAmount,
 }: InstallmentPreviewTableProps) {
   const [distribute, setDistribute] = useState(true);
 
@@ -43,7 +59,6 @@ export function InstallmentPreviewTable({
     const result: { number: number; date: Date; amount: number }[] = [];
 
     if (hasInterest) {
-      // Price system — fixed installments, read-only
       const i = interestRate / 100;
       const pmt =
         Math.round(
@@ -53,10 +68,11 @@ export function InstallmentPreviewTable({
         ) / 100;
 
       for (let idx = 0; idx < n; idx++) {
-        const date =
+        const defaultDate =
           intervalType === "custom_days" && customDays
             ? addDays(paymentDate, idx * customDays)
             : addMonths(paymentDate, idx);
+        const date = customDates[idx + 1] ?? defaultDate;
         result.push({ number: idx + 1, date, amount: pmt });
       }
     } else {
@@ -65,27 +81,28 @@ export function InstallmentPreviewTable({
       const hasEdits = editedIndices.length > 0;
 
       if (hasEdits && distribute) {
-        // Sum of custom amounts
         const customSum = editedIndices.reduce((sum, idx) => sum + (customAmounts[idx] || 0), 0);
         const remaining = totalAmount - customSum;
         const nonEditedCount = n - editedIndices.length;
         const otherAmount = nonEditedCount > 0 ? Math.round((remaining / nonEditedCount) * 100) / 100 : 0;
 
         for (let idx = 0; idx < n; idx++) {
-          const date =
+          const defaultDate =
             intervalType === "custom_days" && customDays
               ? addDays(paymentDate, idx * customDays)
               : addMonths(paymentDate, idx);
+          const date = customDates[idx + 1] ?? defaultDate;
           const instNum = idx + 1;
           const amount = customAmounts[instNum] !== undefined ? customAmounts[instNum] : otherAmount;
           result.push({ number: instNum, date, amount });
         }
       } else {
         for (let idx = 0; idx < n; idx++) {
-          const date =
+          const defaultDate =
             intervalType === "custom_days" && customDays
               ? addDays(paymentDate, idx * customDays)
               : addMonths(paymentDate, idx);
+          const date = customDates[idx + 1] ?? defaultDate;
           const instNum = idx + 1;
           const amount = customAmounts[instNum] !== undefined ? customAmounts[instNum] : defaultPmt;
           result.push({ number: instNum, date, amount });
@@ -94,7 +111,7 @@ export function InstallmentPreviewTable({
     }
 
     return result;
-  }, [totalAmount, n, paymentDate, intervalType, customDays, interestRate, hasInterest, customAmounts, distribute]);
+  }, [totalAmount, n, paymentDate, intervalType, customDays, interestRate, hasInterest, customAmounts, distribute, customDates]);
 
   const total = useMemo(
     () => installments.reduce((sum, inst) => sum + inst.amount, 0),
@@ -102,8 +119,8 @@ export function InstallmentPreviewTable({
   );
 
   const totalInterest = hasInterest ? Math.round((total - totalAmount) * 100) / 100 : 0;
-
   const hasEdits = Object.keys(customAmounts).length > 0;
+  const exceeds = !hasInterest && total > totalAmount + 0.01;
 
   function formatCurrency(value: number) {
     return value.toLocaleString("pt-BR", {
@@ -121,6 +138,11 @@ export function InstallmentPreviewTable({
     } else {
       onCustomAmountsChange({ ...customAmounts, [instNumber]: val });
     }
+  };
+
+  const handleDateChange = (instNumber: number, date: Date | undefined) => {
+    if (!onCustomDatesChange || !date) return;
+    onCustomDatesChange({ ...customDates, [instNumber]: date });
   };
 
   return (
@@ -143,7 +165,30 @@ export function InstallmentPreviewTable({
                   {inst.number}
                 </TableCell>
                 <TableCell className="py-1.5 px-3 text-xs">
-                  {format(inst.date, "dd/MM/yyyy", { locale: ptBR })}
+                  {onCustomDatesChange ? (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          className="h-7 px-2 text-xs font-normal"
+                        >
+                          {format(inst.date, "dd/MM/yyyy", { locale: ptBR })}
+                          <CalendarIcon className="ml-1 h-3 w-3 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={inst.date}
+                          onSelect={(d) => handleDateChange(inst.number, d)}
+                          locale={ptBR}
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  ) : (
+                    format(inst.date, "dd/MM/yyyy", { locale: ptBR })
+                  )}
                 </TableCell>
                 <TableCell className="py-1.5 px-3 text-right">
                   {!hasInterest ? (
@@ -151,12 +196,8 @@ export function InstallmentPreviewTable({
                       type="number"
                       step="0.01"
                       min="0"
-                      max={totalAmount}
                       className="h-7 w-28 text-xs text-right ml-auto"
-                      value={
-                        customAmounts[inst.number] ??
-                        Math.round((totalAmount / n) * 100) / 100
-                      }
+                      value={inst.amount}
                       onChange={(e) => handleAmountChange(inst.number, e.target.value)}
                     />
                   ) : (
@@ -185,7 +226,28 @@ export function InstallmentPreviewTable({
         </Table>
       </div>
 
-      {/* Distribute checkbox — only when any installment was edited and no interest */}
+      {/* Exceed warning */}
+      {exceeds && onUpdateTotalAmount && (
+        <Alert variant="destructive" className="py-2">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between gap-2 text-xs">
+            <span>
+              Total das parcelas (R$ {formatCurrency(total)}) excede o valor bruto (R$ {formatCurrency(totalAmount)}).
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs shrink-0"
+              onClick={() => onUpdateTotalAmount(Math.round(total * 100) / 100)}
+            >
+              Atualizar valor bruto
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Distribute checkbox */}
       {!hasInterest && hasEdits && (
         <div className="flex items-center gap-2">
           <Checkbox

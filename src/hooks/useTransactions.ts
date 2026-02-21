@@ -422,12 +422,13 @@ export function useTransactions() {
     return { success: true, count };
   };
 
-  const updateMultipleTransactions = async (updates: Array<{ id: string; amount: number }>) => {
+  const updateMultipleTransactions = async (updates: Array<{ id: string; amount: number; payment_date?: string }>) => {
     if (updates.length === 0) return true;
-    // Update each transaction individually (Supabase doesn't support batch update with different values)
-    const promises = updates.map((u) =>
-      supabase.from("transactions").update({ amount: u.amount }).eq("id", u.id)
-    );
+    const promises = updates.map((u) => {
+      const updateData: { amount: number; payment_date?: string } = { amount: u.amount };
+      if (u.payment_date) updateData.payment_date = u.payment_date;
+      return supabase.from("transactions").update(updateData).eq("id", u.id);
+    });
     const results = await Promise.all(promises);
     const failed = results.find((r) => r.error);
     if (failed?.error) {
