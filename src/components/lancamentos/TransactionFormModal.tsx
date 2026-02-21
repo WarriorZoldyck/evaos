@@ -56,6 +56,7 @@ import { PaymentMethodFields } from "./PaymentMethodFields";
 import { InstallmentPreviewTable } from "./InstallmentPreviewTable";
 import { SeriesInstallmentTable } from "./SeriesInstallmentTable";
 import { CategorySelectWithCreate } from "./CategorySelectWithCreate";
+import { ContactSelectWithCreate } from "./ContactSelectWithCreate";
 
 interface RateInfo {
   installments: number;
@@ -1176,20 +1177,16 @@ function MainFormContent({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Fornecedor</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {suppliers.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <ContactSelectWithCreate
+                      contacts={suppliers}
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      placeholder="Selecione"
+                      type="supplier"
+                      onContactCreated={(id) => field.onChange(id)}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -1201,20 +1198,16 @@ function MainFormContent({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Cliente</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {clients.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <ContactSelectWithCreate
+                      contacts={clients}
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      placeholder="Selecione"
+                      type="client"
+                      onContactCreated={(id) => field.onChange(id)}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
