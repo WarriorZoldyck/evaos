@@ -16,7 +16,7 @@ import {
   Target,
   TrendingUp,
   BookOpen,
-  CalendarDays,
+  
   Plug,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -47,7 +47,6 @@ import evaLogo from "@/assets/eva-os-logo.jpeg";
 const mainMenuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Lançamentos", url: "/lancamentos", icon: ArrowLeftRight },
-  { title: "Agenda", url: "/agenda", icon: CalendarDays },
 ];
 
 const financeMenuItems = [

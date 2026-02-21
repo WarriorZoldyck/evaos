@@ -16,7 +16,7 @@ import Contas from "@/pages/Contas";
 import Categorias from "@/pages/Categorias";
 import Contatos from "@/pages/Contatos";
 import Configuracoes from "@/pages/Configuracoes";
-import Agenda from "@/pages/Agenda";
+
 import NotFound from "@/pages/NotFound";
 import ComingSoon from "@/pages/ComingSoon";
 import Docs from "@/pages/Docs";
@@ -45,7 +45,7 @@ const App = () => (
                 <Route path="/categorias" element={<Categorias />} />
                 <Route path="/contatos" element={<Contatos />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />
-                <Route path="/agenda" element={<Agenda />} />
+                
                 <Route path="/docs" element={<Docs />} />
                 <Route path="/integracoes" element={<Integracoes />} />
                 <Route path="/eva-kids" element={<ComingSoon title="EVA Kids" description="Educação financeira para crianças. Em breve!" icon={GraduationCap} />} />
