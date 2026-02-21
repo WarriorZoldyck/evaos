@@ -354,6 +354,133 @@ export type Database = {
         }
         Relationships: []
       }
+      pricing_v2_configurations: {
+        Row: {
+          hours_per_month: number
+          id: string
+          num_rooms: number
+          tax_rate: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          hours_per_month?: number
+          id?: string
+          num_rooms?: number
+          tax_rate?: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          hours_per_month?: number
+          id?: string
+          num_rooms?: number
+          tax_rate?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pricing_v2_cost_items: {
+        Row: {
+          category: string
+          config_id: string
+          cost_group: string
+          description: string
+          frequency: string
+          id: string
+          sort_order: number
+          user_id: string
+          value: number
+        }
+        Insert: {
+          category?: string
+          config_id: string
+          cost_group: string
+          description?: string
+          frequency?: string
+          id?: string
+          sort_order?: number
+          user_id: string
+          value?: number
+        }
+        Update: {
+          category?: string
+          config_id?: string
+          cost_group?: string
+          description?: string
+          frequency?: string
+          id?: string
+          sort_order?: number
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_v2_cost_items_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_v2_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_v2_procedure_items: {
+        Row: {
+          description: string
+          id: string
+          procedure_id: string
+          value: number
+        }
+        Insert: {
+          description?: string
+          id?: string
+          procedure_id: string
+          value?: number
+        }
+        Update: {
+          description?: string
+          id?: string
+          procedure_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_v2_procedure_items_procedure_id_fkey"
+            columns: ["procedure_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_v2_procedures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_v2_procedures: {
+        Row: {
+          created_at: string | null
+          desired_price: number
+          execution_time: number
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          desired_price?: number
+          execution_time?: number
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          desired_price?: number
+          execution_time?: number
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
