@@ -54,6 +54,7 @@ import type {
 } from "@/hooks/useTransactions";
 import { PaymentMethodFields } from "./PaymentMethodFields";
 import { InstallmentPreviewTable } from "./InstallmentPreviewTable";
+import { SeriesInstallmentTable } from "./SeriesInstallmentTable";
 import { CategorySelectWithCreate } from "./CategorySelectWithCreate";
 
 interface RateInfo {
@@ -277,6 +278,7 @@ interface TransactionFormModalProps {
   onSave: (data: TransactionInsert) => Promise<boolean>;
   onSaveMultiple: (data: TransactionInsert[]) => Promise<boolean>;
   onUpdate: (id: string, data: Partial<Transaction>) => Promise<boolean>;
+  onUpdateMultiple?: (updates: Array<{ id: string; amount: number }>) => Promise<boolean>;
   bankAccounts: { id: string; name: string }[];
   creditCards: CreditCard[];
   wallets: { id: string; name: string }[];
@@ -297,6 +299,7 @@ export function TransactionFormModal({
   onSave,
   onSaveMultiple,
   onUpdate,
+  onUpdateMultiple,
   bankAccounts,
   creditCards,
   wallets,
@@ -315,6 +318,8 @@ export function TransactionFormModal({
   const [saving, setSaving] = useState(false);
   const [formCompanyId, setFormCompanyId] = useState<string | null>(null);
   const [formCategories, setFormCategories] = useState<Category[]>([]);
+  const [customInstallmentAmounts, setCustomInstallmentAmounts] = useState<Record<number, number>>({});
+  const [seriesUpdates, setSeriesUpdates] = useState<Array<{ id: string; amount: number }>>([]);
 
   const fetchFormCategories = useCallback(async () => {
     if (!user) return;
@@ -389,6 +394,8 @@ export function TransactionFormModal({
   useEffect(() => {
     if (open) {
       paymentDateManuallyEdited.current = false;
+      setCustomInstallmentAmounts({});
+      setSeriesUpdates([]);
       if (editTransaction) {
         setFormCompanyId(editTransaction.company_id ?? null);
         setActiveTab(editTransaction.type);
@@ -590,10 +597,13 @@ export function TransactionFormModal({
     if (isEditing) {
       const { user_id, company_id, ...updateData } = baseData;
       // Preserve original type and status to prevent race conditions
-      // (activeTab defaults to "despesa" and status defaults to "Pendente" before async reset)
       updateData.type = editTransaction.type;
       updateData.status = editTransaction.status;
       success = await onUpdate(editTransaction.id, updateData);
+      // Also apply series installment amount changes if any
+      if (success && seriesUpdates.length > 0 && onUpdateMultiple) {
+        await onUpdateMultiple(seriesUpdates);
+      }
     } else if (selectedTerminal) {
       // Receita via terminal: ALWAYS save as single transaction (full net amount)
       // Installments are the customer's concern, merchant receives total net
@@ -613,54 +623,44 @@ export function TransactionFormModal({
         // Price table (French system) - fixed installments with compound interest
         const i = interestRate / 100;
         installmentAmount = Math.round(total * (i * Math.pow(1 + i, count)) / (Math.pow(1 + i, count) - 1) * 100) / 100;
-      } else if (data.first_installment_amount && data.first_installment_amount > 0 && data.first_installment_amount < total) {
-        // Custom first installment (only when no interest)
-        const firstAmt = Math.round(data.first_installment_amount * 100) / 100;
-        const restAmt = Math.round(((total - firstAmt) / (count - 1)) * 100) / 100;
-
-        const instIntervalType = data.installment_interval_type || "monthly";
-        const instCustomDays = data.installment_custom_days || 30;
-        const installments: TransactionInsert[] = [];
-        for (let idx = 0; idx < count; idx++) {
-          const payDate = instIntervalType === "custom_days"
-            ? addDays(data.payment_date, idx * instCustomDays)
-            : addMonths(data.payment_date, idx);
-          const compDate = data.competence_date;
-          installments.push({
-            ...baseData,
-            amount: idx === 0 ? firstAmt : restAmt,
-            original_amount: total,
-            payment_date: format(payDate, "yyyy-MM-dd"),
-            competence_date: format(compDate, "yyyy-MM-dd"),
-            series_id: seriesId,
-            installment_number: idx + 1,
-            installments_total: count,
-          });
-        }
-        success = await onSaveMultiple(installments);
-        setSaving(false);
-        if (success) onClose();
-        return;
       } else {
         installmentAmount = Math.round((total / count) * 100) / 100;
       }
 
-      const instIntervalType2 = data.installment_interval_type || "monthly";
-      const instCustomDays2 = data.installment_custom_days || 30;
+      const hasCustomAmounts = Object.keys(customInstallmentAmounts).length > 0;
+      const instIntervalType = data.installment_interval_type || "monthly";
+      const instCustomDays = data.installment_custom_days || 30;
       const installments: TransactionInsert[] = [];
+
       for (let idx = 0; idx < count; idx++) {
-        const payDate = instIntervalType2 === "custom_days"
-          ? addDays(data.payment_date, idx * instCustomDays2)
+        const payDate = instIntervalType === "custom_days"
+          ? addDays(data.payment_date, idx * instCustomDays)
           : addMonths(data.payment_date, idx);
         const compDate = data.competence_date;
+        const instNum = idx + 1;
+
+        let amount = installmentAmount;
+        if (hasCustomAmounts && interestRate === 0) {
+          if (customInstallmentAmounts[instNum] !== undefined) {
+            amount = customInstallmentAmounts[instNum];
+          } else {
+            // Redistribute: calculate remaining for non-edited
+            const editedIndices = Object.keys(customInstallmentAmounts).map(Number);
+            const customSum = editedIndices.reduce((s, k) => s + (customInstallmentAmounts[k] || 0), 0);
+            const remaining = total - customSum;
+            const nonEditedCount = count - editedIndices.length;
+            amount = nonEditedCount > 0 ? Math.round((remaining / nonEditedCount) * 100) / 100 : 0;
+          }
+        }
+
         installments.push({
           ...baseData,
-          amount: installmentAmount,
+          amount,
           original_amount: total,
           payment_date: format(payDate, "yyyy-MM-dd"),
           competence_date: format(compDate, "yyyy-MM-dd"),
           series_id: seriesId,
-          installment_number: idx + 1,
+          installment_number: instNum,
           installments_total: count,
         });
       }
@@ -868,6 +868,10 @@ export function TransactionFormModal({
               formCompanyId={formCompanyId}
               onCategoryCreated={fetchFormCategories}
               fieldSettings={fieldSettings}
+              customInstallmentAmounts={customInstallmentAmounts}
+              onCustomInstallmentAmountsChange={setCustomInstallmentAmounts}
+              editTransaction={editTransaction}
+              onSeriesUpdatesChange={setSeriesUpdates}
             />
           </TabsContent>
 
@@ -892,6 +896,10 @@ export function TransactionFormModal({
               formCompanyId={formCompanyId}
               onCategoryCreated={fetchFormCategories}
               fieldSettings={fieldSettings}
+              customInstallmentAmounts={customInstallmentAmounts}
+              onCustomInstallmentAmountsChange={setCustomInstallmentAmounts}
+              editTransaction={editTransaction}
+              onSeriesUpdatesChange={setSeriesUpdates}
             />
           </TabsContent>
 
@@ -1048,6 +1056,10 @@ interface MainFormContentProps {
   formCompanyId: string | null;
   onCategoryCreated: () => Promise<void>;
   fieldSettings?: FormFieldSettings;
+  customInstallmentAmounts: Record<number, number>;
+  onCustomInstallmentAmountsChange: (amounts: Record<number, number>) => void;
+  editTransaction?: Transaction | null;
+  onSeriesUpdatesChange: (updates: Array<{ id: string; amount: number }>) => void;
 }
 
 function MainFormContent({
@@ -1070,6 +1082,10 @@ function MainFormContent({
   formCompanyId,
   onCategoryCreated,
   fieldSettings,
+  customInstallmentAmounts,
+  onCustomInstallmentAmountsChange,
+  editTransaction,
+  onSeriesUpdatesChange,
 }: MainFormContentProps) {
   const watchInstallment = form.watch("is_installment");
   const watchRecurring = form.watch("is_recurring");
@@ -1541,10 +1557,15 @@ function MainFormContent({
                       intervalType={(watchIntervalType as "monthly" | "custom_days") || "monthly"}
                       customDays={watchCustomDays ? Number(watchCustomDays) : undefined}
                       interestRate={watchInterestRate || 0}
-                      firstInstallmentAmount={form.watch("first_installment_amount") ? Number(form.watch("first_installment_amount")) : undefined}
-                      onFirstInstallmentChange={(val) => {
-                        form.setValue("first_installment_amount", val ?? 0);
-                      }}
+                      customAmounts={customInstallmentAmounts}
+                      onCustomAmountsChange={onCustomInstallmentAmountsChange}
+                    />
+                  )}
+                  {/* Series installment table for editing existing series */}
+                  {isEditing && editTransaction?.series_id && (editTransaction?.installments_total ?? 0) > 1 && (
+                    <SeriesInstallmentTable
+                      seriesId={editTransaction.series_id}
+                      onAmountsChanged={onSeriesUpdatesChange}
                     />
                   )}
                 </div>

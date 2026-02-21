@@ -38,7 +38,7 @@ export default function Lancamentos() {
     filters, setFilters,
     createTransaction, createMultipleTransactions, updateTransaction,
     deleteTransaction, deleteSeriesTransactions, duplicateTransaction,
-    fetchTransactions,
+    fetchTransactions, updateMultipleTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
     cardTerminals, allCardTerminals, allAccounts,
   } = useTransactions();
@@ -277,6 +277,7 @@ export default function Lancamentos() {
         onSave={createTransaction}
         onSaveMultiple={createMultipleTransactions}
         onUpdate={updateTransaction}
+        onUpdateMultiple={updateMultipleTransactions}
         bankAccounts={bankAccounts}
         creditCards={creditCards}
         wallets={wallets}
