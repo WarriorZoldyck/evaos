@@ -1,63 +1,70 @@
 
 
-## Icones de Receita/Despesa clicaveis para criar categoria
+## Corrigir dados do DRE e Fluxo de Caixa
 
-Ao clicar no icone verde (Canais de Receita) ou vermelho (Centros de Despesa), abre o modal de criacao de categoria com o tipo ja pre-selecionado.
+Foram identificados 3 problemas que causam divergencia entre os relatorios e os dados reais do sistema.
 
-### Alteracoes
+### Problema 1: Fluxo de Caixa truncando dados em 1000 registros
 
-**`src/pages/Categorias.tsx`**
-- Adicionar estado `defaultType: string` (inicializa como "receita")
-- Criar funcao `openCreateRoot(type)` que limpa parentId/editData, define defaultType e abre o modal
-- Tornar os dois `div` dos icones clicaveis com `cursor-pointer`, `hover:bg-*` e `onClick={() => openCreateRoot("receita"/"despesa")}`
-- Passar `defaultType` ao `CategoryFormModal`
+O hook `useCashFlowData` nao implementa paginacao. O Supabase limita retornos a 1000 linhas por padrao. Com mais de 1000 transacoes no banco, o relatorio pode estar incompleto.
 
-**`src/components/categorias/CategoryFormModal.tsx`**
-- Adicionar prop opcional `defaultType?: string`
-- No `useEffect` de abertura, usar `editData?.type || defaultType || "ambos"` como valor inicial do tipo
+**Solucao**: Adicionar o mesmo loop de paginacao que ja existe no `useDREData`.
+
+### Problema 2: Transferencias entre contas inflando receitas e despesas
+
+Transferencias internas geram 2 registros (1 receita + 1 despesa) com `transfer_id` preenchido. Ambos aparecem nos relatorios, inflando os totais de receita e despesa artificialmente.
+
+**Solucao**: Excluir transacoes com `transfer_id IS NOT NULL` das queries do DRE e do Fluxo de Caixa.
+
+### Problema 3: Fluxo de Caixa sem subcategory2
+
+O Fluxo de Caixa nao busca o campo `subcategory2` no select, podendo agrupar incorretamente transacoes com 3 niveis de categoria.
+
+**Solucao**: Adicionar `subcategory2` ao select e usar a mesma logica de `buildChain` com 3 niveis.
+
+---
+
+### Alteracoes por arquivo
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/hooks/useCashFlowData.ts` | Adicionar paginacao, filtrar `transfer_id`, incluir `subcategory2`, usar `buildChain` com 3 niveis |
+| `src/hooks/useDREData.ts` | Filtrar `transfer_id IS NULL` na query |
 
 ### Detalhes tecnicos
 
-Icone verde:
-```tsx
-<div
-  className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center cursor-pointer hover:bg-emerald-500/20 transition-colors"
-  onClick={() => openCreateRoot("receita")}
-  title="Criar categoria de receita"
->
-  <TrendingUp className="h-4 w-4 text-emerald-500" />
-</div>
+**`useCashFlowData.ts`** - Query com paginacao e filtro de transferencia:
+```typescript
+let q = supabase
+  .from("transactions")
+  .select("id, amount, type, status, category, subcategory, subcategory2, bank_account_id, credit_card_id, transfer_id")
+  .gte(dateField, startStr)
+  .lte(dateField, endStr)
+  .is("transfer_id", null); // excluir transferencias
+
+// Paginacao
+const allData: any[] = [];
+let page = 0;
+const pageSize = 1000;
+while (true) {
+  const { data } = await q.range(page * pageSize, (page + 1) * pageSize - 1);
+  if (!data || data.length === 0) break;
+  allData.push(...data);
+  if (data.length < pageSize) break;
+  page++;
+}
 ```
 
-Icone vermelho:
-```tsx
-<div
-  className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center cursor-pointer hover:bg-red-500/20 transition-colors"
-  onClick={() => openCreateRoot("despesa")}
-  title="Criar categoria de despesa"
->
-  <TrendingDown className="h-4 w-4 text-red-500" />
-</div>
+**`useDREData.ts`** - Adicionar filtro de transferencia:
+```typescript
+let q = supabase
+  .from("transactions")
+  .select("id, amount, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id, transfer_id")
+  .gte("competence_date", startStr)
+  .lte("competence_date", endStr)
+  .is("transfer_id", null); // excluir transferencias
 ```
 
-Funcao auxiliar:
-```tsx
-const openCreateRoot = (type: string) => {
-  setParentId(null);
-  setParentName(undefined);
-  setEditData(null);
-  setDefaultType(type);
-  setFormOpen(true);
-};
-```
+**`useCashFlowData.ts`** - Substituir `resolveChain` por `buildChain` com 3 niveis (mesma logica do DRE), usando `category`, `subcategory` e `subcategory2`.
 
-No modal, o useEffect fica:
-```tsx
-setType(editData?.type || defaultType || "ambos");
-```
-
-| Arquivo | Acao |
-|---------|------|
-| `src/pages/Categorias.tsx` | Icones clicaveis, estado defaultType, funcao openCreateRoot |
-| `src/components/categorias/CategoryFormModal.tsx` | Prop defaultType no useEffect |
-
+Estas correcoes se aplicam a todos os usuarios automaticamente pois sao mudancas no frontend.
