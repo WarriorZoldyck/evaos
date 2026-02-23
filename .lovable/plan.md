@@ -1,160 +1,176 @@
 
 
-## Precificacao V2 - FHC Completo com Custo de Vida
+## Integracao WhatsApp com EVA - Lancamentos e Consultas
 
-Transformar a pagina placeholder "Precificacao V2" em um modulo completo, baseado na planilha FHC que inclui **custo de vida pessoal** integrado ao calculo. A diferenca principal do V1 e que aqui o usuario cadastra **todos** os custos manualmente (nao puxa do banco de transacoes), e o calculo inclui impostos (NF) e metricas de lucratividade.
+O usuario podera enviar fotos de notas fiscais, comandos de lancamento e tambem **perguntas sobre seus dados** pelo WhatsApp. A EVA (IA) identifica a intencao e responde adequadamente.
 
----
-
-### Estrutura da Planilha (resumo)
-
-A planilha organiza os custos em 3 grandes grupos:
+### Arquitetura
 
 ```text
-+---------------------------+-----------------------------+---------------------------+
-| Despesas Fixas Clinica    | Despesas Variaveis Clinica  | Despesas Casa (Pessoais)  |
-+---------------------------+-----------------------------+---------------------------+
-| Prediais                  | Dentais                     | Educacao                  |
-| Salarios                  | Salario (parceiros)         | Moradia                   |
-| Administrativos           | Laboratorio                 | Salarios (baba etc)       |
-| Outros                    | Honorarios                  | Lazer                     |
-|                           | Implantes                   | Planejamento              |
-|                           | Administrativo              | Vestuario                 |
-|                           | Diversos                    | Superfluos                |
-|                           |                             | Alimentacao               |
-|                           |                             | Transporte                |
-|                           |                             | Saude                     |
-|                           |                             | Outros                    |
-+---------------------------+-----------------------------+---------------------------+
+Usuario (WhatsApp)
+    |
+    v
+  uazapi --> n8n --> Edge Function (whatsapp-webhook)
+    ^                      |
+    |                      v
+    +--- resposta <--- IA classifica intencao:
+                        |
+                        +-- "lancamento" --> cria transacao no DB
+                        |
+                        +-- "consulta"  --> busca dados no DB
+                        |
+                        +-- "conversa"  --> resposta generica
 ```
 
-Cada item tem: descricao, valor e frequencia (Mensal ou Anual). Itens anuais sao divididos por 12 para o calculo mensal.
-
-O calculo final do procedimento:
-- **CF** (custo fixo) = Custo/Hora x Tempo
-- **CV** (custo variavel) = soma dos materiais
-- **NF** (imposto) = Valor cobrado x Aliquota IR
-- **Lucro** = Valor cobrado - CF - CV - NF
-- **Lucratividade/h** = Lucro / Tempo
-- **Lucratividade %** = Lucro / Valor cobrado
-
-Inclui tambem: **Quantidade de Salas** e calculo de **FMM/sala** (Faturamento Minimo Mensal por sala).
+O n8n tem papel simples: recebe do uazapi, repassa para o webhook, devolve a resposta para o uazapi. **Toda a inteligencia fica na Edge Function.**
 
 ---
 
-### Plano de Implementacao
+### O que sera feito
 
-#### 1. Novas tabelas no Supabase
+#### 1. Campo de WhatsApp nas Configuracoes
 
-**`pricing_v2_configurations`**
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| user_id | uuid | FK auth.users |
-| hours_per_month | integer | Horas trabalhadas/mes (default 160) |
-| num_rooms | integer | Quantidade de salas (default 1) |
-| tax_rate | numeric | Aliquota IR em % (default 8.44) |
-| updated_at | timestamptz | |
+A tabela `profiles` ja possui a coluna `whatsapp_number`. Adicionar um card na pagina de Configuracoes para o usuario cadastrar seu numero (formato: 5511999999999).
 
-**`pricing_v2_cost_items`**
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| config_id | uuid | FK pricing_v2_configurations |
-| user_id | uuid | Para RLS |
-| group | text | "fixos_clinica", "variaveis_clinica" ou "pessoais" |
-| category | text | Ex: "Prediais", "Educacao" |
-| description | text | Ex: "Aluguel", "Escola Anna" |
-| value | numeric | Valor em R$ |
-| frequency | text | "M" (mensal) ou "A" (anual) |
+**Arquivo**: `src/pages/Configuracoes.tsx`
+- Novo card "WhatsApp" entre o card de Empresas e o de Campos do Formulario
+- Campo de input com mascara para telefone
+- Botao "Salvar" que atualiza `profiles.whatsapp_number`
+- Feedback visual (toast) ao salvar
 
-**`pricing_v2_procedures`**
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| user_id | uuid | |
-| name | text | Nome do procedimento |
-| execution_time | numeric | Tempo em horas |
-| desired_price | numeric | Valor cobrado |
-| created_at | timestamptz | |
+#### 2. Edge Function `whatsapp-webhook`
 
-**`pricing_v2_procedure_items`**
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | |
-| procedure_id | uuid | FK pricing_v2_procedures |
-| description | text | Material/insumo |
-| value | numeric | Custo unitario |
+Endpoint unico que o n8n chama com os dados da mensagem recebida.
 
-RLS em todas: `auth.uid() = user_id` (ou via join para items).
+**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
 
-#### 2. Hook `usePricingV2`
+**Payload recebido do n8n:**
+```text
+{
+  "phone": "5511999999999",
+  "message": "texto da mensagem",
+  "image_base64": "base64 da imagem (se houver)",
+  "image_url": "URL da imagem (alternativa)"
+}
+```
 
-Similar ao `usePricing`, mas:
-- Busca `pricing_v2_configurations` + `pricing_v2_cost_items`
-- Calcula custos mensais somando itens (A dividido por 12, M direto)
-- Agrupa por `group` para mostrar totais por grupo
-- Calcula Custo/Hora = (Total Fixos Clinica + Total Var Clinica + Total Pessoais) / horas_per_month
-- Calcula FMM = Total de todos custos mensais
-- Calcula FMM/sala = FMM / num_rooms
-- Calcula CF/H/sala = Custo/Hora / num_rooms
-- Procedimentos: Lucro = desired_price - CF - CV - (desired_price x tax_rate/100)
+**Fluxo interno:**
 
-#### 3. Pagina `PrecificacaoV2.tsx`
+1. Valida token secreto no header (seguranca)
+2. Busca usuario pelo `whatsapp_number` na tabela `profiles`
+3. Se nao encontrar, retorna erro "numero nao cadastrado"
+4. Envia mensagem + imagem para a IA (Gemini) com um prompt que:
+   - Classifica a intencao: "lancamento", "consulta" ou "conversa"
+   - Para lancamentos: extrai descricao, valor, data, tipo, categoria
+   - Para consultas: identifica o tipo de consulta (saldo, resumo, pendentes, etc.)
+5. Executa a acao correspondente
 
-Layout em 4 secoes (abas ou scroll):
+**Tipos de consulta suportados:**
 
-**Secao 1 - Configuracao Geral**
-- Horas/mes, Quantidade de salas, Aliquota IR (%)
-- Botao Salvar
+| Exemplo de mensagem | Acao |
+|---------------------|------|
+| "Qual meu saldo?" | Busca saldo de todas as contas (bank_accounts + wallets) usando a funcao `get_account_balance` |
+| "Quanto gastei esse mes?" | Soma transacoes tipo despesa do mes atual com status Pago |
+| "Quanto recebi esse mes?" | Soma transacoes tipo receita do mes atual com status Pago |
+| "Resumo do mes" | Retorna receitas, despesas, saldo e top 3 categorias |
+| "Quais minhas contas pendentes?" | Lista transacoes com status Pendente ordenadas por data |
+| "Quanto gastei com alimentacao?" | Filtra despesas por categoria |
 
-**Secao 2 - Despesas (3 grupos em Tabs)**
-- Tab "Fixos Clinica" | Tab "Variaveis Clinica" | Tab "Pessoais"
-- Cada tab: tabela editavel com Categoria, Descricao, Valor, Frequencia (M/A)
-- Botao "+ Adicionar item" por tab
-- Subtotal por categoria e total do grupo
+Para consultas, a Edge Function usa o `service_role_key` com filtro de `user_id` para garantir isolamento dos dados.
 
-**Secao 3 - Resumo de Custos**
-- Cards com: Total Fixos Clinica, Total Var Clinica, Total Pessoais
-- Cards destaque: Custo/Hora, FMM, FMM/sala, CF/H/sala
-- Grafico de pizza com % de cada grupo/categoria
+**Resposta da Edge Function:**
+```text
+{
+  "success": true,
+  "intent": "consulta",
+  "message": "Seu saldo total e de R$ 5.230,00\n\nContas:\n- Nubank: R$ 3.200,00\n- Itau: R$ 2.030,00",
+  "transaction": null
+}
+```
 
-**Secao 4 - Procedimentos**
-- Mesma tabela do V1 mas com colunas extras: CF, CV, NF, Lucro, Lucratividade/h, Lucratividade %
-- Modal de criacao/edicao similar ao V1
-- Decomposicao com imposto incluso
+Para lancamentos:
+```text
+{
+  "success": true,
+  "intent": "lancamento",
+  "message": "Lancamento criado: Supermercado Extra - R$ 157,30 (Despesa/Alimentacao)",
+  "transaction": {
+    "description": "Supermercado Extra",
+    "amount": 157.30,
+    "type": "despesa",
+    "category": "Alimentacao",
+    "date": "2026-02-23"
+  }
+}
+```
 
-#### 4. Componentes novos
+#### 3. Secret para Gemini API
 
-| Componente | Descricao |
-|------------|-----------|
-| `src/pages/PrecificacaoV2.tsx` | Pagina principal substituindo o placeholder |
-| `src/hooks/usePricingV2.ts` | Hook de dados e logica |
-| `src/components/precificacao-v2/CostItemsTab.tsx` | Tabela editavel de itens de custo por grupo |
-| `src/components/precificacao-v2/ConfigCard.tsx` | Card de configuracao (horas, salas, aliquota) |
-| `src/components/precificacao-v2/CostSummaryCards.tsx` | Cards resumo + grafico |
-| `src/components/precificacao-v2/ProcedureTableV2.tsx` | Tabela de procedimentos com metricas extras |
-| `src/components/precificacao-v2/ProcedureFormModalV2.tsx` | Modal criar/editar procedimento |
-| `src/components/precificacao-v2/ProcedureBreakdownV2.tsx` | Decomposicao detalhada |
+A Edge Function precisa de uma chave da API do Google Gemini para processar imagens e texto.
 
-#### 5. Atualizacao do roteamento
+- Secret: `GEMINI_API_KEY`
+- Sera solicitada ao usuario antes de criar a funcao
 
-- Em `App.tsx`: substituir o `<ComingSoon>` da rota `/precificacao-v2` pelo novo componente `<PrecificacaoV2 />`
+#### 4. Secret para seguranca do webhook
 
-#### 6. Migracao SQL
+Um token secreto que o n8n envia no header para autenticar as chamadas.
 
-Uma unica migracao criando as 4 tabelas com RLS habilitado e politicas de acesso por `user_id`.
+- Secret: `WHATSAPP_WEBHOOK_SECRET`
+- O n8n deve enviar como header: `x-webhook-secret: <token>`
+- A Edge Function valida antes de processar
+
+#### 5. Atualizacao do config.toml
+
+```text
+[functions.whatsapp-webhook]
+verify_jwt = false
+```
 
 ---
 
-### Diferenca V1 vs V2
+### Prompt da IA (Gemini)
 
-| Aspecto | V1 | V2 |
-|---------|----|----|
-| Fonte de custos | Transacoes reais (12 meses) | Cadastro manual pelo usuario |
-| Grupos de custo | 2 (Fixos Clinica + Pessoais) | 3 (Fixos + Variaveis Clinica + Pessoais) |
-| Impostos | Nao considera | Aliquota IR aplicada no preco |
-| Salas | Nao tem | Calculo por sala |
-| Metricas | Preco sugerido | Lucro, Lucratividade/h, Lucratividade % |
-| Frequencia | Nao aplica (media automatica) | Mensal ou Anual por item |
+O prompt enviado para a IA tera 3 partes:
+
+**1. Instrucoes do sistema:**
+- Voce e a EVA, assistente financeira
+- Classifique a mensagem como: lancamento, consulta ou conversa
+- Para lancamentos, extraia os campos estruturados
+- Para consultas, identifique o tipo de informacao solicitada
+- Responda sempre em portugues brasileiro
+
+**2. Contexto do usuario:**
+- Lista de categorias do usuario (buscadas do banco)
+- Lista de contas bancarias do usuario
+- Data atual
+
+**3. Mensagem do usuario:**
+- Texto e/ou imagem
+
+A IA retorna um JSON estruturado com a intencao e os dados extraidos.
+
+---
+
+### Arquivos envolvidos
+
+| Arquivo | Acao |
+|---------|------|
+| `src/pages/Configuracoes.tsx` | Adicionar card para cadastrar numero WhatsApp |
+| `supabase/functions/whatsapp-webhook/index.ts` | Nova Edge Function |
+| `supabase/config.toml` | Registrar nova funcao |
+
+### Consideracoes
+
+- Transacoes criadas via WhatsApp: status "Pago", sem company_id, conta bancaria inferida (unica) ou nula (varias)
+- Categorias sugeridas pela IA com base nas categorias existentes do usuario
+- A IA tenta responder consultas com dados reais do banco, nunca inventa numeros
+- Se a IA nao conseguir interpretar a mensagem, retorna uma resposta amigavel pedindo mais detalhes
+- Rate limiting nao implementado na primeira versao, mas pode ser adicionado depois
+
+### Fluxo do n8n (referencia para o usuario configurar fora do Lovable)
+
+1. **Trigger**: Webhook do uazapi (mensagem recebida)
+2. **HTTP Request**: POST para a URL do webhook com phone, message, image
+3. **Condicional**: Se success = true, enviar `response.message` de volta pelo uazapi
+4. **Erro**: Se success = false, enviar mensagem generica de erro
 
