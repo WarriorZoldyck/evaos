@@ -40,7 +40,7 @@ export default function Lancamentos() {
     deleteTransaction, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions, updateMultipleTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
-    cardTerminals, allCardTerminals, allAccounts,
+    cardTerminals, allCardTerminals, allAccounts, allCategories,
   } = useTransactions();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -238,6 +238,7 @@ export default function Lancamentos() {
             transactions={transactions}
             loading={loading}
             categories={categories}
+            allCategories={allCategories}
             bankAccounts={bankAccounts}
             wallets={wallets}
             creditCards={creditCards}
@@ -296,6 +297,7 @@ export default function Lancamentos() {
         transaction={detailTarget}
         onClose={() => setDetailTarget(null)}
         categories={categories}
+        allCategories={allCategories}
         bankAccounts={bankAccounts}
         wallets={wallets}
         creditCards={creditCards}
