@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ArrowLeftRight, BarChart3, FileText, Calculator,
   CreditCard, FolderTree, Users, Settings, BookOpen, Lightbulb,
   Building2, User, MessageSquare, Code, Send, AlertTriangle,
-  CheckCircle2, Repeat, Wallet, ChevronDown,
+  CheckCircle2, Repeat, Wallet, ChevronDown, Copy, Check, Terminal,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -72,13 +72,34 @@ const allIds = navGroups.flatMap((g) => g.items.map((i) => i.id));
 /*  Code Block component                                               */
 /* ------------------------------------------------------------------ */
 
-function CodeBlock({ children, title }: { children: string; title?: string }) {
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="absolute top-2 right-2 p-1.5 rounded-md bg-background/80 hover:bg-background border text-muted-foreground hover:text-foreground transition-colors"
+      title="Copiar"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
+
+function CodeBlock({ children, title, copyable = true }: { children: string; title?: string; copyable?: boolean }) {
   return (
     <div className="my-3">
       {title && <p className="text-xs font-medium text-foreground mb-1">{title}</p>}
-      <pre className="bg-muted rounded-lg p-4 font-mono text-xs overflow-x-auto whitespace-pre text-foreground/80">
-        {children}
-      </pre>
+      <div className="relative">
+        <pre className="bg-muted rounded-lg p-4 pr-10 font-mono text-xs overflow-x-auto whitespace-pre text-foreground/80">
+          {children}
+        </pre>
+        {copyable && <CopyButton text={children} />}
+      </div>
     </div>
   );
 }
@@ -509,6 +530,42 @@ export default function Docs() {
                 </tbody>
               </table>
             </div>
+
+            <Separator className="my-4" />
+
+            {/* cURL pronto */}
+            <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
+              <Terminal className="h-4 w-4" /> cURL Pronto para Uso
+            </h3>
+            <p>Copie e cole no terminal para testar a API rapidamente. Substitua os valores entre <code className="bg-muted px-1 rounded text-xs font-mono">&lt;...&gt;</code>.</p>
+
+            <CodeBlock title="Criar lançamento">{`curl -X POST \\
+  https://<SUPABASE_PROJECT>.supabase.co/functions/v1/whatsapp-webhook \\
+  -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: <SEU_SECRET>" \\
+  -d '{
+    "phone": "5511999999999",
+    "message": "Gastei 50 reais no almoço"
+  }'`}</CodeBlock>
+
+            <CodeBlock title="Consultar saldo">{`curl -X POST \\
+  https://<SUPABASE_PROJECT>.supabase.co/functions/v1/whatsapp-webhook \\
+  -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: <SEU_SECRET>" \\
+  -d '{
+    "phone": "5511999999999",
+    "message": "Qual meu saldo?"
+  }'`}</CodeBlock>
+
+            <CodeBlock title="Enviar imagem de nota fiscal">{`curl -X POST \\
+  https://<SUPABASE_PROJECT>.supabase.co/functions/v1/whatsapp-webhook \\
+  -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: <SEU_SECRET>" \\
+  -d '{
+    "phone": "5511999999999",
+    "message": "Registrar essa nota",
+    "image_url": "https://exemplo.com/nota-fiscal.jpg"
+  }'`}</CodeBlock>
 
             <Separator className="my-4" />
 
