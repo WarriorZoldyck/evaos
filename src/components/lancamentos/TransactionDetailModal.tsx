@@ -17,6 +17,7 @@ interface TransactionDetailModalProps {
   transaction: Transaction | null;
   onClose: () => void;
   categories: Category[];
+  allCategories?: Category[];
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
   creditCards: { id: string; name: string }[];
@@ -33,6 +34,7 @@ export function TransactionDetailModal({
   transaction: t,
   onClose,
   categories,
+  allCategories,
   bankAccounts,
   wallets,
   creditCards,
@@ -50,7 +52,17 @@ export function TransactionDetailModal({
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   // Category hierarchy
-  const getCategoryName = (id: string | null) => categories.find((c) => c.id === id)?.name || null;
+  const getCategoryName = (id: string | null) => {
+    if (!id) return null;
+    const found = categories.find((c) => c.id === id || c.name === id);
+    if (found) return found.name;
+    if (allCategories) {
+      const fallback = allCategories.find((c) => c.id === id || c.name === id);
+      if (fallback) return fallback.name;
+    }
+    return null;
+  };
+
   const catParts = [getCategoryName(t.category), getCategoryName(t.subcategory), getCategoryName(t.subcategory2)].filter(Boolean);
 
   // Account name

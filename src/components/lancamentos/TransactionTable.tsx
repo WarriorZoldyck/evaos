@@ -20,6 +20,7 @@ interface TransactionTableProps {
   transactions: Transaction[];
   loading: boolean;
   categories: Category[];
+  allCategories?: Category[];
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
   creditCards: { id: string; name: string }[];
@@ -41,10 +42,17 @@ interface TransactionTableProps {
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount);
 
-function useCategoryHelpers(categories: Category[]) {
+function useCategoryHelpers(categories: Category[], allCategories?: Category[]) {
   const findCategory = (value: string | null | undefined) => {
     if (!value) return null;
-    return categories.find((c) => c.id === value || c.name === value) ?? null;
+    // First try company-filtered categories
+    const found = categories.find((c) => c.id === value || c.name === value);
+    if (found) return found;
+    // Fallback to all user categories (cross-context)
+    if (allCategories) {
+      return allCategories.find((c) => c.id === value || c.name === value) ?? null;
+    }
+    return null;
   };
 
   const getCategoryHierarchy = (t: Transaction) => {
@@ -106,6 +114,7 @@ function getContactName(
 interface TransactionRowProps {
   t: Transaction;
   categories: Category[];
+  allCategories?: Category[];
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
   creditCards: { id: string; name: string }[];
@@ -120,10 +129,10 @@ interface TransactionRowProps {
 }
 
 function TransactionRow({
-  t, categories, bankAccounts, wallets, creditCards, suppliers, clients,
+  t, categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients,
   onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, indented,
 }: TransactionRowProps) {
-  const { getCategoryHierarchy } = useCategoryHelpers(categories);
+  const { getCategoryHierarchy } = useCategoryHelpers(categories, allCategories);
   const installment = getInstallmentLabel(t);
   const categoryParts = getCategoryHierarchy(t);
   const accountName = getAccountName(t, bankAccounts, wallets, creditCards);
@@ -330,6 +339,7 @@ export function TransactionTable({
   transactions,
   loading,
   categories,
+  allCategories,
   bankAccounts,
   wallets,
   creditCards,
@@ -426,7 +436,7 @@ export function TransactionTable({
     );
   }
 
-  const rowProps = { categories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails };
+  const rowProps = { categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails };
 
   return (
     <div className="space-y-0 divide-y divide-border">

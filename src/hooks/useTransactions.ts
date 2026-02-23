@@ -105,6 +105,7 @@ export function useTransactions() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const [cardTerminals, setCardTerminals] = useState<CardTerminalInfo[]>([]);
 
   // All accounts across all contexts (for transfers)
@@ -132,7 +133,7 @@ export function useTransactions() {
   // Fetch auxiliary data (extracted so it can be called on demand)
   const fetchAux = useCallback(async () => {
     if (!user) return;
-    const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes, termRes] =
+    const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes, termRes, allCatRes] =
       await Promise.all([
         companyFilter(supabase.from("bank_accounts").select("id, name, type")).order("name"),
         companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, bank_account_id")).order("name"),
@@ -141,6 +142,7 @@ export function useTransactions() {
         supabase.from("clients").select("id, name").order("name"),
         companyFilter(supabase.from("categories").select("id, name, parent_id, type")).order("name"),
         companyFilter(supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info")).order("name"),
+        supabase.from("categories").select("id, name, parent_id, type").order("name"),
       ]);
 
     if (accRes.data) setBankAccounts(accRes.data);
@@ -149,6 +151,7 @@ export function useTransactions() {
     if (supplierRes.data) setSuppliers(supplierRes.data);
     if (clientRes.data) setClients(clientRes.data);
     if (catRes.data) setCategories(catRes.data);
+    if (allCatRes.data) setAllCategories(allCatRes.data);
     if (termRes.data) setCardTerminals(termRes.data as CardTerminalInfo[]);
   }, [user, companyFilter]);
 
@@ -472,6 +475,7 @@ export function useTransactions() {
     suppliers,
     clients,
     categories,
+    allCategories,
     cardTerminals,
     allCardTerminals,
     allAccounts,
