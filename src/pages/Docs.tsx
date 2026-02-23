@@ -537,30 +537,30 @@ export default function Docs() {
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
               <Terminal className="h-4 w-4" /> cURL Pronto para Uso
             </h3>
-            <p>Copie e cole no terminal para testar a API rapidamente. Substitua os valores entre <code className="bg-muted px-1 rounded text-xs font-mono">&lt;...&gt;</code>.</p>
+            <p>Copie e cole no terminal para testar a API rapidamente. Substitua <code className="bg-muted px-1 rounded text-xs font-mono">SEU_SECRET_AQUI</code> pelo seu webhook secret e <code className="bg-muted px-1 rounded text-xs font-mono">5511999999999</code> pelo número cadastrado.</p>
 
             <CodeBlock title="Criar lançamento">{`curl -X POST \\
-  https://<SUPABASE_PROJECT>.supabase.co/functions/v1/whatsapp-webhook \\
+  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
   -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: <SEU_SECRET>" \\
+  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
   -d '{
     "phone": "5511999999999",
     "message": "Gastei 50 reais no almoço"
   }'`}</CodeBlock>
 
             <CodeBlock title="Consultar saldo">{`curl -X POST \\
-  https://<SUPABASE_PROJECT>.supabase.co/functions/v1/whatsapp-webhook \\
+  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
   -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: <SEU_SECRET>" \\
+  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
   -d '{
     "phone": "5511999999999",
     "message": "Qual meu saldo?"
   }'`}</CodeBlock>
 
             <CodeBlock title="Enviar imagem de nota fiscal">{`curl -X POST \\
-  https://<SUPABASE_PROJECT>.supabase.co/functions/v1/whatsapp-webhook \\
+  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
   -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: <SEU_SECRET>" \\
+  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
   -d '{
     "phone": "5511999999999",
     "message": "Registrar essa nota",
