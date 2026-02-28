@@ -117,12 +117,17 @@ function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    const { error } = await signIn(email, password);
-    if (error) {
-      toast.error("Erro ao entrar", { description: error.message });
+    try {
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast.error("Erro ao entrar", { description: error.message });
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      toast.error("Erro inesperado ao entrar.");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
@@ -190,14 +195,19 @@ function SignupForm() {
       return;
     }
     setIsLoading(true);
-
-    const { error } = await signUp(email, password, fullName);
-    if (error) {
-      toast.error("Erro ao cadastrar", { description: error.message });
-    } else {
-      toast.success("Conta criada!", { description: "Verifique seu email para confirmar o cadastro." });
+    try {
+      const { error } = await signUp(email, password, fullName);
+      if (error) {
+        toast.error("Erro ao cadastrar", { description: error.message });
+      } else {
+        toast.success("Conta criada!", { description: "Verifique seu email para confirmar o cadastro." });
+      }
+    } catch (err) {
+      console.error("Signup error:", err);
+      toast.error("Erro inesperado ao cadastrar.");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
@@ -264,15 +274,20 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    const { error } = await resetPassword(email);
-    if (error) {
-      toast.error("Erro", { description: error.message });
-    } else {
-      toast.success("Email enviado!", { description: "Verifique sua caixa de entrada para redefinir a senha." });
-      onBack();
+    try {
+      const { error } = await resetPassword(email);
+      if (error) {
+        toast.error("Erro", { description: error.message });
+      } else {
+        toast.success("Email enviado!", { description: "Verifique sua caixa de entrada para redefinir a senha." });
+        onBack();
+      }
+    } catch (err) {
+      console.error("Reset password error:", err);
+      toast.error("Erro inesperado ao redefinir senha.");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
