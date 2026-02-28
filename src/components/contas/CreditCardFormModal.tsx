@@ -105,7 +105,7 @@ export function CreditCardFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg p-6 gap-6">
+      <DialogContent className="sm:max-w-lg p-6 gap-6" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* 3D Card Container */}
           <div className="flex justify-center" style={{ perspective: "1000px" }}>
@@ -115,7 +115,7 @@ export function CreditCardFormModal({
                 transformStyle: "preserve-3d",
                 transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
               }}
-              onClick={() => setIsFlipped(!isFlipped)}
+              onClick={(e) => { e.stopPropagation(); setIsFlipped(!isFlipped); }}
             >
               {/* FRONT */}
               <div
