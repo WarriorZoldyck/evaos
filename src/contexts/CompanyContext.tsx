@@ -32,15 +32,20 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("companies")
-      .select("id, name, cnpj")
-      .order("name");
+    try {
+      const { data, error } = await supabase
+        .from("companies")
+        .select("id, name, cnpj")
+        .order("name");
 
-    if (!error && data) {
-      setCompanies(data);
+      if (!error && data) {
+        setCompanies(data);
+      }
+    } catch (err) {
+      console.error("Error fetching companies:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
