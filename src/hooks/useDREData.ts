@@ -74,9 +74,8 @@ export function useDREData(filters: DREFilters) {
   useEffect(() => {
     if (!user) return;
     const fetchCats = async () => {
-      let q = supabase.from("categories").select("id, name, parent_id");
-      if (isPersonal) q = q.is("company_id", null);
-      else if (selectedCompanyId) q = q.eq("company_id", selectedCompanyId);
+      // Fetch ALL user categories (RLS filters by user) to resolve names across companies
+      const q = supabase.from("categories").select("id, name, parent_id");
       const { data } = await q;
       if (data) setCategories(data);
     };
