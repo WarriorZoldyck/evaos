@@ -1,65 +1,31 @@
 
 
-# Correções: Filtro de Categoria + Fatura do Cartão de Crédito
+# Status das Correções e Bugs Remanescentes
 
-## Problema 1: Filtro de Categoria mostra menos lançamentos
+## 1. MDR mostrando taxa de 1x no card de detalhes
 
-**Causa raiz:** O campo `category` na tabela `transactions` armazena dados mistos — registros antigos usam **nomes de texto** (ex: "Alimentação") e registros novos usam **UUIDs** (ex: "9efd594b-..."). O filtro faz `.eq("category", categoryId)` usando sempre o UUID do dropdown, então só encontra os registros novos que salvaram UUID. Registros com nome de texto são invisíveis ao filtro.
+**Status: CORRIGIDO** na última edição. O `TransactionDetailModal.tsx` (linhas 88-104) agora busca a taxa específica de parcelas em `rates_info` quando `installments_total >= 2`. Após a correção do D+30 (que salva cada parcela individualmente com `installments_total` correto), o card deve exibir a taxa correta.
 
-Além disso, o filtro não inclui subcategorias — ao filtrar por uma categoria pai, lançamentos que estão em subcategorias filhas não aparecem.
+Se o problema persistir, pode ser com lançamentos **antigos** criados antes da correção, que foram salvos como transação única sem `installments_total` preenchido, fazendo o fallback para `credit_rate`.
 
-**Correção:**
-1. Em `useTransactions.ts` (linha 223-225): substituir o `.eq("category", filters.categoryId)` por uma lógica que:
-   - Busca o nome da categoria selecionada
-   - Coleta os IDs das subcategorias filhas
-   - Usa `.or()` para filtrar por UUID **ou** nome da categoria pai, **incluindo** todas as subcategorias (por UUID e nome)
-2. Isso garante que registros antigos (nome) e novos (UUID) sejam capturados, e que subcategorias sejam incluídas
+## 2. Dashboard "Próximos Lançamentos" com valor de fatura divergente
 
-## Problema 2: Fatura do Cartão de Crédito
-
-**Causa raiz:** O cálculo do `billTotal` (linha 122-125 de `CreditCardBillPaymentModal.tsx`) soma todos os `amount` sem considerar o tipo da transação:
-```typescript
-billTransactions.reduce((sum, t) => sum + t.amount, 0)
-```
-
-Transações de `receita` no cartão (estornos, créditos) deveriam **subtrair** do total da fatura, mas são **somadas**. Isso faz o total da fatura aparecer maior que o correto.
-
-**Correção:**
-1. Em `CreditCardBillPaymentModal.tsx`: alterar o cálculo de `billTotal` para subtrair `amount` quando `type === "receita"` e somar quando `type === "despesa"`
-
-## Detalhes Técnicos
-
-### Filtro de categoria (useTransactions.ts)
+**Status: BUG REMANESCENTE.** Em `UpcomingTransactions.tsx` linha 125:
 
 ```typescript
-// Antes: só busca por UUID exato
-if (filters.categoryId) {
-  query = query.eq("category", filters.categoryId);
-}
-
-// Depois: busca por UUID + nome + subcategorias
-if (filters.categoryId) {
-  const selectedCat = categories.find(c => c.id === filters.categoryId);
-  const childIds = categories.filter(c => c.parent_id === filters.categoryId).map(c => c.id);
-  const allIds = [filters.categoryId, ...childIds];
-  const allNames = [selectedCat?.name, ...categories.filter(c => childIds.includes(c.id)).map(c => c.name)].filter(Boolean);
-  // Build OR filter matching both UUIDs and text names
-  const conditions = allIds.map(id => `category.eq.${id}`);
-  allNames.forEach(name => conditions.push(`category.eq.${name}`));
-  query = query.or(conditions.join(","));
-}
+bill.total += Number(t.amount);
 ```
 
-### Bill total (CreditCardBillPaymentModal.tsx)
+Soma todos os `t.amount` sem considerar o tipo. Transações de `receita` no cartão (estornos, créditos) são somadas em vez de subtraídas. Esta é a **mesma** correção aplicada ao `CreditCardBillPaymentModal`, mas que **não foi replicada** no widget do Dashboard.
+
+### Correção
+
+Em `src/components/dashboard/UpcomingTransactions.tsx`, linha 125, alterar para:
 
 ```typescript
-// Despesa soma, receita subtrai
-const billTotal = billTransactions.reduce(
-  (sum, t) => sum + (t.type === "receita" ? -t.amount : t.amount), 0
-);
+bill.total += t.type === "receita" ? -Number(t.amount) : Number(t.amount);
 ```
 
-### Arquivos alterados
-- `src/hooks/useTransactions.ts` — filtro de categoria com suporte a nomes + subcategorias
-- `src/components/contas/CreditCardBillPaymentModal.tsx` — cálculo correto do total da fatura
+### Arquivo alterado
+- `src/components/dashboard/UpcomingTransactions.tsx` — corrigir soma da fatura no widget do Dashboard
 
