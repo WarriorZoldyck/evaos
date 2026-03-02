@@ -221,7 +221,15 @@ export function useTransactions() {
       query = query.or(`description.ilike.%${filters.search.trim()}%,contact_name.ilike.%${filters.search.trim()}%`);
     }
     if (filters.categoryId) {
-      query = query.eq("category", filters.categoryId);
+      const selectedCat = allCategories.find(c => c.id === filters.categoryId);
+      const childCats = allCategories.filter(c => c.parent_id === filters.categoryId);
+      const allIds = [filters.categoryId, ...childCats.map(c => c.id)];
+      const allNames = [selectedCat?.name, ...childCats.map(c => c.name)].filter(Boolean);
+      const conditions = [
+        ...allIds.map(id => `category.eq.${id}`),
+        ...allNames.map(name => `category.eq.${name}`),
+      ];
+      query = query.or(conditions.join(","));
     }
     if (filters.dateFrom) {
       query = query.gte("payment_date", filters.dateFrom);
@@ -269,7 +277,7 @@ export function useTransactions() {
       setTotalCount(count || 0);
     }
     setLoading(false);
-  }, [user, companyFilter, filters, page, toast]);
+  }, [user, companyFilter, filters, page, toast, allCategories]);
 
   useEffect(() => {
     fetchTransactions();

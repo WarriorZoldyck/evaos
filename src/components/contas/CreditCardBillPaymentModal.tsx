@@ -120,7 +120,7 @@ export function CreditCardBillPaymentModal({
   const [interestRate, setInterestRate] = useState("14");
 
   const billTotal = useMemo(
-    () => billTransactions.reduce((sum, t) => sum + t.amount, 0),
+    () => billTransactions.reduce((sum, t) => sum + (t.type === "receita" ? -t.amount : t.amount), 0),
     [billTransactions]
   );
 
