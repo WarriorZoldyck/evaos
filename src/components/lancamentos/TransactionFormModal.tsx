@@ -1143,6 +1143,27 @@ function MainFormContent({
   const watchPaymentDate = form.watch("payment_date");
   const watchIntervalType = form.watch("installment_interval_type");
   const watchCustomDays = form.watch("installment_custom_days");
+  const watchCardTerminalId = form.watch("card_terminal_id");
+  const watchPaymentMethodMain = form.watch("payment_method");
+
+  // Terminal-aware preview: compute net amount and D+N interval for installment preview
+  const terminalPreview = (() => {
+    if (!watchCardTerminalId || !watchAmount || !watchInstallmentsCount || watchInstallmentsCount < 2) return null;
+    if (watchPaymentMethodMain !== "Cartão de Crédito") return null;
+    const terminal = cardTerminals.find((t) => t.id === watchCardTerminalId);
+    if (!terminal) return null;
+
+    const fallbackRate = terminal.credit_rate ?? 0;
+    const rates = parseRatesInfo(terminal.rates_info);
+    const match = rates.find((r) => r.installments === watchInstallmentsCount);
+    const rate = match ? match.rate : fallbackRate;
+
+    const feeAmount = Math.round(watchAmount * (rate / 100) * 100) / 100;
+    const netTotal = Math.round((watchAmount - feeAmount) * 100) / 100;
+    const settlementDays = terminal.settlement_days_credit ?? 30;
+
+    return { netTotal, settlementDays };
+  })();
 
   // Calculate Price table installment preview
   const interestPreview = (() => {
@@ -1591,17 +1612,17 @@ function MainFormContent({
                   )}
                   {interestPreview && watchPaymentDate && (
                     <InstallmentPreviewTable
-                      totalAmount={watchAmount}
+                      totalAmount={terminalPreview ? terminalPreview.netTotal : watchAmount}
                       installmentsCount={watchInstallmentsCount}
                       paymentDate={watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate)}
-                      intervalType={(watchIntervalType as "monthly" | "custom_days") || "monthly"}
-                      customDays={watchCustomDays ? Number(watchCustomDays) : undefined}
-                      interestRate={watchInterestRate || 0}
+                      intervalType={terminalPreview ? "custom_days" : ((watchIntervalType as "monthly" | "custom_days") || "monthly")}
+                      customDays={terminalPreview ? terminalPreview.settlementDays : (watchCustomDays ? Number(watchCustomDays) : undefined)}
+                      interestRate={terminalPreview ? 0 : (watchInterestRate || 0)}
                       customAmounts={customInstallmentAmounts}
                       onCustomAmountsChange={onCustomInstallmentAmountsChange}
                       customDates={customInstallmentDates}
                       onCustomDatesChange={onCustomInstallmentDatesChange}
-                      onUpdateTotalAmount={(newTotal) => form.setValue("amount", newTotal)}
+                      onUpdateTotalAmount={terminalPreview ? undefined : ((newTotal) => form.setValue("amount", newTotal))}
                     />
                   )}
                   {/* Series installment table for editing existing series */}
