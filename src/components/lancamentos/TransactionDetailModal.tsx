@@ -85,8 +85,23 @@ export function TransactionDetailModal({
       mdrRate = terminal.debit_rate || 0;
       mdrDays = terminal.settlement_days_debit || 0;
     } else {
-      // Always use credit_rate (merchant receives based on à vista rate)
-      mdrRate = terminal.credit_rate || 0;
+      // Use installment-specific rate from rates_info when available
+      const fallbackRate = terminal.credit_rate || 0;
+      if (t.installments_total && t.installments_total >= 2 && terminal.rates_info) {
+        try {
+          const rates = JSON.parse(terminal.rates_info);
+          if (Array.isArray(rates)) {
+            const match = rates.find((r: { installments: number; rate: number }) => r.installments === t.installments_total);
+            mdrRate = match ? match.rate : fallbackRate;
+          } else {
+            mdrRate = fallbackRate;
+          }
+        } catch {
+          mdrRate = fallbackRate;
+        }
+      } else {
+        mdrRate = fallbackRate;
+      }
       mdrDays = terminal.settlement_days_credit || 0;
     }
   }
