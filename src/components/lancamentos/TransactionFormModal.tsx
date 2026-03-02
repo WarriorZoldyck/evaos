@@ -608,13 +608,49 @@ export function TransactionFormModal({
         await onUpdateMultiple(seriesUpdates);
       }
     } else if (selectedTerminal) {
-      // Receita via terminal: ALWAYS save as single transaction (full net amount)
-      // Installments are the customer's concern, merchant receives total net
-      if (data.is_installment && data.installments_count && data.installments_count >= 2) {
-        baseData.installments = data.installments_count;
-        baseData.installments_total = data.installments_count;
+      const isDebit = data.payment_method === "Cartão de Débito";
+      if (!isDebit && data.is_installment && data.installments_count && data.installments_count >= 2) {
+        // Credit installment via terminal: generate N individual transactions
+        const count = data.installments_count;
+        const grossPerInstallment = Math.round((data.amount / count) * 100) / 100;
+
+        // Determine installment-specific rate
+        const fallbackRate = selectedTerminal.credit_rate ?? 0;
+        const rates = parseRatesInfo(selectedTerminal.rates_info);
+        const matchRate = rates.find((r) => r.installments === count);
+        const rate = matchRate ? matchRate.rate : fallbackRate;
+
+        const feePerInstallment = Math.round(grossPerInstallment * (rate / 100) * 100) / 100;
+        const netPerInstallment = Math.round((grossPerInstallment - feePerInstallment) * 100) / 100;
+        const settlementDays = selectedTerminal.settlement_days_credit ?? 30;
+        const seriesId = crypto.randomUUID();
+
+        const installments: TransactionInsert[] = [];
+        for (let i = 0; i < count; i++) {
+          // D+30 uses calendar days (not business days) for each installment
+          const payDate = addDays(data.competence_date, settlementDays * (i + 1));
+          installments.push({
+            ...baseData,
+            amount: netPerInstallment,
+            original_amount: grossPerInstallment,
+            payment_date: format(payDate, "yyyy-MM-dd"),
+            competence_date: format(data.competence_date, "yyyy-MM-dd"),
+            series_id: seriesId,
+            installment_number: i + 1,
+            installments_total: count,
+            installments: count,
+            card_terminal_id: selectedTerminal.id,
+          });
+        }
+        success = await onSaveMultiple(installments);
+      } else {
+        // Debit or credit à vista: single transaction (existing behavior)
+        if (data.is_installment && data.installments_count && data.installments_count >= 2) {
+          baseData.installments = data.installments_count;
+          baseData.installments_total = data.installments_count;
+        }
+        success = await onSave(baseData);
       }
-      success = await onSave(baseData);
     } else if (data.is_installment && data.installments_count && data.installments_count >= 2) {
       const seriesId = crypto.randomUUID();
       const total = data.amount;
