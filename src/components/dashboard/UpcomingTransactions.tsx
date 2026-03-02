@@ -122,7 +122,7 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
           });
         }
         const bill = billMap.get(key)!;
-        bill.total += Number(t.amount);
+        bill.total += t.type === "receita" ? -Number(t.amount) : Number(t.amount);
         bill.transactions.push(t);
       } else {
         regular.push(t);
