@@ -1,31 +1,38 @@
 
 
-# Status das Correções e Bugs Remanescentes
+# Fix: Preview de Parcelas com Maquininha — Valor e Datas Incorretos
 
-## 1. MDR mostrando taxa de 1x no card de detalhes
+## Problema
 
-**Status: CORRIGIDO** na última edição. O `TransactionDetailModal.tsx` (linhas 88-104) agora busca a taxa específica de parcelas em `rates_info` quando `installments_total >= 2`. Após a correção do D+30 (que salva cada parcela individualmente com `installments_total` correto), o card deve exibir a taxa correta.
+Quando um lançamento parcelado é criado via maquininha (terminal), a tabela de preview de parcelas (`InstallmentPreviewTable`) mostra:
 
-Se o problema persistir, pode ser com lançamentos **antigos** criados antes da correção, que foram salvos como transação única sem `installments_total` preenchido, fazendo o fallback para `credit_rate`.
+1. **Valor cheio (bruto)** em cada parcela — deveria mostrar o valor líquido (após desconto MDR)
+2. **Intervalo mensal** entre parcelas — deveria usar D+30 (dias corridos baseado em `settlement_days_credit`)
 
-## 2. Dashboard "Próximos Lançamentos" com valor de fatura divergente
+A gravação funciona corretamente (linhas 610-644 do `TransactionFormModal.tsx` calculam net e usam `addDays`), mas o **preview** não reflete essa lógica.
 
-**Status: BUG REMANESCENTE.** Em `UpcomingTransactions.tsx` linha 125:
+## Causa Raiz
 
-```typescript
-bill.total += Number(t.amount);
-```
+No `MainFormContent` (linha 1593-1605), o `InstallmentPreviewTable` recebe:
+- `totalAmount={watchAmount}` → valor bruto, sem deduzir MDR
+- `intervalType="monthly"` → usa `addMonths` em vez de `addDays(settlement_days)`
 
-Soma todos os `t.amount` sem considerar o tipo. Transações de `receita` no cartão (estornos, créditos) são somadas em vez de subtraídas. Esta é a **mesma** correção aplicada ao `CreditCardBillPaymentModal`, mas que **não foi replicada** no widget do Dashboard.
+O componente de preview não tem conhecimento do terminal selecionado nem da taxa MDR.
 
-### Correção
+## Correção
 
-Em `src/components/dashboard/UpcomingTransactions.tsx`, linha 125, alterar para:
+### 1. `TransactionFormModal.tsx` — Passar dados do terminal ao preview
 
-```typescript
-bill.total += t.type === "receita" ? -Number(t.amount) : Number(t.amount);
-```
+No `MainFormContent`:
+- Ler `card_terminal_id` do form
+- Encontrar o terminal selecionado em `cardTerminals`
+- Se houver terminal com crédito parcelado:
+  - Calcular o `totalAmount` como valor líquido total (gross - MDR total)
+  - Forçar `intervalType` para `custom_days` com `customDays = settlement_days_credit` (tipicamente 30)
+- Passar esses valores ajustados ao `InstallmentPreviewTable`
 
-### Arquivo alterado
-- `src/components/dashboard/UpcomingTransactions.tsx` — corrigir soma da fatura no widget do Dashboard
+Isso alinha o preview com a lógica de gravação (linhas 610-644), sem alterar o componente `InstallmentPreviewTable` em si.
+
+### Arquivos alterados
+- `src/components/lancamentos/TransactionFormModal.tsx` — ajustar valores passados ao `InstallmentPreviewTable` quando há terminal selecionado
 
