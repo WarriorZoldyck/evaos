@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CreditCard as CreditCardIcon } from "lucide-react";
 import { addBusinessDays } from "@/lib/utils";
@@ -50,7 +50,6 @@ export function MdrInfoCard({
       rate = terminal.debit_rate ?? 0;
       settlementDays = terminal.settlement_days_debit ?? 1;
     } else {
-      // For credit: use installment-specific rate from rates_info if available
       const fallbackRate = terminal.credit_rate ?? 0;
       if (installmentsCount && installmentsCount >= 2) {
         const rates = parseRatesInfo(terminal.rates_info);
@@ -62,17 +61,105 @@ export function MdrInfoCard({
       settlementDays = terminal.settlement_days_credit ?? 2;
     }
 
-    const feeAmount = Math.round(amount * (rate / 100) * 100) / 100;
-    const netAmount = Math.round((amount - feeAmount) * 100) / 100;
-    const settlementDate = addBusinessDays(paymentDate, settlementDays);
+    const isInstallment = isCredit && installmentsCount && installmentsCount >= 2;
 
-    return { rate, feeAmount, netAmount, settlementDays, settlementDate };
+    if (isInstallment) {
+      // Per-installment breakdown
+      const count = installmentsCount!;
+      const grossPerInstallment = Math.round((amount / count) * 100) / 100;
+      const feePerInstallment = Math.round(grossPerInstallment * (rate / 100) * 100) / 100;
+      const netPerInstallment = Math.round((grossPerInstallment - feePerInstallment) * 100) / 100;
+
+      const totalFee = Math.round(feePerInstallment * count * 100) / 100;
+      const totalNet = Math.round(netPerInstallment * count * 100) / 100;
+
+      // Generate installment dates (calendar days for D+30)
+      const installmentDates: Date[] = [];
+      for (let i = 0; i < count; i++) {
+        installmentDates.push(addDays(paymentDate, settlementDays * (i + 1)));
+      }
+
+      return {
+        type: "installment" as const,
+        rate,
+        count,
+        grossPerInstallment,
+        feePerInstallment,
+        netPerInstallment,
+        totalFee,
+        totalNet,
+        installmentDates,
+        settlementDays,
+      };
+    } else {
+      // Single transaction
+      const feeAmount = Math.round(amount * (rate / 100) * 100) / 100;
+      const netAmount = Math.round((amount - feeAmount) * 100) / 100;
+      const settlementDate = isDebit
+        ? addBusinessDays(paymentDate, settlementDays)
+        : addDays(paymentDate, settlementDays);
+
+      return {
+        type: "single" as const,
+        rate,
+        feeAmount,
+        netAmount,
+        settlementDays,
+        settlementDate,
+      };
+    }
   }, [terminal, amount, paymentMethod, installmentsCount, paymentDate]);
 
   if (!mdrCalc) return null;
 
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  if (mdrCalc.type === "installment") {
+    return (
+      <div className="rounded-lg border border-border bg-muted/50 p-4 space-y-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <CreditCardIcon className="h-4 w-4" />
+          Detalhes da Maquininha: {terminal.name} ({mdrCalc.count}x)
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <span className="text-muted-foreground">Taxa:</span>
+          <span className="font-medium">{mdrCalc.rate.toFixed(2)}%</span>
+
+          <span className="text-muted-foreground">Valor bruto total:</span>
+          <span className="font-medium">{formatCurrency(amount)}</span>
+
+          <span className="text-muted-foreground">Bruto por parcela:</span>
+          <span className="font-medium">{formatCurrency(mdrCalc.grossPerInstallment)}</span>
+
+          <span className="text-muted-foreground">MDR por parcela:</span>
+          <span className="font-medium text-destructive">
+            -{formatCurrency(mdrCalc.feePerInstallment)}
+          </span>
+
+          <span className="text-muted-foreground">Líquido por parcela:</span>
+          <span className="font-semibold text-primary">
+            {formatCurrency(mdrCalc.netPerInstallment)}
+          </span>
+
+          <span className="text-muted-foreground">Total líquido:</span>
+          <span className="font-semibold text-primary">
+            {formatCurrency(mdrCalc.totalNet)}
+          </span>
+        </div>
+        <div className="mt-2 space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">Datas de recebimento:</span>
+          <div className="flex flex-wrap gap-1">
+            {mdrCalc.installmentDates.map((date, i) => (
+              <span key={i} className="text-xs bg-background border border-border rounded px-2 py-0.5">
+                {i + 1}/{mdrCalc.count}: {format(date, "dd/MM/yyyy", { locale: ptBR })}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg border border-border bg-muted/50 p-4 space-y-2">
