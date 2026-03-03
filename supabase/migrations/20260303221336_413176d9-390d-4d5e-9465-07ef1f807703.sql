@@ -1,0 +1,1 @@
+UPDATE public.card_terminals SET auto_anticipation = false WHERE auto_anticipation = true;

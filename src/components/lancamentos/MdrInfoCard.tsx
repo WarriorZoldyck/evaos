@@ -64,14 +64,28 @@ export function MdrInfoCard({
     const isInstallment = isCredit && installmentsCount && installmentsCount >= 2;
 
     if (isInstallment) {
-      // Per-installment breakdown
+      // Per-installment breakdown with cent rounding on last installment
       const count = installmentsCount!;
-      const grossPerInstallment = Math.round((amount / count) * 100) / 100;
-      const feePerInstallment = Math.round(grossPerInstallment * (rate / 100) * 100) / 100;
-      const netPerInstallment = Math.round((grossPerInstallment - feePerInstallment) * 100) / 100;
+      const grossFloor = Math.floor((amount / count) * 100) / 100;
+      const grossLast = Math.round((amount - grossFloor * (count - 1)) * 100) / 100;
 
-      const totalFee = Math.round(feePerInstallment * count * 100) / 100;
-      const totalNet = Math.round(netPerInstallment * count * 100) / 100;
+      let totalFee = 0;
+      let totalNet = 0;
+      const perInstallment: { gross: number; fee: number; net: number }[] = [];
+      for (let i = 0; i < count; i++) {
+        const g = i === count - 1 ? grossLast : grossFloor;
+        const f = Math.round(g * (rate / 100) * 100) / 100;
+        const n = Math.round((g - f) * 100) / 100;
+        perInstallment.push({ gross: g, fee: f, net: n });
+        totalFee += f;
+        totalNet += n;
+      }
+      totalFee = Math.round(totalFee * 100) / 100;
+      totalNet = Math.round(totalNet * 100) / 100;
+
+      const grossPerInstallment = grossFloor;
+      const feePerInstallment = perInstallment[0].fee;
+      const netPerInstallment = perInstallment[0].net;
 
       // Generate installment dates
       const autoAnticipation = (terminal as any).auto_anticipation ?? false;
@@ -81,7 +95,9 @@ export function MdrInfoCard({
           // All installments on the same D+X (business days)
           installmentDates.push(addBusinessDays(paymentDate, settlementDays));
         } else {
-          installmentDates.push(addDays(paymentDate, settlementDays * (i + 1)));
+          // 30-day intervals + D+X business days settlement
+          const vencimento = addDays(paymentDate, 30 * (i + 1));
+          installmentDates.push(addBusinessDays(vencimento, settlementDays));
         }
       }
 
