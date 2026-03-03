@@ -64,8 +64,27 @@ export function MdrInfoCard({
     const isInstallment = isCredit && installmentsCount && installmentsCount >= 2;
 
     if (isInstallment) {
-      // Per-installment breakdown with cent rounding on last installment
       const count = installmentsCount!;
+      const autoAnticipation = (terminal as any).auto_anticipation ?? false;
+
+      if (autoAnticipation) {
+        // D+2 anticipation: single lump-sum payment
+        const totalFee = Math.round(amount * (rate / 100) * 100) / 100;
+        const totalNet = Math.round((amount - totalFee) * 100) / 100;
+        const settlementDate = addBusinessDays(paymentDate, settlementDays);
+
+        return {
+          type: "lump_sum" as const,
+          rate,
+          count,
+          totalFee,
+          totalNet,
+          settlementDays,
+          settlementDate,
+        };
+      }
+
+      // No anticipation: per-installment breakdown with cent rounding on last installment
       const grossFloor = Math.floor((amount / count) * 100) / 100;
       const grossLast = Math.round((amount - grossFloor * (count - 1)) * 100) / 100;
 
@@ -87,18 +106,11 @@ export function MdrInfoCard({
       const feePerInstallment = perInstallment[0].fee;
       const netPerInstallment = perInstallment[0].net;
 
-      // Generate installment dates
-      const autoAnticipation = (terminal as any).auto_anticipation ?? false;
+      // Generate installment dates: 30-day intervals + D+X business days
       const installmentDates: Date[] = [];
       for (let i = 0; i < count; i++) {
-        if (autoAnticipation) {
-          // All installments on the same D+X (business days)
-          installmentDates.push(addBusinessDays(paymentDate, settlementDays));
-        } else {
-          // 30-day intervals + D+X business days settlement
-          const vencimento = addDays(paymentDate, 30 * (i + 1));
-          installmentDates.push(addBusinessDays(vencimento, settlementDays));
-        }
+        const vencimento = addDays(paymentDate, 30 * (i + 1));
+        installmentDates.push(addBusinessDays(vencimento, settlementDays));
       }
 
       return {
@@ -112,7 +124,6 @@ export function MdrInfoCard({
         totalNet,
         installmentDates,
         settlementDays,
-        autoAnticipation,
       };
     } else {
       // Single transaction
@@ -137,6 +148,39 @@ export function MdrInfoCard({
 
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  if (mdrCalc.type === "lump_sum") {
+    return (
+      <div className="rounded-lg border border-border bg-muted/50 p-4 space-y-2">
+        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <CreditCardIcon className="h-4 w-4" />
+          Detalhes da Maquininha: {terminal.name} ({mdrCalc.count}x c/ antecipação)
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <span className="text-muted-foreground">Taxa:</span>
+          <span className="font-medium">{mdrCalc.rate.toFixed(2)}%</span>
+
+          <span className="text-muted-foreground">Valor bruto total:</span>
+          <span className="font-medium">{formatCurrency(amount)}</span>
+
+          <span className="text-muted-foreground">Desconto MDR total:</span>
+          <span className="font-medium text-destructive">
+            -{formatCurrency(mdrCalc.totalFee)}
+          </span>
+
+          <span className="text-muted-foreground">Total líquido (1x):</span>
+          <span className="font-semibold text-primary">
+            {formatCurrency(mdrCalc.totalNet)}
+          </span>
+
+          <span className="text-muted-foreground">Creditado em:</span>
+          <span className="font-medium">
+            D+{mdrCalc.settlementDays} ({format(mdrCalc.settlementDate, "dd/MM/yyyy", { locale: ptBR })})
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   if (mdrCalc.type === "installment") {
     return (
@@ -172,19 +216,13 @@ export function MdrInfoCard({
         </div>
         <div className="mt-2 space-y-1">
           <span className="text-xs font-medium text-muted-foreground">Datas de recebimento:</span>
-          {mdrCalc.autoAnticipation ? (
-            <div className="text-xs bg-background border border-border rounded px-2 py-1">
-              Todas as parcelas em D+{mdrCalc.settlementDays} ({format(mdrCalc.installmentDates[0], "dd/MM/yyyy", { locale: ptBR })})
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-1">
-              {mdrCalc.installmentDates.map((date, i) => (
-                <span key={i} className="text-xs bg-background border border-border rounded px-2 py-0.5">
-                  {i + 1}/{mdrCalc.count}: {format(date, "dd/MM/yyyy", { locale: ptBR })}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-1">
+            {mdrCalc.installmentDates.map((date, i) => (
+              <span key={i} className="text-xs bg-background border border-border rounded px-2 py-0.5">
+                {i + 1}/{mdrCalc.count}: {format(date, "dd/MM/yyyy", { locale: ptBR })}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     );
