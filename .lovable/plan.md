@@ -1,50 +1,74 @@
 
 
-# WhatsApp Webhook: Contexto (Empresa) + Validação de Categoria
+# Fix: D+2 Parcelado — Separar Intervalo de Parcela do Prazo de Liquidação
 
-## Problema atual
+## Problema
 
-A edge function `whatsapp-webhook` não busca empresas do usuário, então todo lançamento vai sem `company_id` (Pessoal). Além disso, as categorias e contas enviadas ao prompt da IA não distinguem por contexto -- a IA pode sugerir uma categoria que pertence a uma empresa diferente, ou o `bank_account_id` errado.
+A lógica atual usa `settlement_days_credit` como **intervalo entre parcelas**. Quando D+2 e `auto_anticipation = false`, calcula: D+2, D+4, D+6... (errado). O correto é:
 
-## Mudanças no `supabase/functions/whatsapp-webhook/index.ts`
+- Parcelas sempre com **30 dias de intervalo** (padrão de mercado)
+- D+X é o **prazo de liquidação** após o vencimento de cada parcela
+- Exemplo 3x D+2: vencimentos em +30, +60, +90 dias → recebimento em +32, +62, +92 (dias úteis)
 
-### 1. Buscar empresas do usuário
+A inferência na migration anterior (`settlement_days_credit < 30 → auto_anticipation = true`) também precisa ser revertida, pois nem toda maquininha D+2 tem antecipação automática.
 
-Adicionar ao bloco de fetch paralelo (linha 69-73):
-- `supabase.from("companies").select("id, name, cnpj").eq("user_id", userId)`
+## Mudanças
 
-### 2. Incluir contexto no prompt da IA
+### 1. Migration: Reverter inferência automática
 
-Adicionar ao system prompt:
-- Lista de contextos: `"Pessoal"` + nomes das empresas
-- Categorias agrupadas por contexto (filtrando `company_id` null = Pessoal, ou o id da empresa)
-- Contas agrupadas por contexto
+```sql
+UPDATE public.card_terminals
+SET auto_anticipation = false
+WHERE auto_anticipation = true;
+```
 
-Instruir a IA a retornar `"context": "Pessoal" | "Nome da Empresa"` no JSON de lançamento e consulta.
+Zera a inferência. O usuário habilita manualmente quando necessário.
 
-### 3. Validar categoria retornada pela IA
+### 2. TransactionFormModal — save logic (linha 630-635)
 
-Após parsear a resposta da IA, antes de inserir:
-- Resolver o `company_id` a partir do `context` retornado (match por nome)
-- Verificar se a `category` retornada existe nas categorias do contexto escolhido
-- Se não existir, fazer fallback para "Outros"
-- Filtrar contas bancárias pelo `company_id` para escolher o `bank_account_id` correto
+Corrigir o cálculo para `auto_anticipation = false`:
 
-### 4. Inserir com `company_id`
+```text
+ANTES (errado):
+  addDays(competence_date, settlementDays * (i + 1))
+  → D+2: 2, 4, 6 dias (tudo junto)
 
-No `insert` da transação (linha 207-218):
-- Adicionar `company_id` resolvido (ou `null` para Pessoal)
-- Filtrar `bank_account_id` apenas entre contas do contexto
+DEPOIS (correto):
+  // Vencimento: parcela mensal padrão (30 dias * parcela)
+  vencimento = addDays(competence_date, 30 * (i + 1))
+  // Recebimento: D+X úteis após vencimento
+  payDate = addBusinessDays(vencimento, settlementDays)
+  → D+2: 30+2, 60+2, 90+2 dias úteis
 
-### 5. Consultas com contexto
+auto_anticipation = true (inalterado):
+  addBusinessDays(competence_date, settlementDays)
+  → Todas parcelas na mesma data
+```
 
-Nas queries de saldo, gastos, resumo etc:
-- Se a IA retornar `context`, filtrar por `company_id`
-- Se não especificar, mostrar dados consolidados (comportamento atual)
+### 3. terminalPreview + InstallmentPreviewTable (linha 1644-1651)
 
-### Arquivo alterado
-- `supabase/functions/whatsapp-webhook/index.ts`
+Mesma correção no preview: quando `auto_anticipation = false`, base date = `addDays(paymentDate, 30)` com `customDays = 30`, e adicionar D+X business days em cada parcela. Na prática, usar `intervalType = "custom_days"` com `customDays = 30` e somar `settlementDays` business days ao paymentDate base.
 
-### Nenhuma migração necessária
-A tabela `transactions` já tem `company_id`. Nenhum dado existente é alterado.
+Simplificação: passar `paymentDate = addBusinessDays(addDays(date, 30), settlementDays)` e `customDays = 30` para que o preview mostre as datas corretas.
+
+### 4. MdrInfoCard (linha 79-84)
+
+Mesma correção nos cálculos de data de recebimento para exibição no card.
+
+### 5. Arredondamento de centavos
+
+Adicionar lógica para jogar a diferença de centavos na última parcela:
+
+```text
+grossPerInstallment = Math.floor((total / N) * 100) / 100
+lastInstallment = total - grossPerInstallment * (N - 1)
+```
+
+### Arquivos alterados
+
+| Arquivo | Mudança |
+|---------|---------|
+| Migration SQL | Reverter `auto_anticipation = true` inferido |
+| `TransactionFormModal.tsx` | Save logic + preview: 30 dias intervalo + D+X liquidação |
+| `MdrInfoCard.tsx` | Datas de recebimento com lógica correta |
 
