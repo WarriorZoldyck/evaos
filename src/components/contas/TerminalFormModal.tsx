@@ -60,6 +60,7 @@ export function TerminalFormModal({
   const [settlementDaysDebit, setSettlementDaysDebit] = useState("");
   const [settlementDaysCredit, setSettlementDaysCredit] = useState("");
   const [ratesInfo, setRatesInfo] = useState<RateInfo[]>([]);
+  const [autoAnticipation, setAutoAnticipation] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [pressedKey, setPressedKey] = useState<string | null>(null);
@@ -85,6 +86,7 @@ export function TerminalFormModal({
       setCreditRate(editData.credit_rate != null ? String(editData.credit_rate) : "");
       setSettlementDaysDebit(editData.settlement_days_debit != null ? String(editData.settlement_days_debit) : "");
       setSettlementDaysCredit(editData.settlement_days_credit != null ? String(editData.settlement_days_credit) : "");
+      setAutoAnticipation(editData.auto_anticipation ?? false);
       try {
         const parsed = editData.rates_info ? JSON.parse(editData.rates_info) : [];
         setRatesInfo(Array.isArray(parsed) ? parsed : []);
@@ -94,7 +96,7 @@ export function TerminalFormModal({
     } else {
       setName(""); setAcquirer(""); setBankAccountId(""); setUniqueId("");
       setDebitRate(""); setCreditRate(""); setSettlementDaysDebit("");
-      setSettlementDaysCredit(""); setRatesInfo([]);
+      setSettlementDaysCredit(""); setRatesInfo([]); setAutoAnticipation(false);
     }
   }, [editData, open]);
 
@@ -140,6 +142,7 @@ export function TerminalFormModal({
       settlement_days_debit: settlementDaysDebit ? Number(settlementDaysDebit) : null,
       settlement_days_credit: settlementDaysCredit ? Number(settlementDaysCredit) : null,
       rates_info: ratesInfo.length > 0 ? JSON.stringify(ratesInfo) : null,
+      auto_anticipation: autoAnticipation,
     };
     const success = await onSave(data);
     setSaving(false);
@@ -263,6 +266,31 @@ export function TerminalFormModal({
                     </div>
                   </div>
                 </div>
+
+                {/* Auto anticipation toggle */}
+                <div className="flex items-center justify-between py-1">
+                  <label className="text-[9px] font-mono text-cyan-400/80 uppercase tracking-wider">
+                    Antecipação automática?
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAutoAnticipation(!autoAnticipation)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      autoAnticipation ? "bg-cyan-400" : "bg-white/20"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                        autoAnticipation ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+                {autoAnticipation && (
+                  <p className="text-[8px] font-mono text-cyan-300/50">
+                    Todas as parcelas serão recebidas no mesmo D+{settlementDaysCredit || "X"}
+                  </p>
+                )}
 
                 {/* Account select */}
                 <div className="space-y-1.5">

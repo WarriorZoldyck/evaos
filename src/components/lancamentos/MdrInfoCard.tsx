@@ -73,10 +73,16 @@ export function MdrInfoCard({
       const totalFee = Math.round(feePerInstallment * count * 100) / 100;
       const totalNet = Math.round(netPerInstallment * count * 100) / 100;
 
-      // Generate installment dates (calendar days for D+30)
+      // Generate installment dates
+      const autoAnticipation = (terminal as any).auto_anticipation ?? false;
       const installmentDates: Date[] = [];
       for (let i = 0; i < count; i++) {
-        installmentDates.push(addDays(paymentDate, settlementDays * (i + 1)));
+        if (autoAnticipation) {
+          // All installments on the same D+X (business days)
+          installmentDates.push(addBusinessDays(paymentDate, settlementDays));
+        } else {
+          installmentDates.push(addDays(paymentDate, settlementDays * (i + 1)));
+        }
       }
 
       return {
@@ -90,6 +96,7 @@ export function MdrInfoCard({
         totalNet,
         installmentDates,
         settlementDays,
+        autoAnticipation,
       };
     } else {
       // Single transaction
@@ -149,13 +156,19 @@ export function MdrInfoCard({
         </div>
         <div className="mt-2 space-y-1">
           <span className="text-xs font-medium text-muted-foreground">Datas de recebimento:</span>
-          <div className="flex flex-wrap gap-1">
-            {mdrCalc.installmentDates.map((date, i) => (
-              <span key={i} className="text-xs bg-background border border-border rounded px-2 py-0.5">
-                {i + 1}/{mdrCalc.count}: {format(date, "dd/MM/yyyy", { locale: ptBR })}
-              </span>
-            ))}
-          </div>
+          {mdrCalc.autoAnticipation ? (
+            <div className="text-xs bg-background border border-border rounded px-2 py-1">
+              Todas as parcelas em D+{mdrCalc.settlementDays} ({format(mdrCalc.installmentDates[0], "dd/MM/yyyy", { locale: ptBR })})
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1">
+              {mdrCalc.installmentDates.map((date, i) => (
+                <span key={i} className="text-xs bg-background border border-border rounded px-2 py-0.5">
+                  {i + 1}/{mdrCalc.count}: {format(date, "dd/MM/yyyy", { locale: ptBR })}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
