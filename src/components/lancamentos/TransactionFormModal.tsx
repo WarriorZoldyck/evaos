@@ -626,17 +626,26 @@ export function TransactionFormModal({
         const autoAnticipation = (selectedTerminal as any).auto_anticipation ?? false;
         const seriesId = crypto.randomUUID();
 
+        // Rounding: floor all installments, put remainder in last one
+        const grossFloor = Math.floor((data.amount / count) * 100) / 100;
+        const grossLast = Math.round((data.amount - grossFloor * (count - 1)) * 100) / 100;
+
         const installments: TransactionInsert[] = [];
         for (let i = 0; i < count; i++) {
+          const isLast = i === count - 1;
+          const thisGross = isLast ? grossLast : grossFloor;
+          const thisFee = Math.round(thisGross * (rate / 100) * 100) / 100;
+          const thisNet = Math.round((thisGross - thisFee) * 100) / 100;
+
           // If auto_anticipation: all installments on the same D+X (business days)
-          // Otherwise: D+30 uses calendar days for each installment
+          // Otherwise: 30-day intervals + D+X business days settlement
           const payDate = autoAnticipation
             ? addBusinessDays(data.competence_date, settlementDays)
-            : addDays(data.competence_date, settlementDays * (i + 1));
+            : addBusinessDays(addDays(data.competence_date, 30 * (i + 1)), settlementDays);
           installments.push({
             ...baseData,
-            amount: netPerInstallment,
-            original_amount: grossPerInstallment,
+            amount: thisNet,
+            original_amount: thisGross,
             payment_date: format(payDate, "yyyy-MM-dd"),
             competence_date: format(data.competence_date, "yyyy-MM-dd"),
             series_id: seriesId,
@@ -1645,10 +1654,10 @@ function MainFormContent({
                       paymentDate={
                         terminalPreview?.autoAnticipation
                           ? addBusinessDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), terminalPreview.settlementDays)
-                          : (watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate))
+                          : addBusinessDays(addDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), 30), terminalPreview?.settlementDays ?? 0)
                       }
                       intervalType={terminalPreview ? "custom_days" : ((watchIntervalType as "monthly" | "custom_days") || "monthly")}
-                      customDays={terminalPreview ? (terminalPreview.autoAnticipation ? 0 : terminalPreview.settlementDays) : (watchCustomDays ? Number(watchCustomDays) : undefined)}
+                      customDays={terminalPreview ? (terminalPreview.autoAnticipation ? 0 : 30) : (watchCustomDays ? Number(watchCustomDays) : undefined)}
                       interestRate={terminalPreview ? 0 : (watchInterestRate || 0)}
                       customAmounts={customInstallmentAmounts}
                       onCustomAmountsChange={onCustomInstallmentAmountsChange}
