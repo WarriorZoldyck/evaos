@@ -1,38 +1,38 @@
 
 
-# Fix: Preview de Parcelas com Maquininha — Valor e Datas Incorretos
+# Fix: Lógica de Terminal no Preview e Gravação de Parcelas
 
-## Problema
+## Problemas Identificados
 
-Quando um lançamento parcelado é criado via maquininha (terminal), a tabela de preview de parcelas (`InstallmentPreviewTable`) mostra:
+### 1. Débito (D+2) "jogando parcelado"
+O switch "Parcelado?" está disponível mesmo para débito. Ao ativá-lo, o save (linha 646-653) grava metadata de parcelas (`installments`, `installments_total`) num registro único de débito — incorreto, pois débito é sempre à vista.
 
-1. **Valor cheio (bruto)** em cada parcela — deveria mostrar o valor líquido (após desconto MDR)
-2. **Intervalo mensal** entre parcelas — deveria usar D+30 (dias corridos baseado em `settlement_days_credit`)
+### 2. Valor errado no preview
+O `terminalPreview` (linha 1150-1166) só ativa para **Cartão de Crédito com 2+ parcelas**. Para débito ou crédito 1x com terminal, retorna `null`, e o preview mostra valor bruto com datas mensais em vez de valor líquido com D+N.
 
-A gravação funciona corretamente (linhas 610-644 do `TransactionFormModal.tsx` calculam net e usam `addDays`), mas o **preview** não reflete essa lógica.
+### 3. D+2 "deu pau"
+O preview para débito usa lógica padrão (mensal, sem MDR), gerando confusão. Além disso, o save para débito com `is_installment` ativo grava campos de parcelas desnecessários.
 
-## Causa Raiz
+## Correções
 
-No `MainFormContent` (linha 1593-1605), o `InstallmentPreviewTable` recebe:
-- `totalAmount={watchAmount}` → valor bruto, sem deduzir MDR
-- `intervalType="monthly"` → usa `addMonths` em vez de `addDays(settlement_days)`
+### A. Esconder/desabilitar "Parcelado?" para Débito com terminal
+Em `TransactionFormModal.tsx`, no bloco do switch "Parcelado?" (~linha 1528-1537): se o método de pagamento for "Cartão de Débito" **e** houver `card_terminal_id`, desabilitar o switch e forçar `is_installment = false`. Débito via maquininha é sempre à vista.
 
-O componente de preview não tem conhecimento do terminal selecionado nem da taxa MDR.
+### B. Expandir `terminalPreview` para todos os cenários de terminal
+Alterar o cálculo de `terminalPreview` (linhas 1149-1166) para:
+- **Crédito 1x** (sem parcelas): calcular net total com `credit_rate`, `settlementDays = settlement_days_credit`
+- **Crédito parcelado**: manter lógica atual (rate específica por parcela, D+30)
+- **Débito**: calcular net com `debit_rate`, `settlementDays = settlement_days_debit`
 
-## Correção
+Retornar um objeto com `{ netTotal, settlementDays, isDebit, isSinglePayment }` para que o preview saiba quando **não** mostrar tabela de parcelas (débito/crédito 1x).
 
-### 1. `TransactionFormModal.tsx` — Passar dados do terminal ao preview
+### C. Ajustar exibição do preview
+- Se `terminalPreview.isDebit` ou `terminalPreview.isSinglePayment`: **não** mostrar `InstallmentPreviewTable`. Em vez disso, mostrar um resumo simples (valor líquido, data de recebimento).
+- Se crédito parcelado: manter preview atual com valores líquidos e D+30.
 
-No `MainFormContent`:
-- Ler `card_terminal_id` do form
-- Encontrar o terminal selecionado em `cardTerminals`
-- Se houver terminal com crédito parcelado:
-  - Calcular o `totalAmount` como valor líquido total (gross - MDR total)
-  - Forçar `intervalType` para `custom_days` com `customDays = settlement_days_credit` (tipicamente 30)
-- Passar esses valores ajustados ao `InstallmentPreviewTable`
-
-Isso alinha o preview com a lógica de gravação (linhas 610-644), sem alterar o componente `InstallmentPreviewTable` em si.
+### D. Limpar save para débito (linha 646-653)
+Remover o bloco que seta `installments`/`installments_total` para débito — não deve gravar metadata de parcelas em transação de débito.
 
 ### Arquivos alterados
-- `src/components/lancamentos/TransactionFormModal.tsx` — ajustar valores passados ao `InstallmentPreviewTable` quando há terminal selecionado
+- `src/components/lancamentos/TransactionFormModal.tsx`
 
