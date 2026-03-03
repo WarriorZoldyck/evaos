@@ -1,38 +1,80 @@
 
 
-# Fix: Lógica de Terminal no Preview e Gravação de Parcelas
+# Antecipacao Automatica na Maquininha + Fix D+2
 
-## Problemas Identificados
+## Problema
 
-### 1. Débito (D+2) "jogando parcelado"
-O switch "Parcelado?" está disponível mesmo para débito. Ao ativá-lo, o save (linha 646-653) grava metadata de parcelas (`installments`, `installments_total`) num registro único de débito — incorreto, pois débito é sempre à vista.
+Atualmente o sistema assume que parcelas de credito via maquininha sempre tem intervalo D+30/D+60/D+90 (calendario). Mas muitas maquininhas tem **antecipacao automatica**, onde TODAS as parcelas caem no mesmo D+X (ex: D+2). O campo `settlement_days_credit` ja existe mas e usado como intervalo entre parcelas, nao como dia unico de recebimento.
 
-### 2. Valor errado no preview
-O `terminalPreview` (linha 1150-1166) só ativa para **Cartão de Crédito com 2+ parcelas**. Para débito ou crédito 1x com terminal, retorna `null`, e o preview mostra valor bruto com datas mensais em vez de valor líquido com D+N.
+A imagem mostra "TESTE D+2 (2x)" com datas 04/03 e 06/03 -- o sistema esta tratando D+2 como intervalo (D+2, D+4), quando deveria ser: ambas parcelas caem em D+2 da venda.
 
-### 3. D+2 "deu pau"
-O preview para débito usa lógica padrão (mensal, sem MDR), gerando confusão. Além disso, o save para débito com `is_installment` ativo grava campos de parcelas desnecessários.
+## Solucao
 
-## Correções
+### 1. Migration: Adicionar campo `auto_anticipation` ao `card_terminals`
 
-### A. Esconder/desabilitar "Parcelado?" para Débito com terminal
-Em `TransactionFormModal.tsx`, no bloco do switch "Parcelado?" (~linha 1528-1537): se o método de pagamento for "Cartão de Débito" **e** houver `card_terminal_id`, desabilitar o switch e forçar `is_installment = false`. Débito via maquininha é sempre à vista.
+```sql
+ALTER TABLE public.card_terminals
+  ADD COLUMN auto_anticipation boolean NOT NULL DEFAULT false;
 
-### B. Expandir `terminalPreview` para todos os cenários de terminal
-Alterar o cálculo de `terminalPreview` (linhas 1149-1166) para:
-- **Crédito 1x** (sem parcelas): calcular net total com `credit_rate`, `settlementDays = settlement_days_credit`
-- **Crédito parcelado**: manter lógica atual (rate específica por parcela, D+30)
-- **Débito**: calcular net com `debit_rate`, `settlementDays = settlement_days_debit`
+-- Inferir para terminais existentes: se settlement_days_credit < 30, provavelmente e antecipacao
+UPDATE public.card_terminals
+  SET auto_anticipation = true
+  WHERE settlement_days_credit IS NOT NULL AND settlement_days_credit < 30;
+```
 
-Retornar um objeto com `{ netTotal, settlementDays, isDebit, isSinglePayment }` para que o preview saiba quando **não** mostrar tabela de parcelas (débito/crédito 1x).
+Campo nullable = false com default false, sem risco para dados existentes. Terminais com D+ credito < 30 sao inferidos como antecipacao automatica.
 
-### C. Ajustar exibição do preview
-- Se `terminalPreview.isDebit` ou `terminalPreview.isSinglePayment`: **não** mostrar `InstallmentPreviewTable`. Em vez disso, mostrar um resumo simples (valor líquido, data de recebimento).
-- Se crédito parcelado: manter preview atual com valores líquidos e D+30.
+### 2. TerminalFormModal: Toggle de antecipacao
 
-### D. Limpar save para débito (linha 646-653)
-Remover o bloco que seta `installments`/`installments_total` para débito — não deve gravar metadata de parcelas em transação de débito.
+Adicionar um switch/toggle na tela da maquininha:
+- **"Antecipacao automatica?"** -- boolean
+- Quando ativo, o campo "D+ Credito" passa a significar "em quantos dias recebo TODAS as parcelas" (ex: 2)
+- Quando inativo, comportamento atual (D+30 entre parcelas)
+
+Carregar/salvar o novo campo `auto_anticipation` junto com os demais.
+
+### 3. TransactionFormModal (save logic, ~linha 610-644)
+
+Quando terminal tem `auto_anticipation = true`:
+- **Todas** as parcelas recebem a **mesma** `payment_date`: `addBusinessDays(competence_date, settlement_days_credit)`
+- Valor liquido por parcela continua igual (bruto/N - MDR)
+- `installment_number` e `installments_total` continuam preenchidos normalmente
+
+Quando `auto_anticipation = false` (padrao atual):
+- Manter logica atual: `addDays(competence_date, settlementDays * (i + 1))`
+
+### 4. MdrInfoCard: Datas de recebimento
+
+Quando `auto_anticipation = true`:
+- Mostrar uma unica data para todas as parcelas em vez de N datas diferentes
+- Texto: "Todas as parcelas em D+X (dd/MM/yyyy)"
+
+Precisa receber a flag `auto_anticipation` do terminal. O `CardTerminalInfo` interface ja tem os campos necessarios, so precisa adicionar `auto_anticipation`.
+
+### 5. terminalPreview (TransactionFormModal, ~linha 1146-1178)
+
+Quando `auto_anticipation = true`:
+- Retornar flag `autoAnticipation: true` no objeto
+- O `InstallmentPreviewTable` recebe `customDays = 0` (ou logica especial) para que todas parcelas tenham a mesma data
+
+Alternativa mais simples: forcar `intervalType = "custom_days"` com `customDays = 0` e ajustar a data base para ser `addBusinessDays(paymentDate, settlementDays)` -- todas parcelas na mesma data.
+
+### 6. Integridade de dados
+
+- **Nenhuma transacao existente e alterada** -- apenas novas transacoes usam a nova logica
+- Terminais existentes ganham `auto_anticipation` inferido (< 30 dias = true)
+- Transacoes ja criadas com datas D+30/D+60 permanecem como estao
 
 ### Arquivos alterados
-- `src/components/lancamentos/TransactionFormModal.tsx`
+
+| Arquivo | Mudanca |
+|---------|---------|
+| Migration SQL | `ADD COLUMN auto_anticipation boolean DEFAULT false` + UPDATE inferencia |
+| `src/integrations/supabase/types.ts` | Regenerado automaticamente |
+| `src/hooks/useTransactions.ts` | Adicionar `auto_anticipation` ao select de `card_terminals` |
+| `src/hooks/useAccounts.ts` | Adicionar `auto_anticipation` ao `createCardTerminal` |
+| `src/components/contas/TerminalFormModal.tsx` | Toggle de antecipacao |
+| `src/components/lancamentos/TransactionFormModal.tsx` | Save logic + terminalPreview |
+| `src/components/lancamentos/MdrInfoCard.tsx` | Datas unicas quando antecipacao |
+| `src/components/lancamentos/PaymentMethodFields.tsx` | Sem mudanca (ja passa terminal) |
 
