@@ -65,9 +65,9 @@ export function MdrInfoCard({
 
     if (isInstallment) {
       const count = installmentsCount!;
-      const autoAnticipation = (terminal as any).auto_anticipation ?? false;
+      const isLumpSum = settlementDays < 30;
 
-      if (autoAnticipation) {
+      if (isLumpSum) {
         // D+2 anticipation: single lump-sum payment
         const totalFee = Math.round(amount * (rate / 100) * 100) / 100;
         const totalNet = Math.round((amount - totalFee) * 100) / 100;

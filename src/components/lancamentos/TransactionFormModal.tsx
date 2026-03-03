@@ -619,9 +619,9 @@ export function TransactionFormModal({
         const rate = matchRate ? matchRate.rate : fallbackRate;
 
         const settlementDays = selectedTerminal.settlement_days_credit ?? 30;
-        const autoAnticipation = (selectedTerminal as any).auto_anticipation ?? false;
+        const isLumpSum = settlementDays < 30;
 
-        if (autoAnticipation) {
+        if (isLumpSum) {
           // D+2 anticipation: acquirer pays TOTAL net in a SINGLE lump sum on D+X
           const totalFee = Math.round(data.amount * (rate / 100) * 100) / 100;
           const totalNet = Math.round((data.amount - totalFee) * 100) / 100;
@@ -1177,7 +1177,8 @@ function MainFormContent({
     if (!isDebit && !isCredit) return null;
 
     const isInstallment = isCredit && watchInstallmentsCount && watchInstallmentsCount >= 2;
-    const autoAnticipation = (terminal as any).auto_anticipation ?? false;
+    const settlementDaysTerm = terminal.settlement_days_credit ?? 30;
+    const isLumpSum = settlementDaysTerm < 30;
 
     let rate: number;
     let settlementDays: number;
@@ -1200,7 +1201,7 @@ function MainFormContent({
     const feeAmount = Math.round(watchAmount * (rate / 100) * 100) / 100;
     const netTotal = Math.round((watchAmount - feeAmount) * 100) / 100;
 
-    return { netTotal, settlementDays, isDebit, isSinglePayment: !isInstallment, rate, autoAnticipation };
+    return { netTotal, settlementDays, isDebit, isSinglePayment: !isInstallment, rate, isLumpSum };
   })();
 
   // Calculate Price table installment preview
@@ -1658,7 +1659,7 @@ function MainFormContent({
                       )}
                     />
                   )}
-                  {interestPreview && watchPaymentDate && !(terminalPreview?.autoAnticipation) && (
+                  {interestPreview && watchPaymentDate && !(terminalPreview?.isLumpSum) && (
                     <InstallmentPreviewTable
                       totalAmount={terminalPreview ? terminalPreview.netTotal : watchAmount}
                       installmentsCount={watchInstallmentsCount}
