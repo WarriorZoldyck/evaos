@@ -644,11 +644,7 @@ export function TransactionFormModal({
         }
         success = await onSaveMultiple(installments);
       } else {
-        // Debit or credit à vista: single transaction (existing behavior)
-        if (data.is_installment && data.installments_count && data.installments_count >= 2) {
-          baseData.installments = data.installments_count;
-          baseData.installments_total = data.installments_count;
-        }
+        // Debit or credit à vista: single transaction — no installment metadata for debit
         success = await onSave(baseData);
       }
     } else if (data.is_installment && data.installments_count && data.installments_count >= 2) {
@@ -1146,23 +1142,40 @@ function MainFormContent({
   const watchCardTerminalId = form.watch("card_terminal_id");
   const watchPaymentMethodMain = form.watch("payment_method");
 
-  // Terminal-aware preview: compute net amount and D+N interval for installment preview
+  // Terminal-aware preview: compute net amount and D+N interval for all terminal scenarios
   const terminalPreview = (() => {
-    if (!watchCardTerminalId || !watchAmount || !watchInstallmentsCount || watchInstallmentsCount < 2) return null;
-    if (watchPaymentMethodMain !== "Cartão de Crédito") return null;
+    if (!watchCardTerminalId || !watchAmount) return null;
     const terminal = cardTerminals.find((t) => t.id === watchCardTerminalId);
     if (!terminal) return null;
 
-    const fallbackRate = terminal.credit_rate ?? 0;
-    const rates = parseRatesInfo(terminal.rates_info);
-    const match = rates.find((r) => r.installments === watchInstallmentsCount);
-    const rate = match ? match.rate : fallbackRate;
+    const isDebit = watchPaymentMethodMain === "Cartão de Débito";
+    const isCredit = watchPaymentMethodMain === "Cartão de Crédito";
+    if (!isDebit && !isCredit) return null;
+
+    const isInstallment = isCredit && watchInstallmentsCount && watchInstallmentsCount >= 2;
+
+    let rate: number;
+    let settlementDays: number;
+
+    if (isDebit) {
+      rate = terminal.debit_rate ?? 0;
+      settlementDays = terminal.settlement_days_debit ?? 1;
+    } else if (isInstallment) {
+      const fallbackRate = terminal.credit_rate ?? 0;
+      const rates = parseRatesInfo(terminal.rates_info);
+      const match = rates.find((r) => r.installments === watchInstallmentsCount);
+      rate = match ? match.rate : fallbackRate;
+      settlementDays = terminal.settlement_days_credit ?? 30;
+    } else {
+      // Credit à vista
+      rate = terminal.credit_rate ?? 0;
+      settlementDays = terminal.settlement_days_credit ?? 30;
+    }
 
     const feeAmount = Math.round(watchAmount * (rate / 100) * 100) / 100;
     const netTotal = Math.round((watchAmount - feeAmount) * 100) / 100;
-    const settlementDays = terminal.settlement_days_credit ?? 30;
 
-    return { netTotal, settlementDays };
+    return { netTotal, settlementDays, isDebit, isSinglePayment: !isInstallment, rate };
   })();
 
   // Calculate Price table installment preview
@@ -1182,6 +1195,13 @@ function MainFormContent({
     return { pmt, totalWithInterest: Math.round(pmt * n * 100) / 100, totalInterest: 0 };
   })();
   const show = (key: keyof FormFieldSettings) => !fieldSettings || fieldSettings[key];
+
+  // Force installment off when debit + terminal
+  useEffect(() => {
+    if (watchPaymentMethodMain === "Cartão de Débito" && watchCardTerminalId && watchInstallment) {
+      form.setValue("is_installment", false);
+    }
+  }, [watchPaymentMethodMain, watchCardTerminalId, watchInstallment, form]);
 
   return (
     <Form {...form}>
@@ -1525,6 +1545,8 @@ function MainFormContent({
           <div className="space-y-4 rounded-lg border border-border p-4">
             {show("installments") && (
             <div className="space-y-3">
+              {/* Hide installment toggle for debit with terminal */}
+              {!(watchPaymentMethodMain === "Cartão de Débito" && watchCardTerminalId) && (
               <div className="flex items-center gap-3">
                 <Switch
                   id="installment-toggle"
@@ -1536,6 +1558,7 @@ function MainFormContent({
                 />
                 <Label htmlFor="installment-toggle">Parcelado?</Label>
               </div>
+              )}
               {watchInstallment && (
                 <div className="space-y-3 pl-2 border-l-2 border-primary/20 ml-2">
                   <FormField
@@ -1635,6 +1658,33 @@ function MainFormContent({
                 </div>
               )}
             </div>
+            )}
+
+            {/* Single-payment terminal summary (debit or credit à vista) */}
+            {terminalPreview && terminalPreview.isSinglePayment && watchAmount > 0 && watchPaymentDate && (
+              <div className="rounded-lg border border-border bg-muted/50 p-3 space-y-1">
+                <p className="text-sm font-medium text-foreground">
+                  {terminalPreview.isDebit ? "Débito" : "Crédito à vista"} via maquininha
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-sm">
+                  <span className="text-muted-foreground">Taxa MDR:</span>
+                  <span>{terminalPreview.rate.toFixed(2)}%</span>
+                  <span className="text-muted-foreground">Valor líquido:</span>
+                  <span className="font-semibold text-primary">
+                    {terminalPreview.netTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </span>
+                  <span className="text-muted-foreground">Recebimento:</span>
+                  <span>
+                    D+{terminalPreview.settlementDays} ({format(
+                      terminalPreview.isDebit
+                        ? addBusinessDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), terminalPreview.settlementDays)
+                        : addDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), terminalPreview.settlementDays),
+                      "dd/MM/yyyy",
+                      { locale: ptBR }
+                    )})
+                  </span>
+                </div>
+              </div>
             )}
 
             {show("recurring") && !watchInstallment && (
