@@ -610,9 +610,7 @@ export function TransactionFormModal({
     } else if (selectedTerminal) {
       const isDebit = data.payment_method === "Cartão de Débito";
       if (!isDebit && data.is_installment && data.installments_count && data.installments_count >= 2) {
-        // Credit installment via terminal: generate N individual transactions
         const count = data.installments_count;
-        const grossPerInstallment = Math.round((data.amount / count) * 100) / 100;
 
         // Determine installment-specific rate
         const fallbackRate = selectedTerminal.credit_rate ?? 0;
@@ -620,42 +618,55 @@ export function TransactionFormModal({
         const matchRate = rates.find((r) => r.installments === count);
         const rate = matchRate ? matchRate.rate : fallbackRate;
 
-        const feePerInstallment = Math.round(grossPerInstallment * (rate / 100) * 100) / 100;
-        const netPerInstallment = Math.round((grossPerInstallment - feePerInstallment) * 100) / 100;
         const settlementDays = selectedTerminal.settlement_days_credit ?? 30;
         const autoAnticipation = (selectedTerminal as any).auto_anticipation ?? false;
-        const seriesId = crypto.randomUUID();
 
-        // Rounding: floor all installments, put remainder in last one
-        const grossFloor = Math.floor((data.amount / count) * 100) / 100;
-        const grossLast = Math.round((data.amount - grossFloor * (count - 1)) * 100) / 100;
+        if (autoAnticipation) {
+          // D+2 anticipation: acquirer pays TOTAL net in a SINGLE lump sum on D+X
+          const totalFee = Math.round(data.amount * (rate / 100) * 100) / 100;
+          const totalNet = Math.round((data.amount - totalFee) * 100) / 100;
+          const payDate = addBusinessDays(data.competence_date, settlementDays);
 
-        const installments: TransactionInsert[] = [];
-        for (let i = 0; i < count; i++) {
-          const isLast = i === count - 1;
-          const thisGross = isLast ? grossLast : grossFloor;
-          const thisFee = Math.round(thisGross * (rate / 100) * 100) / 100;
-          const thisNet = Math.round((thisGross - thisFee) * 100) / 100;
-
-          // If auto_anticipation: all installments on the same D+X (business days)
-          // Otherwise: 30-day intervals + D+X business days settlement
-          const payDate = autoAnticipation
-            ? addBusinessDays(data.competence_date, settlementDays)
-            : addBusinessDays(addDays(data.competence_date, 30 * (i + 1)), settlementDays);
-          installments.push({
+          success = await onSave({
             ...baseData,
-            amount: thisNet,
-            original_amount: thisGross,
+            amount: totalNet,
+            original_amount: data.amount,
             payment_date: format(payDate, "yyyy-MM-dd"),
             competence_date: format(data.competence_date, "yyyy-MM-dd"),
-            series_id: seriesId,
-            installment_number: i + 1,
-            installments_total: count,
             installments: count,
+            installments_total: count,
             card_terminal_id: selectedTerminal.id,
           });
+        } else {
+          // No anticipation: N separate transactions with 30-day intervals + D+X settlement
+          const seriesId = crypto.randomUUID();
+          const grossFloor = Math.floor((data.amount / count) * 100) / 100;
+          const grossLast = Math.round((data.amount - grossFloor * (count - 1)) * 100) / 100;
+
+          const installments: TransactionInsert[] = [];
+          for (let i = 0; i < count; i++) {
+            const isLast = i === count - 1;
+            const thisGross = isLast ? grossLast : grossFloor;
+            const thisFee = Math.round(thisGross * (rate / 100) * 100) / 100;
+            const thisNet = Math.round((thisGross - thisFee) * 100) / 100;
+
+            const vencimento = addDays(data.competence_date, 30 * (i + 1));
+            const payDate = addBusinessDays(vencimento, settlementDays);
+            installments.push({
+              ...baseData,
+              amount: thisNet,
+              original_amount: thisGross,
+              payment_date: format(payDate, "yyyy-MM-dd"),
+              competence_date: format(data.competence_date, "yyyy-MM-dd"),
+              series_id: seriesId,
+              installment_number: i + 1,
+              installments_total: count,
+              installments: count,
+              card_terminal_id: selectedTerminal.id,
+            });
+          }
+          success = await onSaveMultiple(installments);
         }
-        success = await onSaveMultiple(installments);
       } else {
         // Debit or credit à vista: single transaction — no installment metadata for debit
         success = await onSave(baseData);
@@ -1647,17 +1658,15 @@ function MainFormContent({
                       )}
                     />
                   )}
-                  {interestPreview && watchPaymentDate && (
+                  {interestPreview && watchPaymentDate && !(terminalPreview?.autoAnticipation) && (
                     <InstallmentPreviewTable
                       totalAmount={terminalPreview ? terminalPreview.netTotal : watchAmount}
                       installmentsCount={watchInstallmentsCount}
                       paymentDate={
-                        terminalPreview?.autoAnticipation
-                          ? addBusinessDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), terminalPreview.settlementDays)
-                          : addBusinessDays(addDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), 30), terminalPreview?.settlementDays ?? 0)
+                        addBusinessDays(addDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), 30), terminalPreview?.settlementDays ?? 0)
                       }
                       intervalType={terminalPreview ? "custom_days" : ((watchIntervalType as "monthly" | "custom_days") || "monthly")}
-                      customDays={terminalPreview ? (terminalPreview.autoAnticipation ? 0 : 30) : (watchCustomDays ? Number(watchCustomDays) : undefined)}
+                      customDays={terminalPreview ? 30 : (watchCustomDays ? Number(watchCustomDays) : undefined)}
                       interestRate={terminalPreview ? 0 : (watchInterestRate || 0)}
                       customAmounts={customInstallmentAmounts}
                       onCustomAmountsChange={onCustomInstallmentAmountsChange}
