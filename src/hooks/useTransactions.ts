@@ -62,6 +62,7 @@ export interface CardTerminalInfo {
   settlement_days_debit: number | null;
   settlement_days_credit: number | null;
   rates_info: string | null;
+  auto_anticipation: boolean;
 }
 
 export interface Category {
@@ -141,7 +142,7 @@ export function useTransactions() {
         supabase.from("suppliers").select("id, name").order("name"),
         supabase.from("clients").select("id, name").order("name"),
         companyFilter(supabase.from("categories").select("id, name, parent_id, type")).order("name"),
-        companyFilter(supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info")).order("name"),
+        companyFilter(supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation")).order("name"),
         supabase.from("categories").select("id, name, parent_id, type").order("name"),
       ]);
 
@@ -165,7 +166,7 @@ export function useTransactions() {
         supabase.from("wallets").select("id, name, company_id").order("name"),
         supabase.from("credit_cards").select("id, name, last_four_digits, company_id").order("name"),
         supabase.from("companies").select("id, name").order("name"),
-        supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, company_id").order("name"),
+        supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation, company_id").order("name"),
       ]);
 
       const companyMap = new Map<string, string>();

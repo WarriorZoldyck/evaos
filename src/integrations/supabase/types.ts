@@ -62,6 +62,7 @@ export type Database = {
         Row: {
           acquirer: string | null
           affiliation_key: string | null
+          auto_anticipation: boolean
           bank_account_id: string
           company_id: string | null
           created_at: string | null
@@ -78,6 +79,7 @@ export type Database = {
         Insert: {
           acquirer?: string | null
           affiliation_key?: string | null
+          auto_anticipation?: boolean
           bank_account_id: string
           company_id?: string | null
           created_at?: string | null
@@ -94,6 +96,7 @@ export type Database = {
         Update: {
           acquirer?: string | null
           affiliation_key?: string | null
+          auto_anticipation?: boolean
           bank_account_id?: string
           company_id?: string | null
           created_at?: string | null

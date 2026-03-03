@@ -177,7 +177,7 @@ export function useAccounts() {
     name: string; acquirer?: string | null; bank_account_id: string;
     unique_id?: string | null; debit_rate?: number | null; credit_rate?: number | null;
     settlement_days_debit?: number | null; settlement_days_credit?: number | null;
-    rates_info?: string | null;
+    rates_info?: string | null; auto_anticipation?: boolean;
   }) => {
     if (!user) return false;
     const { error } = await supabase.from("card_terminals").insert({
@@ -190,6 +190,7 @@ export function useAccounts() {
       settlement_days_debit: data.settlement_days_debit ?? null,
       settlement_days_credit: data.settlement_days_credit ?? null,
       rates_info: data.rates_info || null,
+      auto_anticipation: data.auto_anticipation ?? false,
       user_id: user.id,
       company_id: selectedCompanyId || null,
     });
