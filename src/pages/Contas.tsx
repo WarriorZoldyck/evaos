@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet, Smartphone, Receipt, FileText } from "lucide-react";
+import { VirtualWalletCard } from "@/components/contas/VirtualWalletCard";
 import { useAccounts, type CardTerminal } from "@/hooks/useAccounts";
 import { useCompany } from "@/contexts/CompanyContext";
 import { AccountFormModal } from "@/components/contas/AccountFormModal";
@@ -32,6 +33,13 @@ import { AccountStatementModal } from "@/components/contas/AccountStatementModal
 import { Skeleton } from "@/components/ui/skeleton";
 
 type AccountTab = "bank" | "card" | "wallet" | "terminal";
+
+// Track flipped state per wallet
+const useWalletFlips = () => {
+  const [flipped, setFlipped] = useState<Record<string, boolean>>({});
+  const toggle = (id: string) => setFlipped(prev => ({ ...prev, [id]: !prev[id] }));
+  return { flipped, toggle };
+};
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -56,6 +64,7 @@ export default function Contas() {
   const [statementTarget, setStatementTarget] = useState<{
     id: string; type: "bank" | "wallet" | "card"; name: string; initialBalance?: number;
   } | null>(null);
+  const walletFlips = useWalletFlips();
 
   const openCreate = () => {
     if (activeTab === "terminal") {
@@ -252,45 +261,40 @@ export default function Contas() {
           </Card>
         </TabsContent>
 
-        {/* Wallets */}
+        {/* Wallets - Virtual Card Layout */}
         <TabsContent value="wallet">
-          <Card>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="p-6 space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-              ) : wallets.length === 0 ? (
+          {loading ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[260px] w-full rounded-lg" />)}
+            </div>
+          ) : wallets.length === 0 ? (
+            <Card>
+              <CardContent className="p-0">
                 <div className="h-48 flex flex-col items-center justify-center text-muted-foreground text-sm gap-2">
                   <Wallet className="h-8 w-8 opacity-50" />
                   Nenhuma carteira cadastrada
                 </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead className="text-right">Saldo Inicial</TableHead>
-                      <TableHead className="w-24 text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {wallets.map((w) => (
-                      <TableRow key={w.id}>
-                        <TableCell className="font-medium">{w.name}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(w.initial_balance)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: w.id, type: "wallet", name: w.name, initialBalance: w.initial_balance })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(w)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: w.id, name: w.name, tab: "wallet" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {wallets.map((w) => (
+                <div key={w.id} className="flex flex-col items-center gap-3">
+                  <VirtualWalletCard
+                    isFlipped={!!walletFlips.flipped[w.id]}
+                    onFlip={() => walletFlips.toggle(w.id)}
+                    walletName={w.name}
+                    balance={String(w.initial_balance)}
+                  />
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: w.id, type: "wallet", name: w.name, initialBalance: w.initial_balance })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(w)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: w.id, name: w.name, tab: "wallet" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         {/* Card Terminals */}

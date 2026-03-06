@@ -13,7 +13,7 @@ import {
   User,
   ChevronDown,
   GraduationCap,
-  Target,
+  LifeBuoy,
   TrendingUp,
   BookOpen,
   
@@ -64,7 +64,7 @@ const registrationMenuItems = [
 
 const comingSoonItems = [
   { title: "EVA Kids", url: "/eva-kids", icon: GraduationCap },
-  { title: "Metas", url: "/metas", icon: Target },
+  { title: "Metas", url: "/metas", icon: LifeBuoy },
   { title: "Precificação V2", url: "/precificacao-v2", icon: TrendingUp },
 ];
 
