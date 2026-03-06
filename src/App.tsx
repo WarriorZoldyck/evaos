@@ -23,6 +23,7 @@ import ComingSoon from "@/pages/ComingSoon";
 import Docs from "@/pages/Docs";
 import Integracoes from "@/pages/Integracoes";
 import PrecificacaoV2 from "@/pages/PrecificacaoV2";
+import LandingPage from "@/pages/LandingPage";
 import { GraduationCap, Target } from "lucide-react";
 import { toast } from "sonner";
 
@@ -49,6 +50,7 @@ const App = () => {
           <BrowserRouter>
             <Routes>
               <Route path="/auth" element={<Auth />} />
+              <Route path="/landing" element={<LandingPage />} />
               <Route element={<AppLayout />}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/lancamentos" element={<Lancamentos />} />
