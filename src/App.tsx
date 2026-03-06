@@ -24,7 +24,8 @@ import Docs from "@/pages/Docs";
 import Integracoes from "@/pages/Integracoes";
 import PrecificacaoV2 from "@/pages/PrecificacaoV2";
 import LandingPage from "@/pages/LandingPage";
-import { GraduationCap, Target } from "lucide-react";
+import Metas from "@/pages/Metas";
+import { GraduationCap } from "lucide-react";
 import { toast } from "sonner";
 
 const queryClient = new QueryClient();
@@ -65,7 +66,7 @@ const App = () => {
                 <Route path="/docs" element={<Docs />} />
                 <Route path="/integracoes" element={<Integracoes />} />
                 <Route path="/eva-kids" element={<ComingSoon title="EVA Kids" description="Educação financeira para crianças. Em breve!" icon={GraduationCap} />} />
-                <Route path="/metas" element={<ComingSoon title="Metas" description="Defina e acompanhe suas metas financeiras." icon={Target} />} />
+                <Route path="/metas" element={<Metas />} />
                 <Route path="/precificacao-v2" element={<PrecificacaoV2 />} />
               </Route>
               <Route path="*" element={<NotFound />} />
