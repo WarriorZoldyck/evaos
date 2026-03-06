@@ -23,6 +23,7 @@ import ComingSoon from "@/pages/ComingSoon";
 import Docs from "@/pages/Docs";
 import Integracoes from "@/pages/Integracoes";
 import PrecificacaoV2 from "@/pages/PrecificacaoV2";
+import LandingPage from "@/pages/LandingPage";
 import { GraduationCap, Target } from "lucide-react";
 import { toast } from "sonner";
 
