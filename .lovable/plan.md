@@ -1,38 +1,26 @@
 
 
-# Fix: D+2 = Sempre Lump Sum (Pagamento Único)
+# Fix: Auth redirect loop
 
-## Problema
+## Problem
 
-A migration anterior resetou `auto_anticipation = false` em todos os terminais. Mas o comportamento correto é: **D+2 sempre credita tudo de uma vez** (lump sum). Não depende de um flag — é inerente ao prazo curto de liquidação. Só terminais D+30 pagam em parcelas separadas.
+Two issues creating a redirect loop:
 
-O MdrInfoCard e o save logic estão mostrando/criando 10 parcelas separadas para REDE (D+2) porque `auto_anticipation = false`.
+1. **Auth.tsx line 25**: After successful login, redirects to `/` (landing page) instead of `/dashboard`
+2. **LandingPage** (`/`): Doesn't check if user is already logged in to redirect to `/dashboard`
 
-## Solução
+Flow: User logs in → Auth sends to `/` → Landing page shows again (loop).
 
-Remover a dependência do flag `auto_anticipation` e usar a lógica direta:
+## Fix
 
-- **`settlement_days_credit < 30`** → Lump sum (1 transação, valor total líquido, creditado em D+X)
-- **`settlement_days_credit >= 30`** → Parcelas separadas (N transações, intervalo 30 dias + D+X)
+### 1. `src/pages/Auth.tsx`
+Change line 25: `<Navigate to="/" replace />` → `<Navigate to="/dashboard" replace />`
 
-### Arquivos alterados
+### 2. `src/pages/LandingPage.tsx`
+Add auth check at the top: if user is logged in, `<Navigate to="/dashboard" replace />`. Show loading spinner while auth is initializing.
 
-| Arquivo | Mudança |
-|---------|---------|
-| `TransactionFormModal.tsx` (linha 622-624) | Trocar `autoAnticipation` por `settlementDays < 30` |
-| `MdrInfoCard.tsx` (linha 68-70) | Mesma troca: `settlementDays < 30` em vez de `auto_anticipation` |
+### 3. `src/components/landing/LandingHero.tsx` and `src/components/landing/LandingFooter.tsx`
+Update CTA buttons that navigate to `/auth` — keep them pointing to `/auth` (this is correct).
 
-### Código
-
-```typescript
-// ANTES
-const autoAnticipation = (selectedTerminal as any).auto_anticipation ?? false;
-if (autoAnticipation) { /* lump sum */ }
-
-// DEPOIS
-const isLumpSum = settlementDays < 30;
-if (isLumpSum) { /* lump sum */ }
-```
-
-Ambos os arquivos usam a mesma condição, então a mudança é simétrica.
+These are the only two changes needed. No routing changes required.
 
