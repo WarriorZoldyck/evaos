@@ -274,6 +274,103 @@ export type Database = {
           },
         ]
       }
+      goal_movements: {
+        Row: {
+          amount: number
+          created_at: string | null
+          description: string | null
+          goal_id: string
+          id: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          description?: string | null
+          goal_id: string
+          id?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          description?: string | null
+          goal_id?: string
+          id?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_movements_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goals: {
+        Row: {
+          auto_reserve_amount: number | null
+          auto_reserve_enabled: boolean
+          auto_reserve_frequency: string | null
+          auto_reserve_per_expense: number | null
+          auto_reserve_per_sale: number | null
+          company_id: string | null
+          created_at: string | null
+          current_amount: number
+          deadline: string | null
+          icon: string | null
+          id: string
+          name: string
+          target_amount: number
+          user_id: string
+        }
+        Insert: {
+          auto_reserve_amount?: number | null
+          auto_reserve_enabled?: boolean
+          auto_reserve_frequency?: string | null
+          auto_reserve_per_expense?: number | null
+          auto_reserve_per_sale?: number | null
+          company_id?: string | null
+          created_at?: string | null
+          current_amount?: number
+          deadline?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          target_amount?: number
+          user_id: string
+        }
+        Update: {
+          auto_reserve_amount?: number | null
+          auto_reserve_enabled?: boolean
+          auto_reserve_frequency?: string | null
+          auto_reserve_per_expense?: number | null
+          auto_reserve_per_sale?: number | null
+          company_id?: string | null
+          created_at?: string | null
+          current_amount?: number
+          deadline?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          target_amount?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pricing_configurations: {
         Row: {
           hours_per_month: number | null
