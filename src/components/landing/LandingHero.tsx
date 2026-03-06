@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Play } from "lucide-react";
 import { HolographicAvatar } from "./HolographicAvatar";
-import dashboardPreview from "@/assets/eva-dashboard-preview.png";
 
 export function LandingHero() {
   const navigate = useNavigate();
@@ -12,7 +11,6 @@ export function LandingHero() {
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[1000px] h-[1000px] rounded-full opacity-30" style={{ background: "radial-gradient(circle, hsl(195 100% 50% / 0.2), hsl(200 100% 40% / 0.08) 50%, transparent 70%)" }} />
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[hsl(195,100%,50%/0.5)] to-transparent" />
-        {/* Animated vertical light rays */}
         <div className="absolute top-0 left-1/3 w-px h-full opacity-20" style={{ background: "linear-gradient(to bottom, transparent, hsl(195 100% 50% / 0.4), transparent)" }} />
         <div className="absolute top-0 left-2/3 w-px h-full opacity-15" style={{ background: "linear-gradient(to bottom, transparent, hsl(195 100% 50% / 0.3), transparent)" }} />
       </div>
@@ -69,11 +67,6 @@ export function LandingHero() {
           {/* Right: Holographic Avatar */}
           <div className="relative flex items-center justify-center">
             <HolographicAvatar />
-
-            {/* Dashboard preview floating card */}
-            <div className="absolute -bottom-8 -right-4 sm:-right-12 w-56 sm:w-72 rounded-xl overflow-hidden border border-[hsl(195,100%,50%/0.2)] shadow-[0_8px_32px_hsl(220,30%,2%/0.6),0_0_20px_hsl(195,100%,50%/0.1)]" style={{ background: "hsla(220,30%,9%,0.9)", backdropFilter: "blur(12px)" }}>
-              <img src={dashboardPreview} alt="Dashboard EVA OS" className="w-full h-auto" />
-            </div>
 
             {/* Floating stat cards with enhanced glow */}
             <div className="absolute -top-4 -left-4 sm:-left-8 px-4 py-3 rounded-xl border border-[hsl(195,100%,50%/0.2)] shadow-[0_0_15px_hsl(195,100%,50%/0.1)]" style={{ background: "hsla(220,30%,9%,0.9)", backdropFilter: "blur(12px)" }}>
