@@ -25,7 +25,6 @@ import Integracoes from "@/pages/Integracoes";
 import PrecificacaoV2 from "@/pages/PrecificacaoV2";
 import LandingPage from "@/pages/LandingPage";
 import { GraduationCap, Target } from "lucide-react";
-import { toast } from "sonner";
 
 const queryClient = new QueryClient();
 
