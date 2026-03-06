@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Settings, Trash2, Building2, Plus, X } from "lucide-react";
+import { Settings, Trash2, Building2, Plus, X, Pencil } from "lucide-react";
 import { TransactionFieldsCard } from "@/components/configuracoes/TransactionFieldsCard";
 import { WhatsAppCard } from "@/components/configuracoes/WhatsAppCard";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,8 +31,68 @@ export default function Configuracoes() {
   const [companyName, setCompanyName] = useState("");
   const [companyCnpj, setCompanyCnpj] = useState("");
   const [savingCompany, setSavingCompany] = useState(false);
+  const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
 
-  const handleAddCompany = async () => {
+  // Profile state
+  const [fullName, setFullName] = useState("");
+  const [cpf, setCpf] = useState("");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from("profiles")
+      .select("full_name, cpf, whatsapp_number")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setFullName(data.full_name || "");
+          setCpf(data.cpf || "");
+          setWhatsappNumber(data.whatsapp_number || "");
+        }
+        setProfileLoaded(true);
+      });
+  }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setSavingProfile(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: fullName.trim() || null,
+          cpf: cpf.trim() || null,
+          whatsapp_number: whatsappNumber.trim() || null,
+        })
+        .eq("id", user.id);
+      if (error) throw error;
+      toast.success("Perfil atualizado com sucesso!");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao atualizar perfil");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleEditCompany = (company: { id: string; name: string; cnpj: string }) => {
+    setEditingCompanyId(company.id);
+    setCompanyName(company.name);
+    setCompanyCnpj(company.cnpj || "");
+    setShowCompanyForm(true);
+  };
+
+  const resetCompanyForm = () => {
+    setEditingCompanyId(null);
+    setCompanyName("");
+    setCompanyCnpj("");
+    setShowCompanyForm(false);
+  };
+
+  const handleAddOrUpdateCompany = async () => {
     if (!companyName.trim()) {
       toast.error("Informe o nome da empresa.");
       return;
@@ -40,19 +100,26 @@ export default function Configuracoes() {
     if (!user) return;
     setSavingCompany(true);
     try {
-      const { error } = await supabase.from("companies").insert({
-        name: companyName.trim(),
-        cnpj: companyCnpj.trim(),
-        user_id: user.id,
-      });
-      if (error) throw error;
-      toast.success("Empresa cadastrada com sucesso!");
-      setCompanyName("");
-      setCompanyCnpj("");
-      setShowCompanyForm(false);
+      if (editingCompanyId) {
+        const { error } = await supabase
+          .from("companies")
+          .update({ name: companyName.trim(), cnpj: companyCnpj.trim() })
+          .eq("id", editingCompanyId);
+        if (error) throw error;
+        toast.success("Empresa atualizada com sucesso!");
+      } else {
+        const { error } = await supabase.from("companies").insert({
+          name: companyName.trim(),
+          cnpj: companyCnpj.trim(),
+          user_id: user.id,
+        });
+        if (error) throw error;
+        toast.success("Empresa cadastrada com sucesso!");
+      }
+      resetCompanyForm();
       refetchCompanies();
     } catch (err: any) {
-      toast.error(err.message || "Erro ao cadastrar empresa");
+      toast.error(err.message || "Erro ao salvar empresa");
     } finally {
       setSavingCompany(false);
     }
@@ -111,17 +178,53 @@ export default function Configuracoes() {
         <p className="text-muted-foreground text-sm mt-1">Ajuste suas preferências</p>
       </div>
 
+      {/* Perfil pessoal */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Settings className="h-5 w-5 text-primary" />
-            Preferências
+            Meu Perfil
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p><strong>Email:</strong> {user?.email}</p>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label className="text-xs">Email</Label>
+            <Input value={user?.email || ""} disabled className="opacity-60" />
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Nome completo</Label>
+              <Input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Seu nome completo"
+                disabled={!profileLoaded}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">CPF</Label>
+              <Input
+                value={cpf}
+                onChange={(e) => setCpf(e.target.value)}
+                placeholder="000.000.000-00"
+                disabled={!profileLoaded}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">WhatsApp</Label>
+              <Input
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder="(00) 00000-0000"
+                disabled={!profileLoaded}
+              />
+            </div>
+          </div>
+          <Button size="sm" onClick={handleSaveProfile} disabled={savingProfile || !profileLoaded}>
+            {savingProfile ? "Salvando..." : "Salvar perfil"}
+          </Button>
         </CardContent>
       </Card>
 
@@ -132,7 +235,15 @@ export default function Configuracoes() {
             <Building2 className="h-5 w-5 text-primary" />
             Empresas
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={() => setShowCompanyForm(true)} className="gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              resetCompanyForm();
+              setShowCompanyForm(true);
+            }}
+            className="gap-1"
+          >
             <Plus className="h-4 w-4" /> Nova Empresa
           </Button>
         </CardHeader>
@@ -140,8 +251,10 @@ export default function Configuracoes() {
           {showCompanyForm && (
             <div className="border border-border rounded-lg p-4 space-y-3 bg-muted/30">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Cadastrar empresa</span>
-                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setShowCompanyForm(false)}>
+                <span className="text-sm font-medium">
+                  {editingCompanyId ? "Editar empresa" : "Cadastrar empresa"}
+                </span>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={resetCompanyForm}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -155,8 +268,8 @@ export default function Configuracoes() {
                   <Input value={companyCnpj} onChange={(e) => setCompanyCnpj(e.target.value)} placeholder="00.000.000/0000-00" />
                 </div>
               </div>
-              <Button size="sm" onClick={handleAddCompany} disabled={savingCompany}>
-                {savingCompany ? "Salvando..." : "Cadastrar"}
+              <Button size="sm" onClick={handleAddOrUpdateCompany} disabled={savingCompany}>
+                {savingCompany ? "Salvando..." : editingCompanyId ? "Salvar alterações" : "Cadastrar"}
               </Button>
             </div>
           )}
@@ -169,9 +282,14 @@ export default function Configuracoes() {
                 <p className="text-sm font-medium">{c.name}</p>
                 {c.cnpj && <p className="text-xs text-muted-foreground">{c.cnpj}</p>}
               </div>
-              <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteCompany(c.id)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEditCompany(c)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteCompany(c.id)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           ))}
         </CardContent>
