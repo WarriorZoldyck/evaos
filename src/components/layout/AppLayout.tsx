@@ -26,7 +26,7 @@ export default function AppLayout() {
   }
 
   if (!user) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return <AppLayoutInner />;

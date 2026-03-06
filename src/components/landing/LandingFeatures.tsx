@@ -75,10 +75,10 @@ export function LandingFeatures() {
           {features.map((f, i) => (
             <div
               key={i}
-              className="group p-6 rounded-2xl border border-[hsl(215,25%,12%)] hover:border-[hsl(195,100%,50%/0.3)] transition-all duration-300"
+              className="group p-6 rounded-2xl border border-[hsl(215,25%,12%)] hover:border-[hsl(195,100%,50%/0.4)] transition-all duration-300 hover:shadow-[0_0_30px_hsl(195,100%,50%/0.1),0_0_60px_hsl(195,100%,50%/0.05)]"
               style={{ background: "hsla(220,30%,7%,0.6)" }}
             >
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center mb-4 bg-[hsl(195,100%,50%/0.1)] group-hover:bg-[hsl(195,100%,50%/0.15)] transition-colors">
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center mb-4 bg-[hsl(195,100%,50%/0.1)] group-hover:bg-[hsl(195,100%,50%/0.2)] group-hover:shadow-[0_0_15px_hsl(195,100%,50%/0.2)] transition-all duration-300">
                 <f.icon className="h-5 w-5 text-[hsl(195,100%,50%)]" />
               </div>
               <h3 className="font-display font-semibold text-base mb-2">{f.title}</h3>
