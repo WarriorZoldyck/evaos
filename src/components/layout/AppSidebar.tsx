@@ -45,7 +45,7 @@ import {
 import evaLogo from "@/assets/eva-os-logo.jpeg";
 
 const mainMenuItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Lançamentos", url: "/lancamentos", icon: ArrowLeftRight },
 ];
 

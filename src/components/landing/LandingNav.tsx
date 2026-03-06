@@ -16,12 +16,14 @@ export function LandingNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[hsl(215,25%,12%)]" style={{ background: "hsla(220,30%,4%,0.85)", backdropFilter: "blur(20px)" }}>
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-[hsl(195,100%,50%/0.1)]" style={{ background: "hsla(220,30%,4%,0.92)", backdropFilter: "blur(24px)" }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-3">
-            <img src={evaLogo} alt="EVA OS" className="h-8 w-8 rounded-lg" />
-            <span className="font-display font-bold text-lg tracking-tight">EVA OS</span>
+            <div className="h-10 w-10 rounded-lg overflow-hidden shadow-[0_0_12px_hsl(195,100%,50%/0.3)]">
+              <img src={evaLogo} alt="EVA OS" className="h-full w-full object-cover" />
+            </div>
+            <span className="font-display font-bold text-xl tracking-tight">EVA OS</span>
           </div>
 
           {/* Desktop nav */}
