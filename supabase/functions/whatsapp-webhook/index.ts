@@ -77,6 +77,11 @@ serve(async (req) => {
     const allCandidates = Array.from(phoneCandidates);
 
     // Fetch all profiles and match by normalized number
+    console.log("=== WHATSAPP WEBHOOK DEBUG ===");
+    console.log("Incoming phone:", phone);
+    console.log("Digits only:", digitsOnly);
+    console.log("Candidates:", JSON.stringify(allCandidates));
+
     const { data: allProfiles, error: profileError } = await supabase
       .from("profiles")
       .select("id, whatsapp_number")
@@ -89,6 +94,8 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log("Profiles with WhatsApp:", JSON.stringify((allProfiles || []).map(p => ({ id: p.id.slice(0, 8), whatsapp: p.whatsapp_number }))));
 
     // Match: normalize stored numbers the same way and compare digits
     const profile = (allProfiles || []).find((p) => {
@@ -110,7 +117,7 @@ serve(async (req) => {
     });
 
     if (!profile) {
-      console.error("Phone not found. Incoming:", phone, "| Digits:", digitsOnly, "| Candidates:", allCandidates);
+      console.error("Phone NOT found. Incoming:", phone, "| Digits:", digitsOnly);
       return new Response(
         JSON.stringify({
           success: false,
@@ -120,6 +127,8 @@ serve(async (req) => {
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log("Matched profile:", profile.id.slice(0, 8), "| Stored number:", profile.whatsapp_number);
 
     const userId = profile.id;
 
