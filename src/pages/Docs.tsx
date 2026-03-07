@@ -537,9 +537,17 @@ export default function Docs() {
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
               <Terminal className="h-4 w-4" /> cURL Pronto para Uso
             </h3>
-            <p>Copie e cole no terminal para testar a API rapidamente. Substitua <code className="bg-muted px-1 rounded text-xs font-mono">SEU_SECRET_AQUI</code> pelo seu webhook secret e <code className="bg-muted px-1 rounded text-xs font-mono">5511999999999</code> pelo número cadastrado.</p>
+            <p>Copie e cole no terminal ou use no HTTP Request do n8n. Substitua <code className="bg-muted px-1 rounded text-xs font-mono">SEU_SECRET_AQUI</code> pelo seu webhook secret e <code className="bg-muted px-1 rounded text-xs font-mono">5511999999999</code> pelo número cadastrado.</p>
 
-            <CodeBlock title="Criar lançamento">{`curl -X POST \\
+            <p className="mt-3 font-medium text-foreground flex items-center gap-2">
+              <User className="h-3.5 w-3.5" /> Contexto Pessoal
+            </p>
+            <p className="text-xs text-muted-foreground/70 mb-1">
+              Quando não especifica contexto na mensagem, a IA assume <strong className="text-foreground">Pessoal</strong> automaticamente.
+              O lançamento é criado com <code className="bg-muted px-1 rounded text-xs font-mono">company_id: null</code>.
+            </p>
+
+            <CodeBlock title="Lançamento Pessoal (despesa)">{`curl -X POST \\
   https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
   -H "Content-Type: application/json" \\
   -H "x-webhook-secret: SEU_SECRET_AQUI" \\
@@ -548,14 +556,67 @@ export default function Docs() {
     "message": "Gastei 50 reais no almoço"
   }'`}</CodeBlock>
 
-            <CodeBlock title="Consultar saldo">{`curl -X POST \\
+            <CodeBlock title="Lançamento Pessoal (receita)">{`curl -X POST \\
   https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
   -H "Content-Type: application/json" \\
   -H "x-webhook-secret: SEU_SECRET_AQUI" \\
   -d '{
     "phone": "5511999999999",
-    "message": "Qual meu saldo?"
+    "message": "Recebi 3000 de freelance hoje"
   }'`}</CodeBlock>
+
+            <CodeBlock title="Consulta de saldo Pessoal">{`curl -X POST \\
+  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
+  -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
+  -d '{
+    "phone": "5511999999999",
+    "message": "Qual meu saldo pessoal?"
+  }'`}</CodeBlock>
+
+            <Separator className="my-3" />
+
+            <p className="font-medium text-foreground flex items-center gap-2">
+              <Building2 className="h-3.5 w-3.5" /> Contexto Empresa
+            </p>
+            <p className="text-xs text-muted-foreground/70 mb-1">
+              Para direcionar ao contexto de uma empresa, <strong className="text-foreground">mencione o nome da empresa na mensagem</strong>.
+              A IA identifica automaticamente e cria o lançamento com o <code className="bg-muted px-1 rounded text-xs font-mono">company_id</code> correto.
+              As categorias e contas usadas serão as do contexto da empresa.
+            </p>
+
+            <CodeBlock title="Lançamento na Empresa">{`curl -X POST \\
+  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
+  -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
+  -d '{
+    "phone": "5511999999999",
+    "message": "Paguei 200 de luz da Minha Empresa"
+  }'`}</CodeBlock>
+
+            <CodeBlock title="Consulta de saldo da Empresa">{`curl -X POST \\
+  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
+  -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
+  -d '{
+    "phone": "5511999999999",
+    "message": "Qual o saldo da Minha Empresa?"
+  }'`}</CodeBlock>
+
+            <CodeBlock title="Resumo mensal da Empresa">{`curl -X POST \\
+  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
+  -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
+  -d '{
+    "phone": "5511999999999",
+    "message": "Resumo do mês da Minha Empresa"
+  }'`}</CodeBlock>
+
+            <Separator className="my-3" />
+
+            <p className="font-medium text-foreground flex items-center gap-2">
+              📸 Imagem / Nota Fiscal
+            </p>
 
             <CodeBlock title="Enviar imagem de nota fiscal">{`curl -X POST \\
   https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
@@ -566,6 +627,16 @@ export default function Docs() {
     "message": "Registrar essa nota",
     "image_url": "https://exemplo.com/nota-fiscal.jpg"
   }'`}</CodeBlock>
+
+            <div className="p-3 rounded-lg border bg-primary/5 mt-3">
+              <p className="text-xs font-medium text-foreground mb-1">💡 Como a IA escolhe o contexto?</p>
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
+                <li>Sem menção a empresa → <strong className="text-foreground">Pessoal</strong> (company_id = null)</li>
+                <li>Menciona nome da empresa → <strong className="text-foreground">Empresa correspondente</strong> (company_id preenchido)</li>
+                <li>A IA usa as categorias e contas bancárias <strong className="text-foreground">do contexto escolhido</strong></li>
+                <li>No n8n, não precisa enviar nenhum campo extra — basta o <code className="bg-muted px-1 rounded text-xs font-mono">phone</code> e <code className="bg-muted px-1 rounded text-xs font-mono">message</code></li>
+              </ul>
+            </div>
 
             <Separator className="my-4" />
 
