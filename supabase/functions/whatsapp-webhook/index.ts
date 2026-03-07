@@ -37,12 +37,50 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // 3. Find user by whatsapp_number
-    const { data: profile, error: profileError } = await supabase
+    // 3. Find user by whatsapp_number with flexible matching
+    // Normalize: strip everything except digits
+    const digitsOnly = phone.replace(/\D/g, "");
+
+    // Generate possible variations to search for
+    const phoneCandidates = new Set<string>();
+    phoneCandidates.add(phone); // original
+    phoneCandidates.add(digitsOnly); // just digits
+    if (digitsOnly.startsWith("55") && digitsOnly.length >= 12) {
+      // With country code: try without it
+      const withoutCountry = digitsOnly.slice(2);
+      phoneCandidates.add(withoutCountry);
+      // Try with/without the 9th digit
+      if (withoutCountry.length === 11) {
+        // Has 9th digit: remove it (DDD + 8 digits)
+        phoneCandidates.add(withoutCountry.slice(0, 2) + withoutCountry.slice(3));
+      } else if (withoutCountry.length === 10) {
+        // Missing 9th digit: add it
+        phoneCandidates.add(withoutCountry.slice(0, 2) + "9" + withoutCountry.slice(2));
+      }
+      // Also add with country code variations
+      phoneCandidates.add("+" + digitsOnly);
+      phoneCandidates.add("+55" + withoutCountry);
+    } else {
+      // Without country code
+      phoneCandidates.add("55" + digitsOnly);
+      phoneCandidates.add("+55" + digitsOnly);
+      if (digitsOnly.length === 11) {
+        phoneCandidates.add(digitsOnly.slice(0, 2) + digitsOnly.slice(3));
+        phoneCandidates.add("55" + digitsOnly.slice(0, 2) + digitsOnly.slice(3));
+      } else if (digitsOnly.length === 10) {
+        phoneCandidates.add(digitsOnly.slice(0, 2) + "9" + digitsOnly.slice(2));
+        phoneCandidates.add("55" + digitsOnly.slice(0, 2) + "9" + digitsOnly.slice(2));
+      }
+    }
+
+    // Also generate formatted versions with common patterns
+    const allCandidates = Array.from(phoneCandidates);
+
+    // Fetch all profiles and match by normalized number
+    const { data: allProfiles, error: profileError } = await supabase
       .from("profiles")
-      .select("id")
-      .eq("whatsapp_number", phone)
-      .maybeSingle();
+      .select("id, whatsapp_number")
+      .not("whatsapp_number", "is", null);
 
     if (profileError) {
       console.error("Profile lookup error:", profileError);
@@ -52,7 +90,27 @@ serve(async (req) => {
       );
     }
 
+    // Match: normalize stored numbers the same way and compare digits
+    const profile = (allProfiles || []).find((p) => {
+      if (!p.whatsapp_number) return false;
+      const storedDigits = p.whatsapp_number.replace(/\D/g, "");
+      // Direct match on any candidate
+      if (allCandidates.includes(p.whatsapp_number)) return true;
+      // Digits-only comparison
+      if (storedDigits === digitsOnly) return true;
+      // Compare last 10-11 digits (most reliable for BR numbers)
+      const incomingTail = digitsOnly.slice(-11);
+      const storedTail = storedDigits.slice(-11);
+      if (incomingTail.length >= 10 && storedTail.length >= 10 && incomingTail === storedTail) return true;
+      // Also try last 10 (without 9th digit)
+      const incomingTail10 = digitsOnly.slice(-10);
+      const storedTail10 = storedDigits.slice(-10);
+      if (incomingTail10 === storedTail10) return true;
+      return false;
+    });
+
     if (!profile) {
+      console.error("Phone not found. Incoming:", phone, "| Digits:", digitsOnly, "| Candidates:", allCandidates);
       return new Response(
         JSON.stringify({
           success: false,
