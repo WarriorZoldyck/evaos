@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +44,7 @@ export function CreditCardFormModal({
 }: CreditCardFormModalProps) {
   const [saving, setSaving] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [usedAmount, setUsedAmount] = useState(0);
   const userTypedDigits = useRef(false);
 
   const [cardName, setCardName] = useState("");
@@ -72,6 +74,25 @@ export function CreditCardFormModal({
       setCardBankId("");
     }
   }, [open, editData]);
+
+  // Fetch used amount for existing cards
+  useEffect(() => {
+    if (!open || !editData?.id) { setUsedAmount(0); return; }
+    const fetchUsed = async () => {
+      const { data } = await supabase
+        .from("transactions")
+        .select("amount, type")
+        .eq("credit_card_id", editData.id)
+        .eq("status", "Pendente");
+      if (data) {
+        const total = data.reduce((sum, t) => {
+          return sum + (t.type === "despesa" ? t.amount : -t.amount);
+        }, 0);
+        setUsedAmount(Math.max(0, total));
+      }
+    };
+    fetchUsed();
+  }, [open, editData?.id]);
 
   // Auto-flip only when user just typed the 4th digit (not on load)
   useEffect(() => {
@@ -113,6 +134,7 @@ export function CreditCardFormModal({
             cardDue={cardDue}
             cardLimit={cardLimit}
             bankAccountName={bankAccounts.find((a) => a.id === cardBankId)?.name}
+            usedAmount={usedAmount}
           />
 
           {/* Form fields based on side */}

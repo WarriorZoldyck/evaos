@@ -9,6 +9,7 @@ interface CreditCard3DProps {
   cardDue: string;
   cardLimit: string;
   bankAccountName?: string;
+  usedAmount?: number;
 }
 
 export function CreditCard3D({
@@ -20,16 +21,21 @@ export function CreditCard3D({
   cardDue,
   cardLimit,
   bankAccountName,
+  usedAmount = 0,
 }: CreditCard3DProps) {
   const formatDisplayNumber = () => {
     const d = cardDigits.padEnd(4, "•");
     return `•••• •••• •••• ${d}`;
   };
 
-  const formatCurrency = (val: string) => {
-    const num = Number(val) || 0;
+  const formatCurrency = (val: number | string) => {
+    const num = typeof val === "string" ? Number(val) || 0 : val;
     return num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   };
+
+  const limit = Number(cardLimit) || 0;
+  const available = limit - usedAmount;
+  const usagePercent = limit > 0 ? Math.min((usedAmount / limit) * 100, 100) : 0;
 
   return (
     <>
@@ -111,42 +117,78 @@ export function CreditCard3D({
               boxShadow: "0 20px 60px -15px rgba(0,0,0,0.5), 0 0 40px -10px rgba(15,52,96,0.3)",
             }}
           >
-            <div className="w-full h-10 mt-5 bg-black/70" />
+            <div className="w-full h-8 mt-4 bg-black/70" />
 
-            <div className="flex-1 px-5 py-3 flex flex-col justify-between">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                <div>
+            <div className="flex-1 px-5 py-2 flex flex-col justify-between">
+              {/* Usage bar */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
                   <span className="text-[9px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
-                    Fechamento
+                    Utilizado
                   </span>
-                  <p className="text-sm font-mono" style={{ color: "rgba(255,255,255,0.85)" }}>
+                  <span className="text-[9px] font-mono" style={{ color: "rgba(255,255,255,0.5)" }}>
+                    {usagePercent.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.1)" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${usagePercent}%`,
+                      background: usagePercent > 80
+                        ? "linear-gradient(90deg, #ef4444, #dc2626)"
+                        : usagePercent > 50
+                        ? "linear-gradient(90deg, #f59e0b, #d97706)"
+                        : "linear-gradient(90deg, #22c55e, #16a34a)",
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[10px] font-mono" style={{ color: "rgba(255,255,255,0.7)" }}>
+                    {formatCurrency(usedAmount)}
+                  </span>
+                  <span className="text-[10px] font-mono" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    de {formatCurrency(limit)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Info grid */}
+              <div className="grid grid-cols-3 gap-x-3 mt-1">
+                <div>
+                  <span className="text-[8px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    Disponível
+                  </span>
+                  <p className="text-xs font-mono font-semibold" style={{ color: available >= 0 ? "rgba(134,239,172,0.9)" : "rgba(252,165,165,0.9)" }}>
+                    {formatCurrency(available)}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[8px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    Fecha
+                  </span>
+                  <p className="text-xs font-mono" style={{ color: "rgba(255,255,255,0.85)" }}>
                     Dia {cardClosing || "—"}
                   </p>
                 </div>
                 <div>
-                  <span className="text-[9px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
-                    Vencimento
+                  <span className="text-[8px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.35)" }}>
+                    Vence
                   </span>
-                  <p className="text-sm font-mono" style={{ color: "rgba(255,255,255,0.85)" }}>
+                  <p className="text-xs font-mono" style={{ color: "rgba(255,255,255,0.85)" }}>
                     Dia {cardDue || "—"}
                   </p>
                 </div>
-                <div className="col-span-2 mt-1">
-                  <span className="text-[9px] uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.4)" }}>
-                    Limite
-                  </span>
-                  <p className="text-sm font-mono" style={{ color: "rgba(255,255,255,0.85)" }}>
-                    {formatCurrency(cardLimit)}
-                  </p>
-                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] uppercase tracking-wider truncate max-w-[180px]" style={{ color: "rgba(255,255,255,0.4)" }}>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[8px] uppercase tracking-wider truncate max-w-[180px]" style={{ color: "rgba(255,255,255,0.35)" }}>
                   {bankAccountName || "Conta vinculada"}
                 </span>
                 <div className="flex -space-x-2">
-                  <div className="w-5 h-5 rounded-full bg-red-500/60" />
-                  <div className="w-5 h-5 rounded-full bg-yellow-500/40" />
+                  <div className="w-4 h-4 rounded-full bg-red-500/60" />
+                  <div className="w-4 h-4 rounded-full bg-yellow-500/40" />
                 </div>
               </div>
             </div>
