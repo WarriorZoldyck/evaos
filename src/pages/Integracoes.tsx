@@ -1,16 +1,34 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plug, Building2, MessageCircle } from "lucide-react";
+import { Plug, MessageCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import logoAsaas from "@/assets/logo-asaas.png";
+import logoBradesco from "@/assets/logo-bradesco.png";
+import logoItau from "@/assets/logo-itau.png";
 
 const staticIntegrations = [
   {
     name: "Asaas",
     description: "Integração bancária com o Asaas para conciliação automática de cobranças, recebimentos e pagamentos.",
     status: "Em breve" as const,
-    icon: Building2,
+    logo: logoAsaas,
+    bgClass: "bg-[#2532c4]",
+  },
+  {
+    name: "Bradesco",
+    description: "Conexão com o Bradesco para importação automática de extratos e conciliação bancária.",
+    status: "Em breve" as const,
+    logo: logoBradesco,
+    bgClass: "bg-white",
+  },
+  {
+    name: "Itaú",
+    description: "Conexão com o Itaú Unibanco para importação automática de extratos e conciliação bancária.",
+    status: "Em breve" as const,
+    logo: logoItau,
+    bgClass: "bg-white",
   },
 ];
 
@@ -74,14 +92,18 @@ export default function Integracoes() {
           </CardContent>
         </Card>
 
-        {/* Static integrations */}
+        {/* Bank / service integrations */}
         {staticIntegrations.map((integration) => (
           <Card key={integration.name} className="relative overflow-hidden opacity-80">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <integration.icon className="h-5 w-5 text-primary" />
+                  <div className={`h-10 w-10 rounded-lg ${integration.bgClass} flex items-center justify-center overflow-hidden`}>
+                    <img
+                      src={integration.logo}
+                      alt={integration.name}
+                      className="h-8 w-8 object-contain"
+                    />
                   </div>
                   <CardTitle className="text-base">{integration.name}</CardTitle>
                 </div>
