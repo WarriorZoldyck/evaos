@@ -75,6 +75,25 @@ export function CreditCardFormModal({
     }
   }, [open, editData]);
 
+  // Fetch used amount for existing cards
+  useEffect(() => {
+    if (!open || !editData?.id) { setUsedAmount(0); return; }
+    const fetchUsed = async () => {
+      const { data } = await supabase
+        .from("transactions")
+        .select("amount, type")
+        .eq("credit_card_id", editData.id)
+        .eq("status", "Pendente");
+      if (data) {
+        const total = data.reduce((sum, t) => {
+          return sum + (t.type === "despesa" ? t.amount : -t.amount);
+        }, 0);
+        setUsedAmount(Math.max(0, total));
+      }
+    };
+    fetchUsed();
+  }, [open, editData?.id]);
+
   // Auto-flip only when user just typed the 4th digit (not on load)
   useEffect(() => {
     if (cardDigits.length === 4 && !isFlipped && userTypedDigits.current) {
