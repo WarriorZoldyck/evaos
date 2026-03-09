@@ -43,6 +43,7 @@ export function CreditCardFormModal({
 }: CreditCardFormModalProps) {
   const [saving, setSaving] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
+  const userTypedDigits = useRef(false);
 
   const [cardName, setCardName] = useState("");
   const [cardDigits, setCardDigits] = useState("");
@@ -54,6 +55,7 @@ export function CreditCardFormModal({
   useEffect(() => {
     if (!open) return;
     setIsFlipped(false);
+    userTypedDigits.current = false;
     if (editData) {
       setCardName(editData.name || "");
       setCardDigits(editData.last_four_digits || "");
@@ -71,9 +73,9 @@ export function CreditCardFormModal({
     }
   }, [open, editData]);
 
-  // Auto-flip when digits are complete
+  // Auto-flip only when user just typed the 4th digit (not on load)
   useEffect(() => {
-    if (cardDigits.length === 4 && !isFlipped) {
+    if (cardDigits.length === 4 && !isFlipped && userTypedDigits.current) {
       const timer = setTimeout(() => setIsFlipped(true), 400);
       return () => clearTimeout(timer);
     }
