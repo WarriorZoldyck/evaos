@@ -44,6 +44,7 @@ export function CreditCardFormModal({
 }: CreditCardFormModalProps) {
   const [saving, setSaving] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [usedAmount, setUsedAmount] = useState(0);
   const userTypedDigits = useRef(false);
 
   const [cardName, setCardName] = useState("");
