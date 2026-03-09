@@ -132,7 +132,7 @@ export function CreditCardFormModal({
                 <Input
                   maxLength={4}
                   value={cardDigits}
-                  onChange={(e) => setCardDigits(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => { userTypedDigits.current = true; setCardDigits(e.target.value.replace(/\D/g, "")); }}
                   placeholder="0000"
                   inputMode="numeric"
                 />
