@@ -311,33 +311,96 @@ IMPORTANTE:
     if (parsed.intent === "lancamento") {
       const companyId = resolveContext(parsed.context);
 
-      // Validate category exists in the chosen context
-      const contextCategories = categories.filter((c) => c.company_id === companyId);
-      const categoryExists = contextCategories.some(
-        (c) => c.name.toLowerCase() === (parsed.category || "").toLowerCase()
+      // --- Resolve category to UUID with fallback chain ---
+      const contextCategories = categories.filter((c) =>
+        companyId ? c.company_id === companyId : !c.company_id
       );
-      const validCategory = categoryExists ? parsed.category : "Outros";
+      const parsedCategoryName = (parsed.category || "").toLowerCase();
 
-      // Pick bank account from the correct context
-      const contextAccounts = accounts.filter((a) => a.company_id === companyId);
-      let bankAccountId: string | null = null;
-      if (contextAccounts.length === 1) {
-        bankAccountId = contextAccounts[0].id;
-      } else if (contextAccounts.length > 1) {
-        bankAccountId = contextAccounts[0].id; // default to first
+      // Try exact match (case-insensitive) on root categories
+      let matchedCategory = contextCategories.find(
+        (c) => !c.parent_id && c.name.toLowerCase() === parsedCategoryName
+      );
+
+      // Fallback: partial match
+      if (!matchedCategory && parsedCategoryName) {
+        matchedCategory = contextCategories.find(
+          (c) => !c.parent_id && c.name.toLowerCase().includes(parsedCategoryName)
+        );
       }
+
+      // Fallback: "Outros" category in context
+      if (!matchedCategory) {
+        matchedCategory = contextCategories.find(
+          (c) => !c.parent_id && c.name.toLowerCase() === "outros"
+        );
+      }
+
+      // Final fallback: first root category in context
+      if (!matchedCategory && contextCategories.length > 0) {
+        matchedCategory = contextCategories.find((c) => !c.parent_id) || contextCategories[0];
+      }
+
+      const categoryValue = matchedCategory?.id || "Outros";
+      const categoryLabel = matchedCategory?.name || parsed.category || "Outros";
+
+      // --- Resolve subcategory to UUID ---
+      let subcategoryValue: string | null = null;
+      let subcategoryLabel: string | null = null;
+      if (parsed.subcategory && matchedCategory) {
+        const parsedSubName = parsed.subcategory.toLowerCase();
+        const matchedSub = contextCategories.find(
+          (c) => c.parent_id === matchedCategory!.id && c.name.toLowerCase() === parsedSubName
+        );
+        if (!matchedSub) {
+          // Try partial match on subcategories
+          const partialSub = contextCategories.find(
+            (c) => c.parent_id === matchedCategory!.id && c.name.toLowerCase().includes(parsedSubName)
+          );
+          if (partialSub) {
+            subcategoryValue = partialSub.id;
+            subcategoryLabel = partialSub.name;
+          }
+        } else {
+          subcategoryValue = matchedSub.id;
+          subcategoryLabel = matchedSub.name;
+        }
+      }
+
+      // --- Account resolution: bank > wallet ---
+      const contextAccounts = accounts.filter((a) =>
+        companyId ? a.company_id === companyId : !a.company_id
+      );
+      const contextWallets = wallets.filter((w) =>
+        companyId ? w.company_id === companyId : !w.company_id
+      );
+      let bankAccountId: string | null = null;
+      let walletId: string | null = null;
+
+      if (contextAccounts.length > 0) {
+        bankAccountId = contextAccounts[0].id;
+      } else if (contextWallets.length > 0) {
+        walletId = contextWallets[0].id;
+      }
+
+      console.log("=== LANCAMENTO RESOLUTION ===");
+      console.log("Context:", parsed.context, "| companyId:", companyId);
+      console.log("AI category:", parsed.category, "→ UUID:", categoryValue, "(", categoryLabel, ")");
+      console.log("AI subcategory:", parsed.subcategory, "→ UUID:", subcategoryValue, "(", subcategoryLabel, ")");
+      console.log("Account:", bankAccountId ? `bank:${bankAccountId}` : walletId ? `wallet:${walletId}` : "none");
 
       const { error: insertError } = await supabase.from("transactions").insert({
         user_id: userId,
         description: parsed.description || "Lançamento via WhatsApp",
         amount: Math.abs(parsed.amount || 0),
         type: parsed.type === "receita" ? "receita" : "despesa",
-        category: validCategory,
-        subcategory: parsed.subcategory || null,
+        category: categoryValue,
+        subcategory: subcategoryValue,
         competence_date: parsed.date || today,
         payment_date: parsed.date || today,
         status: "Pago",
         bank_account_id: bankAccountId,
+        wallet_id: walletId,
         company_id: companyId,
       });
 
