@@ -419,6 +419,7 @@ IMPORTANTE:
       const typeLabel = parsed.type === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(parsed.amount || 0);
       const contextLabel = parsed.context || "Pessoal";
+      const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
 
       return new Response(
         JSON.stringify({
@@ -426,12 +427,12 @@ IMPORTANTE:
           intent: "lancamento",
           message:
             parsed.friendly_message ||
-            `✅ Lançamento criado!\n\n📝 ${parsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${validCategory}${parsed.subcategory ? " / " + parsed.subcategory : ""}\n🏢 ${contextLabel}\n📅 ${parsed.date || today}`,
+            `✅ Lançamento criado!\n\n📝 ${parsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 ${parsed.date || today}`,
           transaction: {
             description: parsed.description,
             amount: parsed.amount,
             type: parsed.type,
-            category: validCategory,
+            category: categoryLabel,
             context: contextLabel,
             date: parsed.date || today,
           },
