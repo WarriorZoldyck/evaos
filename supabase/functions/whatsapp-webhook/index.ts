@@ -155,10 +155,10 @@ serve(async (req) => {
       const parents = filtered.filter((c) => !c.parent_id);
       if (parents.length === 0) return "";
       const lines = parents.map((p) => {
-        const subs = filtered.filter((c) => c.parent_id === p.id).map((c) => c.name);
+        const subs = filtered.filter((c) => c.parent_id === p.id).map((c) => `${c.name}[${c.id}]`);
         return subs.length > 0
-          ? `  ${p.name} (${p.type || "ambos"}) > ${subs.join(", ")}`
-          : `  ${p.name} (${p.type || "ambos"})`;
+          ? `  ${p.name}[${p.id}] (${p.type || "ambos"}) > ${subs.join(", ")}`
+          : `  ${p.name}[${p.id}] (${p.type || "ambos"})`;
       });
       return `[${label}]\n${lines.join("\n")}`;
     };
