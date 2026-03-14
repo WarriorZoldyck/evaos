@@ -38,30 +38,22 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // 3. Find user by whatsapp_number with flexible matching
-    // Normalize: strip everything except digits
     const digitsOnly = phone.replace(/\D/g, "");
 
-    // Generate possible variations to search for
     const phoneCandidates = new Set<string>();
-    phoneCandidates.add(phone); // original
-    phoneCandidates.add(digitsOnly); // just digits
+    phoneCandidates.add(phone);
+    phoneCandidates.add(digitsOnly);
     if (digitsOnly.startsWith("55") && digitsOnly.length >= 12) {
-      // With country code: try without it
       const withoutCountry = digitsOnly.slice(2);
       phoneCandidates.add(withoutCountry);
-      // Try with/without the 9th digit
       if (withoutCountry.length === 11) {
-        // Has 9th digit: remove it (DDD + 8 digits)
         phoneCandidates.add(withoutCountry.slice(0, 2) + withoutCountry.slice(3));
       } else if (withoutCountry.length === 10) {
-        // Missing 9th digit: add it
         phoneCandidates.add(withoutCountry.slice(0, 2) + "9" + withoutCountry.slice(2));
       }
-      // Also add with country code variations
       phoneCandidates.add("+" + digitsOnly);
       phoneCandidates.add("+55" + withoutCountry);
     } else {
-      // Without country code
       phoneCandidates.add("55" + digitsOnly);
       phoneCandidates.add("+55" + digitsOnly);
       if (digitsOnly.length === 11) {
@@ -73,14 +65,11 @@ serve(async (req) => {
       }
     }
 
-    // Also generate formatted versions with common patterns
     const allCandidates = Array.from(phoneCandidates);
 
-    // Fetch all profiles and match by normalized number
     console.log("=== WHATSAPP WEBHOOK DEBUG ===");
     console.log("Incoming phone:", phone);
     console.log("Digits only:", digitsOnly);
-    console.log("Candidates:", JSON.stringify(allCandidates));
 
     const { data: allProfiles, error: profileError } = await supabase
       .from("profiles")
@@ -95,21 +84,14 @@ serve(async (req) => {
       );
     }
 
-    console.log("Profiles with WhatsApp:", JSON.stringify((allProfiles || []).map(p => ({ id: p.id.slice(0, 8), whatsapp: p.whatsapp_number }))));
-
-    // Match: normalize stored numbers the same way and compare digits
     const profile = (allProfiles || []).find((p) => {
       if (!p.whatsapp_number) return false;
       const storedDigits = p.whatsapp_number.replace(/\D/g, "");
-      // Direct match on any candidate
       if (allCandidates.includes(p.whatsapp_number)) return true;
-      // Digits-only comparison
       if (storedDigits === digitsOnly) return true;
-      // Compare last 10-11 digits (most reliable for BR numbers)
       const incomingTail = digitsOnly.slice(-11);
       const storedTail = storedDigits.slice(-11);
       if (incomingTail.length >= 10 && storedTail.length >= 10 && incomingTail === storedTail) return true;
-      // Also try last 10 (without 9th digit)
       const incomingTail10 = digitsOnly.slice(-10);
       const storedTail10 = storedDigits.slice(-10);
       if (incomingTail10 === storedTail10) return true;
@@ -155,18 +137,35 @@ serve(async (req) => {
       const parents = filtered.filter((c) => !c.parent_id);
       if (parents.length === 0) return "";
       const lines = parents.map((p) => {
-        const subs = filtered.filter((c) => c.parent_id === p.id).map((c) => `${c.name}[${c.id}]`);
+        const subs = filtered
+          .filter((c) => c.parent_id === p.id)
+          .map((c) => {
+            // 3rd level
+            const level3 = filtered.filter((l3) => l3.parent_id === c.id).map((l3) => `${l3.name}[${l3.id}]`);
+            return level3.length > 0
+              ? `${c.name}[${c.id}] > ${level3.join(", ")}`
+              : `${c.name}[${c.id}]`;
+          });
+        const typeTag = p.type === "receita" ? "RECEITA" : p.type === "despesa" ? "DESPESA" : "AMBOS";
         return subs.length > 0
-          ? `  ${p.name}[${p.id}] (${p.type || "ambos"}) > ${subs.join(", ")}`
-          : `  ${p.name}[${p.id}] (${p.type || "ambos"})`;
+          ? `  ${p.name}[${p.id}] (${typeTag}) > ${subs.join("; ")}`
+          : `  ${p.name}[${p.id}] (${typeTag})`;
       });
       return `[${label}]\n${lines.join("\n")}`;
     };
 
     const buildAccountList = (companyId: string | null, label: string) => {
-      const filtered = accounts.filter((a) => a.company_id === companyId);
-      if (filtered.length === 0) return "";
-      return `[${label}] ${filtered.map((a) => `${a.name} (${a.type})`).join(", ")}`;
+      const ctxAccounts = accounts.filter((a) => a.company_id === companyId);
+      const ctxWallets = wallets.filter((w) => w.company_id === companyId);
+      const parts: string[] = [];
+      if (ctxAccounts.length > 0) {
+        parts.push("Contas: " + ctxAccounts.map((a) => `${a.name}[${a.id}]`).join(", "));
+      }
+      if (ctxWallets.length > 0) {
+        parts.push("Carteiras: " + ctxWallets.map((w) => `${w.name}[${w.id}]`).join(", "));
+      }
+      if (parts.length === 0) return "";
+      return `[${label}] ${parts.join(" | ")}`;
     };
 
     const categoryListByContext = [
@@ -178,8 +177,6 @@ serve(async (req) => {
       buildAccountList(null, "Pessoal"),
       ...companies.map((c) => buildAccountList(c.id, c.name)),
     ].filter(Boolean).join("\n");
-
-    const walletList = wallets.map((w) => w.name).join(", ");
 
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -194,31 +191,45 @@ serve(async (req) => {
 
 REGRAS:
 1. Classifique como: "lancamento", "consulta" ou "conversa"
-2. Para lançamentos: extraia descrição, valor, data, tipo (receita/despesa), categoria, subcategoria e contexto
-3. Para consultas: identifique o tipo (saldo, resumo_mes, gastos_mes, receitas_mes, pendentes, gastos_categoria) e contexto
+2. Para lançamentos: extraia descrição, valor, data, tipo (receita/despesa), category_id (UUID), subcategory_id (UUID ou null) e context
+3. Para consultas: identifique o tipo e contexto
 4. Responda SEMPRE em português brasileiro
 5. Retorne APENAS um JSON válido, sem texto adicional
 
-CONTEXTOS DISPONÍVEIS:
-${contextNames.join(", ")}
+CONTEXTOS DISPONÍVEIS (use EXATAMENTE um destes valores no campo "context"):
+${contextNames.map((n) => `  - "${n}"`).join("\n")}
 - "Pessoal" é para finanças pessoais do usuário
 ${companies.map((c) => `- "${c.name}" (CNPJ: ${c.cnpj}) é uma empresa do usuário`).join("\n")}
-- Se o usuário não especificar o contexto, use "Pessoal" como padrão
+- Se o usuário NÃO especificar o contexto, use "Pessoal"
 - Se a mensagem mencionar uma empresa ou CNPJ, use o contexto correspondente
+- NÃO invente nomes de contexto. Use SOMENTE os listados acima.
 
-CATEGORIAS POR CONTEXTO:
+CATEGORIAS POR CONTEXTO (formato: Nome[UUID] (TIPO)):
 ${categoryListByContext || "Nenhuma categoria cadastrada"}
 
-CONTAS BANCÁRIAS POR CONTEXTO:
-${accountListByContext || "Nenhuma"}
+REGRA DE TIPO: 
+- Se type="receita", escolha APENAS categorias marcadas como RECEITA ou AMBOS
+- Se type="despesa", escolha APENAS categorias marcadas como DESPESA ou AMBOS
+- NUNCA escolha uma categoria de RECEITA para uma despesa, ou vice-versa
 
-CARTEIRAS: ${walletList || "Nenhuma"}
+CONTAS E CARTEIRAS POR CONTEXTO (formato: Nome[UUID]):
+${accountListByContext || "Nenhuma conta cadastrada"}
 
 DATA ATUAL: ${today}
 
 FORMATO DE RESPOSTA (JSON):
 Para lançamento:
-{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category":"...","subcategory":"...","date":"YYYY-MM-DD","context":"Pessoal|Nome da Empresa","friendly_message":"..."}
+{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista","subcategory_id":"UUID-ou-null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-null","date":"YYYY-MM-DD","friendly_message":"..."}
+
+IMPORTANTE SOBRE category_id e subcategory_id:
+- Retorne o UUID que está entre colchetes [UUID] na lista de categorias acima
+- NÃO retorne o nome da categoria, retorne o UUID
+- Se nenhuma categoria se encaixar, retorne null em category_id
+- subcategory_id é o UUID de uma subcategoria (filho da categoria pai)
+
+IMPORTANTE SOBRE account_id:
+- Retorne o UUID que está entre colchetes [UUID] na lista de contas/carteiras
+- Se não souber qual conta, retorne null (será usada a primeira disponível no contexto)
 
 Para consulta:
 {"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
@@ -229,7 +240,6 @@ Para conversa:
 IMPORTANTE:
 - O valor (amount) deve ser sempre positivo
 - A data padrão é hoje: ${today}
-- Escolha a categoria mais próxima das disponíveis DENTRO DO CONTEXTO escolhido. Se nenhuma se encaixar, use "Outros"
 - Para lançamentos sem tipo explícito, assuma "despesa"
 - Sempre retorne o campo "context"`;
 
@@ -298,8 +308,8 @@ IMPORTANTE:
       );
     }
 
-    // --- Resolve context to company_id ---
-    const resolveContext = (contextName: string | undefined) => {
+    // --- Resolve context to company_id (strict) ---
+    const resolveContext = (contextName: string | undefined): string | null => {
       if (!contextName || contextName === "Pessoal") return null;
       const company = companies.find(
         (c) => c.name.toLowerCase() === contextName.toLowerCase()
@@ -307,67 +317,130 @@ IMPORTANTE:
       return company?.id || null;
     };
 
+    // --- Validate context exists ---
+    const validateContext = (contextName: string | undefined): boolean => {
+      if (!contextName || contextName === "Pessoal") return true;
+      return companies.some((c) => c.name.toLowerCase() === contextName.toLowerCase());
+    };
+
     // 7. Execute action based on intent
     if (parsed.intent === "lancamento") {
+      // Validate context strictly
+      if (!validateContext(parsed.context)) {
+        console.warn("AI returned invalid context:", parsed.context, "| Available:", contextNames);
+        // Fall back to Pessoal but log it
+        parsed.context = "Pessoal";
+      }
+
       const companyId = resolveContext(parsed.context);
 
-      // --- Resolve category to UUID with fallback chain ---
+      // --- Resolve category_id with UUID-first approach ---
       const contextCategories = categories.filter((c) =>
         companyId ? c.company_id === companyId : !c.company_id
       );
-      const parsedCategoryName = (parsed.category || "").toLowerCase();
+      const txType = parsed.type === "receita" ? "receita" : "despesa";
 
-      // Try exact match (case-insensitive) on root categories
-      let matchedCategory = contextCategories.find(
-        (c) => !c.parent_id && c.name.toLowerCase() === parsedCategoryName
-      );
+      // Helper: check if category type matches transaction type
+      const typeMatches = (cat: any) => {
+        return !cat.type || cat.type === "ambos" || cat.type === txType;
+      };
 
-      // Fallback: partial match
-      if (!matchedCategory && parsedCategoryName) {
+      let matchedCategory: any = null;
+      let subcategoryValue: string | null = null;
+      let subcategoryLabel: string | null = null;
+
+      // Step 1: Try direct UUID match from AI response
+      if (parsed.category_id) {
         matchedCategory = contextCategories.find(
-          (c) => !c.parent_id && c.name.toLowerCase().includes(parsedCategoryName)
+          (c) => c.id === parsed.category_id && !c.parent_id
         );
+        // If AI returned a subcategory UUID as category_id, find its parent
+        if (!matchedCategory) {
+          const asSub = contextCategories.find((c) => c.id === parsed.category_id && c.parent_id);
+          if (asSub) {
+            matchedCategory = contextCategories.find((c) => c.id === asSub.parent_id);
+            subcategoryValue = asSub.id;
+            subcategoryLabel = asSub.name;
+          }
+        }
       }
 
-      // Fallback: "Outros" category in context
+      // Step 2: Fallback - AI might have returned a name in category_id field
+      if (!matchedCategory && parsed.category_id) {
+        const nameGuess = parsed.category_id.toLowerCase();
+        matchedCategory = contextCategories.find(
+          (c) => !c.parent_id && c.name.toLowerCase() === nameGuess && typeMatches(c)
+        );
+        if (!matchedCategory) {
+          matchedCategory = contextCategories.find(
+            (c) => !c.parent_id && c.name.toLowerCase().includes(nameGuess) && typeMatches(c)
+          );
+        }
+      }
+
+      // Step 3: Legacy fallback - AI returned "category" as name (old format)
+      if (!matchedCategory && parsed.category) {
+        const parsedCategoryName = parsed.category.toLowerCase();
+        matchedCategory = contextCategories.find(
+          (c) => !c.parent_id && c.name.toLowerCase() === parsedCategoryName && typeMatches(c)
+        );
+        if (!matchedCategory) {
+          matchedCategory = contextCategories.find(
+            (c) => !c.parent_id && c.name.toLowerCase().includes(parsedCategoryName) && typeMatches(c)
+          );
+        }
+      }
+
+      // Step 4: "Outros" fallback (matching type)
       if (!matchedCategory) {
         matchedCategory = contextCategories.find(
-          (c) => !c.parent_id && c.name.toLowerCase() === "outros"
+          (c) => !c.parent_id && c.name.toLowerCase() === "outros" && typeMatches(c)
         );
       }
 
-      // Final fallback: first root category in context
+      // Step 5: First root category matching type
+      if (!matchedCategory) {
+        matchedCategory = contextCategories.find((c) => !c.parent_id && typeMatches(c));
+      }
+
+      // Step 6: Any root category (last resort)
       if (!matchedCategory && contextCategories.length > 0) {
         matchedCategory = contextCategories.find((c) => !c.parent_id) || contextCategories[0];
       }
 
-      const categoryValue = matchedCategory?.id || "Outros";
-      const categoryLabel = matchedCategory?.name || parsed.category || "Outros";
+      // Warn if type didn't match
+      if (matchedCategory && !typeMatches(matchedCategory)) {
+        console.warn("Category type mismatch:", matchedCategory.name, "(", matchedCategory.type, ") vs transaction type:", txType);
+      }
 
-      // --- Resolve subcategory to UUID ---
-      let subcategoryValue: string | null = null;
-      let subcategoryLabel: string | null = null;
-      if (parsed.subcategory && matchedCategory) {
-        const parsedSubName = parsed.subcategory.toLowerCase();
-        const matchedSub = contextCategories.find(
-          (c) => c.parent_id === matchedCategory!.id && c.name.toLowerCase() === parsedSubName
+      const categoryValue = matchedCategory?.id || null;
+      const categoryLabel = matchedCategory?.name || "Sem categoria";
+
+      // --- Resolve subcategory_id ---
+      if (!subcategoryValue && parsed.subcategory_id && matchedCategory) {
+        const subMatch = contextCategories.find(
+          (c) => c.id === parsed.subcategory_id && c.parent_id === matchedCategory!.id
         );
-        if (!matchedSub) {
-          // Try partial match on subcategories
-          const partialSub = contextCategories.find(
-            (c) => c.parent_id === matchedCategory!.id && c.name.toLowerCase().includes(parsedSubName)
-          );
-          if (partialSub) {
-            subcategoryValue = partialSub.id;
-            subcategoryLabel = partialSub.name;
-          }
-        } else {
-          subcategoryValue = matchedSub.id;
-          subcategoryLabel = matchedSub.name;
+        if (subMatch) {
+          subcategoryValue = subMatch.id;
+          subcategoryLabel = subMatch.name;
+        }
+      }
+      // Legacy: AI returned subcategory as name
+      if (!subcategoryValue && parsed.subcategory && matchedCategory) {
+        const parsedSubName = parsed.subcategory.toLowerCase();
+        const subMatch = contextCategories.find(
+          (c) => c.parent_id === matchedCategory!.id && c.name.toLowerCase() === parsedSubName
+        ) || contextCategories.find(
+          (c) => c.parent_id === matchedCategory!.id && c.name.toLowerCase().includes(parsedSubName)
+        );
+        if (subMatch) {
+          subcategoryValue = subMatch.id;
+          subcategoryLabel = subMatch.name;
         }
       }
 
-      // --- Account resolution: bank > wallet ---
+      // --- Account resolution: try AI suggestion first, then first available ---
       const contextAccounts = accounts.filter((a) =>
         companyId ? a.company_id === companyId : !a.company_id
       );
@@ -377,23 +450,71 @@ IMPORTANTE:
       let bankAccountId: string | null = null;
       let walletId: string | null = null;
 
-      if (contextAccounts.length > 0) {
-        bankAccountId = contextAccounts[0].id;
-      } else if (contextWallets.length > 0) {
-        walletId = contextWallets[0].id;
+      // Try AI-suggested account_id
+      if (parsed.account_id) {
+        const accMatch = contextAccounts.find((a) => a.id === parsed.account_id);
+        if (accMatch) {
+          bankAccountId = accMatch.id;
+        } else {
+          const walMatch = contextWallets.find((w) => w.id === parsed.account_id);
+          if (walMatch) {
+            walletId = walMatch.id;
+          }
+        }
+      }
+
+      // Fallback: first available bank account, then wallet
+      if (!bankAccountId && !walletId) {
+        if (contextAccounts.length > 0) {
+          bankAccountId = contextAccounts[0].id;
+        } else if (contextWallets.length > 0) {
+          walletId = contextWallets[0].id;
+        }
+      }
+
+      // --- BLOCK if no account/wallet AND no category ---
+      const contextLabel = parsed.context || "Pessoal";
+
+      if (!bankAccountId && !walletId) {
+        console.error("BLOCKED: No account/wallet for context:", contextLabel);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            intent: "lancamento",
+            message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária ou carteira cadastrada no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
+            transaction: null,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!categoryValue) {
+        console.error("BLOCKED: No category resolved for context:", contextLabel, "| type:", txType);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            intent: "lancamento",
+            message: `❌ Não consegui criar o lançamento porque não há categorias de ${txType} cadastradas no contexto "${contextLabel}". Cadastre categorias antes de lançar.`,
+            transaction: null,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       console.log("=== LANCAMENTO RESOLUTION ===");
       console.log("Context:", parsed.context, "| companyId:", companyId);
-      console.log("AI category:", parsed.category, "→ UUID:", categoryValue, "(", categoryLabel, ")");
-      console.log("AI subcategory:", parsed.subcategory, "→ UUID:", subcategoryValue, "(", subcategoryLabel, ")");
-      console.log("Account:", bankAccountId ? `bank:${bankAccountId}` : walletId ? `wallet:${walletId}` : "none");
+      console.log("AI category_id:", parsed.category_id, "| AI category (legacy):", parsed.category);
+      console.log("Resolved → UUID:", categoryValue, "(", categoryLabel, ")");
+      console.log("AI subcategory_id:", parsed.subcategory_id, "→ UUID:", subcategoryValue, "(", subcategoryLabel, ")");
+      console.log("AI account_id:", parsed.account_id);
+      console.log("Resolved account:", bankAccountId ? `bank:${bankAccountId}` : `wallet:${walletId}`);
+      console.log("Transaction type:", txType);
 
       const { error: insertError } = await supabase.from("transactions").insert({
         user_id: userId,
         description: parsed.description || "Lançamento via WhatsApp",
         amount: Math.abs(parsed.amount || 0),
-        type: parsed.type === "receita" ? "receita" : "despesa",
+        type: txType,
         category: categoryValue,
         subcategory: subcategoryValue,
         competence_date: parsed.date || today,
@@ -416,9 +537,8 @@ IMPORTANTE:
         );
       }
 
-      const typeLabel = parsed.type === "receita" ? "Receita" : "Despesa";
+      const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(parsed.amount || 0);
-      const contextLabel = parsed.context || "Pessoal";
       const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
 
       return new Response(
@@ -431,7 +551,7 @@ IMPORTANTE:
           transaction: {
             description: parsed.description,
             amount: parsed.amount,
-            type: parsed.type,
+            type: txType,
             category: categoryLabel,
             context: contextLabel,
             date: parsed.date || today,
@@ -445,14 +565,12 @@ IMPORTANTE:
       const companyId = resolveContext(parsed.context);
       let responseMessage = "";
 
-      // Helper to add company_id filter to a query
       const addContextFilter = (query: any) => {
         if (companyId) {
           return query.eq("company_id", companyId);
         } else if (parsed.context === "Pessoal") {
           return query.is("company_id", null);
         }
-        // No context specified = consolidated (no filter)
         return query;
       };
 
@@ -569,10 +687,16 @@ IMPORTANTE:
               }
             });
 
+            // Resolve category UUIDs to names for display
+            const resolveCatName = (catIdOrName: string): string => {
+              const found = categories.find((c) => c.id === catIdOrName);
+              return found ? found.name : catIdOrName;
+            };
+
             const top3 = Object.entries(catTotals)
               .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
-              .map(([cat, val]) => `  • ${cat}: ${fmt(val)}`)
+              .map(([cat, val]) => `  • ${resolveCatName(cat)}: ${fmt(val)}`)
               .join("\n");
 
             const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
@@ -606,21 +730,30 @@ IMPORTANTE:
           case "gastos_categoria": {
             const startOfMonth = today.substring(0, 7) + "-01";
             const categoryFilter = parsed.category_filter || "";
+            // Try to resolve filter as category name to UUID for more accurate filtering
+            const filterCat = categories.find(
+              (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
+            );
             let q = supabase
               .from("transactions")
               .select("amount, description")
               .eq("user_id", userId)
               .eq("type", "despesa")
               .eq("status", "Pago")
-              .ilike("category", `%${categoryFilter}%`)
               .gte("payment_date", startOfMonth)
               .lte("payment_date", today);
+            
+            if (filterCat) {
+              q = q.eq("category", filterCat.id);
+            } else {
+              q = q.ilike("category", `%${categoryFilter}%`);
+            }
             q = addContextFilter(q);
             const { data: catExpenses } = await q;
 
             const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
             const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
-            responseMessage = `📊 Gastos com "${categoryFilter}" este mês${ctxLabel}: ${fmt(total)}`;
+            responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" este mês${ctxLabel}: ${fmt(total)}`;
             break;
           }
 
