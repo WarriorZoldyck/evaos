@@ -1011,6 +1011,50 @@ export type Database = {
           },
         ]
       }
+      whatsapp_pending_actions: {
+        Row: {
+          action_type: string
+          category_type: string
+          context_company_id: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          payload: Json
+          suggested_category_name: string
+          user_id: string
+        }
+        Insert: {
+          action_type?: string
+          category_type?: string
+          context_company_id?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          payload?: Json
+          suggested_category_name: string
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          category_type?: string
+          context_company_id?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          payload?: Json
+          suggested_category_name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_pending_actions_context_company_id_fkey"
+            columns: ["context_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
