@@ -7,6 +7,10 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
 
+// Confirmation/cancellation patterns
+const CONFIRM_PATTERNS = /^(sim|s|pode|pode criar|cria|ok|pode sim|sim pode|confirma|confirmar|yes|y|bora|manda|vai|faz|positivo|com certeza|claro)$/i;
+const CANCEL_PATTERNS = /^(não|nao|n|cancela|cancelar|cancel|no|deixa|esquece|nope|negativo|não precisa|nao precisa)$/i;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -114,6 +118,174 @@ serve(async (req) => {
 
     const userId = profile.id;
 
+    // ============================================================
+    // CHECK FOR PENDING ACTIONS BEFORE ANYTHING ELSE
+    // ============================================================
+    if (message) {
+      const trimmedMsg = message.trim();
+
+      // Clean up expired pending actions first
+      await supabase
+        .from("whatsapp_pending_actions")
+        .delete()
+        .eq("user_id", userId)
+        .lt("expires_at", new Date().toISOString());
+
+      // Check for active pending action
+      const { data: pendingActions } = await supabase
+        .from("whatsapp_pending_actions")
+        .select("*")
+        .eq("user_id", userId)
+        .gte("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const pendingAction = pendingActions?.[0];
+
+      if (pendingAction) {
+        // User is responding to a pending action
+        if (CONFIRM_PATTERNS.test(trimmedMsg)) {
+          console.log("=== PENDING ACTION: CONFIRMED ===");
+          console.log("Creating category:", pendingAction.suggested_category_name);
+
+          // Create the category
+          const { data: newCategory, error: catError } = await supabase
+            .from("categories")
+            .insert({
+              user_id: userId,
+              name: pendingAction.suggested_category_name,
+              type: pendingAction.category_type,
+              company_id: pendingAction.context_company_id,
+            })
+            .select("id, name")
+            .single();
+
+          if (catError) {
+            console.error("Failed to create category:", catError);
+            // Clean up pending action
+            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+            return new Response(
+              JSON.stringify({
+                success: false,
+                intent: "lancamento",
+                message: `❌ Não consegui criar a categoria "${pendingAction.suggested_category_name}". Tente novamente.`,
+                transaction: null,
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          console.log("Category created:", newCategory.id, newCategory.name);
+
+          // Now create the transaction using the stored payload
+          const payload = pendingAction.payload as any;
+          const txType = payload.type === "receita" ? "receita" : "despesa";
+
+          // Resolve account from payload
+          const [accountsRes, walletsRes] = await Promise.all([
+            supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
+            supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
+          ]);
+          const accounts = accountsRes.data || [];
+          const walletsList = walletsRes.data || [];
+          const companyId = pendingAction.context_company_id;
+
+          const contextAccounts = accounts.filter((a) =>
+            companyId ? a.company_id === companyId : !a.company_id
+          );
+          const contextWallets = walletsList.filter((w) =>
+            companyId ? w.company_id === companyId : !w.company_id
+          );
+
+          let bankAccountId: string | null = null;
+          let walletId: string | null = null;
+
+          if (payload.account_id) {
+            const accMatch = contextAccounts.find((a) => a.id === payload.account_id);
+            if (accMatch) bankAccountId = accMatch.id;
+            else {
+              const walMatch = contextWallets.find((w) => w.id === payload.account_id);
+              if (walMatch) walletId = walMatch.id;
+            }
+          }
+          if (!bankAccountId && !walletId) {
+            if (contextAccounts.length > 0) bankAccountId = contextAccounts[0].id;
+            else if (contextWallets.length > 0) walletId = contextWallets[0].id;
+          }
+
+          const today = new Date().toISOString().split("T")[0];
+
+          const { error: insertError } = await supabase.from("transactions").insert({
+            user_id: userId,
+            description: payload.description || "Lançamento via WhatsApp",
+            amount: Math.abs(payload.amount || 0),
+            type: txType,
+            category: newCategory.id,
+            subcategory: null,
+            competence_date: payload.date || today,
+            payment_date: payload.date || today,
+            status: "Pago",
+            bank_account_id: bankAccountId,
+            wallet_id: walletId,
+            company_id: companyId,
+          });
+
+          // Clean up pending action
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (insertError) {
+            console.error("Transaction insert error after category creation:", insertError);
+            return new Response(
+              JSON.stringify({
+                success: false,
+                intent: "lancamento",
+                message: `✅ Categoria "${newCategory.name}" criada, mas houve um erro ao criar o lançamento. Tente enviar novamente.`,
+                transaction: null,
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          const typeLabel = txType === "receita" ? "Receita" : "Despesa";
+          const contextLabel = payload.context || "Pessoal";
+          return new Response(
+            JSON.stringify({
+              success: true,
+              intent: "lancamento",
+              message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || today}`,
+              transaction: {
+                description: payload.description,
+                amount: payload.amount,
+                type: txType,
+                category: newCategory.name,
+                context: contextLabel,
+                date: payload.date || today,
+              },
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (CANCEL_PATTERNS.test(trimmedMsg)) {
+          console.log("=== PENDING ACTION: CANCELLED ===");
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return new Response(
+            JSON.stringify({
+              success: true,
+              intent: "conversa",
+              message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊",
+              transaction: null,
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Message doesn't match confirm/cancel — clear pending and process normally
+        console.log("=== PENDING ACTION: IGNORED (new message) ===");
+        await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+      }
+    }
+
     // 4. Fetch user context (categories, accounts, wallets, companies)
     const [categoriesRes, accountsRes, walletsRes, companiesRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
@@ -212,6 +384,12 @@ REGRA DE TIPO:
 - Se type="despesa", escolha APENAS categorias marcadas como DESPESA ou AMBOS
 - NUNCA escolha uma categoria de RECEITA para uma despesa, ou vice-versa
 
+REGRA CRÍTICA DE CATEGORIA:
+- Se NENHUMA categoria da lista acima se encaixar na descrição do lançamento, retorne category_id como null e preencha o campo "suggested_category_name" com o nome que faria sentido.
+- NÃO invente UUIDs que não existam na lista.
+- NÃO escolha uma categoria aleatória só para preencher. Se não faz sentido, retorne null.
+- Exemplos: se o usuário diz "paguei a academia" e não existe categoria "Academia" ou "Saúde", retorne category_id: null e suggested_category_name: "Academia" ou "Saúde".
+
 CONTAS E CARTEIRAS POR CONTEXTO (formato: Nome[UUID]):
 ${accountListByContext || "Nenhuma conta cadastrada"}
 
@@ -219,12 +397,12 @@ DATA ATUAL: ${today}
 
 FORMATO DE RESPOSTA (JSON):
 Para lançamento:
-{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista","subcategory_id":"UUID-ou-null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-null","date":"YYYY-MM-DD","friendly_message":"..."}
+{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-null","date":"YYYY-MM-DD","friendly_message":"..."}
 
 IMPORTANTE SOBRE category_id e subcategory_id:
 - Retorne o UUID que está entre colchetes [UUID] na lista de categorias acima
 - NÃO retorne o nome da categoria, retorne o UUID
-- Se nenhuma categoria se encaixar, retorne null em category_id
+- Se nenhuma categoria se encaixar, retorne null em category_id e preencha suggested_category_name
 - subcategory_id é o UUID de uma subcategoria (filho da categoria pai)
 
 IMPORTANTE SOBRE account_id:
@@ -328,7 +506,6 @@ IMPORTANTE:
       // Validate context strictly
       if (!validateContext(parsed.context)) {
         console.warn("AI returned invalid context:", parsed.context, "| Available:", contextNames);
-        // Fall back to Pessoal but log it
         parsed.context = "Pessoal";
       }
 
@@ -391,21 +568,49 @@ IMPORTANTE:
         }
       }
 
-      // Step 4: "Outros" fallback (matching type)
+      // ============================================================
+      // NO MORE FALLBACKS — if no match, ask user to confirm creation
+      // ============================================================
       if (!matchedCategory) {
-        matchedCategory = contextCategories.find(
-          (c) => !c.parent_id && c.name.toLowerCase() === "outros" && typeMatches(c)
+        const suggestedName = parsed.suggested_category_name || parsed.description || "Nova Categoria";
+        const contextLabel = parsed.context || "Pessoal";
+
+        console.log("=== NO CATEGORY MATCH — ASKING FOR CONFIRMATION ===");
+        console.log("Suggested name:", suggestedName, "| Context:", contextLabel, "| Type:", txType);
+
+        // Save pending action
+        const { error: pendingError } = await supabase
+          .from("whatsapp_pending_actions")
+          .insert({
+            user_id: userId,
+            action_type: "create_category",
+            payload: {
+              description: parsed.description,
+              amount: parsed.amount,
+              type: txType,
+              context: parsed.context,
+              account_id: parsed.account_id,
+              date: parsed.date || today,
+            },
+            suggested_category_name: suggestedName,
+            category_type: txType === "receita" ? "receita" : "despesa",
+            context_company_id: companyId,
+          });
+
+        if (pendingError) {
+          console.error("Failed to save pending action:", pendingError);
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            intent: "lancamento",
+            message: `🤔 Não encontrei a categoria "${suggestedName}" no contexto "${contextLabel}".\n\nQuer que eu crie essa categoria e registre o lançamento?\n\nResponda *sim* para confirmar ou *não* para cancelar.`,
+            transaction: null,
+            pending_confirmation: true,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
-      }
-
-      // Step 5: First root category matching type
-      if (!matchedCategory) {
-        matchedCategory = contextCategories.find((c) => !c.parent_id && typeMatches(c));
-      }
-
-      // Step 6: Any root category (last resort)
-      if (!matchedCategory && contextCategories.length > 0) {
-        matchedCategory = contextCategories.find((c) => !c.parent_id) || contextCategories[0];
       }
 
       // Warn if type didn't match
@@ -472,7 +677,7 @@ IMPORTANTE:
         }
       }
 
-      // --- BLOCK if no account/wallet AND no category ---
+      // --- BLOCK if no account/wallet ---
       const contextLabel = parsed.context || "Pessoal";
 
       if (!bankAccountId && !walletId) {
