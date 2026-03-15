@@ -286,18 +286,24 @@ serve(async (req) => {
       }
     }
 
-    // 4. Fetch user context (categories, accounts, wallets, companies)
-    const [categoriesRes, accountsRes, walletsRes, companiesRes] = await Promise.all([
+    // 4. Fetch user context (categories, accounts, wallets, companies, credit cards, contacts)
+    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
       supabase.from("companies").select("id, name, cnpj").eq("user_id", userId),
+      supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
+      supabase.from("suppliers").select("id, name").eq("user_id", userId),
+      supabase.from("clients").select("id, name").eq("user_id", userId),
     ]);
 
     const categories = categoriesRes.data || [];
     const accounts = accountsRes.data || [];
     const wallets = walletsRes.data || [];
     const companies = companiesRes.data || [];
+    const creditCards = creditCardsRes.data || [];
+    const suppliersList = suppliersRes.data || [];
+    const clientsList = clientsRes.data || [];
 
     const today = new Date().toISOString().split("T")[0];
 
