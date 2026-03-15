@@ -335,6 +335,7 @@ serve(async (req) => {
     const buildAccountList = (companyId: string | null, label: string) => {
       const ctxAccounts = accounts.filter((a) => a.company_id === companyId);
       const ctxWallets = wallets.filter((w) => w.company_id === companyId);
+      const ctxCards = creditCards.filter((c) => c.company_id === companyId);
       const parts: string[] = [];
       if (ctxAccounts.length > 0) {
         parts.push("Contas: " + ctxAccounts.map((a) => `${a.name}[${a.id}]`).join(", "));
@@ -342,8 +343,22 @@ serve(async (req) => {
       if (ctxWallets.length > 0) {
         parts.push("Carteiras: " + ctxWallets.map((w) => `${w.name}[${w.id}]`).join(", "));
       }
+      if (ctxCards.length > 0) {
+        parts.push("Cartões de Crédito: " + ctxCards.map((c) => `${c.name}${c.last_four_digits ? ` Final ${c.last_four_digits}` : ""}[${c.id}]`).join(", "));
+      }
       if (parts.length === 0) return "";
       return `[${label}] ${parts.join(" | ")}`;
+    };
+
+    const buildContactList = () => {
+      const parts: string[] = [];
+      if (suppliersList.length > 0) {
+        parts.push("FORNECEDORES: " + suppliersList.map((s) => `${s.name}[${s.id}]`).join(", "));
+      }
+      if (clientsList.length > 0) {
+        parts.push("CLIENTES: " + clientsList.map((c) => `${c.name}[${c.id}]`).join(", "));
+      }
+      return parts.join("\n");
     };
 
     const categoryListByContext = [
@@ -355,6 +370,8 @@ serve(async (req) => {
       buildAccountList(null, "Pessoal"),
       ...companies.map((c) => buildAccountList(c.id, c.name)),
     ].filter(Boolean).join("\n");
+
+    const contactList = buildContactList();
 
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
