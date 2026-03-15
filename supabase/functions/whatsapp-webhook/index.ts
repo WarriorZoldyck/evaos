@@ -902,14 +902,19 @@ IMPORTANTE:
           intent: "lancamento",
           message:
             parsed.friendly_message ||
-            `✅ Lançamento criado!\n\n📝 ${parsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 ${parsed.date || today}`,
+            `✅ Lançamento criado!${statusDisplay}\n\n📝 ${parsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`,
           transaction: {
             description: parsed.description,
             amount: parsed.amount,
             type: txType,
             category: categoryLabel,
             context: contextLabel,
-            date: parsed.date || today,
+            date: competenceDate,
+            payment_date: paymentDate,
+            status: status,
+            payment_method: paymentMethod,
+            credit_card: cardName,
+            contact: contactName,
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
