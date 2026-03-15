@@ -386,7 +386,7 @@ serve(async (req) => {
 
 REGRAS:
 1. Classifique como: "lancamento", "consulta" ou "conversa"
-2. Para lançamentos: extraia descrição, valor, data, tipo (receita/despesa), category_id (UUID), subcategory_id (UUID ou null) e context
+2. Para lançamentos: extraia TODOS os campos possíveis da mensagem
 3. Para consultas: identifique o tipo e contexto
 4. Responda SEMPRE em português brasileiro
 5. Retorne APENAS um JSON válido, sem texto adicional
@@ -411,16 +411,35 @@ REGRA CRÍTICA DE CATEGORIA:
 - Se NENHUMA categoria da lista acima se encaixar na descrição do lançamento, retorne category_id como null e preencha o campo "suggested_category_name" com o nome que faria sentido.
 - NÃO invente UUIDs que não existam na lista.
 - NÃO escolha uma categoria aleatória só para preencher. Se não faz sentido, retorne null.
-- Exemplos: se o usuário diz "paguei a academia" e não existe categoria "Academia" ou "Saúde", retorne category_id: null e suggested_category_name: "Academia" ou "Saúde".
 
-CONTAS E CARTEIRAS POR CONTEXTO (formato: Nome[UUID]):
+CONTAS, CARTEIRAS E CARTÕES DE CRÉDITO POR CONTEXTO (formato: Nome[UUID]):
 ${accountListByContext || "Nenhuma conta cadastrada"}
+
+${contactList ? `CONTATOS DO USUÁRIO:\n${contactList}` : ""}
+
+MÉTODOS DE PAGAMENTO VÁLIDOS:
+- "pix" - Transferência Pix
+- "dinheiro" - Dinheiro em espécie
+- "cartao_debito" - Cartão de débito
+- "cartao_credito" - Cartão de crédito (DEVE vir com credit_card_id)
+- "boleto" - Boleto bancário
+- "transferencia" - Transferência bancária (TED/DOC)
+- Se não mencionado, retorne null
 
 DATA ATUAL: ${today}
 
 FORMATO DE RESPOSTA (JSON):
 Para lançamento:
-{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-null","date":"YYYY-MM-DD","friendly_message":"..."}
+{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","friendly_message":"..."}
+
+REGRAS DOS NOVOS CAMPOS:
+- Se o usuário mencionar "cartão", "crédito", "no cartão X", use payment_method="cartao_credito" e retorne credit_card_id com o UUID do cartão da lista. NÃO preencha account_id nesse caso.
+- Se o usuário mencionar "pix", "transferência", "boleto", "dinheiro", "débito", preencha payment_method adequadamente.
+- competence_date = quando a despesa/receita ACONTECEU (data do evento). Padrão: hoje.
+- payment_date = quando o dinheiro SAI/ENTRA da conta. Para cartão de crédito, retorne null (o sistema calculará pela data de vencimento da fatura). Para outros métodos, é igual a competence_date por padrão.
+- status: Se a data de pagamento é FUTURA ou se é cartão de crédito, use "Pendente". Caso contrário, "Pago".
+- Se o usuário mencionar "paguei para [nome]" ou "comprei de [nome]", tente encontrar o UUID na lista de FORNECEDORES (para despesa) ou CLIENTES (para receita). Se não encontrar UUID, preencha contact_name com o nome mencionado.
+- notes: qualquer observação extra que o usuário mencionar (ex: "referente ao mês de janeiro").
 
 IMPORTANTE SOBRE category_id e subcategory_id:
 - Retorne o UUID que está entre colchetes [UUID] na lista de categorias acima
@@ -428,8 +447,9 @@ IMPORTANTE SOBRE category_id e subcategory_id:
 - Se nenhuma categoria se encaixar, retorne null em category_id e preencha suggested_category_name
 - subcategory_id é o UUID de uma subcategoria (filho da categoria pai)
 
-IMPORTANTE SOBRE account_id:
-- Retorne o UUID que está entre colchetes [UUID] na lista de contas/carteiras
+IMPORTANTE SOBRE account_id e credit_card_id:
+- Retorne o UUID que está entre colchetes [UUID] na lista de contas/carteiras/cartões
+- Se payment_method é "cartao_credito", preencha credit_card_id e NÃO preencha account_id
 - Se não souber qual conta, retorne null (será usada a primeira disponível no contexto)
 
 Para consulta:
