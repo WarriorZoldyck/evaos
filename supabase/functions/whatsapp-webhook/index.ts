@@ -688,48 +688,70 @@ IMPORTANTE:
         }
       }
 
-      // --- Account resolution: try AI suggestion first, then first available ---
+      // --- Account / Credit Card resolution ---
       const contextAccounts = accounts.filter((a) =>
         companyId ? a.company_id === companyId : !a.company_id
       );
       const contextWallets = wallets.filter((w) =>
         companyId ? w.company_id === companyId : !w.company_id
       );
+      const contextCards = creditCards.filter((c) =>
+        companyId ? c.company_id === companyId : !c.company_id
+      );
+
       let bankAccountId: string | null = null;
       let walletId: string | null = null;
+      let creditCardId: string | null = null;
+      let paymentMethod: string | null = parsed.payment_method || null;
 
-      // Try AI-suggested account_id
-      if (parsed.account_id) {
-        const accMatch = contextAccounts.find((a) => a.id === parsed.account_id);
-        if (accMatch) {
-          bankAccountId = accMatch.id;
-        } else {
-          const walMatch = contextWallets.find((w) => w.id === parsed.account_id);
-          if (walMatch) {
-            walletId = walMatch.id;
+      // Credit card resolution
+      if (parsed.credit_card_id) {
+        const cardMatch = contextCards.find((c) => c.id === parsed.credit_card_id);
+        if (cardMatch) {
+          creditCardId = cardMatch.id;
+          bankAccountId = cardMatch.bank_account_id;
+          paymentMethod = "cartao_credito";
+        }
+      }
+      // If AI said cartao_credito but no card ID, try first available card
+      if (!creditCardId && paymentMethod === "cartao_credito" && contextCards.length > 0) {
+        creditCardId = contextCards[0].id;
+        bankAccountId = contextCards[0].bank_account_id;
+      }
+
+      // Regular account resolution (only if not credit card)
+      if (!creditCardId) {
+        if (parsed.account_id) {
+          const accMatch = contextAccounts.find((a) => a.id === parsed.account_id);
+          if (accMatch) {
+            bankAccountId = accMatch.id;
+          } else {
+            const walMatch = contextWallets.find((w) => w.id === parsed.account_id);
+            if (walMatch) {
+              walletId = walMatch.id;
+            }
+          }
+        }
+        // Fallback: first available bank account, then wallet
+        if (!bankAccountId && !walletId) {
+          if (contextAccounts.length > 0) {
+            bankAccountId = contextAccounts[0].id;
+          } else if (contextWallets.length > 0) {
+            walletId = contextWallets[0].id;
           }
         }
       }
 
-      // Fallback: first available bank account, then wallet
-      if (!bankAccountId && !walletId) {
-        if (contextAccounts.length > 0) {
-          bankAccountId = contextAccounts[0].id;
-        } else if (contextWallets.length > 0) {
-          walletId = contextWallets[0].id;
-        }
-      }
-
-      // --- BLOCK if no account/wallet ---
+      // --- BLOCK if no account/wallet/card ---
       const contextLabel = parsed.context || "Pessoal";
 
-      if (!bankAccountId && !walletId) {
-        console.error("BLOCKED: No account/wallet for context:", contextLabel);
+      if (!bankAccountId && !walletId && !creditCardId) {
+        console.error("BLOCKED: No account/wallet/card for context:", contextLabel);
         return new Response(
           JSON.stringify({
             success: false,
             intent: "lancamento",
-            message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária ou carteira cadastrada no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
+            message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária, carteira ou cartão cadastrado no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
             transaction: null,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -749,14 +771,88 @@ IMPORTANTE:
         );
       }
 
+      // --- Credit card cycle date calculation ---
+      const competenceDate = parsed.competence_date || parsed.date || today;
+      let paymentDate = parsed.payment_date || parsed.date || today;
+
+      if (creditCardId) {
+        const card = contextCards.find((c) => c.id === creditCardId);
+        if (card) {
+          const compDate = new Date(competenceDate + "T12:00:00");
+          const compDay = compDate.getDate();
+          const compMonth = compDate.getMonth();
+          const compYear = compDate.getFullYear();
+
+          let billMonth: number;
+          let billYear: number;
+
+          if (compDay >= card.closing_day) {
+            // Goes to next month's bill
+            billMonth = compMonth + 1;
+            billYear = compYear;
+          } else {
+            // Goes to current month's bill
+            billMonth = compMonth;
+            billYear = compYear;
+          }
+
+          // Calculate due date
+          let dueMonth = billMonth;
+          let dueYear = billYear;
+          if (card.due_day < card.closing_day) {
+            // Due is in the month after closing
+            dueMonth = billMonth + 1;
+            dueYear = billYear;
+          }
+          if (dueMonth > 11) {
+            dueMonth = dueMonth - 12;
+            dueYear++;
+          }
+
+          const dueDate = new Date(dueYear, dueMonth, card.due_day);
+          paymentDate = dueDate.toISOString().split("T")[0];
+        }
+      }
+
+      // --- Contact / Supplier / Client resolution ---
+      let supplierId: string | null = null;
+      let clientId: string | null = null;
+      let contactName: string | null = parsed.contact_name || null;
+
+      if (parsed.supplier_id) {
+        const supMatch = suppliersList.find((s) => s.id === parsed.supplier_id);
+        if (supMatch) {
+          supplierId = supMatch.id;
+          contactName = contactName || supMatch.name;
+        }
+      }
+      if (parsed.client_id) {
+        const cliMatch = clientsList.find((c) => c.id === parsed.client_id);
+        if (cliMatch) {
+          clientId = cliMatch.id;
+          contactName = contactName || cliMatch.name;
+        }
+      }
+
+      // --- Smart status detection ---
+      let status: "Pago" | "Pendente" = "Pago";
+      if (creditCardId) {
+        status = "Pendente"; // Credit card → always pending (paid on bill)
+      } else if (paymentDate > today) {
+        status = "Pendente"; // Future payment → pending
+      } else if (parsed.status === "Pendente") {
+        status = "Pendente"; // AI explicitly said pending
+      }
+
       console.log("=== LANCAMENTO RESOLUTION ===");
       console.log("Context:", parsed.context, "| companyId:", companyId);
       console.log("AI category_id:", parsed.category_id, "| AI category (legacy):", parsed.category);
       console.log("Resolved → UUID:", categoryValue, "(", categoryLabel, ")");
       console.log("AI subcategory_id:", parsed.subcategory_id, "→ UUID:", subcategoryValue, "(", subcategoryLabel, ")");
-      console.log("AI account_id:", parsed.account_id);
-      console.log("Resolved account:", bankAccountId ? `bank:${bankAccountId}` : `wallet:${walletId}`);
-      console.log("Transaction type:", txType);
+      console.log("Account:", bankAccountId ? `bank:${bankAccountId}` : walletId ? `wallet:${walletId}` : "none");
+      console.log("Credit card:", creditCardId, "| Payment method:", paymentMethod);
+      console.log("Competence:", competenceDate, "| Payment:", paymentDate, "| Status:", status);
+      console.log("Supplier:", supplierId, "| Client:", clientId, "| Contact:", contactName);
 
       const { error: insertError } = await supabase.from("transactions").insert({
         user_id: userId,
@@ -765,12 +861,18 @@ IMPORTANTE:
         type: txType,
         category: categoryValue,
         subcategory: subcategoryValue,
-        competence_date: parsed.date || today,
-        payment_date: parsed.date || today,
-        status: "Pago",
+        competence_date: competenceDate,
+        payment_date: paymentDate,
+        status: status,
         bank_account_id: bankAccountId,
         wallet_id: walletId,
+        credit_card_id: creditCardId,
         company_id: companyId,
+        payment_method: paymentMethod,
+        supplier_id: supplierId,
+        client_id: clientId,
+        contact_name: contactName,
+        notes: parsed.notes || null,
       });
 
       if (insertError) {
@@ -788,6 +890,11 @@ IMPORTANTE:
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(parsed.amount || 0);
       const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
+      const payMethodDisplay = paymentMethod ? `\n💳 ${paymentMethod.replace("_", " ")}` : "";
+      const contactDisplay = contactName ? `\n👤 ${contactName}` : "";
+      const statusDisplay = status === "Pendente" ? " (Pendente)" : "";
+      const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
+      const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
       return new Response(
         JSON.stringify({
