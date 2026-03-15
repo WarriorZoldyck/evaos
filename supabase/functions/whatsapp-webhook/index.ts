@@ -286,18 +286,24 @@ serve(async (req) => {
       }
     }
 
-    // 4. Fetch user context (categories, accounts, wallets, companies)
-    const [categoriesRes, accountsRes, walletsRes, companiesRes] = await Promise.all([
+    // 4. Fetch user context (categories, accounts, wallets, companies, credit cards, contacts)
+    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
       supabase.from("companies").select("id, name, cnpj").eq("user_id", userId),
+      supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
+      supabase.from("suppliers").select("id, name").eq("user_id", userId),
+      supabase.from("clients").select("id, name").eq("user_id", userId),
     ]);
 
     const categories = categoriesRes.data || [];
     const accounts = accountsRes.data || [];
     const wallets = walletsRes.data || [];
     const companies = companiesRes.data || [];
+    const creditCards = creditCardsRes.data || [];
+    const suppliersList = suppliersRes.data || [];
+    const clientsList = clientsRes.data || [];
 
     const today = new Date().toISOString().split("T")[0];
 
@@ -329,6 +335,7 @@ serve(async (req) => {
     const buildAccountList = (companyId: string | null, label: string) => {
       const ctxAccounts = accounts.filter((a) => a.company_id === companyId);
       const ctxWallets = wallets.filter((w) => w.company_id === companyId);
+      const ctxCards = creditCards.filter((c) => c.company_id === companyId);
       const parts: string[] = [];
       if (ctxAccounts.length > 0) {
         parts.push("Contas: " + ctxAccounts.map((a) => `${a.name}[${a.id}]`).join(", "));
@@ -336,8 +343,22 @@ serve(async (req) => {
       if (ctxWallets.length > 0) {
         parts.push("Carteiras: " + ctxWallets.map((w) => `${w.name}[${w.id}]`).join(", "));
       }
+      if (ctxCards.length > 0) {
+        parts.push("Cartões de Crédito: " + ctxCards.map((c) => `${c.name}${c.last_four_digits ? ` Final ${c.last_four_digits}` : ""}[${c.id}]`).join(", "));
+      }
       if (parts.length === 0) return "";
       return `[${label}] ${parts.join(" | ")}`;
+    };
+
+    const buildContactList = () => {
+      const parts: string[] = [];
+      if (suppliersList.length > 0) {
+        parts.push("FORNECEDORES: " + suppliersList.map((s) => `${s.name}[${s.id}]`).join(", "));
+      }
+      if (clientsList.length > 0) {
+        parts.push("CLIENTES: " + clientsList.map((c) => `${c.name}[${c.id}]`).join(", "));
+      }
+      return parts.join("\n");
     };
 
     const categoryListByContext = [
@@ -349,6 +370,8 @@ serve(async (req) => {
       buildAccountList(null, "Pessoal"),
       ...companies.map((c) => buildAccountList(c.id, c.name)),
     ].filter(Boolean).join("\n");
+
+    const contactList = buildContactList();
 
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -363,7 +386,7 @@ serve(async (req) => {
 
 REGRAS:
 1. Classifique como: "lancamento", "consulta" ou "conversa"
-2. Para lançamentos: extraia descrição, valor, data, tipo (receita/despesa), category_id (UUID), subcategory_id (UUID ou null) e context
+2. Para lançamentos: extraia TODOS os campos possíveis da mensagem
 3. Para consultas: identifique o tipo e contexto
 4. Responda SEMPRE em português brasileiro
 5. Retorne APENAS um JSON válido, sem texto adicional
@@ -388,16 +411,35 @@ REGRA CRÍTICA DE CATEGORIA:
 - Se NENHUMA categoria da lista acima se encaixar na descrição do lançamento, retorne category_id como null e preencha o campo "suggested_category_name" com o nome que faria sentido.
 - NÃO invente UUIDs que não existam na lista.
 - NÃO escolha uma categoria aleatória só para preencher. Se não faz sentido, retorne null.
-- Exemplos: se o usuário diz "paguei a academia" e não existe categoria "Academia" ou "Saúde", retorne category_id: null e suggested_category_name: "Academia" ou "Saúde".
 
-CONTAS E CARTEIRAS POR CONTEXTO (formato: Nome[UUID]):
+CONTAS, CARTEIRAS E CARTÕES DE CRÉDITO POR CONTEXTO (formato: Nome[UUID]):
 ${accountListByContext || "Nenhuma conta cadastrada"}
+
+${contactList ? `CONTATOS DO USUÁRIO:\n${contactList}` : ""}
+
+MÉTODOS DE PAGAMENTO VÁLIDOS:
+- "pix" - Transferência Pix
+- "dinheiro" - Dinheiro em espécie
+- "cartao_debito" - Cartão de débito
+- "cartao_credito" - Cartão de crédito (DEVE vir com credit_card_id)
+- "boleto" - Boleto bancário
+- "transferencia" - Transferência bancária (TED/DOC)
+- Se não mencionado, retorne null
 
 DATA ATUAL: ${today}
 
 FORMATO DE RESPOSTA (JSON):
 Para lançamento:
-{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-null","date":"YYYY-MM-DD","friendly_message":"..."}
+{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","friendly_message":"..."}
+
+REGRAS DOS NOVOS CAMPOS:
+- Se o usuário mencionar "cartão", "crédito", "no cartão X", use payment_method="cartao_credito" e retorne credit_card_id com o UUID do cartão da lista. NÃO preencha account_id nesse caso.
+- Se o usuário mencionar "pix", "transferência", "boleto", "dinheiro", "débito", preencha payment_method adequadamente.
+- competence_date = quando a despesa/receita ACONTECEU (data do evento). Padrão: hoje.
+- payment_date = quando o dinheiro SAI/ENTRA da conta. Para cartão de crédito, retorne null (o sistema calculará pela data de vencimento da fatura). Para outros métodos, é igual a competence_date por padrão.
+- status: Se a data de pagamento é FUTURA ou se é cartão de crédito, use "Pendente". Caso contrário, "Pago".
+- Se o usuário mencionar "paguei para [nome]" ou "comprei de [nome]", tente encontrar o UUID na lista de FORNECEDORES (para despesa) ou CLIENTES (para receita). Se não encontrar UUID, preencha contact_name com o nome mencionado.
+- notes: qualquer observação extra que o usuário mencionar (ex: "referente ao mês de janeiro").
 
 IMPORTANTE SOBRE category_id e subcategory_id:
 - Retorne o UUID que está entre colchetes [UUID] na lista de categorias acima
@@ -405,8 +447,9 @@ IMPORTANTE SOBRE category_id e subcategory_id:
 - Se nenhuma categoria se encaixar, retorne null em category_id e preencha suggested_category_name
 - subcategory_id é o UUID de uma subcategoria (filho da categoria pai)
 
-IMPORTANTE SOBRE account_id:
-- Retorne o UUID que está entre colchetes [UUID] na lista de contas/carteiras
+IMPORTANTE SOBRE account_id e credit_card_id:
+- Retorne o UUID que está entre colchetes [UUID] na lista de contas/carteiras/cartões
+- Se payment_method é "cartao_credito", preencha credit_card_id e NÃO preencha account_id
 - Se não souber qual conta, retorne null (será usada a primeira disponível no contexto)
 
 Para consulta:
@@ -645,48 +688,70 @@ IMPORTANTE:
         }
       }
 
-      // --- Account resolution: try AI suggestion first, then first available ---
+      // --- Account / Credit Card resolution ---
       const contextAccounts = accounts.filter((a) =>
         companyId ? a.company_id === companyId : !a.company_id
       );
       const contextWallets = wallets.filter((w) =>
         companyId ? w.company_id === companyId : !w.company_id
       );
+      const contextCards = creditCards.filter((c) =>
+        companyId ? c.company_id === companyId : !c.company_id
+      );
+
       let bankAccountId: string | null = null;
       let walletId: string | null = null;
+      let creditCardId: string | null = null;
+      let paymentMethod: string | null = parsed.payment_method || null;
 
-      // Try AI-suggested account_id
-      if (parsed.account_id) {
-        const accMatch = contextAccounts.find((a) => a.id === parsed.account_id);
-        if (accMatch) {
-          bankAccountId = accMatch.id;
-        } else {
-          const walMatch = contextWallets.find((w) => w.id === parsed.account_id);
-          if (walMatch) {
-            walletId = walMatch.id;
+      // Credit card resolution
+      if (parsed.credit_card_id) {
+        const cardMatch = contextCards.find((c) => c.id === parsed.credit_card_id);
+        if (cardMatch) {
+          creditCardId = cardMatch.id;
+          bankAccountId = cardMatch.bank_account_id;
+          paymentMethod = "cartao_credito";
+        }
+      }
+      // If AI said cartao_credito but no card ID, try first available card
+      if (!creditCardId && paymentMethod === "cartao_credito" && contextCards.length > 0) {
+        creditCardId = contextCards[0].id;
+        bankAccountId = contextCards[0].bank_account_id;
+      }
+
+      // Regular account resolution (only if not credit card)
+      if (!creditCardId) {
+        if (parsed.account_id) {
+          const accMatch = contextAccounts.find((a) => a.id === parsed.account_id);
+          if (accMatch) {
+            bankAccountId = accMatch.id;
+          } else {
+            const walMatch = contextWallets.find((w) => w.id === parsed.account_id);
+            if (walMatch) {
+              walletId = walMatch.id;
+            }
+          }
+        }
+        // Fallback: first available bank account, then wallet
+        if (!bankAccountId && !walletId) {
+          if (contextAccounts.length > 0) {
+            bankAccountId = contextAccounts[0].id;
+          } else if (contextWallets.length > 0) {
+            walletId = contextWallets[0].id;
           }
         }
       }
 
-      // Fallback: first available bank account, then wallet
-      if (!bankAccountId && !walletId) {
-        if (contextAccounts.length > 0) {
-          bankAccountId = contextAccounts[0].id;
-        } else if (contextWallets.length > 0) {
-          walletId = contextWallets[0].id;
-        }
-      }
-
-      // --- BLOCK if no account/wallet ---
+      // --- BLOCK if no account/wallet/card ---
       const contextLabel = parsed.context || "Pessoal";
 
-      if (!bankAccountId && !walletId) {
-        console.error("BLOCKED: No account/wallet for context:", contextLabel);
+      if (!bankAccountId && !walletId && !creditCardId) {
+        console.error("BLOCKED: No account/wallet/card for context:", contextLabel);
         return new Response(
           JSON.stringify({
             success: false,
             intent: "lancamento",
-            message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária ou carteira cadastrada no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
+            message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária, carteira ou cartão cadastrado no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
             transaction: null,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -706,14 +771,88 @@ IMPORTANTE:
         );
       }
 
+      // --- Credit card cycle date calculation ---
+      const competenceDate = parsed.competence_date || parsed.date || today;
+      let paymentDate = parsed.payment_date || parsed.date || today;
+
+      if (creditCardId) {
+        const card = contextCards.find((c) => c.id === creditCardId);
+        if (card) {
+          const compDate = new Date(competenceDate + "T12:00:00");
+          const compDay = compDate.getDate();
+          const compMonth = compDate.getMonth();
+          const compYear = compDate.getFullYear();
+
+          let billMonth: number;
+          let billYear: number;
+
+          if (compDay >= card.closing_day) {
+            // Goes to next month's bill
+            billMonth = compMonth + 1;
+            billYear = compYear;
+          } else {
+            // Goes to current month's bill
+            billMonth = compMonth;
+            billYear = compYear;
+          }
+
+          // Calculate due date
+          let dueMonth = billMonth;
+          let dueYear = billYear;
+          if (card.due_day < card.closing_day) {
+            // Due is in the month after closing
+            dueMonth = billMonth + 1;
+            dueYear = billYear;
+          }
+          if (dueMonth > 11) {
+            dueMonth = dueMonth - 12;
+            dueYear++;
+          }
+
+          const dueDate = new Date(dueYear, dueMonth, card.due_day);
+          paymentDate = dueDate.toISOString().split("T")[0];
+        }
+      }
+
+      // --- Contact / Supplier / Client resolution ---
+      let supplierId: string | null = null;
+      let clientId: string | null = null;
+      let contactName: string | null = parsed.contact_name || null;
+
+      if (parsed.supplier_id) {
+        const supMatch = suppliersList.find((s) => s.id === parsed.supplier_id);
+        if (supMatch) {
+          supplierId = supMatch.id;
+          contactName = contactName || supMatch.name;
+        }
+      }
+      if (parsed.client_id) {
+        const cliMatch = clientsList.find((c) => c.id === parsed.client_id);
+        if (cliMatch) {
+          clientId = cliMatch.id;
+          contactName = contactName || cliMatch.name;
+        }
+      }
+
+      // --- Smart status detection ---
+      let status: "Pago" | "Pendente" = "Pago";
+      if (creditCardId) {
+        status = "Pendente"; // Credit card → always pending (paid on bill)
+      } else if (paymentDate > today) {
+        status = "Pendente"; // Future payment → pending
+      } else if (parsed.status === "Pendente") {
+        status = "Pendente"; // AI explicitly said pending
+      }
+
       console.log("=== LANCAMENTO RESOLUTION ===");
       console.log("Context:", parsed.context, "| companyId:", companyId);
       console.log("AI category_id:", parsed.category_id, "| AI category (legacy):", parsed.category);
       console.log("Resolved → UUID:", categoryValue, "(", categoryLabel, ")");
       console.log("AI subcategory_id:", parsed.subcategory_id, "→ UUID:", subcategoryValue, "(", subcategoryLabel, ")");
-      console.log("AI account_id:", parsed.account_id);
-      console.log("Resolved account:", bankAccountId ? `bank:${bankAccountId}` : `wallet:${walletId}`);
-      console.log("Transaction type:", txType);
+      console.log("Account:", bankAccountId ? `bank:${bankAccountId}` : walletId ? `wallet:${walletId}` : "none");
+      console.log("Credit card:", creditCardId, "| Payment method:", paymentMethod);
+      console.log("Competence:", competenceDate, "| Payment:", paymentDate, "| Status:", status);
+      console.log("Supplier:", supplierId, "| Client:", clientId, "| Contact:", contactName);
 
       const { error: insertError } = await supabase.from("transactions").insert({
         user_id: userId,
@@ -722,12 +861,18 @@ IMPORTANTE:
         type: txType,
         category: categoryValue,
         subcategory: subcategoryValue,
-        competence_date: parsed.date || today,
-        payment_date: parsed.date || today,
-        status: "Pago",
+        competence_date: competenceDate,
+        payment_date: paymentDate,
+        status: status,
         bank_account_id: bankAccountId,
         wallet_id: walletId,
+        credit_card_id: creditCardId,
         company_id: companyId,
+        payment_method: paymentMethod,
+        supplier_id: supplierId,
+        client_id: clientId,
+        contact_name: contactName,
+        notes: parsed.notes || null,
       });
 
       if (insertError) {
@@ -745,6 +890,11 @@ IMPORTANTE:
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(parsed.amount || 0);
       const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
+      const payMethodDisplay = paymentMethod ? `\n💳 ${paymentMethod.replace("_", " ")}` : "";
+      const contactDisplay = contactName ? `\n👤 ${contactName}` : "";
+      const statusDisplay = status === "Pendente" ? " (Pendente)" : "";
+      const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
+      const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
       return new Response(
         JSON.stringify({
@@ -752,14 +902,19 @@ IMPORTANTE:
           intent: "lancamento",
           message:
             parsed.friendly_message ||
-            `✅ Lançamento criado!\n\n📝 ${parsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 ${parsed.date || today}`,
+            `✅ Lançamento criado!${statusDisplay}\n\n📝 ${parsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`,
           transaction: {
             description: parsed.description,
             amount: parsed.amount,
             type: txType,
             category: categoryLabel,
             context: contextLabel,
-            date: parsed.date || today,
+            date: competenceDate,
+            payment_date: paymentDate,
+            status: status,
+            payment_method: paymentMethod,
+            credit_card: cardName,
+            contact: contactName,
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
