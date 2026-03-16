@@ -450,7 +450,10 @@ IMPORTANTE SOBRE category_id e subcategory_id:
 IMPORTANTE SOBRE account_id e credit_card_id:
 - Retorne o UUID que está entre colchetes [UUID] na lista de contas/carteiras/cartões
 - Se payment_method é "cartao_credito", preencha credit_card_id e NÃO preencha account_id
-- Se não souber qual conta, retorne null (será usada a primeira disponível no contexto)
+- SEMPRE tente identificar a conta correta. Se o usuário mencionar o nome do banco (ex: "Nubank", "Itaú", "BTG", "Inter", "C6"), encontre a conta correspondente na lista e retorne o UUID dela.
+- Se o contexto tem APENAS UMA conta bancária, use essa conta.
+- Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne null e pergunte no friendly_message qual conta usar, listando as opções disponíveis.
+- NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 
 Para consulta:
 {"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
@@ -732,12 +735,31 @@ IMPORTANTE:
             }
           }
         }
-        // Fallback: first available bank account, then wallet
+        // Fallback: only auto-pick if there's exactly ONE option
         if (!bankAccountId && !walletId) {
-          if (contextAccounts.length > 0) {
-            bankAccountId = contextAccounts[0].id;
-          } else if (contextWallets.length > 0) {
-            walletId = contextWallets[0].id;
+          const totalOptions = contextAccounts.length + contextWallets.length;
+          if (totalOptions === 1) {
+            if (contextAccounts.length === 1) {
+              bankAccountId = contextAccounts[0].id;
+            } else {
+              walletId = contextWallets[0].id;
+            }
+          } else if (totalOptions > 1) {
+            // Multiple accounts — ask user which one
+            const optionsList = [
+              ...contextAccounts.map((a) => `• ${a.name}`),
+              ...contextWallets.map((w) => `• ${w.name} (carteira)`),
+            ].join("\n");
+            console.log("AMBIGUOUS ACCOUNT: multiple options, asking user");
+            return new Response(
+              JSON.stringify({
+                success: true,
+                intent: "lancamento",
+                message: `📋 Entendi o lançamento de R$ ${parsed.amount?.toFixed(2) || "?"} — "${parsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
+                transaction: null,
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
         }
       }
