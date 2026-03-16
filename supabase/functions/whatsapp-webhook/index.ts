@@ -870,7 +870,8 @@ IMPORTANTE:
           }
 
           const dueDate = new Date(dueYear, dueMonth, card.due_day);
-          paymentDate = dueDate.toISOString().split("T")[0];
+          const pad = (n: number) => String(n).padStart(2, "0");
+          paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
         }
       }
 
