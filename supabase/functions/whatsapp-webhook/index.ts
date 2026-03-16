@@ -735,12 +735,31 @@ IMPORTANTE:
             }
           }
         }
-        // Fallback: first available bank account, then wallet
+        // Fallback: only auto-pick if there's exactly ONE option
         if (!bankAccountId && !walletId) {
-          if (contextAccounts.length > 0) {
-            bankAccountId = contextAccounts[0].id;
-          } else if (contextWallets.length > 0) {
-            walletId = contextWallets[0].id;
+          const totalOptions = contextAccounts.length + contextWallets.length;
+          if (totalOptions === 1) {
+            if (contextAccounts.length === 1) {
+              bankAccountId = contextAccounts[0].id;
+            } else {
+              walletId = contextWallets[0].id;
+            }
+          } else if (totalOptions > 1) {
+            // Multiple accounts — ask user which one
+            const optionsList = [
+              ...contextAccounts.map((a) => `• ${a.name}`),
+              ...contextWallets.map((w) => `• ${w.name} (carteira)`),
+            ].join("\n");
+            console.log("AMBIGUOUS ACCOUNT: multiple options, asking user");
+            return new Response(
+              JSON.stringify({
+                success: true,
+                intent: "lancamento",
+                message: `📋 Entendi o lançamento de R$ ${parsed.amount?.toFixed(2) || "?"} — "${parsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
+                transaction: null,
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
         }
       }
