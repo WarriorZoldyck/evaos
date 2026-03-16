@@ -182,12 +182,14 @@ serve(async (req) => {
           const txType = payload.type === "receita" ? "receita" : "despesa";
 
           // Resolve account from payload
-          const [accountsRes, walletsRes] = await Promise.all([
+          const [accountsRes, walletsRes, creditCardsRes] = await Promise.all([
             supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
             supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
+            supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
           ]);
           const accounts = accountsRes.data || [];
           const walletsList = walletsRes.data || [];
+          const creditCards = creditCardsRes.data || [];
           const companyId = pendingAction.context_company_id;
 
           const contextAccounts = accounts.filter((a) =>
