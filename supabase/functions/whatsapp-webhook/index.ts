@@ -456,7 +456,18 @@ IMPORTANTE SOBRE account_id e credit_card_id:
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
+
+TIPOS DE CONSULTA:
+- "saldo" = saldo das contas
+- "resumo_mes" = resumo geral do mês
+- "gastos_mes" = total de despesas do mês
+- "receitas_mes" = total de receitas do mês
+- "pendentes" = contas a pagar/receber
+- "gastos_categoria" = gastos por categoria específica
+- "listar_cartoes" = listar cartões de crédito cadastrados
+- "listar_contas" = listar contas bancárias e carteiras cadastradas
+- Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
 
 Para conversa:
 {"intent":"conversa","friendly_message":"..."}
@@ -1136,6 +1147,57 @@ IMPORTANTE:
             const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
             const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
             responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" este mês${ctxLabel}: ${fmt(total)}`;
+            break;
+          }
+
+          case "listar_cartoes": {
+            const contextCards = companyId
+              ? creditCards.filter((c) => c.company_id === companyId)
+              : parsed.context === "Pessoal"
+                ? creditCards.filter((c) => !c.company_id)
+                : creditCards;
+
+            if (contextCards.length === 0) {
+              responseMessage = "💳 Você não tem cartões de crédito cadastrados" + (parsed.context ? ` no contexto "${parsed.context}"` : "") + ".";
+            } else {
+              const list = contextCards
+                .map((c: any) => {
+                  const digits = c.last_four_digits ? ` (final ${c.last_four_digits})` : "";
+                  return `  • ${c.name}${digits} — Fecha dia ${c.closing_day}, vence dia ${c.due_day}`;
+                })
+                .join("\n");
+              const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+              responseMessage = `💳 Seus cartões de crédito${ctxLabel}:\n\n${list}`;
+            }
+            break;
+          }
+
+          case "listar_contas": {
+            const contextAccts = companyId
+              ? accounts.filter((a) => a.company_id === companyId)
+              : parsed.context === "Pessoal"
+                ? accounts.filter((a) => !a.company_id)
+                : accounts;
+            const contextWlts = companyId
+              ? wallets.filter((w) => w.company_id === companyId)
+              : parsed.context === "Pessoal"
+                ? wallets.filter((w) => !w.company_id)
+                : wallets;
+
+            const parts: string[] = [];
+            if (contextAccts.length > 0) {
+              parts.push("🏦 Contas bancárias:\n" + contextAccts.map((a: any) => `  • ${a.name} (${a.type})`).join("\n"));
+            }
+            if (contextWlts.length > 0) {
+              parts.push("👛 Carteiras:\n" + contextWlts.map((w: any) => `  • ${w.name}`).join("\n"));
+            }
+
+            if (parts.length === 0) {
+              responseMessage = "Você não tem contas ou carteiras cadastradas" + (parsed.context ? ` no contexto "${parsed.context}"` : "") + ".";
+            } else {
+              const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+              responseMessage = `📋 Suas contas${ctxLabel}:\n\n${parts.join("\n\n")}`;
+            }
             break;
           }
 
