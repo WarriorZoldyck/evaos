@@ -718,19 +718,46 @@ IMPORTANTE:
       let creditCardId: string | null = null;
       let paymentMethod: string | null = parsed.payment_method || null;
 
+      // Map AI snake_case payment methods to UI display values
+      const PAYMENT_METHOD_MAP: Record<string, string> = {
+        "pix": "PIX",
+        "dinheiro": "Dinheiro",
+        "cartao_debito": "Cartão de Débito",
+        "cartao_credito": "Cartão de Crédito",
+        "boleto": "Boleto",
+        "transferencia": "Transferência",
+      };
+      if (paymentMethod && PAYMENT_METHOD_MAP[paymentMethod]) {
+        paymentMethod = PAYMENT_METHOD_MAP[paymentMethod];
+      }
+
       // Credit card resolution
       if (parsed.credit_card_id) {
         const cardMatch = contextCards.find((c) => c.id === parsed.credit_card_id);
         if (cardMatch) {
           creditCardId = cardMatch.id;
           bankAccountId = cardMatch.bank_account_id;
-          paymentMethod = "cartao_credito";
+          paymentMethod = "Cartão de Crédito";
         }
       }
-      // If AI said cartao_credito but no card ID, try first available card
-      if (!creditCardId && paymentMethod === "cartao_credito" && contextCards.length > 0) {
-        creditCardId = contextCards[0].id;
-        bankAccountId = contextCards[0].bank_account_id;
+      // If AI said Cartão de Crédito but no card ID, resolve or ask
+      if (!creditCardId && paymentMethod === "Cartão de Crédito") {
+        if (contextCards.length === 1) {
+          creditCardId = contextCards[0].id;
+          bankAccountId = contextCards[0].bank_account_id;
+        } else if (contextCards.length > 1) {
+          const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
+          console.log("AMBIGUOUS CARD: multiple options, asking user");
+          return new Response(
+            JSON.stringify({
+              success: true,
+              intent: "lancamento",
+              message: `💳 Entendi a compra de R$ ${parsed.amount?.toFixed(2) || "?"} — "${parsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
+              transaction: null,
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
 
       // Regular account resolution (only if not credit card)
