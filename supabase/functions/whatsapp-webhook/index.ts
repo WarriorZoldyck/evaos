@@ -182,12 +182,14 @@ serve(async (req) => {
           const txType = payload.type === "receita" ? "receita" : "despesa";
 
           // Resolve account from payload
-          const [accountsRes, walletsRes] = await Promise.all([
+          const [accountsRes, walletsRes, creditCardsRes] = await Promise.all([
             supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
             supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
+            supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
           ]);
           const accounts = accountsRes.data || [];
           const walletsList = walletsRes.data || [];
+          const creditCards = creditCardsRes.data || [];
           const companyId = pendingAction.context_company_id;
 
           const contextAccounts = accounts.filter((a) =>
@@ -199,21 +201,69 @@ serve(async (req) => {
 
           let bankAccountId: string | null = null;
           let walletId: string | null = null;
+          let creditCardId: string | null = payload.credit_card_id || null;
 
-          if (payload.account_id) {
-            const accMatch = contextAccounts.find((a) => a.id === payload.account_id);
-            if (accMatch) bankAccountId = accMatch.id;
-            else {
-              const walMatch = contextWallets.find((w) => w.id === payload.account_id);
-              if (walMatch) walletId = walMatch.id;
+          // If credit card was resolved, use its linked bank account
+          if (creditCardId) {
+            const ctxCards = creditCards.filter((c: any) =>
+              companyId ? c.company_id === companyId : !c.company_id
+            );
+            const cardMatch = ctxCards.find((c: any) => c.id === creditCardId);
+            if (cardMatch) {
+              bankAccountId = cardMatch.bank_account_id;
             }
           }
-          if (!bankAccountId && !walletId) {
-            if (contextAccounts.length > 0) bankAccountId = contextAccounts[0].id;
-            else if (contextWallets.length > 0) walletId = contextWallets[0].id;
+
+          if (!creditCardId) {
+            if (payload.account_id) {
+              const accMatch = contextAccounts.find((a) => a.id === payload.account_id);
+              if (accMatch) bankAccountId = accMatch.id;
+              else {
+                const walMatch = contextWallets.find((w) => w.id === payload.account_id);
+                if (walMatch) walletId = walMatch.id;
+              }
+            }
+            if (!bankAccountId && !walletId) {
+              if (contextAccounts.length > 0) bankAccountId = contextAccounts[0].id;
+              else if (contextWallets.length > 0) walletId = contextWallets[0].id;
+            }
           }
 
-          const today = new Date().toISOString().split("T")[0];
+          const today = new Date();
+          const pad = (n: number) => String(n).padStart(2, "0");
+          const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+
+          const competenceDate = payload.competence_date || payload.date || todayStr;
+          let paymentDate = payload.date || todayStr;
+          let status: "Pago" | "Pendente" = "Pago";
+
+          // Credit card cycle calculation for pending action
+          if (creditCardId) {
+            const ctxCards = creditCards.filter((c: any) =>
+              companyId ? c.company_id === companyId : !c.company_id
+            );
+            const card = ctxCards.find((c: any) => c.id === creditCardId);
+            if (card) {
+              const compDate = new Date(competenceDate + "T12:00:00");
+              const compDay = compDate.getDate();
+              const compMonth = compDate.getMonth();
+              const compYear = compDate.getFullYear();
+              let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
+              let billYear = compYear;
+              let dueMonth = billMonth;
+              let dueYear = billYear;
+              if (card.due_day < card.closing_day) {
+                dueMonth = billMonth + 1;
+              }
+              if (dueMonth > 11) {
+                dueMonth -= 12;
+                dueYear++;
+              }
+              const dueDate = new Date(dueYear, dueMonth, card.due_day);
+              paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+            }
+            status = "Pendente";
+          }
 
           const { error: insertError } = await supabase.from("transactions").insert({
             user_id: userId,
@@ -222,12 +272,18 @@ serve(async (req) => {
             type: txType,
             category: newCategory.id,
             subcategory: null,
-            competence_date: payload.date || today,
-            payment_date: payload.date || today,
-            status: "Pago",
+            competence_date: competenceDate,
+            payment_date: paymentDate,
+            status: status,
             bank_account_id: bankAccountId,
             wallet_id: walletId,
+            credit_card_id: creditCardId,
             company_id: companyId,
+            payment_method: payload.payment_method || null,
+            supplier_id: payload.supplier_id || null,
+            client_id: payload.client_id || null,
+            contact_name: payload.contact_name || null,
+            notes: payload.notes || null,
           });
 
           // Clean up pending action
@@ -647,7 +703,14 @@ IMPORTANTE:
               type: txType,
               context: parsed.context,
               account_id: parsed.account_id,
+              credit_card_id: creditCardId,
+              payment_method: paymentMethod,
               date: parsed.date || today,
+              competence_date: competenceDate,
+              contact_name: contactName,
+              supplier_id: supplierId,
+              client_id: clientId,
+              notes: parsed.notes,
             },
             suggested_category_name: suggestedName,
             category_type: txType === "receita" ? "receita" : "despesa",
@@ -718,19 +781,46 @@ IMPORTANTE:
       let creditCardId: string | null = null;
       let paymentMethod: string | null = parsed.payment_method || null;
 
+      // Map AI snake_case payment methods to UI display values
+      const PAYMENT_METHOD_MAP: Record<string, string> = {
+        "pix": "PIX",
+        "dinheiro": "Dinheiro",
+        "cartao_debito": "Cartão de Débito",
+        "cartao_credito": "Cartão de Crédito",
+        "boleto": "Boleto",
+        "transferencia": "Transferência",
+      };
+      if (paymentMethod && PAYMENT_METHOD_MAP[paymentMethod]) {
+        paymentMethod = PAYMENT_METHOD_MAP[paymentMethod];
+      }
+
       // Credit card resolution
       if (parsed.credit_card_id) {
         const cardMatch = contextCards.find((c) => c.id === parsed.credit_card_id);
         if (cardMatch) {
           creditCardId = cardMatch.id;
           bankAccountId = cardMatch.bank_account_id;
-          paymentMethod = "cartao_credito";
+          paymentMethod = "Cartão de Crédito";
         }
       }
-      // If AI said cartao_credito but no card ID, try first available card
-      if (!creditCardId && paymentMethod === "cartao_credito" && contextCards.length > 0) {
-        creditCardId = contextCards[0].id;
-        bankAccountId = contextCards[0].bank_account_id;
+      // If AI said Cartão de Crédito but no card ID, resolve or ask
+      if (!creditCardId && paymentMethod === "Cartão de Crédito") {
+        if (contextCards.length === 1) {
+          creditCardId = contextCards[0].id;
+          bankAccountId = contextCards[0].bank_account_id;
+        } else if (contextCards.length > 1) {
+          const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
+          console.log("AMBIGUOUS CARD: multiple options, asking user");
+          return new Response(
+            JSON.stringify({
+              success: true,
+              intent: "lancamento",
+              message: `💳 Entendi a compra de R$ ${parsed.amount?.toFixed(2) || "?"} — "${parsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
+              transaction: null,
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
 
       // Regular account resolution (only if not credit card)
@@ -843,7 +933,8 @@ IMPORTANTE:
           }
 
           const dueDate = new Date(dueYear, dueMonth, card.due_day);
-          paymentDate = dueDate.toISOString().split("T")[0];
+          const pad = (n: number) => String(n).padStart(2, "0");
+          paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
         }
       }
 
