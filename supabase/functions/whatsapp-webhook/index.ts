@@ -456,7 +456,18 @@ IMPORTANTE SOBRE account_id e credit_card_id:
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
+
+TIPOS DE CONSULTA:
+- "saldo" = saldo das contas
+- "resumo_mes" = resumo geral do mês
+- "gastos_mes" = total de despesas do mês
+- "receitas_mes" = total de receitas do mês
+- "pendentes" = contas a pagar/receber
+- "gastos_categoria" = gastos por categoria específica
+- "listar_cartoes" = listar cartões de crédito cadastrados
+- "listar_contas" = listar contas bancárias e carteiras cadastradas
+- Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
 
 Para conversa:
 {"intent":"conversa","friendly_message":"..."}
