@@ -1150,6 +1150,57 @@ IMPORTANTE:
             break;
           }
 
+          case "listar_cartoes": {
+            const contextCards = companyId
+              ? creditCards.filter((c) => c.company_id === companyId)
+              : parsed.context === "Pessoal"
+                ? creditCards.filter((c) => !c.company_id)
+                : creditCards;
+
+            if (contextCards.length === 0) {
+              responseMessage = "💳 Você não tem cartões de crédito cadastrados" + (parsed.context ? ` no contexto "${parsed.context}"` : "") + ".";
+            } else {
+              const list = contextCards
+                .map((c: any) => {
+                  const digits = c.last_four_digits ? ` (final ${c.last_four_digits})` : "";
+                  return `  • ${c.name}${digits} — Fecha dia ${c.closing_day}, vence dia ${c.due_day}`;
+                })
+                .join("\n");
+              const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+              responseMessage = `💳 Seus cartões de crédito${ctxLabel}:\n\n${list}`;
+            }
+            break;
+          }
+
+          case "listar_contas": {
+            const contextAccts = companyId
+              ? accounts.filter((a) => a.company_id === companyId)
+              : parsed.context === "Pessoal"
+                ? accounts.filter((a) => !a.company_id)
+                : accounts;
+            const contextWlts = companyId
+              ? wallets.filter((w) => w.company_id === companyId)
+              : parsed.context === "Pessoal"
+                ? wallets.filter((w) => !w.company_id)
+                : wallets;
+
+            const parts: string[] = [];
+            if (contextAccts.length > 0) {
+              parts.push("🏦 Contas bancárias:\n" + contextAccts.map((a: any) => `  • ${a.name} (${a.type})`).join("\n"));
+            }
+            if (contextWlts.length > 0) {
+              parts.push("👛 Carteiras:\n" + contextWlts.map((w: any) => `  • ${w.name}`).join("\n"));
+            }
+
+            if (parts.length === 0) {
+              responseMessage = "Você não tem contas ou carteiras cadastradas" + (parsed.context ? ` no contexto "${parsed.context}"` : "") + ".";
+            } else {
+              const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+              responseMessage = `📋 Suas contas${ctxLabel}:\n\n${parts.join("\n\n")}`;
+            }
+            break;
+          }
+
           default:
             responseMessage = parsed.friendly_message || "Não entendi o tipo de consulta. Tente perguntar de outra forma.";
         }
