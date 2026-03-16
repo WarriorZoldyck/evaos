@@ -199,21 +199,69 @@ serve(async (req) => {
 
           let bankAccountId: string | null = null;
           let walletId: string | null = null;
+          let creditCardId: string | null = payload.credit_card_id || null;
 
-          if (payload.account_id) {
-            const accMatch = contextAccounts.find((a) => a.id === payload.account_id);
-            if (accMatch) bankAccountId = accMatch.id;
-            else {
-              const walMatch = contextWallets.find((w) => w.id === payload.account_id);
-              if (walMatch) walletId = walMatch.id;
+          // If credit card was resolved, use its linked bank account
+          if (creditCardId) {
+            const ctxCards = creditCards.filter((c: any) =>
+              companyId ? c.company_id === companyId : !c.company_id
+            );
+            const cardMatch = ctxCards.find((c: any) => c.id === creditCardId);
+            if (cardMatch) {
+              bankAccountId = cardMatch.bank_account_id;
             }
           }
-          if (!bankAccountId && !walletId) {
-            if (contextAccounts.length > 0) bankAccountId = contextAccounts[0].id;
-            else if (contextWallets.length > 0) walletId = contextWallets[0].id;
+
+          if (!creditCardId) {
+            if (payload.account_id) {
+              const accMatch = contextAccounts.find((a) => a.id === payload.account_id);
+              if (accMatch) bankAccountId = accMatch.id;
+              else {
+                const walMatch = contextWallets.find((w) => w.id === payload.account_id);
+                if (walMatch) walletId = walMatch.id;
+              }
+            }
+            if (!bankAccountId && !walletId) {
+              if (contextAccounts.length > 0) bankAccountId = contextAccounts[0].id;
+              else if (contextWallets.length > 0) walletId = contextWallets[0].id;
+            }
           }
 
-          const today = new Date().toISOString().split("T")[0];
+          const today = new Date();
+          const pad = (n: number) => String(n).padStart(2, "0");
+          const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+
+          const competenceDate = payload.competence_date || payload.date || todayStr;
+          let paymentDate = payload.date || todayStr;
+          let status: "Pago" | "Pendente" = "Pago";
+
+          // Credit card cycle calculation for pending action
+          if (creditCardId) {
+            const ctxCards = creditCards.filter((c: any) =>
+              companyId ? c.company_id === companyId : !c.company_id
+            );
+            const card = ctxCards.find((c: any) => c.id === creditCardId);
+            if (card) {
+              const compDate = new Date(competenceDate + "T12:00:00");
+              const compDay = compDate.getDate();
+              const compMonth = compDate.getMonth();
+              const compYear = compDate.getFullYear();
+              let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
+              let billYear = compYear;
+              let dueMonth = billMonth;
+              let dueYear = billYear;
+              if (card.due_day < card.closing_day) {
+                dueMonth = billMonth + 1;
+              }
+              if (dueMonth > 11) {
+                dueMonth -= 12;
+                dueYear++;
+              }
+              const dueDate = new Date(dueYear, dueMonth, card.due_day);
+              paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+            }
+            status = "Pendente";
+          }
 
           const { error: insertError } = await supabase.from("transactions").insert({
             user_id: userId,
@@ -222,12 +270,18 @@ serve(async (req) => {
             type: txType,
             category: newCategory.id,
             subcategory: null,
-            competence_date: payload.date || today,
-            payment_date: payload.date || today,
-            status: "Pago",
+            competence_date: competenceDate,
+            payment_date: paymentDate,
+            status: status,
             bank_account_id: bankAccountId,
             wallet_id: walletId,
+            credit_card_id: creditCardId,
             company_id: companyId,
+            payment_method: payload.payment_method || null,
+            supplier_id: payload.supplier_id || null,
+            client_id: payload.client_id || null,
+            contact_name: payload.contact_name || null,
+            notes: payload.notes || null,
           });
 
           // Clean up pending action
