@@ -450,7 +450,10 @@ IMPORTANTE SOBRE category_id e subcategory_id:
 IMPORTANTE SOBRE account_id e credit_card_id:
 - Retorne o UUID que está entre colchetes [UUID] na lista de contas/carteiras/cartões
 - Se payment_method é "cartao_credito", preencha credit_card_id e NÃO preencha account_id
-- Se não souber qual conta, retorne null (será usada a primeira disponível no contexto)
+- SEMPRE tente identificar a conta correta. Se o usuário mencionar o nome do banco (ex: "Nubank", "Itaú", "BTG", "Inter", "C6"), encontre a conta correspondente na lista e retorne o UUID dela.
+- Se o contexto tem APENAS UMA conta bancária, use essa conta.
+- Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne null e pergunte no friendly_message qual conta usar, listando as opções disponíveis.
+- NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 
 Para consulta:
 {"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
