@@ -1,47 +1,38 @@
 
 
-# Diagnóstico: Erro 400 no N8N persiste
+# Fix: D+2 = Sempre Lump Sum (Pagamento Único)
 
-## O que vi no screenshot
+## Problema
 
-O N8N está configurado corretamente visualmente:
-- Body Content Type: JSON
-- Specify Body: Using JSON
-- JSON: `{ "phone": "556499998901", "message": "{{ $json.mensagem }}" }`
-- A preview na parte inferior resolve corretamente para `"quais cartões tenho cadastrados..."`
+A migration anterior resetou `auto_anticipation = false` em todos os terminais. Mas o comportamento correto é: **D+2 sempre credita tudo de uma vez** (lump sum). Não depende de um flag — é inerente ao prazo curto de liquidação. Só terminais D+30 pagam em parcelas separadas.
 
-Mas o erro 400 persiste: `"phone and message/image are required"`.
+O MdrInfoCard e o save logic estão mostrando/criando 10 parcelas separadas para REDE (D+2) porque `auto_anticipation = false`.
 
-## Causa provável
+## Solução
 
-A Edge Function pode estar rodando uma **versão antiga** que não foi redeployada após as mudanças recentes. Ou o N8N pode estar enviando o body de forma inesperada (double-encoding, charset, etc).
+Remover a dependência do flag `auto_anticipation` e usar a lógica direta:
 
-## Plano
+- **`settlement_days_credit < 30`** → Lump sum (1 transação, valor total líquido, creditado em D+X)
+- **`settlement_days_credit >= 30`** → Parcelas separadas (N transações, intervalo 30 dias + D+X)
 
-### 1. Adicionar log de debug na Edge Function
+### Arquivos alterados
 
-Antes da validação (linha 30-36), adicionar um `console.log` do body raw recebido para diagnosticar exatamente o que chega:
+| Arquivo | Mudança |
+|---------|---------|
+| `TransactionFormModal.tsx` (linha 622-624) | Trocar `autoAnticipation` por `settlementDays < 30` |
+| `MdrInfoCard.tsx` (linha 68-70) | Mesma troca: `settlementDays < 30` em vez de `auto_anticipation` |
+
+### Código
 
 ```typescript
-const rawBody = await req.text();
-console.log("RAW BODY:", rawBody);
-const parsed = JSON.parse(rawBody);
-const { phone, message, image_base64, image_url } = parsed;
-console.log("PARSED:", { phone, message: message?.substring(0, 50) });
+// ANTES
+const autoAnticipation = (selectedTerminal as any).auto_anticipation ?? false;
+if (autoAnticipation) { /* lump sum */ }
+
+// DEPOIS
+const isLumpSum = settlementDays < 30;
+if (isLumpSum) { /* lump sum */ }
 ```
 
-### 2. Redeployar a Edge Function
-
-As mudanças feitas anteriormente (payment_method map, card disambiguation, timezone fix) e este novo log precisam ser deployados.
-
-### 3. Testar e verificar os logs
-
-Após o deploy, executar novamente no N8N e verificar os logs para ver o que exatamente está chegando no body.
-
----
-
-Isso vai revelar se o problema é:
-- N8N enviando body vazio/malformado
-- Double-encoding do JSON
-- Expressão `{{ $json.mensagem }}` resolvendo para vazio na execução real (diferente do preview)
+Ambos os arquivos usam a mesma condição, então a mudança é simétrica.
 

@@ -27,7 +27,20 @@ serve(async (req) => {
       );
     }
 
-    const { phone, message, image_base64, image_url } = await req.json();
+    const rawBody = await req.text();
+    console.log("RAW BODY:", rawBody);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawBody);
+    } catch (e) {
+      console.log("JSON PARSE ERROR:", e.message);
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid JSON body", rawBody: rawBody.substring(0, 200) }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { phone, message, image_base64, image_url } = parsed;
+    console.log("PARSED:", { phone, message: message?.substring?.(0, 50), image_base64: !!image_base64, image_url: !!image_url });
 
     if (!phone || (!message && !image_base64 && !image_url)) {
       return new Response(
