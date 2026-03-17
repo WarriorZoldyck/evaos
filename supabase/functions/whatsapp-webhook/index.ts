@@ -11,41 +11,132 @@ const corsHeaders = {
 const CONFIRM_PATTERNS = /^(sim|s|pode|pode criar|cria|ok|pode sim|sim pode|confirma|confirmar|yes|y|bora|manda|vai|faz|positivo|com certeza|claro)$/i;
 const CANCEL_PATTERNS = /^(não|nao|n|cancela|cancelar|cancel|no|deixa|esquece|nope|negativo|não precisa|nao precisa)$/i;
 
+// --- Evolution API helper: send reply back to WhatsApp ---
+async function sendEvolutionReply(phone: string, text: string) {
+  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
+  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
+  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
+  if (!evoUrl || !evoKey || !evoInstance) {
+    console.log("Evolution API not configured, skipping reply");
+    return;
+  }
+  try {
+    const url = `${evoUrl}/message/sendText/${encodeURIComponent(evoInstance)}`;
+    console.log("Sending Evolution reply to:", phone);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "apikey": evoKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ number: phone, text }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("Evolution sendText error:", res.status, errBody);
+    } else {
+      console.log("Evolution reply sent successfully");
+    }
+  } catch (err) {
+    console.error("Evolution sendText exception:", err);
+  }
+}
+
+// Helper to build response AND send Evolution reply
+function buildResponse(body: any, status: number, phone: string, isEvolution: boolean) {
+  // Send reply via Evolution API if the request came from Evolution
+  if (isEvolution && body.message) {
+    // Fire-and-forget: don't await to avoid delaying the webhook response
+    sendEvolutionReply(phone, body.message);
+  }
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // 1. Validate webhook secret
+    // 1. Validate webhook secret (optional for Evolution API which sends via configured headers)
     const webhookSecret = Deno.env.get("WHATSAPP_WEBHOOK_SECRET");
     const receivedSecret = req.headers.get("x-webhook-secret");
-    if (!webhookSecret || receivedSecret !== webhookSecret) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    
     const rawBody = await req.text();
-    console.log("RAW BODY:", rawBody);
+    console.log("RAW BODY:", rawBody.substring(0, 500));
     let parsed: any;
     try {
       parsed = JSON.parse(rawBody);
     } catch (e) {
       console.log("JSON PARSE ERROR:", e.message);
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid JSON body", rawBody: rawBody.substring(0, 200) }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return buildResponse(
+        { success: false, error: "Invalid JSON body", rawBody: rawBody.substring(0, 200) },
+        400, phone, isEvolution
       );
     }
-    const { phone, message, image_base64, image_url } = parsed;
+
+    // --- Detect Evolution API payload and normalize ---
+    let phone: string | undefined;
+    let message: string | undefined;
+    let image_base64: string | undefined;
+    let image_url: string | undefined;
+    let isEvolution = false;
+
+    if (parsed.event === "messages.upsert" && parsed.data) {
+      isEvolution = true;
+      console.log("=== EVOLUTION API PAYLOAD DETECTED ===");
+      const msgData = parsed.data;
+      const key = msgData.key;
+
+      // Ignore messages sent by us (fromMe)
+      if (key?.fromMe) {
+        console.log("Ignoring fromMe message");
+        return new Response(JSON.stringify({ success: true, ignored: true }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Extract phone from remoteJid
+      phone = key?.remoteJid?.replace("@s.whatsapp.net", "")?.replace("@g.us", "");
+
+      // Extract message text from various Evolution message types
+      const msgContent = msgData.message;
+      message = msgContent?.conversation
+        || msgContent?.extendedTextMessage?.text
+        || msgContent?.imageMessage?.caption
+        || "";
+
+      // Extract image URL if present
+      // (Evolution sends mediaUrl in some configs)
+      if (msgContent?.imageMessage) {
+        // Evolution may include base64 or a mediaUrl depending on config
+        // For now we handle text; image support can be added later
+        console.log("Image message detected (text caption extracted)");
+      }
+
+      console.log("Evolution normalized:", { phone, message: message?.substring(0, 50) });
+    } else {
+      // Legacy N8N / direct API format
+      phone = parsed.phone;
+      message = parsed.message;
+      image_base64 = parsed.image_base64;
+      image_url = parsed.image_url;
+
+      // Validate webhook secret for non-Evolution requests
+      if (!webhookSecret || receivedSecret !== webhookSecret) {
+        return buildResponse(
+        { success: false, error: "Unauthorized" },
+        401, phone, isEvolution
+      );
+      }
+    }
+
     console.log("PARSED:", { phone, message: message?.substring?.(0, 50), image_base64: !!image_base64, image_url: !!image_url });
 
     if (!phone || (!message && !image_base64 && !image_url)) {
-      return new Response(
-        JSON.stringify({ success: false, error: "phone and message/image are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return buildResponse(
+        { success: false, error: "phone and message/image are required" },
+        400, phone || "", isEvolution
       );
     }
 
@@ -95,9 +186,9 @@ serve(async (req) => {
 
     if (profileError) {
       console.error("Profile lookup error:", profileError);
-      return new Response(
-        JSON.stringify({ success: false, error: "Erro interno ao buscar perfil" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return buildResponse(
+        { success: false, error: "Erro interno ao buscar perfil" },
+        500, phone, isEvolution
       );
     }
 
@@ -117,13 +208,13 @@ serve(async (req) => {
 
     if (!profile) {
       console.error("Phone NOT found. Incoming:", phone, "| Digits:", digitsOnly);
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: false,
           error: "Número não cadastrado. Cadastre seu WhatsApp nas configurações do EVA OS.",
           message: "Número não cadastrado. Cadastre seu WhatsApp nas configurações do EVA OS.",
-        }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        404, phone, isEvolution
       );
     }
 
@@ -177,15 +268,15 @@ serve(async (req) => {
             console.error("Failed to create category:", catError);
             // Clean up pending action
             await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-            return new Response(
-              JSON.stringify({
+            return buildResponse(
+        {
                 success: false,
                 intent: "lancamento",
                 message: `❌ Não consegui criar a categoria "${pendingAction.suggested_category_name}". Tente novamente.`,
                 transaction: null,
-              }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+              },
+        200, phone, isEvolution
+      );
           }
 
           console.log("Category created:", newCategory.id, newCategory.name);
@@ -304,21 +395,21 @@ serve(async (req) => {
 
           if (insertError) {
             console.error("Transaction insert error after category creation:", insertError);
-            return new Response(
-              JSON.stringify({
+            return buildResponse(
+        {
                 success: false,
                 intent: "lancamento",
                 message: `✅ Categoria "${newCategory.name}" criada, mas houve um erro ao criar o lançamento. Tente enviar novamente.`,
                 transaction: null,
-              }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+              },
+        200, phone, isEvolution
+      );
           }
 
           const typeLabel = txType === "receita" ? "Receita" : "Despesa";
           const contextLabel = payload.context || "Pessoal";
-          return new Response(
-            JSON.stringify({
+          return buildResponse(
+        {
               success: true,
               intent: "lancamento",
               message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || today}`,
@@ -330,23 +421,23 @@ serve(async (req) => {
                 context: contextLabel,
                 date: payload.date || today,
               },
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+            },
+        200, phone, isEvolution
+      );
         }
 
         if (CANCEL_PATTERNS.test(trimmedMsg)) {
           console.log("=== PENDING ACTION: CANCELLED ===");
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-          return new Response(
-            JSON.stringify({
+          return buildResponse(
+        {
               success: true,
               intent: "conversa",
               message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊",
               transaction: null,
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+            },
+        200, phone, isEvolution
+      );
         }
 
         // Message doesn't match confirm/cancel — clear pending and process normally
@@ -445,9 +536,9 @@ serve(async (req) => {
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return new Response(
-        JSON.stringify({ success: false, error: "AI not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return buildResponse(
+        { success: false, error: "AI not configured" },
+        500, phone, isEvolution
       );
     }
 
@@ -581,13 +672,13 @@ IMPORTANTE:
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI Gateway error:", aiResponse.status, errText);
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: false,
           error: "Erro ao processar mensagem com IA",
           message: "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.",
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        500, phone, isEvolution
       );
     }
 
@@ -601,14 +692,14 @@ IMPORTANTE:
       aiParsed = JSON.parse(jsonMatch[1].trim());
     } catch {
       console.error("Failed to parse AI response:", rawContent);
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: true,
           intent: "conversa",
           message: "Desculpe, não consegui entender sua mensagem. Pode reformular?",
           transaction: null,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        200, phone, isEvolution
       );
     }
 
@@ -734,16 +825,16 @@ IMPORTANTE:
           console.error("Failed to save pending action:", pendingError);
         }
 
-        return new Response(
-          JSON.stringify({
+        return buildResponse(
+        {
             success: true,
             intent: "lancamento",
             message: `🤔 Não encontrei a categoria "${suggestedName}" no contexto "${contextLabel}".\n\nQuer que eu crie essa categoria e registre o lançamento?\n\nResponda *sim* para confirmar ou *não* para cancelar.`,
             transaction: null,
             pending_confirmation: true,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+          },
+        200, phone, isEvolution
+      );
       }
 
       // Warn if type didn't match
@@ -824,15 +915,15 @@ IMPORTANTE:
         } else if (contextCards.length > 1) {
           const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
           console.log("AMBIGUOUS CARD: multiple options, asking user");
-          return new Response(
-            JSON.stringify({
+          return buildResponse(
+        {
               success: true,
               intent: "lancamento",
               message: `💳 Entendi a compra de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
               transaction: null,
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+            },
+        200, phone, isEvolution
+      );
         }
       }
 
@@ -865,15 +956,15 @@ IMPORTANTE:
               ...contextWallets.map((w) => `• ${w.name} (carteira)`),
             ].join("\n");
             console.log("AMBIGUOUS ACCOUNT: multiple options, asking user");
-            return new Response(
-              JSON.stringify({
+            return buildResponse(
+        {
                 success: true,
                 intent: "lancamento",
                 message: `📋 Entendi o lançamento de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
                 transaction: null,
-              }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+              },
+        200, phone, isEvolution
+      );
           }
         }
       }
@@ -883,28 +974,28 @@ IMPORTANTE:
 
       if (!bankAccountId && !walletId && !creditCardId) {
         console.error("BLOCKED: No account/wallet/card for context:", contextLabel);
-        return new Response(
-          JSON.stringify({
+        return buildResponse(
+        {
             success: false,
             intent: "lancamento",
             message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária, carteira ou cartão cadastrado no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
             transaction: null,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+          },
+        200, phone, isEvolution
+      );
       }
 
       if (!categoryValue) {
         console.error("BLOCKED: No category resolved for context:", contextLabel, "| type:", txType);
-        return new Response(
-          JSON.stringify({
+        return buildResponse(
+        {
             success: false,
             intent: "lancamento",
             message: `❌ Não consegui criar o lançamento porque não há categorias de ${txType} cadastradas no contexto "${contextLabel}". Cadastre categorias antes de lançar.`,
             transaction: null,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+          },
+        200, phone, isEvolution
+      );
       }
 
       // --- Credit card cycle date calculation ---
@@ -1014,14 +1105,14 @@ IMPORTANTE:
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
-        return new Response(
-          JSON.stringify({
+        return buildResponse(
+        {
             success: false,
             error: "Erro ao criar lançamento",
             message: "Não consegui criar o lançamento. Tente novamente.",
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+          },
+        500, phone, isEvolution
+      );
       }
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
@@ -1033,8 +1124,8 @@ IMPORTANTE:
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: true,
           intent: "lancamento",
           message:
@@ -1053,8 +1144,8 @@ IMPORTANTE:
             credit_card: cardName,
             contact: contactName,
           },
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        200, phone, isEvolution
       );
     }
 
@@ -1313,37 +1404,37 @@ IMPORTANTE:
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
       }
 
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: true,
           intent: "consulta",
           message: responseMessage,
           transaction: null,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        200, phone, isEvolution
       );
     }
 
     // conversa
-    return new Response(
-      JSON.stringify({
+    return buildResponse(
+        {
         success: true,
         intent: "conversa",
         message: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras.",
         transaction: null,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      },
+        200, phone, isEvolution
+      );
   } catch (error) {
     console.error("Webhook error:", error);
-    return new Response(
-      JSON.stringify({
+    return buildResponse(
+        {
         success: false,
         error: error instanceof Error ? error.message : "Erro interno",
         message: "Ocorreu um erro inesperado. Tente novamente.",
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      },
+        500, phone, isEvolution
+      );
   }
 });
 
