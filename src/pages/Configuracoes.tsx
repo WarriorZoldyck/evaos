@@ -337,7 +337,7 @@ export default function Configuracoes() {
                 <AlertDialogCancel onClick={() => setConfirmText("")}>Cancelar</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleDeleteAccount}
-                  disabled={confirmText !== "EXCLUIR" || deleting}
+                  disabled={!user?.email || confirmText !== user.email || deleting}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 >
                   {deleting ? "Excluindo..." : "Excluir permanentemente"}
