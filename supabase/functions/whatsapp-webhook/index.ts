@@ -17,12 +17,12 @@ async function sendEvolutionReply(phone: string, text: string) {
   const evoKey = Deno.env.get("EVOLUTION_API_KEY");
   const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
   if (!evoUrl || !evoKey || !evoInstance) {
-    console.log("Evolution API not configured, skipping reply");
+    console.error("Evolution API not configured, skipping reply. URL:", evoUrl ? "SET" : "MISSING", "KEY:", evoKey ? "SET" : "MISSING", "INSTANCE:", evoInstance ? "SET" : "MISSING");
     return;
   }
   try {
     const url = `${evoUrl}/message/sendText/${encodeURIComponent(evoInstance)}`;
-    console.log("Sending Evolution reply to:", phone);
+    console.log("Sending Evolution reply to:", phone, "| URL:", url);
     const res = await fetch(url, {
       method: "POST",
       headers: { "apikey": evoKey, "Content-Type": "application/json" },
@@ -40,10 +40,8 @@ async function sendEvolutionReply(phone: string, text: string) {
 }
 
 // Helper to build response AND send Evolution reply
-function buildResponse(body: any, status: number, phone: string, isEvolution: boolean) {
-  // Send reply via Evolution API if the request came from Evolution
-  if (isEvolution && body.message) {
-    // Fire-and-forget: don't await to avoid delaying the webhook response
+function buildResponse(body: any, status: number, phone: string) {
+  if (body.message && phone) {
     sendEvolutionReply(phone, body.message);
   }
   return new Response(JSON.stringify(body), {
@@ -57,86 +55,71 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Declare phone early so error handler can use it
+  let phone = "";
+
   try {
-    // 1. Validate webhook secret (optional for Evolution API which sends via configured headers)
-    const webhookSecret = Deno.env.get("WHATSAPP_WEBHOOK_SECRET");
-    const receivedSecret = req.headers.get("x-webhook-secret");
-    
     const rawBody = await req.text();
     console.log("RAW BODY:", rawBody.substring(0, 500));
+
     let parsed: any;
     try {
       parsed = JSON.parse(rawBody);
     } catch (e) {
       console.log("JSON PARSE ERROR:", e.message);
-      return buildResponse(
-        { success: false, error: "Invalid JSON body", rawBody: rawBody.substring(0, 200) },
-        400, phone, isEvolution
-      );
+      return new Response(JSON.stringify({ success: false, error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // --- Detect Evolution API payload and normalize ---
-    let phone: string | undefined;
-    let message: string | undefined;
-    let image_base64: string | undefined;
-    let image_url: string | undefined;
-    let isEvolution = false;
-
-    if (parsed.event === "messages.upsert" && parsed.data) {
-      isEvolution = true;
-      console.log("=== EVOLUTION API PAYLOAD DETECTED ===");
-      const msgData = parsed.data;
-      const key = msgData.key;
-
-      // Ignore messages sent by us (fromMe)
-      if (key?.fromMe) {
-        console.log("Ignoring fromMe message");
-        return new Response(JSON.stringify({ success: true, ignored: true }), {
-          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Extract phone from remoteJid
-      phone = key?.remoteJid?.replace("@s.whatsapp.net", "")?.replace("@g.us", "");
-
-      // Extract message text from various Evolution message types
-      const msgContent = msgData.message;
-      message = msgContent?.conversation
-        || msgContent?.extendedTextMessage?.text
-        || msgContent?.imageMessage?.caption
-        || "";
-
-      // Extract image URL if present
-      // (Evolution sends mediaUrl in some configs)
-      if (msgContent?.imageMessage) {
-        // Evolution may include base64 or a mediaUrl depending on config
-        // For now we handle text; image support can be added later
-        console.log("Image message detected (text caption extracted)");
-      }
-
-      console.log("Evolution normalized:", { phone, message: message?.substring(0, 50) });
-    } else {
-      // Legacy N8N / direct API format
-      phone = parsed.phone;
-      message = parsed.message;
-      image_base64 = parsed.image_base64;
-      image_url = parsed.image_url;
-
-      // Validate webhook secret for non-Evolution requests
-      if (!webhookSecret || receivedSecret !== webhookSecret) {
-        return buildResponse(
-        { success: false, error: "Unauthorized" },
-        401, phone, isEvolution
-      );
-      }
+    // === EVOLUTION API ONLY ===
+    // Ignore non-message events (connection.update, qrcode.updated, etc)
+    if (parsed.event !== "messages.upsert" || !parsed.data) {
+      console.log("Ignoring non-message event:", parsed.event || "unknown");
+      return new Response(JSON.stringify({ success: true, ignored: true, event: parsed.event }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log("PARSED:", { phone, message: message?.substring?.(0, 50), image_base64: !!image_base64, image_url: !!image_url });
+    const msgData = parsed.data;
+    const key = msgData.key;
 
-    if (!phone || (!message && !image_base64 && !image_url)) {
+    // Ignore messages sent by us (fromMe) to prevent loops
+    if (key?.fromMe) {
+      console.log("Ignoring fromMe message");
+      return new Response(JSON.stringify({ success: true, ignored: true, reason: "fromMe" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Ignore group messages
+    if (key?.remoteJid?.includes("@g.us")) {
+      console.log("Ignoring group message");
+      return new Response(JSON.stringify({ success: true, ignored: true, reason: "group" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Extract phone from remoteJid
+    phone = key?.remoteJid?.replace("@s.whatsapp.net", "") || "";
+
+    // Extract message text
+    const msgContent = msgData.message;
+    const message = msgContent?.conversation
+      || msgContent?.extendedTextMessage?.text
+      || msgContent?.imageMessage?.caption
+      || "";
+
+    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50) });
+
+    if (!phone || !message) {
       return buildResponse(
-        { success: false, error: "phone and message/image are required" },
-        400, phone || "", isEvolution
+        { success: false, error: "phone and message are required" },
+        400, phone
       );
     }
 
@@ -178,6 +161,7 @@ serve(async (req) => {
     console.log("=== WHATSAPP WEBHOOK DEBUG ===");
     console.log("Incoming phone:", phone);
     console.log("Digits only:", digitsOnly);
+    console.log("Candidates:", allCandidates);
 
     const { data: allProfiles, error: profileError } = await supabase
       .from("profiles")
@@ -188,9 +172,11 @@ serve(async (req) => {
       console.error("Profile lookup error:", profileError);
       return buildResponse(
         { success: false, error: "Erro interno ao buscar perfil" },
-        500, phone, isEvolution
+        500, phone
       );
     }
+
+    console.log("All profiles with whatsapp:", (allProfiles || []).map(p => ({ id: p.id.slice(0, 8), wn: p.whatsapp_number })));
 
     const profile = (allProfiles || []).find((p) => {
       if (!p.whatsapp_number) return false;
@@ -212,9 +198,9 @@ serve(async (req) => {
         {
           success: false,
           error: "Número não cadastrado. Cadastre seu WhatsApp nas configurações do EVA OS.",
-          message: "Número não cadastrado. Cadastre seu WhatsApp nas configurações do EVA OS.",
+          message: "❌ Número não cadastrado. Cadastre seu WhatsApp nas configurações do EVA OS para usar a EVA.",
         },
-        404, phone, isEvolution
+        200, phone
       );
     }
 
@@ -225,228 +211,210 @@ serve(async (req) => {
     // ============================================================
     // CHECK FOR PENDING ACTIONS BEFORE ANYTHING ELSE
     // ============================================================
-    if (message) {
-      const trimmedMsg = message.trim();
+    const trimmedMsg = message.trim();
 
-      // Clean up expired pending actions first
-      await supabase
-        .from("whatsapp_pending_actions")
-        .delete()
-        .eq("user_id", userId)
-        .lt("expires_at", new Date().toISOString());
+    // Clean up expired pending actions first
+    await supabase
+      .from("whatsapp_pending_actions")
+      .delete()
+      .eq("user_id", userId)
+      .lt("expires_at", new Date().toISOString());
 
-      // Check for active pending action
-      const { data: pendingActions } = await supabase
-        .from("whatsapp_pending_actions")
-        .select("*")
-        .eq("user_id", userId)
-        .gte("expires_at", new Date().toISOString())
-        .order("created_at", { ascending: false })
-        .limit(1);
+    // Check for active pending action
+    const { data: pendingActions } = await supabase
+      .from("whatsapp_pending_actions")
+      .select("*")
+      .eq("user_id", userId)
+      .gte("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-      const pendingAction = pendingActions?.[0];
+    const pendingAction = pendingActions?.[0];
 
-      if (pendingAction) {
-        // User is responding to a pending action
-        if (CONFIRM_PATTERNS.test(trimmedMsg)) {
-          console.log("=== PENDING ACTION: CONFIRMED ===");
-          console.log("Creating category:", pendingAction.suggested_category_name);
+    if (pendingAction) {
+      // User is responding to a pending action
+      if (CONFIRM_PATTERNS.test(trimmedMsg)) {
+        console.log("=== PENDING ACTION: CONFIRMED ===");
+        console.log("Creating category:", pendingAction.suggested_category_name);
 
-          // Create the category
-          const { data: newCategory, error: catError } = await supabase
-            .from("categories")
-            .insert({
-              user_id: userId,
-              name: pendingAction.suggested_category_name,
-              type: pendingAction.category_type,
-              company_id: pendingAction.context_company_id,
-            })
-            .select("id, name")
-            .single();
-
-          if (catError) {
-            console.error("Failed to create category:", catError);
-            // Clean up pending action
-            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-            return buildResponse(
-        {
-                success: false,
-                intent: "lancamento",
-                message: `❌ Não consegui criar a categoria "${pendingAction.suggested_category_name}". Tente novamente.`,
-                transaction: null,
-              },
-        200, phone, isEvolution
-      );
-          }
-
-          console.log("Category created:", newCategory.id, newCategory.name);
-
-          // Now create the transaction using the stored payload
-          const payload = pendingAction.payload as any;
-          const txType = payload.type === "receita" ? "receita" : "despesa";
-
-          // Resolve account from payload
-          const [accountsRes, walletsRes, creditCardsRes] = await Promise.all([
-            supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
-            supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
-            supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
-          ]);
-          const accounts = accountsRes.data || [];
-          const walletsList = walletsRes.data || [];
-          const creditCards = creditCardsRes.data || [];
-          const companyId = pendingAction.context_company_id;
-
-          const contextAccounts = accounts.filter((a) =>
-            companyId ? a.company_id === companyId : !a.company_id
-          );
-          const contextWallets = walletsList.filter((w) =>
-            companyId ? w.company_id === companyId : !w.company_id
-          );
-
-          let bankAccountId: string | null = null;
-          let walletId: string | null = null;
-          let creditCardId: string | null = payload.credit_card_id || null;
-
-          // If credit card was resolved, use its linked bank account
-          if (creditCardId) {
-            const ctxCards = creditCards.filter((c: any) =>
-              companyId ? c.company_id === companyId : !c.company_id
-            );
-            const cardMatch = ctxCards.find((c: any) => c.id === creditCardId);
-            if (cardMatch) {
-              bankAccountId = cardMatch.bank_account_id;
-            }
-          }
-
-          if (!creditCardId) {
-            if (payload.account_id) {
-              const accMatch = contextAccounts.find((a) => a.id === payload.account_id);
-              if (accMatch) bankAccountId = accMatch.id;
-              else {
-                const walMatch = contextWallets.find((w) => w.id === payload.account_id);
-                if (walMatch) walletId = walMatch.id;
-              }
-            }
-            if (!bankAccountId && !walletId) {
-              if (contextAccounts.length > 0) bankAccountId = contextAccounts[0].id;
-              else if (contextWallets.length > 0) walletId = contextWallets[0].id;
-            }
-          }
-
-          const today = new Date();
-          const pad = (n: number) => String(n).padStart(2, "0");
-          const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
-
-          const competenceDate = payload.competence_date || payload.date || todayStr;
-          let paymentDate = payload.date || todayStr;
-          let status: "Pago" | "Pendente" = "Pago";
-
-          // Credit card cycle calculation for pending action
-          if (creditCardId) {
-            const ctxCards = creditCards.filter((c: any) =>
-              companyId ? c.company_id === companyId : !c.company_id
-            );
-            const card = ctxCards.find((c: any) => c.id === creditCardId);
-            if (card) {
-              const compDate = new Date(competenceDate + "T12:00:00");
-              const compDay = compDate.getDate();
-              const compMonth = compDate.getMonth();
-              const compYear = compDate.getFullYear();
-              let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
-              let billYear = compYear;
-              let dueMonth = billMonth;
-              let dueYear = billYear;
-              if (card.due_day < card.closing_day) {
-                dueMonth = billMonth + 1;
-              }
-              if (dueMonth > 11) {
-                dueMonth -= 12;
-                dueYear++;
-              }
-              const dueDate = new Date(dueYear, dueMonth, card.due_day);
-              paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
-            }
-            status = "Pendente";
-          }
-
-          const { error: insertError } = await supabase.from("transactions").insert({
+        // Create the category
+        const { data: newCategory, error: catError } = await supabase
+          .from("categories")
+          .insert({
             user_id: userId,
-            description: payload.description || "Lançamento via WhatsApp",
-            amount: Math.abs(payload.amount || 0),
-            type: txType,
-            category: newCategory.id,
-            subcategory: null,
-            competence_date: competenceDate,
-            payment_date: paymentDate,
-            status: status,
-            bank_account_id: bankAccountId,
-            wallet_id: walletId,
-            credit_card_id: creditCardId,
-            company_id: companyId,
-            payment_method: payload.payment_method || null,
-            supplier_id: payload.supplier_id || null,
-            client_id: payload.client_id || null,
-            contact_name: payload.contact_name || null,
-            notes: payload.notes || null,
-          });
+            name: pendingAction.suggested_category_name,
+            type: pendingAction.category_type,
+            company_id: pendingAction.context_company_id,
+          })
+          .select("id, name")
+          .single();
 
-          // Clean up pending action
+        if (catError) {
+          console.error("Failed to create category:", catError);
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return buildResponse({
+            success: false,
+            intent: "lancamento",
+            message: `❌ Não consegui criar a categoria "${pendingAction.suggested_category_name}". Tente novamente.`,
+            transaction: null,
+          }, 200, phone);
+        }
 
-          if (insertError) {
-            console.error("Transaction insert error after category creation:", insertError);
-            return buildResponse(
-        {
-                success: false,
-                intent: "lancamento",
-                message: `✅ Categoria "${newCategory.name}" criada, mas houve um erro ao criar o lançamento. Tente enviar novamente.`,
-                transaction: null,
-              },
-        200, phone, isEvolution
-      );
+        console.log("Category created:", newCategory.id, newCategory.name);
+
+        // Now create the transaction using the stored payload
+        const payload = pendingAction.payload as any;
+        const txType = payload.type === "receita" ? "receita" : "despesa";
+
+        // Resolve account from payload
+        const [accountsRes, walletsRes, creditCardsRes] = await Promise.all([
+          supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
+          supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
+          supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
+        ]);
+        const accounts = accountsRes.data || [];
+        const walletsList = walletsRes.data || [];
+        const creditCards = creditCardsRes.data || [];
+        const companyId = pendingAction.context_company_id;
+
+        const contextAccounts = accounts.filter((a) =>
+          companyId ? a.company_id === companyId : !a.company_id
+        );
+        const contextWallets = walletsList.filter((w) =>
+          companyId ? w.company_id === companyId : !w.company_id
+        );
+
+        let bankAccountId: string | null = null;
+        let walletId: string | null = null;
+        let creditCardId: string | null = payload.credit_card_id || null;
+
+        if (creditCardId) {
+          const ctxCards = creditCards.filter((c: any) =>
+            companyId ? c.company_id === companyId : !c.company_id
+          );
+          const cardMatch = ctxCards.find((c: any) => c.id === creditCardId);
+          if (cardMatch) {
+            bankAccountId = cardMatch.bank_account_id;
           }
-
-          const typeLabel = txType === "receita" ? "Receita" : "Despesa";
-          const contextLabel = payload.context || "Pessoal";
-          return buildResponse(
-        {
-              success: true,
-              intent: "lancamento",
-              message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || today}`,
-              transaction: {
-                description: payload.description,
-                amount: payload.amount,
-                type: txType,
-                category: newCategory.name,
-                context: contextLabel,
-                date: payload.date || today,
-              },
-            },
-        200, phone, isEvolution
-      );
         }
 
-        if (CANCEL_PATTERNS.test(trimmedMsg)) {
-          console.log("=== PENDING ACTION: CANCELLED ===");
-          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-          return buildResponse(
-        {
-              success: true,
-              intent: "conversa",
-              message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊",
-              transaction: null,
-            },
-        200, phone, isEvolution
-      );
+        if (!creditCardId) {
+          if (payload.account_id) {
+            const accMatch = contextAccounts.find((a) => a.id === payload.account_id);
+            if (accMatch) bankAccountId = accMatch.id;
+            else {
+              const walMatch = contextWallets.find((w) => w.id === payload.account_id);
+              if (walMatch) walletId = walMatch.id;
+            }
+          }
+          if (!bankAccountId && !walletId) {
+            if (contextAccounts.length > 0) bankAccountId = contextAccounts[0].id;
+            else if (contextWallets.length > 0) walletId = contextWallets[0].id;
+          }
         }
 
-        // Message doesn't match confirm/cancel — clear pending and process normally
-        console.log("=== PENDING ACTION: IGNORED (new message) ===");
+        const today = new Date();
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+
+        const competenceDate = payload.competence_date || payload.date || todayStr;
+        let paymentDate = payload.date || todayStr;
+        let status: "Pago" | "Pendente" = "Pago";
+
+        if (creditCardId) {
+          const ctxCards = creditCards.filter((c: any) =>
+            companyId ? c.company_id === companyId : !c.company_id
+          );
+          const card = ctxCards.find((c: any) => c.id === creditCardId);
+          if (card) {
+            const compDate = new Date(competenceDate + "T12:00:00");
+            const compDay = compDate.getDate();
+            const compMonth = compDate.getMonth();
+            const compYear = compDate.getFullYear();
+            let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
+            let billYear = compYear;
+            let dueMonth = billMonth;
+            let dueYear = billYear;
+            if (card.due_day < card.closing_day) {
+              dueMonth = billMonth + 1;
+            }
+            if (dueMonth > 11) {
+              dueMonth -= 12;
+              dueYear++;
+            }
+            const dueDate = new Date(dueYear, dueMonth, card.due_day);
+            paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+          }
+          status = "Pendente";
+        }
+
+        const { error: insertError } = await supabase.from("transactions").insert({
+          user_id: userId,
+          description: payload.description || "Lançamento via WhatsApp",
+          amount: Math.abs(payload.amount || 0),
+          type: txType,
+          category: newCategory.id,
+          subcategory: null,
+          competence_date: competenceDate,
+          payment_date: paymentDate,
+          status: status,
+          bank_account_id: bankAccountId,
+          wallet_id: walletId,
+          credit_card_id: creditCardId,
+          company_id: companyId,
+          payment_method: payload.payment_method || null,
+          supplier_id: payload.supplier_id || null,
+          client_id: payload.client_id || null,
+          contact_name: payload.contact_name || null,
+          notes: payload.notes || null,
+        });
+
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+        if (insertError) {
+          console.error("Transaction insert error after category creation:", insertError);
+          return buildResponse({
+            success: false,
+            intent: "lancamento",
+            message: `✅ Categoria "${newCategory.name}" criada, mas houve um erro ao criar o lançamento. Tente enviar novamente.`,
+            transaction: null,
+          }, 200, phone);
+        }
+
+        const typeLabel = txType === "receita" ? "Receita" : "Despesa";
+        const contextLabel = payload.context || "Pessoal";
+        return buildResponse({
+          success: true,
+          intent: "lancamento",
+          message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}`,
+          transaction: {
+            description: payload.description,
+            amount: payload.amount,
+            type: txType,
+            category: newCategory.name,
+            context: contextLabel,
+            date: payload.date || todayStr,
+          },
+        }, 200, phone);
       }
+
+      if (CANCEL_PATTERNS.test(trimmedMsg)) {
+        console.log("=== PENDING ACTION: CANCELLED ===");
+        await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+        return buildResponse({
+          success: true,
+          intent: "conversa",
+          message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊",
+          transaction: null,
+        }, 200, phone);
+      }
+
+      // Message doesn't match confirm/cancel — clear pending and process normally
+      console.log("=== PENDING ACTION: IGNORED (new message) ===");
+      await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
     }
 
-    // 4. Fetch user context (categories, accounts, wallets, companies, credit cards, contacts)
+    // 4. Fetch user context
     const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
@@ -467,7 +435,7 @@ serve(async (req) => {
 
     const today = new Date().toISOString().split("T")[0];
 
-    // 5. Build context-aware category and account lists for AI prompt
+    // 5. Build context-aware lists for AI prompt
     const contextNames = ["Pessoal", ...companies.map((c) => c.name)];
 
     const buildCategoryList = (companyId: string | null, label: string) => {
@@ -478,7 +446,6 @@ serve(async (req) => {
         const subs = filtered
           .filter((c) => c.parent_id === p.id)
           .map((c) => {
-            // 3rd level
             const level3 = filtered.filter((l3) => l3.parent_id === c.id).map((l3) => `${l3.name}[${l3.id}]`);
             return level3.length > 0
               ? `${c.name}[${c.id}] > ${level3.join(", ")}`
@@ -537,8 +504,8 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       return buildResponse(
-        { success: false, error: "AI not configured" },
-        500, phone, isEvolution
+        { success: false, error: "AI not configured", message: "⚠️ IA não configurada. Contate o suporte." },
+        500, phone
       );
     }
 
@@ -638,22 +605,6 @@ IMPORTANTE:
 - Para lançamentos sem tipo explícito, assuma "despesa"
 - Sempre retorne o campo "context"`;
 
-    const userContent: any[] = [];
-    if (message) {
-      userContent.push({ type: "text", text: message });
-    }
-    if (image_base64) {
-      userContent.push({
-        type: "image_url",
-        image_url: { url: `data:image/jpeg;base64,${image_base64}` },
-      });
-    } else if (image_url) {
-      userContent.push({
-        type: "image_url",
-        image_url: { url: image_url },
-      });
-    }
-
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -664,7 +615,7 @@ IMPORTANTE:
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userContent.length === 1 && userContent[0].type === "text" ? message : userContent },
+          { role: "user", content: message },
         ],
       }),
     });
@@ -672,14 +623,11 @@ IMPORTANTE:
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI Gateway error:", aiResponse.status, errText);
-      return buildResponse(
-        {
-          success: false,
-          error: "Erro ao processar mensagem com IA",
-          message: "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.",
-        },
-        500, phone, isEvolution
-      );
+      return buildResponse({
+        success: false,
+        error: "Erro ao processar mensagem com IA",
+        message: "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.",
+      }, 500, phone);
     }
 
     const aiData = await aiResponse.json();
@@ -692,18 +640,15 @@ IMPORTANTE:
       aiParsed = JSON.parse(jsonMatch[1].trim());
     } catch {
       console.error("Failed to parse AI response:", rawContent);
-      return buildResponse(
-        {
-          success: true,
-          intent: "conversa",
-          message: "Desculpe, não consegui entender sua mensagem. Pode reformular?",
-          transaction: null,
-        },
-        200, phone, isEvolution
-      );
+      return buildResponse({
+        success: true,
+        intent: "conversa",
+        message: "Desculpe, não consegui entender sua mensagem. Pode reformular?",
+        transaction: null,
+      }, 200, phone);
     }
 
-    // --- Resolve context to company_id (strict) ---
+    // --- Resolve context to company_id ---
     const resolveContext = (contextName: string | undefined): string | null => {
       if (!contextName || contextName === "Pessoal") return null;
       const company = companies.find(
@@ -712,7 +657,6 @@ IMPORTANTE:
       return company?.id || null;
     };
 
-    // --- Validate context exists ---
     const validateContext = (contextName: string | undefined): boolean => {
       if (!contextName || contextName === "Pessoal") return true;
       return companies.some((c) => c.name.toLowerCase() === contextName.toLowerCase());
@@ -720,7 +664,6 @@ IMPORTANTE:
 
     // 7. Execute action based on intent
     if (aiParsed.intent === "lancamento") {
-      // Validate context strictly
       if (!validateContext(aiParsed.context)) {
         console.warn("AI returned invalid context:", aiParsed.context, "| Available:", contextNames);
         aiParsed.context = "Pessoal";
@@ -728,13 +671,12 @@ IMPORTANTE:
 
       const companyId = resolveContext(aiParsed.context);
 
-      // --- Resolve category_id with UUID-first approach ---
+      // --- Resolve category_id ---
       const contextCategories = categories.filter((c) =>
         companyId ? c.company_id === companyId : !c.company_id
       );
       const txType = aiParsed.type === "receita" ? "receita" : "despesa";
 
-      // Helper: check if category type matches transaction type
       const typeMatches = (cat: any) => {
         return !cat.type || cat.type === "ambos" || cat.type === txType;
       };
@@ -743,12 +685,10 @@ IMPORTANTE:
       let subcategoryValue: string | null = null;
       let subcategoryLabel: string | null = null;
 
-      // Step 1: Try direct UUID match from AI response
       if (aiParsed.category_id) {
         matchedCategory = contextCategories.find(
           (c) => c.id === aiParsed.category_id && !c.parent_id
         );
-        // If AI returned a subcategory UUID as category_id, find its parent
         if (!matchedCategory) {
           const asSub = contextCategories.find((c) => c.id === aiParsed.category_id && c.parent_id);
           if (asSub) {
@@ -759,7 +699,6 @@ IMPORTANTE:
         }
       }
 
-      // Step 2: Fallback - AI might have returned a name in category_id field
       if (!matchedCategory && aiParsed.category_id) {
         const nameGuess = aiParsed.category_id.toLowerCase();
         matchedCategory = contextCategories.find(
@@ -772,7 +711,6 @@ IMPORTANTE:
         }
       }
 
-      // Step 3: Legacy fallback - AI returned "category" as name (old format)
       if (!matchedCategory && aiParsed.category) {
         const parsedCategoryName = aiParsed.category.toLowerCase();
         matchedCategory = contextCategories.find(
@@ -785,17 +723,121 @@ IMPORTANTE:
         }
       }
 
-      // ============================================================
-      // NO MORE FALLBACKS — if no match, ask user to confirm creation
-      // ============================================================
+      // --- Account / Credit Card resolution ---
+      const contextAccounts = accounts.filter((a) =>
+        companyId ? a.company_id === companyId : !a.company_id
+      );
+      const contextWallets = wallets.filter((w) =>
+        companyId ? w.company_id === companyId : !w.company_id
+      );
+      const contextCards = creditCards.filter((c) =>
+        companyId ? c.company_id === companyId : !c.company_id
+      );
+
+      let bankAccountId: string | null = null;
+      let walletId: string | null = null;
+      let creditCardId: string | null = null;
+      let paymentMethod: string | null = aiParsed.payment_method || null;
+
+      const PAYMENT_METHOD_MAP: Record<string, string> = {
+        "pix": "PIX",
+        "dinheiro": "Dinheiro",
+        "cartao_debito": "Cartão de Débito",
+        "cartao_credito": "Cartão de Crédito",
+        "boleto": "Boleto",
+        "transferencia": "Transferência",
+      };
+      if (paymentMethod && PAYMENT_METHOD_MAP[paymentMethod]) {
+        paymentMethod = PAYMENT_METHOD_MAP[paymentMethod];
+      }
+
+      if (aiParsed.credit_card_id) {
+        const cardMatch = contextCards.find((c) => c.id === aiParsed.credit_card_id);
+        if (cardMatch) {
+          creditCardId = cardMatch.id;
+          bankAccountId = cardMatch.bank_account_id;
+          paymentMethod = "Cartão de Crédito";
+        }
+      }
+      if (!creditCardId && paymentMethod === "Cartão de Crédito") {
+        if (contextCards.length === 1) {
+          creditCardId = contextCards[0].id;
+          bankAccountId = contextCards[0].bank_account_id;
+        } else if (contextCards.length > 1) {
+          const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
+          return buildResponse({
+            success: true,
+            intent: "lancamento",
+            message: `💳 Entendi a compra de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
+            transaction: null,
+          }, 200, phone);
+        }
+      }
+
+      if (!creditCardId) {
+        if (aiParsed.account_id) {
+          const accMatch = contextAccounts.find((a) => a.id === aiParsed.account_id);
+          if (accMatch) {
+            bankAccountId = accMatch.id;
+          } else {
+            const walMatch = contextWallets.find((w) => w.id === aiParsed.account_id);
+            if (walMatch) {
+              walletId = walMatch.id;
+            }
+          }
+        }
+        if (!bankAccountId && !walletId) {
+          const totalOptions = contextAccounts.length + contextWallets.length;
+          if (totalOptions === 1) {
+            if (contextAccounts.length === 1) {
+              bankAccountId = contextAccounts[0].id;
+            } else {
+              walletId = contextWallets[0].id;
+            }
+          } else if (totalOptions > 1) {
+            const optionsList = [
+              ...contextAccounts.map((a) => `• ${a.name}`),
+              ...contextWallets.map((w) => `• ${w.name} (carteira)`),
+            ].join("\n");
+            return buildResponse({
+              success: true,
+              intent: "lancamento",
+              message: `📋 Entendi o lançamento de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
+              transaction: null,
+            }, 200, phone);
+          }
+        }
+      }
+
+      // --- Contact / Supplier / Client resolution ---
+      let supplierId: string | null = null;
+      let clientId: string | null = null;
+      let contactName: string | null = aiParsed.contact_name || null;
+
+      if (aiParsed.supplier_id) {
+        const supMatch = suppliersList.find((s) => s.id === aiParsed.supplier_id);
+        if (supMatch) {
+          supplierId = supMatch.id;
+          contactName = contactName || supMatch.name;
+        }
+      }
+      if (aiParsed.client_id) {
+        const cliMatch = clientsList.find((c) => c.id === aiParsed.client_id);
+        if (cliMatch) {
+          clientId = cliMatch.id;
+          contactName = contactName || cliMatch.name;
+        }
+      }
+
+      // --- NO CATEGORY MATCH → ask user ---
       if (!matchedCategory) {
         const suggestedName = aiParsed.suggested_category_name || aiParsed.description || "Nova Categoria";
         const contextLabel = aiParsed.context || "Pessoal";
 
         console.log("=== NO CATEGORY MATCH — ASKING FOR CONFIRMATION ===");
-        console.log("Suggested name:", suggestedName, "| Context:", contextLabel, "| Type:", txType);
 
-        // Save pending action
+        const competenceDate = aiParsed.competence_date || aiParsed.date || today;
+
         const { error: pendingError } = await supabase
           .from("whatsapp_pending_actions")
           .insert({
@@ -825,19 +867,15 @@ IMPORTANTE:
           console.error("Failed to save pending action:", pendingError);
         }
 
-        return buildResponse(
-        {
-            success: true,
-            intent: "lancamento",
-            message: `🤔 Não encontrei a categoria "${suggestedName}" no contexto "${contextLabel}".\n\nQuer que eu crie essa categoria e registre o lançamento?\n\nResponda *sim* para confirmar ou *não* para cancelar.`,
-            transaction: null,
-            pending_confirmation: true,
-          },
-        200, phone, isEvolution
-      );
+        return buildResponse({
+          success: true,
+          intent: "lancamento",
+          message: `🤔 Não encontrei a categoria "${suggestedName}" no contexto "${contextLabel}".\n\nQuer que eu crie essa categoria e registre o lançamento?\n\nResponda *sim* para confirmar ou *não* para cancelar.`,
+          transaction: null,
+          pending_confirmation: true,
+        }, 200, phone);
       }
 
-      // Warn if type didn't match
       if (matchedCategory && !typeMatches(matchedCategory)) {
         console.warn("Category type mismatch:", matchedCategory.name, "(", matchedCategory.type, ") vs transaction type:", txType);
       }
@@ -855,7 +893,6 @@ IMPORTANTE:
           subcategoryLabel = subMatch.name;
         }
       }
-      // Legacy: AI returned subcategory as name
       if (!subcategoryValue && aiParsed.subcategory && matchedCategory) {
         const parsedSubName = aiParsed.subcategory.toLowerCase();
         const subMatch = contextCategories.find(
@@ -869,133 +906,25 @@ IMPORTANTE:
         }
       }
 
-      // --- Account / Credit Card resolution ---
-      const contextAccounts = accounts.filter((a) =>
-        companyId ? a.company_id === companyId : !a.company_id
-      );
-      const contextWallets = wallets.filter((w) =>
-        companyId ? w.company_id === companyId : !w.company_id
-      );
-      const contextCards = creditCards.filter((c) =>
-        companyId ? c.company_id === companyId : !c.company_id
-      );
-
-      let bankAccountId: string | null = null;
-      let walletId: string | null = null;
-      let creditCardId: string | null = null;
-      let paymentMethod: string | null = aiParsed.payment_method || null;
-
-      // Map AI snake_case payment methods to UI display values
-      const PAYMENT_METHOD_MAP: Record<string, string> = {
-        "pix": "PIX",
-        "dinheiro": "Dinheiro",
-        "cartao_debito": "Cartão de Débito",
-        "cartao_credito": "Cartão de Crédito",
-        "boleto": "Boleto",
-        "transferencia": "Transferência",
-      };
-      if (paymentMethod && PAYMENT_METHOD_MAP[paymentMethod]) {
-        paymentMethod = PAYMENT_METHOD_MAP[paymentMethod];
-      }
-
-      // Credit card resolution
-      if (aiParsed.credit_card_id) {
-        const cardMatch = contextCards.find((c) => c.id === aiParsed.credit_card_id);
-        if (cardMatch) {
-          creditCardId = cardMatch.id;
-          bankAccountId = cardMatch.bank_account_id;
-          paymentMethod = "Cartão de Crédito";
-        }
-      }
-      // If AI said Cartão de Crédito but no card ID, resolve or ask
-      if (!creditCardId && paymentMethod === "Cartão de Crédito") {
-        if (contextCards.length === 1) {
-          creditCardId = contextCards[0].id;
-          bankAccountId = contextCards[0].bank_account_id;
-        } else if (contextCards.length > 1) {
-          const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
-          console.log("AMBIGUOUS CARD: multiple options, asking user");
-          return buildResponse(
-        {
-              success: true,
-              intent: "lancamento",
-              message: `💳 Entendi a compra de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
-              transaction: null,
-            },
-        200, phone, isEvolution
-      );
-        }
-      }
-
-      // Regular account resolution (only if not credit card)
-      if (!creditCardId) {
-        if (aiParsed.account_id) {
-          const accMatch = contextAccounts.find((a) => a.id === aiParsed.account_id);
-          if (accMatch) {
-            bankAccountId = accMatch.id;
-          } else {
-            const walMatch = contextWallets.find((w) => w.id === aiParsed.account_id);
-            if (walMatch) {
-              walletId = walMatch.id;
-            }
-          }
-        }
-        // Fallback: only auto-pick if there's exactly ONE option
-        if (!bankAccountId && !walletId) {
-          const totalOptions = contextAccounts.length + contextWallets.length;
-          if (totalOptions === 1) {
-            if (contextAccounts.length === 1) {
-              bankAccountId = contextAccounts[0].id;
-            } else {
-              walletId = contextWallets[0].id;
-            }
-          } else if (totalOptions > 1) {
-            // Multiple accounts — ask user which one
-            const optionsList = [
-              ...contextAccounts.map((a) => `• ${a.name}`),
-              ...contextWallets.map((w) => `• ${w.name} (carteira)`),
-            ].join("\n");
-            console.log("AMBIGUOUS ACCOUNT: multiple options, asking user");
-            return buildResponse(
-        {
-                success: true,
-                intent: "lancamento",
-                message: `📋 Entendi o lançamento de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
-                transaction: null,
-              },
-        200, phone, isEvolution
-      );
-          }
-        }
-      }
-
-      // --- BLOCK if no account/wallet/card ---
       const contextLabel = aiParsed.context || "Pessoal";
 
+      // --- BLOCK if no account/wallet/card ---
       if (!bankAccountId && !walletId && !creditCardId) {
-        console.error("BLOCKED: No account/wallet/card for context:", contextLabel);
-        return buildResponse(
-        {
-            success: false,
-            intent: "lancamento",
-            message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária, carteira ou cartão cadastrado no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
-            transaction: null,
-          },
-        200, phone, isEvolution
-      );
+        return buildResponse({
+          success: false,
+          intent: "lancamento",
+          message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária, carteira ou cartão cadastrado no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
+          transaction: null,
+        }, 200, phone);
       }
 
       if (!categoryValue) {
-        console.error("BLOCKED: No category resolved for context:", contextLabel, "| type:", txType);
-        return buildResponse(
-        {
-            success: false,
-            intent: "lancamento",
-            message: `❌ Não consegui criar o lançamento porque não há categorias de ${txType} cadastradas no contexto "${contextLabel}". Cadastre categorias antes de lançar.`,
-            transaction: null,
-          },
-        200, phone, isEvolution
-      );
+        return buildResponse({
+          success: false,
+          intent: "lancamento",
+          message: `❌ Não consegui criar o lançamento porque não há categorias de ${txType} cadastradas no contexto "${contextLabel}". Cadastre categorias antes de lançar.`,
+          transaction: null,
+        }, 200, phone);
       }
 
       // --- Credit card cycle date calculation ---
@@ -1010,29 +939,15 @@ IMPORTANTE:
           const compMonth = compDate.getMonth();
           const compYear = compDate.getFullYear();
 
-          let billMonth: number;
-          let billYear: number;
-
-          if (compDay >= card.closing_day) {
-            // Goes to next month's bill
-            billMonth = compMonth + 1;
-            billYear = compYear;
-          } else {
-            // Goes to current month's bill
-            billMonth = compMonth;
-            billYear = compYear;
-          }
-
-          // Calculate due date
+          let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
+          let billYear = compYear;
           let dueMonth = billMonth;
           let dueYear = billYear;
           if (card.due_day < card.closing_day) {
-            // Due is in the month after closing
             dueMonth = billMonth + 1;
-            dueYear = billYear;
           }
           if (dueMonth > 11) {
-            dueMonth = dueMonth - 12;
+            dueMonth -= 12;
             dueYear++;
           }
 
@@ -1042,45 +957,22 @@ IMPORTANTE:
         }
       }
 
-      // --- Contact / Supplier / Client resolution ---
-      let supplierId: string | null = null;
-      let clientId: string | null = null;
-      let contactName: string | null = aiParsed.contact_name || null;
-
-      if (aiParsed.supplier_id) {
-        const supMatch = suppliersList.find((s) => s.id === aiParsed.supplier_id);
-        if (supMatch) {
-          supplierId = supMatch.id;
-          contactName = contactName || supMatch.name;
-        }
-      }
-      if (aiParsed.client_id) {
-        const cliMatch = clientsList.find((c) => c.id === aiParsed.client_id);
-        if (cliMatch) {
-          clientId = cliMatch.id;
-          contactName = contactName || cliMatch.name;
-        }
-      }
-
       // --- Smart status detection ---
       let status: "Pago" | "Pendente" = "Pago";
       if (creditCardId) {
-        status = "Pendente"; // Credit card → always pending (paid on bill)
+        status = "Pendente";
       } else if (paymentDate > today) {
-        status = "Pendente"; // Future payment → pending
+        status = "Pendente";
       } else if (aiParsed.status === "Pendente") {
-        status = "Pendente"; // AI explicitly said pending
+        status = "Pendente";
       }
 
       console.log("=== LANCAMENTO RESOLUTION ===");
       console.log("Context:", aiParsed.context, "| companyId:", companyId);
-      console.log("AI category_id:", aiParsed.category_id, "| AI category (legacy):", aiParsed.category);
-      console.log("Resolved → UUID:", categoryValue, "(", categoryLabel, ")");
-      console.log("AI subcategory_id:", aiParsed.subcategory_id, "→ UUID:", subcategoryValue, "(", subcategoryLabel, ")");
+      console.log("Category:", categoryValue, "(", categoryLabel, ")");
       console.log("Account:", bankAccountId ? `bank:${bankAccountId}` : walletId ? `wallet:${walletId}` : "none");
       console.log("Credit card:", creditCardId, "| Payment method:", paymentMethod);
-      console.log("Competence:", competenceDate, "| Payment:", paymentDate, "| Status:", status);
-      console.log("Supplier:", supplierId, "| Client:", clientId, "| Contact:", contactName);
+      console.log("Status:", status, "| Competence:", competenceDate, "| Payment:", paymentDate);
 
       const { error: insertError } = await supabase.from("transactions").insert({
         user_id: userId,
@@ -1105,48 +997,42 @@ IMPORTANTE:
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
-        return buildResponse(
-        {
-            success: false,
-            error: "Erro ao criar lançamento",
-            message: "Não consegui criar o lançamento. Tente novamente.",
-          },
-        500, phone, isEvolution
-      );
+        return buildResponse({
+          success: false,
+          error: "Erro ao criar lançamento",
+          message: "❌ Não consegui criar o lançamento. Tente novamente.",
+        }, 500, phone);
       }
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(aiParsed.amount || 0);
       const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
-      const payMethodDisplay = paymentMethod ? `\n💳 ${paymentMethod.replace("_", " ")}` : "";
+      const payMethodDisplay = paymentMethod ? `\n💳 ${paymentMethod}` : "";
       const contactDisplay = contactName ? `\n👤 ${contactName}` : "";
       const statusDisplay = status === "Pendente" ? " (Pendente)" : "";
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
-      return buildResponse(
-        {
-          success: true,
-          intent: "lancamento",
-          message:
-            aiParsed.friendly_message ||
-            `✅ Lançamento criado!${statusDisplay}\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`,
-          transaction: {
-            description: aiParsed.description,
-            amount: aiParsed.amount,
-            type: txType,
-            category: categoryLabel,
-            context: contextLabel,
-            date: competenceDate,
-            payment_date: paymentDate,
-            status: status,
-            payment_method: paymentMethod,
-            credit_card: cardName,
-            contact: contactName,
-          },
+      return buildResponse({
+        success: true,
+        intent: "lancamento",
+        message:
+          aiParsed.friendly_message ||
+          `✅ Lançamento criado!${statusDisplay}\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`,
+        transaction: {
+          description: aiParsed.description,
+          amount: aiParsed.amount,
+          type: txType,
+          category: categoryLabel,
+          context: contextLabel,
+          date: competenceDate,
+          payment_date: paymentDate,
+          status: status,
+          payment_method: paymentMethod,
+          credit_card: cardName,
+          contact: contactName,
         },
-        200, phone, isEvolution
-      );
+      }, 200, phone);
     }
 
     if (aiParsed.intent === "consulta") {
@@ -1181,13 +1067,13 @@ IMPORTANTE:
               balances.push(`  • ${acc.name}: ${fmt(balance)}`);
             }
 
-            const contextWallets = companyId
+            const contextWltsList = companyId
               ? wallets.filter((w) => w.company_id === companyId)
               : aiParsed.context === "Pessoal"
                 ? wallets.filter((w) => !w.company_id)
                 : wallets;
 
-            for (const w of contextWallets) {
+            for (const w of contextWltsList) {
               const { data: wTransactions } = await supabase
                 .from("transactions")
                 .select("amount, type")
@@ -1275,7 +1161,6 @@ IMPORTANTE:
               }
             });
 
-            // Resolve category UUIDs to names for display
             const resolveCatName = (catIdOrName: string): string => {
               const found = categories.find((c) => c.id === catIdOrName);
               return found ? found.name : catIdOrName;
@@ -1318,7 +1203,6 @@ IMPORTANTE:
           case "gastos_categoria": {
             const startOfMonth = today.substring(0, 7) + "-01";
             const categoryFilter = aiParsed.category_filter || "";
-            // Try to resolve filter as category name to UUID for more accurate filtering
             const filterCat = categories.find(
               (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
             );
@@ -1346,16 +1230,16 @@ IMPORTANTE:
           }
 
           case "listar_cartoes": {
-            const contextCards = companyId
+            const ctxCards = companyId
               ? creditCards.filter((c) => c.company_id === companyId)
               : aiParsed.context === "Pessoal"
                 ? creditCards.filter((c) => !c.company_id)
                 : creditCards;
 
-            if (contextCards.length === 0) {
+            if (ctxCards.length === 0) {
               responseMessage = "💳 Você não tem cartões de crédito cadastrados" + (aiParsed.context ? ` no contexto "${aiParsed.context}"` : "") + ".";
             } else {
-              const list = contextCards
+              const list = ctxCards
                 .map((c: any) => {
                   const digits = c.last_four_digits ? ` (final ${c.last_four_digits})` : "";
                   return `  • ${c.name}${digits} — Fecha dia ${c.closing_day}, vence dia ${c.due_day}`;
@@ -1404,37 +1288,28 @@ IMPORTANTE:
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
       }
 
-      return buildResponse(
-        {
-          success: true,
-          intent: "consulta",
-          message: responseMessage,
-          transaction: null,
-        },
-        200, phone, isEvolution
-      );
+      return buildResponse({
+        success: true,
+        intent: "consulta",
+        message: responseMessage,
+        transaction: null,
+      }, 200, phone);
     }
 
     // conversa
-    return buildResponse(
-        {
-        success: true,
-        intent: "conversa",
-        message: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras.",
-        transaction: null,
-      },
-        200, phone, isEvolution
-      );
+    return buildResponse({
+      success: true,
+      intent: "conversa",
+      message: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras. 😊",
+      transaction: null,
+    }, 200, phone);
   } catch (error) {
     console.error("Webhook error:", error);
-    return buildResponse(
-        {
-        success: false,
-        error: error instanceof Error ? error.message : "Erro interno",
-        message: "Ocorreu um erro inesperado. Tente novamente.",
-      },
-        500, phone, isEvolution
-      );
+    return buildResponse({
+      success: false,
+      error: error instanceof Error ? error.message : "Erro interno",
+      message: "Ocorreu um erro inesperado. Tente novamente.",
+    }, 500, phone);
   }
 });
 
