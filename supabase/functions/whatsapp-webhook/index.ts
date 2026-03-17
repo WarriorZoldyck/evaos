@@ -628,20 +628,20 @@ IMPORTANTE:
     };
 
     // 7. Execute action based on intent
-    if (parsed.intent === "lancamento") {
+    if (aiParsed.intent === "lancamento") {
       // Validate context strictly
-      if (!validateContext(parsed.context)) {
-        console.warn("AI returned invalid context:", parsed.context, "| Available:", contextNames);
-        parsed.context = "Pessoal";
+      if (!validateContext(aiParsed.context)) {
+        console.warn("AI returned invalid context:", aiParsed.context, "| Available:", contextNames);
+        aiParsed.context = "Pessoal";
       }
 
-      const companyId = resolveContext(parsed.context);
+      const companyId = resolveContext(aiParsed.context);
 
       // --- Resolve category_id with UUID-first approach ---
       const contextCategories = categories.filter((c) =>
         companyId ? c.company_id === companyId : !c.company_id
       );
-      const txType = parsed.type === "receita" ? "receita" : "despesa";
+      const txType = aiParsed.type === "receita" ? "receita" : "despesa";
 
       // Helper: check if category type matches transaction type
       const typeMatches = (cat: any) => {
@@ -653,13 +653,13 @@ IMPORTANTE:
       let subcategoryLabel: string | null = null;
 
       // Step 1: Try direct UUID match from AI response
-      if (parsed.category_id) {
+      if (aiParsed.category_id) {
         matchedCategory = contextCategories.find(
-          (c) => c.id === parsed.category_id && !c.parent_id
+          (c) => c.id === aiParsed.category_id && !c.parent_id
         );
         // If AI returned a subcategory UUID as category_id, find its parent
         if (!matchedCategory) {
-          const asSub = contextCategories.find((c) => c.id === parsed.category_id && c.parent_id);
+          const asSub = contextCategories.find((c) => c.id === aiParsed.category_id && c.parent_id);
           if (asSub) {
             matchedCategory = contextCategories.find((c) => c.id === asSub.parent_id);
             subcategoryValue = asSub.id;
@@ -669,8 +669,8 @@ IMPORTANTE:
       }
 
       // Step 2: Fallback - AI might have returned a name in category_id field
-      if (!matchedCategory && parsed.category_id) {
-        const nameGuess = parsed.category_id.toLowerCase();
+      if (!matchedCategory && aiParsed.category_id) {
+        const nameGuess = aiParsed.category_id.toLowerCase();
         matchedCategory = contextCategories.find(
           (c) => !c.parent_id && c.name.toLowerCase() === nameGuess && typeMatches(c)
         );
@@ -682,8 +682,8 @@ IMPORTANTE:
       }
 
       // Step 3: Legacy fallback - AI returned "category" as name (old format)
-      if (!matchedCategory && parsed.category) {
-        const parsedCategoryName = parsed.category.toLowerCase();
+      if (!matchedCategory && aiParsed.category) {
+        const parsedCategoryName = aiParsed.category.toLowerCase();
         matchedCategory = contextCategories.find(
           (c) => !c.parent_id && c.name.toLowerCase() === parsedCategoryName && typeMatches(c)
         );
@@ -698,8 +698,8 @@ IMPORTANTE:
       // NO MORE FALLBACKS — if no match, ask user to confirm creation
       // ============================================================
       if (!matchedCategory) {
-        const suggestedName = parsed.suggested_category_name || parsed.description || "Nova Categoria";
-        const contextLabel = parsed.context || "Pessoal";
+        const suggestedName = aiParsed.suggested_category_name || aiParsed.description || "Nova Categoria";
+        const contextLabel = aiParsed.context || "Pessoal";
 
         console.log("=== NO CATEGORY MATCH — ASKING FOR CONFIRMATION ===");
         console.log("Suggested name:", suggestedName, "| Context:", contextLabel, "| Type:", txType);
@@ -711,19 +711,19 @@ IMPORTANTE:
             user_id: userId,
             action_type: "create_category",
             payload: {
-              description: parsed.description,
-              amount: parsed.amount,
+              description: aiParsed.description,
+              amount: aiParsed.amount,
               type: txType,
-              context: parsed.context,
-              account_id: parsed.account_id,
+              context: aiParsed.context,
+              account_id: aiParsed.account_id,
               credit_card_id: creditCardId,
               payment_method: paymentMethod,
-              date: parsed.date || today,
+              date: aiParsed.date || today,
               competence_date: competenceDate,
               contact_name: contactName,
               supplier_id: supplierId,
               client_id: clientId,
-              notes: parsed.notes,
+              notes: aiParsed.notes,
             },
             suggested_category_name: suggestedName,
             category_type: txType === "receita" ? "receita" : "despesa",
@@ -755,9 +755,9 @@ IMPORTANTE:
       const categoryLabel = matchedCategory?.name || "Sem categoria";
 
       // --- Resolve subcategory_id ---
-      if (!subcategoryValue && parsed.subcategory_id && matchedCategory) {
+      if (!subcategoryValue && aiParsed.subcategory_id && matchedCategory) {
         const subMatch = contextCategories.find(
-          (c) => c.id === parsed.subcategory_id && c.parent_id === matchedCategory!.id
+          (c) => c.id === aiParsed.subcategory_id && c.parent_id === matchedCategory!.id
         );
         if (subMatch) {
           subcategoryValue = subMatch.id;
@@ -765,8 +765,8 @@ IMPORTANTE:
         }
       }
       // Legacy: AI returned subcategory as name
-      if (!subcategoryValue && parsed.subcategory && matchedCategory) {
-        const parsedSubName = parsed.subcategory.toLowerCase();
+      if (!subcategoryValue && aiParsed.subcategory && matchedCategory) {
+        const parsedSubName = aiParsed.subcategory.toLowerCase();
         const subMatch = contextCategories.find(
           (c) => c.parent_id === matchedCategory!.id && c.name.toLowerCase() === parsedSubName
         ) || contextCategories.find(
@@ -792,7 +792,7 @@ IMPORTANTE:
       let bankAccountId: string | null = null;
       let walletId: string | null = null;
       let creditCardId: string | null = null;
-      let paymentMethod: string | null = parsed.payment_method || null;
+      let paymentMethod: string | null = aiParsed.payment_method || null;
 
       // Map AI snake_case payment methods to UI display values
       const PAYMENT_METHOD_MAP: Record<string, string> = {
@@ -808,8 +808,8 @@ IMPORTANTE:
       }
 
       // Credit card resolution
-      if (parsed.credit_card_id) {
-        const cardMatch = contextCards.find((c) => c.id === parsed.credit_card_id);
+      if (aiParsed.credit_card_id) {
+        const cardMatch = contextCards.find((c) => c.id === aiParsed.credit_card_id);
         if (cardMatch) {
           creditCardId = cardMatch.id;
           bankAccountId = cardMatch.bank_account_id;
@@ -828,7 +828,7 @@ IMPORTANTE:
             JSON.stringify({
               success: true,
               intent: "lancamento",
-              message: `💳 Entendi a compra de R$ ${parsed.amount?.toFixed(2) || "?"} — "${parsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
+              message: `💳 Entendi a compra de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
               transaction: null,
             }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -838,12 +838,12 @@ IMPORTANTE:
 
       // Regular account resolution (only if not credit card)
       if (!creditCardId) {
-        if (parsed.account_id) {
-          const accMatch = contextAccounts.find((a) => a.id === parsed.account_id);
+        if (aiParsed.account_id) {
+          const accMatch = contextAccounts.find((a) => a.id === aiParsed.account_id);
           if (accMatch) {
             bankAccountId = accMatch.id;
           } else {
-            const walMatch = contextWallets.find((w) => w.id === parsed.account_id);
+            const walMatch = contextWallets.find((w) => w.id === aiParsed.account_id);
             if (walMatch) {
               walletId = walMatch.id;
             }
@@ -869,7 +869,7 @@ IMPORTANTE:
               JSON.stringify({
                 success: true,
                 intent: "lancamento",
-                message: `📋 Entendi o lançamento de R$ ${parsed.amount?.toFixed(2) || "?"} — "${parsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
+                message: `📋 Entendi o lançamento de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
                 transaction: null,
               }),
               { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -879,7 +879,7 @@ IMPORTANTE:
       }
 
       // --- BLOCK if no account/wallet/card ---
-      const contextLabel = parsed.context || "Pessoal";
+      const contextLabel = aiParsed.context || "Pessoal";
 
       if (!bankAccountId && !walletId && !creditCardId) {
         console.error("BLOCKED: No account/wallet/card for context:", contextLabel);
@@ -908,8 +908,8 @@ IMPORTANTE:
       }
 
       // --- Credit card cycle date calculation ---
-      const competenceDate = parsed.competence_date || parsed.date || today;
-      let paymentDate = parsed.payment_date || parsed.date || today;
+      const competenceDate = aiParsed.competence_date || aiParsed.date || today;
+      let paymentDate = aiParsed.payment_date || aiParsed.date || today;
 
       if (creditCardId) {
         const card = contextCards.find((c) => c.id === creditCardId);
@@ -954,17 +954,17 @@ IMPORTANTE:
       // --- Contact / Supplier / Client resolution ---
       let supplierId: string | null = null;
       let clientId: string | null = null;
-      let contactName: string | null = parsed.contact_name || null;
+      let contactName: string | null = aiParsed.contact_name || null;
 
-      if (parsed.supplier_id) {
-        const supMatch = suppliersList.find((s) => s.id === parsed.supplier_id);
+      if (aiParsed.supplier_id) {
+        const supMatch = suppliersList.find((s) => s.id === aiParsed.supplier_id);
         if (supMatch) {
           supplierId = supMatch.id;
           contactName = contactName || supMatch.name;
         }
       }
-      if (parsed.client_id) {
-        const cliMatch = clientsList.find((c) => c.id === parsed.client_id);
+      if (aiParsed.client_id) {
+        const cliMatch = clientsList.find((c) => c.id === aiParsed.client_id);
         if (cliMatch) {
           clientId = cliMatch.id;
           contactName = contactName || cliMatch.name;
@@ -977,15 +977,15 @@ IMPORTANTE:
         status = "Pendente"; // Credit card → always pending (paid on bill)
       } else if (paymentDate > today) {
         status = "Pendente"; // Future payment → pending
-      } else if (parsed.status === "Pendente") {
+      } else if (aiParsed.status === "Pendente") {
         status = "Pendente"; // AI explicitly said pending
       }
 
       console.log("=== LANCAMENTO RESOLUTION ===");
-      console.log("Context:", parsed.context, "| companyId:", companyId);
-      console.log("AI category_id:", parsed.category_id, "| AI category (legacy):", parsed.category);
+      console.log("Context:", aiParsed.context, "| companyId:", companyId);
+      console.log("AI category_id:", aiParsed.category_id, "| AI category (legacy):", aiParsed.category);
       console.log("Resolved → UUID:", categoryValue, "(", categoryLabel, ")");
-      console.log("AI subcategory_id:", parsed.subcategory_id, "→ UUID:", subcategoryValue, "(", subcategoryLabel, ")");
+      console.log("AI subcategory_id:", aiParsed.subcategory_id, "→ UUID:", subcategoryValue, "(", subcategoryLabel, ")");
       console.log("Account:", bankAccountId ? `bank:${bankAccountId}` : walletId ? `wallet:${walletId}` : "none");
       console.log("Credit card:", creditCardId, "| Payment method:", paymentMethod);
       console.log("Competence:", competenceDate, "| Payment:", paymentDate, "| Status:", status);
@@ -993,8 +993,8 @@ IMPORTANTE:
 
       const { error: insertError } = await supabase.from("transactions").insert({
         user_id: userId,
-        description: parsed.description || "Lançamento via WhatsApp",
-        amount: Math.abs(parsed.amount || 0),
+        description: aiParsed.description || "Lançamento via WhatsApp",
+        amount: Math.abs(aiParsed.amount || 0),
         type: txType,
         category: categoryValue,
         subcategory: subcategoryValue,
@@ -1009,7 +1009,7 @@ IMPORTANTE:
         supplier_id: supplierId,
         client_id: clientId,
         contact_name: contactName,
-        notes: parsed.notes || null,
+        notes: aiParsed.notes || null,
       });
 
       if (insertError) {
@@ -1025,7 +1025,7 @@ IMPORTANTE:
       }
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
-      const formattedAmount = fmt(parsed.amount || 0);
+      const formattedAmount = fmt(aiParsed.amount || 0);
       const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
       const payMethodDisplay = paymentMethod ? `\n💳 ${paymentMethod.replace("_", " ")}` : "";
       const contactDisplay = contactName ? `\n👤 ${contactName}` : "";
@@ -1038,11 +1038,11 @@ IMPORTANTE:
           success: true,
           intent: "lancamento",
           message:
-            parsed.friendly_message ||
-            `✅ Lançamento criado!${statusDisplay}\n\n📝 ${parsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`,
+            aiParsed.friendly_message ||
+            `✅ Lançamento criado!${statusDisplay}\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`,
           transaction: {
-            description: parsed.description,
-            amount: parsed.amount,
+            description: aiParsed.description,
+            amount: aiParsed.amount,
             type: txType,
             category: categoryLabel,
             context: contextLabel,
@@ -1058,28 +1058,28 @@ IMPORTANTE:
       );
     }
 
-    if (parsed.intent === "consulta") {
-      const companyId = resolveContext(parsed.context);
+    if (aiParsed.intent === "consulta") {
+      const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
 
       const addContextFilter = (query: any) => {
         if (companyId) {
           return query.eq("company_id", companyId);
-        } else if (parsed.context === "Pessoal") {
+        } else if (aiParsed.context === "Pessoal") {
           return query.is("company_id", null);
         }
         return query;
       };
 
       try {
-        switch (parsed.query_type) {
+        switch (aiParsed.query_type) {
           case "saldo": {
             const balances: string[] = [];
             let totalBalance = 0;
 
             const contextAccounts = companyId
               ? accounts.filter((a) => a.company_id === companyId)
-              : parsed.context === "Pessoal"
+              : aiParsed.context === "Pessoal"
                 ? accounts.filter((a) => !a.company_id)
                 : accounts;
 
@@ -1092,7 +1092,7 @@ IMPORTANTE:
 
             const contextWallets = companyId
               ? wallets.filter((w) => w.company_id === companyId)
-              : parsed.context === "Pessoal"
+              : aiParsed.context === "Pessoal"
                 ? wallets.filter((w) => !w.company_id)
                 : wallets;
 
@@ -1118,7 +1118,7 @@ IMPORTANTE:
               balances.push(`  • ${w.name}: ${fmt(walletBal)}`);
             }
 
-            const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
             responseMessage = `💰 Saldo total${ctxLabel}: ${fmt(totalBalance)}\n\n${balances.join("\n")}`;
             break;
           }
@@ -1137,7 +1137,7 @@ IMPORTANTE:
             const { data: expenses } = await q;
 
             const total = (expenses || []).reduce((s: number, t: any) => s + t.amount, 0);
-            const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
             responseMessage = `📊 Total de despesas este mês${ctxLabel}: ${fmt(total)}`;
             break;
           }
@@ -1156,7 +1156,7 @@ IMPORTANTE:
             const { data: revenues } = await q;
 
             const total = (revenues || []).reduce((s: number, t: any) => s + t.amount, 0);
-            const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
             responseMessage = `📊 Total de receitas este mês${ctxLabel}: ${fmt(total)}`;
             break;
           }
@@ -1196,7 +1196,7 @@ IMPORTANTE:
               .map(([cat, val]) => `  • ${resolveCatName(cat)}: ${fmt(val)}`)
               .join("\n");
 
-            const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
             responseMessage = `📊 Resumo do mês${ctxLabel}\n\n✅ Receitas: ${fmt(receitas)}\n❌ Despesas: ${fmt(despesas)}\n💰 Saldo: ${fmt(receitas - despesas)}${top3 ? "\n\n🏷️ Top categorias de despesa:\n" + top3 : ""}`;
             break;
           }
@@ -1218,7 +1218,7 @@ IMPORTANTE:
               const list = pending
                 .map((t: any) => `  • ${t.description}: ${fmt(t.amount)} (${t.type === "receita" ? "receber" : "pagar"} em ${formatDate(t.payment_date)})`)
                 .join("\n");
-              const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+              const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
               responseMessage = `📋 Contas pendentes${ctxLabel}:\n\n${list}`;
             }
             break;
@@ -1226,7 +1226,7 @@ IMPORTANTE:
 
           case "gastos_categoria": {
             const startOfMonth = today.substring(0, 7) + "-01";
-            const categoryFilter = parsed.category_filter || "";
+            const categoryFilter = aiParsed.category_filter || "";
             // Try to resolve filter as category name to UUID for more accurate filtering
             const filterCat = categories.find(
               (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
@@ -1249,7 +1249,7 @@ IMPORTANTE:
             const { data: catExpenses } = await q;
 
             const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
-            const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
             responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" este mês${ctxLabel}: ${fmt(total)}`;
             break;
           }
@@ -1257,12 +1257,12 @@ IMPORTANTE:
           case "listar_cartoes": {
             const contextCards = companyId
               ? creditCards.filter((c) => c.company_id === companyId)
-              : parsed.context === "Pessoal"
+              : aiParsed.context === "Pessoal"
                 ? creditCards.filter((c) => !c.company_id)
                 : creditCards;
 
             if (contextCards.length === 0) {
-              responseMessage = "💳 Você não tem cartões de crédito cadastrados" + (parsed.context ? ` no contexto "${parsed.context}"` : "") + ".";
+              responseMessage = "💳 Você não tem cartões de crédito cadastrados" + (aiParsed.context ? ` no contexto "${aiParsed.context}"` : "") + ".";
             } else {
               const list = contextCards
                 .map((c: any) => {
@@ -1270,7 +1270,7 @@ IMPORTANTE:
                   return `  • ${c.name}${digits} — Fecha dia ${c.closing_day}, vence dia ${c.due_day}`;
                 })
                 .join("\n");
-              const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+              const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
               responseMessage = `💳 Seus cartões de crédito${ctxLabel}:\n\n${list}`;
             }
             break;
@@ -1279,12 +1279,12 @@ IMPORTANTE:
           case "listar_contas": {
             const contextAccts = companyId
               ? accounts.filter((a) => a.company_id === companyId)
-              : parsed.context === "Pessoal"
+              : aiParsed.context === "Pessoal"
                 ? accounts.filter((a) => !a.company_id)
                 : accounts;
             const contextWlts = companyId
               ? wallets.filter((w) => w.company_id === companyId)
-              : parsed.context === "Pessoal"
+              : aiParsed.context === "Pessoal"
                 ? wallets.filter((w) => !w.company_id)
                 : wallets;
 
@@ -1297,16 +1297,16 @@ IMPORTANTE:
             }
 
             if (parts.length === 0) {
-              responseMessage = "Você não tem contas ou carteiras cadastradas" + (parsed.context ? ` no contexto "${parsed.context}"` : "") + ".";
+              responseMessage = "Você não tem contas ou carteiras cadastradas" + (aiParsed.context ? ` no contexto "${aiParsed.context}"` : "") + ".";
             } else {
-              const ctxLabel = parsed.context ? ` (${parsed.context})` : "";
+              const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
               responseMessage = `📋 Suas contas${ctxLabel}:\n\n${parts.join("\n\n")}`;
             }
             break;
           }
 
           default:
-            responseMessage = parsed.friendly_message || "Não entendi o tipo de consulta. Tente perguntar de outra forma.";
+            responseMessage = aiParsed.friendly_message || "Não entendi o tipo de consulta. Tente perguntar de outra forma.";
         }
       } catch (queryError) {
         console.error("Query error:", queryError);
@@ -1329,7 +1329,7 @@ IMPORTANTE:
       JSON.stringify({
         success: true,
         intent: "conversa",
-        message: parsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras.",
+        message: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras.",
         transaction: null,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
