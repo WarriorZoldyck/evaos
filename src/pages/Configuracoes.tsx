@@ -137,7 +137,7 @@ export default function Configuracoes() {
   };
 
   const handleDeleteAccount = async () => {
-    if (confirmText !== "EXCLUIR") return;
+    if (!user?.email || confirmText !== user.email) return;
     setDeleting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
