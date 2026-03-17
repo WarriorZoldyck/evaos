@@ -1,38 +1,99 @@
 
 
-# Fix: D+2 = Sempre Lump Sum (Pagamento Único)
+# Integração Direta com Evolution API (sem N8N)
 
-## Problema
+## Diagnóstico do problema atual
 
-A migration anterior resetou `auto_anticipation = false` em todos os terminais. Mas o comportamento correto é: **D+2 sempre credita tudo de uma vez** (lump sum). Não depende de um flag — é inerente ao prazo curto de liquidação. Só terminais D+30 pagam em parcelas separadas.
+Os logs confirmam tudo:
 
-O MdrInfoCard e o save logic estão mostrando/criando 10 parcelas separadas para REDE (D+2) porque `auto_anticipation = false`.
+1. **N8N com "Using Fields Below"** envia `{"phone":"556499998901"}` — **sem o campo `message`**. O N8N está descartando o campo `message` silenciosamente (provavelmente o valor da expressão `{{ $json.mensagem }}` está vazio no nó anterior, ou o campo não está sendo passado corretamente).
 
-## Solução
+2. **N8N com "Using JSON"** funciona quando a mensagem é longa (vide log com o comprovante PIX), mas falha quando a expressão tem caracteres especiais.
 
-Remover a dependência do flag `auto_anticipation` e usar a lógica direta:
+Em vez de continuar debugando o N8N, vamos eliminar o intermediário e conectar a Evolution API direto ao webhook.
 
-- **`settlement_days_credit < 30`** → Lump sum (1 transação, valor total líquido, creditado em D+X)
-- **`settlement_days_credit >= 30`** → Parcelas separadas (N transações, intervalo 30 dias + D+X)
+## Plano: Evolution API → Webhook direto
 
-### Arquivos alterados
+### 1. Modificar o webhook para aceitar payload da Evolution API
+
+A Evolution API envia webhooks no formato `messages.upsert`:
+
+```text
+{
+  "event": "messages.upsert",
+  "data": {
+    "key": {
+      "remoteJid": "5511996346086@s.whatsapp.net",
+      "fromMe": false
+    },
+    "message": {
+      "conversation": "texto da mensagem"
+      // ou "extendedTextMessage": { "text": "..." }
+      // ou "imageMessage": { "caption": "..." }
+    }
+  }
+}
+```
+
+No início da função, antes da validação, detectar se o payload é da Evolution API e normalizar para o formato interno `{ phone, message }`:
+
+```typescript
+// Detectar payload Evolution API
+if (parsed.event === "messages.upsert" && parsed.data) {
+  const key = parsed.data.key;
+  if (key.fromMe) return 200; // ignorar mensagens enviadas por nós
+  phone = key.remoteJid.replace("@s.whatsapp.net", "");
+  message = parsed.data.message?.conversation 
+         || parsed.data.message?.extendedTextMessage?.text
+         || parsed.data.message?.imageMessage?.caption
+         || "";
+}
+```
+
+### 2. Adicionar envio de resposta via Evolution API
+
+Atualmente o webhook retorna JSON mas não responde no WhatsApp. Adicionar uma chamada à Evolution API `sendText` no final para enviar a resposta de volta:
+
+```text
+POST https://api.resolvsolucoes.com.br/message/sendText/teste eva
+Headers: apikey: E77F807AD386-41C1-857E-2C91A48CFDB6
+Body: { "number": "5511996346086", "text": "resposta da EVA" }
+```
+
+### 3. Armazenar credenciais como secrets
+
+- `EVOLUTION_API_URL` = `https://api.resolvsolucoes.com.br`
+- `EVOLUTION_API_KEY` = `E77F807AD386-41C1-857E-2C91A48CFDB6`
+- `EVOLUTION_INSTANCE` = `teste eva`
+
+### 4. Configurar webhook na Evolution API
+
+Registrar o webhook da Edge Function na instância da Evolution:
+
+```text
+PUT https://api.resolvsolucoes.com.br/webhook/set/teste eva
+Headers: apikey: <global_key>
+Body: {
+  "url": "https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook",
+  "webhook_by_events": false,
+  "events": ["MESSAGES_UPSERT"],
+  "headers": { "x-webhook-secret": "<WHATSAPP_WEBHOOK_SECRET>" }
+}
+```
+
+### 5. Remover autenticação x-webhook-secret para Evolution (ou tornar opcional)
+
+A Evolution API envia o secret no header configurado. Manter a validação, mas a Evolution pode enviar via headers customizados.
+
+## Arquivos alterados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `TransactionFormModal.tsx` (linha 622-624) | Trocar `autoAnticipation` por `settlementDays < 30` |
-| `MdrInfoCard.tsx` (linha 68-70) | Mesma troca: `settlementDays < 30` em vez de `auto_anticipation` |
+| `supabase/functions/whatsapp-webhook/index.ts` | Normalizar payload Evolution + enviar resposta via sendText |
 
-### Código
+## Resultado
 
-```typescript
-// ANTES
-const autoAnticipation = (selectedTerminal as any).auto_anticipation ?? false;
-if (autoAnticipation) { /* lump sum */ }
-
-// DEPOIS
-const isLumpSum = settlementDays < 30;
-if (isLumpSum) { /* lump sum */ }
-```
-
-Ambos os arquivos usam a mesma condição, então a mudança é simétrica.
+- Mensagem chega no WhatsApp → Evolution API envia webhook → Edge Function processa → Edge Function responde via Evolution API sendText
+- Sem N8N no meio
+- Bidirecional: o usuário recebe a resposta da EVA direto no WhatsApp
 
