@@ -595,10 +595,10 @@ IMPORTANTE:
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
     // Parse AI response
-    let parsed: any;
+    let aiParsed: any;
     try {
       const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, rawContent];
-      parsed = JSON.parse(jsonMatch[1].trim());
+      aiParsed = JSON.parse(jsonMatch[1].trim());
     } catch {
       console.error("Failed to parse AI response:", rawContent);
       return new Response(
