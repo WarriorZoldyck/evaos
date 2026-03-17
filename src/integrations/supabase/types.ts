@@ -20,7 +20,6 @@ export type Database = {
           agency_number: string | null
           company_id: string | null
           created_at: string | null
-          deleted_at: string | null
           id: string
           initial_balance: number
           name: string
@@ -32,7 +31,6 @@ export type Database = {
           agency_number?: string | null
           company_id?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           initial_balance?: number
           name: string
@@ -44,7 +42,6 @@ export type Database = {
           agency_number?: string | null
           company_id?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           initial_balance?: number
           name?: string
@@ -71,7 +68,6 @@ export type Database = {
           created_at: string | null
           credit_rate: number | null
           debit_rate: number | null
-          deleted_at: string | null
           id: string
           name: string
           rates_info: string | null
@@ -89,7 +85,6 @@ export type Database = {
           created_at?: string | null
           credit_rate?: number | null
           debit_rate?: number | null
-          deleted_at?: string | null
           id?: string
           name: string
           rates_info?: string | null
@@ -107,7 +102,6 @@ export type Database = {
           created_at?: string | null
           credit_rate?: number | null
           debit_rate?: number | null
-          deleted_at?: string | null
           id?: string
           name?: string
           rates_info?: string | null
@@ -137,7 +131,6 @@ export type Database = {
         Row: {
           company_id: string | null
           created_at: string | null
-          deleted_at: string | null
           id: string
           name: string
           parent_id: string | null
@@ -147,7 +140,6 @@ export type Database = {
         Insert: {
           company_id?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           name: string
           parent_id?: string | null
@@ -157,7 +149,6 @@ export type Database = {
         Update: {
           company_id?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           name?: string
           parent_id?: string | null
@@ -185,7 +176,6 @@ export type Database = {
         Row: {
           cnpj_cpf: string | null
           created_at: string | null
-          deleted_at: string | null
           id: string
           name: string
           user_id: string
@@ -193,7 +183,6 @@ export type Database = {
         Insert: {
           cnpj_cpf?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           name: string
           user_id: string
@@ -201,7 +190,6 @@ export type Database = {
         Update: {
           cnpj_cpf?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           name?: string
           user_id?: string
@@ -212,7 +200,6 @@ export type Database = {
         Row: {
           cnpj: string
           created_at: string | null
-          deleted_at: string | null
           id: string
           name: string
           user_id: string
@@ -220,7 +207,6 @@ export type Database = {
         Insert: {
           cnpj: string
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           name: string
           user_id: string
@@ -228,7 +214,6 @@ export type Database = {
         Update: {
           cnpj?: string
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           name?: string
           user_id?: string
@@ -241,7 +226,6 @@ export type Database = {
           closing_day: number
           company_id: string | null
           created_at: string | null
-          deleted_at: string | null
           due_day: number
           id: string
           last_four_digits: string | null
@@ -254,7 +238,6 @@ export type Database = {
           closing_day: number
           company_id?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           due_day: number
           id?: string
           last_four_digits?: string | null
@@ -267,7 +250,6 @@ export type Database = {
           closing_day?: number
           company_id?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           due_day?: number
           id?: string
           last_four_digits?: string | null
@@ -296,7 +278,6 @@ export type Database = {
         Row: {
           amount: number
           created_at: string | null
-          deleted_at: string | null
           description: string | null
           goal_id: string
           id: string
@@ -306,7 +287,6 @@ export type Database = {
         Insert: {
           amount: number
           created_at?: string | null
-          deleted_at?: string | null
           description?: string | null
           goal_id: string
           id?: string
@@ -316,7 +296,6 @@ export type Database = {
         Update: {
           amount?: number
           created_at?: string | null
-          deleted_at?: string | null
           description?: string | null
           goal_id?: string
           id?: string
@@ -344,7 +323,6 @@ export type Database = {
           created_at: string | null
           current_amount: number
           deadline: string | null
-          deleted_at: string | null
           icon: string | null
           id: string
           name: string
@@ -361,7 +339,6 @@ export type Database = {
           created_at?: string | null
           current_amount?: number
           deadline?: string | null
-          deleted_at?: string | null
           icon?: string | null
           id?: string
           name: string
@@ -378,7 +355,6 @@ export type Database = {
           created_at?: string | null
           current_amount?: number
           deadline?: string | null
-          deleted_at?: string | null
           icon?: string | null
           id?: string
           name?: string
@@ -397,7 +373,6 @@ export type Database = {
       }
       pricing_configurations: {
         Row: {
-          deleted_at: string | null
           hours_per_month: number | null
           id: string
           matrix_values: Json | null
@@ -406,7 +381,6 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          deleted_at?: string | null
           hours_per_month?: number | null
           id?: string
           matrix_values?: Json | null
@@ -415,7 +389,6 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          deleted_at?: string | null
           hours_per_month?: number | null
           id?: string
           matrix_values?: Json | null
@@ -427,21 +400,18 @@ export type Database = {
       }
       pricing_procedure_items: {
         Row: {
-          deleted_at: string | null
           description: string
           id: string
           procedure_id: string | null
           value: number | null
         }
         Insert: {
-          deleted_at?: string | null
           description: string
           id?: string
           procedure_id?: string | null
           value?: number | null
         }
         Update: {
-          deleted_at?: string | null
           description?: string
           id?: string
           procedure_id?: string | null
@@ -460,7 +430,6 @@ export type Database = {
       pricing_procedures: {
         Row: {
           created_at: string | null
-          deleted_at: string | null
           desired_price: number | null
           execution_time: number | null
           id: string
@@ -469,7 +438,6 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          deleted_at?: string | null
           desired_price?: number | null
           execution_time?: number | null
           id?: string
@@ -478,7 +446,6 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          deleted_at?: string | null
           desired_price?: number | null
           execution_time?: number | null
           id?: string
@@ -489,7 +456,6 @@ export type Database = {
       }
       pricing_v2_configurations: {
         Row: {
-          deleted_at: string | null
           hours_per_month: number
           id: string
           num_rooms: number
@@ -498,7 +464,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          deleted_at?: string | null
           hours_per_month?: number
           id?: string
           num_rooms?: number
@@ -507,7 +472,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          deleted_at?: string | null
           hours_per_month?: number
           id?: string
           num_rooms?: number
@@ -522,7 +486,6 @@ export type Database = {
           category: string
           config_id: string
           cost_group: string
-          deleted_at: string | null
           description: string
           frequency: string
           id: string
@@ -534,7 +497,6 @@ export type Database = {
           category?: string
           config_id: string
           cost_group: string
-          deleted_at?: string | null
           description?: string
           frequency?: string
           id?: string
@@ -546,7 +508,6 @@ export type Database = {
           category?: string
           config_id?: string
           cost_group?: string
-          deleted_at?: string | null
           description?: string
           frequency?: string
           id?: string
@@ -566,21 +527,18 @@ export type Database = {
       }
       pricing_v2_procedure_items: {
         Row: {
-          deleted_at: string | null
           description: string
           id: string
           procedure_id: string
           value: number
         }
         Insert: {
-          deleted_at?: string | null
           description?: string
           id?: string
           procedure_id: string
           value?: number
         }
         Update: {
-          deleted_at?: string | null
           description?: string
           id?: string
           procedure_id?: string
@@ -599,7 +557,6 @@ export type Database = {
       pricing_v2_procedures: {
         Row: {
           created_at: string | null
-          deleted_at: string | null
           desired_price: number
           execution_time: number
           id: string
@@ -608,7 +565,6 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          deleted_at?: string | null
           desired_price?: number
           execution_time?: number
           id?: string
@@ -617,7 +573,6 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          deleted_at?: string | null
           desired_price?: number
           execution_time?: number
           id?: string
@@ -630,7 +585,6 @@ export type Database = {
         Row: {
           avatar_url: string | null
           cpf: string | null
-          deleted_at: string | null
           full_name: string | null
           id: string
           transaction_form_fields: Json | null
@@ -640,7 +594,6 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           cpf?: string | null
-          deleted_at?: string | null
           full_name?: string | null
           id: string
           transaction_form_fields?: Json | null
@@ -650,7 +603,6 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           cpf?: string | null
-          deleted_at?: string | null
           full_name?: string | null
           id?: string
           transaction_form_fields?: Json | null
@@ -675,7 +627,6 @@ export type Database = {
           credit_card_id: string | null
           day_of_month: number | null
           day_of_week: number | null
-          deleted_at: string | null
           description: string
           end_date: string | null
           frequency: string
@@ -716,7 +667,6 @@ export type Database = {
           credit_card_id?: string | null
           day_of_month?: number | null
           day_of_week?: number | null
-          deleted_at?: string | null
           description: string
           end_date?: string | null
           frequency: string
@@ -757,7 +707,6 @@ export type Database = {
           credit_card_id?: string | null
           day_of_month?: number | null
           day_of_week?: number | null
-          deleted_at?: string | null
           description?: string
           end_date?: string | null
           frequency?: string
@@ -839,7 +788,6 @@ export type Database = {
         Row: {
           cnpj: string | null
           created_at: string | null
-          deleted_at: string | null
           id: string
           name: string
           user_id: string
@@ -847,7 +795,6 @@ export type Database = {
         Insert: {
           cnpj?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           name: string
           user_id: string
@@ -855,7 +802,6 @@ export type Database = {
         Update: {
           cnpj?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           name?: string
           user_id?: string
@@ -876,7 +822,6 @@ export type Database = {
           contact_name: string | null
           created_at: string | null
           credit_card_id: string | null
-          deleted_at: string | null
           description: string
           external_id: string | null
           id: string
@@ -913,7 +858,6 @@ export type Database = {
           contact_name?: string | null
           created_at?: string | null
           credit_card_id?: string | null
-          deleted_at?: string | null
           description: string
           external_id?: string | null
           id?: string
@@ -950,7 +894,6 @@ export type Database = {
           contact_name?: string | null
           created_at?: string | null
           credit_card_id?: string | null
-          deleted_at?: string | null
           description?: string
           external_id?: string | null
           id?: string
@@ -1037,7 +980,6 @@ export type Database = {
         Row: {
           company_id: string | null
           created_at: string | null
-          deleted_at: string | null
           id: string
           initial_balance: number
           name: string
@@ -1046,7 +988,6 @@ export type Database = {
         Insert: {
           company_id?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           initial_balance?: number
           name: string
@@ -1055,7 +996,6 @@ export type Database = {
         Update: {
           company_id?: string | null
           created_at?: string | null
-          deleted_at?: string | null
           id?: string
           initial_balance?: number
           name?: string
@@ -1077,7 +1017,6 @@ export type Database = {
           category_type: string
           context_company_id: string | null
           created_at: string
-          deleted_at: string | null
           expires_at: string
           id: string
           payload: Json
@@ -1089,7 +1028,6 @@ export type Database = {
           category_type?: string
           context_company_id?: string | null
           created_at?: string
-          deleted_at?: string | null
           expires_at?: string
           id?: string
           payload?: Json
@@ -1101,7 +1039,6 @@ export type Database = {
           category_type?: string
           context_company_id?: string | null
           created_at?: string
-          deleted_at?: string | null
           expires_at?: string
           id?: string
           payload?: Json
