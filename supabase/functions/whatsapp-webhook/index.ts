@@ -11,24 +11,59 @@ const corsHeaders = {
 const CONFIRM_PATTERNS = /^(sim|s|pode|pode criar|cria|ok|pode sim|sim pode|confirma|confirmar|yes|y|bora|manda|vai|faz|positivo|com certeza|claro)$/i;
 const CANCEL_PATTERNS = /^(não|nao|n|cancela|cancelar|cancel|no|deixa|esquece|nope|negativo|não precisa|nao precisa)$/i;
 
+// --- Evolution API helper: send reply back to WhatsApp ---
+async function sendEvolutionReply(phone: string, text: string) {
+  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
+  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
+  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
+  if (!evoUrl || !evoKey || !evoInstance) {
+    console.log("Evolution API not configured, skipping reply");
+    return;
+  }
+  try {
+    const url = `${evoUrl}/message/sendText/${encodeURIComponent(evoInstance)}`;
+    console.log("Sending Evolution reply to:", phone);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "apikey": evoKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ number: phone, text }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("Evolution sendText error:", res.status, errBody);
+    } else {
+      console.log("Evolution reply sent successfully");
+    }
+  } catch (err) {
+    console.error("Evolution sendText exception:", err);
+  }
+}
+
+// Helper to build response AND send Evolution reply
+function buildResponse(body: any, status: number, phone: string, isEvolution: boolean) {
+  // Send reply via Evolution API if the request came from Evolution
+  if (isEvolution && body.message) {
+    // Fire-and-forget: don't await to avoid delaying the webhook response
+    sendEvolutionReply(phone, body.message);
+  }
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // 1. Validate webhook secret
+    // 1. Validate webhook secret (optional for Evolution API which sends via configured headers)
     const webhookSecret = Deno.env.get("WHATSAPP_WEBHOOK_SECRET");
     const receivedSecret = req.headers.get("x-webhook-secret");
-    if (!webhookSecret || receivedSecret !== webhookSecret) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    
     const rawBody = await req.text();
-    console.log("RAW BODY:", rawBody);
+    console.log("RAW BODY:", rawBody.substring(0, 500));
     let parsed: any;
     try {
       parsed = JSON.parse(rawBody);
@@ -39,13 +74,69 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    const { phone, message, image_base64, image_url } = parsed;
+
+    // --- Detect Evolution API payload and normalize ---
+    let phone: string | undefined;
+    let message: string | undefined;
+    let image_base64: string | undefined;
+    let image_url: string | undefined;
+    let isEvolution = false;
+
+    if (parsed.event === "messages.upsert" && parsed.data) {
+      isEvolution = true;
+      console.log("=== EVOLUTION API PAYLOAD DETECTED ===");
+      const msgData = parsed.data;
+      const key = msgData.key;
+
+      // Ignore messages sent by us (fromMe)
+      if (key?.fromMe) {
+        console.log("Ignoring fromMe message");
+        return new Response(JSON.stringify({ success: true, ignored: true }), {
+          status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Extract phone from remoteJid
+      phone = key?.remoteJid?.replace("@s.whatsapp.net", "")?.replace("@g.us", "");
+
+      // Extract message text from various Evolution message types
+      const msgContent = msgData.message;
+      message = msgContent?.conversation
+        || msgContent?.extendedTextMessage?.text
+        || msgContent?.imageMessage?.caption
+        || "";
+
+      // Extract image URL if present
+      // (Evolution sends mediaUrl in some configs)
+      if (msgContent?.imageMessage) {
+        // Evolution may include base64 or a mediaUrl depending on config
+        // For now we handle text; image support can be added later
+        console.log("Image message detected (text caption extracted)");
+      }
+
+      console.log("Evolution normalized:", { phone, message: message?.substring(0, 50) });
+    } else {
+      // Legacy N8N / direct API format
+      phone = parsed.phone;
+      message = parsed.message;
+      image_base64 = parsed.image_base64;
+      image_url = parsed.image_url;
+
+      // Validate webhook secret for non-Evolution requests
+      if (!webhookSecret || receivedSecret !== webhookSecret) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Unauthorized" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     console.log("PARSED:", { phone, message: message?.substring?.(0, 50), image_base64: !!image_base64, image_url: !!image_url });
 
     if (!phone || (!message && !image_base64 && !image_url)) {
-      return new Response(
-        JSON.stringify({ success: false, error: "phone and message/image are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return buildResponse(
+        { success: false, error: "phone and message/image are required" },
+        400, phone || "", isEvolution
       );
     }
 
