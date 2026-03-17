@@ -319,18 +319,18 @@ export default function Configuracoes() {
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta ação é irreversível. Todos os seus lançamentos, contas, categorias, contatos e demais dados serão permanentemente excluídos.
+              <AlertDialogDescription>
+                  Sua conta será desativada e todos os seus dados serão marcados para exclusão. Após 30 dias, os dados serão permanentemente removidos. Esta ação não pode ser desfeita.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-2">
                 <p className="text-sm text-muted-foreground mb-2">
-                  Digite <strong>EXCLUIR</strong> para confirmar:
+                  Digite seu email <strong>{user?.email}</strong> para confirmar:
                 </p>
                 <Input
                   value={confirmText}
                   onChange={(e) => setConfirmText(e.target.value)}
-                  placeholder="EXCLUIR"
+                  placeholder={user?.email || ""}
                 />
               </div>
               <AlertDialogFooter>
