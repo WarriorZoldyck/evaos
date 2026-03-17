@@ -1017,6 +1017,7 @@ export type Database = {
           category_type: string
           context_company_id: string | null
           created_at: string
+          deleted_at: string | null
           expires_at: string
           id: string
           payload: Json
@@ -1028,6 +1029,7 @@ export type Database = {
           category_type?: string
           context_company_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           expires_at?: string
           id?: string
           payload?: Json
@@ -1039,6 +1041,7 @@ export type Database = {
           category_type?: string
           context_company_id?: string | null
           created_at?: string
+          deleted_at?: string | null
           expires_at?: string
           id?: string
           payload?: Json
