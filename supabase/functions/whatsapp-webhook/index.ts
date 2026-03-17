@@ -69,9 +69,9 @@ serve(async (req) => {
       parsed = JSON.parse(rawBody);
     } catch (e) {
       console.log("JSON PARSE ERROR:", e.message);
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid JSON body", rawBody: rawBody.substring(0, 200) }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return buildResponse(
+        { success: false, error: "Invalid JSON body", rawBody: rawBody.substring(0, 200) },
+        400, phone, isEvolution
       );
     }
 
@@ -124,10 +124,10 @@ serve(async (req) => {
 
       // Validate webhook secret for non-Evolution requests
       if (!webhookSecret || receivedSecret !== webhookSecret) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return buildResponse(
+        { success: false, error: "Unauthorized" },
+        401, phone, isEvolution
+      );
       }
     }
 
@@ -186,9 +186,9 @@ serve(async (req) => {
 
     if (profileError) {
       console.error("Profile lookup error:", profileError);
-      return new Response(
-        JSON.stringify({ success: false, error: "Erro interno ao buscar perfil" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return buildResponse(
+        { success: false, error: "Erro interno ao buscar perfil" },
+        500, phone, isEvolution
       );
     }
 
@@ -208,13 +208,13 @@ serve(async (req) => {
 
     if (!profile) {
       console.error("Phone NOT found. Incoming:", phone, "| Digits:", digitsOnly);
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: false,
           error: "Número não cadastrado. Cadastre seu WhatsApp nas configurações do EVA OS.",
           message: "Número não cadastrado. Cadastre seu WhatsApp nas configurações do EVA OS.",
-        }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        404, phone, isEvolution
       );
     }
 
@@ -268,15 +268,15 @@ serve(async (req) => {
             console.error("Failed to create category:", catError);
             // Clean up pending action
             await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-            return new Response(
-              JSON.stringify({
+            return buildResponse(
+        {
                 success: false,
                 intent: "lancamento",
                 message: `❌ Não consegui criar a categoria "${pendingAction.suggested_category_name}". Tente novamente.`,
                 transaction: null,
-              }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+              },
+        200, phone, isEvolution
+      );
           }
 
           console.log("Category created:", newCategory.id, newCategory.name);
@@ -395,21 +395,21 @@ serve(async (req) => {
 
           if (insertError) {
             console.error("Transaction insert error after category creation:", insertError);
-            return new Response(
-              JSON.stringify({
+            return buildResponse(
+        {
                 success: false,
                 intent: "lancamento",
                 message: `✅ Categoria "${newCategory.name}" criada, mas houve um erro ao criar o lançamento. Tente enviar novamente.`,
                 transaction: null,
-              }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+              },
+        200, phone, isEvolution
+      );
           }
 
           const typeLabel = txType === "receita" ? "Receita" : "Despesa";
           const contextLabel = payload.context || "Pessoal";
-          return new Response(
-            JSON.stringify({
+          return buildResponse(
+        {
               success: true,
               intent: "lancamento",
               message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || today}`,
@@ -421,23 +421,23 @@ serve(async (req) => {
                 context: contextLabel,
                 date: payload.date || today,
               },
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+            },
+        200, phone, isEvolution
+      );
         }
 
         if (CANCEL_PATTERNS.test(trimmedMsg)) {
           console.log("=== PENDING ACTION: CANCELLED ===");
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-          return new Response(
-            JSON.stringify({
+          return buildResponse(
+        {
               success: true,
               intent: "conversa",
               message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊",
               transaction: null,
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+            },
+        200, phone, isEvolution
+      );
         }
 
         // Message doesn't match confirm/cancel — clear pending and process normally
@@ -536,9 +536,9 @@ serve(async (req) => {
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return new Response(
-        JSON.stringify({ success: false, error: "AI not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return buildResponse(
+        { success: false, error: "AI not configured" },
+        500, phone, isEvolution
       );
     }
 
@@ -672,13 +672,13 @@ IMPORTANTE:
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI Gateway error:", aiResponse.status, errText);
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: false,
           error: "Erro ao processar mensagem com IA",
           message: "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.",
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        500, phone, isEvolution
       );
     }
 
@@ -692,14 +692,14 @@ IMPORTANTE:
       aiParsed = JSON.parse(jsonMatch[1].trim());
     } catch {
       console.error("Failed to parse AI response:", rawContent);
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: true,
           intent: "conversa",
           message: "Desculpe, não consegui entender sua mensagem. Pode reformular?",
           transaction: null,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        200, phone, isEvolution
       );
     }
 
@@ -825,16 +825,16 @@ IMPORTANTE:
           console.error("Failed to save pending action:", pendingError);
         }
 
-        return new Response(
-          JSON.stringify({
+        return buildResponse(
+        {
             success: true,
             intent: "lancamento",
             message: `🤔 Não encontrei a categoria "${suggestedName}" no contexto "${contextLabel}".\n\nQuer que eu crie essa categoria e registre o lançamento?\n\nResponda *sim* para confirmar ou *não* para cancelar.`,
             transaction: null,
             pending_confirmation: true,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+          },
+        200, phone, isEvolution
+      );
       }
 
       // Warn if type didn't match
@@ -915,15 +915,15 @@ IMPORTANTE:
         } else if (contextCards.length > 1) {
           const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
           console.log("AMBIGUOUS CARD: multiple options, asking user");
-          return new Response(
-            JSON.stringify({
+          return buildResponse(
+        {
               success: true,
               intent: "lancamento",
               message: `💳 Entendi a compra de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
               transaction: null,
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+            },
+        200, phone, isEvolution
+      );
         }
       }
 
@@ -956,15 +956,15 @@ IMPORTANTE:
               ...contextWallets.map((w) => `• ${w.name} (carteira)`),
             ].join("\n");
             console.log("AMBIGUOUS ACCOUNT: multiple options, asking user");
-            return new Response(
-              JSON.stringify({
+            return buildResponse(
+        {
                 success: true,
                 intent: "lancamento",
                 message: `📋 Entendi o lançamento de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
                 transaction: null,
-              }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+              },
+        200, phone, isEvolution
+      );
           }
         }
       }
@@ -974,28 +974,28 @@ IMPORTANTE:
 
       if (!bankAccountId && !walletId && !creditCardId) {
         console.error("BLOCKED: No account/wallet/card for context:", contextLabel);
-        return new Response(
-          JSON.stringify({
+        return buildResponse(
+        {
             success: false,
             intent: "lancamento",
             message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária, carteira ou cartão cadastrado no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
             transaction: null,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+          },
+        200, phone, isEvolution
+      );
       }
 
       if (!categoryValue) {
         console.error("BLOCKED: No category resolved for context:", contextLabel, "| type:", txType);
-        return new Response(
-          JSON.stringify({
+        return buildResponse(
+        {
             success: false,
             intent: "lancamento",
             message: `❌ Não consegui criar o lançamento porque não há categorias de ${txType} cadastradas no contexto "${contextLabel}". Cadastre categorias antes de lançar.`,
             transaction: null,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+          },
+        200, phone, isEvolution
+      );
       }
 
       // --- Credit card cycle date calculation ---
@@ -1105,14 +1105,14 @@ IMPORTANTE:
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
-        return new Response(
-          JSON.stringify({
+        return buildResponse(
+        {
             success: false,
             error: "Erro ao criar lançamento",
             message: "Não consegui criar o lançamento. Tente novamente.",
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+          },
+        500, phone, isEvolution
+      );
       }
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
@@ -1124,8 +1124,8 @@ IMPORTANTE:
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: true,
           intent: "lancamento",
           message:
@@ -1144,8 +1144,8 @@ IMPORTANTE:
             credit_card: cardName,
             contact: contactName,
           },
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        200, phone, isEvolution
       );
     }
 
@@ -1404,37 +1404,37 @@ IMPORTANTE:
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
       }
 
-      return new Response(
-        JSON.stringify({
+      return buildResponse(
+        {
           success: true,
           intent: "consulta",
           message: responseMessage,
           transaction: null,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        },
+        200, phone, isEvolution
       );
     }
 
     // conversa
-    return new Response(
-      JSON.stringify({
+    return buildResponse(
+        {
         success: true,
         intent: "conversa",
         message: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras.",
         transaction: null,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      },
+        200, phone, isEvolution
+      );
   } catch (error) {
     console.error("Webhook error:", error);
-    return new Response(
-      JSON.stringify({
+    return buildResponse(
+        {
         success: false,
         error: error instanceof Error ? error.message : "Erro interno",
         message: "Ocorreu um erro inesperado. Tente novamente.",
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      },
+        500, phone, isEvolution
+      );
   }
 });
 
