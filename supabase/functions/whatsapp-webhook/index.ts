@@ -181,14 +181,23 @@ serve(async (req) => {
     const profile = (allProfiles || []).find((p) => {
       if (!p.whatsapp_number) return false;
       const storedDigits = p.whatsapp_number.replace(/\D/g, "");
+      // Exact match against candidates
       if (allCandidates.includes(p.whatsapp_number)) return true;
       if (storedDigits === digitsOnly) return true;
-      const incomingTail = digitsOnly.slice(-11);
-      const storedTail = storedDigits.slice(-11);
-      if (incomingTail.length >= 10 && storedTail.length >= 10 && incomingTail === storedTail) return true;
-      const incomingTail10 = digitsOnly.slice(-10);
-      const storedTail10 = storedDigits.slice(-10);
-      if (incomingTail10 === storedTail10) return true;
+      // Tail-based matching (last 11, 10, 9, 8 digits) to handle 9th-digit variations
+      for (const tailLen of [11, 10, 9, 8]) {
+        const incomingTail = digitsOnly.slice(-tailLen);
+        const storedTail = storedDigits.slice(-tailLen);
+        if (incomingTail.length >= tailLen && storedTail.length >= tailLen && incomingTail === storedTail) return true;
+      }
+      // Strip country code and compare with/without 9th digit
+      const stripCountry = (d: string) => d.startsWith("55") ? d.slice(2) : d;
+      const incLocal = stripCountry(digitsOnly);
+      const stoLocal = stripCountry(storedDigits);
+      const add9 = (d: string) => d.length === 10 ? d.slice(0, 2) + "9" + d.slice(2) : d;
+      const rem9 = (d: string) => d.length === 11 && d[2] === "9" ? d.slice(0, 2) + d.slice(3) : d;
+      if (add9(incLocal) === add9(stoLocal)) return true;
+      if (rem9(incLocal) === rem9(stoLocal)) return true;
       return false;
     });
 
