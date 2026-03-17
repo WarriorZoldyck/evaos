@@ -20,7 +20,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify the user with anon client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -38,15 +37,22 @@ Deno.serve(async (req) => {
     }
 
     const userId = user.id;
+    const now = new Date().toISOString();
 
-    // Use service role to delete all user data then the auth user
+    // Use service role to soft-delete all user data
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Delete in order respecting foreign keys
+    // Soft delete: set deleted_at on all tables
     const tables = [
       "pricing_procedure_items",
       "pricing_procedures",
       "pricing_configurations",
+      "pricing_v2_procedure_items",
+      "pricing_v2_procedures",
+      "pricing_v2_cost_items",
+      "pricing_v2_configurations",
+      "goal_movements",
+      "goals",
       "recurring_transactions",
       "transactions",
       "card_terminals",
@@ -57,21 +63,29 @@ Deno.serve(async (req) => {
       "clients",
       "suppliers",
       "companies",
+      "whatsapp_pending_actions",
       "profiles",
     ];
 
     for (const table of tables) {
       const col = table === "profiles" ? "id" : "user_id";
-      const { error } = await adminClient.from(table).delete().eq(col, userId);
+      const { error } = await adminClient
+        .from(table)
+        .update({ deleted_at: now })
+        .eq(col, userId)
+        .is("deleted_at", null);
       if (error) {
-        console.error(`Error deleting from ${table}:`, error.message);
+        console.error(`Error soft-deleting from ${table}:`, error.message);
       }
     }
 
-    // Delete the auth user
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
-    if (deleteError) {
-      return new Response(JSON.stringify({ error: deleteError.message }), {
+    // Ban the user instead of deleting (preserves data for 30 days)
+    const { error: banError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      { ban_duration: "876000h" }
+    );
+    if (banError) {
+      return new Response(JSON.stringify({ error: banError.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
