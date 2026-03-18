@@ -345,6 +345,148 @@ serve(async (req) => {
     const pendingAction = pendingActions?.[0];
 
     if (pendingAction) {
+      // === HANDLE "choose_account" pending action ===
+      if (pendingAction.action_type === "choose_account") {
+        console.log("=== PENDING ACTION: CHOOSE ACCOUNT ===");
+        const payload = pendingAction.payload as any;
+        const companyId = pendingAction.context_company_id;
+        
+        // Fetch accounts for matching
+        const [accsRes, wltsRes, ccsRes] = await Promise.all([
+          supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
+          supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
+          supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
+        ]);
+        const allAccs = (accsRes.data || []).filter((a: any) => companyId ? a.company_id === companyId : !a.company_id);
+        const allWlts = (wltsRes.data || []).filter((w: any) => companyId ? w.company_id === companyId : !w.company_id);
+        const allCcs = (ccsRes.data || []).filter((c: any) => companyId ? c.company_id === companyId : !c.company_id);
+
+        if (CANCEL_PATTERNS.test(trimmedMsg)) {
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({ success: true, intent: "conversa", message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊", transaction: null }, 200);
+        }
+
+        // Try to match the user's response to an account/wallet/card name
+        const userChoice = trimmedMsg.toLowerCase();
+        let matchedBankId: string | null = null;
+        let matchedWalletId: string | null = null;
+        let matchedCardId: string | null = null;
+        let matchedCardBankId: string | null = null;
+
+        if (payload.choose_type === "credit_card") {
+          const cardMatch = allCcs.find((c: any) => 
+            c.name.toLowerCase().includes(userChoice) || 
+            userChoice.includes(c.name.toLowerCase()) ||
+            (c.last_four_digits && userChoice.includes(c.last_four_digits))
+          );
+          if (cardMatch) {
+            matchedCardId = cardMatch.id;
+            matchedCardBankId = cardMatch.bank_account_id;
+          }
+        } else {
+          // Try bank accounts first, then wallets
+          const accMatch = allAccs.find((a: any) => 
+            a.name.toLowerCase().includes(userChoice) || userChoice.includes(a.name.toLowerCase())
+          );
+          if (accMatch) {
+            matchedBankId = accMatch.id;
+          } else {
+            const walMatch = allWlts.find((w: any) => 
+              w.name.toLowerCase().includes(userChoice) || userChoice.includes(w.name.toLowerCase())
+            );
+            if (walMatch) matchedWalletId = walMatch.id;
+          }
+        }
+
+        if (!matchedBankId && !matchedWalletId && !matchedCardId) {
+          // Didn't understand - ask again
+          return respond({
+            success: true,
+            intent: "lancamento",
+            message: `❓ Não entendi qual conta. Por favor, responda com o nome exato da conta ou *não* para cancelar.`,
+            transaction: null,
+          }, 200);
+        }
+
+        // Now create the transaction with the chosen account
+        const txPayload = payload;
+        const txType = txPayload.type === "receita" ? "receita" : "despesa";
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const todayNow = new Date();
+        const todayStr = `${todayNow.getFullYear()}-${pad(todayNow.getMonth() + 1)}-${pad(todayNow.getDate())}`;
+
+        const competenceDate = txPayload.competence_date || txPayload.date || todayStr;
+        let paymentDate = txPayload.payment_date || txPayload.date || todayStr;
+        let status: "Pago" | "Pendente" = "Pago";
+
+        if (matchedCardId) {
+          const card = allCcs.find((c: any) => c.id === matchedCardId);
+          if (card) {
+            const compDate = new Date(competenceDate + "T12:00:00");
+            const compDay = compDate.getDate();
+            const compMonth = compDate.getMonth();
+            const compYear = compDate.getFullYear();
+            let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
+            let billYear = compYear;
+            let dueMonth = billMonth;
+            let dueYear = billYear;
+            if (card.due_day < card.closing_day) dueMonth = billMonth + 1;
+            if (dueMonth > 11) { dueMonth -= 12; dueYear++; }
+            const dueDate = new Date(dueYear, dueMonth, card.due_day);
+            paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+          }
+          status = "Pendente";
+          matchedBankId = matchedCardBankId;
+        } else if (paymentDate > todayStr) {
+          status = "Pendente";
+        }
+
+        const { error: insertErr } = await supabase.from("transactions").insert({
+          user_id: userId,
+          description: txPayload.description || "Lançamento via WhatsApp",
+          amount: Math.abs(txPayload.amount || 0),
+          type: txType,
+          category: txPayload.category_id,
+          subcategory: txPayload.subcategory_id || null,
+          competence_date: competenceDate,
+          payment_date: paymentDate,
+          status,
+          bank_account_id: matchedBankId,
+          wallet_id: matchedWalletId,
+          credit_card_id: matchedCardId,
+          company_id: companyId,
+          payment_method: txPayload.payment_method || null,
+          supplier_id: txPayload.supplier_id || null,
+          client_id: txPayload.client_id || null,
+          contact_name: txPayload.contact_name || null,
+          notes: txPayload.notes || null,
+        });
+
+        await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+        if (insertErr) {
+          console.error("Transaction insert error after account choice:", insertErr);
+          return respond({
+            success: false, intent: "lancamento",
+            message: "❌ Não consegui criar o lançamento. Tente enviar novamente.",
+            transaction: null,
+          }, 200);
+        }
+
+        const typeLabel = txType === "receita" ? "Receita" : "Despesa";
+        const contextLabel = txPayload.context || "Pessoal";
+        const chosenName = matchedCardId ? allCcs.find((c: any) => c.id === matchedCardId)?.name
+          : matchedBankId ? allAccs.find((a: any) => a.id === matchedBankId)?.name
+          : allWlts.find((w: any) => w.id === matchedWalletId)?.name;
+
+        return respond({
+          success: true, intent: "lancamento",
+          message: `✅ Lançamento registrado na conta "${chosenName}"!\n\n📝 ${txPayload.description}\n💰 ${fmt(txPayload.amount || 0)}\n📁 ${typeLabel} / ${txPayload.category_label || "Categoria"}\n🏢 ${contextLabel}\n📅 ${formatDate(competenceDate)}`,
+          transaction: { description: txPayload.description, amount: txPayload.amount, type: txType, context: contextLabel },
+        }, 200);
+      }
+
+      // === HANDLE "create_category" pending action (existing) ===
       // User is responding to a pending action
       if (CONFIRM_PATTERNS.test(trimmedMsg)) {
         console.log("=== PENDING ACTION: CONFIRMED ===");
