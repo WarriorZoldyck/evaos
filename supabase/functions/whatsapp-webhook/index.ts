@@ -952,6 +952,21 @@ TIPOS DE CONSULTA:
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
 - Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
 
+Para editar lançamento existente:
+{"intent":"editar_lancamento","transaction_id":"UUID-do-lancamento-da-lista-ou-null","field":"amount|description|category|payment_date|competence_date|status|notes","new_value":"novo valor","friendly_message":"..."}
+
+REGRAS DE EDIÇÃO DE LANÇAMENTO:
+- Se o usuário diz "muda o valor", "corrige pra X", "era R$Y não R$Z", "edita aquele lançamento", "na verdade era...", classifique como "editar_lancamento"
+- Use o HISTÓRICO DA CONVERSA e a LISTA DE LANÇAMENTOS RECENTES abaixo para identificar qual lançamento o usuário quer editar
+- Se o lançamento foi mencionado na conversa ou acabou de ser criado, use o transaction_id correspondente
+- Se não conseguir identificar qual lançamento, retorne transaction_id como null — o sistema perguntará ao usuário
+- Para field="amount", new_value deve ser o número (ex: "45.90")
+- Para field="status", new_value deve ser "Pago" ou "Pendente"
+- Para field="payment_date" ou "competence_date", new_value deve ser "YYYY-MM-DD"
+
+LANÇAMENTOS RECENTES DO USUÁRIO (use para identificar o lançamento correto):
+${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.id}] ${t.description} | ${fmt(t.amount)} | ${t.type} | ${t.status} | ${t.payment_date}`).join("\n") : "Nenhum lançamento recente"}
+
 Para conversa:
 {"intent":"conversa","friendly_message":"..."}
 
