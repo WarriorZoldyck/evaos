@@ -507,12 +507,12 @@ serve(async (req) => {
         if (catError) {
           console.error("Failed to create category:", catError);
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-          return buildResponse({
+          return respond({
             success: false,
             intent: "lancamento",
             message: `❌ Não consegui criar a categoria "${pendingAction.suggested_category_name}". Tente novamente.`,
             transaction: null,
-          }, 200, phone);
+          }, 200);
         }
 
         console.log("Category created:", newCategory.id, newCategory.name);
@@ -628,17 +628,17 @@ serve(async (req) => {
 
         if (insertError) {
           console.error("Transaction insert error after category creation:", insertError);
-          return buildResponse({
+          return respond({
             success: false,
             intent: "lancamento",
             message: `✅ Categoria "${newCategory.name}" criada, mas houve um erro ao criar o lançamento. Tente enviar novamente.`,
             transaction: null,
-          }, 200, phone);
+          }, 200);
         }
 
         const typeLabel = txType === "receita" ? "Receita" : "Despesa";
         const contextLabel = payload.context || "Pessoal";
-        return buildResponse({
+        return respond({
           success: true,
           intent: "lancamento",
           message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}`,
@@ -650,18 +650,18 @@ serve(async (req) => {
             context: contextLabel,
             date: payload.date || todayStr,
           },
-        }, 200, phone);
+        }, 200);
       }
 
       if (CANCEL_PATTERNS.test(trimmedMsg)) {
         console.log("=== PENDING ACTION: CANCELLED ===");
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-        return buildResponse({
+        return respond({
           success: true,
           intent: "conversa",
           message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊",
           transaction: null,
-        }, 200, phone);
+        }, 200);
       }
 
       // Message doesn't match confirm/cancel — clear pending and process normally
@@ -896,11 +896,11 @@ IMPORTANTE:
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI Gateway error:", aiResponse.status, errText);
-      return buildResponse({
+      return respond({
         success: false,
         error: "Erro ao processar mensagem com IA",
         message: "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.",
-      }, 500, phone);
+      }, 500);
     }
 
     const aiData = await aiResponse.json();
@@ -913,12 +913,12 @@ IMPORTANTE:
       aiParsed = JSON.parse(jsonMatch[1].trim());
     } catch {
       console.error("Failed to parse AI response:", rawContent);
-      return buildResponse({
+      return respond({
         success: true,
         intent: "conversa",
         message: "Desculpe, não consegui entender sua mensagem. Pode reformular?",
         transaction: null,
-      }, 200, phone);
+      }, 200);
     }
 
     // --- Resolve context to company_id ---
@@ -1195,13 +1195,13 @@ IMPORTANTE:
           console.error("Failed to save pending action:", pendingError);
         }
 
-        return buildResponse({
+        return respond({
           success: true,
           intent: "lancamento",
           message: `🤔 Não encontrei a categoria "${suggestedName}" no contexto "${contextLabel}".\n\nQuer que eu crie essa categoria e registre o lançamento?\n\nResponda *sim* para confirmar ou *não* para cancelar.`,
           transaction: null,
           pending_confirmation: true,
-        }, 200, phone);
+        }, 200);
       }
 
       if (matchedCategory && !typeMatches(matchedCategory)) {
@@ -1238,21 +1238,21 @@ IMPORTANTE:
 
       // --- BLOCK if no account/wallet/card ---
       if (!bankAccountId && !walletId && !creditCardId) {
-        return buildResponse({
+        return respond({
           success: false,
           intent: "lancamento",
           message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária, carteira ou cartão cadastrado no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
           transaction: null,
-        }, 200, phone);
+        }, 200);
       }
 
       if (!categoryValue) {
-        return buildResponse({
+        return respond({
           success: false,
           intent: "lancamento",
           message: `❌ Não consegui criar o lançamento porque não há categorias de ${txType} cadastradas no contexto "${contextLabel}". Cadastre categorias antes de lançar.`,
           transaction: null,
-        }, 200, phone);
+        }, 200);
       }
 
       // --- Credit card cycle date calculation ---
@@ -1325,11 +1325,11 @@ IMPORTANTE:
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
-        return buildResponse({
+        return respond({
           success: false,
           error: "Erro ao criar lançamento",
           message: "❌ Não consegui criar o lançamento. Tente novamente.",
-        }, 500, phone);
+        }, 500);
       }
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
@@ -1341,7 +1341,7 @@ IMPORTANTE:
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
-      return buildResponse({
+      return respond({
         success: true,
         intent: "lancamento",
         message:
@@ -1360,7 +1360,7 @@ IMPORTANTE:
           credit_card: cardName,
           contact: contactName,
         },
-      }, 200, phone);
+      }, 200);
     }
 
     if (aiParsed.intent === "consulta") {
@@ -1616,28 +1616,28 @@ IMPORTANTE:
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
       }
 
-      return buildResponse({
+      return respond({
         success: true,
         intent: "consulta",
         message: responseMessage,
         transaction: null,
-      }, 200, phone);
+      }, 200);
     }
 
     // conversa
-    return buildResponse({
+    return respond({
       success: true,
       intent: "conversa",
       message: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras. 😊",
       transaction: null,
-    }, 200, phone);
+    }, 200);
   } catch (error) {
     console.error("Webhook error:", error);
-    return buildResponse({
+    return respond({
       success: false,
       error: error instanceof Error ? error.message : "Erro interno",
       message: "Ocorreu um erro inesperado. Tente novamente.",
-    }, 500, phone);
+    }, 500);
   }
 });
 
