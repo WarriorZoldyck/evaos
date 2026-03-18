@@ -866,15 +866,16 @@ IMPORTANTE SOBRE account_id e credit_card_id:
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 
 Para gerenciamento de categorias:
-{"intent":"gerenciar_categoria","action":"criar|criar_subcategoria","category_name":"nome da nova categoria","parent_category_id":"UUID-da-categoria-pai-se-subcategoria|null","category_type":"receita|despesa|ambos","context":"Pessoal|Nome da Empresa","friendly_message":"mensagem descrevendo a ação"}
+{"intent":"gerenciar_categoria","action":"criar|criar_subcategoria|renomear|mover|excluir","category_name":"nome da nova categoria (para criar)","category_id":"UUID da categoria alvo (para renomear/mover/excluir)","new_name":"novo nome (para renomear)","parent_category_id":"UUID-da-categoria-pai-se-subcategoria|null","new_parent_category_id":"UUID do novo pai ou null para tornar raiz (para mover)","category_type":"receita|despesa|ambos","context":"Pessoal|Nome da Empresa","friendly_message":"mensagem descrevendo a ação"}
 
 REGRAS DE GERENCIAMENTO DE CATEGORIAS:
-- Ações suportadas: "criar" (nova categoria raiz) e "criar_subcategoria" (nova subcategoria dentro de uma existente)
+- Ações suportadas: "criar", "criar_subcategoria", "renomear", "mover", "excluir"
 - Para "criar_subcategoria": parent_category_id DEVE ser um UUID válido da lista de categorias acima
 - category_type: para subcategorias, herde o tipo da categoria pai
-- NUNCA diga que vai "desativar", "mover", "renomear" ou "excluir" categorias. Essas ações NÃO são suportadas via WhatsApp.
-- Se o usuário pedir para mover/renomear/excluir, informe que essas ações devem ser feitas pelo painel web (EVA OS).
-- NÃO invente ações. Se a ação pedida não é "criar" ou "criar_subcategoria", retorne intent="conversa" explicando a limitação.
+- Para "renomear": category_id DEVE ser um UUID válido + new_name com o novo nome
+- Para "mover": category_id DEVE ser um UUID válido + new_parent_category_id (UUID do novo pai, ou null para tornar categoria raiz)
+- Para "excluir": category_id DEVE ser um UUID válido. IMPORTANTE: Antes de excluir, SEMPRE pergunte ao usuário se tem certeza. Retorne a friendly_message pedindo confirmação. O sistema usará pending_actions para aguardar a resposta.
+- NÃO invente ações além das listadas acima.
 
 Para consulta:
 {"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
