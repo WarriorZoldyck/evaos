@@ -1633,11 +1633,11 @@ IMPORTANTE:
     }, 200);
   } catch (error) {
     console.error("Webhook error:", error);
-    return respond({
+    return buildResponse({
       success: false,
       error: error instanceof Error ? error.message : "Erro interno",
       message: "Ocorreu um erro inesperado. Tente novamente.",
-    }, 500);
+    }, 500, phone);
   }
 });
 
