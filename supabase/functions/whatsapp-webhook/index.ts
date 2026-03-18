@@ -672,7 +672,24 @@ IMPORTANTE:
 - O valor (amount) deve ser sempre positivo
 - A data padrão é hoje: ${today}
 - Para lançamentos sem tipo explícito, assuma "despesa"
-- Sempre retorne o campo "context"`;
+- Sempre retorne o campo "context"
+- Se o usuário enviar uma IMAGEM (foto de comprovante, nota fiscal, recibo, etc.), analise o conteúdo visual para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações da imagem com qualquer legenda de texto fornecida.`;
+
+    // Build user content: multimodal if image, text-only otherwise
+    const userText = message || "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
+    let userContent: any;
+    if (imageBase64) {
+      // Detect mime type from base64 header or default to jpeg
+      const mimeType = imageBase64.startsWith("/9j/") ? "image/jpeg" : 
+                       imageBase64.startsWith("iVBOR") ? "image/png" : "image/jpeg";
+      userContent = [
+        { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+        { type: "text", text: userText },
+      ];
+      console.log("Sending multimodal request to AI (image + text)");
+    } else {
+      userContent = userText;
+    }
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -684,7 +701,7 @@ IMPORTANTE:
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message },
+          { role: "user", content: userContent },
         ],
       }),
     });
