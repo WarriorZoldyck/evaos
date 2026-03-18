@@ -1837,10 +1837,149 @@ IMPORTANTE:
         }, 200);
       }
 
+      // === RENOMEAR ===
+      if (action === "renomear") {
+        const catId = aiParsed.category_id;
+        const newName = aiParsed.new_name;
+        if (!catId || !newName) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Preciso saber qual categoria renomear e o novo nome. Pode repetir?",
+            transaction: null,
+          }, 200);
+        }
+        const cat = categories.find((c) => c.id === catId);
+        if (!cat) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Não encontrei essa categoria. Verifique o nome e tente novamente.",
+            transaction: null,
+          }, 200);
+        }
+        const { error: renErr } = await supabase
+          .from("categories")
+          .update({ name: newName })
+          .eq("id", catId)
+          .eq("user_id", userId);
+        if (renErr) {
+          console.error("Category rename error:", renErr);
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: `❌ Erro ao renomear a categoria. Tente novamente.`,
+            transaction: null,
+          }, 200);
+        }
+        return respond({
+          success: true, intent: "gerenciar_categoria",
+          message: `✅ Categoria "${cat.name}" renomeada para "${newName}"!`,
+          transaction: null,
+        }, 200);
+      }
+
+      // === MOVER ===
+      if (action === "mover") {
+        const catId = aiParsed.category_id;
+        const newParentId = aiParsed.new_parent_category_id || null;
+        if (!catId) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Preciso saber qual categoria mover. Pode repetir?",
+            transaction: null,
+          }, 200);
+        }
+        const cat = categories.find((c) => c.id === catId);
+        if (!cat) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Não encontrei essa categoria. Verifique o nome e tente novamente.",
+            transaction: null,
+          }, 200);
+        }
+        // Validate new parent exists and is not a descendant
+        if (newParentId) {
+          const newParent = categories.find((c) => c.id === newParentId);
+          if (!newParent) {
+            return respond({
+              success: false, intent: "gerenciar_categoria",
+              message: "❌ Não encontrei a categoria de destino. Verifique o nome e tente novamente.",
+              transaction: null,
+            }, 200);
+          }
+          // Check for circular reference
+          let checkId: string | null = newParentId;
+          while (checkId) {
+            if (checkId === catId) {
+              return respond({
+                success: false, intent: "gerenciar_categoria",
+                message: "❌ Não é possível mover uma categoria para dentro de si mesma ou de suas subcategorias.",
+                transaction: null,
+              }, 200);
+            }
+            const parent = categories.find((c) => c.id === checkId);
+            checkId = parent?.parent_id || null;
+          }
+        }
+        const { error: movErr } = await supabase
+          .from("categories")
+          .update({ parent_id: newParentId })
+          .eq("id", catId)
+          .eq("user_id", userId);
+        if (movErr) {
+          console.error("Category move error:", movErr);
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: `❌ Erro ao mover a categoria. Tente novamente.`,
+            transaction: null,
+          }, 200);
+        }
+        const destName = newParentId ? categories.find((c) => c.id === newParentId)?.name : "raiz";
+        return respond({
+          success: true, intent: "gerenciar_categoria",
+          message: `✅ Categoria "${cat.name}" movida para ${newParentId ? `dentro de "${destName}"` : "a raiz"}!`,
+          transaction: null,
+        }, 200);
+      }
+
+      // === EXCLUIR (com confirmação via pending_actions) ===
+      if (action === "excluir") {
+        const catId = aiParsed.category_id;
+        if (!catId) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Preciso saber qual categoria excluir. Pode repetir?",
+            transaction: null,
+          }, 200);
+        }
+        const cat = categories.find((c) => c.id === catId);
+        if (!cat) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Não encontrei essa categoria. Verifique o nome e tente novamente.",
+            transaction: null,
+          }, 200);
+        }
+
+        // Create pending action for confirmation
+        await supabase.from("whatsapp_pending_actions").insert({
+          user_id: userId,
+          action_type: "delete_category",
+          suggested_category_name: cat.name,
+          category_type: cat.type || "ambos",
+          context_company_id: companyId || null,
+          payload: { category_id: catId, category_name: cat.name },
+        });
+
+        return respond({
+          success: true, intent: "gerenciar_categoria",
+          message: aiParsed.friendly_message || `⚠️ Tem certeza que deseja excluir a categoria "${cat.name}"? Responda *sim* para confirmar ou *não* para cancelar.`,
+          transaction: null,
+        }, 200);
+      }
+
       // Unsupported action
       return respond({
         success: true, intent: "conversa",
-        message: aiParsed.friendly_message || "Pelo WhatsApp eu consigo criar categorias e subcategorias. Para mover, renomear ou excluir, use o painel web do EVA OS. 😊",
+        message: aiParsed.friendly_message || "Não entendi a ação solicitada para categorias. Posso criar, renomear, mover ou excluir categorias. 😊",
         transaction: null,
       }, 200);
     }
