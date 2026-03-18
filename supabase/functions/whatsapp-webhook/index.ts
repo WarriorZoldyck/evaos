@@ -754,7 +754,7 @@ serve(async (req) => {
     }
 
     // 4. Fetch user context
-    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes] = await Promise.all([
+    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
@@ -762,6 +762,7 @@ serve(async (req) => {
       supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
+      supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(10),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -771,6 +772,7 @@ serve(async (req) => {
     const creditCards = creditCardsRes.data || [];
     const suppliersList = suppliersRes.data || [];
     const clientsList = clientsRes.data || [];
+    const recentTransactions = recentTxRes.data || [];
 
     const today = new Date().toISOString().split("T")[0];
 
