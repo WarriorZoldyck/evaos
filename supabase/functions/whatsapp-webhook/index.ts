@@ -1038,12 +1038,39 @@ IMPORTANTE:
           bankAccountId = contextCards[0].bank_account_id;
         } else if (contextCards.length > 1) {
           const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
-          return buildResponse({
+          
+          // Save pending action for card choice
+          await supabase.from("whatsapp_pending_actions").insert({
+            user_id: userId,
+            action_type: "choose_account",
+            payload: {
+              choose_type: "credit_card",
+              description: aiParsed.description,
+              amount: aiParsed.amount,
+              type: txType,
+              context: aiParsed.context,
+              category_id: matchedCategory?.id || null,
+              category_label: matchedCategory?.name || null,
+              subcategory_id: subcategoryValue,
+              payment_method: "Cartão de Crédito",
+              date: aiParsed.date || today,
+              competence_date: aiParsed.competence_date || aiParsed.date || today,
+              contact_name: aiParsed.contact_name || null,
+              supplier_id: aiParsed.supplier_id || null,
+              client_id: aiParsed.client_id || null,
+              notes: aiParsed.notes || null,
+            },
+            suggested_category_name: matchedCategory?.name || "N/A",
+            category_type: txType,
+            context_company_id: companyId,
+          });
+          
+          return respond({
             success: true,
             intent: "lancamento",
-            message: `💳 Entendi a compra de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
+            message: `💳 Entendi a compra de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão ou *não* para cancelar.`,
             transaction: null,
-          }, 200, phone);
+          }, 200);
         }
       }
 
