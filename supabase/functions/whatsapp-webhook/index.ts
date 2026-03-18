@@ -39,6 +39,51 @@ async function sendEvolutionReply(phone: string, text: string) {
   }
 }
 
+// --- Evolution API helper: get base64 image from media message ---
+async function getImageBase64(remoteJid: string, messageId: string): Promise<string | null> {
+  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
+  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
+  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
+  if (!evoUrl || !evoKey || !evoInstance) {
+    console.error("Evolution API not configured for media download");
+    return null;
+  }
+  try {
+    const url = `${evoUrl}/chat/getBase64FromMediaMessage/${encodeURIComponent(evoInstance)}`;
+    console.log("Fetching image base64 from Evolution:", url);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "apikey": evoKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          key: {
+            remoteJid,
+            fromMe: false,
+            id: messageId,
+          },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("Evolution getBase64 error:", res.status, errBody);
+      return null;
+    }
+    const data = await res.json();
+    // Evolution returns { base64: "..." } or the base64 string directly
+    const base64 = data.base64 || (typeof data === "string" ? data : null);
+    if (!base64) {
+      console.error("No base64 in Evolution response:", JSON.stringify(data).substring(0, 200));
+      return null;
+    }
+    console.log("Image base64 fetched successfully, length:", base64.length);
+    return base64;
+  } catch (err) {
+    console.error("Evolution getBase64 exception:", err);
+    return null;
+  }
+}
+
 // Helper to build response AND send Evolution reply
 function buildResponse(body: any, status: number, phone: string) {
   if (body.message && phone) {
