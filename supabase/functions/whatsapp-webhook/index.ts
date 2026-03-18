@@ -161,7 +161,13 @@ serve(async (req) => {
     const remoteJid = key?.remoteJid || "";
 
     // Extract message text
-    const msgContent = msgData.message;
+    // Unwrap ephemeral messages (disappearing messages / temporary messages)
+    let msgContent = msgData.message;
+    if (msgContent?.ephemeralMessage?.message) {
+      const ephemeralInner = msgContent.ephemeralMessage.message;
+      msgContent = { ...msgContent, ...ephemeralInner };
+      delete msgContent.ephemeralMessage;
+    }
     const message = msgContent?.conversation
       || msgContent?.extendedTextMessage?.text
       || msgContent?.imageMessage?.caption
