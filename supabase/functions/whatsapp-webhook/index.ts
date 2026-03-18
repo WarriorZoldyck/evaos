@@ -794,11 +794,12 @@ serve(async (req) => {
 IMPORTANTE: Você tem acesso ao HISTÓRICO DA CONVERSA de hoje. Use-o para entender o contexto completo. Se o usuário está respondendo a uma pergunta anterior (ex: informando o valor, escolhendo uma conta, dando detalhes adicionais), considere todo o contexto da conversa para construir o lançamento completo.
 
 REGRAS:
-1. Classifique como: "lancamento", "consulta" ou "conversa"
+1. Classifique como: "lancamento", "consulta", "gerenciar_categoria" ou "conversa"
 2. Para lançamentos: extraia TODOS os campos possíveis da mensagem E do contexto da conversa
 3. Para consultas: identifique o tipo e contexto
-4. Responda SEMPRE em português brasileiro
-5. Retorne APENAS um JSON válido, sem texto adicional
+4. Para gerenciar categorias: identifique a ação solicitada
+5. Responda SEMPRE em português brasileiro
+6. Retorne APENAS um JSON válido, sem texto adicional
 
 CONTEXTOS DISPONÍVEIS (use EXATAMENTE um destes valores no campo "context"):
 ${contextNames.map((n) => `  - "${n}"`).join("\n")}
@@ -864,6 +865,17 @@ IMPORTANTE SOBRE account_id e credit_card_id:
 - Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne null e pergunte no friendly_message qual conta usar, listando as opções disponíveis.
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 
+Para gerenciamento de categorias:
+{"intent":"gerenciar_categoria","action":"criar|criar_subcategoria","category_name":"nome da nova categoria","parent_category_id":"UUID-da-categoria-pai-se-subcategoria|null","category_type":"receita|despesa|ambos","context":"Pessoal|Nome da Empresa","friendly_message":"mensagem descrevendo a ação"}
+
+REGRAS DE GERENCIAMENTO DE CATEGORIAS:
+- Ações suportadas: "criar" (nova categoria raiz) e "criar_subcategoria" (nova subcategoria dentro de uma existente)
+- Para "criar_subcategoria": parent_category_id DEVE ser um UUID válido da lista de categorias acima
+- category_type: para subcategorias, herde o tipo da categoria pai
+- NUNCA diga que vai "desativar", "mover", "renomear" ou "excluir" categorias. Essas ações NÃO são suportadas via WhatsApp.
+- Se o usuário pedir para mover/renomear/excluir, informe que essas ações devem ser feitas pelo painel web (EVA OS).
+- NÃO invente ações. Se a ação pedida não é "criar" ou "criar_subcategoria", retorne intent="conversa" explicando a limitação.
+
 Para consulta:
 {"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
 
@@ -887,7 +899,8 @@ IMPORTANTE:
 - Para lançamentos sem tipo explícito, assuma "despesa"
 - Sempre retorne o campo "context"
 - Se o usuário enviar uma IMAGEM, DOCUMENTO PDF ou ÁUDIO (foto de comprovante, nota fiscal, recibo, extrato, mensagem de voz, etc.), analise o conteúdo visual/textual/sonoro para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.
-- Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.`;
+- Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.
+- NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.`;
 
     // Build user content: multimodal if media, text-only otherwise
     const defaultMediaPrompt = hasAudio
@@ -1681,6 +1694,93 @@ IMPORTANTE:
         success: true,
         intent: "consulta",
         message: responseMessage,
+        transaction: null,
+      }, 200);
+    }
+
+    // === GERENCIAR CATEGORIA ===
+    if (aiParsed.intent === "gerenciar_categoria") {
+      const companyId = resolveContext(aiParsed.context);
+      const action = aiParsed.action;
+
+      if (action === "criar" || action === "criar_subcategoria") {
+        const categoryName = aiParsed.category_name;
+        const parentId = action === "criar_subcategoria" ? aiParsed.parent_category_id : null;
+        const categoryType = aiParsed.category_type || "ambos";
+
+        if (!categoryName) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Não entendi o nome da categoria. Pode repetir?",
+            transaction: null,
+          }, 200);
+        }
+
+        // Validate parent exists if subcategory
+        if (parentId) {
+          const parentCat = categories.find((c) => c.id === parentId);
+          if (!parentCat) {
+            return respond({
+              success: false, intent: "gerenciar_categoria",
+              message: `❌ Não encontrei a categoria pai. Verifique o nome e tente novamente.`,
+              transaction: null,
+            }, 200);
+          }
+        }
+
+        // Check if already exists
+        const contextCats = categories.filter((c) =>
+          companyId ? c.company_id === companyId : !c.company_id
+        );
+        const existing = contextCats.find(
+          (c) => c.name.toLowerCase() === categoryName.toLowerCase() && c.parent_id === (parentId || null)
+        );
+        if (existing) {
+          return respond({
+            success: true, intent: "gerenciar_categoria",
+            message: `ℹ️ A categoria "${categoryName}" já existe${parentId ? " nessa categoria pai" : ""}. Não precisa criar novamente!`,
+            transaction: null,
+          }, 200);
+        }
+
+        const { data: newCat, error: catErr } = await supabase
+          .from("categories")
+          .insert({
+            user_id: userId,
+            name: categoryName,
+            type: parentId ? null : categoryType,
+            parent_id: parentId || null,
+            company_id: companyId,
+          })
+          .select("id, name")
+          .single();
+
+        if (catErr) {
+          console.error("Category creation error:", catErr);
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: `❌ Erro ao criar a categoria "${categoryName}". Tente novamente.`,
+            transaction: null,
+          }, 200);
+        }
+
+        const parentName = parentId ? categories.find((c) => c.id === parentId)?.name : null;
+        const contextLabel = aiParsed.context || "Pessoal";
+        const msg = parentId
+          ? `✅ Subcategoria "${newCat.name}" criada dentro de "${parentName}" no contexto "${contextLabel}"!`
+          : `✅ Categoria "${newCat.name}" (${categoryType}) criada no contexto "${contextLabel}"!`;
+
+        return respond({
+          success: true, intent: "gerenciar_categoria",
+          message: msg,
+          transaction: null,
+        }, 200);
+      }
+
+      // Unsupported action
+      return respond({
+        success: true, intent: "conversa",
+        message: aiParsed.friendly_message || "Pelo WhatsApp eu consigo criar categorias e subcategorias. Para mover, renomear ou excluir, use o painel web do EVA OS. 😊",
         transaction: null,
       }, 200);
     }
