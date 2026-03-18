@@ -105,7 +105,14 @@ serve(async (req) => {
 
   try {
     const rawBody = await req.text();
-    console.log("RAW BODY:", rawBody.substring(0, 500));
+    console.log("RAW BODY:", rawBody.substring(0, 1500));
+    // Debug: log message keys to understand structure
+    try {
+      const debugParsed = JSON.parse(rawBody);
+      if (debugParsed?.data?.message) {
+        console.log("MESSAGE KEYS:", Object.keys(debugParsed.data.message));
+      }
+    } catch (_) {}
 
     let parsed: any;
     try {
