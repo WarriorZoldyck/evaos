@@ -278,9 +278,53 @@ serve(async (req) => {
     const userId = profile.id;
 
     // ============================================================
+    // CONVERSATION MEMORY: Load today's history + save user message
+    // ============================================================
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data: chatHistory } = await supabase
+      .from("whatsapp_messages")
+      .select("role, content, created_at")
+      .eq("user_id", userId)
+      .gte("created_at", todayStart.toISOString())
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    const conversationHistory = (chatHistory || []).map((m: any) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
+    console.log("Conversation history loaded:", conversationHistory.length, "messages");
+
+    // Save incoming user message
+    const userMsgText = message || "[imagem enviada]";
+    await supabase.from("whatsapp_messages").insert({
+      user_id: userId,
+      role: "user",
+      content: userMsgText,
+    });
+
+    // Helper to save assistant response to history
+    const saveAssistantMsg = (text: string) => {
+      supabase.from("whatsapp_messages").insert({
+        user_id: userId,
+        role: "assistant",
+        content: text,
+      }).then(() => {});
+    };
+
+    // Wrap buildResponse to also save to conversation history
+    const respond = (body: any, status: number) => {
+      if (body.message) saveAssistantMsg(body.message);
+      return buildResponse(body, status, phone);
+    };
+
+    // ============================================================
     // CHECK FOR PENDING ACTIONS BEFORE ANYTHING ELSE
     // ============================================================
-    const trimmedMsg = message.trim();
+    const trimmedMsg = (message || "").trim();
 
     // Clean up expired pending actions first
     await supabase
@@ -301,6 +345,148 @@ serve(async (req) => {
     const pendingAction = pendingActions?.[0];
 
     if (pendingAction) {
+      // === HANDLE "choose_account" pending action ===
+      if (pendingAction.action_type === "choose_account") {
+        console.log("=== PENDING ACTION: CHOOSE ACCOUNT ===");
+        const payload = pendingAction.payload as any;
+        const companyId = pendingAction.context_company_id;
+        
+        // Fetch accounts for matching
+        const [accsRes, wltsRes, ccsRes] = await Promise.all([
+          supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
+          supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
+          supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
+        ]);
+        const allAccs = (accsRes.data || []).filter((a: any) => companyId ? a.company_id === companyId : !a.company_id);
+        const allWlts = (wltsRes.data || []).filter((w: any) => companyId ? w.company_id === companyId : !w.company_id);
+        const allCcs = (ccsRes.data || []).filter((c: any) => companyId ? c.company_id === companyId : !c.company_id);
+
+        if (CANCEL_PATTERNS.test(trimmedMsg)) {
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({ success: true, intent: "conversa", message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊", transaction: null }, 200);
+        }
+
+        // Try to match the user's response to an account/wallet/card name
+        const userChoice = trimmedMsg.toLowerCase();
+        let matchedBankId: string | null = null;
+        let matchedWalletId: string | null = null;
+        let matchedCardId: string | null = null;
+        let matchedCardBankId: string | null = null;
+
+        if (payload.choose_type === "credit_card") {
+          const cardMatch = allCcs.find((c: any) => 
+            c.name.toLowerCase().includes(userChoice) || 
+            userChoice.includes(c.name.toLowerCase()) ||
+            (c.last_four_digits && userChoice.includes(c.last_four_digits))
+          );
+          if (cardMatch) {
+            matchedCardId = cardMatch.id;
+            matchedCardBankId = cardMatch.bank_account_id;
+          }
+        } else {
+          // Try bank accounts first, then wallets
+          const accMatch = allAccs.find((a: any) => 
+            a.name.toLowerCase().includes(userChoice) || userChoice.includes(a.name.toLowerCase())
+          );
+          if (accMatch) {
+            matchedBankId = accMatch.id;
+          } else {
+            const walMatch = allWlts.find((w: any) => 
+              w.name.toLowerCase().includes(userChoice) || userChoice.includes(w.name.toLowerCase())
+            );
+            if (walMatch) matchedWalletId = walMatch.id;
+          }
+        }
+
+        if (!matchedBankId && !matchedWalletId && !matchedCardId) {
+          // Didn't understand - ask again
+          return respond({
+            success: true,
+            intent: "lancamento",
+            message: `❓ Não entendi qual conta. Por favor, responda com o nome exato da conta ou *não* para cancelar.`,
+            transaction: null,
+          }, 200);
+        }
+
+        // Now create the transaction with the chosen account
+        const txPayload = payload;
+        const txType = txPayload.type === "receita" ? "receita" : "despesa";
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const todayNow = new Date();
+        const todayStr = `${todayNow.getFullYear()}-${pad(todayNow.getMonth() + 1)}-${pad(todayNow.getDate())}`;
+
+        const competenceDate = txPayload.competence_date || txPayload.date || todayStr;
+        let paymentDate = txPayload.payment_date || txPayload.date || todayStr;
+        let status: "Pago" | "Pendente" = "Pago";
+
+        if (matchedCardId) {
+          const card = allCcs.find((c: any) => c.id === matchedCardId);
+          if (card) {
+            const compDate = new Date(competenceDate + "T12:00:00");
+            const compDay = compDate.getDate();
+            const compMonth = compDate.getMonth();
+            const compYear = compDate.getFullYear();
+            let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
+            let billYear = compYear;
+            let dueMonth = billMonth;
+            let dueYear = billYear;
+            if (card.due_day < card.closing_day) dueMonth = billMonth + 1;
+            if (dueMonth > 11) { dueMonth -= 12; dueYear++; }
+            const dueDate = new Date(dueYear, dueMonth, card.due_day);
+            paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+          }
+          status = "Pendente";
+          matchedBankId = matchedCardBankId;
+        } else if (paymentDate > todayStr) {
+          status = "Pendente";
+        }
+
+        const { error: insertErr } = await supabase.from("transactions").insert({
+          user_id: userId,
+          description: txPayload.description || "Lançamento via WhatsApp",
+          amount: Math.abs(txPayload.amount || 0),
+          type: txType,
+          category: txPayload.category_id,
+          subcategory: txPayload.subcategory_id || null,
+          competence_date: competenceDate,
+          payment_date: paymentDate,
+          status,
+          bank_account_id: matchedBankId,
+          wallet_id: matchedWalletId,
+          credit_card_id: matchedCardId,
+          company_id: companyId,
+          payment_method: txPayload.payment_method || null,
+          supplier_id: txPayload.supplier_id || null,
+          client_id: txPayload.client_id || null,
+          contact_name: txPayload.contact_name || null,
+          notes: txPayload.notes || null,
+        });
+
+        await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+        if (insertErr) {
+          console.error("Transaction insert error after account choice:", insertErr);
+          return respond({
+            success: false, intent: "lancamento",
+            message: "❌ Não consegui criar o lançamento. Tente enviar novamente.",
+            transaction: null,
+          }, 200);
+        }
+
+        const typeLabel = txType === "receita" ? "Receita" : "Despesa";
+        const contextLabel = txPayload.context || "Pessoal";
+        const chosenName = matchedCardId ? allCcs.find((c: any) => c.id === matchedCardId)?.name
+          : matchedBankId ? allAccs.find((a: any) => a.id === matchedBankId)?.name
+          : allWlts.find((w: any) => w.id === matchedWalletId)?.name;
+
+        return respond({
+          success: true, intent: "lancamento",
+          message: `✅ Lançamento registrado na conta "${chosenName}"!\n\n📝 ${txPayload.description}\n💰 ${fmt(txPayload.amount || 0)}\n📁 ${typeLabel} / ${txPayload.category_label || "Categoria"}\n🏢 ${contextLabel}\n📅 ${formatDate(competenceDate)}`,
+          transaction: { description: txPayload.description, amount: txPayload.amount, type: txType, context: contextLabel },
+        }, 200);
+      }
+
+      // === HANDLE "create_category" pending action (existing) ===
       // User is responding to a pending action
       if (CONFIRM_PATTERNS.test(trimmedMsg)) {
         console.log("=== PENDING ACTION: CONFIRMED ===");
@@ -321,12 +507,12 @@ serve(async (req) => {
         if (catError) {
           console.error("Failed to create category:", catError);
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-          return buildResponse({
+          return respond({
             success: false,
             intent: "lancamento",
             message: `❌ Não consegui criar a categoria "${pendingAction.suggested_category_name}". Tente novamente.`,
             transaction: null,
-          }, 200, phone);
+          }, 200);
         }
 
         console.log("Category created:", newCategory.id, newCategory.name);
@@ -442,17 +628,17 @@ serve(async (req) => {
 
         if (insertError) {
           console.error("Transaction insert error after category creation:", insertError);
-          return buildResponse({
+          return respond({
             success: false,
             intent: "lancamento",
             message: `✅ Categoria "${newCategory.name}" criada, mas houve um erro ao criar o lançamento. Tente enviar novamente.`,
             transaction: null,
-          }, 200, phone);
+          }, 200);
         }
 
         const typeLabel = txType === "receita" ? "Receita" : "Despesa";
         const contextLabel = payload.context || "Pessoal";
-        return buildResponse({
+        return respond({
           success: true,
           intent: "lancamento",
           message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}`,
@@ -464,18 +650,18 @@ serve(async (req) => {
             context: contextLabel,
             date: payload.date || todayStr,
           },
-        }, 200, phone);
+        }, 200);
       }
 
       if (CANCEL_PATTERNS.test(trimmedMsg)) {
         console.log("=== PENDING ACTION: CANCELLED ===");
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-        return buildResponse({
+        return respond({
           success: true,
           intent: "conversa",
           message: "Ok, cancelei o lançamento. Se precisar de algo, é só falar! 😊",
           transaction: null,
-        }, 200, phone);
+        }, 200);
       }
 
       // Message doesn't match confirm/cancel — clear pending and process normally
@@ -572,17 +758,19 @@ serve(async (req) => {
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return buildResponse(
+      return respond(
         { success: false, error: "AI not configured", message: "⚠️ IA não configurada. Contate o suporte." },
-        500, phone
+        500
       );
     }
 
     const systemPrompt = `Você é a EVA, assistente financeira inteligente. Analise a mensagem do usuário e classifique a intenção.
 
+IMPORTANTE: Você tem acesso ao HISTÓRICO DA CONVERSA de hoje. Use-o para entender o contexto completo. Se o usuário está respondendo a uma pergunta anterior (ex: informando o valor, escolhendo uma conta, dando detalhes adicionais), considere todo o contexto da conversa para construir o lançamento completo.
+
 REGRAS:
 1. Classifique como: "lancamento", "consulta" ou "conversa"
-2. Para lançamentos: extraia TODOS os campos possíveis da mensagem
+2. Para lançamentos: extraia TODOS os campos possíveis da mensagem E do contexto da conversa
 3. Para consultas: identifique o tipo e contexto
 4. Responda SEMPRE em português brasileiro
 5. Retorne APENAS um JSON válido, sem texto adicional
@@ -701,6 +889,7 @@ IMPORTANTE:
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
+          ...conversationHistory,
           { role: "user", content: userContent },
         ],
       }),
@@ -709,11 +898,11 @@ IMPORTANTE:
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI Gateway error:", aiResponse.status, errText);
-      return buildResponse({
+      return respond({
         success: false,
         error: "Erro ao processar mensagem com IA",
         message: "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.",
-      }, 500, phone);
+      }, 500);
     }
 
     const aiData = await aiResponse.json();
@@ -726,12 +915,12 @@ IMPORTANTE:
       aiParsed = JSON.parse(jsonMatch[1].trim());
     } catch {
       console.error("Failed to parse AI response:", rawContent);
-      return buildResponse({
+      return respond({
         success: true,
         intent: "conversa",
         message: "Desculpe, não consegui entender sua mensagem. Pode reformular?",
         transaction: null,
-      }, 200, phone);
+      }, 200);
     }
 
     // --- Resolve context to company_id ---
@@ -851,12 +1040,39 @@ IMPORTANTE:
           bankAccountId = contextCards[0].bank_account_id;
         } else if (contextCards.length > 1) {
           const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
-          return buildResponse({
+          
+          // Save pending action for card choice
+          await supabase.from("whatsapp_pending_actions").insert({
+            user_id: userId,
+            action_type: "choose_account",
+            payload: {
+              choose_type: "credit_card",
+              description: aiParsed.description,
+              amount: aiParsed.amount,
+              type: txType,
+              context: aiParsed.context,
+              category_id: matchedCategory?.id || null,
+              category_label: matchedCategory?.name || null,
+              subcategory_id: subcategoryValue,
+              payment_method: "Cartão de Crédito",
+              date: aiParsed.date || today,
+              competence_date: aiParsed.competence_date || aiParsed.date || today,
+              contact_name: aiParsed.contact_name || null,
+              supplier_id: aiParsed.supplier_id || null,
+              client_id: aiParsed.client_id || null,
+              notes: aiParsed.notes || null,
+            },
+            suggested_category_name: matchedCategory?.name || "N/A",
+            category_type: txType,
+            context_company_id: companyId,
+          });
+          
+          return respond({
             success: true,
             intent: "lancamento",
-            message: `💳 Entendi a compra de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão.`,
+            message: `💳 Entendi a compra de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão ou *não* para cancelar.`,
             transaction: null,
-          }, 200, phone);
+          }, 200);
         }
       }
 
@@ -885,12 +1101,40 @@ IMPORTANTE:
               ...contextAccounts.map((a) => `• ${a.name}`),
               ...contextWallets.map((w) => `• ${w.name} (carteira)`),
             ].join("\n");
-            return buildResponse({
+            
+            // Save pending action for account choice
+            await supabase.from("whatsapp_pending_actions").insert({
+              user_id: userId,
+              action_type: "choose_account",
+              payload: {
+                choose_type: "bank_account",
+                description: aiParsed.description,
+                amount: aiParsed.amount,
+                type: txType,
+                context: aiParsed.context,
+                category_id: matchedCategory?.id || null,
+                category_label: matchedCategory?.name || null,
+                subcategory_id: subcategoryValue,
+                payment_method: paymentMethod,
+                date: aiParsed.date || today,
+                competence_date: aiParsed.competence_date || aiParsed.date || today,
+                payment_date: aiParsed.payment_date || null,
+                contact_name: aiParsed.contact_name || null,
+                supplier_id: aiParsed.supplier_id || null,
+                client_id: aiParsed.client_id || null,
+                notes: aiParsed.notes || null,
+              },
+              suggested_category_name: matchedCategory?.name || "N/A",
+              category_type: txType,
+              context_company_id: companyId,
+            });
+            
+            return respond({
               success: true,
               intent: "lancamento",
-              message: `📋 Entendi o lançamento de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
+              message: `📋 Entendi o lançamento de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta ou *não* para cancelar.`,
               transaction: null,
-            }, 200, phone);
+            }, 200);
           }
         }
       }
@@ -953,13 +1197,13 @@ IMPORTANTE:
           console.error("Failed to save pending action:", pendingError);
         }
 
-        return buildResponse({
+        return respond({
           success: true,
           intent: "lancamento",
           message: `🤔 Não encontrei a categoria "${suggestedName}" no contexto "${contextLabel}".\n\nQuer que eu crie essa categoria e registre o lançamento?\n\nResponda *sim* para confirmar ou *não* para cancelar.`,
           transaction: null,
           pending_confirmation: true,
-        }, 200, phone);
+        }, 200);
       }
 
       if (matchedCategory && !typeMatches(matchedCategory)) {
@@ -996,21 +1240,21 @@ IMPORTANTE:
 
       // --- BLOCK if no account/wallet/card ---
       if (!bankAccountId && !walletId && !creditCardId) {
-        return buildResponse({
+        return respond({
           success: false,
           intent: "lancamento",
           message: `❌ Não consegui criar o lançamento porque você não tem nenhuma conta bancária, carteira ou cartão cadastrado no contexto "${contextLabel}". Cadastre uma conta antes de lançar.`,
           transaction: null,
-        }, 200, phone);
+        }, 200);
       }
 
       if (!categoryValue) {
-        return buildResponse({
+        return respond({
           success: false,
           intent: "lancamento",
           message: `❌ Não consegui criar o lançamento porque não há categorias de ${txType} cadastradas no contexto "${contextLabel}". Cadastre categorias antes de lançar.`,
           transaction: null,
-        }, 200, phone);
+        }, 200);
       }
 
       // --- Credit card cycle date calculation ---
@@ -1083,11 +1327,11 @@ IMPORTANTE:
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
-        return buildResponse({
+        return respond({
           success: false,
           error: "Erro ao criar lançamento",
           message: "❌ Não consegui criar o lançamento. Tente novamente.",
-        }, 500, phone);
+        }, 500);
       }
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
@@ -1099,7 +1343,7 @@ IMPORTANTE:
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
-      return buildResponse({
+      return respond({
         success: true,
         intent: "lancamento",
         message:
@@ -1118,7 +1362,7 @@ IMPORTANTE:
           credit_card: cardName,
           contact: contactName,
         },
-      }, 200, phone);
+      }, 200);
     }
 
     if (aiParsed.intent === "consulta") {
@@ -1374,21 +1618,21 @@ IMPORTANTE:
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
       }
 
-      return buildResponse({
+      return respond({
         success: true,
         intent: "consulta",
         message: responseMessage,
         transaction: null,
-      }, 200, phone);
+      }, 200);
     }
 
     // conversa
-    return buildResponse({
+    return respond({
       success: true,
       intent: "conversa",
       message: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras. 😊",
       transaction: null,
-    }, 200, phone);
+    }, 200);
   } catch (error) {
     console.error("Webhook error:", error);
     return buildResponse({
