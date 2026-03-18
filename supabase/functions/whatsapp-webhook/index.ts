@@ -158,28 +158,38 @@ serve(async (req) => {
     const message = msgContent?.conversation
       || msgContent?.extendedTextMessage?.text
       || msgContent?.imageMessage?.caption
+      || msgContent?.documentMessage?.caption
       || "";
 
-    // Detect image message and extract messageId for media download
+    // Detect image or document message and extract messageId for media download
     const hasImage = !!msgContent?.imageMessage;
+    const hasDocument = !!msgContent?.documentMessage;
+    const hasMedia = hasImage || hasDocument;
     const messageId = key?.id || "";
+    const documentMimetype = msgContent?.documentMessage?.mimetype || "application/pdf";
 
-    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, messageId: messageId?.substring(0, 20) });
+    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, hasDocument, messageId: messageId?.substring(0, 20) });
 
-    // Allow image-only messages (no text caption) — we'll analyze the image
-    if (!phone || (!message && !hasImage)) {
+    // Allow image-only or document-only messages (no text caption)
+    if (!phone || (!message && !hasMedia)) {
       return buildResponse(
         { success: false, error: "phone and message are required" },
         400, phone
       );
     }
 
-    // Fetch image base64 if present
+    // Fetch media base64 if present (same Evolution endpoint for images and documents)
     let imageBase64: string | null = null;
-    if (hasImage && messageId) {
+    let mediaIsDocument = false;
+    let mediaMimetype = "image/jpeg";
+    if (hasMedia && messageId) {
       imageBase64 = await getImageBase64(remoteJid, messageId);
       if (!imageBase64) {
-        console.warn("Failed to fetch image base64, proceeding with text only");
+        console.warn("Failed to fetch media base64, proceeding with text only");
+      } else if (hasDocument) {
+        mediaIsDocument = true;
+        mediaMimetype = documentMimetype;
+        console.log("Document media fetched, mimetype:", mediaMimetype);
       }
     }
 
