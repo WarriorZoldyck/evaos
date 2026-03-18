@@ -39,6 +39,51 @@ async function sendEvolutionReply(phone: string, text: string) {
   }
 }
 
+// --- Evolution API helper: get base64 image from media message ---
+async function getImageBase64(remoteJid: string, messageId: string): Promise<string | null> {
+  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
+  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
+  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
+  if (!evoUrl || !evoKey || !evoInstance) {
+    console.error("Evolution API not configured for media download");
+    return null;
+  }
+  try {
+    const url = `${evoUrl}/chat/getBase64FromMediaMessage/${encodeURIComponent(evoInstance)}`;
+    console.log("Fetching image base64 from Evolution:", url);
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "apikey": evoKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          key: {
+            remoteJid,
+            fromMe: false,
+            id: messageId,
+          },
+        },
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("Evolution getBase64 error:", res.status, errBody);
+      return null;
+    }
+    const data = await res.json();
+    // Evolution returns { base64: "..." } or the base64 string directly
+    const base64 = data.base64 || (typeof data === "string" ? data : null);
+    if (!base64) {
+      console.error("No base64 in Evolution response:", JSON.stringify(data).substring(0, 200));
+      return null;
+    }
+    console.log("Image base64 fetched successfully, length:", base64.length);
+    return base64;
+  } catch (err) {
+    console.error("Evolution getBase64 exception:", err);
+    return null;
+  }
+}
+
 // Helper to build response AND send Evolution reply
 function buildResponse(body: any, status: number, phone: string) {
   if (body.message && phone) {
@@ -106,6 +151,7 @@ serve(async (req) => {
 
     // Extract phone from remoteJid
     phone = key?.remoteJid?.replace("@s.whatsapp.net", "") || "";
+    const remoteJid = key?.remoteJid || "";
 
     // Extract message text
     const msgContent = msgData.message;
@@ -114,13 +160,27 @@ serve(async (req) => {
       || msgContent?.imageMessage?.caption
       || "";
 
-    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50) });
+    // Detect image message and extract messageId for media download
+    const hasImage = !!msgContent?.imageMessage;
+    const messageId = key?.id || "";
 
-    if (!phone || !message) {
+    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, messageId: messageId?.substring(0, 20) });
+
+    // Allow image-only messages (no text caption) — we'll analyze the image
+    if (!phone || (!message && !hasImage)) {
       return buildResponse(
         { success: false, error: "phone and message are required" },
         400, phone
       );
+    }
+
+    // Fetch image base64 if present
+    let imageBase64: string | null = null;
+    if (hasImage && messageId) {
+      imageBase64 = await getImageBase64(remoteJid, messageId);
+      if (!imageBase64) {
+        console.warn("Failed to fetch image base64, proceeding with text only");
+      }
     }
 
     // 2. Create admin Supabase client
@@ -612,7 +672,24 @@ IMPORTANTE:
 - O valor (amount) deve ser sempre positivo
 - A data padrão é hoje: ${today}
 - Para lançamentos sem tipo explícito, assuma "despesa"
-- Sempre retorne o campo "context"`;
+- Sempre retorne o campo "context"
+- Se o usuário enviar uma IMAGEM (foto de comprovante, nota fiscal, recibo, etc.), analise o conteúdo visual para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações da imagem com qualquer legenda de texto fornecida.`;
+
+    // Build user content: multimodal if image, text-only otherwise
+    const userText = message || "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
+    let userContent: any;
+    if (imageBase64) {
+      // Detect mime type from base64 header or default to jpeg
+      const mimeType = imageBase64.startsWith("/9j/") ? "image/jpeg" : 
+                       imageBase64.startsWith("iVBOR") ? "image/png" : "image/jpeg";
+      userContent = [
+        { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+        { type: "text", text: userText },
+      ];
+      console.log("Sending multimodal request to AI (image + text)");
+    } else {
+      userContent = userText;
+    }
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -624,7 +701,7 @@ IMPORTANTE:
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: message },
+          { role: "user", content: userContent },
         ],
       }),
     });
