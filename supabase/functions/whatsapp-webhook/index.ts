@@ -754,7 +754,7 @@ serve(async (req) => {
     }
 
     // 4. Fetch user context
-    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes] = await Promise.all([
+    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
@@ -762,6 +762,7 @@ serve(async (req) => {
       supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
+      supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(10),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -771,6 +772,7 @@ serve(async (req) => {
     const creditCards = creditCardsRes.data || [];
     const suppliersList = suppliersRes.data || [];
     const clientsList = clientsRes.data || [];
+    const recentTransactions = recentTxRes.data || [];
 
     const today = new Date().toISOString().split("T")[0];
 
@@ -853,7 +855,7 @@ serve(async (req) => {
 IMPORTANTE: Você tem acesso ao HISTÓRICO DA CONVERSA de hoje. Use-o para entender o contexto completo. Se o usuário está respondendo a uma pergunta anterior (ex: informando o valor, escolhendo uma conta, dando detalhes adicionais), considere todo o contexto da conversa para construir o lançamento completo.
 
 REGRAS:
-1. Classifique como: "lancamento", "consulta", "gerenciar_categoria" ou "conversa"
+1. Classifique como: "lancamento", "editar_lancamento", "consulta", "gerenciar_categoria" ou "conversa"
 2. Para lançamentos: extraia TODOS os campos possíveis da mensagem E do contexto da conversa
 3. Para consultas: identifique o tipo e contexto
 4. Para gerenciar categorias: identifique a ação solicitada
@@ -949,6 +951,21 @@ TIPOS DE CONSULTA:
 - "listar_cartoes" = listar cartões de crédito cadastrados
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
 - Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
+
+Para editar lançamento existente:
+{"intent":"editar_lancamento","transaction_id":"UUID-do-lancamento-da-lista-ou-null","field":"amount|description|category|payment_date|competence_date|status|notes","new_value":"novo valor","friendly_message":"..."}
+
+REGRAS DE EDIÇÃO DE LANÇAMENTO:
+- Se o usuário diz "muda o valor", "corrige pra X", "era R$Y não R$Z", "edita aquele lançamento", "na verdade era...", classifique como "editar_lancamento"
+- Use o HISTÓRICO DA CONVERSA e a LISTA DE LANÇAMENTOS RECENTES abaixo para identificar qual lançamento o usuário quer editar
+- Se o lançamento foi mencionado na conversa ou acabou de ser criado, use o transaction_id correspondente
+- Se não conseguir identificar qual lançamento, retorne transaction_id como null — o sistema perguntará ao usuário
+- Para field="amount", new_value deve ser o número (ex: "45.90")
+- Para field="status", new_value deve ser "Pago" ou "Pendente"
+- Para field="payment_date" ou "competence_date", new_value deve ser "YYYY-MM-DD"
+
+LANÇAMENTOS RECENTES DO USUÁRIO (use para identificar o lançamento correto):
+${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.id}] ${t.description} | ${fmt(t.amount)} | ${t.type} | ${t.status} | ${t.payment_date}`).join("\n") : "Nenhum lançamento recente"}
 
 Para conversa:
 {"intent":"conversa","friendly_message":"..."}
@@ -1494,6 +1511,171 @@ IMPORTANTE:
           credit_card: cardName,
           contact: contactName,
         },
+      }, 200);
+    }
+
+    // === EDITAR LANÇAMENTO ===
+    if (aiParsed.intent === "editar_lancamento") {
+      console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed));
+      let transactionId = aiParsed.transaction_id;
+      const field = aiParsed.field;
+      const newValue = aiParsed.new_value;
+
+      if (!field || newValue === undefined || newValue === null) {
+        return respond({
+          success: false, intent: "editar_lancamento",
+          message: aiParsed.friendly_message || "❌ Não entendi o que você quer editar. Pode me dizer qual campo e o novo valor?",
+          transaction: null,
+        }, 200);
+      }
+
+      // If no transaction_id, try to find from recent transactions context
+      if (!transactionId) {
+        // If there's only 1 recent transaction, assume it's that one
+        if (recentTransactions.length === 1) {
+          transactionId = recentTransactions[0].id;
+        } else if (recentTransactions.length > 1) {
+          // List recent transactions for user to choose
+          const txList = recentTransactions.slice(0, 5).map((t: any, i: number) =>
+            `${i + 1}. ${t.description} — ${fmt(t.amount)} (${t.payment_date})`
+          ).join("\n");
+          return respond({
+            success: false, intent: "editar_lancamento",
+            message: `Qual lançamento você quer editar?\n\n${txList}\n\nMe diga o número ou o nome do lançamento.`,
+            transaction: null,
+          }, 200);
+        } else {
+          return respond({
+            success: false, intent: "editar_lancamento",
+            message: "Não encontrei lançamentos recentes para editar. Pode descrever qual lançamento quer alterar?",
+            transaction: null,
+          }, 200);
+        }
+      }
+
+      // Validate transaction belongs to user
+      const { data: txToEdit, error: txErr } = await supabase
+        .from("transactions")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, notes")
+        .eq("id", transactionId)
+        .eq("user_id", userId)
+        .single();
+
+      if (txErr || !txToEdit) {
+        console.error("Transaction not found for edit:", transactionId, txErr);
+        return respond({
+          success: false, intent: "editar_lancamento",
+          message: "❌ Não encontrei esse lançamento. Pode verificar e tentar novamente?",
+          transaction: null,
+        }, 200);
+      }
+
+      // Map field to column and prepare update
+      const updateData: Record<string, any> = {};
+      let fieldLabel = "";
+      let oldValueLabel = "";
+      let newValueLabel = "";
+
+      switch (field) {
+        case "amount": {
+          const numVal = parseFloat(String(newValue).replace(",", ".").replace(/[^\d.]/g, ""));
+          if (isNaN(numVal) || numVal <= 0) {
+            return respond({
+              success: false, intent: "editar_lancamento",
+              message: "❌ O valor informado não é válido. Informe um valor numérico positivo.",
+              transaction: null,
+            }, 200);
+          }
+          updateData.amount = numVal;
+          fieldLabel = "Valor";
+          oldValueLabel = fmt(txToEdit.amount);
+          newValueLabel = fmt(numVal);
+          break;
+        }
+        case "description": {
+          updateData.description = String(newValue);
+          fieldLabel = "Descrição";
+          oldValueLabel = txToEdit.description;
+          newValueLabel = String(newValue);
+          break;
+        }
+        case "category": {
+          // Try to resolve category by UUID or name
+          const allCats = categoriesRes.data || [];
+          let cat = allCats.find((c: any) => c.id === newValue);
+          if (!cat) {
+            cat = allCats.find((c: any) => c.name.toLowerCase() === String(newValue).toLowerCase());
+          }
+          if (!cat) {
+            return respond({
+              success: false, intent: "editar_lancamento",
+              message: `❌ Não encontrei a categoria "${newValue}". Verifique o nome e tente novamente.`,
+              transaction: null,
+            }, 200);
+          }
+          updateData.category = cat.id;
+          fieldLabel = "Categoria";
+          oldValueLabel = txToEdit.category;
+          newValueLabel = cat.name;
+          break;
+        }
+        case "payment_date": {
+          updateData.payment_date = String(newValue);
+          fieldLabel = "Data de pagamento";
+          oldValueLabel = formatDate(txToEdit.payment_date);
+          newValueLabel = formatDate(String(newValue));
+          break;
+        }
+        case "competence_date": {
+          updateData.competence_date = String(newValue);
+          fieldLabel = "Data de competência";
+          oldValueLabel = formatDate(txToEdit.competence_date);
+          newValueLabel = formatDate(String(newValue));
+          break;
+        }
+        case "status": {
+          const statusVal = String(newValue) === "Pago" ? "Pago" : "Pendente";
+          updateData.status = statusVal;
+          fieldLabel = "Status";
+          oldValueLabel = txToEdit.status;
+          newValueLabel = statusVal;
+          break;
+        }
+        case "notes": {
+          updateData.notes = String(newValue);
+          fieldLabel = "Observações";
+          oldValueLabel = txToEdit.notes || "(vazio)";
+          newValueLabel = String(newValue);
+          break;
+        }
+        default:
+          return respond({
+            success: false, intent: "editar_lancamento",
+            message: `❌ Não é possível editar o campo "${field}". Campos editáveis: valor, descrição, categoria, data de pagamento, data de competência, status, observações.`,
+            transaction: null,
+          }, 200);
+      }
+
+      const { error: updateErr } = await supabase
+        .from("transactions")
+        .update(updateData)
+        .eq("id", transactionId)
+        .eq("user_id", userId);
+
+      if (updateErr) {
+        console.error("Transaction update error:", updateErr);
+        return respond({
+          success: false, intent: "editar_lancamento",
+          message: "❌ Erro ao atualizar o lançamento. Tente novamente.",
+          transaction: null,
+        }, 200);
+      }
+
+      const successMsg = `✅ Lançamento "${txToEdit.description}" atualizado!\n\n📝 ${fieldLabel}: ${oldValueLabel} → ${newValueLabel}`;
+      return respond({
+        success: true, intent: "editar_lancamento",
+        message: successMsg,
+        transaction: { id: transactionId, ...updateData },
       }, 200);
     }
 
