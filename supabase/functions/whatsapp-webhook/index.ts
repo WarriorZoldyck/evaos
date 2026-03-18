@@ -309,7 +309,7 @@ serve(async (req) => {
     console.log("Conversation history loaded:", conversationHistory.length, "messages");
 
     // Save incoming user message
-    const userMsgText = message || "[imagem enviada]";
+    const userMsgText = message || (hasDocument ? "[documento enviado]" : "[imagem enviada]");
     await supabase.from("whatsapp_messages").insert({
       user_id: userId,
       role: "user",
