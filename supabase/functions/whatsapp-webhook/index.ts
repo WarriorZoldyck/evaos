@@ -794,11 +794,12 @@ serve(async (req) => {
 IMPORTANTE: Você tem acesso ao HISTÓRICO DA CONVERSA de hoje. Use-o para entender o contexto completo. Se o usuário está respondendo a uma pergunta anterior (ex: informando o valor, escolhendo uma conta, dando detalhes adicionais), considere todo o contexto da conversa para construir o lançamento completo.
 
 REGRAS:
-1. Classifique como: "lancamento", "consulta" ou "conversa"
+1. Classifique como: "lancamento", "consulta", "gerenciar_categoria" ou "conversa"
 2. Para lançamentos: extraia TODOS os campos possíveis da mensagem E do contexto da conversa
 3. Para consultas: identifique o tipo e contexto
-4. Responda SEMPRE em português brasileiro
-5. Retorne APENAS um JSON válido, sem texto adicional
+4. Para gerenciar categorias: identifique a ação solicitada
+5. Responda SEMPRE em português brasileiro
+6. Retorne APENAS um JSON válido, sem texto adicional
 
 CONTEXTOS DISPONÍVEIS (use EXATAMENTE um destes valores no campo "context"):
 ${contextNames.map((n) => `  - "${n}"`).join("\n")}
@@ -864,6 +865,17 @@ IMPORTANTE SOBRE account_id e credit_card_id:
 - Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne null e pergunte no friendly_message qual conta usar, listando as opções disponíveis.
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 
+Para gerenciamento de categorias:
+{"intent":"gerenciar_categoria","action":"criar|criar_subcategoria","category_name":"nome da nova categoria","parent_category_id":"UUID-da-categoria-pai-se-subcategoria|null","category_type":"receita|despesa|ambos","context":"Pessoal|Nome da Empresa","friendly_message":"mensagem descrevendo a ação"}
+
+REGRAS DE GERENCIAMENTO DE CATEGORIAS:
+- Ações suportadas: "criar" (nova categoria raiz) e "criar_subcategoria" (nova subcategoria dentro de uma existente)
+- Para "criar_subcategoria": parent_category_id DEVE ser um UUID válido da lista de categorias acima
+- category_type: para subcategorias, herde o tipo da categoria pai
+- NUNCA diga que vai "desativar", "mover", "renomear" ou "excluir" categorias. Essas ações NÃO são suportadas via WhatsApp.
+- Se o usuário pedir para mover/renomear/excluir, informe que essas ações devem ser feitas pelo painel web (EVA OS).
+- NÃO invente ações. Se a ação pedida não é "criar" ou "criar_subcategoria", retorne intent="conversa" explicando a limitação.
+
 Para consulta:
 {"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
 
@@ -887,7 +899,8 @@ IMPORTANTE:
 - Para lançamentos sem tipo explícito, assuma "despesa"
 - Sempre retorne o campo "context"
 - Se o usuário enviar uma IMAGEM, DOCUMENTO PDF ou ÁUDIO (foto de comprovante, nota fiscal, recibo, extrato, mensagem de voz, etc.), analise o conteúdo visual/textual/sonoro para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.
-- Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.`;
+- Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.
+- NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.`;
 
     // Build user content: multimodal if media, text-only otherwise
     const defaultMediaPrompt = hasAudio
