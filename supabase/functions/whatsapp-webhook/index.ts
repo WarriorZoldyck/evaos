@@ -1679,7 +1679,7 @@ IMPORTANTE:
       }, 200);
     }
 
-
+    if (aiParsed.intent === "consulta") {
       const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
 
