@@ -1099,12 +1099,40 @@ IMPORTANTE:
               ...contextAccounts.map((a) => `• ${a.name}`),
               ...contextWallets.map((w) => `• ${w.name} (carteira)`),
             ].join("\n");
-            return buildResponse({
+            
+            // Save pending action for account choice
+            await supabase.from("whatsapp_pending_actions").insert({
+              user_id: userId,
+              action_type: "choose_account",
+              payload: {
+                choose_type: "bank_account",
+                description: aiParsed.description,
+                amount: aiParsed.amount,
+                type: txType,
+                context: aiParsed.context,
+                category_id: matchedCategory?.id || null,
+                category_label: matchedCategory?.name || null,
+                subcategory_id: subcategoryValue,
+                payment_method: paymentMethod,
+                date: aiParsed.date || today,
+                competence_date: aiParsed.competence_date || aiParsed.date || today,
+                payment_date: aiParsed.payment_date || null,
+                contact_name: aiParsed.contact_name || null,
+                supplier_id: aiParsed.supplier_id || null,
+                client_id: aiParsed.client_id || null,
+                notes: aiParsed.notes || null,
+              },
+              suggested_category_name: matchedCategory?.name || "N/A",
+              category_type: txType,
+              context_company_id: companyId,
+            });
+            
+            return respond({
               success: true,
               intent: "lancamento",
-              message: `📋 Entendi o lançamento de R$ ${aiParsed.amount?.toFixed(2) || "?"} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta.`,
+              message: `📋 Entendi o lançamento de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta ou *não* para cancelar.`,
               transaction: null,
-            }, 200, phone);
+            }, 200);
           }
         }
       }
