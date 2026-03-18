@@ -151,6 +151,7 @@ serve(async (req) => {
 
     // Extract phone from remoteJid
     phone = key?.remoteJid?.replace("@s.whatsapp.net", "") || "";
+    const remoteJid = key?.remoteJid || "";
 
     // Extract message text
     const msgContent = msgData.message;
@@ -159,13 +160,27 @@ serve(async (req) => {
       || msgContent?.imageMessage?.caption
       || "";
 
-    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50) });
+    // Detect image message and extract messageId for media download
+    const hasImage = !!msgContent?.imageMessage;
+    const messageId = key?.id || "";
 
-    if (!phone || !message) {
+    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, messageId: messageId?.substring(0, 20) });
+
+    // Allow image-only messages (no text caption) — we'll analyze the image
+    if (!phone || (!message && !hasImage)) {
       return buildResponse(
         { success: false, error: "phone and message are required" },
         400, phone
       );
+    }
+
+    // Fetch image base64 if present
+    let imageBase64: string | null = null;
+    if (hasImage && messageId) {
+      imageBase64 = await getImageBase64(remoteJid, messageId);
+      if (!imageBase64) {
+        console.warn("Failed to fetch image base64, proceeding with text only");
+      }
     }
 
     // 2. Create admin Supabase client
