@@ -871,20 +871,38 @@ IMPORTANTE:
 - A data padrão é hoje: ${today}
 - Para lançamentos sem tipo explícito, assuma "despesa"
 - Sempre retorne o campo "context"
-- Se o usuário enviar uma IMAGEM (foto de comprovante, nota fiscal, recibo, etc.), analise o conteúdo visual para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações da imagem com qualquer legenda de texto fornecida.`;
+- Se o usuário enviar uma IMAGEM ou DOCUMENTO PDF (foto de comprovante, nota fiscal, recibo, extrato, etc.), analise o conteúdo visual/textual para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.`;
 
-    // Build user content: multimodal if image, text-only otherwise
-    const userText = message || "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
+    // Build user content: multimodal if media, text-only otherwise
+    const defaultMediaPrompt = hasDocument 
+      ? "Analise este documento PDF e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc)."
+      : "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
+    const userText = message || defaultMediaPrompt;
     let userContent: any;
     if (imageBase64) {
-      // Detect mime type from base64 header or default to jpeg
-      const mimeType = imageBase64.startsWith("/9j/") ? "image/jpeg" : 
-                       imageBase64.startsWith("iVBOR") ? "image/png" : "image/jpeg";
-      userContent = [
-        { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-        { type: "text", text: userText },
-      ];
-      console.log("Sending multimodal request to AI (image + text)");
+      if (mediaIsDocument) {
+        // Send document (PDF) using file format (same as parse-bank-statement)
+        userContent = [
+          {
+            type: "file",
+            file: {
+              filename: "document.pdf",
+              file_data: `data:${mediaMimetype};base64,${imageBase64}`,
+            },
+          },
+          { type: "text", text: userText },
+        ];
+        console.log("Sending multimodal request to AI (document + text), mimetype:", mediaMimetype);
+      } else {
+        // Send image using image_url format
+        const mimeType = imageBase64.startsWith("/9j/") ? "image/jpeg" : 
+                         imageBase64.startsWith("iVBOR") ? "image/png" : "image/jpeg";
+        userContent = [
+          { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          { type: "text", text: userText },
+        ];
+        console.log("Sending multimodal request to AI (image + text)");
+      }
     } else {
       userContent = userText;
     }
