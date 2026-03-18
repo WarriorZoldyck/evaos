@@ -855,7 +855,7 @@ serve(async (req) => {
 IMPORTANTE: Você tem acesso ao HISTÓRICO DA CONVERSA de hoje. Use-o para entender o contexto completo. Se o usuário está respondendo a uma pergunta anterior (ex: informando o valor, escolhendo uma conta, dando detalhes adicionais), considere todo o contexto da conversa para construir o lançamento completo.
 
 REGRAS:
-1. Classifique como: "lancamento", "consulta", "gerenciar_categoria" ou "conversa"
+1. Classifique como: "lancamento", "editar_lancamento", "consulta", "gerenciar_categoria" ou "conversa"
 2. Para lançamentos: extraia TODOS os campos possíveis da mensagem E do contexto da conversa
 3. Para consultas: identifique o tipo e contexto
 4. Para gerenciar categorias: identifique a ação solicitada
