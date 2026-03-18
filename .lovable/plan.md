@@ -1,43 +1,30 @@
 
 
+## Habilitar Renomear, Mover e Excluir Categorias via WhatsApp
 
-# Integração Evolution API — 100% Direto (sem N8N) ✅
+### Situação Atual
+A EVA só suporta `criar` e `criar_subcategoria`. As ações de renomear, mover e excluir estão explicitamente bloqueadas no system prompt (linha 875-877) e no handler (linhas 1780-1785), que redireciona o usuário para o painel web.
 
-## O que foi feito
+### Plano
 
-1. **Webhook reescrito** — 100% Evolution API, sem branch N8N legado
-2. **Bug de escopo corrigido** — `phone` declarado antes do try/catch
-3. **Secret `EVOLUTION_API_URL` corrigido** — estava com valor da API key, agora tem a URL correta
-4. **Webhook registrado** na instância "teste eva" com evento `MESSAGES_UPSERT`
-5. **Mensagens ignoradas**: `fromMe`, grupos (`@g.us`), eventos não-message
-6. **Resposta bidirecional** via Evolution `sendText`
-7. **Visão computacional** — suporte a imagens via `getBase64FromMediaMessage` + Gemini multimodal ✅
-8. **Memória de conversa** — histórico completo do dia enviado como contexto para a IA ✅
-9. **Escolha de conta** — quando há múltiplas contas, pergunta ANTES de registrar e guarda em pending_actions ✅
+**1. Atualizar o System Prompt** (linhas ~868-878)
+- Adicionar as ações `renomear`, `mover` e `excluir` ao formato JSON de `gerenciar_categoria`
+- Remover a instrução que proíbe essas ações
+- Adicionar regras:
+  - `renomear`: requer `category_id` + `new_name`
+  - `mover`: requer `category_id` + `new_parent_category_id` (ou null para tornar raiz)
+  - `excluir`: requer `category_id`. A IA deve avisar que subcategorias precisam ser excluídas antes
+- Adicionar instrução para a IA **confirmar** ações destrutivas (excluir) com o usuário antes de executar — usando o sistema de pending_actions
 
-## Fluxo atual
+**2. Estender o handler `gerenciar_categoria`** (linhas ~1700-1785)
 
-```
-WhatsApp → Evolution API → Edge Function (webhook) → carrega histórico do dia → processa com IA (texto + imagem + contexto) → responde via Evolution sendText → WhatsApp
-```
+- **Renomear**: `supabase.from("categories").update({ name }).eq("id", id).eq("user_id", userId)`
+- **Mover**: `supabase.from("categories").update({ parent_id }).eq("id", id).eq("user_id", userId)` — validar que o destino existe e não cria ciclo
+- **Excluir**: Criar pending_action `delete_category` com confirmação. No handler de confirmação, verificar se tem filhos antes de excluir
 
-## Memória de Conversa ✅
+**3. Adicionar pending action para exclusão** (na seção de pending actions, ~linhas 370-695)
+- Novo `action_type: "delete_category"` — ao confirmar, verifica filhos e deleta
 
-- Tabela `whatsapp_messages` armazena todas as mensagens (user + assistant)
-- Carrega histórico completo do dia (até 50 mensagens) antes de cada processamento
-- Envia histórico como mensagens adicionais no chat da IA
-- Permite follow-ups naturais ("R$45,90" como resposta a "qual o valor?")
+### Arquivo afetado
+- `supabase/functions/whatsapp-webhook/index.ts`
 
-## Escolha de Conta (Pending Actions) ✅
-
-- Se múltiplas contas/carteiras existem e o usuário não especificou qual, a EVA pergunta
-- Payload completo é salvo em `whatsapp_pending_actions` com `action_type: "choose_account"`
-- Quando o usuário responde com o nome da conta, o lançamento é criado automaticamente
-- Suporta tanto contas bancárias/carteiras quanto cartões de crédito
-
-## Configuração Evolution
-
-- Instância: `teste eva`
-- Webhook URL: `https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook`
-- Eventos: `MESSAGES_UPSERT`
-- webhookByEvents: false
