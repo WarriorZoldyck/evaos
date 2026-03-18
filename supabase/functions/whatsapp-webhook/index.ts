@@ -278,9 +278,53 @@ serve(async (req) => {
     const userId = profile.id;
 
     // ============================================================
+    // CONVERSATION MEMORY: Load today's history + save user message
+    // ============================================================
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data: chatHistory } = await supabase
+      .from("whatsapp_messages")
+      .select("role, content, created_at")
+      .eq("user_id", userId)
+      .gte("created_at", todayStart.toISOString())
+      .order("created_at", { ascending: true })
+      .limit(50);
+
+    const conversationHistory = (chatHistory || []).map((m: any) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
+    console.log("Conversation history loaded:", conversationHistory.length, "messages");
+
+    // Save incoming user message
+    const userMsgText = message || "[imagem enviada]";
+    await supabase.from("whatsapp_messages").insert({
+      user_id: userId,
+      role: "user",
+      content: userMsgText,
+    });
+
+    // Helper to save assistant response to history
+    const saveAssistantMsg = (text: string) => {
+      supabase.from("whatsapp_messages").insert({
+        user_id: userId,
+        role: "assistant",
+        content: text,
+      }).then(() => {});
+    };
+
+    // Wrap buildResponse to also save to conversation history
+    const respond = (body: any, status: number) => {
+      if (body.message) saveAssistantMsg(body.message);
+      return buildResponse(body, status, phone);
+    };
+
+    // ============================================================
     // CHECK FOR PENDING ACTIONS BEFORE ANYTHING ELSE
     // ============================================================
-    const trimmedMsg = message.trim();
+    const trimmedMsg = (message || "").trim();
 
     // Clean up expired pending actions first
     await supabase
