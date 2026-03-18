@@ -166,18 +166,21 @@ serve(async (req) => {
       || msgContent?.extendedTextMessage?.text
       || msgContent?.imageMessage?.caption
       || msgContent?.documentMessage?.caption
+      || msgContent?.audioMessage?.caption
       || "";
 
-    // Detect image or document message and extract messageId for media download
+    // Detect media types
     const hasImage = !!msgContent?.imageMessage;
     const hasDocument = !!msgContent?.documentMessage;
-    const hasMedia = hasImage || hasDocument;
+    const hasAudio = !!msgContent?.audioMessage;
+    const hasMedia = hasImage || hasDocument || hasAudio;
     const messageId = key?.id || "";
     const documentMimetype = msgContent?.documentMessage?.mimetype || "application/pdf";
+    const audioMimetype = msgContent?.audioMessage?.mimetype || "audio/ogg";
 
-    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, hasDocument, messageId: messageId?.substring(0, 20) });
+    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, hasDocument, hasAudio, messageId: messageId?.substring(0, 20) });
 
-    // Allow image-only or document-only messages (no text caption)
+    // Allow media-only messages (no text caption)
     if (!phone || (!message && !hasMedia)) {
       return buildResponse(
         { success: false, error: "phone and message are required" },
@@ -185,9 +188,10 @@ serve(async (req) => {
       );
     }
 
-    // Fetch media base64 if present (same Evolution endpoint for images and documents)
+    // Fetch media base64 if present (same Evolution endpoint for images, documents, and audio)
     let imageBase64: string | null = null;
     let mediaIsDocument = false;
+    let mediaIsAudio = false;
     let mediaMimetype = "image/jpeg";
     if (hasMedia && messageId) {
       imageBase64 = await getImageBase64(remoteJid, messageId);
@@ -197,6 +201,10 @@ serve(async (req) => {
         mediaIsDocument = true;
         mediaMimetype = documentMimetype;
         console.log("Document media fetched, mimetype:", mediaMimetype);
+      } else if (hasAudio) {
+        mediaIsAudio = true;
+        mediaMimetype = audioMimetype.split(";")[0].trim(); // "audio/ogg; codecs=opus" -> "audio/ogg"
+        console.log("Audio media fetched, mimetype:", mediaMimetype, "length:", imageBase64.length);
       }
     }
 
