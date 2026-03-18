@@ -166,18 +166,21 @@ serve(async (req) => {
       || msgContent?.extendedTextMessage?.text
       || msgContent?.imageMessage?.caption
       || msgContent?.documentMessage?.caption
+      || msgContent?.audioMessage?.caption
       || "";
 
-    // Detect image or document message and extract messageId for media download
+    // Detect media types
     const hasImage = !!msgContent?.imageMessage;
     const hasDocument = !!msgContent?.documentMessage;
-    const hasMedia = hasImage || hasDocument;
+    const hasAudio = !!msgContent?.audioMessage;
+    const hasMedia = hasImage || hasDocument || hasAudio;
     const messageId = key?.id || "";
     const documentMimetype = msgContent?.documentMessage?.mimetype || "application/pdf";
+    const audioMimetype = msgContent?.audioMessage?.mimetype || "audio/ogg";
 
-    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, hasDocument, messageId: messageId?.substring(0, 20) });
+    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, hasDocument, hasAudio, messageId: messageId?.substring(0, 20) });
 
-    // Allow image-only or document-only messages (no text caption)
+    // Allow media-only messages (no text caption)
     if (!phone || (!message && !hasMedia)) {
       return buildResponse(
         { success: false, error: "phone and message are required" },
@@ -185,9 +188,10 @@ serve(async (req) => {
       );
     }
 
-    // Fetch media base64 if present (same Evolution endpoint for images and documents)
+    // Fetch media base64 if present (same Evolution endpoint for images, documents, and audio)
     let imageBase64: string | null = null;
     let mediaIsDocument = false;
+    let mediaIsAudio = false;
     let mediaMimetype = "image/jpeg";
     if (hasMedia && messageId) {
       imageBase64 = await getImageBase64(remoteJid, messageId);
@@ -197,6 +201,10 @@ serve(async (req) => {
         mediaIsDocument = true;
         mediaMimetype = documentMimetype;
         console.log("Document media fetched, mimetype:", mediaMimetype);
+      } else if (hasAudio) {
+        mediaIsAudio = true;
+        mediaMimetype = audioMimetype.split(";")[0].trim(); // "audio/ogg; codecs=opus" -> "audio/ogg"
+        console.log("Audio media fetched, mimetype:", mediaMimetype, "length:", imageBase64.length);
       }
     }
 
@@ -316,7 +324,7 @@ serve(async (req) => {
     console.log("Conversation history loaded:", conversationHistory.length, "messages");
 
     // Save incoming user message
-    const userMsgText = message || (hasDocument ? "[documento enviado]" : "[imagem enviada]");
+    const userMsgText = message || (hasAudio ? "[áudio enviado]" : hasDocument ? "[documento enviado]" : "[imagem enviada]");
     await supabase.from("whatsapp_messages").insert({
       user_id: userId,
       role: "user",
@@ -878,16 +886,32 @@ IMPORTANTE:
 - A data padrão é hoje: ${today}
 - Para lançamentos sem tipo explícito, assuma "despesa"
 - Sempre retorne o campo "context"
-- Se o usuário enviar uma IMAGEM ou DOCUMENTO PDF (foto de comprovante, nota fiscal, recibo, extrato, etc.), analise o conteúdo visual/textual para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.`;
+- Se o usuário enviar uma IMAGEM, DOCUMENTO PDF ou ÁUDIO (foto de comprovante, nota fiscal, recibo, extrato, mensagem de voz, etc.), analise o conteúdo visual/textual/sonoro para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.
+- Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.`;
 
     // Build user content: multimodal if media, text-only otherwise
-    const defaultMediaPrompt = hasDocument 
-      ? "Analise este documento PDF e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc)."
-      : "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
+    const defaultMediaPrompt = hasAudio
+      ? "Transcreva este áudio e interprete o conteúdo como uma mensagem do usuário sobre lançamentos financeiros. Extraia valor, descrição, data, categoria, método de pagamento, etc."
+      : hasDocument 
+        ? "Analise este documento PDF e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc)."
+        : "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
     const userText = message || defaultMediaPrompt;
     let userContent: any;
     if (imageBase64) {
-      if (mediaIsDocument) {
+      if (mediaIsAudio) {
+        // Send audio using file format for Gemini multimodal
+        userContent = [
+          {
+            type: "file",
+            file: {
+              filename: "audio.ogg",
+              file_data: `data:${mediaMimetype};base64,${imageBase64}`,
+            },
+          },
+          { type: "text", text: userText },
+        ];
+        console.log("Sending multimodal request to AI (audio + text), mimetype:", mediaMimetype);
+      } else if (mediaIsDocument) {
         // Send document (PDF) using file format (same as parse-bank-statement)
         userContent = [
           {
