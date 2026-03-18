@@ -689,6 +689,65 @@ serve(async (req) => {
         }, 200);
       }
 
+      // === HANDLE "delete_category" pending action ===
+      if (pendingAction.action_type === "delete_category") {
+        if (CONFIRM_PATTERNS.test(trimmedMsg)) {
+          console.log("=== PENDING ACTION: DELETE CATEGORY CONFIRMED ===");
+          const payload = pendingAction.payload as any;
+          const categoryId = payload.category_id;
+          const categoryName = payload.category_name;
+
+          // Check for children
+          const { data: children } = await supabase
+            .from("categories")
+            .select("id")
+            .eq("parent_id", categoryId)
+            .eq("user_id", userId)
+            .limit(1);
+
+          if (children && children.length > 0) {
+            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+            return respond({
+              success: false, intent: "gerenciar_categoria",
+              message: `❌ A categoria "${categoryName}" possui subcategorias. Exclua as subcategorias primeiro antes de excluir a categoria pai.`,
+              transaction: null,
+            }, 200);
+          }
+
+          const { error: delErr } = await supabase
+            .from("categories")
+            .delete()
+            .eq("id", categoryId)
+            .eq("user_id", userId);
+
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (delErr) {
+            console.error("Category delete error:", delErr);
+            return respond({
+              success: false, intent: "gerenciar_categoria",
+              message: `❌ Erro ao excluir a categoria "${categoryName}". Pode haver lançamentos vinculados a ela.`,
+              transaction: null,
+            }, 200);
+          }
+
+          return respond({
+            success: true, intent: "gerenciar_categoria",
+            message: `✅ Categoria "${categoryName}" excluída com sucesso!`,
+            transaction: null,
+          }, 200);
+        }
+
+        if (CANCEL_PATTERNS.test(trimmedMsg)) {
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({
+            success: true, intent: "conversa",
+            message: "Ok, a categoria não foi excluída. 😊",
+            transaction: null,
+          }, 200);
+        }
+      }
+
       // Message doesn't match confirm/cancel — clear pending and process normally
       console.log("=== PENDING ACTION: IGNORED (new message) ===");
       await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -866,15 +925,16 @@ IMPORTANTE SOBRE account_id e credit_card_id:
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 
 Para gerenciamento de categorias:
-{"intent":"gerenciar_categoria","action":"criar|criar_subcategoria","category_name":"nome da nova categoria","parent_category_id":"UUID-da-categoria-pai-se-subcategoria|null","category_type":"receita|despesa|ambos","context":"Pessoal|Nome da Empresa","friendly_message":"mensagem descrevendo a ação"}
+{"intent":"gerenciar_categoria","action":"criar|criar_subcategoria|renomear|mover|excluir","category_name":"nome da nova categoria (para criar)","category_id":"UUID da categoria alvo (para renomear/mover/excluir)","new_name":"novo nome (para renomear)","parent_category_id":"UUID-da-categoria-pai-se-subcategoria|null","new_parent_category_id":"UUID do novo pai ou null para tornar raiz (para mover)","category_type":"receita|despesa|ambos","context":"Pessoal|Nome da Empresa","friendly_message":"mensagem descrevendo a ação"}
 
 REGRAS DE GERENCIAMENTO DE CATEGORIAS:
-- Ações suportadas: "criar" (nova categoria raiz) e "criar_subcategoria" (nova subcategoria dentro de uma existente)
+- Ações suportadas: "criar", "criar_subcategoria", "renomear", "mover", "excluir"
 - Para "criar_subcategoria": parent_category_id DEVE ser um UUID válido da lista de categorias acima
 - category_type: para subcategorias, herde o tipo da categoria pai
-- NUNCA diga que vai "desativar", "mover", "renomear" ou "excluir" categorias. Essas ações NÃO são suportadas via WhatsApp.
-- Se o usuário pedir para mover/renomear/excluir, informe que essas ações devem ser feitas pelo painel web (EVA OS).
-- NÃO invente ações. Se a ação pedida não é "criar" ou "criar_subcategoria", retorne intent="conversa" explicando a limitação.
+- Para "renomear": category_id DEVE ser um UUID válido + new_name com o novo nome
+- Para "mover": category_id DEVE ser um UUID válido + new_parent_category_id (UUID do novo pai, ou null para tornar categoria raiz)
+- Para "excluir": category_id DEVE ser um UUID válido. IMPORTANTE: Antes de excluir, SEMPRE pergunte ao usuário se tem certeza. Retorne a friendly_message pedindo confirmação. O sistema usará pending_actions para aguardar a resposta.
+- NÃO invente ações além das listadas acima.
 
 Para consulta:
 {"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
@@ -1777,10 +1837,149 @@ IMPORTANTE:
         }, 200);
       }
 
+      // === RENOMEAR ===
+      if (action === "renomear") {
+        const catId = aiParsed.category_id;
+        const newName = aiParsed.new_name;
+        if (!catId || !newName) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Preciso saber qual categoria renomear e o novo nome. Pode repetir?",
+            transaction: null,
+          }, 200);
+        }
+        const cat = categories.find((c) => c.id === catId);
+        if (!cat) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Não encontrei essa categoria. Verifique o nome e tente novamente.",
+            transaction: null,
+          }, 200);
+        }
+        const { error: renErr } = await supabase
+          .from("categories")
+          .update({ name: newName })
+          .eq("id", catId)
+          .eq("user_id", userId);
+        if (renErr) {
+          console.error("Category rename error:", renErr);
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: `❌ Erro ao renomear a categoria. Tente novamente.`,
+            transaction: null,
+          }, 200);
+        }
+        return respond({
+          success: true, intent: "gerenciar_categoria",
+          message: `✅ Categoria "${cat.name}" renomeada para "${newName}"!`,
+          transaction: null,
+        }, 200);
+      }
+
+      // === MOVER ===
+      if (action === "mover") {
+        const catId = aiParsed.category_id;
+        const newParentId = aiParsed.new_parent_category_id || null;
+        if (!catId) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Preciso saber qual categoria mover. Pode repetir?",
+            transaction: null,
+          }, 200);
+        }
+        const cat = categories.find((c) => c.id === catId);
+        if (!cat) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Não encontrei essa categoria. Verifique o nome e tente novamente.",
+            transaction: null,
+          }, 200);
+        }
+        // Validate new parent exists and is not a descendant
+        if (newParentId) {
+          const newParent = categories.find((c) => c.id === newParentId);
+          if (!newParent) {
+            return respond({
+              success: false, intent: "gerenciar_categoria",
+              message: "❌ Não encontrei a categoria de destino. Verifique o nome e tente novamente.",
+              transaction: null,
+            }, 200);
+          }
+          // Check for circular reference
+          let checkId: string | null = newParentId;
+          while (checkId) {
+            if (checkId === catId) {
+              return respond({
+                success: false, intent: "gerenciar_categoria",
+                message: "❌ Não é possível mover uma categoria para dentro de si mesma ou de suas subcategorias.",
+                transaction: null,
+              }, 200);
+            }
+            const parent = categories.find((c) => c.id === checkId);
+            checkId = parent?.parent_id || null;
+          }
+        }
+        const { error: movErr } = await supabase
+          .from("categories")
+          .update({ parent_id: newParentId })
+          .eq("id", catId)
+          .eq("user_id", userId);
+        if (movErr) {
+          console.error("Category move error:", movErr);
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: `❌ Erro ao mover a categoria. Tente novamente.`,
+            transaction: null,
+          }, 200);
+        }
+        const destName = newParentId ? categories.find((c) => c.id === newParentId)?.name : "raiz";
+        return respond({
+          success: true, intent: "gerenciar_categoria",
+          message: `✅ Categoria "${cat.name}" movida para ${newParentId ? `dentro de "${destName}"` : "a raiz"}!`,
+          transaction: null,
+        }, 200);
+      }
+
+      // === EXCLUIR (com confirmação via pending_actions) ===
+      if (action === "excluir") {
+        const catId = aiParsed.category_id;
+        if (!catId) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Preciso saber qual categoria excluir. Pode repetir?",
+            transaction: null,
+          }, 200);
+        }
+        const cat = categories.find((c) => c.id === catId);
+        if (!cat) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Não encontrei essa categoria. Verifique o nome e tente novamente.",
+            transaction: null,
+          }, 200);
+        }
+
+        // Create pending action for confirmation
+        await supabase.from("whatsapp_pending_actions").insert({
+          user_id: userId,
+          action_type: "delete_category",
+          suggested_category_name: cat.name,
+          category_type: cat.type || "ambos",
+          context_company_id: companyId || null,
+          payload: { category_id: catId, category_name: cat.name },
+        });
+
+        return respond({
+          success: true, intent: "gerenciar_categoria",
+          message: aiParsed.friendly_message || `⚠️ Tem certeza que deseja excluir a categoria "${cat.name}"? Responda *sim* para confirmar ou *não* para cancelar.`,
+          transaction: null,
+        }, 200);
+      }
+
       // Unsupported action
       return respond({
         success: true, intent: "conversa",
-        message: aiParsed.friendly_message || "Pelo WhatsApp eu consigo criar categorias e subcategorias. Para mover, renomear ou excluir, use o painel web do EVA OS. 😊",
+        message: aiParsed.friendly_message || "Não entendi a ação solicitada para categorias. Posso criar, renomear, mover ou excluir categorias. 😊",
         transaction: null,
       }, 200);
     }
