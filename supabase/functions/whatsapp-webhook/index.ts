@@ -758,9 +758,9 @@ serve(async (req) => {
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      return buildResponse(
+      return respond(
         { success: false, error: "AI not configured", message: "⚠️ IA não configurada. Contate o suporte." },
-        500, phone
+        500
       );
     }
 
