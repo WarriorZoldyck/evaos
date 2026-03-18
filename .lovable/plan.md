@@ -1,34 +1,43 @@
 
 
-## Suporte a PDFs no WhatsApp (EVA)
 
-### Problema
-Atualmente a EVA só detecta `imageMessage`. Quando o usuário envia um PDF pelo WhatsApp, o payload vem como `documentMessage` e é ignorado.
+# Integração Evolution API — 100% Direto (sem N8N) ✅
 
-### Solução
-Estender o webhook para detectar `documentMessage`, baixar o base64 via Evolution API (mesmo endpoint `getBase64FromMediaMessage`), e enviar ao Gemini como conteúdo multimodal com `file` type (igual ao `parse-bank-statement` já faz).
+## O que foi feito
 
-### Alterações em `supabase/functions/whatsapp-webhook/index.ts`
+1. **Webhook reescrito** — 100% Evolution API, sem branch N8N legado
+2. **Bug de escopo corrigido** — `phone` declarado antes do try/catch
+3. **Secret `EVOLUTION_API_URL` corrigido** — estava com valor da API key, agora tem a URL correta
+4. **Webhook registrado** na instância "teste eva" com evento `MESSAGES_UPSERT`
+5. **Mensagens ignoradas**: `fromMe`, grupos (`@g.us`), eventos não-message
+6. **Resposta bidirecional** via Evolution `sendText`
+7. **Visão computacional** — suporte a imagens via `getBase64FromMediaMessage` + Gemini multimodal ✅
+8. **Memória de conversa** — histórico completo do dia enviado como contexto para a IA ✅
+9. **Escolha de conta** — quando há múltiplas contas, pergunta ANTES de registrar e guarda em pending_actions ✅
 
-1. **Extrair texto de documentMessage**
-   - Adicionar `msgContent?.documentMessage?.caption` na cadeia de extração de texto
-   
-2. **Detectar documento**
-   - Adicionar `hasDocument = !!msgContent?.documentMessage` além do `hasImage`
-   - Considerar `hasMedia = hasImage || hasDocument`
-   - Usar `hasMedia` onde atualmente usa `hasImage`
+## Fluxo atual
 
-3. **Baixar base64 do documento**
-   - Reutilizar a mesma função `getImageBase64` (Evolution API usa o mesmo endpoint para qualquer mídia)
+```
+WhatsApp → Evolution API → Edge Function (webhook) → carrega histórico do dia → processa com IA (texto + imagem + contexto) → responde via Evolution sendText → WhatsApp
+```
 
-4. **Enviar ao Gemini como multimodal**
-   - Se for documento (PDF), usar o formato `file` com `data:application/pdf;base64,...` em vez de `image_url`
-   - Se for imagem, manter o formato atual `image_url`
-   - Detectar o mimetype: `documentMessage.mimetype` ou fallback `application/pdf`
+## Memória de Conversa ✅
 
-5. **Permitir mensagens só com documento (sem legenda)**
-   - Alterar condição `(!message && !hasImage)` para `(!message && !hasMedia)`
+- Tabela `whatsapp_messages` armazena todas as mensagens (user + assistant)
+- Carrega histórico completo do dia (até 50 mensagens) antes de cada processamento
+- Envia histórico como mensagens adicionais no chat da IA
+- Permite follow-ups naturais ("R$45,90" como resposta a "qual o valor?")
 
-### Arquivo afetado
-- `supabase/functions/whatsapp-webhook/index.ts`
+## Escolha de Conta (Pending Actions) ✅
 
+- Se múltiplas contas/carteiras existem e o usuário não especificou qual, a EVA pergunta
+- Payload completo é salvo em `whatsapp_pending_actions` com `action_type: "choose_account"`
+- Quando o usuário responde com o nome da conta, o lançamento é criado automaticamente
+- Suporta tanto contas bancárias/carteiras quanto cartões de crédito
+
+## Configuração Evolution
+
+- Instância: `teste eva`
+- Webhook URL: `https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook`
+- Eventos: `MESSAGES_UPSERT`
+- webhookByEvents: false

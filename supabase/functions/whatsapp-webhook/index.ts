@@ -158,28 +158,38 @@ serve(async (req) => {
     const message = msgContent?.conversation
       || msgContent?.extendedTextMessage?.text
       || msgContent?.imageMessage?.caption
+      || msgContent?.documentMessage?.caption
       || "";
 
-    // Detect image message and extract messageId for media download
+    // Detect image or document message and extract messageId for media download
     const hasImage = !!msgContent?.imageMessage;
+    const hasDocument = !!msgContent?.documentMessage;
+    const hasMedia = hasImage || hasDocument;
     const messageId = key?.id || "";
+    const documentMimetype = msgContent?.documentMessage?.mimetype || "application/pdf";
 
-    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, messageId: messageId?.substring(0, 20) });
+    console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, hasDocument, messageId: messageId?.substring(0, 20) });
 
-    // Allow image-only messages (no text caption) — we'll analyze the image
-    if (!phone || (!message && !hasImage)) {
+    // Allow image-only or document-only messages (no text caption)
+    if (!phone || (!message && !hasMedia)) {
       return buildResponse(
         { success: false, error: "phone and message are required" },
         400, phone
       );
     }
 
-    // Fetch image base64 if present
+    // Fetch media base64 if present (same Evolution endpoint for images and documents)
     let imageBase64: string | null = null;
-    if (hasImage && messageId) {
+    let mediaIsDocument = false;
+    let mediaMimetype = "image/jpeg";
+    if (hasMedia && messageId) {
       imageBase64 = await getImageBase64(remoteJid, messageId);
       if (!imageBase64) {
-        console.warn("Failed to fetch image base64, proceeding with text only");
+        console.warn("Failed to fetch media base64, proceeding with text only");
+      } else if (hasDocument) {
+        mediaIsDocument = true;
+        mediaMimetype = documentMimetype;
+        console.log("Document media fetched, mimetype:", mediaMimetype);
       }
     }
 
@@ -299,7 +309,7 @@ serve(async (req) => {
     console.log("Conversation history loaded:", conversationHistory.length, "messages");
 
     // Save incoming user message
-    const userMsgText = message || "[imagem enviada]";
+    const userMsgText = message || (hasDocument ? "[documento enviado]" : "[imagem enviada]");
     await supabase.from("whatsapp_messages").insert({
       user_id: userId,
       role: "user",
@@ -861,20 +871,38 @@ IMPORTANTE:
 - A data padrão é hoje: ${today}
 - Para lançamentos sem tipo explícito, assuma "despesa"
 - Sempre retorne o campo "context"
-- Se o usuário enviar uma IMAGEM (foto de comprovante, nota fiscal, recibo, etc.), analise o conteúdo visual para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações da imagem com qualquer legenda de texto fornecida.`;
+- Se o usuário enviar uma IMAGEM ou DOCUMENTO PDF (foto de comprovante, nota fiscal, recibo, extrato, etc.), analise o conteúdo visual/textual para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.`;
 
-    // Build user content: multimodal if image, text-only otherwise
-    const userText = message || "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
+    // Build user content: multimodal if media, text-only otherwise
+    const defaultMediaPrompt = hasDocument 
+      ? "Analise este documento PDF e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc)."
+      : "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
+    const userText = message || defaultMediaPrompt;
     let userContent: any;
     if (imageBase64) {
-      // Detect mime type from base64 header or default to jpeg
-      const mimeType = imageBase64.startsWith("/9j/") ? "image/jpeg" : 
-                       imageBase64.startsWith("iVBOR") ? "image/png" : "image/jpeg";
-      userContent = [
-        { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-        { type: "text", text: userText },
-      ];
-      console.log("Sending multimodal request to AI (image + text)");
+      if (mediaIsDocument) {
+        // Send document (PDF) using file format (same as parse-bank-statement)
+        userContent = [
+          {
+            type: "file",
+            file: {
+              filename: "document.pdf",
+              file_data: `data:${mediaMimetype};base64,${imageBase64}`,
+            },
+          },
+          { type: "text", text: userText },
+        ];
+        console.log("Sending multimodal request to AI (document + text), mimetype:", mediaMimetype);
+      } else {
+        // Send image using image_url format
+        const mimeType = imageBase64.startsWith("/9j/") ? "image/jpeg" : 
+                         imageBase64.startsWith("iVBOR") ? "image/png" : "image/jpeg";
+        userContent = [
+          { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          { type: "text", text: userText },
+        ];
+        console.log("Sending multimodal request to AI (image + text)");
+      }
     } else {
       userContent = userText;
     }
