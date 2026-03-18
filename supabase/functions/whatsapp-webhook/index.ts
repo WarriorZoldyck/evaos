@@ -886,16 +886,32 @@ IMPORTANTE:
 - A data padrão é hoje: ${today}
 - Para lançamentos sem tipo explícito, assuma "despesa"
 - Sempre retorne o campo "context"
-- Se o usuário enviar uma IMAGEM ou DOCUMENTO PDF (foto de comprovante, nota fiscal, recibo, extrato, etc.), analise o conteúdo visual/textual para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.`;
+- Se o usuário enviar uma IMAGEM, DOCUMENTO PDF ou ÁUDIO (foto de comprovante, nota fiscal, recibo, extrato, mensagem de voz, etc.), analise o conteúdo visual/textual/sonoro para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.
+- Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.`;
 
     // Build user content: multimodal if media, text-only otherwise
-    const defaultMediaPrompt = hasDocument 
-      ? "Analise este documento PDF e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc)."
-      : "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
+    const defaultMediaPrompt = hasAudio
+      ? "Transcreva este áudio e interprete o conteúdo como uma mensagem do usuário sobre lançamentos financeiros. Extraia valor, descrição, data, categoria, método de pagamento, etc."
+      : hasDocument 
+        ? "Analise este documento PDF e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc)."
+        : "Analise esta imagem e extraia as informações do lançamento financeiro (valor, descrição, data, categoria, método de pagamento, etc).";
     const userText = message || defaultMediaPrompt;
     let userContent: any;
     if (imageBase64) {
-      if (mediaIsDocument) {
+      if (mediaIsAudio) {
+        // Send audio using file format for Gemini multimodal
+        userContent = [
+          {
+            type: "file",
+            file: {
+              filename: "audio.ogg",
+              file_data: `data:${mediaMimetype};base64,${imageBase64}`,
+            },
+          },
+          { type: "text", text: userText },
+        ];
+        console.log("Sending multimodal request to AI (audio + text), mimetype:", mediaMimetype);
+      } else if (mediaIsDocument) {
         // Send document (PDF) using file format (same as parse-bank-statement)
         userContent = [
           {
