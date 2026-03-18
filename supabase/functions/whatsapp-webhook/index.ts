@@ -689,6 +689,65 @@ serve(async (req) => {
         }, 200);
       }
 
+      // === HANDLE "delete_category" pending action ===
+      if (pendingAction.action_type === "delete_category") {
+        if (CONFIRM_PATTERNS.test(trimmedMsg)) {
+          console.log("=== PENDING ACTION: DELETE CATEGORY CONFIRMED ===");
+          const payload = pendingAction.payload as any;
+          const categoryId = payload.category_id;
+          const categoryName = payload.category_name;
+
+          // Check for children
+          const { data: children } = await supabase
+            .from("categories")
+            .select("id")
+            .eq("parent_id", categoryId)
+            .eq("user_id", userId)
+            .limit(1);
+
+          if (children && children.length > 0) {
+            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+            return respond({
+              success: false, intent: "gerenciar_categoria",
+              message: `❌ A categoria "${categoryName}" possui subcategorias. Exclua as subcategorias primeiro antes de excluir a categoria pai.`,
+              transaction: null,
+            }, 200);
+          }
+
+          const { error: delErr } = await supabase
+            .from("categories")
+            .delete()
+            .eq("id", categoryId)
+            .eq("user_id", userId);
+
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (delErr) {
+            console.error("Category delete error:", delErr);
+            return respond({
+              success: false, intent: "gerenciar_categoria",
+              message: `❌ Erro ao excluir a categoria "${categoryName}". Pode haver lançamentos vinculados a ela.`,
+              transaction: null,
+            }, 200);
+          }
+
+          return respond({
+            success: true, intent: "gerenciar_categoria",
+            message: `✅ Categoria "${categoryName}" excluída com sucesso!`,
+            transaction: null,
+          }, 200);
+        }
+
+        if (CANCEL_PATTERNS.test(trimmedMsg)) {
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({
+            success: true, intent: "conversa",
+            message: "Ok, a categoria não foi excluída. 😊",
+            transaction: null,
+          }, 200);
+        }
+      }
+
       // Message doesn't match confirm/cancel — clear pending and process normally
       console.log("=== PENDING ACTION: IGNORED (new message) ===");
       await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
