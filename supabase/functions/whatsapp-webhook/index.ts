@@ -1698,6 +1698,93 @@ IMPORTANTE:
       }, 200);
     }
 
+    // === GERENCIAR CATEGORIA ===
+    if (aiParsed.intent === "gerenciar_categoria") {
+      const companyId = resolveContext(aiParsed.context);
+      const action = aiParsed.action;
+
+      if (action === "criar" || action === "criar_subcategoria") {
+        const categoryName = aiParsed.category_name;
+        const parentId = action === "criar_subcategoria" ? aiParsed.parent_category_id : null;
+        const categoryType = aiParsed.category_type || "ambos";
+
+        if (!categoryName) {
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: "❌ Não entendi o nome da categoria. Pode repetir?",
+            transaction: null,
+          }, 200);
+        }
+
+        // Validate parent exists if subcategory
+        if (parentId) {
+          const parentCat = categories.find((c) => c.id === parentId);
+          if (!parentCat) {
+            return respond({
+              success: false, intent: "gerenciar_categoria",
+              message: `❌ Não encontrei a categoria pai. Verifique o nome e tente novamente.`,
+              transaction: null,
+            }, 200);
+          }
+        }
+
+        // Check if already exists
+        const contextCats = categories.filter((c) =>
+          companyId ? c.company_id === companyId : !c.company_id
+        );
+        const existing = contextCats.find(
+          (c) => c.name.toLowerCase() === categoryName.toLowerCase() && c.parent_id === (parentId || null)
+        );
+        if (existing) {
+          return respond({
+            success: true, intent: "gerenciar_categoria",
+            message: `ℹ️ A categoria "${categoryName}" já existe${parentId ? " nessa categoria pai" : ""}. Não precisa criar novamente!`,
+            transaction: null,
+          }, 200);
+        }
+
+        const { data: newCat, error: catErr } = await supabase
+          .from("categories")
+          .insert({
+            user_id: userId,
+            name: categoryName,
+            type: parentId ? null : categoryType,
+            parent_id: parentId || null,
+            company_id: companyId,
+          })
+          .select("id, name")
+          .single();
+
+        if (catErr) {
+          console.error("Category creation error:", catErr);
+          return respond({
+            success: false, intent: "gerenciar_categoria",
+            message: `❌ Erro ao criar a categoria "${categoryName}". Tente novamente.`,
+            transaction: null,
+          }, 200);
+        }
+
+        const parentName = parentId ? categories.find((c) => c.id === parentId)?.name : null;
+        const contextLabel = aiParsed.context || "Pessoal";
+        const msg = parentId
+          ? `✅ Subcategoria "${newCat.name}" criada dentro de "${parentName}" no contexto "${contextLabel}"!`
+          : `✅ Categoria "${newCat.name}" (${categoryType}) criada no contexto "${contextLabel}"!`;
+
+        return respond({
+          success: true, intent: "gerenciar_categoria",
+          message: msg,
+          transaction: null,
+        }, 200);
+      }
+
+      // Unsupported action
+      return respond({
+        success: true, intent: "conversa",
+        message: aiParsed.friendly_message || "Pelo WhatsApp eu consigo criar categorias e subcategorias. Para mover, renomear ou excluir, use o painel web do EVA OS. 😊",
+        transaction: null,
+      }, 200);
+    }
+
     // conversa
     return respond({
       success: true,
