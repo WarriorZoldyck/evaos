@@ -219,6 +219,47 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // --- Upload media to storage and get public URL ---
+    let attachmentUrl: string | null = null;
+    if (imageBase64 && !mediaIsAudio) {
+      try {
+        const ext = mediaMimetype.includes("pdf") ? "pdf"
+          : mediaMimetype.includes("png") ? "png"
+          : "jpg";
+        const timestamp = Date.now();
+        const filePath = `${phone}/${timestamp}.${ext}`;
+        const binaryStr = atob(imageBase64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        const { error: uploadErr } = await supabase.storage
+          .from("whatsapp-attachments")
+          .upload(filePath, bytes.buffer, { contentType: mediaMimetype, upsert: false });
+
+        if (uploadErr) {
+          console.error("Storage upload error:", uploadErr);
+        } else {
+          const { data: urlData } = supabase.storage
+            .from("whatsapp-attachments")
+            .getPublicUrl(filePath);
+          attachmentUrl = urlData?.publicUrl || null;
+          console.log("Media uploaded, URL:", attachmentUrl);
+        }
+      } catch (uploadEx) {
+        console.error("Storage upload exception:", uploadEx);
+      }
+    }
+
+    // Build original user text for notes field
+    // Build original user text for notes field
+    const originalUserText = message ? `[Via WhatsApp] ${message}` : null;
+
+    // Helper to combine original user text with AI-extracted notes
+    const buildNotes = (aiNotes: string | null | undefined): string | null => {
+      const parts = [originalUserText, aiNotes].filter(Boolean);
+      return parts.length > 0 ? parts.join("\n") : null;
+    };
+
     // 3. Find user by whatsapp_number with flexible matching
     const digitsOnly = phone.replace(/\D/g, "");
 
@@ -490,7 +531,8 @@ serve(async (req) => {
           supplier_id: txPayload.supplier_id || null,
           client_id: txPayload.client_id || null,
           contact_name: txPayload.contact_name || null,
-          notes: txPayload.notes || null,
+          notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
+          attachment_url: txPayload.attachment_url || null,
         });
 
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -652,7 +694,8 @@ serve(async (req) => {
           supplier_id: payload.supplier_id || null,
           client_id: payload.client_id || null,
           contact_name: payload.contact_name || null,
-          notes: payload.notes || null,
+          notes: [payload.original_user_text, payload.notes].filter(Boolean).join("\n") || null,
+          attachment_url: payload.attachment_url || null,
         });
 
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -1216,6 +1259,8 @@ IMPORTANTE:
               supplier_id: aiParsed.supplier_id || null,
               client_id: aiParsed.client_id || null,
               notes: aiParsed.notes || null,
+              attachment_url: attachmentUrl,
+              original_user_text: originalUserText,
             },
             suggested_category_name: matchedCategory?.name || "N/A",
             category_type: txType,
@@ -1278,6 +1323,8 @@ IMPORTANTE:
                 supplier_id: aiParsed.supplier_id || null,
                 client_id: aiParsed.client_id || null,
                 notes: aiParsed.notes || null,
+                attachment_url: attachmentUrl,
+                original_user_text: originalUserText,
               },
               suggested_category_name: matchedCategory?.name || "N/A",
               category_type: txType,
@@ -1342,6 +1389,8 @@ IMPORTANTE:
               supplier_id: supplierId,
               client_id: clientId,
               notes: aiParsed.notes,
+              attachment_url: attachmentUrl,
+              original_user_text: originalUserText,
             },
             suggested_category_name: suggestedName,
             category_type: txType === "receita" ? "receita" : "despesa",
@@ -1477,7 +1526,8 @@ IMPORTANTE:
         supplier_id: supplierId,
         client_id: clientId,
         contact_name: contactName,
-        notes: aiParsed.notes || null,
+        notes: buildNotes(aiParsed.notes),
+        attachment_url: attachmentUrl,
       });
 
       if (insertError) {
