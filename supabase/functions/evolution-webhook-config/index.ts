@@ -37,13 +37,15 @@ serve(async (req) => {
       const webhookUrl = `https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook`;
       
       const payload = {
-        url: webhookUrl,
-        webhookByEvents: false,
-        webhookBase64: true,
-        enabled: true,
-        events: [
-          "MESSAGES_UPSERT"
-        ]
+        webhook: {
+          url: webhookUrl,
+          webhookByEvents: false,
+          webhookBase64: true,
+          enabled: true,
+          events: [
+            "MESSAGES_UPSERT"
+          ]
+        }
       };
 
       const res = await fetch(`${EVOLUTION_API_URL}/webhook/set/${EVOLUTION_INSTANCE}`, {
