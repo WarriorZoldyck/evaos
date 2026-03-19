@@ -694,7 +694,7 @@ serve(async (req) => {
           supplier_id: payload.supplier_id || null,
           client_id: payload.client_id || null,
           contact_name: payload.contact_name || null,
-          notes: buildNotes(payload.notes),
+          notes: [payload.original_user_text, payload.notes].filter(Boolean).join("\n") || null,
           attachment_url: payload.attachment_url || null,
         });
 
