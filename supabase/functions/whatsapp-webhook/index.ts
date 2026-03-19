@@ -694,7 +694,8 @@ serve(async (req) => {
           supplier_id: payload.supplier_id || null,
           client_id: payload.client_id || null,
           contact_name: payload.contact_name || null,
-          notes: payload.notes || null,
+          notes: buildNotes(payload.notes),
+          attachment_url: payload.attachment_url || null,
         });
 
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
