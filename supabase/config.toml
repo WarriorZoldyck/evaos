@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.purge-deleted-accounts]
 verify_jwt = false
+
+[functions.evolution-webhook-config]
+verify_jwt = false
