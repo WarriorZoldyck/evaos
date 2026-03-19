@@ -1526,7 +1526,8 @@ IMPORTANTE:
         supplier_id: supplierId,
         client_id: clientId,
         contact_name: contactName,
-        notes: aiParsed.notes || null,
+        notes: buildNotes(aiParsed.notes),
+        attachment_url: attachmentUrl,
       });
 
       if (insertError) {
