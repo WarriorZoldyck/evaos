@@ -1389,6 +1389,8 @@ IMPORTANTE:
               supplier_id: supplierId,
               client_id: clientId,
               notes: aiParsed.notes,
+              attachment_url: attachmentUrl,
+              original_user_text: originalUserText,
             },
             suggested_category_name: suggestedName,
             category_type: txType === "receita" ? "receita" : "despesa",
