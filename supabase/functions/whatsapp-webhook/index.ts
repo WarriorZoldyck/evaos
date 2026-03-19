@@ -219,6 +219,40 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // --- Upload media to storage and get public URL ---
+    let attachmentUrl: string | null = null;
+    if (imageBase64 && !mediaIsAudio) {
+      try {
+        const ext = mediaMimetype.includes("pdf") ? "pdf"
+          : mediaMimetype.includes("png") ? "png"
+          : "jpg";
+        const timestamp = Date.now();
+        const filePath = `${phone}/${timestamp}.${ext}`;
+        const binaryStr = atob(imageBase64);
+        const bytes = new Uint8Array(binaryStr.length);
+        for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+
+        const { error: uploadErr } = await supabase.storage
+          .from("whatsapp-attachments")
+          .upload(filePath, bytes.buffer, { contentType: mediaMimetype, upsert: false });
+
+        if (uploadErr) {
+          console.error("Storage upload error:", uploadErr);
+        } else {
+          const { data: urlData } = supabase.storage
+            .from("whatsapp-attachments")
+            .getPublicUrl(filePath);
+          attachmentUrl = urlData?.publicUrl || null;
+          console.log("Media uploaded, URL:", attachmentUrl);
+        }
+      } catch (uploadEx) {
+        console.error("Storage upload exception:", uploadEx);
+      }
+    }
+
+    // Build original user text for notes field
+    const originalUserText = message ? `[Via WhatsApp] ${message}` : null;
+
     // 3. Find user by whatsapp_number with flexible matching
     const digitsOnly = phone.replace(/\D/g, "");
 
