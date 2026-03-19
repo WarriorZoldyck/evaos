@@ -1323,6 +1323,8 @@ IMPORTANTE:
                 supplier_id: aiParsed.supplier_id || null,
                 client_id: aiParsed.client_id || null,
                 notes: aiParsed.notes || null,
+                attachment_url: attachmentUrl,
+                original_user_text: originalUserText,
               },
               suggested_category_name: matchedCategory?.name || "N/A",
               category_type: txType,
