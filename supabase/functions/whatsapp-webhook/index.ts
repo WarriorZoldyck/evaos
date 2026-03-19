@@ -310,14 +310,14 @@ serve(async (req) => {
 
     console.log("All profiles with whatsapp:", (allProfiles || []).map(p => ({ id: p.id.slice(0, 8), wn: p.whatsapp_number })));
 
-    const profile = (allProfiles || []).find((p) => {
+    const matchingProfiles = (allProfiles || []).filter((p) => {
       if (!p.whatsapp_number) return false;
       const storedDigits = p.whatsapp_number.replace(/\D/g, "");
       // Exact match against candidates
       if (allCandidates.includes(p.whatsapp_number)) return true;
       if (storedDigits === digitsOnly) return true;
-      // Tail-based matching (last 11, 10, 9, 8 digits) to handle 9th-digit variations
-      for (const tailLen of [11, 10, 9, 8]) {
+      // Tail-based matching (last 11, 10 digits only — stricter to avoid false positives)
+      for (const tailLen of [11, 10]) {
         const incomingTail = digitsOnly.slice(-tailLen);
         const storedTail = storedDigits.slice(-tailLen);
         if (incomingTail.length >= tailLen && storedTail.length >= tailLen && incomingTail === storedTail) return true;
@@ -332,6 +332,21 @@ serve(async (req) => {
       if (rem9(incLocal) === rem9(stoLocal)) return true;
       return false;
     });
+
+    // Reject if multiple profiles match the same number (data integrity issue)
+    if (matchingProfiles.length > 1) {
+      console.error("DUPLICATE WHATSAPP NUMBER! Multiple profiles matched:", matchingProfiles.map(p => p.id.slice(0, 8)));
+      return buildResponse(
+        {
+          success: false,
+          error: "Número duplicado no sistema",
+          message: "⚠️ Seu número está associado a mais de uma conta. Entre em contato com o suporte para resolver.",
+        },
+        200, phone
+      );
+    }
+
+    const profile = matchingProfiles[0] || null;
 
     if (!profile) {
       console.error("Phone NOT found. Incoming:", phone, "| Digits:", digitsOnly);
