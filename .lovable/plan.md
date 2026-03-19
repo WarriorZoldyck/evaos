@@ -1,42 +1,38 @@
 
 
-## Anexar mídia e texto original aos lançamentos via WhatsApp
+## Corrigir duplicidade de WhatsApp e prevenir recorrência
 
-### Problema atual
-Quando o usuário envia uma foto de comprovante ou áudio pelo WhatsApp, a EVA extrai os dados e cria o lançamento, mas **não anexa a imagem** nem **salva o texto/transcrição original** no lançamento.
+### O que foi encontrado
+Dois perfis têm o mesmo `whatsapp_number = 5511996346086`:
+- `9b5a3c7c` — gurimag77@gmail.com (Dionísio)
+- `673ade6e` — renatobruggemann@yahoo.com.br (Renato)
 
-### Solução
+### Plano
 
-#### 1. Criar bucket de storage no Supabase
-- Criar bucket público `whatsapp-attachments` para armazenar as imagens/documentos recebidos
-- RLS: permitir leitura pública (URLs públicas) e inserção via service role
+#### 1. Limpar o número dos dois perfis
+Usar o insert tool para executar:
+```sql
+UPDATE profiles SET whatsapp_number = NULL 
+WHERE id IN ('9b5a3c7c-781d-4826-aa0d-59b5a7f5a883', '673ade6e-570a-4fbe-988a-2917a9c6933e');
+```
+Cada usuário recadastra o próprio número quando quiser.
 
-#### 2. Atualizar a Edge Function `whatsapp-webhook`
-No fluxo de criação de lançamento (todas as inserções de `transactions`):
+#### 2. Criar constraint UNIQUE no whatsapp_number
+Migration SQL com índice parcial (ignora NULLs):
+```sql
+CREATE UNIQUE INDEX unique_whatsapp_number 
+ON profiles (whatsapp_number) 
+WHERE whatsapp_number IS NOT NULL;
+```
+Impede que dois perfis cadastrem o mesmo número no futuro.
 
-**Para imagens/documentos (foto de comprovante, PDF):**
-- Após obter o `imageBase64`, fazer upload para o bucket `whatsapp-attachments` com nome `{userId}/{timestamp}.{ext}`
-- Gerar URL pública e salvar no campo `attachment_url` da transação
-- Tamanho controlado: imagens WhatsApp já vêm comprimidas (~100-300KB)
+#### 3. Melhorar matching no webhook
+No `whatsapp-webhook/index.ts`:
+- Se a query retornar mais de um perfil com o mesmo número, rejeitar com mensagem de erro ao usuário ("Número duplicado, entre em contato com suporte")
+- Aumentar rigor do tail-matching de 8 para 10 dígitos
 
-**Para áudio (nota de voz):**
-- A IA já transcreve o áudio — capturar a transcrição da resposta da IA
-- Salvar o texto original do usuário (ou transcrição) no campo `notes` do lançamento, com prefixo `[Via WhatsApp]`
-- Não armazenar o áudio em si (pesado e desnecessário)
-
-**Para texto:**
-- Salvar a mensagem original do usuário no campo `notes`, com prefixo `[Via WhatsApp]`
-- Se a IA já extraiu `notes` adicionais, combinar ambos
-
-#### 3. Detalhes técnicos
-
-- **Storage upload**: Usar `supabase.storage.from('whatsapp-attachments').upload(path, buffer, { contentType })`
-- **Conversão**: `base64` → `Uint8Array` para upload
-- **Campos afetados**: `attachment_url` (imagem/PDF) e `notes` (texto original + observações da IA)
-- **Performance**: Upload é assíncrono mas rápido (~100-300KB por imagem WhatsApp)
-- **Pontos de inserção**: Existem ~4 locais no webhook onde `transactions.insert` é chamado (fluxo direto, após criar categoria, após escolher conta) — todos serão atualizados
-
-#### 4. Arquivos modificados
-- **Nova migration SQL**: Criar bucket `whatsapp-attachments` com política de acesso
-- **`supabase/functions/whatsapp-webhook/index.ts`**: Adicionar lógica de upload de mídia e persistência de texto original nos lançamentos
+### Arquivos modificados
+- **Data fix**: UPDATE via insert tool (limpar números)
+- **Nova migration**: UNIQUE index no `whatsapp_number`
+- **`supabase/functions/whatsapp-webhook/index.ts`**: Validação de duplicatas
 
