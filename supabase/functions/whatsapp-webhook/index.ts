@@ -531,7 +531,7 @@ serve(async (req) => {
           supplier_id: txPayload.supplier_id || null,
           client_id: txPayload.client_id || null,
           contact_name: txPayload.contact_name || null,
-          notes: txPayload.notes || null,
+          notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
           attachment_url: txPayload.attachment_url || null,
         });
 
