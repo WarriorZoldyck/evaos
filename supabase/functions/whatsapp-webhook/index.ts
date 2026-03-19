@@ -251,7 +251,14 @@ serve(async (req) => {
     }
 
     // Build original user text for notes field
+    // Build original user text for notes field
     const originalUserText = message ? `[Via WhatsApp] ${message}` : null;
+
+    // Helper to combine original user text with AI-extracted notes
+    const buildNotes = (aiNotes: string | null | undefined): string | null => {
+      const parts = [originalUserText, aiNotes].filter(Boolean);
+      return parts.length > 0 ? parts.join("\n") : null;
+    };
 
     // 3. Find user by whatsapp_number with flexible matching
     const digitsOnly = phone.replace(/\D/g, "");
