@@ -2187,7 +2187,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         return respond({
           success: true,
           intent: "lancamento",
-          message: `✅ ${installmentCount} parcelas criadas!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}\n\n📋 Parcelas:\n${parcelsDisplay}`,
+          message: `✅ ${installmentCount} parcelas criadas!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}\n\n📋 Parcelas:\n${parcelsDisplay}${barcodeNote}`,
           transaction: {
             description: aiParsed.description,
             amount: totalAmount,
