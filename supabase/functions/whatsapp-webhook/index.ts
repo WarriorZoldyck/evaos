@@ -468,23 +468,23 @@ serve(async (req) => {
     // ============================================================
     // CONVERSATION MEMORY: Load recent history + save user message
     // ============================================================
-    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const { data: chatHistory } = await supabase
       .from("whatsapp_messages")
       .select("role, content, created_at")
       .eq("user_id", userId)
-      .gte("created_at", threeHoursAgo.toISOString())
+      .gte("created_at", thirtyDaysAgo.toISOString())
       .order("created_at", { ascending: true })
-      .limit(80);
+      .limit(500);
 
     const allMessages = (chatHistory || []).map((m: any) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
 
-    // Smart summarization: keep last 20 messages integral, summarize older ones
-    const RECENT_COUNT = 20;
+    // Smart summarization: keep last 30 messages integral, summarize older ones
+    const RECENT_COUNT = 30;
     let conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
 
     if (allMessages.length > RECENT_COUNT) {
@@ -508,7 +508,7 @@ serve(async (req) => {
         }
       }
 
-      const summaryText = `[RESUMO DA CONVERSA ANTERIOR]\n${summaryParts.join("\n")}`;
+      const summaryText = `[RESUMO DA CONVERSA ANTERIOR — últimos 30 dias]\n${summaryParts.join("\n")}`;
       conversationHistory = [
         { role: "user", content: summaryText },
         { role: "assistant", content: "Entendido, tenho o contexto da conversa anterior." },
