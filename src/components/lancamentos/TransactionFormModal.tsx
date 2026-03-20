@@ -475,7 +475,6 @@ export function TransactionFormModal({
   }, [editTransaction, open]);
 
   const handleContextChange = (companyId: string | null) => {
-    if (isEditing) return; // Block context change during editing to preserve account fields
     setFormCompanyId(companyId);
     setActiveTab(companyId === null ? "despesa" : "receita");
     // Clear account and category selections when context changes
@@ -598,10 +597,9 @@ export function TransactionFormModal({
     let success = false;
 
     if (isEditing) {
-      const { user_id, company_id, ...updateData } = baseData;
-      // Preserve original type and status to prevent race conditions
-      updateData.type = editTransaction.type;
-      updateData.status = editTransaction.status;
+      const { user_id, ...updateData } = baseData;
+      // Use current form values for type, status, and company_id
+      updateData.company_id = formCompanyId;
       success = await onUpdate(editTransaction.id, updateData);
       // Also apply series installment amount changes if any
       if (success && seriesUpdates.length > 0 && onUpdateMultiple) {
@@ -899,7 +897,12 @@ export function TransactionFormModal({
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as typeof activeTab)}
         >
-          {!isEditing && (
+          {isEditing ? (
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="receita">Receita</TabsTrigger>
+              <TabsTrigger value="despesa">Despesa</TabsTrigger>
+            </TabsList>
+          ) : (
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="receita">Receita</TabsTrigger>
               <TabsTrigger value="despesa">Despesa</TabsTrigger>
