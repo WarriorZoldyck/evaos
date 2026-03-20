@@ -1231,12 +1231,17 @@ Para lançamento:
 {"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","installments":1,"installment_details":null,"friendly_message":"..."}
 
 REGRAS DE PARCELAMENTO:
-- Se o documento (NF, boleto) indicar PARCELAMENTO, preencha "installments" com o número de parcelas e "installment_details" com um array de objetos {"amount": valor, "due_date": "YYYY-MM-DD"} para cada parcela.
+- Se o documento (NF, boleto) indicar PARCELAMENTO, preencha "installments" com o número de parcelas e "installment_details" com um array de objetos {"amount": valor, "due_date": "YYYY-MM-DD", "barcode": "código de barras ou linha digitável ou null"} para cada parcela.
 - Se a NF listar boletos/duplicatas com datas de vencimento diferentes, CADA boleto é uma parcela. OBRIGATORIAMENTE use "installments" e "installment_details" nesse caso.
 - NUNCA crie um lançamento único com o valor total quando a NF/documento lista múltiplos boletos ou duplicatas com vencimentos diferentes. Isso é PROIBIDO.
+- Se houver código de barras ou linha digitável visível no boleto/duplicata, SEMPRE extraia e inclua no campo "barcode" de cada parcela.
 - Se não houver parcelamento, use installments=1 e installment_details=null.
-- Exemplo com 3 parcelas: {"installments":3,"installment_details":[{"amount":500,"due_date":"2026-04-10"},{"amount":500,"due_date":"2026-05-10"},{"amount":500,"due_date":"2026-06-10"}]}
+- Exemplo com 3 parcelas: {"installments":3,"installment_details":[{"amount":500,"due_date":"2026-04-10","barcode":"23793.38128 60000.000003 00000.000402 1 84340000050000"},{"amount":500,"due_date":"2026-05-10","barcode":"23793.38128 60000.000003 00000.000402 2 85340000050000"},{"amount":500,"due_date":"2026-06-10","barcode":null}]}
 - O "amount" no campo principal deve ser o VALOR TOTAL (soma de todas as parcelas).
+
+REGRAS DE CONTA BANCÁRIA PARA BOLETOS:
+- Se a transação for DESPESA (compra) com método "boleto", NÃO é necessário perguntar a conta bancária. Registre SEM conta (account_id=null). O usuário pode associar a conta depois.
+- Se a transação for RECEITA (venda) com método "boleto", SEMPRE pergunte em qual conta bancária o valor será recebido, caso haja múltiplas contas.
 
 IMPORTANTE SOBRE CONTEXTO DAS CONTAS:
 - As contas estão listadas dentro de blocos [Pessoal] ou [NomeDaEmpresa]. O contexto da transação DEVE corresponder ao bloco onde a conta está listada.
