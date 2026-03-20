@@ -689,6 +689,7 @@ serve(async (req) => {
             contact_name: txPayload.contact_name || null,
             notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
             attachment_url: txPayload.attachment_url || null,
+            barcode: detail.barcode || null,
             series_id: seriesId,
             installment_number: idx + 1,
             installments_total: installmentCount,
