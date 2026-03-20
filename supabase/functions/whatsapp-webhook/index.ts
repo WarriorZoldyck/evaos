@@ -2150,6 +2150,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           contact_name: contactName,
           notes: buildNotes(aiParsed.notes),
           attachment_url: attachmentUrl,
+          barcode: detail.barcode || null,
           series_id: seriesId,
           installment_number: idx + 1,
           installments_total: installmentCount,
