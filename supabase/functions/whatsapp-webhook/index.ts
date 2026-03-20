@@ -1024,7 +1024,7 @@ serve(async (req) => {
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
       supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
-      supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(500),
+      supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(1000),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -1774,7 +1774,31 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // --- HISTORICAL CATEGORY REUSE HEURISTIC ---
       // Before asking to create a category, check if historical transactions
       // have a matching contact_name/description that used a valid category
-      if (!matchedCategory && historicalTransactions.length > 0) {
+      
+      // Layer 2: Targeted merchant search (365 days) to guarantee matching even for high-volume users
+      const merchantSearchName = normalizeText(documentPartyExtraction?.issuer_name || aiParsed.contact_name || contactName || "");
+      let mergedHistoricalTransactions = [...historicalTransactions];
+      
+      if (merchantSearchName && merchantSearchName.length >= 4) {
+        const oneYearAgoStr = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+        const { data: targetedTxs } = await supabase
+          .from("transactions")
+          .select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date")
+          .eq("user_id", userId)
+          .gte("payment_date", oneYearAgoStr)
+          .or(`description.ilike.%${merchantSearchName}%,contact_name.ilike.%${merchantSearchName}%`)
+          .order("payment_date", { ascending: false })
+          .limit(20);
+        
+        if (targetedTxs && targetedTxs.length > 0) {
+          const existingIds = new Set(mergedHistoricalTransactions.map((t: any) => t.id));
+          const newTxs = targetedTxs.filter((t: any) => !existingIds.has(t.id));
+          mergedHistoricalTransactions = [...mergedHistoricalTransactions, ...newTxs];
+          console.log(`TARGETED MERCHANT SEARCH: "${merchantSearchName}" found ${targetedTxs.length} txs (${newTxs.length} new, total ${mergedHistoricalTransactions.length})`);
+        }
+      }
+      
+      if (!matchedCategory && mergedHistoricalTransactions.length > 0) {
         const aiDescription = normalizeText(aiParsed.description);
         const aiContact = normalizeText(aiParsed.contact_name || contactName);
         // Bug fix: also use issuer_name from document extraction as a matching signal
@@ -1784,12 +1808,12 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           aiContact,
           aiDescription,
           docIssuer: docIssuer || "(none)",
-          historicalCount: historicalTransactions.length,
+          historicalCount: mergedHistoricalTransactions.length,
           contextCategoriesCount: contextCategories.length,
         });
         
         // Try to find a historical transaction with similar contact/description
-        for (const htx of historicalTransactions) {
+        for (const htx of mergedHistoricalTransactions) {
           const htxContact = normalizeText(htx.contact_name);
           const htxDesc = normalizeText(htx.description);
           
