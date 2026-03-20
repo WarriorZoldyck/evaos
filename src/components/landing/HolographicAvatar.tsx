@@ -168,9 +168,9 @@ export function HolographicAvatar() {
     };
   }, [sampleImageToParticles]);
 
-  const glowOpacity = 0.08 + proximity * 0.35;
-  const glowScale = 1 + proximity * 0.15;
-  const outerGlowOpacity = proximity * 0.25;
+  const glowOpacity = 0.04 + proximity * 0.12;
+  const glowScale = 1 + proximity * 0.06;
+  const outerGlowOpacity = proximity * 0.08;
 
   return (
     <div ref={containerRef} className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
