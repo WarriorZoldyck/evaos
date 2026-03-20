@@ -193,7 +193,7 @@ export function HolographicAvatar() {
         />
         {/* Outer ring glow */}
         <div
-          className="absolute inset-[-18%] rounded-full"
+          className="absolute inset-[-12%] rounded-full"
           style={{
             background: `radial-gradient(circle, transparent 40%, hsla(195,100%,55%,${outerGlowOpacity}) 60%, transparent 75%)`,
             transition: "background 0.3s ease-out",
