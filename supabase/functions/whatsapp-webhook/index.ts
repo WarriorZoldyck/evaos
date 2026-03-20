@@ -1745,63 +1745,59 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
         }
         if (!bankAccountId && !walletId) {
-          const totalOptions = contextAccounts.length + contextWallets.length;
-          if (totalOptions === 1) {
-            if (contextAccounts.length === 1) {
-              bankAccountId = contextAccounts[0].id;
-            } else {
-              walletId = contextWallets[0].id;
-            }
-          } else if (totalOptions > 1) {
-            // For despesas (purchases) with boleto, don't ask for account - register without one
-            const isBoletoCompra = txType === "despesa" && (paymentMethod === "Boleto" || aiParsed.payment_method === "boleto");
-            if (isBoletoCompra) {
-              // Skip account selection - proceed without bank account
-              console.log("Boleto de compra (despesa): registrando sem conta bancária");
-            } else {
-            const optionsList = [
-              ...contextAccounts.map((a) => `• ${a.name}`),
-              ...contextWallets.map((w) => `• ${w.name} (carteira)`),
-            ].join("\n");
-            
-            // Save pending action for account choice
-            await supabase.from("whatsapp_pending_actions").insert({
-              user_id: userId,
-              action_type: "choose_account",
-              payload: {
-                choose_type: "bank_account",
-                description: aiParsed.description,
-                amount: aiParsed.amount,
-                type: txType,
-                context: aiParsed.context,
-                category_id: matchedCategory?.id || null,
-                category_label: matchedCategory?.name || null,
-                subcategory_id: subcategoryValue,
-                payment_method: paymentMethod,
-                date: aiParsed.date || today,
-                competence_date: aiParsed.competence_date || aiParsed.date || today,
-                payment_date: aiParsed.payment_date || null,
-                contact_name: aiParsed.contact_name || null,
-                supplier_id: aiParsed.supplier_id || null,
-                client_id: aiParsed.client_id || null,
-                notes: aiParsed.notes || null,
-                attachment_url: attachmentUrl,
-                original_user_text: originalUserText,
-                installments: aiParsed.installments || 1,
-                installment_details: aiParsed.installment_details || null,
-                original_user_text: originalUserText,
-              },
-              suggested_category_name: matchedCategory?.name || "N/A",
-              category_type: txType,
-              context_company_id: companyId,
-            });
-            
-            return respond({
-              success: true,
-              intent: "lancamento",
-              message: `📋 Entendi o lançamento de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta ou *não* para cancelar.`,
-              transaction: null,
-            }, 200);
+          const isBoletoCompra = txType === "despesa" && (paymentMethod === "Boleto" || aiParsed.payment_method === "boleto");
+          if (isBoletoCompra) {
+            console.log("Boleto de compra (despesa): registrando sem conta bancária");
+          } else {
+            const totalOptions = contextAccounts.length + contextWallets.length;
+            if (totalOptions === 1) {
+              if (contextAccounts.length === 1) {
+                bankAccountId = contextAccounts[0].id;
+              } else {
+                walletId = contextWallets[0].id;
+              }
+            } else if (totalOptions > 1) {
+              const optionsList = [
+                ...contextAccounts.map((a) => `• ${a.name}`),
+                ...contextWallets.map((w) => `• ${w.name} (carteira)`),
+              ].join("\n");
+              
+              await supabase.from("whatsapp_pending_actions").insert({
+                user_id: userId,
+                action_type: "choose_account",
+                payload: {
+                  choose_type: "bank_account",
+                  description: aiParsed.description,
+                  amount: aiParsed.amount,
+                  type: txType,
+                  context: aiParsed.context,
+                  category_id: matchedCategory?.id || null,
+                  category_label: matchedCategory?.name || null,
+                  subcategory_id: subcategoryValue,
+                  payment_method: paymentMethod,
+                  date: aiParsed.date || today,
+                  competence_date: aiParsed.competence_date || aiParsed.date || today,
+                  payment_date: aiParsed.payment_date || null,
+                  contact_name: aiParsed.contact_name || null,
+                  supplier_id: aiParsed.supplier_id || null,
+                  client_id: aiParsed.client_id || null,
+                  notes: aiParsed.notes || null,
+                  attachment_url: attachmentUrl,
+                  original_user_text: originalUserText,
+                  installments: aiParsed.installments || 1,
+                  installment_details: aiParsed.installment_details || null,
+                },
+                suggested_category_name: matchedCategory?.name || "N/A",
+                category_type: txType,
+                context_company_id: companyId,
+              });
+              
+              return respond({
+                success: true,
+                intent: "lancamento",
+                message: `📋 Entendi o lançamento de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta ou *não* para cancelar.`,
+                transaction: null,
+              }, 200);
             }
           }
         }
@@ -2065,8 +2061,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       const contextLabel = aiParsed.context || "Pessoal";
 
-      // --- BLOCK if no account/wallet/card ---
-      if (!bankAccountId && !walletId && !creditCardId) {
+      // --- BLOCK if no account/wallet/card (except boleto de compra) ---
+      const isBoletoCompraFinal = txType === "despesa" && (paymentMethod === "Boleto" || paymentMethod === "boleto");
+      if (!bankAccountId && !walletId && !creditCardId && !isBoletoCompraFinal) {
         return respond({
           success: false,
           intent: "lancamento",
