@@ -1763,6 +1763,74 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
       }
 
+      // --- HISTORICAL CATEGORY REUSE HEURISTIC ---
+      // Before asking to create a category, check if historical transactions
+      // have a matching contact_name/description that used a valid category
+      if (!matchedCategory && historicalTransactions.length > 0) {
+        const aiDescription = normalizeText(aiParsed.description);
+        const aiContact = normalizeText(aiParsed.contact_name || contactName);
+        
+        // Try to find a historical transaction with similar contact/description
+        for (const htx of historicalTransactions) {
+          const htxContact = normalizeText(htx.contact_name);
+          const htxDesc = normalizeText(htx.description);
+          
+          let isMatch = false;
+          // Match by contact_name (strongest signal)
+          if (aiContact && htxContact && aiContact.length >= 4 && (
+            aiContact === htxContact ||
+            aiContact.includes(htxContact) ||
+            htxContact.includes(aiContact)
+          )) {
+            isMatch = true;
+          }
+          // Match by description similarity
+          if (!isMatch && aiDescription && htxDesc && aiDescription.length >= 5) {
+            const descTokens = aiDescription.split(" ").filter((t: string) => t.length >= 4);
+            const htxTokens = new Set(htxDesc.split(" ").filter((t: string) => t.length >= 4));
+            const overlap = descTokens.filter((t: string) => htxTokens.has(t));
+            if (overlap.length >= 2 || (descTokens.length <= 2 && overlap.length >= 1 && descTokens[0]?.length >= 6)) {
+              isMatch = true;
+            }
+          }
+          
+          if (isMatch) {
+            // Check the context matches (same company_id)
+            if ((htx.company_id || null) === (companyId || null)) {
+              // Find this category in current context
+              const histCat = contextCategories.find((c: any) => c.id === htx.category);
+              if (histCat) {
+                // Found a valid category from history
+                if (histCat.parent_id) {
+                  // It's a subcategory — find parent
+                  const parentCat = contextCategories.find((c: any) => c.id === histCat.parent_id);
+                  if (parentCat && typeMatches(parentCat)) {
+                    matchedCategory = parentCat;
+                    subcategoryValue = histCat.id;
+                    subcategoryLabel = histCat.name;
+                    console.log("CATEGORY REUSED FROM HISTORY:", {
+                      trigger: aiContact || aiDescription,
+                      matchedWith: htxContact || htxDesc,
+                      category: parentCat.name,
+                      subcategory: histCat.name,
+                    });
+                    break;
+                  }
+                } else if (typeMatches(histCat)) {
+                  matchedCategory = histCat;
+                  console.log("CATEGORY REUSED FROM HISTORY:", {
+                    trigger: aiContact || aiDescription,
+                    matchedWith: htxContact || htxDesc,
+                    category: histCat.name,
+                  });
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
       // --- NO CATEGORY MATCH → ask user ---
       if (!matchedCategory) {
         const suggestedName = aiParsed.suggested_category_name || aiParsed.description || "Nova Categoria";
