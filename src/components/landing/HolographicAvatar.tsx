@@ -147,17 +147,25 @@ export function HolographicAvatar() {
   }, [sampleImageToParticles]);
 
   return (
-    <div className="relative w-full aspect-square max-w-[480px] mx-auto">
+    <div className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
       <div
-        className="absolute inset-[-10%] rounded-full opacity-60"
         style={{
-          background: "radial-gradient(circle, hsla(195,100%,50%,0.08) 0%, transparent 70%)",
+          transform: `rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
+          transformStyle: "preserve-3d",
+          transition: "transform 0.15s ease-out",
         }}
-      />
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full relative z-10"
-      />
+        className="relative w-full h-full"
+      >
+        <div
+          className="absolute inset-[-10%] rounded-full opacity-60"
+          style={{
+            background: "radial-gradient(circle, hsla(195,100%,50%,0.08) 0%, transparent 70%)",
+          }}
+        />
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full relative z-10"
+        />
       <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 text-center">
         <p className="text-xs tracking-[0.3em] uppercase text-[hsl(195,100%,50%/0.6)] font-medium">EVA · Assistente IA</p>
       </div>
