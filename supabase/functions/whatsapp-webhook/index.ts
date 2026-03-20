@@ -1395,7 +1395,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         aiParsed.context = "Pessoal";
       }
 
-      const companyId = resolveContext(aiParsed.context);
+      let companyId = resolveContext(aiParsed.context);
 
       // --- Resolve category_id ---
       const contextCategories = categories.filter((c) =>
