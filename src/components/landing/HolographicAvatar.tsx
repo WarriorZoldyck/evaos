@@ -9,10 +9,10 @@ export function HolographicAvatar() {
     const x = (e.clientX - rect.left) / rect.width - 0.5;
     const y = (e.clientY - rect.top) / rect.height - 0.5;
     setOffset({
-      x: x * 30,
-      y: y * 20,
-      rotX: -y * 3,
-      rotY: x * 3,
+      x: x * 24,
+      y: y * 16,
+      rotX: -y * 4,
+      rotY: x * 4,
     });
   };
 
@@ -22,8 +22,8 @@ export function HolographicAvatar() {
 
   return (
     <div
-      className="relative w-full max-w-[680px] mx-auto"
-      style={{ perspective: "900px" }}
+      className="relative w-full max-w-[600px] mx-auto"
+      style={{ perspective: "1200px" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -38,42 +38,56 @@ export function HolographicAvatar() {
 
       {/* Parallax + subtle rotation container */}
       <div
+        className="relative"
         style={{
-          transform: `translate(${offset.x}px, ${offset.y}px) rotateX(${offset.rotX}deg) rotateY(${offset.rotY}deg) scale(1.15)`,
+          transform: `translate(${offset.x}px, ${offset.y}px) rotateX(${offset.rotX}deg) rotateY(${offset.rotY}deg)`,
           transformStyle: "preserve-3d",
-          transition: "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+          animation: "eva-breathe 5s ease-in-out infinite",
         }}
       >
         {/* EVA image */}
         <img
           src={evaAvatar}
           alt="EVA — Assistente IA"
-          className="relative z-10 w-full h-auto drop-shadow-[0_0_40px_hsla(195,100%,50%,0.3)]"
-          style={{ filter: "drop-shadow(0 0 60px hsla(195,100%,50%,0.2))" }}
+          className="relative z-10 w-full h-auto"
+          style={{
+            filter: "drop-shadow(0 0 60px hsla(195,100%,50%,0.25)) drop-shadow(0 0 120px hsla(195,100%,50%,0.1))",
+          }}
           draggable={false}
+        />
+
+        {/* Eye glow overlay — pulses independently */}
+        <div
+          className="absolute inset-0 pointer-events-none z-20"
+          style={{
+            background: "radial-gradient(ellipse 8% 4% at 44% 32%, hsla(195,100%,60%,0.35) 0%, transparent 100%), radial-gradient(ellipse 8% 4% at 56% 32%, hsla(195,100%,60%,0.35) 0%, transparent 100%)",
+            animation: "eva-eye-glow 3s ease-in-out infinite",
+          }}
         />
 
         {/* Subtle scanlines overlay */}
         <div
           className="absolute inset-0 pointer-events-none z-20"
           style={{
-            background: "repeating-linear-gradient(0deg, transparent, transparent 3px, hsla(195,100%,50%,0.02) 3px, hsla(195,100%,50%,0.02) 4px)",
+            background: "repeating-linear-gradient(0deg, transparent, transparent 3px, hsla(195,100%,50%,0.015) 3px, hsla(195,100%,50%,0.015) 4px)",
             mixBlendMode: "screen",
           }}
         />
-      </div>
-
-      {/* Label */}
-      <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 text-center">
-        <p className="text-xs tracking-[0.3em] uppercase text-[hsl(195,100%,50%/0.6)] font-medium">
-          EVA · Assistente IA
-        </p>
       </div>
 
       <style>{`
         @keyframes eva-pulse {
           0%, 100% { opacity: 0.5; transform: scale(1); }
           50% { opacity: 0.8; transform: scale(1.03); }
+        }
+        @keyframes eva-breathe {
+          0%, 100% { transform: translate(${offset.x}px, ${offset.y}px) rotateX(${offset.rotX}deg) rotateY(${offset.rotY}deg) translateY(0px); }
+          50% { transform: translate(${offset.x}px, ${offset.y}px) rotateX(${offset.rotX}deg) rotateY(${offset.rotY}deg) translateY(-6px); }
+        }
+        @keyframes eva-eye-glow {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 1; }
         }
       `}</style>
     </div>
