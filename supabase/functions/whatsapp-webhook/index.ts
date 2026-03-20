@@ -95,6 +95,107 @@ function buildResponse(body: any, status: number, phone: string) {
   });
 }
 
+function normalizeDigits(value: string | null | undefined) {
+  return (value || "").replace(/\D/g, "");
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function hasStrongCompanyNameMatch(companyName: string, extractedName: string) {
+  const normalizedCompany = normalizeText(companyName);
+  const normalizedExtracted = normalizeText(extractedName);
+
+  if (!normalizedCompany || !normalizedExtracted) return false;
+  if (normalizedCompany === normalizedExtracted) return true;
+  if (normalizedCompany.length >= 8 && normalizedExtracted.includes(normalizedCompany)) return true;
+  if (normalizedExtracted.length >= 8 && normalizedCompany.includes(normalizedExtracted)) return true;
+
+  const companyTokens = normalizedCompany.split(" ").filter((token) => token.length >= 3);
+  const extractedTokens = new Set(normalizedExtracted.split(" ").filter((token) => token.length >= 3));
+  const overlap = companyTokens.filter((token) => extractedTokens.has(token));
+
+  return overlap.length >= 2;
+}
+
+async function extractDocumentParties(apiKey: string, userContent: any) {
+  try {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content: `Você analisa notas fiscais, boletos, recibos e comprovantes.
+
+Retorne APENAS um JSON válido no formato:
+{"document_type":"nota_fiscal|boleto|recibo|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","reason":"breve explicação"}
+
+REGRAS:
+- "recipient" = destinatário/tomador/comprador/pagador/sacado (quem vai pagar ou recebeu a nota)
+- "issuer" = emitente/fornecedor/cobrador
+- Em nota fiscal, priorize DESTINATÁRIO/REMETENTE ou TOMADOR, nunca o emitente
+- Se não conseguir ler um campo com segurança, retorne null nesse campo
+- Não escreva texto fora do JSON`,
+          },
+          { role: "user", content: userContent },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn("Document party extraction request failed:", response.status);
+      return null;
+    }
+
+    const aiData = await response.json();
+    const rawContent = aiData.choices?.[0]?.message?.content || "";
+    const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, rawContent];
+    const parsed = JSON.parse(jsonMatch[1].trim());
+    console.log("Document party extraction:", parsed);
+    return parsed;
+  } catch (error) {
+    console.warn("Document party extraction failed:", error);
+    return null;
+  }
+}
+
+function matchCompanyFromDocument(
+  companies: Array<{ id: string; name: string; cnpj: string | null }>,
+  extractedDocument: any,
+) {
+  if (!extractedDocument) return null;
+
+  const recipientCnpj = normalizeDigits(extractedDocument.recipient_cnpj);
+  if (recipientCnpj) {
+    const cnpjMatch = companies.find((company) => normalizeDigits(company.cnpj) === recipientCnpj);
+    if (cnpjMatch) {
+      return { company: cnpjMatch, reason: `CNPJ do destinatário ${recipientCnpj}` };
+    }
+  }
+
+  const recipientName = extractedDocument.recipient_name;
+  if (recipientName) {
+    const nameMatch = companies.find((company) => hasStrongCompanyNameMatch(company.name, recipientName));
+    if (nameMatch) {
+      return { company: nameMatch, reason: `nome do destinatário "${recipientName}"` };
+    }
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -1198,6 +1299,29 @@ IMPORTANTE:
       userContent = userText;
     }
 
+    const documentPartyExtraction = !mediaIsAudio && imageBase64 && companies.length > 0
+      ? await extractDocumentParties(LOVABLE_API_KEY, userContent)
+      : null;
+    const documentContextMatch = matchCompanyFromDocument(companies, documentPartyExtraction);
+
+    if (documentContextMatch) {
+      console.log("DOCUMENT CONTEXT DETECTED:", {
+        company: documentContextMatch.company.name,
+        reason: documentContextMatch.reason,
+        extracted: documentPartyExtraction,
+      });
+    }
+
+    const effectiveSystemPrompt = documentContextMatch
+      ? `${systemPrompt}
+
+CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
+- O destinatário/tomador identificado no documento corresponde à empresa "${documentContextMatch.company.name}".
+- Motivo: ${documentContextMatch.reason}.
+- Para este lançamento, use obrigatoriamente context="${documentContextMatch.company.name}".
+- Escolha categoria, conta, carteira e cartão SOMENTE desse contexto.`
+      : systemPrompt;
+
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -1207,7 +1331,7 @@ IMPORTANTE:
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: effectiveSystemPrompt },
           ...conversationHistory,
           { role: "user", content: userContent },
         ],
@@ -1268,7 +1392,16 @@ IMPORTANTE:
 
     // 7. Execute action based on intent
     if (aiParsed.intent === "lancamento") {
-      if (!validateContext(aiParsed.context)) {
+      if (documentContextMatch) {
+        if (aiParsed.context !== documentContextMatch.company.name) {
+          console.log("Overriding AI context from document match:", {
+            aiContext: aiParsed.context || null,
+            forcedContext: documentContextMatch.company.name,
+            reason: documentContextMatch.reason,
+          });
+        }
+        aiParsed.context = documentContextMatch.company.name;
+      } else if (!validateContext(aiParsed.context)) {
         console.warn("AI returned invalid context:", aiParsed.context, "| Available:", contextNames);
         aiParsed.context = "Pessoal";
       }
@@ -1304,14 +1437,55 @@ IMPORTANTE:
       }
 
       if (!matchedCategory && aiParsed.category_id) {
-        const nameGuess = aiParsed.category_id.toLowerCase();
-        matchedCategory = contextCategories.find(
-          (c) => !c.parent_id && c.name.toLowerCase() === nameGuess && typeMatches(c)
-        );
+        const crossContextCategory = categories.find((c) => c.id === aiParsed.category_id);
+
+        if (crossContextCategory) {
+          if (crossContextCategory.parent_id) {
+            const crossContextParent = categories.find((c) => c.id === crossContextCategory.parent_id);
+            if (crossContextParent) {
+              matchedCategory = contextCategories.find(
+                (c) => !c.parent_id && normalizeText(c.name) === normalizeText(crossContextParent.name) && typeMatches(c)
+              ) || contextCategories.find(
+                (c) => !c.parent_id && normalizeText(c.name).includes(normalizeText(crossContextParent.name)) && typeMatches(c)
+              );
+
+              if (matchedCategory) {
+                const siblingSubcategory = contextCategories.find(
+                  (c) => c.parent_id === matchedCategory!.id && normalizeText(c.name) === normalizeText(crossContextCategory.name)
+                );
+                if (siblingSubcategory) {
+                  subcategoryValue = siblingSubcategory.id;
+                  subcategoryLabel = siblingSubcategory.name;
+                }
+              }
+            }
+          } else {
+            matchedCategory = contextCategories.find(
+              (c) => !c.parent_id && normalizeText(c.name) === normalizeText(crossContextCategory.name) && typeMatches(c)
+            ) || contextCategories.find(
+              (c) => !c.parent_id && normalizeText(c.name).includes(normalizeText(crossContextCategory.name)) && typeMatches(c)
+            );
+          }
+
+          if (matchedCategory) {
+            console.log("Recovered category across contexts:", {
+              sourceCategory: crossContextCategory.name,
+              resolvedCategory: matchedCategory.name,
+              context: aiParsed.context,
+            });
+          }
+        }
+
         if (!matchedCategory) {
+          const nameGuess = aiParsed.category_id.toLowerCase();
           matchedCategory = contextCategories.find(
-            (c) => !c.parent_id && c.name.toLowerCase().includes(nameGuess) && typeMatches(c)
+            (c) => !c.parent_id && c.name.toLowerCase() === nameGuess && typeMatches(c)
           );
+          if (!matchedCategory) {
+            matchedCategory = contextCategories.find(
+              (c) => !c.parent_id && c.name.toLowerCase().includes(nameGuess) && typeMatches(c)
+            );
+          }
         }
       }
 
