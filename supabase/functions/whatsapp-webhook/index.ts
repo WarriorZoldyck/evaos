@@ -1262,7 +1262,7 @@ REGRAS DE GERENCIAMENTO DE CATEGORIAS:
 - NÃO invente ações além das listadas acima.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
 
 TIPOS DE CONSULTA:
 - "saldo" = saldo das contas
@@ -1270,10 +1270,21 @@ TIPOS DE CONSULTA:
 - "gastos_mes" = total de despesas do mês
 - "receitas_mes" = total de receitas do mês
 - "pendentes" = contas a pagar/receber
-- "gastos_categoria" = gastos por categoria específica
+- "gastos_categoria" = gastos por categoria específica (LISTA os lançamentos individuais + total)
+- "listar_lancamentos" = listar lançamentos filtrados por fornecedor, cliente, descrição, ou qualquer critério específico
 - "listar_cartoes" = listar cartões de crédito cadastrados
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
 - Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
+- Se o usuário pedir lançamentos de um fornecedor específico (ex: "lançamentos do Moscato", "quanto paguei no Dentais"), use "listar_lancamentos" com contact_filter.
+- Se o usuário pedir lançamentos de uma categoria específica (ex: "gastos com Alimentação"), use "gastos_categoria" com category_filter.
+- SEMPRE que o usuário pedir dados específicos, filtre e retorne SOMENTE o que ele pediu. NÃO retorne dados genéricos.
+
+REGRAS DE PERÍODO:
+- Se o usuário não especificar período, use "mes_atual"
+- Se disser "mês passado", "último mês", use "mes_passado"
+- Se disser "últimos 7 dias", "essa semana", use "ultimos_7_dias"
+- Se disser "últimos 30 dias", use "ultimos_30_dias"
+- Se disser "últimos 3 meses", use "ultimos_90_dias"
 
 Para editar lançamento existente:
 {"intent":"editar_lancamento","transaction_id":"UUID-do-lancamento-da-lista-ou-null","field":"amount|description|category|payment_date|competence_date|status|notes","new_value":"novo valor","friendly_message":"..."}
@@ -2391,6 +2402,46 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         return query;
       };
 
+      // Resolve period filter
+      const resolvePeriod = (): { start: string; end: string; label: string } => {
+        const period = aiParsed.period_filter || "mes_atual";
+        const todayDate = new Date(today + "T12:00:00");
+        const pad2 = (n: number) => String(n).padStart(2, "0");
+        const fmtDate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        
+        switch (period) {
+          case "mes_passado": {
+            const d = new Date(todayDate);
+            d.setMonth(d.getMonth() - 1);
+            const start = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`;
+            const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+            const end = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(lastDay)}`;
+            return { start, end, label: "mês passado" };
+          }
+          case "ultimos_7_dias": {
+            const d = new Date(todayDate);
+            d.setDate(d.getDate() - 7);
+            return { start: fmtDate(d), end: today, label: "últimos 7 dias" };
+          }
+          case "ultimos_30_dias": {
+            const d = new Date(todayDate);
+            d.setDate(d.getDate() - 30);
+            return { start: fmtDate(d), end: today, label: "últimos 30 dias" };
+          }
+          case "ultimos_90_dias": {
+            const d = new Date(todayDate);
+            d.setDate(d.getDate() - 90);
+            return { start: fmtDate(d), end: today, label: "últimos 3 meses" };
+          }
+          default: { // mes_atual
+            const start = today.substring(0, 7) + "-01";
+            return { start, end: today, label: "este mês" };
+          }
+        }
+      };
+
+      const { start: periodStart, end: periodEnd, label: periodLabel } = resolvePeriod();
+
       try {
         switch (aiParsed.query_type) {
           case "saldo": {
@@ -2444,52 +2495,49 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
 
           case "gastos_mes": {
-            const startOfMonth = today.substring(0, 7) + "-01";
             let q = supabase
               .from("transactions")
               .select("amount")
               .eq("user_id", userId)
               .eq("type", "despesa")
               .eq("status", "Pago")
-              .gte("payment_date", startOfMonth)
-              .lte("payment_date", today);
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd);
             q = addContextFilter(q);
             const { data: expenses } = await q;
 
             const total = (expenses || []).reduce((s: number, t: any) => s + t.amount, 0);
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            responseMessage = `📊 Total de despesas este mês${ctxLabel}: ${fmt(total)}`;
+            responseMessage = `📊 Total de despesas ${periodLabel}${ctxLabel}: ${fmt(total)}`;
             break;
           }
 
           case "receitas_mes": {
-            const startOfMonth = today.substring(0, 7) + "-01";
             let q = supabase
               .from("transactions")
               .select("amount")
               .eq("user_id", userId)
               .eq("type", "receita")
               .eq("status", "Pago")
-              .gte("payment_date", startOfMonth)
-              .lte("payment_date", today);
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd);
             q = addContextFilter(q);
             const { data: revenues } = await q;
 
             const total = (revenues || []).reduce((s: number, t: any) => s + t.amount, 0);
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            responseMessage = `📊 Total de receitas este mês${ctxLabel}: ${fmt(total)}`;
+            responseMessage = `📊 Total de receitas ${periodLabel}${ctxLabel}: ${fmt(total)}`;
             break;
           }
 
           case "resumo_mes": {
-            const startOfMonth = today.substring(0, 7) + "-01";
             let q = supabase
               .from("transactions")
               .select("amount, type, category")
               .eq("user_id", userId)
               .eq("status", "Pago")
-              .gte("payment_date", startOfMonth)
-              .lte("payment_date", today);
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd);
             q = addContextFilter(q);
             const { data: txns } = await q;
 
@@ -2516,7 +2564,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               .join("\n");
 
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            responseMessage = `📊 Resumo do mês${ctxLabel}\n\n✅ Receitas: ${fmt(receitas)}\n❌ Despesas: ${fmt(despesas)}\n💰 Saldo: ${fmt(receitas - despesas)}${top3 ? "\n\n🏷️ Top categorias de despesa:\n" + top3 : ""}`;
+            responseMessage = `📊 Resumo ${periodLabel}${ctxLabel}\n\n✅ Receitas: ${fmt(receitas)}\n❌ Despesas: ${fmt(despesas)}\n💰 Saldo: ${fmt(receitas - despesas)}${top3 ? "\n\n🏷️ Top categorias de despesa:\n" + top3 : ""}`;
             break;
           }
 
@@ -2527,7 +2575,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               .eq("user_id", userId)
               .eq("status", "Pendente")
               .order("payment_date", { ascending: true })
-              .limit(10);
+              .limit(15);
             q = addContextFilter(q);
             const { data: pending } = await q;
 
@@ -2544,23 +2592,31 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
 
           case "gastos_categoria": {
-            const startOfMonth = today.substring(0, 7) + "-01";
             const categoryFilter = aiParsed.category_filter || "";
             const filterCat = categories.find(
               (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
             );
+            // Include subcategories of the matched category
+            const catIds: string[] = [];
+            if (filterCat) {
+              catIds.push(filterCat.id);
+              const subs = categories.filter((c: any) => c.parent_id === filterCat.id);
+              subs.forEach((s: any) => catIds.push(s.id));
+            }
+
             let q = supabase
               .from("transactions")
-              .select("amount, description")
+              .select("amount, description, payment_date, contact_name, status")
               .eq("user_id", userId)
               .eq("type", "despesa")
-              .eq("status", "Pago")
-              .gte("payment_date", startOfMonth)
-              .lte("payment_date", today);
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd)
+              .order("payment_date", { ascending: false })
+              .limit(20);
             
-            if (filterCat) {
-              q = q.eq("category", filterCat.id);
-            } else {
+            if (catIds.length > 0) {
+              q = q.in("category", catIds);
+            } else if (categoryFilter) {
               q = q.ilike("category", `%${categoryFilter}%`);
             }
             q = addContextFilter(q);
@@ -2568,7 +2624,82 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
             const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" este mês${ctxLabel}: ${fmt(total)}`;
+            
+            if (!catExpenses || catExpenses.length === 0) {
+              responseMessage = `📊 Nenhum gasto com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}.`;
+            } else {
+              const items = catExpenses.map((t: any) => {
+                const contact = t.contact_name ? ` — ${t.contact_name}` : "";
+                const statusIcon = t.status === "Pendente" ? " ⏳" : "";
+                return `  • ${t.description}${contact}: ${fmt(t.amount)} (${formatDate(t.payment_date)})${statusIcon}`;
+              }).join("\n");
+              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}:\n\n${items}\n\n💰 Total: ${fmt(total)} (${catExpenses.length} lançamento${catExpenses.length > 1 ? "s" : ""})`;
+            }
+            break;
+          }
+
+          case "listar_lancamentos": {
+            const contactFilter = aiParsed.contact_filter || "";
+            const categoryFilter = aiParsed.category_filter || "";
+            
+            let q = supabase
+              .from("transactions")
+              .select("amount, description, payment_date, contact_name, type, status, category")
+              .eq("user_id", userId)
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd)
+              .order("payment_date", { ascending: false })
+              .limit(20);
+            
+            q = addContextFilter(q);
+
+            // Apply contact/supplier filter
+            if (contactFilter) {
+              q = q.or(`contact_name.ilike.%${contactFilter}%,description.ilike.%${contactFilter}%`);
+            }
+
+            // Apply category filter
+            if (categoryFilter) {
+              const filterCat = categories.find(
+                (c: any) => c.name.toLowerCase() === categoryFilter.toLowerCase()
+              );
+              if (filterCat) {
+                const catIds = [filterCat.id];
+                categories.filter((c: any) => c.parent_id === filterCat.id).forEach((s: any) => catIds.push(s.id));
+                q = q.in("category", catIds);
+              }
+            }
+
+            const { data: filteredTxns } = await q;
+
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+            const filterLabel = contactFilter || categoryFilter || "";
+            
+            if (!filteredTxns || filteredTxns.length === 0) {
+              responseMessage = `📋 Nenhum lançamento encontrado${filterLabel ? ` para "${filterLabel}"` : ""} ${periodLabel}${ctxLabel}.`;
+            } else {
+              const resolveCatName2 = (catId: string): string => {
+                const found = categories.find((c: any) => c.id === catId);
+                return found ? found.name : catId;
+              };
+
+              let totalReceitas = 0;
+              let totalDespesas = 0;
+              const items = filteredTxns.map((t: any) => {
+                const typeIcon = t.type === "receita" ? "🟢" : "🔴";
+                const statusIcon = t.status === "Pendente" ? " ⏳" : "";
+                const catName = resolveCatName2(t.category);
+                if (t.type === "receita") totalReceitas += t.amount;
+                else totalDespesas += t.amount;
+                return `  ${typeIcon} ${t.description}: ${fmt(t.amount)} (${formatDate(t.payment_date)}) — ${catName}${statusIcon}`;
+              }).join("\n");
+
+              let summary = `\n\n📊 ${filteredTxns.length} lançamento${filteredTxns.length > 1 ? "s" : ""}`;
+              if (totalReceitas > 0) summary += ` | Receitas: ${fmt(totalReceitas)}`;
+              if (totalDespesas > 0) summary += ` | Despesas: ${fmt(totalDespesas)}`;
+
+              responseMessage = `📋 Lançamentos${filterLabel ? ` de "${filterLabel}"` : ""} ${periodLabel}${ctxLabel}:\n\n${items}${summary}`;
+            }
             break;
           }
 
