@@ -1813,7 +1813,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         });
         
         // Try to find a historical transaction with similar contact/description
-        for (const htx of historicalTransactions) {
+        for (const htx of mergedHistoricalTransactions) {
           const htxContact = normalizeText(htx.contact_name);
           const htxDesc = normalizeText(htx.description);
           
