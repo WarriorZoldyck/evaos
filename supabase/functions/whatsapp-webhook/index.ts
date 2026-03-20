@@ -2177,9 +2177,12 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
         const typeLabel = txType === "receita" ? "Receita" : "Despesa";
         const totalAmount = installmentDetails.reduce((sum: number, d: any) => sum + Math.abs(d.amount || 0), 0);
-        const parcelsDisplay = installmentDetails.map((d: any, i: number) =>
-          `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}`
-        ).join("\n");
+        const parcelsDisplay = installmentDetails.map((d: any, i: number) => {
+          const barcodeInfo = d.barcode ? ` 📄` : "";
+          return `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}${barcodeInfo}`;
+        }).join("\n");
+        const barcodeCount = installmentDetails.filter((d: any) => d.barcode).length;
+        const barcodeNote = barcodeCount > 0 ? `\n\n📄 ${barcodeCount} boleto(s) com código de barras registrado(s)` : "";
 
         return respond({
           success: true,
