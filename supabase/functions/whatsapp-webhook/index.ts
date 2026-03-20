@@ -365,25 +365,59 @@ serve(async (req) => {
     const userId = profile.id;
 
     // ============================================================
-    // CONVERSATION MEMORY: Load today's history + save user message
+    // CONVERSATION MEMORY: Load recent history + save user message
     // ============================================================
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
 
     const { data: chatHistory } = await supabase
       .from("whatsapp_messages")
       .select("role, content, created_at")
       .eq("user_id", userId)
-      .gte("created_at", todayStart.toISOString())
+      .gte("created_at", threeHoursAgo.toISOString())
       .order("created_at", { ascending: true })
-      .limit(50);
+      .limit(80);
 
-    const conversationHistory = (chatHistory || []).map((m: any) => ({
+    const allMessages = (chatHistory || []).map((m: any) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
 
-    console.log("Conversation history loaded:", conversationHistory.length, "messages");
+    // Smart summarization: keep last 20 messages integral, summarize older ones
+    const RECENT_COUNT = 20;
+    let conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
+
+    if (allMessages.length > RECENT_COUNT) {
+      const olderMessages = allMessages.slice(0, allMessages.length - RECENT_COUNT);
+      const recentMessages = allMessages.slice(-RECENT_COUNT);
+
+      // Build compact summary of older messages
+      const summaryParts: string[] = [];
+      for (let i = 0; i < olderMessages.length; i += 2) {
+        const userMsg = olderMessages[i];
+        const assistantMsg = olderMessages[i + 1];
+        if (userMsg?.role === "user") {
+          const userSnippet = userMsg.content.length > 80 ? userMsg.content.slice(0, 80) + "..." : userMsg.content;
+          if (assistantMsg?.role === "assistant") {
+            const assistantSnippet = assistantMsg.content.length > 100 ? assistantMsg.content.slice(0, 100) + "..." : assistantMsg.content;
+            summaryParts.push(`Usuário: ${userSnippet} → EVA: ${assistantSnippet}`);
+          } else {
+            summaryParts.push(`Usuário: ${userSnippet}`);
+            i--; // re-process this message as it wasn't paired
+          }
+        }
+      }
+
+      const summaryText = `[RESUMO DA CONVERSA ANTERIOR]\n${summaryParts.join("\n")}`;
+      conversationHistory = [
+        { role: "user", content: summaryText },
+        { role: "assistant", content: "Entendido, tenho o contexto da conversa anterior." },
+        ...recentMessages,
+      ];
+    } else {
+      conversationHistory = allMessages;
+    }
+
+    console.log("Conversation history loaded:", allMessages.length, "messages (", conversationHistory.length, "sent to AI)");
 
     // Save incoming user message
     const userMsgText = message || (hasAudio ? "[áudio enviado]" : hasDocument ? "[documento enviado]" : "[imagem enviada]");
@@ -826,7 +860,7 @@ serve(async (req) => {
       supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
-      supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(10),
+      supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -1121,13 +1155,23 @@ IMPORTANTE:
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
-    // Parse AI response
+    // Parse AI response — fallback to raw text if JSON fails
     let aiParsed: any;
     try {
       const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, rawContent];
       aiParsed = JSON.parse(jsonMatch[1].trim());
     } catch {
-      console.error("Failed to parse AI response:", rawContent);
+      console.warn("Failed to parse AI response as JSON, using raw text as friendly_message:", rawContent.substring(0, 200));
+      // If the AI returned useful text (not empty), use it directly instead of "não entendi"
+      const cleanText = rawContent.replace(/```[\s\S]*?```/g, "").trim();
+      if (cleanText && cleanText.length > 5) {
+        return respond({
+          success: true,
+          intent: "conversa",
+          message: cleanText,
+          transaction: null,
+        }, 200);
+      }
       return respond({
         success: true,
         intent: "conversa",
