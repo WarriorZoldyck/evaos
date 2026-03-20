@@ -1581,6 +1581,71 @@ IMPORTANTE:
       console.log("Credit card:", creditCardId, "| Payment method:", paymentMethod);
       console.log("Status:", status, "| Competence:", competenceDate, "| Payment:", paymentDate);
 
+      // --- INSTALLMENT SUPPORT ---
+      const installmentCount = aiParsed.installments || 1;
+      const installmentDetails = aiParsed.installment_details || null;
+
+      if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
+        // Create multiple transactions as a series
+        const seriesId = crypto.randomUUID();
+        const transactions = installmentDetails.map((detail: any, idx: number) => ({
+          user_id: userId,
+          description: `${aiParsed.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
+          amount: Math.abs(detail.amount || 0),
+          type: txType,
+          category: categoryValue,
+          subcategory: subcategoryValue,
+          competence_date: competenceDate,
+          payment_date: detail.due_date || paymentDate,
+          status: (detail.due_date && detail.due_date <= today) ? "Pago" as const : "Pendente" as const,
+          bank_account_id: bankAccountId,
+          wallet_id: walletId,
+          credit_card_id: creditCardId,
+          company_id: companyId,
+          payment_method: paymentMethod,
+          supplier_id: supplierId,
+          client_id: clientId,
+          contact_name: contactName,
+          notes: buildNotes(aiParsed.notes),
+          attachment_url: attachmentUrl,
+          series_id: seriesId,
+          installment_number: idx + 1,
+          installments_total: installmentCount,
+        }));
+
+        const { error: insertError } = await supabase.from("transactions").insert(transactions);
+
+        if (insertError) {
+          console.error("Installment insert error:", insertError);
+          return respond({
+            success: false,
+            error: "Erro ao criar parcelas",
+            message: "❌ Não consegui criar as parcelas. Tente novamente.",
+          }, 500);
+        }
+
+        const typeLabel = txType === "receita" ? "Receita" : "Despesa";
+        const totalAmount = installmentDetails.reduce((sum: number, d: any) => sum + Math.abs(d.amount || 0), 0);
+        const parcelsDisplay = installmentDetails.map((d: any, i: number) =>
+          `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}`
+        ).join("\n");
+
+        return respond({
+          success: true,
+          intent: "lancamento",
+          message: `✅ ${installmentCount} parcelas criadas!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}\n\n📋 Parcelas:\n${parcelsDisplay}`,
+          transaction: {
+            description: aiParsed.description,
+            amount: totalAmount,
+            type: txType,
+            category: categoryLabel,
+            context: contextLabel,
+            installments: installmentCount,
+          },
+        }, 200);
+      }
+
+      // Single transaction (no installments)
       const { error: insertError } = await supabase.from("transactions").insert({
         user_id: userId,
         description: aiParsed.description || "Lançamento via WhatsApp",
