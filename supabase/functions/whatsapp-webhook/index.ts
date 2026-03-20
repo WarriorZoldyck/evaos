@@ -2402,6 +2402,46 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         return query;
       };
 
+      // Resolve period filter
+      const resolvePeriod = (): { start: string; end: string; label: string } => {
+        const period = aiParsed.period_filter || "mes_atual";
+        const todayDate = new Date(today + "T12:00:00");
+        const pad2 = (n: number) => String(n).padStart(2, "0");
+        const fmtDate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        
+        switch (period) {
+          case "mes_passado": {
+            const d = new Date(todayDate);
+            d.setMonth(d.getMonth() - 1);
+            const start = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`;
+            const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+            const end = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(lastDay)}`;
+            return { start, end, label: "mês passado" };
+          }
+          case "ultimos_7_dias": {
+            const d = new Date(todayDate);
+            d.setDate(d.getDate() - 7);
+            return { start: fmtDate(d), end: today, label: "últimos 7 dias" };
+          }
+          case "ultimos_30_dias": {
+            const d = new Date(todayDate);
+            d.setDate(d.getDate() - 30);
+            return { start: fmtDate(d), end: today, label: "últimos 30 dias" };
+          }
+          case "ultimos_90_dias": {
+            const d = new Date(todayDate);
+            d.setDate(d.getDate() - 90);
+            return { start: fmtDate(d), end: today, label: "últimos 3 meses" };
+          }
+          default: { // mes_atual
+            const start = today.substring(0, 7) + "-01";
+            return { start, end: today, label: "este mês" };
+          }
+        }
+      };
+
+      const { start: periodStart, end: periodEnd, label: periodLabel } = resolvePeriod();
+
       try {
         switch (aiParsed.query_type) {
           case "saldo": {
