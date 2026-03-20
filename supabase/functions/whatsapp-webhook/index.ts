@@ -2495,52 +2495,49 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
 
           case "gastos_mes": {
-            const startOfMonth = today.substring(0, 7) + "-01";
             let q = supabase
               .from("transactions")
               .select("amount")
               .eq("user_id", userId)
               .eq("type", "despesa")
               .eq("status", "Pago")
-              .gte("payment_date", startOfMonth)
-              .lte("payment_date", today);
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd);
             q = addContextFilter(q);
             const { data: expenses } = await q;
 
             const total = (expenses || []).reduce((s: number, t: any) => s + t.amount, 0);
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            responseMessage = `📊 Total de despesas este mês${ctxLabel}: ${fmt(total)}`;
+            responseMessage = `📊 Total de despesas ${periodLabel}${ctxLabel}: ${fmt(total)}`;
             break;
           }
 
           case "receitas_mes": {
-            const startOfMonth = today.substring(0, 7) + "-01";
             let q = supabase
               .from("transactions")
               .select("amount")
               .eq("user_id", userId)
               .eq("type", "receita")
               .eq("status", "Pago")
-              .gte("payment_date", startOfMonth)
-              .lte("payment_date", today);
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd);
             q = addContextFilter(q);
             const { data: revenues } = await q;
 
             const total = (revenues || []).reduce((s: number, t: any) => s + t.amount, 0);
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            responseMessage = `📊 Total de receitas este mês${ctxLabel}: ${fmt(total)}`;
+            responseMessage = `📊 Total de receitas ${periodLabel}${ctxLabel}: ${fmt(total)}`;
             break;
           }
 
           case "resumo_mes": {
-            const startOfMonth = today.substring(0, 7) + "-01";
             let q = supabase
               .from("transactions")
               .select("amount, type, category")
               .eq("user_id", userId)
               .eq("status", "Pago")
-              .gte("payment_date", startOfMonth)
-              .lte("payment_date", today);
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd);
             q = addContextFilter(q);
             const { data: txns } = await q;
 
@@ -2567,7 +2564,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               .join("\n");
 
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            responseMessage = `📊 Resumo do mês${ctxLabel}\n\n✅ Receitas: ${fmt(receitas)}\n❌ Despesas: ${fmt(despesas)}\n💰 Saldo: ${fmt(receitas - despesas)}${top3 ? "\n\n🏷️ Top categorias de despesa:\n" + top3 : ""}`;
+            responseMessage = `📊 Resumo ${periodLabel}${ctxLabel}\n\n✅ Receitas: ${fmt(receitas)}\n❌ Despesas: ${fmt(despesas)}\n💰 Saldo: ${fmt(receitas - despesas)}${top3 ? "\n\n🏷️ Top categorias de despesa:\n" + top3 : ""}`;
             break;
           }
 
@@ -2578,7 +2575,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               .eq("user_id", userId)
               .eq("status", "Pendente")
               .order("payment_date", { ascending: true })
-              .limit(10);
+              .limit(15);
             q = addContextFilter(q);
             const { data: pending } = await q;
 
@@ -2595,23 +2592,31 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
 
           case "gastos_categoria": {
-            const startOfMonth = today.substring(0, 7) + "-01";
             const categoryFilter = aiParsed.category_filter || "";
             const filterCat = categories.find(
               (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
             );
+            // Include subcategories of the matched category
+            const catIds: string[] = [];
+            if (filterCat) {
+              catIds.push(filterCat.id);
+              const subs = categories.filter((c: any) => c.parent_id === filterCat.id);
+              subs.forEach((s: any) => catIds.push(s.id));
+            }
+
             let q = supabase
               .from("transactions")
-              .select("amount, description")
+              .select("amount, description, payment_date, contact_name, status")
               .eq("user_id", userId)
               .eq("type", "despesa")
-              .eq("status", "Pago")
-              .gte("payment_date", startOfMonth)
-              .lte("payment_date", today);
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd)
+              .order("payment_date", { ascending: false })
+              .limit(20);
             
-            if (filterCat) {
-              q = q.eq("category", filterCat.id);
-            } else {
+            if (catIds.length > 0) {
+              q = q.in("category", catIds);
+            } else if (categoryFilter) {
               q = q.ilike("category", `%${categoryFilter}%`);
             }
             q = addContextFilter(q);
@@ -2619,7 +2624,82 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
             const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" este mês${ctxLabel}: ${fmt(total)}`;
+            
+            if (!catExpenses || catExpenses.length === 0) {
+              responseMessage = `📊 Nenhum gasto com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}.`;
+            } else {
+              const items = catExpenses.map((t: any) => {
+                const contact = t.contact_name ? ` — ${t.contact_name}` : "";
+                const statusIcon = t.status === "Pendente" ? " ⏳" : "";
+                return `  • ${t.description}${contact}: ${fmt(t.amount)} (${formatDate(t.payment_date)})${statusIcon}`;
+              }).join("\n");
+              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}:\n\n${items}\n\n💰 Total: ${fmt(total)} (${catExpenses.length} lançamento${catExpenses.length > 1 ? "s" : ""})`;
+            }
+            break;
+          }
+
+          case "listar_lancamentos": {
+            const contactFilter = aiParsed.contact_filter || "";
+            const categoryFilter = aiParsed.category_filter || "";
+            
+            let q = supabase
+              .from("transactions")
+              .select("amount, description, payment_date, contact_name, type, status, category")
+              .eq("user_id", userId)
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd)
+              .order("payment_date", { ascending: false })
+              .limit(20);
+            
+            q = addContextFilter(q);
+
+            // Apply contact/supplier filter
+            if (contactFilter) {
+              q = q.or(`contact_name.ilike.%${contactFilter}%,description.ilike.%${contactFilter}%`);
+            }
+
+            // Apply category filter
+            if (categoryFilter) {
+              const filterCat = categories.find(
+                (c: any) => c.name.toLowerCase() === categoryFilter.toLowerCase()
+              );
+              if (filterCat) {
+                const catIds = [filterCat.id];
+                categories.filter((c: any) => c.parent_id === filterCat.id).forEach((s: any) => catIds.push(s.id));
+                q = q.in("category", catIds);
+              }
+            }
+
+            const { data: filteredTxns } = await q;
+
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+            const filterLabel = contactFilter || categoryFilter || "";
+            
+            if (!filteredTxns || filteredTxns.length === 0) {
+              responseMessage = `📋 Nenhum lançamento encontrado${filterLabel ? ` para "${filterLabel}"` : ""} ${periodLabel}${ctxLabel}.`;
+            } else {
+              const resolveCatName2 = (catId: string): string => {
+                const found = categories.find((c: any) => c.id === catId);
+                return found ? found.name : catId;
+              };
+
+              let totalReceitas = 0;
+              let totalDespesas = 0;
+              const items = filteredTxns.map((t: any) => {
+                const typeIcon = t.type === "receita" ? "🟢" : "🔴";
+                const statusIcon = t.status === "Pendente" ? " ⏳" : "";
+                const catName = resolveCatName2(t.category);
+                if (t.type === "receita") totalReceitas += t.amount;
+                else totalDespesas += t.amount;
+                return `  ${typeIcon} ${t.description}: ${fmt(t.amount)} (${formatDate(t.payment_date)}) — ${catName}${statusIcon}`;
+              }).join("\n");
+
+              let summary = `\n\n📊 ${filteredTxns.length} lançamento${filteredTxns.length > 1 ? "s" : ""}`;
+              if (totalReceitas > 0) summary += ` | Receitas: ${fmt(totalReceitas)}`;
+              if (totalDespesas > 0) summary += ` | Despesas: ${fmt(totalDespesas)}`;
+
+              responseMessage = `📋 Lançamentos${filterLabel ? ` de "${filterLabel}"` : ""} ${periodLabel}${ctxLabel}:\n\n${items}${summary}`;
+            }
             break;
           }
 
