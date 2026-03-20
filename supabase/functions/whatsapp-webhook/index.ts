@@ -968,6 +968,13 @@ ${companies.map((c) => `- "${c.name}" (CNPJ: ${c.cnpj}) é uma empresa do usuár
 - Se a mensagem mencionar uma empresa ou CNPJ, use o contexto correspondente
 - NÃO invente nomes de contexto. Use SOMENTE os listados acima.
 
+REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR DOCUMENTO:
+- Ao analisar documentos (NF, boleto, recibo, nota fiscal), SEMPRE verifique se o CNPJ ou razão social do DESTINATÁRIO/TOMADOR corresponde a alguma empresa do usuário listada acima.
+- Se o CNPJ do destinatário/tomador da NF corresponder ao CNPJ de uma empresa do usuário, use o contexto dessa empresa AUTOMATICAMENTE. NÃO use "Pessoal".
+- Priorize o CNPJ do DESTINATÁRIO/TOMADOR (quem está pagando), não do EMITENTE (quem está cobrando).
+- Se não encontrar match com nenhuma empresa, aí sim use "Pessoal".
+- CNPJs das empresas: ${companies.map((c) => `${c.cnpj} = "${c.name}"`).join(", ") || "nenhuma empresa cadastrada"}
+
 CATEGORIAS POR CONTEXTO (formato: Nome[UUID] (TIPO)):
 ${categoryListByContext || "Nenhuma categoria cadastrada"}
 
@@ -999,12 +1006,19 @@ DATA ATUAL: ${today}
 
 FORMATO DE RESPOSTA (JSON):
 Para lançamento:
-{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","friendly_message":"..."}
+{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","installments":1,"installment_details":null,"friendly_message":"..."}
+
+REGRAS DE PARCELAMENTO:
+- Se o documento (NF, boleto) indicar PARCELAMENTO, preencha "installments" com o número de parcelas e "installment_details" com um array de objetos {"amount": valor, "due_date": "YYYY-MM-DD"} para cada parcela.
+- Se a NF listar boletos com datas de vencimento diferentes, cada boleto é uma parcela.
+- Se não houver parcelamento, use installments=1 e installment_details=null.
+- Exemplo com 3 parcelas: {"installments":3,"installment_details":[{"amount":500,"due_date":"2026-04-10"},{"amount":500,"due_date":"2026-05-10"},{"amount":500,"due_date":"2026-06-10"}]}
+- O "amount" no campo principal deve ser o VALOR TOTAL (soma de todas as parcelas).
 
 REGRAS DOS NOVOS CAMPOS:
 - Se o usuário mencionar "cartão", "crédito", "no cartão X", use payment_method="cartao_credito" e retorne credit_card_id com o UUID do cartão da lista. NÃO preencha account_id nesse caso.
 - Se o usuário mencionar "pix", "transferência", "boleto", "dinheiro", "débito", preencha payment_method adequadamente.
-- competence_date = quando a despesa/receita ACONTECEU (data do evento). Padrão: hoje.
+- competence_date = quando a despesa/receita ACONTECEU (data do evento/serviço). Padrão: hoje.
 - payment_date = quando o dinheiro SAI/ENTRA da conta. Para cartão de crédito, retorne null (o sistema calculará pela data de vencimento da fatura). Para outros métodos, é igual a competence_date por padrão.
 - status: Se a data de pagamento é FUTURA ou se é cartão de crédito, use "Pendente". Caso contrário, "Pago".
 - Se o usuário mencionar "paguei para [nome]" ou "comprei de [nome]", tente encontrar o UUID na lista de FORNECEDORES (para despesa) ou CLIENTES (para receita). Se não encontrar UUID, preencha contact_name com o nome mencionado.
