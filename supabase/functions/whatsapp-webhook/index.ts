@@ -1024,7 +1024,7 @@ serve(async (req) => {
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
       supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
-      supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(100),
+      supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(500),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -1834,40 +1834,71 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           
           if (isMatch) {
             // Check the context matches (same company_id)
-            if ((htx.company_id || null) === (companyId || null)) {
-              // Find this category in current context
-              const histCat = contextCategories.find((c: any) => c.id === htx.category);
+            const htxCompany = htx.company_id || null;
+            const currentCompany = companyId || null;
+            if (htxCompany !== currentCompany) {
+              console.log("HISTORICAL REUSE: match found but company_id mismatch", {
+                matchReason,
+                htxCompany,
+                currentCompany,
+                htxDesc: normalizeText(htx.description),
+              });
+              continue;
+            }
+            // Find this category in current context — try by ID first, then by name
+            let histCat = contextCategories.find((c: any) => c.id === htx.category);
+            if (!histCat) {
+              // category field might be a name instead of UUID — try name match
+              const catNameNorm = normalizeText(htx.category);
+              histCat = contextCategories.find((c: any) => normalizeText(c.name) === catNameNorm);
               if (histCat) {
-                // Found a valid category from history
-                if (histCat.parent_id) {
-                  // It's a subcategory — find parent
-                  const parentCat = contextCategories.find((c: any) => c.id === histCat.parent_id);
-                  if (parentCat && typeMatches(parentCat)) {
-                    matchedCategory = parentCat;
-                    subcategoryValue = histCat.id;
-                    subcategoryLabel = histCat.name;
-                    console.log("CATEGORY REUSED FROM HISTORY:", {
-                      matchReason,
-                      category: parentCat.name,
-                      subcategory: histCat.name,
-                    });
-                    break;
-                  }
-                } else if (typeMatches(histCat)) {
-                  matchedCategory = histCat;
+                console.log("HISTORICAL REUSE: matched category by NAME fallback", { catName: htx.category, resolvedId: histCat.id });
+              }
+            }
+            if (histCat) {
+              // Found a valid category from history
+              if (histCat.parent_id) {
+                // It's a subcategory — find parent
+                const parentCat = contextCategories.find((c: any) => c.id === histCat.parent_id);
+                if (parentCat && typeMatches(parentCat)) {
+                  matchedCategory = parentCat;
+                  subcategoryValue = histCat.id;
+                  subcategoryLabel = histCat.name;
                   console.log("CATEGORY REUSED FROM HISTORY:", {
                     matchReason,
-                    category: histCat.name,
+                    category: parentCat.name,
+                    subcategory: histCat.name,
                   });
                   break;
+                } else {
+                  console.log("HISTORICAL REUSE: subcategory parent not found or typeMatches failed", {
+                    matchReason,
+                    histCatName: histCat.name,
+                    parentId: histCat.parent_id,
+                    parentFound: !!parentCat,
+                  });
                 }
-              } else {
-                console.log("HISTORICAL REUSE: category not found in contextCategories", {
+              } else if (typeMatches(histCat)) {
+                matchedCategory = histCat;
+                console.log("CATEGORY REUSED FROM HISTORY:", {
                   matchReason,
-                  htxCategory: htx.category,
-                  contextCategoryIds: contextCategories.map((c: any) => c.id).slice(0, 10),
+                  category: histCat.name,
+                });
+                break;
+              } else {
+                console.log("HISTORICAL REUSE: typeMatches failed", {
+                  matchReason,
+                  catName: histCat.name,
+                  catType: histCat.type,
+                  txType,
                 });
               }
+            } else {
+              console.log("HISTORICAL REUSE: category not found in contextCategories (by ID or name)", {
+                matchReason,
+                htxCategory: htx.category,
+                contextCategoryCount: contextCategories.length,
+              });
             }
           }
         }
