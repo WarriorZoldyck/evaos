@@ -1011,7 +1011,11 @@ serve(async (req) => {
     }
 
     // 4. Fetch user context
-    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes] = await Promise.all([
+    // Fetch 90 days of transaction history for pattern recognition
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgoStr = `${ninetyDaysAgo.getFullYear()}-${String(ninetyDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(ninetyDaysAgo.getDate()).padStart(2, "0")}`;
+
+    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes, historyTxRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
@@ -1020,6 +1024,7 @@ serve(async (req) => {
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
       supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
+      supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(100),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -1030,6 +1035,7 @@ serve(async (req) => {
     const suppliersList = suppliersRes.data || [];
     const clientsList = clientsRes.data || [];
     const recentTransactions = recentTxRes.data || [];
+    const historicalTransactions = historyTxRes.data || [];
 
     const today = new Date().toISOString().split("T")[0];
 
