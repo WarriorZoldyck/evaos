@@ -14,11 +14,13 @@ interface Particle {
 
 export function HolographicAvatar() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const animFrameRef = useRef<number>(0);
   const imageLoadedRef = useRef(false);
   const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
+  const [proximity, setProximity] = useState(0);
 
   const sampleImageToParticles = useCallback((canvasW: number, canvasH: number) => {
     const img = new Image();
