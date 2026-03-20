@@ -1300,7 +1300,16 @@ IMPORTANTE:
 - Sempre retorne o campo "context"
 - Se o usuário enviar uma IMAGEM, DOCUMENTO PDF ou ÁUDIO (foto de comprovante, nota fiscal, recibo, extrato, mensagem de voz, etc.), analise o conteúdo visual/textual/sonoro para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.
 - Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.
-- NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.`;
+- NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.
+
+REGRA CRÍTICA — ESTABELECIMENTO NÃO É CATEGORIA:
+- O nome do estabelecimento (ex: "Empório Moscato", "Lanchonete da Maria", "Doceria XYZ", "Restaurante ABC") NUNCA deve ser usado como nome de categoria.
+- Categorias são classificações genéricas (ex: "Alimentação", "Supermercado", "Supérfluos", "Material de Escritório").
+- Se os PADRÕES HISTÓRICOS abaixo mostram que um estabelecimento similar já foi lançado com uma categoria específica, USE ESSA MESMA CATEGORIA. Não sugira criar uma nova.
+- Priorize SEMPRE o histórico do usuário. Se "Empório Moscato" já foi lançado como "Supérfluos", continue usando "Supérfluos".
+- Só sugira nova categoria quando NENHUMA categoria existente se aplicar E não houver histórico similar.
+${historicalPatternsBlock}`;
+
 
     // Build user content: multimodal if media, text-only otherwise
     const defaultMediaPrompt = hasAudio
