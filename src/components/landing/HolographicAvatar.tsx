@@ -17,6 +17,7 @@ export function HolographicAvatar() {
   const particlesRef = useRef<Particle[]>([]);
   const animFrameRef = useRef<number>(0);
   const imageLoadedRef = useRef(false);
+  const mouseRef = useRef({ x: 0.5, y: 0.5 }); // normalized 0-1
 
   const sampleImageToParticles = useCallback((canvasW: number, canvasH: number) => {
     const img = new Image();
@@ -39,7 +40,7 @@ export function HolographicAvatar() {
       const pixels = imageData.data;
 
       const particles: Particle[] = [];
-      const step = Math.max(5, Math.floor(size / 80)); // ~80x80 grid → ~500 particles
+      const step = Math.max(5, Math.floor(size / 80));
       const offsetX = (canvasW - size) / 2;
       const offsetY = (canvasH - size) / 2;
 
@@ -87,6 +88,14 @@ export function HolographicAvatar() {
     resize();
     window.addEventListener("resize", resize);
 
+    const handleMouseMove = (e: MouseEvent) => {
+      mouseRef.current = {
+        x: e.clientX / window.innerWidth,
+        y: e.clientY / window.innerHeight,
+      };
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+
     let t = 0;
     const animate = () => {
       const rect = canvas.getBoundingClientRect();
@@ -102,14 +111,22 @@ export function HolographicAvatar() {
       }
 
       const particles = particlesRef.current;
+      const mx = (mouseRef.current.x - 0.5) * 18; // max ~9px shift
+      const my = (mouseRef.current.y - 0.5) * 18;
 
-      // Draw particles — static positions, just subtle opacity pulse
       for (const p of particles) {
         const flicker = 0.85 + 0.15 * Math.sin(t * 0.8 + p.originX * 0.05 + p.originY * 0.03);
         const alpha = p.opacity * flicker;
 
+        // Parallax: particles shift based on distance from center
+        const cx = w * 0.5;
+        const cy = h * 0.5;
+        const distFactor = 1 + Math.sqrt((p.originX - cx) ** 2 + (p.originY - cy) ** 2) / (w * 0.5) * 0.4;
+        const px = p.originX + mx * distFactor;
+        const py = p.originY + my * distFactor;
+
         ctx.fillStyle = `hsla(${p.hue}, 90%, ${p.lightness}%, ${alpha})`;
-        ctx.fillRect(p.x - p.size * 0.5, p.y - p.size * 0.5, p.size, p.size);
+        ctx.fillRect(px - p.size * 0.5, py - p.size * 0.5, p.size, p.size);
       }
 
       // Single scan line
@@ -125,6 +142,7 @@ export function HolographicAvatar() {
     return () => {
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener("resize", resize);
+      window.removeEventListener("mousemove", handleMouseMove);
     };
   }, [sampleImageToParticles]);
 
