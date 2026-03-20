@@ -1302,6 +1302,10 @@ IMPORTANTE:
 - Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.
 - NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.
 
+REGRA OBRIGATÓRIA — contact_name:
+- Quando houver documento/recibo/comprovante/NF, o campo "contact_name" DEVE SEMPRE conter o nome do ESTABELECIMENTO/EMISSOR identificado no documento (ex: "Empório Moscato", "Dentais Comércio", "Posto Shell").
+- NUNCA deixe contact_name como null quando o documento mostra claramente o nome do estabelecimento.
+
 REGRA CRÍTICA — ESTABELECIMENTO NÃO É CATEGORIA:
 - O nome do estabelecimento (ex: "Empório Moscato", "Lanchonete da Maria", "Doceria XYZ", "Restaurante ABC") NUNCA deve ser usado como nome de categoria.
 - Categorias são classificações genéricas (ex: "Alimentação", "Supermercado", "Supérfluos", "Material de Escritório").
@@ -1470,7 +1474,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       let companyId = resolveContext(aiParsed.context);
 
       // --- Resolve category_id ---
-      const contextCategories = categories.filter((c) =>
+      let contextCategories = categories.filter((c) =>
         companyId ? c.company_id === companyId : !c.company_id
       );
       const txType = aiParsed.type === "receita" ? "receita" : "despesa";
@@ -1668,7 +1672,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 });
                 // Override context to match the account's actual context
                 companyId = newCompanyId;
-                // Re-filter context lists
+                // Re-filter context lists (including categories!)
                 contextAccounts = accounts.filter((a) =>
                   companyId ? a.company_id === companyId : !a.company_id
                 );
@@ -1678,6 +1682,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 contextCards = creditCards.filter((c) =>
                   companyId ? c.company_id === companyId : !c.company_id
                 );
+                contextCategories = categories.filter((c) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+                console.log("Re-filtered contextCategories after cross-context resolution:", contextCategories.length, "categories");
                 if (crossAcc) {
                   bankAccountId = crossAcc.id;
                 } else {
@@ -1769,6 +1777,16 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       if (!matchedCategory && historicalTransactions.length > 0) {
         const aiDescription = normalizeText(aiParsed.description);
         const aiContact = normalizeText(aiParsed.contact_name || contactName);
+        // Bug fix: also use issuer_name from document extraction as a matching signal
+        const docIssuer = normalizeText(documentPartyExtraction?.issuer_name || "");
+        
+        console.log("HISTORICAL REUSE: attempting match", {
+          aiContact,
+          aiDescription,
+          docIssuer: docIssuer || "(none)",
+          historicalCount: historicalTransactions.length,
+          contextCategoriesCount: contextCategories.length,
+        });
         
         // Try to find a historical transaction with similar contact/description
         for (const htx of historicalTransactions) {
@@ -1776,14 +1794,33 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           const htxDesc = normalizeText(htx.description);
           
           let isMatch = false;
-          // Match by contact_name (strongest signal)
-          if (aiContact && htxContact && aiContact.length >= 4 && (
-            aiContact === htxContact ||
-            aiContact.includes(htxContact) ||
-            htxContact.includes(aiContact)
-          )) {
-            isMatch = true;
+          let matchReason = "";
+          
+          // Match by document issuer_name against historical contact_name or description (STRONGEST signal)
+          if (!isMatch && docIssuer && docIssuer.length >= 4) {
+            if (htxContact && (docIssuer === htxContact || docIssuer.includes(htxContact) || htxContact.includes(docIssuer))) {
+              isMatch = true;
+              matchReason = `docIssuer "${docIssuer}" ~ htxContact "${htxContact}"`;
+            }
+            if (!isMatch && htxDesc && (htxDesc.includes(docIssuer) || docIssuer.includes(htxDesc))) {
+              isMatch = true;
+              matchReason = `docIssuer "${docIssuer}" ~ htxDesc "${htxDesc}"`;
+            }
           }
+          
+          // Match by contact_name
+          if (!isMatch && aiContact && aiContact.length >= 4) {
+            if (htxContact && (aiContact === htxContact || aiContact.includes(htxContact) || htxContact.includes(aiContact))) {
+              isMatch = true;
+              matchReason = `aiContact "${aiContact}" ~ htxContact "${htxContact}"`;
+            }
+            // Also compare aiContact against htxDesc (for cases where historical has no contact_name)
+            if (!isMatch && htxDesc && (htxDesc.includes(aiContact) || aiContact.includes(htxDesc))) {
+              isMatch = true;
+              matchReason = `aiContact "${aiContact}" ~ htxDesc "${htxDesc}"`;
+            }
+          }
+          
           // Match by description similarity
           if (!isMatch && aiDescription && htxDesc && aiDescription.length >= 5) {
             const descTokens = aiDescription.split(" ").filter((t: string) => t.length >= 4);
@@ -1791,6 +1828,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             const overlap = descTokens.filter((t: string) => htxTokens.has(t));
             if (overlap.length >= 2 || (descTokens.length <= 2 && overlap.length >= 1 && descTokens[0]?.length >= 6)) {
               isMatch = true;
+              matchReason = `description overlap: [${overlap.join(", ")}]`;
             }
           }
           
@@ -1809,8 +1847,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                     subcategoryValue = histCat.id;
                     subcategoryLabel = histCat.name;
                     console.log("CATEGORY REUSED FROM HISTORY:", {
-                      trigger: aiContact || aiDescription,
-                      matchedWith: htxContact || htxDesc,
+                      matchReason,
                       category: parentCat.name,
                       subcategory: histCat.name,
                     });
@@ -1819,12 +1856,17 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 } else if (typeMatches(histCat)) {
                   matchedCategory = histCat;
                   console.log("CATEGORY REUSED FROM HISTORY:", {
-                    trigger: aiContact || aiDescription,
-                    matchedWith: htxContact || htxDesc,
+                    matchReason,
                     category: histCat.name,
                   });
                   break;
                 }
+              } else {
+                console.log("HISTORICAL REUSE: category not found in contextCategories", {
+                  matchReason,
+                  htxCategory: htx.category,
+                  contextCategoryIds: contextCategories.map((c: any) => c.id).slice(0, 10),
+                });
               }
             }
           }
