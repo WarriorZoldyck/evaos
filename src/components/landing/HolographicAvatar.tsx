@@ -166,8 +166,9 @@ export function HolographicAvatar() {
           ref={canvasRef}
           className="w-full h-full relative z-10"
         />
-      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 text-center">
-        <p className="text-xs tracking-[0.3em] uppercase text-[hsl(195,100%,50%/0.6)] font-medium">EVA · Assistente IA</p>
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 text-center">
+          <p className="text-xs tracking-[0.3em] uppercase text-[hsl(195,100%,50%/0.6)] font-medium">EVA · Assistente IA</p>
+        </div>
       </div>
     </div>
   );
