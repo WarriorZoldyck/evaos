@@ -6,7 +6,7 @@ export function LandingHero() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden">
+    <section className="relative pt-32 pb-0 lg:pt-40 lg:pb-0 overflow-hidden">
       {/* Enhanced background effects */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[1000px] h-[1000px] rounded-full opacity-30" style={{ background: "radial-gradient(circle, hsl(195 100% 50% / 0.2), hsl(200 100% 40% / 0.08) 50%, transparent 70%)" }} />
