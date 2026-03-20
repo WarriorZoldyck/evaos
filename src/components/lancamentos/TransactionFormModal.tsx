@@ -475,7 +475,6 @@ export function TransactionFormModal({
   }, [editTransaction, open]);
 
   const handleContextChange = (companyId: string | null) => {
-    if (isEditing) return; // Block context change during editing to preserve account fields
     setFormCompanyId(companyId);
     setActiveTab(companyId === null ? "despesa" : "receita");
     // Clear account and category selections when context changes
