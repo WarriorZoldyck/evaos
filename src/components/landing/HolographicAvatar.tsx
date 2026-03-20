@@ -14,11 +14,13 @@ interface Particle {
 
 export function HolographicAvatar() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const animFrameRef = useRef<number>(0);
   const imageLoadedRef = useRef(false);
   const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
+  const [proximity, setProximity] = useState(0);
 
   const sampleImageToParticles = useCallback((canvasW: number, canvasH: number) => {
     const img = new Image();
@@ -97,6 +99,16 @@ export function HolographicAvatar() {
         rotateY: (nx - 0.5) * 12,
         rotateX: (0.5 - ny) * 12,
       });
+
+      // Calculate proximity to avatar center (0 = far, 1 = on top)
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dist = Math.sqrt((e.clientX - cx) ** 2 + (e.clientY - cy) ** 2);
+        const maxDist = rect.width * 1.2;
+        setProximity(Math.max(0, 1 - dist / maxDist));
+      }
     };
     window.addEventListener("mousemove", handleMouseMove);
 
@@ -146,8 +158,12 @@ export function HolographicAvatar() {
     };
   }, [sampleImageToParticles]);
 
+  const glowOpacity = 0.08 + proximity * 0.35;
+  const glowScale = 1 + proximity * 0.15;
+  const outerGlowOpacity = proximity * 0.25;
+
   return (
-    <div className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
+    <div ref={containerRef} className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
       <div
         style={{
           transform: `rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
@@ -156,10 +172,21 @@ export function HolographicAvatar() {
         }}
         className="relative w-full h-full"
       >
+        {/* Inner radial glow */}
         <div
-          className="absolute inset-[-10%] rounded-full opacity-60"
+          className="absolute inset-[-10%] rounded-full"
           style={{
-            background: "radial-gradient(circle, hsla(195,100%,50%,0.08) 0%, transparent 70%)",
+            background: `radial-gradient(circle, hsla(195,100%,50%,${glowOpacity}) 0%, transparent 70%)`,
+            transform: `scale(${glowScale})`,
+            transition: "background 0.3s ease-out, transform 0.3s ease-out",
+          }}
+        />
+        {/* Outer ring glow */}
+        <div
+          className="absolute inset-[-18%] rounded-full"
+          style={{
+            background: `radial-gradient(circle, transparent 40%, hsla(195,100%,55%,${outerGlowOpacity}) 60%, transparent 75%)`,
+            transition: "background 0.3s ease-out",
           }}
         />
         <canvas
