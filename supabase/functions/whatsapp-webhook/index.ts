@@ -1406,6 +1406,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
+        max_tokens: 4096,
         messages: [
           { role: "system", content: effectiveSystemPrompt },
           ...conversationHistory,
