@@ -1575,13 +1575,43 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       if (!creditCardId) {
         if (aiParsed.account_id) {
-          const accMatch = contextAccounts.find((a) => a.id === aiParsed.account_id);
+          let accMatch = contextAccounts.find((a) => a.id === aiParsed.account_id);
           if (accMatch) {
             bankAccountId = accMatch.id;
           } else {
-            const walMatch = contextWallets.find((w) => w.id === aiParsed.account_id);
+            let walMatch = contextWallets.find((w) => w.id === aiParsed.account_id);
             if (walMatch) {
               walletId = walMatch.id;
+            } else {
+              // Cross-context fallback: search ALL accounts/wallets
+              const crossAcc = accounts.find((a) => a.id === aiParsed.account_id);
+              const crossWal = !crossAcc ? wallets.find((w) => w.id === aiParsed.account_id) : null;
+              const crossMatch = crossAcc || crossWal;
+              if (crossMatch) {
+                const newCompanyId = crossMatch.company_id || null;
+                console.log("Cross-context account resolution:", {
+                  account: crossMatch.name,
+                  originalContext: aiParsed.context,
+                  resolvedCompanyId: newCompanyId,
+                });
+                // Override context to match the account's actual context
+                companyId = newCompanyId;
+                // Re-filter context lists
+                contextAccounts = accounts.filter((a) =>
+                  companyId ? a.company_id === companyId : !a.company_id
+                );
+                contextWallets = wallets.filter((w) =>
+                  companyId ? w.company_id === companyId : !w.company_id
+                );
+                contextCards = creditCards.filter((c) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+                if (crossAcc) {
+                  bankAccountId = crossAcc.id;
+                } else {
+                  walletId = crossWal!.id;
+                }
+              }
             }
           }
         }
