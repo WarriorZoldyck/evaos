@@ -562,6 +562,64 @@ serve(async (req) => {
           status = "Pendente";
         }
 
+        // --- INSTALLMENT SUPPORT for choose_account ---
+        const installmentCount = txPayload.installments || 1;
+        const installmentDetails = txPayload.installment_details || null;
+
+        if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
+          const seriesId = crypto.randomUUID();
+          const transactions = installmentDetails.map((detail: any, idx: number) => ({
+            user_id: userId,
+            description: `${txPayload.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
+            amount: Math.abs(detail.amount || 0),
+            type: txType,
+            category: txPayload.category_id,
+            subcategory: txPayload.subcategory_id || null,
+            competence_date: competenceDate,
+            payment_date: detail.due_date || paymentDate,
+            status: (detail.due_date && detail.due_date <= todayStr) ? "Pago" as const : "Pendente" as const,
+            bank_account_id: matchedBankId,
+            wallet_id: matchedWalletId,
+            credit_card_id: matchedCardId,
+            company_id: companyId,
+            payment_method: txPayload.payment_method || null,
+            supplier_id: txPayload.supplier_id || null,
+            client_id: txPayload.client_id || null,
+            contact_name: txPayload.contact_name || null,
+            notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
+            attachment_url: txPayload.attachment_url || null,
+            series_id: seriesId,
+            installment_number: idx + 1,
+            installments_total: installmentCount,
+          }));
+
+          const { error: insertErr } = await supabase.from("transactions").insert(transactions);
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (insertErr) {
+            console.error("Installment insert error after account choice:", insertErr);
+            return respond({
+              success: false, intent: "lancamento",
+              message: "❌ Não consegui criar as parcelas. Tente enviar novamente.",
+              transaction: null,
+            }, 200);
+          }
+
+          const totalAmount = installmentDetails.reduce((sum: number, d: any) => sum + Math.abs(d.amount || 0), 0);
+          const chosenName = matchedCardId ? allCcs.find((c: any) => c.id === matchedCardId)?.name
+            : matchedBankId ? allAccs.find((a: any) => a.id === matchedBankId)?.name
+            : allWlts.find((w: any) => w.id === matchedWalletId)?.name;
+          const parcelsDisplay = installmentDetails.map((d: any, i: number) =>
+            `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}`
+          ).join("\n");
+
+          return respond({
+            success: true, intent: "lancamento",
+            message: `✅ ${installmentCount} parcelas registradas na conta "${chosenName}"!\n\n📝 ${txPayload.description}\n💰 Total: ${fmt(totalAmount)}\n\n📋 Parcelas:\n${parcelsDisplay}`,
+            transaction: { description: txPayload.description, amount: totalAmount, type: txType, installments: installmentCount },
+          }, 200);
+        }
+
         const { error: insertErr } = await supabase.from("transactions").insert({
           user_id: userId,
           description: txPayload.description || "Lançamento via WhatsApp",
@@ -968,6 +1026,13 @@ ${companies.map((c) => `- "${c.name}" (CNPJ: ${c.cnpj}) é uma empresa do usuár
 - Se a mensagem mencionar uma empresa ou CNPJ, use o contexto correspondente
 - NÃO invente nomes de contexto. Use SOMENTE os listados acima.
 
+REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR DOCUMENTO:
+- Ao analisar documentos (NF, boleto, recibo, nota fiscal), SEMPRE verifique se o CNPJ ou razão social do DESTINATÁRIO/TOMADOR corresponde a alguma empresa do usuário listada acima.
+- Se o CNPJ do destinatário/tomador da NF corresponder ao CNPJ de uma empresa do usuário, use o contexto dessa empresa AUTOMATICAMENTE. NÃO use "Pessoal".
+- Priorize o CNPJ do DESTINATÁRIO/TOMADOR (quem está pagando), não do EMITENTE (quem está cobrando).
+- Se não encontrar match com nenhuma empresa, aí sim use "Pessoal".
+- CNPJs das empresas: ${companies.map((c) => `${c.cnpj} = "${c.name}"`).join(", ") || "nenhuma empresa cadastrada"}
+
 CATEGORIAS POR CONTEXTO (formato: Nome[UUID] (TIPO)):
 ${categoryListByContext || "Nenhuma categoria cadastrada"}
 
@@ -999,12 +1064,19 @@ DATA ATUAL: ${today}
 
 FORMATO DE RESPOSTA (JSON):
 Para lançamento:
-{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","friendly_message":"..."}
+{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","installments":1,"installment_details":null,"friendly_message":"..."}
+
+REGRAS DE PARCELAMENTO:
+- Se o documento (NF, boleto) indicar PARCELAMENTO, preencha "installments" com o número de parcelas e "installment_details" com um array de objetos {"amount": valor, "due_date": "YYYY-MM-DD"} para cada parcela.
+- Se a NF listar boletos com datas de vencimento diferentes, cada boleto é uma parcela.
+- Se não houver parcelamento, use installments=1 e installment_details=null.
+- Exemplo com 3 parcelas: {"installments":3,"installment_details":[{"amount":500,"due_date":"2026-04-10"},{"amount":500,"due_date":"2026-05-10"},{"amount":500,"due_date":"2026-06-10"}]}
+- O "amount" no campo principal deve ser o VALOR TOTAL (soma de todas as parcelas).
 
 REGRAS DOS NOVOS CAMPOS:
 - Se o usuário mencionar "cartão", "crédito", "no cartão X", use payment_method="cartao_credito" e retorne credit_card_id com o UUID do cartão da lista. NÃO preencha account_id nesse caso.
 - Se o usuário mencionar "pix", "transferência", "boleto", "dinheiro", "débito", preencha payment_method adequadamente.
-- competence_date = quando a despesa/receita ACONTECEU (data do evento). Padrão: hoje.
+- competence_date = quando a despesa/receita ACONTECEU (data do evento/serviço). Padrão: hoje.
 - payment_date = quando o dinheiro SAI/ENTRA da conta. Para cartão de crédito, retorne null (o sistema calculará pela data de vencimento da fatura). Para outros métodos, é igual a competence_date por padrão.
 - status: Se a data de pagamento é FUTURA ou se é cartão de crédito, use "Pendente". Caso contrário, "Pago".
 - Se o usuário mencionar "paguei para [nome]" ou "comprei de [nome]", tente encontrar o UUID na lista de FORNECEDORES (para despesa) ou CLIENTES (para receita). Se não encontrar UUID, preencha contact_name com o nome mencionado.
@@ -1320,6 +1392,9 @@ IMPORTANTE:
               notes: aiParsed.notes || null,
               attachment_url: attachmentUrl,
               original_user_text: originalUserText,
+              installments: aiParsed.installments || 1,
+              installment_details: aiParsed.installment_details || null,
+              original_user_text: originalUserText,
             },
             suggested_category_name: matchedCategory?.name || "N/A",
             category_type: txType,
@@ -1383,6 +1458,9 @@ IMPORTANTE:
                 client_id: aiParsed.client_id || null,
                 notes: aiParsed.notes || null,
                 attachment_url: attachmentUrl,
+                original_user_text: originalUserText,
+                installments: aiParsed.installments || 1,
+                installment_details: aiParsed.installment_details || null,
                 original_user_text: originalUserText,
               },
               suggested_category_name: matchedCategory?.name || "N/A",
@@ -1567,6 +1645,71 @@ IMPORTANTE:
       console.log("Credit card:", creditCardId, "| Payment method:", paymentMethod);
       console.log("Status:", status, "| Competence:", competenceDate, "| Payment:", paymentDate);
 
+      // --- INSTALLMENT SUPPORT ---
+      const installmentCount = aiParsed.installments || 1;
+      const installmentDetails = aiParsed.installment_details || null;
+
+      if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
+        // Create multiple transactions as a series
+        const seriesId = crypto.randomUUID();
+        const transactions = installmentDetails.map((detail: any, idx: number) => ({
+          user_id: userId,
+          description: `${aiParsed.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
+          amount: Math.abs(detail.amount || 0),
+          type: txType,
+          category: categoryValue,
+          subcategory: subcategoryValue,
+          competence_date: competenceDate,
+          payment_date: detail.due_date || paymentDate,
+          status: (detail.due_date && detail.due_date <= today) ? "Pago" as const : "Pendente" as const,
+          bank_account_id: bankAccountId,
+          wallet_id: walletId,
+          credit_card_id: creditCardId,
+          company_id: companyId,
+          payment_method: paymentMethod,
+          supplier_id: supplierId,
+          client_id: clientId,
+          contact_name: contactName,
+          notes: buildNotes(aiParsed.notes),
+          attachment_url: attachmentUrl,
+          series_id: seriesId,
+          installment_number: idx + 1,
+          installments_total: installmentCount,
+        }));
+
+        const { error: insertError } = await supabase.from("transactions").insert(transactions);
+
+        if (insertError) {
+          console.error("Installment insert error:", insertError);
+          return respond({
+            success: false,
+            error: "Erro ao criar parcelas",
+            message: "❌ Não consegui criar as parcelas. Tente novamente.",
+          }, 500);
+        }
+
+        const typeLabel = txType === "receita" ? "Receita" : "Despesa";
+        const totalAmount = installmentDetails.reduce((sum: number, d: any) => sum + Math.abs(d.amount || 0), 0);
+        const parcelsDisplay = installmentDetails.map((d: any, i: number) =>
+          `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}`
+        ).join("\n");
+
+        return respond({
+          success: true,
+          intent: "lancamento",
+          message: `✅ ${installmentCount} parcelas criadas!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}\n\n📋 Parcelas:\n${parcelsDisplay}`,
+          transaction: {
+            description: aiParsed.description,
+            amount: totalAmount,
+            type: txType,
+            category: categoryLabel,
+            context: contextLabel,
+            installments: installmentCount,
+          },
+        }, 200);
+      }
+
+      // Single transaction (no installments)
       const { error: insertError } = await supabase.from("transactions").insert({
         user_id: userId,
         description: aiParsed.description || "Lançamento via WhatsApp",
