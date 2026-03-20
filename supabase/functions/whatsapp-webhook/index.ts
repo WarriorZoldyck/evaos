@@ -1169,29 +1169,18 @@ Para lançamento:
 
 REGRAS DE PARCELAMENTO:
 - Se o documento (NF, boleto) indicar PARCELAMENTO, preencha "installments" com o número de parcelas e "installment_details" com um array de objetos {"amount": valor, "due_date": "YYYY-MM-DD"} para cada parcela.
-- Se a NF listar boletos com datas de vencimento diferentes, cada boleto é uma parcela.
+- Se a NF listar boletos/duplicatas com datas de vencimento diferentes, CADA boleto é uma parcela. OBRIGATORIAMENTE use "installments" e "installment_details" nesse caso.
+- NUNCA crie um lançamento único com o valor total quando a NF/documento lista múltiplos boletos ou duplicatas com vencimentos diferentes. Isso é PROIBIDO.
 - Se não houver parcelamento, use installments=1 e installment_details=null.
 - Exemplo com 3 parcelas: {"installments":3,"installment_details":[{"amount":500,"due_date":"2026-04-10"},{"amount":500,"due_date":"2026-05-10"},{"amount":500,"due_date":"2026-06-10"}]}
 - O "amount" no campo principal deve ser o VALOR TOTAL (soma de todas as parcelas).
 
-REGRAS DOS NOVOS CAMPOS:
-- Se o usuário mencionar "cartão", "crédito", "no cartão X", use payment_method="cartao_credito" e retorne credit_card_id com o UUID do cartão da lista. NÃO preencha account_id nesse caso.
-- Se o usuário mencionar "pix", "transferência", "boleto", "dinheiro", "débito", preencha payment_method adequadamente.
-- competence_date = quando a despesa/receita ACONTECEU (data do evento/serviço). Padrão: hoje.
-- payment_date = quando o dinheiro SAI/ENTRA da conta. Para cartão de crédito, retorne null (o sistema calculará pela data de vencimento da fatura). Para outros métodos, é igual a competence_date por padrão.
-- status: Se a data de pagamento é FUTURA ou se é cartão de crédito, use "Pendente". Caso contrário, "Pago".
-- Se o usuário mencionar "paguei para [nome]" ou "comprei de [nome]", tente encontrar o UUID na lista de FORNECEDORES (para despesa) ou CLIENTES (para receita). Se não encontrar UUID, preencha contact_name com o nome mencionado.
-- notes: qualquer observação extra que o usuário mencionar (ex: "referente ao mês de janeiro").
+IMPORTANTE SOBRE CONTEXTO DAS CONTAS:
+- As contas estão listadas dentro de blocos [Pessoal] ou [NomeDaEmpresa]. O contexto da transação DEVE corresponder ao bloco onde a conta está listada.
+- Se a conta "Itaú Pessoal IT" aparece em [Pessoal], ela é uma conta PESSOAL. NÃO classifique a transação em contexto de empresa se usar essa conta.
+- Se a conta "Bradesco Empresa" aparece em [MinhaEmpresa], ela é uma conta EMPRESARIAL. NÃO classifique a transação como Pessoal se usar essa conta.
+- O nome da conta JÁ INDICA o contexto correto. Respeite-o.
 
-IMPORTANTE SOBRE category_id e subcategory_id:
-- Retorne o UUID que está entre colchetes [UUID] na lista de categorias acima
-- NÃO retorne o nome da categoria, retorne o UUID
-- Se nenhuma categoria se encaixar, retorne null em category_id e preencha suggested_category_name
-- subcategory_id é o UUID de uma subcategoria (filho da categoria pai)
-
-IMPORTANTE SOBRE account_id e credit_card_id:
-- Retorne o UUID que está entre colchetes [UUID] na lista de contas/carteiras/cartões
-- Se payment_method é "cartao_credito", preencha credit_card_id e NÃO preencha account_id
 - SEMPRE tente identificar a conta correta. Se o usuário mencionar o nome do banco (ex: "Nubank", "Itaú", "BTG", "Inter", "C6"), encontre a conta correspondente na lista e retorne o UUID dela.
 - Se o contexto tem APENAS UMA conta bancária, use essa conta.
 - Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne null e pergunte no friendly_message qual conta usar, listando as opções disponíveis.
@@ -1406,7 +1395,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         aiParsed.context = "Pessoal";
       }
 
-      const companyId = resolveContext(aiParsed.context);
+      let companyId = resolveContext(aiParsed.context);
 
       // --- Resolve category_id ---
       const contextCategories = categories.filter((c) =>
@@ -1502,13 +1491,13 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
       // --- Account / Credit Card resolution ---
-      const contextAccounts = accounts.filter((a) =>
+      let contextAccounts = accounts.filter((a: any) =>
         companyId ? a.company_id === companyId : !a.company_id
       );
-      const contextWallets = wallets.filter((w) =>
+      let contextWallets = wallets.filter((w: any) =>
         companyId ? w.company_id === companyId : !w.company_id
       );
-      const contextCards = creditCards.filter((c) =>
+      let contextCards = creditCards.filter((c: any) =>
         companyId ? c.company_id === companyId : !c.company_id
       );
 
@@ -1586,13 +1575,43 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       if (!creditCardId) {
         if (aiParsed.account_id) {
-          const accMatch = contextAccounts.find((a) => a.id === aiParsed.account_id);
+          let accMatch = contextAccounts.find((a) => a.id === aiParsed.account_id);
           if (accMatch) {
             bankAccountId = accMatch.id;
           } else {
-            const walMatch = contextWallets.find((w) => w.id === aiParsed.account_id);
+            let walMatch = contextWallets.find((w) => w.id === aiParsed.account_id);
             if (walMatch) {
               walletId = walMatch.id;
+            } else {
+              // Cross-context fallback: search ALL accounts/wallets
+              const crossAcc = accounts.find((a) => a.id === aiParsed.account_id);
+              const crossWal = !crossAcc ? wallets.find((w) => w.id === aiParsed.account_id) : null;
+              const crossMatch = crossAcc || crossWal;
+              if (crossMatch) {
+                const newCompanyId = crossMatch.company_id || null;
+                console.log("Cross-context account resolution:", {
+                  account: crossMatch.name,
+                  originalContext: aiParsed.context,
+                  resolvedCompanyId: newCompanyId,
+                });
+                // Override context to match the account's actual context
+                companyId = newCompanyId;
+                // Re-filter context lists
+                contextAccounts = accounts.filter((a) =>
+                  companyId ? a.company_id === companyId : !a.company_id
+                );
+                contextWallets = wallets.filter((w) =>
+                  companyId ? w.company_id === companyId : !w.company_id
+                );
+                contextCards = creditCards.filter((c) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+                if (crossAcc) {
+                  bankAccountId = crossAcc.id;
+                } else {
+                  walletId = crossWal!.id;
+                }
+              }
             }
           }
         }
