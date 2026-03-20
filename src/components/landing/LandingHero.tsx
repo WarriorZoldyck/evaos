@@ -1,6 +1,12 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Play } from "lucide-react";
 import { HolographicAvatar } from "./HolographicAvatar";
+import avatar1 from "@/assets/avatar-1.jpg";
+import avatar2 from "@/assets/avatar-2.jpg";
+import avatar3 from "@/assets/avatar-3.jpg";
+import avatar4 from "@/assets/avatar-4.jpg";
+
+const avatars = [avatar1, avatar2, avatar3, avatar4];
 
 export function LandingHero() {
   const navigate = useNavigate();
@@ -14,6 +20,12 @@ export function LandingHero() {
         <div className="absolute top-0 left-1/3 w-px h-full opacity-20" style={{ background: "linear-gradient(to bottom, transparent, hsl(195 100% 50% / 0.4), transparent)" }} />
         <div className="absolute top-0 left-2/3 w-px h-full opacity-15" style={{ background: "linear-gradient(to bottom, transparent, hsl(195 100% 50% / 0.3), transparent)" }} />
       </div>
+
+      {/* Bottom gradient fade to separate from next section */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none z-20"
+        style={{ background: "linear-gradient(to bottom, transparent, hsl(220 30% 4%))" }}
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-end">
@@ -54,8 +66,13 @@ export function LandingHero() {
 
             <div className="mt-10 flex items-center gap-6 justify-center lg:justify-start">
               <div className="flex -space-x-2">
-                {[1,2,3,4].map((i) => (
-                  <div key={i} className="h-8 w-8 rounded-full border-2 border-[hsl(220,30%,4%)] bg-gradient-to-br from-[hsl(195,100%,50%/0.3)] to-[hsl(200,100%,40%/0.3)]" />
+                {avatars.map((src, i) => (
+                  <img
+                    key={i}
+                    src={src}
+                    alt=""
+                    className="h-9 w-9 rounded-full border-2 border-[hsl(220,30%,4%)] object-cover"
+                  />
                 ))}
               </div>
               <div className="text-sm text-[hsl(215,18%,55%)]">
