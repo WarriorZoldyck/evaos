@@ -158,8 +158,12 @@ export function HolographicAvatar() {
     };
   }, [sampleImageToParticles]);
 
+  const glowOpacity = 0.08 + proximity * 0.35;
+  const glowScale = 1 + proximity * 0.15;
+  const outerGlowOpacity = proximity * 0.25;
+
   return (
-    <div className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
+    <div ref={containerRef} className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
       <div
         style={{
           transform: `rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
@@ -168,10 +172,21 @@ export function HolographicAvatar() {
         }}
         className="relative w-full h-full"
       >
+        {/* Inner radial glow */}
         <div
-          className="absolute inset-[-10%] rounded-full opacity-60"
+          className="absolute inset-[-10%] rounded-full"
           style={{
-            background: "radial-gradient(circle, hsla(195,100%,50%,0.08) 0%, transparent 70%)",
+            background: `radial-gradient(circle, hsla(195,100%,50%,${glowOpacity}) 0%, transparent 70%)`,
+            transform: `scale(${glowScale})`,
+            transition: "background 0.3s ease-out, transform 0.3s ease-out",
+          }}
+        />
+        {/* Outer ring glow */}
+        <div
+          className="absolute inset-[-18%] rounded-full"
+          style={{
+            background: `radial-gradient(circle, transparent 40%, hsla(195,100%,55%,${outerGlowOpacity}) 60%, transparent 75%)`,
+            transition: "background 0.3s ease-out",
           }}
         />
         <canvas
