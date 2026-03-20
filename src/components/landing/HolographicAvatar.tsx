@@ -173,7 +173,7 @@ export function HolographicAvatar() {
   const outerGlowOpacity = proximity * 0.08;
 
   return (
-    <div ref={containerRef} className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
+    <div ref={containerRef} className="relative w-full aspect-[3/4] max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
       <div
         style={{
           transform: `rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
