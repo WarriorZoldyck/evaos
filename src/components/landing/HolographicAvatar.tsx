@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import evaAvatar from "@/assets/eva-avatar.png";
 
 interface Particle {
