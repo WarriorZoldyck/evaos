@@ -1,40 +1,40 @@
 
 
-## Estrategia: Aumentar para 1000 + Busca Inteligente por Relevancia
+## Problema: Lançamentos não podem ser editados adequadamente
 
-### Problema atual
-O limite de 500 transações dos últimos 90 dias ainda pode não capturar lançamentos relevantes de usuários com alto volume (como o Renato, com 889 transações). Simplesmente aumentar para 1000 resolve o caso dele, mas outros usuários power-users podem ultrapassar novamente.
+### Diagnóstico
 
-### Solucao em 2 camadas
+Ao editar um lançamento, o formulário bloqueia 3 coisas intencionalmente:
 
-#### Camada 1: Aumentar limite para 1000 (simples)
-- Linha 1027: trocar `.limit(500)` por `.limit(1000)`
-- Manter os 90 dias como janela
+1. **Contexto (empresa) bloqueado** — Linha 478: `if (isEditing) return;` impede qualquer mudança de contexto
+2. **Tipo (receita/despesa) bloqueado** — Linha 902: `{!isEditing && (TabsList)}` esconde as tabs, e linha 603: `updateData.type = editTransaction.type` força o tipo original
+3. **Status bloqueado** — Linha 604: `updateData.status = editTransaction.status` força o status original
 
-#### Camada 2: Busca direcionada por estabelecimento (evita o problema para sempre)
-Alem da busca genérica de 1000 transações, fazer uma **segunda query focada**: quando houver `issuer_name` do documento ou `contact_name` da IA, buscar especificamente transações que contenham esse nome na `description` ou `contact_name`, sem limite de tempo (últimos 365 dias). Limite de 20 resultados. Isso garante que mesmo que o Moscato esteja na posição 1500, ele será encontrado.
+A intenção original era evitar "race conditions" e desaparecimentos de transações. Mas isso impede correções legítimas — especialmente para lançamentos criados pela EVA com dados errados.
 
-```text
-Query 1: últimas 1000 transações (90 dias) → padrões gerais
-Query 2: busca focada por nome do estabelecimento (365 dias, limit 20) → matching garantido
-```
+### Solução proposta
 
-Merge das duas queries eliminando duplicatas antes de rodar a heurística.
+Manter proteções mas permitir edições com confirmação:
 
-### Mudanças no arquivo
+#### 1. Permitir troca de contexto na edição
+- Remover o `if (isEditing) return;` da linha 478
+- Ao trocar contexto na edição, mostrar um aviso ("As contas serão redefinidas") e limpar as seleções de conta/cartão/carteira como já faz no modo criação
 
-`supabase/functions/whatsapp-webhook/index.ts`:
+#### 2. Permitir troca de tipo (receita/despesa) na edição
+- Mostrar as tabs mesmo em modo edição, mas sem a tab "Transferência"
+- Remover a linha 603 que força `editTransaction.type`
 
-1. **Linha 1027**: aumentar limit de 500 para 1000
-2. **Após linha 1038**: adicionar busca direcionada — se `documentPartyExtraction?.issuer_name` existir, fazer query extra filtrando por `description.ilike.%nome%` ou `contact_name.ilike.%nome%` nos últimos 365 dias, limit 20
-3. **Antes do loop de matching (~linha 1792)**: mergear os resultados das duas queries, deduplicando por `id`
+#### 3. Permitir troca de status na edição
+- Adicionar um campo Select para status ("Pago" / "Pendente") no formulário de edição
+- Remover a linha 604 que força `editTransaction.status`
 
-### Impacto em performance
-- Query 1 (1000 rows): ~50-100ms, aceitável
-- Query 2 (targeted, limit 20): ~10-20ms, muito rápido por ser filtrada
-- Sem risco de travar — ambas têm limite hard
+### Mudanças técnicas
 
-### Resultado
-- Renato com 889 transações: coberto pela query de 1000
-- Usuário futuro com 2000 transações: a query focada encontra o estabelecimento mesmo fora das 1000
+**Arquivo**: `src/components/lancamentos/TransactionFormModal.tsx`
+
+1. **Linha 478**: Remover o `if (isEditing) return;` — adicionar lógica para limpar contas ao trocar contexto em edição
+2. **Linha 601**: Parar de descartar `company_id` no update — incluir o `company_id` do contexto atual (formCompanyId)
+3. **Linhas 602-604**: Remover as 2 linhas que forçam type e status do original
+4. **Linha 902**: Mostrar tabs de tipo (receita/despesa) em edição — esconder apenas "transferência"
+5. **Adicionar campo de status** no formulário (Select com "Pago"/"Pendente"), visível apenas em edição
 
