@@ -4,125 +4,61 @@ import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import evaAvatar from "@/assets/eva-avatar.png";
 
-/* ─── Custom holographic shader ─── */
-const hologramVertexShader = `
-  varying vec2 vUv;
-  varying vec3 vPosition;
-  varying vec3 vNormal;
-  varying vec3 vWorldPosition;
-
-  void main() {
-    vUv = uv;
-    vPosition = position;
-    vNormal = normalize(normalMatrix * normal);
-    vec4 worldPos = modelMatrix * vec4(position, 1.0);
-    vWorldPosition = worldPos.xyz;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-
-const hologramFragmentShader = `
-  uniform sampler2D uTexture;
-  uniform float uTime;
-  uniform vec2 uMouse;
-  uniform float uFresnelPower;
-
-  varying vec2 vUv;
-  varying vec3 vPosition;
-  varying vec3 vNormal;
-  varying vec3 vWorldPosition;
-
-  float random(vec2 st) {
-    return fract(sin(dot(st, vec2(12.9898, 78.233))) * 43758.5453);
-  }
-
-  void main() {
-    // Base texture
-    vec4 texColor = texture2D(uTexture, vUv);
-
-    // Fresnel rim glow
-    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-    float fresnel = pow(1.0 - max(dot(viewDir, vNormal), 0.0), uFresnelPower);
-
-    // Scanlines
-    float scanline = sin(vUv.y * 300.0 + uTime * 2.0) * 0.5 + 0.5;
-    scanline = smoothstep(0.3, 0.7, scanline) * 0.15 + 0.85;
-
-    // Horizontal glitch bands
-    float glitchBand = step(0.98, sin(uTime * 3.0 + vUv.y * 20.0));
-    float glitchOffset = glitchBand * (random(vec2(floor(uTime * 10.0), floor(vUv.y * 20.0))) - 0.5) * 0.03;
-    vec4 glitchColor = texture2D(uTexture, vec2(vUv.x + glitchOffset, vUv.y));
-    texColor = mix(texColor, glitchColor, glitchBand * 0.6);
-
-    // Digital noise flicker
-    float noise = random(vUv + fract(uTime * 0.1)) * 0.06;
-
-    // Holographic tint — cyan/blue with subtle violet
-    vec3 holoTint = vec3(0.3, 0.75, 1.0);
-    vec3 rimColor = vec3(0.4, 0.55, 1.0);
-
-    // Combine
-    vec3 baseColor = texColor.rgb * holoTint * 1.2;
-    baseColor *= scanline;
-    baseColor += fresnel * rimColor * 0.8;
-    baseColor += noise;
-
-    // Transparency: translucent core, brighter at edges
-    float alpha = texColor.a * (0.7 + fresnel * 0.3);
-    alpha *= (0.88 + sin(uTime * 1.5) * 0.04); // subtle pulse
-
-    gl_FragColor = vec4(baseColor, alpha);
-  }
-`;
-
-/* ─── Holographic sphere mesh ─── */
-function HoloSphere({ mousePos }: { mousePos: React.MutableRefObject<{ x: number; y: number }> }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+/* ─── Billboard: EVA image on a flat plane facing camera ─── */
+function EvaBillboard() {
   const texture = useTexture(evaAvatar);
-  const { viewport } = useThree();
+  const meshRef = useRef<THREE.Mesh>(null);
 
-  const uniforms = useMemo(
-    () => ({
-      uTexture: { value: texture },
-      uTime: { value: 0 },
-      uMouse: { value: new THREE.Vector2(0, 0) },
-      uFresnelPower: { value: 2.5 },
-    }),
-    [texture]
-  );
+  // Keep aspect ratio of the image
+  const aspect = useMemo(() => {
+    if (texture.image) {
+      return texture.image.width / texture.image.height;
+    }
+    return 1;
+  }, [texture]);
 
-  useFrame(({ clock }) => {
-    if (!meshRef.current) return;
-    const t = clock.getElapsedTime();
-    uniforms.uTime.value = t;
-
-    // Smooth rotation following mouse
-    const targetRotY = (mousePos.current.x - 0.5) * 0.6;
-    const targetRotX = (0.5 - mousePos.current.y) * 0.4;
-
-    meshRef.current.rotation.y += (targetRotY - meshRef.current.rotation.y) * 0.05;
-    meshRef.current.rotation.x += (targetRotX - meshRef.current.rotation.x) * 0.05;
-
-    // Gentle idle float
-    meshRef.current.position.y = Math.sin(t * 0.8) * 0.08;
-  });
+  const height = 3.2;
+  const width = height * aspect;
 
   return (
-    <mesh ref={meshRef}>
-      <sphereGeometry args={[1.6, 64, 64]} />
-      <shaderMaterial
-        vertexShader={hologramVertexShader}
-        fragmentShader={hologramFragmentShader}
-        uniforms={uniforms}
+    <mesh ref={meshRef} position={[0, 0, 0]}>
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial
+        map={texture}
         transparent
-        side={THREE.DoubleSide}
+        alphaTest={0.05}
         depthWrite={false}
+        side={THREE.DoubleSide}
       />
     </mesh>
   );
 }
 
-/* ─── Floating ring ─── */
+/* ─── Wireframe holographic sphere ─── */
+function HoloWireframeSphere() {
+  const ref = useRef<THREE.Mesh>(null);
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.getElapsedTime();
+    ref.current.rotation.y = t * 0.15;
+    ref.current.rotation.x = Math.sin(t * 0.1) * 0.1;
+  });
+
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[2.0, 32, 32]} />
+      <meshBasicMaterial
+        color="#00bfff"
+        wireframe
+        transparent
+        opacity={0.12}
+      />
+    </mesh>
+  );
+}
+
+/* ─── Floating orbital ring ─── */
 function HoloRing({ radius, speed, opacity }: { radius: number; speed: number; opacity: number }) {
   const ref = useRef<THREE.Mesh>(null);
 
@@ -141,7 +77,7 @@ function HoloRing({ radius, speed, opacity }: { radius: number; speed: number; o
   );
 }
 
-/* ─── Floating data particles ─── */
+/* ─── Data particles orbiting ─── */
 function DataParticles() {
   const pointsRef = useRef<THREE.Points>(null);
   const count = 200;
@@ -190,47 +126,104 @@ function DataParticles() {
   );
 }
 
+/* ─── Camera parallax following mouse ─── */
+function CameraParallax({ mousePos }: { mousePos: React.MutableRefObject<{ x: number; y: number }> }) {
+  const { camera } = useThree();
+  const basePos = useMemo(() => new THREE.Vector3(0, 0, 4.5), []);
+
+  useFrame(() => {
+    const targetX = basePos.x + (mousePos.current.x - 0.5) * 0.6;
+    const targetY = basePos.y + (0.5 - mousePos.current.y) * 0.4;
+
+    camera.position.x += (targetX - camera.position.x) * 0.05;
+    camera.position.y += (targetY - camera.position.y) * 0.05;
+    camera.lookAt(0, 0, 0);
+  });
+
+  return null;
+}
+
 /* ─── Main component ─── */
 export function HolographicAvatar() {
   const mousePos = useRef({ x: 0.5, y: 0.5 });
   const [isReady, setIsReady] = useState(false);
+  const [tiltStyle, setTiltStyle] = useState({ rotateX: 0, rotateY: 0 });
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    mousePos.current = {
-      x: (e.clientX - rect.left) / rect.width,
-      y: (e.clientY - rect.top) / rect.height,
-    };
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    mousePos.current = { x, y };
+    setTiltStyle({
+      rotateX: (0.5 - y) * 12,
+      rotateY: (x - 0.5) * 12,
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setTiltStyle({ rotateX: 0, rotateY: 0 });
   };
 
   return (
     <div
       className="relative w-full aspect-square max-w-[480px] mx-auto"
+      style={{ perspective: "800px" }}
       onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Background glow */}
       <div
         className="absolute inset-[-15%] rounded-full opacity-40 pointer-events-none"
         style={{
-          background: "radial-gradient(circle, hsla(195,100%,50%,0.12) 0%, transparent 70%)",
+          background: "radial-gradient(circle, hsla(195,100%,50%,0.15) 0%, hsla(260,80%,50%,0.05) 40%, transparent 70%)",
         }}
       />
 
-      <Canvas
-        camera={{ position: [0, 0, 4], fov: 45 }}
-        gl={{ alpha: true, antialias: true }}
-        onCreated={() => setIsReady(true)}
-        style={{ opacity: isReady ? 1 : 0, transition: "opacity 0.6s ease-in" }}
+      {/* 3D tilt container */}
+      <div
+        className="w-full h-full"
+        style={{
+          transform: `rotateX(${tiltStyle.rotateX}deg) rotateY(${tiltStyle.rotateY}deg)`,
+          transformStyle: "preserve-3d",
+          transition: "transform 0.15s ease-out",
+        }}
       >
-        <ambientLight intensity={0.3} />
-        <pointLight position={[3, 2, 4]} intensity={0.6} color="#00bfff" />
-        <pointLight position={[-3, -1, 3]} intensity={0.3} color="#7b68ee" />
+        <Canvas
+          camera={{ position: [0, 0, 4.5], fov: 45 }}
+          gl={{ alpha: true, antialias: true }}
+          onCreated={() => setIsReady(true)}
+          style={{ opacity: isReady ? 1 : 0, transition: "opacity 0.6s ease-in" }}
+        >
+          <ambientLight intensity={0.4} />
+          <pointLight position={[3, 2, 4]} intensity={0.5} color="#00bfff" />
+          <pointLight position={[-3, -1, 3]} intensity={0.3} color="#7b68ee" />
 
-        <HoloSphere mousePos={mousePos} />
-        <HoloRing radius={2.0} speed={0.8} opacity={0.2} />
-        <HoloRing radius={2.3} speed={-0.5} opacity={0.12} />
-        <DataParticles />
-      </Canvas>
+          <CameraParallax mousePos={mousePos} />
+          <HoloWireframeSphere />
+          <EvaBillboard />
+          <HoloRing radius={2.2} speed={0.8} opacity={0.18} />
+          <HoloRing radius={2.5} speed={-0.5} opacity={0.1} />
+          <DataParticles />
+        </Canvas>
+
+        {/* Scanlines overlay */}
+        <div
+          className="absolute inset-0 pointer-events-none z-10 rounded-full"
+          style={{
+            background: "repeating-linear-gradient(0deg, transparent, transparent 2px, hsla(195,100%,50%,0.03) 2px, hsla(195,100%,50%,0.03) 3px)",
+            mixBlendMode: "screen",
+          }}
+        />
+
+        {/* Pulsing glow overlay */}
+        <div
+          className="absolute inset-[10%] rounded-full pointer-events-none z-10"
+          style={{
+            background: "radial-gradient(circle, hsla(195,100%,50%,0.06) 0%, transparent 60%)",
+            animation: "pulse-glow 3s ease-in-out infinite",
+          }}
+        />
+      </div>
 
       {/* Label */}
       <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 text-center">
@@ -238,6 +231,13 @@ export function HolographicAvatar() {
           EVA · Assistente IA
         </p>
       </div>
+
+      <style>{`
+        @keyframes pulse-glow {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.8; }
+        }
+      `}</style>
     </div>
   );
 }
