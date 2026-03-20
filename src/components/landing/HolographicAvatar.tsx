@@ -14,63 +14,51 @@ interface Particle {
 
 export function HolographicAvatar() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const particlesRef = useRef<Particle[]>([]);
   const animFrameRef = useRef<number>(0);
   const imageLoadedRef = useRef(false);
   const mouseRef = useRef({ x: 0.5, y: 0.5 });
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
-  const [proximity, setProximity] = useState(0);
 
   const sampleImageToParticles = useCallback((canvasW: number, canvasH: number) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const offCanvas = document.createElement("canvas");
-      // Use full canvas dimensions (3:4 aspect) instead of forcing square
-      const drawW = canvasW;
-      const drawH = canvasH;
-      offCanvas.width = drawW;
-      offCanvas.height = drawH;
+      const size = Math.min(canvasW, canvasH);
+      offCanvas.width = size;
+      offCanvas.height = size;
       const offCtx = offCanvas.getContext("2d");
       if (!offCtx) return;
 
-      // Cover-fit the image into the canvas area
       const imgAspect = img.width / img.height;
-      const canvasAspect = drawW / drawH;
       let sx = 0, sy = 0, sw = img.width, sh = img.height;
-      if (imgAspect > canvasAspect) {
-        sw = img.height * canvasAspect;
-        sx = (img.width - sw) / 2;
-      } else {
-        sh = img.width / canvasAspect;
-        sy = (img.height - sh) / 2;
-      }
+      if (imgAspect > 1) { sx = (img.width - img.height) / 2; sw = img.height; }
+      else { sy = (img.height - img.width) / 2; sh = img.width; }
 
-      offCtx.drawImage(img, sx, sy, sw, sh, 0, 0, drawW, drawH);
-      const imageData = offCtx.getImageData(0, 0, drawW, drawH);
+      offCtx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
+      const imageData = offCtx.getImageData(0, 0, size, size);
       const pixels = imageData.data;
 
       const particles: Particle[] = [];
-      const step = Math.max(5, Math.floor(Math.min(drawW, drawH) / 80));
+      const step = Math.max(5, Math.floor(size / 80));
+      const offsetX = (canvasW - size) / 2;
+      const offsetY = (canvasH - size) / 2;
 
-      for (let y = 0; y < drawH; y += step) {
-        for (let x = 0; x < drawW; x += step) {
-          const i = (y * drawW + x) * 4;
+      for (let y = 0; y < size; y += step) {
+        for (let x = 0; x < size; x += step) {
+          const i = (y * size + x) * 4;
           const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
           const brightness = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
           if (a < 100 || brightness < 0.08) continue;
 
-          // Vertical fade: particles near bottom fade out for holographic effect
-          const verticalFade = 1 - Math.max(0, (y / drawH - 0.7)) * 2.5;
-
           particles.push({
-            x: x,
-            y: y,
-            originX: x,
-            originY: y,
+            x: x + offsetX,
+            y: y + offsetY,
+            originX: x + offsetX,
+            originY: y + offsetY,
             size: 0.8 + brightness * 1.5,
-            opacity: (0.3 + brightness * 0.6) * Math.max(0.05, verticalFade),
+            opacity: 0.3 + brightness * 0.6,
             hue: 190 + (brightness - 0.5) * 15,
             lightness: 45 + brightness * 30,
           });
@@ -109,16 +97,6 @@ export function HolographicAvatar() {
         rotateY: (nx - 0.5) * 12,
         rotateX: (0.5 - ny) * 12,
       });
-
-      // Calculate proximity to avatar center (0 = far, 1 = on top)
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        const dist = Math.sqrt((e.clientX - cx) ** 2 + (e.clientY - cy) ** 2);
-        const maxDist = rect.width * 1.2;
-        setProximity(Math.max(0, 1 - dist / maxDist));
-      }
     };
     window.addEventListener("mousemove", handleMouseMove);
 
@@ -168,12 +146,8 @@ export function HolographicAvatar() {
     };
   }, [sampleImageToParticles]);
 
-  const glowOpacity = 0.04 + proximity * 0.12;
-  const glowScale = 1 + proximity * 0.06;
-  const outerGlowOpacity = proximity * 0.08;
-
   return (
-    <div ref={containerRef} className="relative w-full aspect-[3/4] max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
+    <div className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
       <div
         style={{
           transform: `rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
@@ -182,21 +156,10 @@ export function HolographicAvatar() {
         }}
         className="relative w-full h-full"
       >
-        {/* Inner radial glow */}
         <div
-          className="absolute inset-[-10%] rounded-full"
+          className="absolute inset-[-10%] rounded-full opacity-60"
           style={{
-            background: `radial-gradient(circle, hsla(195,100%,50%,${glowOpacity}) 0%, transparent 70%)`,
-            transform: `scale(${glowScale})`,
-            transition: "background 0.3s ease-out, transform 0.3s ease-out",
-          }}
-        />
-        {/* Outer ring glow */}
-        <div
-          className="absolute inset-[-12%] rounded-full"
-          style={{
-            background: `radial-gradient(circle, transparent 40%, hsla(195,100%,55%,${outerGlowOpacity}) 60%, transparent 75%)`,
-            transition: "background 0.3s ease-out",
+            background: "radial-gradient(circle, hsla(195,100%,50%,0.08) 0%, transparent 70%)",
           }}
         />
         <canvas
