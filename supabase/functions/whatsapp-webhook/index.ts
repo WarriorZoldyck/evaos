@@ -1491,13 +1491,13 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
       // --- Account / Credit Card resolution ---
-      const contextAccounts = accounts.filter((a) =>
+      let contextAccounts = accounts.filter((a: any) =>
         companyId ? a.company_id === companyId : !a.company_id
       );
-      const contextWallets = wallets.filter((w) =>
+      let contextWallets = wallets.filter((w: any) =>
         companyId ? w.company_id === companyId : !w.company_id
       );
-      const contextCards = creditCards.filter((c) =>
+      let contextCards = creditCards.filter((c: any) =>
         companyId ? c.company_id === companyId : !c.company_id
       );
 
