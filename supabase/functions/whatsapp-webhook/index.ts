@@ -2065,8 +2065,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       const contextLabel = aiParsed.context || "Pessoal";
 
-      // --- BLOCK if no account/wallet/card ---
-      if (!bankAccountId && !walletId && !creditCardId) {
+      // --- BLOCK if no account/wallet/card (except boleto de compra) ---
+      const isBoletoCompraFinal = txType === "despesa" && (paymentMethod === "Boleto" || paymentMethod === "boleto");
+      if (!bankAccountId && !walletId && !creditCardId && !isBoletoCompraFinal) {
         return respond({
           success: false,
           intent: "lancamento",
