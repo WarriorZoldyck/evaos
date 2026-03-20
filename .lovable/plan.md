@@ -1,25 +1,42 @@
 
 
-## 3D Tilt no Avatar Holográfico da EVA
+## Novo Avatar EVA - Imagem 3D com Ambiente Holográfico
 
-### O que será feito
-Adicionar uma rotação 3D (tilt) ao container do avatar que acompanha o mouse, criando sensação de profundidade. O canvas já faz o deslocamento das partículas; agora o container externo também vai inclinar levemente.
+### O que muda
+Abandonar a abordagem de textura numa esfera (que fica "imagem girando"). Em vez disso, a nova imagem da EVA fica como um **plano central fixo** (billboard) enquanto todo o ambiente 3D ao redor dela gira e reage ao mouse: esfera holográfica translúcida, anéis orbitais, partículas de dados, e linhas de código flutuantes.
+
+### Conceito visual
+- A EVA fica estática no centro como uma projeção holográfica (plano com transparência)
+- Atrás dela, uma **esfera wireframe** translúcida gira lentamente (como na imagem de referência)
+- Partículas de dados e pequenos elementos HUD orbitam ao redor
+- Efeito de **scanlines e glitch** aplicado via CSS no plano da imagem (não no shader da esfera)
+- Mouse move a câmera levemente (parallax), dando profundidade real sem distorcer a imagem
+- Glow pulsante ciano/violeta emana do centro
 
 ### Implementação
 
-**Arquivo:** `src/components/landing/HolographicAvatar.tsx`
+**Arquivo:** `src/components/landing/HolographicAvatar.tsx` (reescrita completa)
 
-1. Adicionar um `ref` para o container div e um state para os valores de rotação (`rotateX`, `rotateY`).
+1. **Copiar a imagem** `user-uploads://image-48.png` para `src/assets/eva-avatar.png`
 
-2. No `handleMouseMove` existente, calcular os ângulos de tilt (max ±12°) baseados na posição normalizada do mouse e aplicar ao container via `transform: perspective(800px) rotateX(...) rotateY(...)`.
+2. **Plano central (Billboard)**: Um `<planeGeometry>` com a textura da EVA, usando `meshBasicMaterial` com `transparent: true` e `alphaTest`. Fica fixo olhando a câmera, sem rotação.
 
-3. Aplicar `transition: transform 0.15s ease-out` no container para suavizar o movimento.
+3. **Esfera wireframe holográfica**: Uma `sphereGeometry` com `wireframe: true`, material translúcido ciano, girando lentamente. Raio ligeiramente maior que o plano para envolver a EVA.
 
-4. O container div principal recebe `style={{ perspective: "800px" }}` e o div interno do canvas recebe o `transform` com `rotateX/rotateY` dinâmicos.
+4. **Anéis orbitais**: Manter os `HoloRing` existentes girando ao redor.
+
+5. **Partículas de dados**: Manter `DataParticles` orbitando ao redor.
+
+6. **Parallax com mouse**: Em vez de rotacionar a imagem, a **câmera** se desloca levemente com o mouse (parallax), criando profundidade real entre camadas (imagem no centro, esfera atrás, partículas ao redor).
+
+7. **Efeitos CSS overlay**: Scanlines e flicker aplicados como um `div` overlay sobre o Canvas com `mix-blend-mode` e animação CSS.
+
+8. **3D Tilt no container**: Manter o tilt existente do container.
 
 ### Detalhes técnicos
-- `rotateY` = `(mouseX - 0.5) * 12` graus (mouse à direita → rotação positiva)
-- `rotateX` = `(0.5 - mouseY) * 12` graus (mouse acima → rotação positiva, invertido para parecer natural)
-- Usar `useState` para `tiltStyle` e atualizar no mesmo `handleMouseMove` já existente
-- Adicionar `transformStyle: "preserve-3d"` para garantir o efeito 3D
+- Plano: `planeGeometry` com aspect ratio da imagem (~1:1), tamanho ~3 units
+- Esfera wireframe: raio 2.0, segments 32, `opacity: 0.15`, cor ciano
+- Câmera parallax: deslocamento máximo ±0.3 units no X/Y seguindo o mouse com lerp
+- Scanlines CSS: `repeating-linear-gradient` com linhas de 1px a cada 3px, opacity 0.05
+- Remover o fundo cinza da imagem via `alphaTest: 0.1` no material
 
