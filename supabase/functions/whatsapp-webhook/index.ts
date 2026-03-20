@@ -562,6 +562,64 @@ serve(async (req) => {
           status = "Pendente";
         }
 
+        // --- INSTALLMENT SUPPORT for choose_account ---
+        const installmentCount = txPayload.installments || 1;
+        const installmentDetails = txPayload.installment_details || null;
+
+        if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
+          const seriesId = crypto.randomUUID();
+          const transactions = installmentDetails.map((detail: any, idx: number) => ({
+            user_id: userId,
+            description: `${txPayload.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
+            amount: Math.abs(detail.amount || 0),
+            type: txType,
+            category: txPayload.category_id,
+            subcategory: txPayload.subcategory_id || null,
+            competence_date: competenceDate,
+            payment_date: detail.due_date || paymentDate,
+            status: (detail.due_date && detail.due_date <= todayStr) ? "Pago" as const : "Pendente" as const,
+            bank_account_id: matchedBankId,
+            wallet_id: matchedWalletId,
+            credit_card_id: matchedCardId,
+            company_id: companyId,
+            payment_method: txPayload.payment_method || null,
+            supplier_id: txPayload.supplier_id || null,
+            client_id: txPayload.client_id || null,
+            contact_name: txPayload.contact_name || null,
+            notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
+            attachment_url: txPayload.attachment_url || null,
+            series_id: seriesId,
+            installment_number: idx + 1,
+            installments_total: installmentCount,
+          }));
+
+          const { error: insertErr } = await supabase.from("transactions").insert(transactions);
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (insertErr) {
+            console.error("Installment insert error after account choice:", insertErr);
+            return respond({
+              success: false, intent: "lancamento",
+              message: "❌ Não consegui criar as parcelas. Tente enviar novamente.",
+              transaction: null,
+            }, 200);
+          }
+
+          const totalAmount = installmentDetails.reduce((sum: number, d: any) => sum + Math.abs(d.amount || 0), 0);
+          const chosenName = matchedCardId ? allCcs.find((c: any) => c.id === matchedCardId)?.name
+            : matchedBankId ? allAccs.find((a: any) => a.id === matchedBankId)?.name
+            : allWlts.find((w: any) => w.id === matchedWalletId)?.name;
+          const parcelsDisplay = installmentDetails.map((d: any, i: number) =>
+            `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}`
+          ).join("\n");
+
+          return respond({
+            success: true, intent: "lancamento",
+            message: `✅ ${installmentCount} parcelas registradas na conta "${chosenName}"!\n\n📝 ${txPayload.description}\n💰 Total: ${fmt(totalAmount)}\n\n📋 Parcelas:\n${parcelsDisplay}`,
+            transaction: { description: txPayload.description, amount: totalAmount, type: txType, installments: installmentCount },
+          }, 200);
+        }
+
         const { error: insertErr } = await supabase.from("transactions").insert({
           user_id: userId,
           description: txPayload.description || "Lançamento via WhatsApp",
