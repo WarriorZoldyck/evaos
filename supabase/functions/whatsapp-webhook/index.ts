@@ -1752,6 +1752,12 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               walletId = contextWallets[0].id;
             }
           } else if (totalOptions > 1) {
+            // For despesas (purchases) with boleto, don't ask for account - register without one
+            const isBoletoCompra = txType === "despesa" && (paymentMethod === "Boleto" || aiParsed.payment_method === "boleto");
+            if (isBoletoCompra) {
+              // Skip account selection - proceed without bank account
+              console.log("Boleto de compra (despesa): registrando sem conta bancária");
+            } else {
             const optionsList = [
               ...contextAccounts.map((a) => `• ${a.name}`),
               ...contextWallets.map((w) => `• ${w.name} (carteira)`),
@@ -1795,6 +1801,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               message: `📋 Entendi o lançamento de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta ou *não* para cancelar.`,
               transaction: null,
             }, 200);
+            }
           }
         }
       }
