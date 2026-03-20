@@ -11,8 +11,9 @@ function EvaBillboard() {
 
   // Keep aspect ratio of the image
   const aspect = useMemo(() => {
-    if (texture.image) {
-      return texture.image.width / texture.image.height;
+    const img = texture.image as HTMLImageElement | undefined;
+    if (img) {
+      return img.width / img.height;
     }
     return 1;
   }, [texture]);
