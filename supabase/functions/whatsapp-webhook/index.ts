@@ -1155,13 +1155,23 @@ IMPORTANTE:
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
-    // Parse AI response
+    // Parse AI response — fallback to raw text if JSON fails
     let aiParsed: any;
     try {
       const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, rawContent];
       aiParsed = JSON.parse(jsonMatch[1].trim());
     } catch {
-      console.error("Failed to parse AI response:", rawContent);
+      console.warn("Failed to parse AI response as JSON, using raw text as friendly_message:", rawContent.substring(0, 200));
+      // If the AI returned useful text (not empty), use it directly instead of "não entendi"
+      const cleanText = rawContent.replace(/```[\s\S]*?```/g, "").trim();
+      if (cleanText && cleanText.length > 5) {
+        return respond({
+          success: true,
+          intent: "conversa",
+          message: cleanText,
+          transaction: null,
+        }, 200);
+      }
       return respond({
         success: true,
         intent: "conversa",
