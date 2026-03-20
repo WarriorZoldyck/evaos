@@ -90,10 +90,13 @@ export function HolographicAvatar() {
     window.addEventListener("resize", resize);
 
     const handleMouseMove = (e: MouseEvent) => {
-      mouseRef.current = {
-        x: e.clientX / window.innerWidth,
-        y: e.clientY / window.innerHeight,
-      };
+      const nx = e.clientX / window.innerWidth;
+      const ny = e.clientY / window.innerHeight;
+      mouseRef.current = { x: nx, y: ny };
+      setTilt({
+        rotateY: (nx - 0.5) * 12,
+        rotateX: (0.5 - ny) * 12,
+      });
     };
     window.addEventListener("mousemove", handleMouseMove);
 
