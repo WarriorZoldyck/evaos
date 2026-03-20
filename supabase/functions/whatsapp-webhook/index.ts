@@ -1104,6 +1104,63 @@ serve(async (req) => {
 
     const contactList = buildContactList();
 
+    // Build historical patterns block for AI context
+    const buildHistoricalPatterns = () => {
+      if (historicalTransactions.length === 0) return "";
+      
+      // Group by contact_name/description to find patterns
+      const patterns = new Map<string, { category: string; categoryName: string; companyId: string | null; count: number; lastDate: string; supplierId: string | null; clientId: string | null; paymentMethod: string | null; accountId: string | null }>();
+      
+      for (const tx of historicalTransactions) {
+        // Build a key from contact_name or normalized description
+        const key = normalizeText(tx.contact_name || tx.description);
+        if (!key || key.length < 3) continue;
+        
+        const existing = patterns.get(key);
+        const catObj = categories.find((c: any) => c.id === tx.category);
+        const catName = catObj?.name || tx.category;
+        
+        if (existing) {
+          existing.count++;
+          if (tx.payment_date > existing.lastDate) existing.lastDate = tx.payment_date;
+        } else {
+          const contextLabel = tx.company_id 
+            ? companies.find((c: any) => c.id === tx.company_id)?.name || "Empresa" 
+            : "Pessoal";
+          patterns.set(key, {
+            category: tx.category,
+            categoryName: catName,
+            companyId: tx.company_id,
+            count: 1,
+            lastDate: tx.payment_date,
+            supplierId: tx.supplier_id,
+            clientId: tx.client_id,
+            paymentMethod: tx.payment_method,
+            accountId: tx.bank_account_id || tx.wallet_id,
+          });
+        }
+      }
+      
+      // Only include patterns with at least 1 occurrence, sorted by count
+      const sorted = [...patterns.entries()]
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 50);
+      
+      if (sorted.length === 0) return "";
+      
+      const lines = sorted.map(([key, p]) => {
+        const contextLabel = p.companyId 
+          ? companies.find((c: any) => c.id === p.companyId)?.name || "Empresa" 
+          : "Pessoal";
+        return `  "${key}" → Categoria: ${p.categoryName}[${p.category}] | Contexto: ${contextLabel} | Usado ${p.count}x`;
+      });
+      
+      return `\nPADRÕES HISTÓRICOS DO USUÁRIO (últimos 90 dias — USE COMO REFERÊNCIA PRIORITÁRIA):
+${lines.join("\n")}`;
+    };
+
+    const historicalPatternsBlock = buildHistoricalPatterns();
+
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
