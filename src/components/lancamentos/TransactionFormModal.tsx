@@ -897,7 +897,12 @@ export function TransactionFormModal({
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as typeof activeTab)}
         >
-          {!isEditing && (
+          {isEditing ? (
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="receita">Receita</TabsTrigger>
+              <TabsTrigger value="despesa">Despesa</TabsTrigger>
+            </TabsList>
+          ) : (
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="receita">Receita</TabsTrigger>
               <TabsTrigger value="despesa">Despesa</TabsTrigger>
