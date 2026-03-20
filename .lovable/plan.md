@@ -1,17 +1,28 @@
 
 
-## Zoom na EVA + Rosto Seguindo o Mouse
+## Correção: Contexto de Conta e Parcelamento via WhatsApp
 
-### O que muda
+### Problema 1: Conta no contexto errado
 
-1. **Zoom na imagem**: Aumentar o `max-w` do container de `480px` para `680px` e aplicar `scale(1.15)` na imagem para ela preencher todo o lado direito do banner. Usar `overflow-hidden` no container do hero para cortar bordas se necessário.
+Quando o usuário menciona uma conta (ex: "Itaú Pessoal IT"), a IA pode retornar um `account_id` que pertence ao contexto "Pessoal", mas classificar o lançamento no contexto de uma empresa (ou vice-versa). O código atual (linha ~1588) só procura a conta dentro do contexto escolhido pela IA (`contextAccounts`). Se não encontra, cai no fluxo de "múltiplas contas" e pergunta de novo.
 
-2. **Rosto segue o mouse**: Trocar o efeito atual de tilt 3D (que rotaciona a imagem inteira como um cartão) por um efeito de **parallax sutil** — a imagem se desloca levemente na direção do mouse (translateX/Y de ±15px), como se a EVA estivesse "olhando" para onde o cursor está. Manter uma rotação mínima (±3deg) para dar naturalidade.
+**Solução**: Adicionar resolução cross-context para contas, similar ao que já existe para categorias. Se o `account_id` retornado pela IA não for encontrado no contexto atual, buscar em TODAS as contas do usuário. Se encontrar, usar o contexto DAQUELA conta (ajustar `companyId` e re-filtrar categorias se necessário). Isso garante que se a IA acertar a conta pelo nome mas errar o contexto, o sistema corrige automaticamente.
 
-3. **Ajuste no hero**: Permitir overflow visível no container do avatar para a imagem maior não ser cortada, e reposicionar os cards flutuantes para acompanhar o tamanho maior.
+Além disso, reforçar no prompt da IA que o nome da conta já indica o contexto (está listada dentro de `[Pessoal]` ou `[NomeEmpresa]`).
 
-### Arquivos alterados
+### Problema 2: NFs parceladas criando lançamento único
 
-- `src/components/landing/HolographicAvatar.tsx` — Aumentar max-w para 680px, trocar rotateX/Y por translateX/Y + rotação sutil, escalar imagem
-- `src/components/landing/LandingHero.tsx` — Ajustar container do avatar se necessário para acomodar tamanho maior
+Quando uma NF tem boletos parcelados, a IA deve retornar `installments > 1` com `installment_details`. O código já suporta isso (linha ~1826), mas há dois gaps:
+- O prompt pede que `amount` seja o valor total, mas quando a IA não retorna `installment_details`, o sistema cria um único lançamento com o valor cheio em vez de parcelas.
+- Reforçar no prompt que CADA boleto listado em uma NF é uma parcela separada, e que o sistema NUNCA deve criar um lançamento único com o valor total quando há parcelas evidentes.
+
+### Arquivo alterado
+
+`supabase/functions/whatsapp-webhook/index.ts`:
+
+1. **Cross-context account resolution** (~linha 1587-1598): Se `account_id` não for encontrado no contexto, buscar em `accounts` (todas). Se encontrar, sobrescrever `companyId` com o `company_id` da conta encontrada e re-filtrar `contextAccounts`, `contextWallets`, `contextCards` e `contextCategories`.
+
+2. **Reforço no prompt** (~linha 1195): Adicionar instrução explícita: "A conta [Nome] listada em [Pessoal] é uma conta PESSOAL. NÃO a classifique em contexto de empresa. O contexto deve corresponder ao bloco onde a conta está listada."
+
+3. **Reforço de parcelamento no prompt** (~linha 1170): Tornar mais explícito que se a NF lista múltiplos boletos/duplicatas com vencimentos diferentes, OBRIGATORIAMENTE usar `installments` e `installment_details`, nunca lançar como valor único.
 
