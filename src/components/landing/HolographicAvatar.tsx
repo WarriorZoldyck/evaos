@@ -118,12 +118,8 @@ export function HolographicAvatar() {
         const flicker = 0.85 + 0.15 * Math.sin(t * 0.8 + p.originX * 0.05 + p.originY * 0.03);
         const alpha = p.opacity * flicker;
 
-        // Parallax: particles shift based on distance from center
-        const cx = w * 0.5;
-        const cy = h * 0.5;
-        const distFactor = 1 + Math.sqrt((p.originX - cx) ** 2 + (p.originY - cy) ** 2) / (w * 0.5) * 0.4;
-        const px = p.originX + mx * distFactor;
-        const py = p.originY + my * distFactor;
+        const px = p.originX + mx;
+        const py = p.originY + my;
 
         ctx.fillStyle = `hsla(${p.hue}, 90%, ${p.lightness}%, ${alpha})`;
         ctx.fillRect(px - p.size * 0.5, py - p.size * 0.5, p.size, p.size);
