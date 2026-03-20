@@ -1668,7 +1668,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 });
                 // Override context to match the account's actual context
                 companyId = newCompanyId;
-                // Re-filter context lists
+                // Re-filter context lists (including categories!)
                 contextAccounts = accounts.filter((a) =>
                   companyId ? a.company_id === companyId : !a.company_id
                 );
@@ -1678,6 +1678,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 contextCards = creditCards.filter((c) =>
                   companyId ? c.company_id === companyId : !c.company_id
                 );
+                contextCategories = categories.filter((c) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+                console.log("Re-filtered contextCategories after cross-context resolution:", contextCategories.length, "categories");
                 if (crossAcc) {
                   bankAccountId = crossAcc.id;
                 } else {
