@@ -2180,12 +2180,23 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
+      // Build the display message — never trust AI's friendly_message for status wording
+      const aiFriendly = aiParsed.friendly_message || "";
+      // If AI says "pago" but real status is Pendente (e.g. credit card), fix it
+      let displayMessage = aiFriendly;
+      if (status === "Pendente" && aiFriendly) {
+        displayMessage = aiFriendly
+          .replace(/já está marcado como pago/gi, "foi registrado como pendente (cartão de crédito)")
+          .replace(/marcado como pago/gi, "registrado como pendente")
+          .replace(/\bcomo pago\b/gi, "como pendente")
+          .replace(/\bjá pago\b/gi, "pendente");
+      }
+      const fallbackMessage = `✅ Lançamento criado!${statusDisplay}\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`;
+
       return respond({
         success: true,
         intent: "lancamento",
-        message:
-          aiParsed.friendly_message ||
-          `✅ Lançamento criado!${statusDisplay}\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`,
+        message: displayMessage || fallbackMessage,
         transaction: {
           description: aiParsed.description,
           amount: aiParsed.amount,
