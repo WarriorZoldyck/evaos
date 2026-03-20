@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import evaAvatar from "@/assets/eva-avatar.png";
 
 interface Particle {
@@ -17,7 +17,8 @@ export function HolographicAvatar() {
   const particlesRef = useRef<Particle[]>([]);
   const animFrameRef = useRef<number>(0);
   const imageLoadedRef = useRef(false);
-  const mouseRef = useRef({ x: 0.5, y: 0.5 }); // normalized 0-1
+  const mouseRef = useRef({ x: 0.5, y: 0.5 });
+  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
 
   const sampleImageToParticles = useCallback((canvasW: number, canvasH: number) => {
     const img = new Image();
@@ -89,10 +90,13 @@ export function HolographicAvatar() {
     window.addEventListener("resize", resize);
 
     const handleMouseMove = (e: MouseEvent) => {
-      mouseRef.current = {
-        x: e.clientX / window.innerWidth,
-        y: e.clientY / window.innerHeight,
-      };
+      const nx = e.clientX / window.innerWidth;
+      const ny = e.clientY / window.innerHeight;
+      mouseRef.current = { x: nx, y: ny };
+      setTilt({
+        rotateY: (nx - 0.5) * 12,
+        rotateX: (0.5 - ny) * 12,
+      });
     };
     window.addEventListener("mousemove", handleMouseMove);
 
@@ -143,19 +147,28 @@ export function HolographicAvatar() {
   }, [sampleImageToParticles]);
 
   return (
-    <div className="relative w-full aspect-square max-w-[480px] mx-auto">
+    <div className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
       <div
-        className="absolute inset-[-10%] rounded-full opacity-60"
         style={{
-          background: "radial-gradient(circle, hsla(195,100%,50%,0.08) 0%, transparent 70%)",
+          transform: `rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
+          transformStyle: "preserve-3d",
+          transition: "transform 0.15s ease-out",
         }}
-      />
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full relative z-10"
-      />
-      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 text-center">
-        <p className="text-xs tracking-[0.3em] uppercase text-[hsl(195,100%,50%/0.6)] font-medium">EVA · Assistente IA</p>
+        className="relative w-full h-full"
+      >
+        <div
+          className="absolute inset-[-10%] rounded-full opacity-60"
+          style={{
+            background: "radial-gradient(circle, hsla(195,100%,50%,0.08) 0%, transparent 70%)",
+          }}
+        />
+        <canvas
+          ref={canvasRef}
+          className="w-full h-full relative z-10"
+        />
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 text-center">
+          <p className="text-xs tracking-[0.3em] uppercase text-[hsl(195,100%,50%/0.6)] font-medium">EVA · Assistente IA</p>
+        </div>
       </div>
     </div>
   );
