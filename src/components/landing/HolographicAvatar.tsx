@@ -3,30 +3,22 @@ import evaAvatar from "@/assets/eva-avatar.png";
 
 export function HolographicAvatar() {
   const [offset, setOffset] = useState({ x: 0, y: 0, rotX: 0, rotY: 0 });
-  // Eye tracking — normalized -1 to 1
-  const [eyeDir, setEyeDir] = useState({ x: 0, y: 0 });
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const nx = (e.clientX - rect.left) / rect.width - 0.5;
     const ny = (e.clientY - rect.top) / rect.height - 0.5;
-    setOffset({ x: nx * 20, y: ny * 12, rotX: -ny * 3, rotY: nx * 3 });
-    setEyeDir({ x: nx * 2, y: ny * 2 });
+    setOffset({ x: nx * 20, y: ny * 12, rotX: -ny * 6, rotY: nx * 6 });
   }, []);
 
   const handleMouseLeave = useCallback(() => {
     setOffset({ x: 0, y: 0, rotX: 0, rotY: 0 });
-    setEyeDir({ x: 0, y: 0 });
   }, []);
-
-  // Eye pupil shift in px (subtle but visible)
-  const eyeShiftX = eyeDir.x * 4;
-  const eyeShiftY = eyeDir.y * 3;
 
   return (
     <div
       className="relative w-full mx-auto"
-      style={{ perspective: "1200px" }}
+      style={{ perspective: "800px" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -41,12 +33,12 @@ export function HolographicAvatar() {
 
       {/* Breathing wrapper */}
       <div className="eva-breathe">
-        {/* Mouse-tracking transform */}
+        {/* 3D tilt container */}
         <div
           style={{
             transform: `translate(${offset.x}px, ${offset.y}px) rotateX(${offset.rotX}deg) rotateY(${offset.rotY}deg)`,
             transformStyle: "preserve-3d",
-            transition: "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+            transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         >
           {/* EVA image */}
@@ -56,65 +48,8 @@ export function HolographicAvatar() {
             className="relative z-10 w-full h-auto"
             style={{
               filter: "drop-shadow(0 0 60px hsla(195,100%,50%,0.3)) drop-shadow(0 0 120px hsla(195,100%,50%,0.12))",
-              transform: "scale(1.2)",
-              transformOrigin: "center top",
             }}
             draggable={false}
-          />
-
-          {/* Left eye — iris tracking */}
-          <div
-            className="absolute pointer-events-none z-30"
-            style={{
-              top: "28%",
-              left: "41%",
-              width: "6%",
-              height: "4%",
-              transition: "transform 0.15s ease-out",
-              transform: `translate(${eyeShiftX}px, ${eyeShiftY}px) scale(1.2)`,
-              transformOrigin: "center top",
-            }}
-          >
-            <div
-              className="w-full h-full rounded-full"
-              style={{
-                background: "radial-gradient(circle, hsla(195,100%,70%,0.9) 0%, hsla(195,100%,50%,0.6) 40%, transparent 70%)",
-                boxShadow: "0 0 12px 4px hsla(195,100%,50%,0.4), 0 0 30px 8px hsla(195,100%,50%,0.15)",
-              }}
-            />
-          </div>
-
-          {/* Right eye — iris tracking */}
-          <div
-            className="absolute pointer-events-none z-30"
-            style={{
-              top: "28%",
-              left: "53%",
-              width: "6%",
-              height: "4%",
-              transition: "transform 0.15s ease-out",
-              transform: `translate(${eyeShiftX}px, ${eyeShiftY}px) scale(1.2)`,
-              transformOrigin: "center top",
-            }}
-          >
-            <div
-              className="w-full h-full rounded-full"
-              style={{
-                background: "radial-gradient(circle, hsla(195,100%,70%,0.9) 0%, hsla(195,100%,50%,0.6) 40%, transparent 70%)",
-                boxShadow: "0 0 12px 4px hsla(195,100%,50%,0.4), 0 0 30px 8px hsla(195,100%,50%,0.15)",
-              }}
-            />
-          </div>
-
-          {/* Ambient eye glow pulse (always on) */}
-          <div
-            className="absolute inset-0 pointer-events-none z-20"
-            style={{
-              background: "radial-gradient(ellipse 10% 5% at 44% 30%, hsla(195,100%,60%,0.2) 0%, transparent 100%), radial-gradient(ellipse 10% 5% at 56% 30%, hsla(195,100%,60%,0.2) 0%, transparent 100%)",
-              animation: "eva-eye-glow 3s ease-in-out infinite",
-              transform: "scale(1.2)",
-              transformOrigin: "center top",
-            }}
           />
 
           {/* Scanlines */}
@@ -139,10 +74,6 @@ export function HolographicAvatar() {
         @keyframes eva-breathe {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-6px); }
-        }
-        @keyframes eva-eye-glow {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
         }
       `}</style>
     </div>

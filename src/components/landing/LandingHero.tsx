@@ -18,7 +18,7 @@ export function LandingHero() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
           {/* Left: Copy */}
-          <div className="text-center lg:text-left pb-16 lg:pb-24">
+          <div className="text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[hsl(195,100%,50%/0.3)] bg-[hsl(195,100%,50%/0.06)] mb-6">
               <div className="h-2 w-2 rounded-full bg-[hsl(195,100%,50%)] animate-pulse shadow-[0_0_8px_hsl(195,100%,50%)]" />
               <span className="text-xs font-medium text-[hsl(195,100%,50%)]">Inteligência financeira ativa</span>
