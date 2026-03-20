@@ -1470,7 +1470,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       let companyId = resolveContext(aiParsed.context);
 
       // --- Resolve category_id ---
-      const contextCategories = categories.filter((c) =>
+      let contextCategories = categories.filter((c) =>
         companyId ? c.company_id === companyId : !c.company_id
       );
       const txType = aiParsed.type === "receita" ? "receita" : "despesa";
