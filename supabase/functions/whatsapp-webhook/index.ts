@@ -860,7 +860,7 @@ serve(async (req) => {
       supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
-      supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(10),
+      supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
     ]);
 
     const categories = categoriesRes.data || [];
