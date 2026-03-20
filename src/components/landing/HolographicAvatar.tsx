@@ -99,6 +99,16 @@ export function HolographicAvatar() {
         rotateY: (nx - 0.5) * 12,
         rotateX: (0.5 - ny) * 12,
       });
+
+      // Calculate proximity to avatar center (0 = far, 1 = on top)
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dist = Math.sqrt((e.clientX - cx) ** 2 + (e.clientY - cy) ** 2);
+        const maxDist = rect.width * 1.2;
+        setProximity(Math.max(0, 1 - dist / maxDist));
+      }
     };
     window.addEventListener("mousemove", handleMouseMove);
 
