@@ -1,40 +1,30 @@
 
 
-## Problema: Lançamentos não podem ser editados adequadamente
+## Problema
 
-### Diagnóstico
+A EVA detectou corretamente que a NF pertence à empresa "IMPLANTES BR LTDA", mas essa empresa **não tem nenhuma conta bancária cadastrada**. O código que permite boletos de compra sem conta (linha 1757-1760) só executa quando `totalOptions > 1`. Quando `totalOptions === 0`, o fluxo cai direto no bloqueio da linha 2068-2076 que rejeita a transação.
 
-Ao editar um lançamento, o formulário bloqueia 3 coisas intencionalmente:
+## Solução
 
-1. **Contexto (empresa) bloqueado** — Linha 478: `if (isEditing) return;` impede qualquer mudança de contexto
-2. **Tipo (receita/despesa) bloqueado** — Linha 902: `{!isEditing && (TabsList)}` esconde as tabs, e linha 603: `updateData.type = editTransaction.type` força o tipo original
-3. **Status bloqueado** — Linha 604: `updateData.status = editTransaction.status` força o status original
+Duas correções no `supabase/functions/whatsapp-webhook/index.ts`:
 
-A intenção original era evitar "race conditions" e desaparecimentos de transações. Mas isso impede correções legítimas — especialmente para lançamentos criados pela EVA com dados errados.
+### 1. Permitir boleto de compra sem conta mesmo com 0 contas
 
-### Solução proposta
+Mover a verificação de boleto de compra para **antes** da checagem de `totalOptions`, ou adicionar a mesma condição no bloco `totalOptions === 0`. O boleto de compra (despesa) deve sempre prosseguir sem conta, independentemente de quantas contas existem no contexto.
 
-Manter proteções mas permitir edições com confirmação:
+### 2. Remover bloqueio absoluto para despesas via boleto
 
-#### 1. Permitir troca de contexto na edição
-- Remover o `if (isEditing) return;` da linha 478
-- Ao trocar contexto na edição, mostrar um aviso ("As contas serão redefinidas") e limpar as seleções de conta/cartão/carteira como já faz no modo criação
-
-#### 2. Permitir troca de tipo (receita/despesa) na edição
-- Mostrar as tabs mesmo em modo edição, mas sem a tab "Transferência"
-- Remover a linha 603 que força `editTransaction.type`
-
-#### 3. Permitir troca de status na edição
-- Adicionar um campo Select para status ("Pago" / "Pendente") no formulário de edição
-- Remover a linha 604 que força `editTransaction.status`
+No bloco final (linha 2068-2076) que verifica `!bankAccountId && !walletId && !creditCardId`, adicionar uma exceção: se for boleto de compra (despesa), permitir continuar sem conta.
 
 ### Mudanças técnicas
 
-**Arquivo**: `src/components/lancamentos/TransactionFormModal.tsx`
+**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
 
-1. **Linha 478**: Remover o `if (isEditing) return;` — adicionar lógica para limpar contas ao trocar contexto em edição
-2. **Linha 601**: Parar de descartar `company_id` no update — incluir o `company_id` do contexto atual (formCompanyId)
-3. **Linhas 602-604**: Remover as 2 linhas que forçam type e status do original
-4. **Linha 902**: Mostrar tabs de tipo (receita/despesa) em edição — esconder apenas "transferência"
-5. **Adicionar campo de status** no formulário (Select com "Pago"/"Pendente"), visível apenas em edição
+- **Linha ~1747-1806**: Reestruturar a lógica para que o check de `isBoletoCompra` ocorra **antes** do `if (totalOptions === 1)`, assim:
+  - Se é boleto de compra → skip (log e continua sem conta)
+  - Senão → lógica atual de 1 conta / múltiplas contas / perguntar
+  
+- **Linha ~2068-2076**: Adicionar exceção ao bloqueio: se `txType === "despesa"` e método é boleto, não bloquear — permitir lançamento sem conta.
+
+- **Re-deploy** da edge function após a correção.
 
