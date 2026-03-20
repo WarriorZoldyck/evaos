@@ -468,23 +468,23 @@ serve(async (req) => {
     // ============================================================
     // CONVERSATION MEMORY: Load recent history + save user message
     // ============================================================
-    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const { data: chatHistory } = await supabase
       .from("whatsapp_messages")
       .select("role, content, created_at")
       .eq("user_id", userId)
-      .gte("created_at", threeHoursAgo.toISOString())
+      .gte("created_at", thirtyDaysAgo.toISOString())
       .order("created_at", { ascending: true })
-      .limit(80);
+      .limit(500);
 
     const allMessages = (chatHistory || []).map((m: any) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     }));
 
-    // Smart summarization: keep last 20 messages integral, summarize older ones
-    const RECENT_COUNT = 20;
+    // Smart summarization: keep last 30 messages integral, summarize older ones
+    const RECENT_COUNT = 30;
     let conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
 
     if (allMessages.length > RECENT_COUNT) {
@@ -508,7 +508,7 @@ serve(async (req) => {
         }
       }
 
-      const summaryText = `[RESUMO DA CONVERSA ANTERIOR]\n${summaryParts.join("\n")}`;
+      const summaryText = `[RESUMO DA CONVERSA ANTERIOR — últimos 30 dias]\n${summaryParts.join("\n")}`;
       conversationHistory = [
         { role: "user", content: summaryText },
         { role: "assistant", content: "Entendido, tenho o contexto da conversa anterior." },
@@ -1011,7 +1011,11 @@ serve(async (req) => {
     }
 
     // 4. Fetch user context
-    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes] = await Promise.all([
+    // Fetch 90 days of transaction history for pattern recognition
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgoStr = `${ninetyDaysAgo.getFullYear()}-${String(ninetyDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(ninetyDaysAgo.getDate()).padStart(2, "0")}`;
+
+    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes, historyTxRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
@@ -1020,6 +1024,7 @@ serve(async (req) => {
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
       supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
+      supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(100),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -1030,6 +1035,7 @@ serve(async (req) => {
     const suppliersList = suppliersRes.data || [];
     const clientsList = clientsRes.data || [];
     const recentTransactions = recentTxRes.data || [];
+    const historicalTransactions = historyTxRes.data || [];
 
     const today = new Date().toISOString().split("T")[0];
 
@@ -1097,6 +1103,63 @@ serve(async (req) => {
     ].filter(Boolean).join("\n");
 
     const contactList = buildContactList();
+
+    // Build historical patterns block for AI context
+    const buildHistoricalPatterns = () => {
+      if (historicalTransactions.length === 0) return "";
+      
+      // Group by contact_name/description to find patterns
+      const patterns = new Map<string, { category: string; categoryName: string; companyId: string | null; count: number; lastDate: string; supplierId: string | null; clientId: string | null; paymentMethod: string | null; accountId: string | null }>();
+      
+      for (const tx of historicalTransactions) {
+        // Build a key from contact_name or normalized description
+        const key = normalizeText(tx.contact_name || tx.description);
+        if (!key || key.length < 3) continue;
+        
+        const existing = patterns.get(key);
+        const catObj = categories.find((c: any) => c.id === tx.category);
+        const catName = catObj?.name || tx.category;
+        
+        if (existing) {
+          existing.count++;
+          if (tx.payment_date > existing.lastDate) existing.lastDate = tx.payment_date;
+        } else {
+          const contextLabel = tx.company_id 
+            ? companies.find((c: any) => c.id === tx.company_id)?.name || "Empresa" 
+            : "Pessoal";
+          patterns.set(key, {
+            category: tx.category,
+            categoryName: catName,
+            companyId: tx.company_id,
+            count: 1,
+            lastDate: tx.payment_date,
+            supplierId: tx.supplier_id,
+            clientId: tx.client_id,
+            paymentMethod: tx.payment_method,
+            accountId: tx.bank_account_id || tx.wallet_id,
+          });
+        }
+      }
+      
+      // Only include patterns with at least 1 occurrence, sorted by count
+      const sorted = [...patterns.entries()]
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 50);
+      
+      if (sorted.length === 0) return "";
+      
+      const lines = sorted.map(([key, p]) => {
+        const contextLabel = p.companyId 
+          ? companies.find((c: any) => c.id === p.companyId)?.name || "Empresa" 
+          : "Pessoal";
+        return `  "${key}" → Categoria: ${p.categoryName}[${p.category}] | Contexto: ${contextLabel} | Usado ${p.count}x`;
+      });
+      
+      return `\nPADRÕES HISTÓRICOS DO USUÁRIO (últimos 90 dias — USE COMO REFERÊNCIA PRIORITÁRIA):
+${lines.join("\n")}`;
+    };
+
+    const historicalPatternsBlock = buildHistoricalPatterns();
 
     // 6. Call Lovable AI Gateway
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -1237,7 +1300,16 @@ IMPORTANTE:
 - Sempre retorne o campo "context"
 - Se o usuário enviar uma IMAGEM, DOCUMENTO PDF ou ÁUDIO (foto de comprovante, nota fiscal, recibo, extrato, mensagem de voz, etc.), analise o conteúdo visual/textual/sonoro para extrair valor, descrição, data e outros detalhes do lançamento. Combine as informações do arquivo com qualquer legenda de texto fornecida.
 - Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.
-- NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.`;
+- NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.
+
+REGRA CRÍTICA — ESTABELECIMENTO NÃO É CATEGORIA:
+- O nome do estabelecimento (ex: "Empório Moscato", "Lanchonete da Maria", "Doceria XYZ", "Restaurante ABC") NUNCA deve ser usado como nome de categoria.
+- Categorias são classificações genéricas (ex: "Alimentação", "Supermercado", "Supérfluos", "Material de Escritório").
+- Se os PADRÕES HISTÓRICOS abaixo mostram que um estabelecimento similar já foi lançado com uma categoria específica, USE ESSA MESMA CATEGORIA. Não sugira criar uma nova.
+- Priorize SEMPRE o histórico do usuário. Se "Empório Moscato" já foi lançado como "Supérfluos", continue usando "Supérfluos".
+- Só sugira nova categoria quando NENHUMA categoria existente se aplicar E não houver histórico similar.
+${historicalPatternsBlock}`;
+
 
     // Build user content: multimodal if media, text-only otherwise
     const defaultMediaPrompt = hasAudio
@@ -1688,6 +1760,74 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         if (cliMatch) {
           clientId = cliMatch.id;
           contactName = contactName || cliMatch.name;
+        }
+      }
+
+      // --- HISTORICAL CATEGORY REUSE HEURISTIC ---
+      // Before asking to create a category, check if historical transactions
+      // have a matching contact_name/description that used a valid category
+      if (!matchedCategory && historicalTransactions.length > 0) {
+        const aiDescription = normalizeText(aiParsed.description);
+        const aiContact = normalizeText(aiParsed.contact_name || contactName);
+        
+        // Try to find a historical transaction with similar contact/description
+        for (const htx of historicalTransactions) {
+          const htxContact = normalizeText(htx.contact_name);
+          const htxDesc = normalizeText(htx.description);
+          
+          let isMatch = false;
+          // Match by contact_name (strongest signal)
+          if (aiContact && htxContact && aiContact.length >= 4 && (
+            aiContact === htxContact ||
+            aiContact.includes(htxContact) ||
+            htxContact.includes(aiContact)
+          )) {
+            isMatch = true;
+          }
+          // Match by description similarity
+          if (!isMatch && aiDescription && htxDesc && aiDescription.length >= 5) {
+            const descTokens = aiDescription.split(" ").filter((t: string) => t.length >= 4);
+            const htxTokens = new Set(htxDesc.split(" ").filter((t: string) => t.length >= 4));
+            const overlap = descTokens.filter((t: string) => htxTokens.has(t));
+            if (overlap.length >= 2 || (descTokens.length <= 2 && overlap.length >= 1 && descTokens[0]?.length >= 6)) {
+              isMatch = true;
+            }
+          }
+          
+          if (isMatch) {
+            // Check the context matches (same company_id)
+            if ((htx.company_id || null) === (companyId || null)) {
+              // Find this category in current context
+              const histCat = contextCategories.find((c: any) => c.id === htx.category);
+              if (histCat) {
+                // Found a valid category from history
+                if (histCat.parent_id) {
+                  // It's a subcategory — find parent
+                  const parentCat = contextCategories.find((c: any) => c.id === histCat.parent_id);
+                  if (parentCat && typeMatches(parentCat)) {
+                    matchedCategory = parentCat;
+                    subcategoryValue = histCat.id;
+                    subcategoryLabel = histCat.name;
+                    console.log("CATEGORY REUSED FROM HISTORY:", {
+                      trigger: aiContact || aiDescription,
+                      matchedWith: htxContact || htxDesc,
+                      category: parentCat.name,
+                      subcategory: histCat.name,
+                    });
+                    break;
+                  }
+                } else if (typeMatches(histCat)) {
+                  matchedCategory = histCat;
+                  console.log("CATEGORY REUSED FROM HISTORY:", {
+                    trigger: aiContact || aiDescription,
+                    matchedWith: htxContact || htxDesc,
+                    category: histCat.name,
+                  });
+                  break;
+                }
+              }
+            }
+          }
         }
       }
 
