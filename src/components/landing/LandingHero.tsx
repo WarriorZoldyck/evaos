@@ -6,7 +6,7 @@ export function LandingHero() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative pt-32 pb-12 lg:pt-40 lg:pb-20 overflow-hidden">
+    <section className="relative pt-32 pb-0 lg:pt-40 lg:pb-0 overflow-visible">
       {/* Enhanced background effects */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[1000px] h-[1000px] rounded-full opacity-30" style={{ background: "radial-gradient(circle, hsl(195 100% 50% / 0.2), hsl(200 100% 40% / 0.08) 50%, transparent 70%)" }} />
@@ -16,9 +16,9 @@ export function LandingHero() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-center">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-end">
           {/* Left: Copy */}
-          <div className="text-center lg:text-left">
+          <div className="text-center lg:text-left pb-20">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[hsl(195,100%,50%/0.3)] bg-[hsl(195,100%,50%/0.06)] mb-6">
               <div className="h-2 w-2 rounded-full bg-[hsl(195,100%,50%)] animate-pulse shadow-[0_0_8px_hsl(195,100%,50%)]" />
               <span className="text-xs font-medium text-[hsl(195,100%,50%)]">Inteligência financeira ativa</span>
