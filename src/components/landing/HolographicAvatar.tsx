@@ -1,174 +1,242 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useMemo, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useTexture } from "@react-three/drei";
+import * as THREE from "three";
 import evaAvatar from "@/assets/eva-avatar.png";
 
-interface Particle {
-  x: number;
-  y: number;
-  originX: number;
-  originY: number;
-  size: number;
-  opacity: number;
-  hue: number;
-  lightness: number;
-}
+/* ─── Custom holographic shader ─── */
+const hologramVertexShader = `
+  varying vec2 vUv;
+  varying vec3 vPosition;
+  varying vec3 vNormal;
+  varying vec3 vWorldPosition;
 
-export function HolographicAvatar() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const particlesRef = useRef<Particle[]>([]);
-  const animFrameRef = useRef<number>(0);
-  const imageLoadedRef = useRef(false);
-  const mouseRef = useRef({ x: 0.5, y: 0.5 });
-  const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0 });
+  void main() {
+    vUv = uv;
+    vPosition = position;
+    vNormal = normalize(normalMatrix * normal);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPos.xyz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
 
-  const sampleImageToParticles = useCallback((canvasW: number, canvasH: number) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const offCanvas = document.createElement("canvas");
-      const size = Math.min(canvasW, canvasH);
-      offCanvas.width = size;
-      offCanvas.height = size;
-      const offCtx = offCanvas.getContext("2d");
-      if (!offCtx) return;
+const hologramFragmentShader = `
+  uniform sampler2D uTexture;
+  uniform float uTime;
+  uniform vec2 uMouse;
+  uniform float uFresnelPower;
 
-      const imgAspect = img.width / img.height;
-      let sx = 0, sy = 0, sw = img.width, sh = img.height;
-      if (imgAspect > 1) { sx = (img.width - img.height) / 2; sw = img.height; }
-      else { sy = (img.height - img.width) / 2; sh = img.width; }
+  varying vec2 vUv;
+  varying vec3 vPosition;
+  varying vec3 vNormal;
+  varying vec3 vWorldPosition;
 
-      offCtx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
-      const imageData = offCtx.getImageData(0, 0, size, size);
-      const pixels = imageData.data;
+  float random(vec2 st) {
+    return fract(sin(dot(st, vec2(12.9898, 78.233))) * 43758.5453);
+  }
 
-      const particles: Particle[] = [];
-      const step = Math.max(5, Math.floor(size / 80));
-      const offsetX = (canvasW - size) / 2;
-      const offsetY = (canvasH - size) / 2;
+  void main() {
+    // Base texture
+    vec4 texColor = texture2D(uTexture, vUv);
 
-      for (let y = 0; y < size; y += step) {
-        for (let x = 0; x < size; x += step) {
-          const i = (y * size + x) * 4;
-          const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
-          const brightness = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
-          if (a < 100 || brightness < 0.08) continue;
+    // Fresnel rim glow
+    vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+    float fresnel = pow(1.0 - max(dot(viewDir, vNormal), 0.0), uFresnelPower);
 
-          particles.push({
-            x: x + offsetX,
-            y: y + offsetY,
-            originX: x + offsetX,
-            originY: y + offsetY,
-            size: 0.8 + brightness * 1.5,
-            opacity: 0.3 + brightness * 0.6,
-            hue: 190 + (brightness - 0.5) * 15,
-            lightness: 45 + brightness * 30,
-          });
-        }
-      }
+    // Scanlines
+    float scanline = sin(vUv.y * 300.0 + uTime * 2.0) * 0.5 + 0.5;
+    scanline = smoothstep(0.3, 0.7, scanline) * 0.15 + 0.85;
 
-      particlesRef.current = particles;
-      imageLoadedRef.current = true;
-    };
-    img.src = evaAvatar;
-  }, []);
+    // Horizontal glitch bands
+    float glitchBand = step(0.98, sin(uTime * 3.0 + vUv.y * 20.0));
+    float glitchOffset = glitchBand * (random(vec2(floor(uTime * 10.0), floor(vUv.y * 20.0))) - 0.5) * 0.03;
+    vec4 glitchColor = texture2D(uTexture, vec2(vUv.x + glitchOffset, vUv.y));
+    texColor = mix(texColor, glitchColor, glitchBand * 0.6);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    // Digital noise flicker
+    float noise = random(vUv + fract(uTime * 0.1)) * 0.06;
 
-    const resize = () => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-      sampleImageToParticles(rect.width, rect.height);
-    };
+    // Holographic tint — cyan/blue with subtle violet
+    vec3 holoTint = vec3(0.3, 0.75, 1.0);
+    vec3 rimColor = vec3(0.4, 0.55, 1.0);
 
-    resize();
-    window.addEventListener("resize", resize);
+    // Combine
+    vec3 baseColor = texColor.rgb * holoTint * 1.2;
+    baseColor *= scanline;
+    baseColor += fresnel * rimColor * 0.8;
+    baseColor += noise;
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const nx = e.clientX / window.innerWidth;
-      const ny = e.clientY / window.innerHeight;
-      mouseRef.current = { x: nx, y: ny };
-      setTilt({
-        rotateY: (nx - 0.5) * 12,
-        rotateX: (0.5 - ny) * 12,
-      });
-    };
-    window.addEventListener("mousemove", handleMouseMove);
+    // Transparency: translucent core, brighter at edges
+    float alpha = texColor.a * (0.7 + fresnel * 0.3);
+    alpha *= (0.88 + sin(uTime * 1.5) * 0.04); // subtle pulse
 
-    let t = 0;
-    const animate = () => {
-      const rect = canvas.getBoundingClientRect();
-      const w = rect.width;
-      const h = rect.height;
-      t += 0.012;
+    gl_FragColor = vec4(baseColor, alpha);
+  }
+`;
 
-      ctx.clearRect(0, 0, w, h);
+/* ─── Holographic sphere mesh ─── */
+function HoloSphere({ mousePos }: { mousePos: React.MutableRefObject<{ x: number; y: number }> }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const texture = useTexture(evaAvatar);
+  const { viewport } = useThree();
 
-      if (!imageLoadedRef.current) {
-        animFrameRef.current = requestAnimationFrame(animate);
-        return;
-      }
+  const uniforms = useMemo(
+    () => ({
+      uTexture: { value: texture },
+      uTime: { value: 0 },
+      uMouse: { value: new THREE.Vector2(0, 0) },
+      uFresnelPower: { value: 2.5 },
+    }),
+    [texture]
+  );
 
-      const particles = particlesRef.current;
-      const mx = (mouseRef.current.x - 0.5) * 18; // max ~9px shift
-      const my = (mouseRef.current.y - 0.5) * 18;
+  useFrame(({ clock }) => {
+    if (!meshRef.current) return;
+    const t = clock.getElapsedTime();
+    uniforms.uTime.value = t;
 
-      for (const p of particles) {
-        const flicker = 0.85 + 0.15 * Math.sin(t * 0.8 + p.originX * 0.05 + p.originY * 0.03);
-        const alpha = p.opacity * flicker;
+    // Smooth rotation following mouse
+    const targetRotY = (mousePos.current.x - 0.5) * 0.6;
+    const targetRotX = (0.5 - mousePos.current.y) * 0.4;
 
-        const px = p.originX + mx;
-        const py = p.originY + my;
+    meshRef.current.rotation.y += (targetRotY - meshRef.current.rotation.y) * 0.05;
+    meshRef.current.rotation.x += (targetRotX - meshRef.current.rotation.x) * 0.05;
 
-        ctx.fillStyle = `hsla(${p.hue}, 90%, ${p.lightness}%, ${alpha})`;
-        ctx.fillRect(px - p.size * 0.5, py - p.size * 0.5, p.size, p.size);
-      }
-
-      // Single scan line
-      const scanY = (t * 25) % h;
-      ctx.fillStyle = "hsla(195, 100%, 70%, 0.03)";
-      ctx.fillRect(0, scanY, w, 1);
-
-      animFrameRef.current = requestAnimationFrame(animate);
-    };
-
-    animFrameRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-      window.removeEventListener("resize", resize);
-      window.removeEventListener("mousemove", handleMouseMove);
-    };
-  }, [sampleImageToParticles]);
+    // Gentle idle float
+    meshRef.current.position.y = Math.sin(t * 0.8) * 0.08;
+  });
 
   return (
-    <div className="relative w-full aspect-square max-w-[480px] mx-auto" style={{ perspective: "800px" }}>
+    <mesh ref={meshRef}>
+      <sphereGeometry args={[1.6, 64, 64]} />
+      <shaderMaterial
+        vertexShader={hologramVertexShader}
+        fragmentShader={hologramFragmentShader}
+        uniforms={uniforms}
+        transparent
+        side={THREE.DoubleSide}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
+/* ─── Floating ring ─── */
+function HoloRing({ radius, speed, opacity }: { radius: number; speed: number; opacity: number }) {
+  const ref = useRef<THREE.Mesh>(null);
+
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.getElapsedTime();
+    ref.current.rotation.x = Math.PI / 2 + Math.sin(t * speed * 0.3) * 0.15;
+    ref.current.rotation.z = t * speed * 0.2;
+  });
+
+  return (
+    <mesh ref={ref}>
+      <torusGeometry args={[radius, 0.008, 16, 100]} />
+      <meshBasicMaterial color="#00bfff" transparent opacity={opacity} />
+    </mesh>
+  );
+}
+
+/* ─── Floating data particles ─── */
+function DataParticles() {
+  const pointsRef = useRef<THREE.Points>(null);
+  const count = 200;
+
+  const { positions, speeds } = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const spd = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 1.8 + Math.random() * 1.2;
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      pos[i * 3 + 2] = r * Math.cos(phi);
+      spd[i] = 0.3 + Math.random() * 0.7;
+    }
+    return { positions: pos, speeds: spd };
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (!pointsRef.current) return;
+    const geo = pointsRef.current.geometry;
+    const posAttr = geo.attributes.position as THREE.BufferAttribute;
+    const t = clock.getElapsedTime();
+
+    for (let i = 0; i < count; i++) {
+      const speed = speeds[i];
+      posAttr.setY(i, posAttr.getY(i) + Math.sin(t * speed + i) * 0.001);
+    }
+    posAttr.needsUpdate = true;
+    pointsRef.current.rotation.y = t * 0.05;
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={positions}
+          count={count}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial color="#00d4ff" size={0.02} transparent opacity={0.6} sizeAttenuation />
+    </points>
+  );
+}
+
+/* ─── Main component ─── */
+export function HolographicAvatar() {
+  const mousePos = useRef({ x: 0.5, y: 0.5 });
+  const [isReady, setIsReady] = useState(false);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    mousePos.current = {
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height,
+    };
+  };
+
+  return (
+    <div
+      className="relative w-full aspect-square max-w-[480px] mx-auto"
+      onMouseMove={handleMouseMove}
+    >
+      {/* Background glow */}
       <div
+        className="absolute inset-[-15%] rounded-full opacity-40 pointer-events-none"
         style={{
-          transform: `rotateX(${tilt.rotateX}deg) rotateY(${tilt.rotateY}deg)`,
-          transformStyle: "preserve-3d",
-          transition: "transform 0.15s ease-out",
+          background: "radial-gradient(circle, hsla(195,100%,50%,0.12) 0%, transparent 70%)",
         }}
-        className="relative w-full h-full"
+      />
+
+      <Canvas
+        camera={{ position: [0, 0, 4], fov: 45 }}
+        gl={{ alpha: true, antialias: true }}
+        onCreated={() => setIsReady(true)}
+        style={{ opacity: isReady ? 1 : 0, transition: "opacity 0.6s ease-in" }}
       >
-        <div
-          className="absolute inset-[-10%] rounded-full opacity-60"
-          style={{
-            background: "radial-gradient(circle, hsla(195,100%,50%,0.08) 0%, transparent 70%)",
-          }}
-        />
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full relative z-10"
-        />
-        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 text-center">
-          <p className="text-xs tracking-[0.3em] uppercase text-[hsl(195,100%,50%/0.6)] font-medium">EVA · Assistente IA</p>
-        </div>
+        <ambientLight intensity={0.3} />
+        <pointLight position={[3, 2, 4]} intensity={0.6} color="#00bfff" />
+        <pointLight position={[-3, -1, 3]} intensity={0.3} color="#7b68ee" />
+
+        <HoloSphere mousePos={mousePos} />
+        <HoloRing radius={2.0} speed={0.8} opacity={0.2} />
+        <HoloRing radius={2.3} speed={-0.5} opacity={0.12} />
+        <DataParticles />
+      </Canvas>
+
+      {/* Label */}
+      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 text-center">
+        <p className="text-xs tracking-[0.3em] uppercase text-[hsl(195,100%,50%/0.6)] font-medium">
+          EVA · Assistente IA
+        </p>
       </div>
     </div>
   );
