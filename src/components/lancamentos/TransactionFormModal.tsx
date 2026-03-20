@@ -597,10 +597,9 @@ export function TransactionFormModal({
     let success = false;
 
     if (isEditing) {
-      const { user_id, company_id, ...updateData } = baseData;
-      // Preserve original type and status to prevent race conditions
-      updateData.type = editTransaction.type;
-      updateData.status = editTransaction.status;
+      const { user_id, ...updateData } = baseData;
+      // Use current form values for type, status, and company_id
+      updateData.company_id = formCompanyId;
       success = await onUpdate(editTransaction.id, updateData);
       // Also apply series installment amount changes if any
       if (success && seriesUpdates.length > 0 && onUpdateMultiple) {
