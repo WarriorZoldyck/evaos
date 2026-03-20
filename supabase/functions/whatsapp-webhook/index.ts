@@ -1427,14 +1427,45 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
-    // Parse AI response — fallback to raw text if JSON fails
+    // Parse AI response — robust fallback for truncated/malformed JSON
     let aiParsed: any;
-    try {
-      const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, rawContent];
-      aiParsed = JSON.parse(jsonMatch[1].trim());
-    } catch {
-      console.warn("Failed to parse AI response as JSON, using raw text as friendly_message:", rawContent.substring(0, 200));
-      // If the AI returned useful text (not empty), use it directly instead of "não entendi"
+    const parseJsonRobust = (text: string): any => {
+      // Try direct parse first
+      try { return JSON.parse(text.trim()); } catch {}
+      // Try extracting from markdown code block
+      const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) {
+        try { return JSON.parse(codeBlockMatch[1].trim()); } catch {}
+      }
+      // Try finding first { to last } (greedy)
+      const firstBrace = text.indexOf("{");
+      const lastBrace = text.lastIndexOf("}");
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        try { return JSON.parse(text.substring(firstBrace, lastBrace + 1)); } catch {}
+      }
+      // Try to repair truncated JSON by closing open braces/brackets
+      if (firstBrace !== -1) {
+        let partial = text.substring(firstBrace);
+        // Remove trailing incomplete string (after last complete key-value)
+        partial = partial.replace(/,\s*"[^"]*$/, "");
+        partial = partial.replace(/,\s*$/, "");
+        // Count open braces/brackets and close them
+        let openBraces = 0, openBrackets = 0;
+        for (const ch of partial) {
+          if (ch === "{") openBraces++;
+          else if (ch === "}") openBraces--;
+          else if (ch === "[") openBrackets++;
+          else if (ch === "]") openBrackets--;
+        }
+        partial += "]".repeat(Math.max(0, openBrackets)) + "}".repeat(Math.max(0, openBraces));
+        try { return JSON.parse(partial); } catch {}
+      }
+      return null;
+    };
+
+    aiParsed = parseJsonRobust(rawContent);
+    if (!aiParsed) {
+      console.warn("Failed to parse AI response as JSON, using raw text as friendly_message:", rawContent.substring(0, 300));
       const cleanText = rawContent.replace(/```[\s\S]*?```/g, "").trim();
       if (cleanText && cleanText.length > 5) {
         return respond({
