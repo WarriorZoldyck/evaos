@@ -16,7 +16,7 @@ export function LandingHero() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-end">
           {/* Left: Copy */}
           <div className="text-center lg:text-left">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[hsl(195,100%,50%/0.3)] bg-[hsl(195,100%,50%/0.06)] mb-6">
