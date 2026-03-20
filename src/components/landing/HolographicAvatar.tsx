@@ -2,25 +2,27 @@ import { useState } from "react";
 import evaAvatar from "@/assets/eva-avatar.png";
 
 export function HolographicAvatar() {
-  const [tiltStyle, setTiltStyle] = useState({ rotateX: 0, rotateY: 0 });
+  const [offset, setOffset] = useState({ x: 0, y: 0, rotX: 0, rotY: 0 });
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    setTiltStyle({
-      rotateX: (0.5 - y) * 14,
-      rotateY: (x - 0.5) * 14,
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    setOffset({
+      x: x * 30,
+      y: y * 20,
+      rotX: -y * 3,
+      rotY: x * 3,
     });
   };
 
   const handleMouseLeave = () => {
-    setTiltStyle({ rotateX: 0, rotateY: 0 });
+    setOffset({ x: 0, y: 0, rotX: 0, rotY: 0 });
   };
 
   return (
     <div
-      className="relative w-full max-w-[480px] mx-auto"
+      className="relative w-full max-w-[680px] mx-auto"
       style={{ perspective: "900px" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
@@ -34,12 +36,12 @@ export function HolographicAvatar() {
         }}
       />
 
-      {/* 3D tilt container */}
+      {/* Parallax + subtle rotation container */}
       <div
         style={{
-          transform: `rotateX(${tiltStyle.rotateX}deg) rotateY(${tiltStyle.rotateY}deg)`,
+          transform: `translate(${offset.x}px, ${offset.y}px) rotateX(${offset.rotX}deg) rotateY(${offset.rotY}deg) scale(1.15)`,
           transformStyle: "preserve-3d",
-          transition: "transform 0.15s ease-out",
+          transition: "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
         {/* EVA image */}

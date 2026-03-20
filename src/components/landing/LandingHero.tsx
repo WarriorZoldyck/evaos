@@ -65,7 +65,7 @@ export function LandingHero() {
           </div>
 
           {/* Right: Holographic Avatar */}
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex items-center justify-center overflow-visible">
             <HolographicAvatar />
 
             {/* Floating stat cards with enhanced glow */}
