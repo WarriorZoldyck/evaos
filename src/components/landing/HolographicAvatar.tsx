@@ -27,40 +27,50 @@ export function HolographicAvatar() {
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const offCanvas = document.createElement("canvas");
-      const size = Math.min(canvasW, canvasH);
-      offCanvas.width = size;
-      offCanvas.height = size;
+      // Use full canvas dimensions (3:4 aspect) instead of forcing square
+      const drawW = canvasW;
+      const drawH = canvasH;
+      offCanvas.width = drawW;
+      offCanvas.height = drawH;
       const offCtx = offCanvas.getContext("2d");
       if (!offCtx) return;
 
+      // Cover-fit the image into the canvas area
       const imgAspect = img.width / img.height;
+      const canvasAspect = drawW / drawH;
       let sx = 0, sy = 0, sw = img.width, sh = img.height;
-      if (imgAspect > 1) { sx = (img.width - img.height) / 2; sw = img.height; }
-      else { sy = (img.height - img.width) / 2; sh = img.width; }
+      if (imgAspect > canvasAspect) {
+        sw = img.height * canvasAspect;
+        sx = (img.width - sw) / 2;
+      } else {
+        sh = img.width / canvasAspect;
+        sy = (img.height - sh) / 2;
+      }
 
-      offCtx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size);
-      const imageData = offCtx.getImageData(0, 0, size, size);
+      offCtx.drawImage(img, sx, sy, sw, sh, 0, 0, drawW, drawH);
+      const imageData = offCtx.getImageData(0, 0, drawW, drawH);
       const pixels = imageData.data;
 
       const particles: Particle[] = [];
-      const step = Math.max(5, Math.floor(size / 80));
-      const offsetX = (canvasW - size) / 2;
-      const offsetY = (canvasH - size) / 2;
+      const step = Math.max(5, Math.floor(Math.min(drawW, drawH) / 80));
 
-      for (let y = 0; y < size; y += step) {
-        for (let x = 0; x < size; x += step) {
-          const i = (y * size + x) * 4;
+      for (let y = 0; y < drawH; y += step) {
+        for (let x = 0; x < drawW; x += step) {
+          const i = (y * drawW + x) * 4;
           const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2], a = pixels[i + 3];
           const brightness = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
           if (a < 100 || brightness < 0.08) continue;
 
+          // Vertical fade: particles near bottom fade out for holographic effect
+          const verticalFade = 1 - Math.max(0, (y / drawH - 0.7)) * 2.5;
+
           particles.push({
-            x: x + offsetX,
-            y: y + offsetY,
-            originX: x + offsetX,
-            originY: y + offsetY,
+            x: x,
+            y: y,
+            originX: x,
+            originY: y,
             size: 0.8 + brightness * 1.5,
-            opacity: 0.3 + brightness * 0.6,
+            opacity: (0.3 + brightness * 0.6) * Math.max(0.05, verticalFade),
             hue: 190 + (brightness - 0.5) * 15,
             lightness: 45 + brightness * 30,
           });
