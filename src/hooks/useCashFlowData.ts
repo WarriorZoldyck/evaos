@@ -115,12 +115,16 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
   }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId, linkedCardIds, mode]);
 
   // Resolve a category name/id to its display name
+  const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
   const resolveName = useCallback(
     (value: string | null | undefined): { id: string; name: string } | null => {
       if (!value) return null;
       let cat = categories.find((c) => c.id === value);
       if (!cat) cat = categories.find((c) => c.name.toLowerCase() === value.toLowerCase());
       if (cat) return { id: cat.id, name: cat.name };
+      // Don't display raw UUIDs — skip unresolved references
+      if (isUuid(value)) return null;
       return { id: value, name: value };
     },
     [categories]
