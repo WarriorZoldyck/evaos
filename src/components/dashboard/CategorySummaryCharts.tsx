@@ -74,10 +74,10 @@ function DoughnutChart({
               </Pie>
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "hsl(220, 30%, 9%)",
-                  border: "1px solid hsl(215, 25%, 16%)",
+                  backgroundColor: "var(--tooltip-bg, hsl(var(--popover)))",
+                  border: "1px solid hsl(var(--border))",
                   borderRadius: "10px",
-                  color: "hsl(210, 30%, 92%)",
+                  color: "hsl(var(--popover-foreground))",
                   fontSize: 12,
                 }}
                 formatter={(value: number) => [formatCurrency(value)]}
@@ -86,7 +86,7 @@ function DoughnutChart({
                 verticalAlign="bottom"
                 height={36}
                 formatter={(value: string) => (
-                  <span style={{ color: "hsl(215, 18%, 55%)", fontSize: 11 }}>{value}</span>
+                  <span style={{ color: "hsl(var(--muted-foreground))", fontSize: 11 }}>{value}</span>
                 )}
               />
             </PieChart>
