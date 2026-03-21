@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, Fragment, useRef } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { CategoryGroup } from "@/hooks/useCashFlowData";
 
 interface Props {
@@ -13,11 +13,10 @@ interface Props {
   loading: boolean;
 }
 
-function formatBRL(value: number) {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
+const fmt = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 
-const INDENT_PX = 24;
+const INDENT_PX = 20;
 
 function CategoryRows({
   groups,
@@ -25,73 +24,142 @@ function CategoryRows({
   colorClass,
   expanded,
   toggle,
+  rowCounter,
 }: {
   groups: CategoryGroup[];
   level: number;
   colorClass: string;
   expanded: Set<string>;
   toggle: (id: string) => void;
+  rowCounter: { current: number };
 }) {
   return (
     <>
       {groups.map((g) => {
         const isOpen = expanded.has(g.categoryId);
         const hasChildren = g.children.length > 0;
-        const paddingLeft = 24 + level * INDENT_PX;
+        const idx = rowCounter.current++;
+        const isEven = idx % 2 === 0;
 
         return (
-          <span key={g.categoryId}>
-            <TableRow
-              className={hasChildren ? "cursor-pointer" : ""}
+          <Fragment key={g.categoryId}>
+            <tr
+              className={cn(
+                hasChildren ? "cursor-pointer font-medium" : "cursor-default",
+                isEven ? "bg-muted/30" : "",
+                "hover:bg-muted/50 border-b border-border/30"
+              )}
               onClick={() => hasChildren && toggle(g.categoryId)}
             >
-              <TableCell className="py-1.5" style={{ paddingLeft }}>
-                <span className="flex items-center gap-1.5 text-sm font-medium">
+              <td
+                className="whitespace-nowrap text-xs py-2"
+                style={{ paddingLeft: 12 + level * INDENT_PX }}
+              >
+                <span className="flex items-center gap-1">
                   {hasChildren ? (
                     isOpen ? (
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      <ChevronDown className="h-3.5 w-3.5 shrink-0" />
                     ) : (
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0" />
                     )
                   ) : (
-                    <span className="w-3.5" />
+                    <span className="w-3.5 shrink-0" />
                   )}
-                  {g.categoryName}
+                  {g.categoryName.toUpperCase()}
                 </span>
-              </TableCell>
-              <TableCell className={`text-right py-1.5 text-sm font-medium ${colorClass}`}>
-                {formatBRL(g.total)}
-              </TableCell>
-            </TableRow>
+              </td>
+              <td className={cn("text-right text-xs py-2 pr-3 tabular-nums font-semibold", colorClass)}>
+                {fmt(g.total)}
+              </td>
+            </tr>
 
-            {isOpen && (
+            {isOpen && hasChildren && (
               <CategoryRows
                 groups={g.children}
                 level={level + 1}
                 colorClass={colorClass}
                 expanded={expanded}
                 toggle={toggle}
+                rowCounter={rowCounter}
               />
             )}
-          </span>
+          </Fragment>
         );
       })}
     </>
   );
 }
 
-function SectionRows({
-  groups,
+function SectionBlock({
+  sectionId,
   label,
   total,
+  groups,
+  expanded,
+  toggle,
+  toggleSection,
+  isSectionOpen,
+  sectionClassName,
   colorClass,
 }: {
-  groups: CategoryGroup[];
+  sectionId: string;
   label: string;
   total: number;
+  groups: CategoryGroup[];
+  expanded: Set<string>;
+  toggle: (id: string) => void;
+  toggleSection: (id: string) => void;
+  isSectionOpen: boolean;
+  sectionClassName: string;
   colorClass: string;
 }) {
+  const rowCounter = useRef(0);
+  rowCounter.current = 0;
+
+  return (
+    <>
+      <tr
+        className={cn("font-bold cursor-pointer border-b", sectionClassName)}
+        onClick={() => toggleSection(sectionId)}
+      >
+        <td className="text-xs py-2 pl-3 whitespace-nowrap">
+          <span className="flex items-center gap-1">
+            {isSectionOpen ? (
+              <ChevronDown className="h-4 w-4 shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 shrink-0" />
+            )}
+            {label}
+          </span>
+        </td>
+        <td className="text-right text-xs py-2 pr-3 tabular-nums font-bold">
+          {fmt(total)}
+        </td>
+      </tr>
+      {isSectionOpen && (
+        <CategoryRows
+          groups={groups}
+          level={1}
+          colorClass={colorClass}
+          expanded={expanded}
+          toggle={toggle}
+          rowCounter={rowCounter}
+        />
+      )}
+    </>
+  );
+}
+
+export function CategoryReportTable({
+  revenueGroups,
+  expenseGroups,
+  totalRevenue,
+  totalExpense,
+  result,
+  loading,
+}: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [sections, setSections] = useState<Set<string>>(new Set());
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -102,37 +170,19 @@ function SectionRows({
     });
   };
 
-  return (
-    <>
-      <TableRow className="bg-muted/60 hover:bg-muted/60">
-        <TableCell className="font-bold text-xs uppercase tracking-wider py-2">{label}</TableCell>
-        <TableCell className={`text-right font-bold py-2 ${colorClass}`}>{formatBRL(total)}</TableCell>
-      </TableRow>
+  const toggleSection = (id: string) => {
+    setSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
-      <CategoryRows
-        groups={groups}
-        level={0}
-        colorClass={colorClass}
-        expanded={expanded}
-        toggle={toggle}
-      />
-
-      {groups.length === 0 && (
-        <TableRow>
-          <TableCell colSpan={2} className="text-center text-muted-foreground text-sm py-3">
-            Nenhum lançamento no período
-          </TableCell>
-        </TableRow>
-      )}
-    </>
-  );
-}
-
-export function CategoryReportTable({ revenueGroups, expenseGroups, totalRevenue, totalExpense, result, loading }: Props) {
   if (loading) {
     return (
-      <div className="space-y-2 p-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+      <div className="p-6 space-y-3">
+        {Array.from({ length: 6 }).map((_, i) => (
           <Skeleton key={i} className="h-8 w-full" />
         ))}
       </div>
@@ -140,39 +190,54 @@ export function CategoryReportTable({ revenueGroups, expenseGroups, totalRevenue
   }
 
   return (
-    <Table>
-      <TableBody>
-        <SectionRows
-          groups={revenueGroups}
-          label="Receitas"
-          total={totalRevenue}
-          colorClass="text-emerald-600 dark:text-emerald-400"
-        />
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-muted/50 border-b">
+            <th className="text-left text-xs font-medium text-muted-foreground p-2 pl-3">Categoria</th>
+            <th className="text-right text-xs font-medium text-muted-foreground p-2 pr-3" style={{ width: 140 }}>Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          <SectionBlock
+            sectionId="__revenue__"
+            label="(+) RECEITAS"
+            total={totalRevenue}
+            groups={revenueGroups}
+            expanded={expanded}
+            toggle={toggle}
+            toggleSection={toggleSection}
+            isSectionOpen={sections.has("__revenue__")}
+            sectionClassName="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-b"
+            colorClass="text-emerald-700 dark:text-emerald-400"
+          />
 
-        <TableRow className="hover:bg-transparent">
-          <TableCell colSpan={2} className="py-1" />
-        </TableRow>
+          <SectionBlock
+            sectionId="__expense__"
+            label="(-) DESPESAS"
+            total={-totalExpense}
+            groups={expenseGroups}
+            expanded={expanded}
+            toggle={toggle}
+            toggleSection={toggleSection}
+            isSectionOpen={sections.has("__expense__")}
+            sectionClassName="bg-destructive/10 text-destructive border-b"
+            colorClass="text-destructive"
+          />
 
-        <SectionRows
-          groups={expenseGroups}
-          label="Despesas"
-          total={totalExpense}
-          colorClass="text-red-600 dark:text-red-400"
-        />
-
-        <TableRow className="bg-muted hover:bg-muted border-t-2">
-          <TableCell className="font-bold py-3">RESULTADO</TableCell>
-          <TableCell
-            className={`text-right font-bold py-3 text-base ${
+          <tr
+            className={cn(
+              "font-bold border-t-2",
               result >= 0
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-red-600 dark:text-red-400"
-            }`}
+                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                : "bg-destructive/10 text-destructive"
+            )}
           >
-            {formatBRL(result)}
-          </TableCell>
-        </TableRow>
-      </TableBody>
-    </Table>
+            <td className="text-xs py-2 pl-3 whitespace-nowrap">= RESULTADO</td>
+            <td className="text-right text-xs py-2 pr-3 tabular-nums font-bold">{fmt(result)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 }
