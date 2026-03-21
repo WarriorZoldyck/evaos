@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Info } from "lucide-react";
+import { FileText, Info } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
 import { CategoryReportTable } from "@/components/relatorios/CategoryReportTable";
@@ -63,7 +63,7 @@ export default function PlanoDeCaixa() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
+            <FileText className="h-5 w-5 text-primary" />
             Fluxo de Caixa por Categoria
           </CardTitle>
         </CardHeader>
