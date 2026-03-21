@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart3, Info } from "lucide-react";
+import { FileText, Info } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
 import { CategoryReportTable } from "@/components/relatorios/CategoryReportTable";
