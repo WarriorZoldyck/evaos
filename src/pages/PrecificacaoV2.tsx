@@ -62,34 +62,7 @@ export default function PrecificacaoV2() {
       {/* Seção 1: Config */}
       <ConfigCard hoursPerMonth={hoursPerMonth} numRooms={numRooms} taxRate={taxRate} onSave={saveConfig} />
 
-      {/* Seção 2: Despesas em Tabs */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Despesas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="fixos_clinica">
-            <TabsList className="w-full grid grid-cols-3">
-              {GROUPS.map((g) => (
-                <TabsTrigger key={g} value={g}>{GROUP_TAB_LABELS[g]}</TabsTrigger>
-              ))}
-            </TabsList>
-            {GROUPS.map((g) => (
-              <TabsContent key={g} value={g}>
-                <CostItemsTab
-                  group={g}
-                  items={costItems}
-                  onAdd={addCostItem}
-                  onUpdate={updateCostItem}
-                  onDelete={deleteCostItem}
-                />
-              </TabsContent>
-            ))}
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Seção 3: Resumo */}
+      {/* Seção 2: Resumo */}
       <CostSummaryCards
         groupTotals={groupTotals}
         custoHora={custoHora}
@@ -98,7 +71,7 @@ export default function PrecificacaoV2() {
         custoHoraPorSala={custoHoraPorSala}
       />
 
-      {/* Seção 4: Procedimentos */}
+      {/* Seção 3: Procedimentos */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -133,6 +106,33 @@ export default function PrecificacaoV2() {
           calcProcedure={calcProcedure}
         />
       )}
+
+      {/* Seção 4: Despesas em Tabs */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Despesas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="fixos_clinica">
+            <TabsList className="w-full grid grid-cols-3">
+              {GROUPS.map((g) => (
+                <TabsTrigger key={g} value={g}>{GROUP_TAB_LABELS[g]}</TabsTrigger>
+              ))}
+            </TabsList>
+            {GROUPS.map((g) => (
+              <TabsContent key={g} value={g}>
+                <CostItemsTab
+                  group={g}
+                  items={costItems}
+                  onAdd={addCostItem}
+                  onUpdate={updateCostItem}
+                  onDelete={deleteCostItem}
+                />
+              </TabsContent>
+            ))}
+          </Tabs>
+        </CardContent>
+      </Card>
 
       {/* Modal */}
       <ProcedureFormModalV2
