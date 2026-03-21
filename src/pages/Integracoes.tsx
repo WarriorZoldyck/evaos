@@ -7,6 +7,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import logoAsaas from "@/assets/logo-asaas.png";
 import logoBradesco from "@/assets/logo-bradesco.png";
 import logoItau from "@/assets/logo-itau.png";
+import logoSantander from "@/assets/logo-santander.png";
+import logoC6Bank from "@/assets/logo-c6bank.png";
 
 const staticIntegrations = [
   {
@@ -28,6 +30,20 @@ const staticIntegrations = [
     description: "Conexão com o Itaú Unibanco para importação automática de extratos e conciliação bancária.",
     status: "Em breve" as const,
     logo: logoItau,
+    bgClass: "bg-white",
+  },
+  {
+    name: "Santander",
+    description: "Conexão com o Santander para importação automática de extratos e conciliação bancária.",
+    status: "Em breve" as const,
+    logo: logoSantander,
+    bgClass: "bg-white",
+  },
+  {
+    name: "C6 Bank",
+    description: "Conexão com o C6 Bank para importação automática de extratos e conciliação bancária.",
+    status: "Em breve" as const,
+    logo: logoC6Bank,
     bgClass: "bg-white",
   },
 ];
