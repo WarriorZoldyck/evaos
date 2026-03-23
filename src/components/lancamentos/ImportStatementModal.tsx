@@ -38,6 +38,7 @@ interface ImportStatementModalProps {
   onImport: (data: TransactionInsert[]) => Promise<boolean>;
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
+  creditCards: { id: string; name: string; last_four_digits: string | null }[];
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
 }
 
@@ -47,6 +48,7 @@ export function ImportStatementModal({
   onImport,
   bankAccounts,
   wallets,
+  creditCards,
   categories,
 }: ImportStatementModalProps) {
   const { user } = useAuth();
@@ -60,6 +62,7 @@ export function ImportStatementModal({
   const [fileName, setFileName] = useState("");
   const [targetAccount, setTargetAccount] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
+  const [autoDetectedCard, setAutoDetectedCard] = useState("");
 
   const rootCategories = categories.filter((c) => !c.parent_id);
 
@@ -99,16 +102,31 @@ export function ImportStatementModal({
         return;
       }
 
-      setRows(
-        (result.transactions || []).map((t: any) => ({
-          ...t,
-          selected: true,
-        }))
-      );
+      const parsed = (result.transactions || []).map((t: any) => ({
+        ...t,
+        selected: true,
+      }));
+      setRows(parsed);
+
+      // Auto-detect credit card by last 4 digits
+      const allDescriptions = parsed.map((t: any) => t.description).join(" ");
+      const detectedCard = creditCards.find((c) => {
+        if (!c.last_four_digits) return false;
+        return allDescriptions.includes(c.last_four_digits);
+      });
+      if (detectedCard) {
+        const cardValue = `card:${detectedCard.id}`;
+        setTargetAccount(cardValue);
+        setAutoDetectedCard(detectedCard.name);
+      } else {
+        setAutoDetectedCard("");
+      }
 
       toast({
         title: `${result.count} transações encontradas`,
-        description: `Revise antes de importar.`,
+        description: detectedCard
+          ? `Cartão "${detectedCard.name}" detectado automaticamente.`
+          : `Revise antes de importar.`,
       });
     } catch (err: any) {
       toast({
@@ -157,6 +175,7 @@ export function ImportStatementModal({
       company_id: selectedCompanyId || null,
       bank_account_id: accType === "bank" ? accId : null,
       wallet_id: accType === "wallet" ? accId : null,
+      credit_card_id: accType === "card" ? accId : null,
       external_id: `import_${r.date}_${r.amount}_${r.description.slice(0, 20)}`,
     }));
 
@@ -175,6 +194,7 @@ export function ImportStatementModal({
     setFileName("");
     setTargetAccount("");
     setDefaultCategory("");
+    setAutoDetectedCard("");
     onClose();
   };
 
@@ -234,16 +254,33 @@ export function ImportStatementModal({
                     <SelectValue placeholder="Selecione a conta" />
                   </SelectTrigger>
                   <SelectContent>
-                    {bankAccounts.map((a) => (
-                      <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>
-                        🏦 {a.name}
-                      </SelectItem>
-                    ))}
-                    {wallets.map((w) => (
-                      <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
-                        👛 {w.name}
-                      </SelectItem>
-                    ))}
+                    {bankAccounts.length > 0 && (
+                      <>
+                        {bankAccounts.map((a) => (
+                          <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>
+                            🏦 {a.name}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {wallets.length > 0 && (
+                      <>
+                        {wallets.map((w) => (
+                          <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
+                            👛 {w.name}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {creditCards.length > 0 && (
+                      <>
+                        {creditCards.map((c) => (
+                          <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>
+                            💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -265,6 +302,12 @@ export function ImportStatementModal({
                 </Select>
               </div>
             </div>
+
+            {autoDetectedCard && (
+              <div className="text-xs text-primary font-medium flex items-center gap-1">
+                💳 Cartão "{autoDetectedCard}" detectado automaticamente pelos últimos 4 dígitos
+              </div>
+            )}
 
             <div className="text-xs text-muted-foreground">
               {fileName} — {selectedRows.length} de {rows.length} selecionadas
