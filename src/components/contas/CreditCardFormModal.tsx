@@ -56,6 +56,7 @@ export function CreditCardFormModal({
   const [cardDue, setCardDue] = useState("10");
   const [cardLimit, setCardLimit] = useState("0");
   const [cardBankId, setCardBankId] = useState("");
+  const [cardParentId, setCardParentId] = useState("");
 
   useEffect(() => {
     if (!open) return;
