@@ -42,6 +42,7 @@ export function CreditCardFormModal({
   onClose,
   editData,
   bankAccounts,
+  allCreditCards,
   onSave,
 }: CreditCardFormModalProps) {
   const [saving, setSaving] = useState(false);
