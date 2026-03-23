@@ -155,14 +155,22 @@ export function ImportStatementModal({
 
   const handleImport = async () => {
     if (!user) return;
-    if (!targetAccount) {
+    if (!targetBankAccount) {
       toast({ title: "Selecione a conta destino", variant: "destructive" });
+      return;
+    }
+    if (!importType) {
+      toast({ title: "Selecione o tipo de extrato", variant: "destructive" });
+      return;
+    }
+    if (importType === "cartao" && !targetCard) {
+      toast({ title: "Selecione o cartão de crédito", variant: "destructive" });
       return;
     }
 
     setImporting(true);
 
-    const [accType, ...idParts] = targetAccount.split(":");
+    const [accType, ...idParts] = targetBankAccount.split(":");
     const accId = idParts.join(":");
 
     const transactions: TransactionInsert[] = selectedRows.map((r) => ({
@@ -177,7 +185,7 @@ export function ImportStatementModal({
       company_id: selectedCompanyId || null,
       bank_account_id: accType === "bank" ? accId : null,
       wallet_id: accType === "wallet" ? accId : null,
-      credit_card_id: accType === "card" ? accId : null,
+      credit_card_id: importType === "cartao" ? targetCard : null,
       external_id: `import_${r.date}_${r.amount}_${r.description.slice(0, 20)}`,
     }));
 
