@@ -240,7 +240,13 @@ Para gerenciamento de categorias:
 {"intent":"gerenciar_categoria","action":"criar|criar_subcategoria|renomear|mover|excluir","category_name":"...","category_id":"UUID","new_name":"...","parent_category_id":"UUID|null","new_parent_category_id":"UUID|null","category_type":"receita|despesa|ambos","context":"Pessoal|Nome","friendly_message":"..."}
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...","contact_filter":"...|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome","friendly_message":"..."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...","contact_filter":"...|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|ano_passado|null","context":"Pessoal|Nome","friendly_message":"..."}
+
+REGRA DE PERÍODO — PRESTE MUITA ATENÇÃO:
+- Se o usuário diz "ano", "anual", "este ano", "2025", "2026" → use "ano_atual" ou "ano_passado"
+- Se o usuário diz "mês", "mensal", "este mês" → use "mes_atual"
+- NUNCA responda com dados mensais quando o usuário pediu dados anuais
+- Se o usuário corrigir o período (ex: "perguntei ano não mês"), use o período correto imediatamente
 
 Para editar lançamento:
 {"intent":"editar_lancamento","transaction_id":"UUID-ou-null","field":"amount|description|category|payment_date|competence_date|status|notes","new_value":"...","friendly_message":"..."}
@@ -626,6 +632,11 @@ ${historicalPatternsBlock}`;
           case "ultimos_7_dias": { const d = new Date(todayDate); d.setDate(d.getDate() - 7); return { start: fmtD(d), end: today, label: "últimos 7 dias" }; }
           case "ultimos_30_dias": { const d = new Date(todayDate); d.setDate(d.getDate() - 30); return { start: fmtD(d), end: today, label: "últimos 30 dias" }; }
           case "ultimos_90_dias": { const d = new Date(todayDate); d.setDate(d.getDate() - 90); return { start: fmtD(d), end: today, label: "últimos 3 meses" }; }
+          case "ano_atual": { return { start: `${todayDate.getFullYear()}-01-01`, end: today, label: "este ano" }; }
+          case "ano_passado": {
+            const y = todayDate.getFullYear() - 1;
+            return { start: `${y}-01-01`, end: `${y}-12-31`, label: `${y}` };
+          }
           default: return { start: today.substring(0, 7) + "-01", end: today, label: "este mês" };
         }
       };
