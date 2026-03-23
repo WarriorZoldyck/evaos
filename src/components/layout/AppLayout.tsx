@@ -70,6 +70,7 @@ function AppLayoutInner() {
           onClose={() => setGlobalFormOpen(false)}
         />
         <OnboardingGuide />
+        <EvaChatButton />
       </SidebarProvider>
     </CompanyProvider>
   );

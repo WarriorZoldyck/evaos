@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.evolution-webhook-config]
 verify_jwt = false
+
+[functions.eva-chat]
+verify_jwt = false
