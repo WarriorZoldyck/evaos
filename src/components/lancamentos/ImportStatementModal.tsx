@@ -60,7 +60,9 @@ export function ImportStatementModal({
   const [importing, setImporting] = useState(false);
   const [rows, setRows] = useState<ParsedTransaction[]>([]);
   const [fileName, setFileName] = useState("");
-  const [targetAccount, setTargetAccount] = useState("");
+  const [targetBankAccount, setTargetBankAccount] = useState("");
+  const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
+  const [targetCard, setTargetCard] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
   const [autoDetectedCard, setAutoDetectedCard] = useState("");
 
@@ -115,8 +117,8 @@ export function ImportStatementModal({
         return allDescriptions.includes(c.last_four_digits);
       });
       if (detectedCard) {
-        const cardValue = `card:${detectedCard.id}`;
-        setTargetAccount(cardValue);
+        setImportType("cartao");
+        setTargetCard(detectedCard.id);
         setAutoDetectedCard(detectedCard.name);
       } else {
         setAutoDetectedCard("");
@@ -153,14 +155,22 @@ export function ImportStatementModal({
 
   const handleImport = async () => {
     if (!user) return;
-    if (!targetAccount) {
+    if (!targetBankAccount) {
       toast({ title: "Selecione a conta destino", variant: "destructive" });
+      return;
+    }
+    if (!importType) {
+      toast({ title: "Selecione o tipo de extrato", variant: "destructive" });
+      return;
+    }
+    if (importType === "cartao" && !targetCard) {
+      toast({ title: "Selecione o cartão de crédito", variant: "destructive" });
       return;
     }
 
     setImporting(true);
 
-    const [accType, ...idParts] = targetAccount.split(":");
+    const [accType, ...idParts] = targetBankAccount.split(":");
     const accId = idParts.join(":");
 
     const transactions: TransactionInsert[] = selectedRows.map((r) => ({
@@ -175,7 +185,7 @@ export function ImportStatementModal({
       company_id: selectedCompanyId || null,
       bank_account_id: accType === "bank" ? accId : null,
       wallet_id: accType === "wallet" ? accId : null,
-      credit_card_id: accType === "card" ? accId : null,
+      credit_card_id: importType === "cartao" ? targetCard : null,
       external_id: `import_${r.date}_${r.amount}_${r.description.slice(0, 20)}`,
     }));
 
@@ -192,7 +202,9 @@ export function ImportStatementModal({
   const handleClose = () => {
     setRows([]);
     setFileName("");
-    setTargetAccount("");
+    setTargetBankAccount("");
+    setImportType("");
+    setTargetCard("");
     setDefaultCategory("");
     setAutoDetectedCard("");
     onClose();
@@ -249,41 +261,57 @@ export function ImportStatementModal({
               {/* Account select */}
               <div className="flex-1 min-w-[200px]">
                 <label className="text-xs text-muted-foreground mb-1 block">Conta destino *</label>
-                <Select value={targetAccount} onValueChange={setTargetAccount}>
+                <Select value={targetBankAccount} onValueChange={(v) => { setTargetBankAccount(v); }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a conta" />
                   </SelectTrigger>
                   <SelectContent>
-                    {bankAccounts.length > 0 && (
-                      <>
-                        {bankAccounts.map((a) => (
-                          <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>
-                            🏦 {a.name}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {wallets.length > 0 && (
-                      <>
-                        {wallets.map((w) => (
-                          <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
-                            👛 {w.name}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {creditCards.length > 0 && (
-                      <>
-                        {creditCards.map((c) => (
-                          <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>
-                            💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
+                    {bankAccounts.map((a) => (
+                      <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>
+                        🏦 {a.name}
+                      </SelectItem>
+                    ))}
+                    {wallets.map((w) => (
+                      <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
+                        👛 {w.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {targetBankAccount && (
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-xs text-muted-foreground mb-1 block">Tipo de extrato *</label>
+                  <Select value={importType} onValueChange={(v) => setImportType(v as "debito" | "cartao")}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="debito">💰 Débito em conta</SelectItem>
+                      <SelectItem value="cartao">💳 Cartão de crédito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {importType === "cartao" && (
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-xs text-muted-foreground mb-1 block">Cartão *</label>
+                  <Select value={targetCard} onValueChange={setTargetCard}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o cartão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {creditCards.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Default category */}
               <div className="flex-1 min-w-[200px]">
@@ -358,7 +386,7 @@ export function ImportStatementModal({
             </Button>
             <Button
               onClick={handleImport}
-              disabled={importing || selectedRows.length === 0 || !targetAccount}
+              disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !targetCard)}
               className="gap-2"
             >
               {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
