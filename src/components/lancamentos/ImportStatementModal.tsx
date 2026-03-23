@@ -386,7 +386,7 @@ export function ImportStatementModal({
             </Button>
             <Button
               onClick={handleImport}
-              disabled={importing || selectedRows.length === 0 || !targetAccount}
+              disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !targetCard)}
               className="gap-2"
             >
               {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
