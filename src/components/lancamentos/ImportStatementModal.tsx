@@ -202,7 +202,9 @@ export function ImportStatementModal({
   const handleClose = () => {
     setRows([]);
     setFileName("");
-    setTargetAccount("");
+    setTargetBankAccount("");
+    setImportType("");
+    setTargetCard("");
     setDefaultCategory("");
     setAutoDetectedCard("");
     onClose();
