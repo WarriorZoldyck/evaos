@@ -311,7 +311,7 @@ export function ImportStatementModal({
                     </SelectContent>
                   </Select>
                 </div>
-              )
+              )}
 
               {/* Default category */}
               <div className="flex-1 min-w-[200px]">
