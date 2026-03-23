@@ -69,6 +69,7 @@ export function CreditCardFormModal({
       setCardDue(String(editData.due_day || 10));
       setCardLimit(String(editData.limit || 0));
       setCardBankId(editData.bank_account_id || "");
+      setCardParentId(editData.parent_card_id || "");
     } else {
       setCardName("");
       setCardDigits("");
@@ -76,6 +77,7 @@ export function CreditCardFormModal({
       setCardDue("10");
       setCardLimit("0");
       setCardBankId("");
+      setCardParentId("");
     }
   }, [open, editData]);
 
