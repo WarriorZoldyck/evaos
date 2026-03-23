@@ -254,16 +254,33 @@ export function ImportStatementModal({
                     <SelectValue placeholder="Selecione a conta" />
                   </SelectTrigger>
                   <SelectContent>
-                    {bankAccounts.map((a) => (
-                      <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>
-                        🏦 {a.name}
-                      </SelectItem>
-                    ))}
-                    {wallets.map((w) => (
-                      <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
-                        👛 {w.name}
-                      </SelectItem>
-                    ))}
+                    {bankAccounts.length > 0 && (
+                      <>
+                        {bankAccounts.map((a) => (
+                          <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>
+                            🏦 {a.name}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {wallets.length > 0 && (
+                      <>
+                        {wallets.map((w) => (
+                          <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
+                            👛 {w.name}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    {creditCards.length > 0 && (
+                      <>
+                        {creditCards.map((c) => (
+                          <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>
+                            💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
