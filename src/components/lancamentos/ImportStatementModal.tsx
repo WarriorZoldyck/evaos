@@ -60,7 +60,9 @@ export function ImportStatementModal({
   const [importing, setImporting] = useState(false);
   const [rows, setRows] = useState<ParsedTransaction[]>([]);
   const [fileName, setFileName] = useState("");
-  const [targetAccount, setTargetAccount] = useState("");
+  const [targetBankAccount, setTargetBankAccount] = useState("");
+  const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
+  const [targetCard, setTargetCard] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
   const [autoDetectedCard, setAutoDetectedCard] = useState("");
 
