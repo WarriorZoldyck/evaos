@@ -632,6 +632,11 @@ ${historicalPatternsBlock}`;
           case "ultimos_7_dias": { const d = new Date(todayDate); d.setDate(d.getDate() - 7); return { start: fmtD(d), end: today, label: "últimos 7 dias" }; }
           case "ultimos_30_dias": { const d = new Date(todayDate); d.setDate(d.getDate() - 30); return { start: fmtD(d), end: today, label: "últimos 30 dias" }; }
           case "ultimos_90_dias": { const d = new Date(todayDate); d.setDate(d.getDate() - 90); return { start: fmtD(d), end: today, label: "últimos 3 meses" }; }
+          case "ano_atual": { return { start: `${todayDate.getFullYear()}-01-01`, end: today, label: "este ano" }; }
+          case "ano_passado": {
+            const y = todayDate.getFullYear() - 1;
+            return { start: `${y}-01-01`, end: `${y}-12-31`, label: `${y}` };
+          }
           default: return { start: today.substring(0, 7) + "-01", end: today, label: "este mês" };
         }
       };
