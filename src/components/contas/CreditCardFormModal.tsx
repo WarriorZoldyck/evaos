@@ -108,6 +108,23 @@ export function CreditCardFormModal({
     }
   }, [cardDigits, isFlipped]);
 
+  // Available parent cards: only main cards (no parent) and not the card being edited
+  const availableParentCards = allCreditCards.filter(
+    (c) => !c.parent_card_id && (!editData || c.id !== editData.id)
+  );
+
+  const handleParentChange = (parentId: string) => {
+    setCardParentId(parentId);
+    if (parentId && parentId !== "none") {
+      const parent = allCreditCards.find((c) => c.id === parentId);
+      if (parent) {
+        setCardClosing(String(parent.closing_day));
+        setCardDue(String(parent.due_day));
+        setCardBankId(parent.bank_account_id);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -118,10 +135,15 @@ export function CreditCardFormModal({
       due_day: Number(cardDue) || 10,
       limit: Number(cardLimit) || 0,
       last_four_digits: cardDigits.trim() || undefined,
+      parent_card_id: cardParentId && cardParentId !== "none" ? cardParentId : undefined,
     });
     setSaving(false);
     if (success) onClose();
   };
+
+  const parentCardName = cardParentId && cardParentId !== "none"
+    ? allCreditCards.find((c) => c.id === cardParentId)?.name
+    : undefined;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
