@@ -191,6 +191,24 @@ export function CreditCardFormModal({
             </div>
           ) : (
             <div className="space-y-3">
+              {availableParentCards.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Vincular a Cartão Principal</Label>
+                  <Select value={cardParentId || "none"} onValueChange={handleParentChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Nenhum (cartão independente)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum (independente)</SelectItem>
+                      {availableParentCards.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Dia Fechamento</Label>

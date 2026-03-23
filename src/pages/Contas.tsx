@@ -413,6 +413,7 @@ export default function Contas() {
         onClose={() => { setFormOpen(false); setEditData(null); }}
         editData={editData}
         bankAccounts={bankAccounts.map((a) => ({ id: a.id, name: a.name }))}
+        allCreditCards={creditCards.map((c) => ({ id: c.id, name: c.name, parent_card_id: (c as any).parent_card_id, closing_day: c.closing_day, due_day: c.due_day, bank_account_id: c.bank_account_id }))}
         onSave={handleSaveCreditCard}
       />
 
