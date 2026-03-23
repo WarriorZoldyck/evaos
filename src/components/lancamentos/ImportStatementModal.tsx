@@ -175,6 +175,7 @@ export function ImportStatementModal({
       company_id: selectedCompanyId || null,
       bank_account_id: accType === "bank" ? accId : null,
       wallet_id: accType === "wallet" ? accId : null,
+      credit_card_id: accType === "card" ? accId : null,
       external_id: `import_${r.date}_${r.amount}_${r.description.slice(0, 20)}`,
     }));
 
