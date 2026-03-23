@@ -38,6 +38,7 @@ interface ImportStatementModalProps {
   onImport: (data: TransactionInsert[]) => Promise<boolean>;
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
+  creditCards: { id: string; name: string; last_four_digits: string | null }[];
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
 }
 
