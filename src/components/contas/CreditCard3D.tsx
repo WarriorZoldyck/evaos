@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { Link, RotateCcw } from "lucide-react";
 
 interface CreditCard3DProps {
   isFlipped: boolean;
@@ -10,6 +10,7 @@ interface CreditCard3DProps {
   cardLimit: string;
   bankAccountName?: string;
   usedAmount?: number;
+  parentCardName?: string;
 }
 
 export function CreditCard3D({
@@ -22,6 +23,7 @@ export function CreditCard3D({
   cardLimit,
   bankAccountName,
   usedAmount = 0,
+  parentCardName,
 }: CreditCard3DProps) {
   const formatDisplayNumber = () => {
     const d = cardDigits.padEnd(4, "•");
@@ -94,12 +96,20 @@ export function CreditCard3D({
             </p>
 
             <div className="flex items-end justify-between relative z-10">
-              <p
-                className="text-sm uppercase tracking-wider truncate max-w-[200px]"
-                style={{ color: "rgba(255,255,255,0.7)" }}
-              >
-                {cardName || "SEU NOME AQUI"}
-              </p>
+              <div className="flex flex-col">
+                <p
+                  className="text-sm uppercase tracking-wider truncate max-w-[200px]"
+                  style={{ color: "rgba(255,255,255,0.7)" }}
+                >
+                  {cardName || "SEU NOME AQUI"}
+                </p>
+                {parentCardName && (
+                  <span className="flex items-center gap-1 text-[9px] mt-0.5" style={{ color: "rgba(147,197,253,0.8)" }}>
+                    <Link className="h-2.5 w-2.5" />
+                    Virtual • {parentCardName}
+                  </span>
+                )}
+              </div>
               <div className="flex -space-x-2">
                 <div className="w-7 h-7 rounded-full bg-red-500/80" />
                 <div className="w-7 h-7 rounded-full bg-yellow-500/60" />

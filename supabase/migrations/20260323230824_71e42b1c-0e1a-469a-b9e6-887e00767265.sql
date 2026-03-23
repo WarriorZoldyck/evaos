@@ -1,0 +1,1 @@
+ALTER TABLE credit_cards ADD COLUMN parent_card_id uuid REFERENCES credit_cards(id) ON DELETE SET NULL;

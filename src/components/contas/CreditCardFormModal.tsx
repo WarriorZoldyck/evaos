@@ -25,6 +25,7 @@ interface CreditCardForm {
   due_day: number;
   limit: number;
   last_four_digits?: string;
+  parent_card_id?: string;
 }
 
 interface CreditCardFormModalProps {
@@ -32,6 +33,7 @@ interface CreditCardFormModalProps {
   onClose: () => void;
   editData?: any;
   bankAccounts: Array<{ id: string; name: string }>;
+  allCreditCards: Array<{ id: string; name: string; parent_card_id?: string | null; closing_day: number; due_day: number; bank_account_id: string }>;
   onSave: (data: CreditCardForm) => Promise<boolean>;
 }
 
@@ -40,6 +42,7 @@ export function CreditCardFormModal({
   onClose,
   editData,
   bankAccounts,
+  allCreditCards,
   onSave,
 }: CreditCardFormModalProps) {
   const [saving, setSaving] = useState(false);
@@ -53,6 +56,7 @@ export function CreditCardFormModal({
   const [cardDue, setCardDue] = useState("10");
   const [cardLimit, setCardLimit] = useState("0");
   const [cardBankId, setCardBankId] = useState("");
+  const [cardParentId, setCardParentId] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -65,6 +69,7 @@ export function CreditCardFormModal({
       setCardDue(String(editData.due_day || 10));
       setCardLimit(String(editData.limit || 0));
       setCardBankId(editData.bank_account_id || "");
+      setCardParentId(editData.parent_card_id || "");
     } else {
       setCardName("");
       setCardDigits("");
@@ -72,6 +77,7 @@ export function CreditCardFormModal({
       setCardDue("10");
       setCardLimit("0");
       setCardBankId("");
+      setCardParentId("");
     }
   }, [open, editData]);
 
@@ -102,6 +108,23 @@ export function CreditCardFormModal({
     }
   }, [cardDigits, isFlipped]);
 
+  // Available parent cards: only main cards (no parent) and not the card being edited
+  const availableParentCards = allCreditCards.filter(
+    (c) => !c.parent_card_id && (!editData || c.id !== editData.id)
+  );
+
+  const handleParentChange = (parentId: string) => {
+    setCardParentId(parentId);
+    if (parentId && parentId !== "none") {
+      const parent = allCreditCards.find((c) => c.id === parentId);
+      if (parent) {
+        setCardClosing(String(parent.closing_day));
+        setCardDue(String(parent.due_day));
+        setCardBankId(parent.bank_account_id);
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -112,10 +135,15 @@ export function CreditCardFormModal({
       due_day: Number(cardDue) || 10,
       limit: Number(cardLimit) || 0,
       last_four_digits: cardDigits.trim() || undefined,
+      parent_card_id: cardParentId && cardParentId !== "none" ? cardParentId : undefined,
     });
     setSaving(false);
     if (success) onClose();
   };
+
+  const parentCardName = cardParentId && cardParentId !== "none"
+    ? allCreditCards.find((c) => c.id === cardParentId)?.name
+    : undefined;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -135,6 +163,7 @@ export function CreditCardFormModal({
             cardLimit={cardLimit}
             bankAccountName={bankAccounts.find((a) => a.id === cardBankId)?.name}
             usedAmount={usedAmount}
+            parentCardName={parentCardName}
           />
 
           {/* Form fields based on side */}
@@ -162,6 +191,24 @@ export function CreditCardFormModal({
             </div>
           ) : (
             <div className="space-y-3">
+              {availableParentCards.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Vincular a Cartão Principal</Label>
+                  <Select value={cardParentId || "none"} onValueChange={handleParentChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Nenhum (cartão independente)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum (independente)</SelectItem>
+                      {availableParentCards.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Dia Fechamento</Label>
