@@ -33,6 +33,7 @@ interface CreditCardFormModalProps {
   onClose: () => void;
   editData?: any;
   bankAccounts: Array<{ id: string; name: string }>;
+  allCreditCards: Array<{ id: string; name: string; parent_card_id?: string | null; closing_day: number; due_day: number; bank_account_id: string }>;
   onSave: (data: CreditCardForm) => Promise<boolean>;
 }
 
