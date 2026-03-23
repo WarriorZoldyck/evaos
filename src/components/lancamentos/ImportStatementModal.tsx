@@ -303,6 +303,12 @@ export function ImportStatementModal({
               </div>
             </div>
 
+            {autoDetectedCard && (
+              <div className="text-xs text-primary font-medium flex items-center gap-1">
+                💳 Cartão "{autoDetectedCard}" detectado automaticamente pelos últimos 4 dígitos
+              </div>
+            )}
+
             <div className="text-xs text-muted-foreground">
               {fileName} — {selectedRows.length} de {rows.length} selecionadas
             </div>
