@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet, Smartphone, Receipt, FileText } from "lucide-react";
+import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet, Smartphone, Receipt, FileText, Link } from "lucide-react";
 import { VirtualWalletCard } from "@/components/contas/VirtualWalletCard";
 import { useAccounts, type CardTerminal } from "@/hooks/useAccounts";
 import { useCompany } from "@/contexts/CompanyContext";
