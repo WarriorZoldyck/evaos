@@ -23,6 +23,7 @@ export function CreditCard3D({
   cardLimit,
   bankAccountName,
   usedAmount = 0,
+  parentCardName,
 }: CreditCard3DProps) {
   const formatDisplayNumber = () => {
     const d = cardDigits.padEnd(4, "•");
