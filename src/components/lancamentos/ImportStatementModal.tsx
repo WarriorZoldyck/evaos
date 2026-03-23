@@ -117,8 +117,8 @@ export function ImportStatementModal({
         return allDescriptions.includes(c.last_four_digits);
       });
       if (detectedCard) {
-        const cardValue = `card:${detectedCard.id}`;
-        setTargetAccount(cardValue);
+        setImportType("cartao");
+        setTargetCard(detectedCard.id);
         setAutoDetectedCard(detectedCard.name);
       } else {
         setAutoDetectedCard("");
