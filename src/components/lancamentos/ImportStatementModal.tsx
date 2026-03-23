@@ -62,6 +62,7 @@ export function ImportStatementModal({
   const [fileName, setFileName] = useState("");
   const [targetAccount, setTargetAccount] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
+  const [autoDetectedCard, setAutoDetectedCard] = useState("");
 
   const rootCategories = categories.filter((c) => !c.parent_id);
 
