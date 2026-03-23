@@ -163,6 +163,7 @@ export function CreditCardFormModal({
             cardLimit={cardLimit}
             bankAccountName={bankAccounts.find((a) => a.id === cardBankId)?.name}
             usedAmount={usedAmount}
+            parentCardName={parentCardName}
           />
 
           {/* Form fields based on side */}
