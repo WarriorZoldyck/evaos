@@ -7,6 +7,7 @@ import { AppSidebar } from "./AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GlobalTransactionModal } from "./GlobalTransactionModal";
 import { OnboardingGuide } from "@/components/onboarding/OnboardingGuide";
+import { EvaChatButton } from "@/components/chat/EvaChatButton";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
