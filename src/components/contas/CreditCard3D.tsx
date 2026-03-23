@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react";
+import { Link, RotateCcw } from "lucide-react";
 
 interface CreditCard3DProps {
   isFlipped: boolean;
@@ -10,6 +10,7 @@ interface CreditCard3DProps {
   cardLimit: string;
   bankAccountName?: string;
   usedAmount?: number;
+  parentCardName?: string;
 }
 
 export function CreditCard3D({
