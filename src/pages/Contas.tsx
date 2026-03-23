@@ -237,23 +237,54 @@ export default function Contas() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {creditCards.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{c.last_four_digits ? `**** ${c.last_four_digits}` : "—"}</TableCell>
-                        <TableCell>Dia {c.closing_day}</TableCell>
-                        <TableCell>Dia {c.due_day}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(c.limit)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: c.id, type: "card", name: c.name })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="sm" onClick={() => setBillPaymentCard(c)} className="h-8 gap-1 text-xs"><Receipt className="h-3.5 w-3.5" />Pagar Fatura</Button>
-                            <Button variant="ghost" size="icon" onClick={() => openEdit(c)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: c.id, name: c.name, tab: "card" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {/* Sort: main cards first, then linked cards grouped under parent */}
+                    {(() => {
+                      const mainCards = creditCards.filter((c) => !(c as any).parent_card_id);
+                      const childCards = creditCards.filter((c) => (c as any).parent_card_id);
+                      const sorted: typeof creditCards = [];
+                      mainCards.forEach((main) => {
+                        sorted.push(main);
+                        childCards.filter((ch) => (ch as any).parent_card_id === main.id).forEach((ch) => sorted.push(ch));
+                      });
+                      // orphan children (parent deleted)
+                      childCards.filter((ch) => !mainCards.find((m) => m.id === (ch as any).parent_card_id)).forEach((ch) => sorted.push(ch));
+                      return sorted;
+                    })().map((c) => {
+                      const isChild = !!(c as any).parent_card_id;
+                      const parentName = isChild ? creditCards.find((p) => p.id === (c as any).parent_card_id)?.name : undefined;
+                      return (
+                        <TableRow key={c.id} className={isChild ? "bg-muted/30" : ""}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              {isChild && <Link className="h-3.5 w-3.5 text-muted-foreground ml-4" />}
+                              <span>{c.name}</span>
+                              {isChild && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  Virtual
+                                </Badge>
+                              )}
+                            </div>
+                            {isChild && parentName && (
+                              <span className="text-[10px] text-muted-foreground ml-10">
+                                vinculado a {parentName}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{c.last_four_digits ? `**** ${c.last_four_digits}` : "—"}</TableCell>
+                          <TableCell>Dia {c.closing_day}</TableCell>
+                          <TableCell>Dia {c.due_day}</TableCell>
+                          <TableCell className="text-right font-mono">{formatCurrency(c.limit)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: c.id, type: "card", name: c.name })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="sm" onClick={() => setBillPaymentCard(c)} className="h-8 gap-1 text-xs"><Receipt className="h-3.5 w-3.5" />Pagar Fatura</Button>
+                              <Button variant="ghost" size="icon" onClick={() => openEdit(c)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: c.id, name: c.name, tab: "card" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
