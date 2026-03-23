@@ -261,41 +261,57 @@ export function ImportStatementModal({
               {/* Account select */}
               <div className="flex-1 min-w-[200px]">
                 <label className="text-xs text-muted-foreground mb-1 block">Conta destino *</label>
-                <Select value={targetAccount} onValueChange={setTargetAccount}>
+                <Select value={targetBankAccount} onValueChange={(v) => { setTargetBankAccount(v); }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a conta" />
                   </SelectTrigger>
                   <SelectContent>
-                    {bankAccounts.length > 0 && (
-                      <>
-                        {bankAccounts.map((a) => (
-                          <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>
-                            🏦 {a.name}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {wallets.length > 0 && (
-                      <>
-                        {wallets.map((w) => (
-                          <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
-                            👛 {w.name}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {creditCards.length > 0 && (
-                      <>
-                        {creditCards.map((c) => (
-                          <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>
-                            💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
+                    {bankAccounts.map((a) => (
+                      <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>
+                        🏦 {a.name}
+                      </SelectItem>
+                    ))}
+                    {wallets.map((w) => (
+                      <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>
+                        👛 {w.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
+              {targetBankAccount && (
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-xs text-muted-foreground mb-1 block">Tipo de extrato *</label>
+                  <Select value={importType} onValueChange={(v) => setImportType(v as "debito" | "cartao")}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="debito">💰 Débito em conta</SelectItem>
+                      <SelectItem value="cartao">💳 Cartão de crédito</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {importType === "cartao" && (
+                <div className="flex-1 min-w-[200px]">
+                  <label className="text-xs text-muted-foreground mb-1 block">Cartão *</label>
+                  <Select value={targetCard} onValueChange={setTargetCard}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o cartão" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {creditCards.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )
 
               {/* Default category */}
               <div className="flex-1 min-w-[200px]">
