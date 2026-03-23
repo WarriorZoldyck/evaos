@@ -194,6 +194,7 @@ export function ImportStatementModal({
     setFileName("");
     setTargetAccount("");
     setDefaultCategory("");
+    setAutoDetectedCard("");
     onClose();
   };
 
