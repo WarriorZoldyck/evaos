@@ -94,11 +94,12 @@ export function useAccounts() {
   };
 
   // Credit Cards CRUD
-  const createCreditCard = async (data: { name: string; bank_account_id: string; closing_day: number; due_day: number; limit: number; last_four_digits?: string }) => {
+  const createCreditCard = async (data: { name: string; bank_account_id: string; closing_day: number; due_day: number; limit: number; last_four_digits?: string; parent_card_id?: string }) => {
     if (!user) return false;
     const { error } = await supabase.from("credit_cards").insert({
       ...data,
       last_four_digits: data.last_four_digits || null,
+      parent_card_id: data.parent_card_id || null,
       user_id: user.id,
       company_id: selectedCompanyId || null,
     });

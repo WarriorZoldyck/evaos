@@ -25,6 +25,7 @@ interface CreditCardForm {
   due_day: number;
   limit: number;
   last_four_digits?: string;
+  parent_card_id?: string;
 }
 
 interface CreditCardFormModalProps {

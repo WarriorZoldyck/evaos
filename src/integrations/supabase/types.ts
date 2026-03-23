@@ -231,6 +231,7 @@ export type Database = {
           last_four_digits: string | null
           limit: number
           name: string
+          parent_card_id: string | null
           user_id: string
         }
         Insert: {
@@ -243,6 +244,7 @@ export type Database = {
           last_four_digits?: string | null
           limit: number
           name: string
+          parent_card_id?: string | null
           user_id: string
         }
         Update: {
@@ -255,6 +257,7 @@ export type Database = {
           last_four_digits?: string | null
           limit?: number
           name?: string
+          parent_card_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -270,6 +273,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_cards_parent_card_id_fkey"
+            columns: ["parent_card_id"]
+            isOneToOne: false
+            referencedRelation: "credit_cards"
             referencedColumns: ["id"]
           },
         ]
