@@ -48,6 +48,7 @@ export function ImportStatementModal({
   onImport,
   bankAccounts,
   wallets,
+  creditCards,
   categories,
 }: ImportStatementModalProps) {
   const { user } = useAuth();
