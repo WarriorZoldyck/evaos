@@ -102,16 +102,31 @@ export function ImportStatementModal({
         return;
       }
 
-      setRows(
-        (result.transactions || []).map((t: any) => ({
-          ...t,
-          selected: true,
-        }))
-      );
+      const parsed = (result.transactions || []).map((t: any) => ({
+        ...t,
+        selected: true,
+      }));
+      setRows(parsed);
+
+      // Auto-detect credit card by last 4 digits
+      const allDescriptions = parsed.map((t: any) => t.description).join(" ");
+      const detectedCard = creditCards.find((c) => {
+        if (!c.last_four_digits) return false;
+        return allDescriptions.includes(c.last_four_digits);
+      });
+      if (detectedCard) {
+        const cardValue = `card:${detectedCard.id}`;
+        setTargetAccount(cardValue);
+        setAutoDetectedCard(detectedCard.name);
+      } else {
+        setAutoDetectedCard("");
+      }
 
       toast({
         title: `${result.count} transações encontradas`,
-        description: `Revise antes de importar.`,
+        description: detectedCard
+          ? `Cartão "${detectedCard.name}" detectado automaticamente.`
+          : `Revise antes de importar.`,
       });
     } catch (err: any) {
       toast({
