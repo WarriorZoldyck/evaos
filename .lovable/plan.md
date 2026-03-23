@@ -1,39 +1,51 @@
 
 
-## Problema
+# Vincular Cartões (Cartão Principal + Cartões Virtuais)
 
-A lógica atual trata **todo** boleto de compra (despesa) como "sem conta" — pula direto a seleção de conta. Mas a IMPLANTES BR LTDA **tem** contas e carteiras cadastradas (1 conta + 1 carteira por empresa). A EVA deveria perguntar em qual conta registrar quando existem contas disponíveis, e só pular quando realmente não houver nenhuma.
+## Contexto
+Hoje cada cartão de crédito é independente. A proposta é permitir que um cartão seja vinculado a outro (ex: cartão virtual vinculado ao cartão físico principal), compartilhando o mesmo limite e conta bancária.
 
-## Solução
+## O que muda
 
-Inverter a ordem da verificação: primeiro checar se há contas disponíveis no contexto, e só aplicar o bypass de "boleto de compra sem conta" quando `totalOptions === 0`.
+### 1. Migração no banco de dados
+Adicionar uma coluna `parent_card_id` (uuid, nullable) na tabela `credit_cards` que referencia outro cartão da mesma tabela. Cartões com `parent_card_id = null` são cartões principais. Cartões com valor preenchido são "virtuais/vinculados".
 
-## Mudanças técnicas
-
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
-
-### Reestruturar bloco de seleção de conta (linhas ~1747-1803)
-
-Lógica atual:
-```
-if isBoletoCompra → skip (sempre)
-else → checar totalOptions
+```sql
+ALTER TABLE credit_cards
+  ADD COLUMN parent_card_id uuid REFERENCES credit_cards(id) ON DELETE SET NULL;
 ```
 
-Nova lógica:
-```
-totalOptions = contextAccounts + contextWallets
-if totalOptions === 1 → usar automaticamente
-else if totalOptions > 1 → perguntar (para TODOS, incluindo boleto de compra)
-else (totalOptions === 0):
-  if isBoletoCompra → skip sem conta
-  else → buscar contas de outros contextos e perguntar (ou erro)
-```
+### 2. Formulário de criação/edição (`CreditCardFormModal.tsx`)
+- Adicionar um campo opcional **"Vincular a cartão principal"** (Select) no verso do cartão (junto com fechamento, vencimento, etc.)
+- Listar apenas cartões que NÃO são vinculados (onde `parent_card_id IS NULL`) e que não são o próprio cartão em edição
+- Quando vinculado: herdar automaticamente `closing_day`, `due_day`, `bank_account_id` do cartão pai (campos ficam preenchidos mas editáveis caso o usuário queira sobrescrever)
+- O `limit` do cartão virtual representa um sub-limite dentro do limite do pai (ou pode ser igual)
 
-Ou seja:
-- Boleto de compra com contas disponíveis → pergunta normalmente qual conta
-- Boleto de compra sem nenhuma conta → registra sem conta (bypass)
-- Outros métodos sem conta → comportamento atual (perguntar/buscar cross-context)
+### 3. Interface de criação (`CreditCardForm` interface)
+- Adicionar `parent_card_id?: string` ao tipo `CreditCardForm`
 
-### Re-deploy da edge function
+### 4. Hook `useAccounts.ts`
+- Passar `parent_card_id` no `createCreditCard` e `updateCreditCard`
+
+### 5. Listagem na página Contas (`Contas.tsx`)
+- Na tabela de cartões, agrupar visualmente: cartões principais aparecem primeiro, cartões vinculados aparecem indentados logo abaixo do pai com um indicador visual (ex: ícone de link ou badge "Virtual")
+- Adicionar coluna ou badge indicando "Vinculado a: [Nome do Pai]"
+
+### 6. Componente 3D do cartão (`CreditCard3D.tsx`)
+- Exibir no verso, quando vinculado, o nome do cartão principal
+- Opcionalmente: visual ligeiramente diferente (badge "Virtual" ou cor mais clara)
+
+## Fluxo do usuário
+1. Usuário clica em "Novo Cartão"
+2. Preenche nome e dígitos (frente)
+3. Vira o cartão (verso) -- vê o novo campo "Vincular a cartão principal"
+4. Se selecionar um cartão pai, os campos de fechamento, vencimento e conta bancária são preenchidos automaticamente com os dados do pai
+5. Usuário pode ajustar se quiser e salvar
+
+## Arquivos afetados
+- **Migração SQL**: nova coluna `parent_card_id` em `credit_cards`
+- `src/components/contas/CreditCardFormModal.tsx`: novo campo de vínculo + auto-preenchimento
+- `src/components/contas/CreditCard3D.tsx`: indicação visual de cartão vinculado
+- `src/hooks/useAccounts.ts`: propagar `parent_card_id` no CRUD
+- `src/pages/Contas.tsx`: agrupamento visual na listagem
 
