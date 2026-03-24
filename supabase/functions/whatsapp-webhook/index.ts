@@ -1922,7 +1922,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         console.log("HISTORICAL REUSE: attempting match", {
           aiContact,
           aiDescription,
-          docIssuer: docIssuer || "(none)",
+          docMerchant: docMerchantNorm || "(none)",
           historicalCount: mergedHistoricalTransactions.length,
           contextCategoriesCount: contextCategories.length,
         });
@@ -1935,15 +1935,15 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           let isMatch = false;
           let matchReason = "";
           
-          // Match by document issuer_name against historical contact_name or description (STRONGEST signal)
-          if (!isMatch && docIssuer && docIssuer.length >= 4) {
-            if (htxContact && (docIssuer === htxContact || docIssuer.includes(htxContact) || htxContact.includes(docIssuer))) {
+          // Match by document merchant against historical contact_name or description (STRONGEST signal)
+          if (!isMatch && docMerchantNorm && docMerchantNorm.length >= 4) {
+            if (htxContact && (docMerchantNorm === htxContact || docMerchantNorm.includes(htxContact) || htxContact.includes(docMerchantNorm))) {
               isMatch = true;
-              matchReason = `docIssuer "${docIssuer}" ~ htxContact "${htxContact}"`;
+              matchReason = `docMerchant "${docMerchantNorm}" ~ htxContact "${htxContact}"`;
             }
-            if (!isMatch && htxDesc && (htxDesc.includes(docIssuer) || docIssuer.includes(htxDesc))) {
+            if (!isMatch && htxDesc && (htxDesc.includes(docMerchantNorm) || docMerchantNorm.includes(htxDesc))) {
               isMatch = true;
-              matchReason = `docIssuer "${docIssuer}" ~ htxDesc "${htxDesc}"`;
+              matchReason = `docMerchant "${docMerchantNorm}" ~ htxDesc "${htxDesc}"`;
             }
           }
           
