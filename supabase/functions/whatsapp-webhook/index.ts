@@ -457,7 +457,7 @@ serve(async (req) => {
 
     const { data: allProfiles, error: profileError } = await supabase
       .from("profiles")
-      .select("id, whatsapp_number")
+      .select("id, whatsapp_number, full_name")
       .not("whatsapp_number", "is", null);
 
     if (profileError) {
