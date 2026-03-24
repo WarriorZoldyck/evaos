@@ -1381,6 +1381,8 @@ IMPORTANTE:
 REGRA OBRIGATÓRIA — contact_name:
 - Quando houver documento/recibo/comprovante/NF, o campo "contact_name" DEVE SEMPRE conter o nome do ESTABELECIMENTO/EMISSOR identificado no documento (ex: "Empório Moscato", "Dentais Comércio", "Posto Shell").
 - NUNCA deixe contact_name como null quando o documento mostra claramente o nome do estabelecimento.
+- Em COMPROVANTES DE PIX/TRANSFERÊNCIA: o "contact_name" deve ser o BENEFICIÁRIO/FAVORECIDO (quem RECEBEU o dinheiro), e NÃO o remetente/pagador. Se o usuário é quem pagou, o contact_name é o nome de quem recebeu.
+- Em COMPROVANTES DE RECEBIMENTO (PIX recebido): o "contact_name" deve ser o nome de quem ENVIOU o dinheiro.
 
 REGRA CRÍTICA — ESTABELECIMENTO NÃO É CATEGORIA:
 - O nome do estabelecimento (ex: "Empório Moscato", "Lanchonete da Maria", "Doceria XYZ", "Restaurante ABC") NUNCA deve ser usado como nome de categoria.
