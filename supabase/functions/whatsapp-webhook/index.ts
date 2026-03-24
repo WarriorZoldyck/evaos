@@ -140,13 +140,18 @@ async function extractDocumentParties(apiKey: string, userContent: any) {
             content: `Você analisa notas fiscais, boletos, recibos e comprovantes.
 
 Retorne APENAS um JSON válido no formato:
-{"document_type":"nota_fiscal|boleto|recibo|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","reason":"breve explicação"}
+{"document_type":"nota_fiscal|boleto|recibo|comprovante_pix|comprovante_transferencia|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","transaction_direction":"sent|received|unknown","reason":"breve explicação"}
 
 REGRAS:
 - "recipient" = destinatário/tomador/comprador/pagador/sacado (quem vai pagar ou recebeu a nota)
-- "issuer" = emitente/fornecedor/cobrador
+- "issuer" = emitente/fornecedor/cobrador/remetente
 - Em nota fiscal, priorize DESTINATÁRIO/REMETENTE ou TOMADOR, nunca o emitente
+- Em comprovante de PIX/transferência:
+  - "issuer" = quem ENVIOU o dinheiro (remetente/pagador/origem)
+  - "recipient" = quem RECEBEU o dinheiro (beneficiário/favorecido/destino)
+  - "transaction_direction" = "sent" se o documento mostra um ENVIO/PAGAMENTO, "received" se mostra um RECEBIMENTO
 - Se não conseguir ler um campo com segurança, retorne null nesse campo
+- "transaction_direction" indica se o dinheiro está SAINDO ("sent") ou ENTRANDO ("received") do ponto de vista de quem enviou o documento. Se não for claro, use "unknown"
 - Não escreva texto fora do JSON`,
           },
           { role: "user", content: userContent },
@@ -169,6 +174,60 @@ REGRAS:
     console.warn("Document party extraction failed:", error);
     return null;
   }
+}
+
+// Helper: determine the correct merchant name from document parties based on transaction context
+function resolveDocMerchant(
+  documentPartyExtraction: any,
+  txType: string,
+  userFullName: string | null
+): string {
+  if (!documentPartyExtraction) return "";
+
+  const docType = (documentPartyExtraction.document_type || "").toLowerCase();
+  const direction = (documentPartyExtraction.transaction_direction || "").toLowerCase();
+  const issuer = documentPartyExtraction.issuer_name || "";
+  const recipient = documentPartyExtraction.recipient_name || "";
+
+  let merchant = "";
+
+  // For PIX/transfer receipts: use the counterparty (not the user)
+  const isPixOrTransfer = docType.includes("pix") || docType.includes("transferencia") || docType.includes("transfer");
+
+  if (isPixOrTransfer) {
+    if (direction === "sent" || txType === "despesa") {
+      // User sent money → merchant is the recipient
+      merchant = recipient || issuer;
+    } else if (direction === "received" || txType === "receita") {
+      // User received money → merchant is the issuer/sender
+      merchant = issuer || recipient;
+    } else {
+      merchant = recipient || issuer;
+    }
+  } else if (docType === "boleto") {
+    // Boleto: issuer is the one charging (the merchant)
+    merchant = issuer || recipient;
+  } else {
+    // NF, recibo, etc: issuer is the merchant/fornecedor
+    merchant = issuer || recipient;
+  }
+
+  // Anti-self-match: if merchant matches the user's own name, use the other party
+  if (merchant && userFullName) {
+    const normalizedMerchant = normalizeText(merchant);
+    const normalizedUser = normalizeText(userFullName);
+    if (normalizedUser && normalizedMerchant && normalizedUser.length >= 4) {
+      const isSelf = normalizedMerchant === normalizedUser
+        || normalizedMerchant.includes(normalizedUser)
+        || normalizedUser.includes(normalizedMerchant);
+      if (isSelf) {
+        console.log("ANTI-SELF-MATCH: merchant matched user name, swapping", { merchant, userFullName });
+        merchant = merchant === issuer ? recipient : issuer;
+      }
+    }
+  }
+
+  return merchant;
 }
 
 function matchCompanyFromDocument(
@@ -398,7 +457,7 @@ serve(async (req) => {
 
     const { data: allProfiles, error: profileError } = await supabase
       .from("profiles")
-      .select("id, whatsapp_number")
+      .select("id, whatsapp_number, full_name")
       .not("whatsapp_number", "is", null);
 
     if (profileError) {
@@ -1322,6 +1381,8 @@ IMPORTANTE:
 REGRA OBRIGATÓRIA — contact_name:
 - Quando houver documento/recibo/comprovante/NF, o campo "contact_name" DEVE SEMPRE conter o nome do ESTABELECIMENTO/EMISSOR identificado no documento (ex: "Empório Moscato", "Dentais Comércio", "Posto Shell").
 - NUNCA deixe contact_name como null quando o documento mostra claramente o nome do estabelecimento.
+- Em COMPROVANTES DE PIX/TRANSFERÊNCIA: o "contact_name" deve ser o BENEFICIÁRIO/FAVORECIDO (quem RECEBEU o dinheiro), e NÃO o remetente/pagador. Se o usuário é quem pagou, o contact_name é o nome de quem recebeu.
+- Em COMPROVANTES DE RECEBIMENTO (PIX recebido): o "contact_name" deve ser o nome de quem ENVIOU o dinheiro.
 
 REGRA CRÍTICA — ESTABELECIMENTO NÃO É CATEGORIA:
 - O nome do estabelecimento (ex: "Empório Moscato", "Lanchonete da Maria", "Doceria XYZ", "Restaurante ABC") NUNCA deve ser usado como nome de categoria.
@@ -1829,7 +1890,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // have a matching contact_name/description that used a valid category
       
       // Layer 2: Targeted merchant search (365 days) to guarantee matching even for high-volume users
-      const merchantSearchName = normalizeText(documentPartyExtraction?.issuer_name || aiParsed.contact_name || contactName || "");
+      // SMART MERCHANT RESOLUTION: use the correct counterparty based on transaction direction
+      const userFullName = profile?.full_name || null;
+      const docMerchant = resolveDocMerchant(documentPartyExtraction, txType, userFullName);
+      const merchantSearchName = normalizeText(docMerchant || aiParsed.contact_name || contactName || "");
       let mergedHistoricalTransactions = [...historicalTransactions];
       
       if (merchantSearchName && merchantSearchName.length >= 4) {
@@ -1854,13 +1918,13 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       if (!matchedCategory && mergedHistoricalTransactions.length > 0) {
         const aiDescription = normalizeText(aiParsed.description);
         const aiContact = normalizeText(aiParsed.contact_name || contactName);
-        // Bug fix: also use issuer_name from document extraction as a matching signal
-        const docIssuer = normalizeText(documentPartyExtraction?.issuer_name || "");
+        // Use resolved merchant name from document (direction-aware, anti-self-match)
+        const docMerchantNorm = normalizeText(docMerchant);
         
         console.log("HISTORICAL REUSE: attempting match", {
           aiContact,
           aiDescription,
-          docIssuer: docIssuer || "(none)",
+          docMerchant: docMerchantNorm || "(none)",
           historicalCount: mergedHistoricalTransactions.length,
           contextCategoriesCount: contextCategories.length,
         });
@@ -1873,15 +1937,15 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           let isMatch = false;
           let matchReason = "";
           
-          // Match by document issuer_name against historical contact_name or description (STRONGEST signal)
-          if (!isMatch && docIssuer && docIssuer.length >= 4) {
-            if (htxContact && (docIssuer === htxContact || docIssuer.includes(htxContact) || htxContact.includes(docIssuer))) {
+          // Match by document merchant against historical contact_name or description (STRONGEST signal)
+          if (!isMatch && docMerchantNorm && docMerchantNorm.length >= 4) {
+            if (htxContact && (docMerchantNorm === htxContact || docMerchantNorm.includes(htxContact) || htxContact.includes(docMerchantNorm))) {
               isMatch = true;
-              matchReason = `docIssuer "${docIssuer}" ~ htxContact "${htxContact}"`;
+              matchReason = `docMerchant "${docMerchantNorm}" ~ htxContact "${htxContact}"`;
             }
-            if (!isMatch && htxDesc && (htxDesc.includes(docIssuer) || docIssuer.includes(htxDesc))) {
+            if (!isMatch && htxDesc && (htxDesc.includes(docMerchantNorm) || docMerchantNorm.includes(htxDesc))) {
               isMatch = true;
-              matchReason = `docIssuer "${docIssuer}" ~ htxDesc "${htxDesc}"`;
+              matchReason = `docMerchant "${docMerchantNorm}" ~ htxDesc "${htxDesc}"`;
             }
           }
           
