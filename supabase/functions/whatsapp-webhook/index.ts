@@ -140,13 +140,18 @@ async function extractDocumentParties(apiKey: string, userContent: any) {
             content: `Você analisa notas fiscais, boletos, recibos e comprovantes.
 
 Retorne APENAS um JSON válido no formato:
-{"document_type":"nota_fiscal|boleto|recibo|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","reason":"breve explicação"}
+{"document_type":"nota_fiscal|boleto|recibo|comprovante_pix|comprovante_transferencia|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","transaction_direction":"sent|received|unknown","reason":"breve explicação"}
 
 REGRAS:
 - "recipient" = destinatário/tomador/comprador/pagador/sacado (quem vai pagar ou recebeu a nota)
-- "issuer" = emitente/fornecedor/cobrador
+- "issuer" = emitente/fornecedor/cobrador/remetente
 - Em nota fiscal, priorize DESTINATÁRIO/REMETENTE ou TOMADOR, nunca o emitente
+- Em comprovante de PIX/transferência:
+  - "issuer" = quem ENVIOU o dinheiro (remetente/pagador/origem)
+  - "recipient" = quem RECEBEU o dinheiro (beneficiário/favorecido/destino)
+  - "transaction_direction" = "sent" se o documento mostra um ENVIO/PAGAMENTO, "received" se mostra um RECEBIMENTO
 - Se não conseguir ler um campo com segurança, retorne null nesse campo
+- "transaction_direction" indica se o dinheiro está SAINDO ("sent") ou ENTRANDO ("received") do ponto de vista de quem enviou o documento. Se não for claro, use "unknown"
 - Não escreva texto fora do JSON`,
           },
           { role: "user", content: userContent },
@@ -169,6 +174,60 @@ REGRAS:
     console.warn("Document party extraction failed:", error);
     return null;
   }
+}
+
+// Helper: determine the correct merchant name from document parties based on transaction context
+function resolveDocMerchant(
+  documentPartyExtraction: any,
+  txType: string,
+  userFullName: string | null
+): string {
+  if (!documentPartyExtraction) return "";
+
+  const docType = (documentPartyExtraction.document_type || "").toLowerCase();
+  const direction = (documentPartyExtraction.transaction_direction || "").toLowerCase();
+  const issuer = documentPartyExtraction.issuer_name || "";
+  const recipient = documentPartyExtraction.recipient_name || "";
+
+  let merchant = "";
+
+  // For PIX/transfer receipts: use the counterparty (not the user)
+  const isPixOrTransfer = docType.includes("pix") || docType.includes("transferencia") || docType.includes("transfer");
+
+  if (isPixOrTransfer) {
+    if (direction === "sent" || txType === "despesa") {
+      // User sent money → merchant is the recipient
+      merchant = recipient || issuer;
+    } else if (direction === "received" || txType === "receita") {
+      // User received money → merchant is the issuer/sender
+      merchant = issuer || recipient;
+    } else {
+      merchant = recipient || issuer;
+    }
+  } else if (docType === "boleto") {
+    // Boleto: issuer is the one charging (the merchant)
+    merchant = issuer || recipient;
+  } else {
+    // NF, recibo, etc: issuer is the merchant/fornecedor
+    merchant = issuer || recipient;
+  }
+
+  // Anti-self-match: if merchant matches the user's own name, use the other party
+  if (merchant && userFullName) {
+    const normalizedMerchant = normalizeText(merchant);
+    const normalizedUser = normalizeText(userFullName);
+    if (normalizedUser && normalizedMerchant && normalizedUser.length >= 4) {
+      const isSelf = normalizedMerchant === normalizedUser
+        || normalizedMerchant.includes(normalizedUser)
+        || normalizedUser.includes(normalizedMerchant);
+      if (isSelf) {
+        console.log("ANTI-SELF-MATCH: merchant matched user name, swapping", { merchant, userFullName });
+        merchant = merchant === issuer ? recipient : issuer;
+      }
+    }
+  }
+
+  return merchant;
 }
 
 function matchCompanyFromDocument(
