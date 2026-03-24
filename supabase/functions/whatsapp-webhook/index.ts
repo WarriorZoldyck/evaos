@@ -1888,7 +1888,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // have a matching contact_name/description that used a valid category
       
       // Layer 2: Targeted merchant search (365 days) to guarantee matching even for high-volume users
-      const merchantSearchName = normalizeText(documentPartyExtraction?.issuer_name || aiParsed.contact_name || contactName || "");
+      // SMART MERCHANT RESOLUTION: use the correct counterparty based on transaction direction
+      const userFullName = profile?.full_name || null;
+      const docMerchant = resolveDocMerchant(documentPartyExtraction, txType, userFullName);
+      const merchantSearchName = normalizeText(docMerchant || aiParsed.contact_name || contactName || "");
       let mergedHistoricalTransactions = [...historicalTransactions];
       
       if (merchantSearchName && merchantSearchName.length >= 4) {
@@ -1913,8 +1916,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       if (!matchedCategory && mergedHistoricalTransactions.length > 0) {
         const aiDescription = normalizeText(aiParsed.description);
         const aiContact = normalizeText(aiParsed.contact_name || contactName);
-        // Bug fix: also use issuer_name from document extraction as a matching signal
-        const docIssuer = normalizeText(documentPartyExtraction?.issuer_name || "");
+        // Use resolved merchant name from document (direction-aware, anti-self-match)
+        const docMerchantNorm = normalizeText(docMerchant);
         
         console.log("HISTORICAL REUSE: attempting match", {
           aiContact,
