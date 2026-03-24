@@ -1,39 +1,70 @@
 
 
-# Corrigir Fluxo de Importação de Extrato: Conta + Tipo de Lançamento
+# Corrigir Leitura de Documentos no WhatsApp — Merchant Search Inteligente
 
-## Problema
-Hoje o seletor "Conta destino" mistura contas bancarias, carteiras e cartoes de credito em uma unica lista. O fluxo correto deve ser:
+## Problema Raiz
 
-1. Primeiro: selecionar a **conta bancaria** (ou carteira) de destino
-2. Segundo: perguntar se o extrato e de **debito em conta** ou de **cartao de credito**
-3. Se for cartao: mostrar um segundo seletor para escolher qual cartao (auto-detectando pelos ultimos 4 digitos do extrato)
+Quando a Paula (ou qualquer usuario) envia um comprovante de PIX, o sistema `extractDocumentParties` retorna:
+- `issuer_name` = "Paula Regina Silva Simoes" (quem ENVIOU o PIX — ou seja, a propria usuario)
+- `recipient_name` = "Edson Gleith de Oliveira" (quem RECEBEU o PIX — o verdadeiro destino)
 
-## O que muda
+O codigo usa `issuer_name` como `merchantSearchName` (linha 1832) e `docIssuer` (linha 1858) para buscar historico. Isso faz com que:
+1. A busca historica encontre transacoes da propria Paula ("PIX recebido Paula...") que sao RECEITA
+2. O `typeMatches` falha porque a transacao atual e DESPESA
+3. Nenhuma categoria historica e reusada → pede para criar categoria nova
 
-### `src/components/lancamentos/ImportStatementModal.tsx`
+## Correcoes
 
-**Estado**: substituir `targetAccount` (string unica) por 3 estados:
-- `targetBankAccount` — conta bancaria ou carteira selecionada (`bank:id` ou `wallet:id`)
-- `importType` — `"debito"` ou `"cartao"` (aparece apos selecionar conta)
-- `targetCard` — cartao selecionado (aparece apenas se `importType === "cartao"`)
+### 1. Merchant Search inteligente baseado no tipo da transacao
 
-**UI — 3 campos em sequencia**:
-1. **"Conta destino"** — lista apenas contas bancarias e carteiras (sem cartoes)
-2. **"Tipo de extrato"** — aparece apos selecionar conta. Opcoes: "Debito em conta" / "Cartao de credito"
-3. **"Cartao"** — aparece apenas se tipo = cartao. Lista os cartoes de credito. Auto-detecta pelos 4 digitos
+No `merchantSearchName` (linha 1832), usar logica condicional:
+- Se `txType === "despesa"` e o documento e um comprovante PIX/transferencia: usar `recipient_name` (quem recebeu = o fornecedor/destino)
+- Se `txType === "receita"`: usar `issuer_name` (quem pagou = o cliente/pagador)
+- Fallback: `aiParsed.contact_name || contactName`
 
-**Auto-deteccao**: apos parsing, se detectar 4 digitos de um cartao nas descricoes:
-- Setar `importType = "cartao"` automaticamente
-- Pre-selecionar o cartao detectado em `targetCard`
-- Manter aviso visual
+### 2. `docIssuer` → `docMerchant` com mesma logica
 
-**handleImport**: 
-- Se `importType === "debito"`: usar `bank_account_id` ou `wallet_id` da conta selecionada, `credit_card_id = null`
-- Se `importType === "cartao"`: usar `credit_card_id` do cartao selecionado, e `bank_account_id`/`wallet_id` da conta tambem (pois o cartao esta vinculado a uma conta)
+Na linha 1858, substituir `docIssuer` por um `docMerchant` que seleciona o nome correto baseado no contexto:
+- Despesa + comprovante PIX/transferencia → usa `recipient_name`
+- Receita → usa `issuer_name`
+- NF/boleto → manter `issuer_name` (quem emitiu/cobrou)
 
-**Validacao**: exigir conta + tipo. Se tipo = cartao, exigir cartao tambem.
+### 3. Filtro anti-self-match
 
-## Arquivos afetados
-- `src/components/lancamentos/ImportStatementModal.tsx` — unico arquivo a alterar
+Adicionar protecao para NUNCA usar o nome do proprio usuario como merchant search. Buscar o `full_name` do profile e, se o `merchantSearchName` normalizado for similar ao nome do usuario, pular e usar o outro campo.
+
+### 4. Enriquecer `extractDocumentParties` com tipo de transacao
+
+Adicionar ao JSON de retorno um campo `transaction_direction` ("sent" | "received" | "unknown") para que o sistema saiba se o dinheiro esta saindo ou entrando, independente da nomenclatura issuer/recipient.
+
+### 5. Prompt de extracao de imagem mais robusto
+
+Reforcar no system prompt principal que para comprovantes de PIX/transferencia:
+- `contact_name` deve ser o DESTINATARIO do pagamento (quem recebeu o dinheiro), NAO quem enviou
+- Se o usuario e o remetente, o `contact_name` e quem aparece como beneficiario/favorecido
+
+## Arquivo afetado
+- `supabase/functions/whatsapp-webhook/index.ts`
+
+## Detalhes Tecnicos
+
+```text
+FLUXO ATUAL (BUGADO):
+  PIX Comprovante → extractDocumentParties
+    → issuer = "Paula" (remetente/pagadora)
+    → recipient = "Edson" (beneficiario)
+  merchantSearchName = issuer = "Paula" ← ERRADO
+  Busca historica encontra "PIX recebido Paula" (RECEITA)
+  typeMatches falha (despesa != receita)
+  → Nao encontra categoria → pede criar
+
+FLUXO CORRIGIDO:
+  PIX Comprovante → extractDocumentParties
+    → issuer = "Paula", recipient = "Edson"
+    → transaction_direction = "sent"
+  merchantSearchName = recipient = "Edson" ← CORRETO
+  docMerchant = "Edson"
+  Busca historica por "Edson" → encontra categoria correta
+  → Reusa categoria com sucesso
+```
 
