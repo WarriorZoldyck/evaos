@@ -186,7 +186,7 @@ export function ImportStatementModal({
       bank_account_id: accType === "bank" ? accId : null,
       wallet_id: accType === "wallet" ? accId : null,
       credit_card_id: importType === "cartao" ? targetCard : null,
-      external_id: `import_${r.date}_${r.amount}_${r.description.slice(0, 20)}`,
+      external_id: `import_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}`,
     }));
 
     const success = await onImport(transactions);
