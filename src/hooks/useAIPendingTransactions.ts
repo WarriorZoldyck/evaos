@@ -42,6 +42,45 @@ export interface AIPendingTransaction {
   created_at: string;
 }
 
+async function approveSingle(pending: AIPendingTransaction) {
+  const { error: insertError } = await supabase.from("transactions").insert({
+    user_id: pending.user_id,
+    description: pending.description,
+    amount: pending.amount,
+    type: pending.type as "receita" | "despesa",
+    category: pending.category || "",
+    subcategory: pending.subcategory,
+    subcategory2: pending.subcategory2,
+    competence_date: pending.competence_date || new Date().toISOString().split("T")[0],
+    payment_date: pending.payment_date || new Date().toISOString().split("T")[0],
+    status: (pending.transaction_status || "Pago") as "Pago" | "Pendente",
+    bank_account_id: pending.bank_account_id,
+    wallet_id: pending.wallet_id,
+    credit_card_id: pending.credit_card_id,
+    card_terminal_id: pending.card_terminal_id,
+    company_id: pending.company_id,
+    payment_method: pending.payment_method,
+    supplier_id: pending.supplier_id,
+    client_id: pending.client_id,
+    contact_name: pending.contact_name,
+    notes: pending.notes,
+    attachment_url: pending.attachment_url,
+    barcode: pending.barcode,
+    installments: pending.installments,
+    installment_number: pending.installment_number,
+    installments_total: pending.installments_total,
+    series_id: pending.series_id,
+    original_amount: pending.original_amount,
+  });
+  if (insertError) throw insertError;
+
+  const { error: updateError } = await supabase
+    .from("ai_pending_transactions")
+    .update({ status: "approved", reviewed_at: new Date().toISOString() })
+    .eq("id", pending.id);
+  if (updateError) throw updateError;
+}
+
 export function useAIPendingTransactions() {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal } = useCompany();
@@ -70,7 +109,6 @@ export function useAIPendingTransactions() {
     enabled: !!user?.id,
   });
 
-  // Count ALL pending (across all contexts) for badge
   const { data: pendingCount = 0 } = useQuery({
     queryKey: ["ai-pending-count", user?.id],
     queryFn: async () => {
@@ -84,59 +122,22 @@ export function useAIPendingTransactions() {
       return count || 0;
     },
     enabled: !!user?.id,
-    refetchInterval: 30000, // poll every 30s
+    refetchInterval: 30000,
   });
 
-  const approveMutation = useMutation({
-    mutationFn: async (pending: AIPendingTransaction) => {
-      // Insert into transactions
-      const { error: insertError } = await supabase.from("transactions").insert({
-        user_id: pending.user_id,
-        description: pending.description,
-        amount: pending.amount,
-        type: pending.type as "receita" | "despesa",
-        category: pending.category || "",
-        subcategory: pending.subcategory,
-        subcategory2: pending.subcategory2,
-        competence_date: pending.competence_date || new Date().toISOString().split("T")[0],
-        payment_date: pending.payment_date || new Date().toISOString().split("T")[0],
-        status: (pending.transaction_status || "Pago") as "Pago" | "Pendente",
-        bank_account_id: pending.bank_account_id,
-        wallet_id: pending.wallet_id,
-        credit_card_id: pending.credit_card_id,
-        card_terminal_id: pending.card_terminal_id,
-        company_id: pending.company_id,
-        payment_method: pending.payment_method,
-        supplier_id: pending.supplier_id,
-        client_id: pending.client_id,
-        contact_name: pending.contact_name,
-        notes: pending.notes,
-        attachment_url: pending.attachment_url,
-        barcode: pending.barcode,
-        installments: pending.installments,
-        installment_number: pending.installment_number,
-        installments_total: pending.installments_total,
-        series_id: pending.series_id,
-        original_amount: pending.original_amount,
-      });
-      if (insertError) throw insertError;
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
+    queryClient.invalidateQueries({ queryKey: ["transactions"] });
+  };
 
-      // Mark as approved
-      const { error: updateError } = await supabase
-        .from("ai_pending_transactions")
-        .update({ status: "approved", reviewed_at: new Date().toISOString() })
-        .eq("id", pending.id);
-      if (updateError) throw updateError;
-    },
+  const approveMutation = useMutation({
+    mutationFn: approveSingle,
     onSuccess: () => {
       toast.success("Lançamento aprovado e registrado!");
-      queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      invalidateAll();
     },
-    onError: (err: any) => {
-      toast.error("Erro ao aprovar: " + err.message);
-    },
+    onError: (err: any) => toast.error("Erro ao aprovar: " + err.message),
   });
 
   const rejectMutation = useMutation({
@@ -149,12 +150,38 @@ export function useAIPendingTransactions() {
     },
     onSuccess: () => {
       toast.success("Lançamento rejeitado.");
-      queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
+      invalidateAll();
     },
-    onError: (err: any) => {
-      toast.error("Erro ao rejeitar: " + err.message);
+    onError: (err: any) => toast.error("Erro ao rejeitar: " + err.message),
+  });
+
+  const approveAllMutation = useMutation({
+    mutationFn: async (items: AIPendingTransaction[]) => {
+      for (const item of items) {
+        await approveSingle(item);
+      }
     },
+    onSuccess: () => {
+      toast.success("Todas as parcelas aprovadas!");
+      invalidateAll();
+    },
+    onError: (err: any) => toast.error("Erro ao aprovar parcelas: " + err.message),
+  });
+
+  const rejectAllMutation = useMutation({
+    mutationFn: async (items: AIPendingTransaction[]) => {
+      const ids = items.map((i) => i.id);
+      const { error } = await supabase
+        .from("ai_pending_transactions")
+        .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Todas as parcelas rejeitadas.");
+      invalidateAll();
+    },
+    onError: (err: any) => toast.error("Erro ao rejeitar parcelas: " + err.message),
   });
 
   const pending = pendingTransactions.filter((t) => t.status === "pending");
@@ -167,7 +194,9 @@ export function useAIPendingTransactions() {
     isLoading,
     approve: approveMutation.mutate,
     reject: rejectMutation.mutate,
-    isApproving: approveMutation.isPending,
-    isRejecting: rejectMutation.isPending,
+    approveAll: approveAllMutation.mutate,
+    rejectAll: rejectAllMutation.mutate,
+    isApproving: approveMutation.isPending || approveAllMutation.isPending,
+    isRejecting: rejectMutation.isPending || rejectAllMutation.isPending,
   };
 }

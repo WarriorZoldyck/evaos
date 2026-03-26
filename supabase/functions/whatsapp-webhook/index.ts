@@ -2165,9 +2165,21 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }, 200);
       }
 
+      // --- Date sanity: fix wrong year ---
+      const currentYear = new Date().getFullYear();
+      const fixYear = (d: string): string => {
+        if (!d) return d;
+        const parts = d.split("-");
+        if (parts.length >= 1 && parseInt(parts[0]) < currentYear) {
+          parts[0] = String(currentYear);
+          return parts.join("-");
+        }
+        return d;
+      };
+
       // --- Credit card cycle date calculation ---
-      const competenceDate = aiParsed.competence_date || aiParsed.date || today;
-      let paymentDate = aiParsed.payment_date || aiParsed.date || today;
+      const competenceDate = fixYear(aiParsed.competence_date || aiParsed.date || today);
+      let paymentDate = fixYear(aiParsed.payment_date || aiParsed.date || today);
 
       if (creditCardId) {
         const card = contextCards.find((c) => c.id === creditCardId);

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sparkles,
   Check,
@@ -20,14 +21,23 @@ import {
   Calendar,
   Tag,
   CreditCard,
-  Building2,
   User,
   FileText,
   Clock,
+  ChevronDown,
+  ChevronUp,
+  Layers,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+const fmt = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+const fmtDate = (d: string | null) =>
+  d ? format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }) : "—";
+
+// ── Single item card (used standalone or inside series) ──
 function PendingCard({
   item,
   onApprove,
@@ -36,6 +46,7 @@ function PendingCard({
   isRejecting,
   categoryName,
   accountName,
+  compact = false,
 }: {
   item: AIPendingTransaction;
   onApprove: () => void;
@@ -44,16 +55,33 @@ function PendingCard({
   isRejecting: boolean;
   categoryName: string;
   accountName: string;
+  compact?: boolean;
 }) {
   const isReceita = item.type === "receita";
-  const formattedAmount = new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(item.amount);
 
-  const formattedDate = item.competence_date
-    ? format(parseISO(item.competence_date), "dd/MM/yyyy", { locale: ptBR })
-    : "—";
+  if (compact) {
+    return (
+      <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/40 text-sm">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <span className="text-muted-foreground font-medium shrink-0">
+            {item.installment_number}/{item.installments_total}
+          </span>
+          <span className="truncate">{item.description}</span>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {item.payment_date && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {fmtDate(item.payment_date)}
+            </span>
+          )}
+          <span className={`font-semibold ${isReceita ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+            {fmt(item.amount)}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const sourceIcon = item.source === "whatsapp" ? MessageSquare : item.source === "email" ? Mail : Upload;
   const SourceIcon = sourceIcon;
@@ -63,7 +91,6 @@ function PendingCard({
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 space-y-2">
-            {/* Header */}
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" className="gap-1 text-xs">
                 <SourceIcon className="h-3 w-3" />
@@ -81,7 +108,6 @@ function PendingCard({
               )}
             </div>
 
-            {/* Description & Amount */}
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="font-semibold text-foreground">{item.description}</p>
@@ -93,16 +119,21 @@ function PendingCard({
                 )}
               </div>
               <span className={`text-lg font-bold whitespace-nowrap ${isReceita ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                {isReceita ? "+" : "-"}{formattedAmount}
+                {isReceita ? "+" : "-"}{fmt(item.amount)}
               </span>
             </div>
 
-            {/* Details */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                {formattedDate}
+                {fmtDate(item.competence_date)}
               </span>
+              {item.payment_date && item.payment_date !== item.competence_date && (
+                <span className="flex items-center gap-1 text-primary">
+                  <Clock className="h-3 w-3" />
+                  Venc: {fmtDate(item.payment_date)}
+                </span>
+              )}
               {categoryName && (
                 <span className="flex items-center gap-1">
                   <Tag className="h-3 w-3" />
@@ -123,7 +154,6 @@ function PendingCard({
               )}
             </div>
 
-            {/* Original message preview */}
             {item.original_message && (
               <p className="text-xs text-muted-foreground/70 italic truncate max-w-md">
                 "{item.original_message.replace("[Via WhatsApp] ", "")}"
@@ -132,34 +162,17 @@ function PendingCard({
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
-          <Button
-            size="sm"
-            onClick={onApprove}
-            disabled={isApproving || isRejecting}
-            className="gap-1.5"
-          >
+          <Button size="sm" onClick={onApprove} disabled={isApproving || isRejecting} className="gap-1.5">
             <Check className="h-3.5 w-3.5" />
             Aprovar
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onReject}
-            disabled={isApproving || isRejecting}
-            className="gap-1.5 text-destructive hover:text-destructive"
-          >
+          <Button size="sm" variant="outline" onClick={onReject} disabled={isApproving || isRejecting} className="gap-1.5 text-destructive hover:text-destructive">
             <X className="h-3.5 w-3.5" />
             Rejeitar
           </Button>
           {item.attachment_url && (
-            <Button
-              size="sm"
-              variant="ghost"
-              asChild
-              className="gap-1.5 ml-auto"
-            >
+            <Button size="sm" variant="ghost" asChild className="gap-1.5 ml-auto">
               <a href={item.attachment_url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
                 Ver anexo
@@ -172,6 +185,175 @@ function PendingCard({
   );
 }
 
+// ── Series (installment group) card ──
+function SeriesCard({
+  items,
+  onApproveAll,
+  onRejectAll,
+  isApproving,
+  isRejecting,
+  getCategoryName,
+  getAccountName,
+}: {
+  items: AIPendingTransaction[];
+  onApproveAll: () => void;
+  onRejectAll: () => void;
+  isApproving: boolean;
+  isRejecting: boolean;
+  getCategoryName: (id: string | null) => string;
+  getAccountName: (item: AIPendingTransaction) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const sorted = [...items].sort((a, b) => (a.installment_number || 0) - (b.installment_number || 0));
+  const first = sorted[0];
+  const isReceita = first.type === "receita";
+  const total = items.reduce((s, i) => s + i.amount, 0);
+  const baseDesc = first.description.replace(/\s*\(\d+\/\d+\)\s*$/, "");
+  const categoryName = getCategoryName(first.category);
+  const accountName = getAccountName(first);
+
+  const sourceIcon = first.source === "whatsapp" ? MessageSquare : first.source === "email" ? Mail : Upload;
+  const SourceIcon = sourceIcon;
+
+  return (
+    <Card className="border-l-4 transition-all hover:shadow-md" style={{ borderLeftColor: isReceita ? "hsl(var(--chart-2))" : "hsl(var(--chart-1))" }}>
+      <CardContent className="p-4">
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className="gap-1 text-xs">
+              <SourceIcon className="h-3 w-3" />
+              {first.source === "whatsapp" ? "WhatsApp" : first.source === "email" ? "E-mail" : "Upload"}
+            </Badge>
+            <Badge variant={isReceita ? "default" : "destructive"} className="gap-1 text-xs">
+              {isReceita ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
+              {isReceita ? "Receita" : "Despesa"}
+            </Badge>
+            <Badge variant="secondary" className="gap-1 text-xs">
+              <Layers className="h-3 w-3" />
+              {items.length}x parcelas
+            </Badge>
+          </div>
+
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-foreground">{baseDesc}</p>
+              {first.contact_name && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                  <User className="h-3 w-3" />
+                  {first.contact_name}
+                </p>
+              )}
+            </div>
+            <span className={`text-lg font-bold whitespace-nowrap ${isReceita ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              {isReceita ? "+" : "-"}{fmt(total)}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {fmtDate(first.competence_date)}
+            </span>
+            {categoryName && (
+              <span className="flex items-center gap-1">
+                <Tag className="h-3 w-3" />
+                {categoryName}
+              </span>
+            )}
+            {accountName && (
+              <span className="flex items-center gap-1">
+                <CreditCard className="h-3 w-3" />
+                {accountName}
+              </span>
+            )}
+          </div>
+
+          {/* Collapsible installment list */}
+          <Collapsible open={open} onOpenChange={setOpen}>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-1.5 text-xs w-full justify-center mt-1">
+                {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {open ? "Ocultar parcelas" : "Ver parcelas"}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-1.5 mt-2">
+              {sorted.map((p) => (
+                <PendingCard
+                  key={p.id}
+                  item={p}
+                  onApprove={() => {}}
+                  onReject={() => {}}
+                  isApproving={false}
+                  isRejecting={false}
+                  categoryName=""
+                  accountName=""
+                  compact
+                />
+              ))}
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
+          <Button size="sm" onClick={onApproveAll} disabled={isApproving || isRejecting} className="gap-1.5">
+            <Check className="h-3.5 w-3.5" />
+            Aprovar Todas
+          </Button>
+          <Button size="sm" variant="outline" onClick={onRejectAll} disabled={isApproving || isRejecting} className="gap-1.5 text-destructive hover:text-destructive">
+            <X className="h-3.5 w-3.5" />
+            Rejeitar Todas
+          </Button>
+          {first.attachment_url && (
+            <Button size="sm" variant="ghost" asChild className="gap-1.5 ml-auto">
+              <a href={first.attachment_url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                Ver anexo
+              </a>
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Group items: series grouped + standalone ──
+type GroupedItem =
+  | { kind: "single"; item: AIPendingTransaction }
+  | { kind: "series"; seriesId: string; items: AIPendingTransaction[] };
+
+function groupPending(items: AIPendingTransaction[]): GroupedItem[] {
+  const seriesMap = new Map<string, AIPendingTransaction[]>();
+  const singles: AIPendingTransaction[] = [];
+
+  for (const item of items) {
+    if (item.series_id) {
+      const list = seriesMap.get(item.series_id) || [];
+      list.push(item);
+      seriesMap.set(item.series_id, list);
+    } else {
+      singles.push(item);
+    }
+  }
+
+  const result: GroupedItem[] = [];
+  for (const [seriesId, sItems] of seriesMap) {
+    result.push({ kind: "series", seriesId, items: sItems });
+  }
+  for (const item of singles) {
+    result.push({ kind: "single", item });
+  }
+
+  // Sort by most recent created_at
+  result.sort((a, b) => {
+    const aDate = a.kind === "single" ? a.item.created_at : a.items[0].created_at;
+    const bDate = b.kind === "single" ? b.item.created_at : b.items[0].created_at;
+    return new Date(bDate).getTime() - new Date(aDate).getTime();
+  });
+
+  return result;
+}
+
 export default function AnalisesEva() {
   const {
     pendingTransactions,
@@ -180,6 +362,8 @@ export default function AnalisesEva() {
     isLoading,
     approve,
     reject,
+    approveAll,
+    rejectAll,
     isApproving,
     isRejecting,
   } = useAIPendingTransactions();
@@ -203,7 +387,7 @@ export default function AnalisesEva() {
       return acc?.name || "";
     }
     if (item.wallet_id) {
-      const w = wallets.find((w) => w.id === item.wallet_id);
+      const w = wallets.find((wl) => wl.id === item.wallet_id);
       return w?.name || "";
     }
     return "";
@@ -212,9 +396,41 @@ export default function AnalisesEva() {
   const whatsappPending = pendingTransactions.filter((t) => t.source === "whatsapp");
   const otherPending = pendingTransactions.filter((t) => t.source !== "whatsapp");
 
+  const whatsappGrouped = groupPending(whatsappPending);
+  const otherGrouped = groupPending(otherPending);
+
+  const renderGrouped = (grouped: GroupedItem[]) =>
+    grouped.map((g) => {
+      if (g.kind === "series") {
+        return (
+          <SeriesCard
+            key={g.seriesId}
+            items={g.items}
+            onApproveAll={() => approveAll(g.items)}
+            onRejectAll={() => rejectAll(g.items)}
+            isApproving={isApproving}
+            isRejecting={isRejecting}
+            getCategoryName={getCategoryName}
+            getAccountName={getAccountName}
+          />
+        );
+      }
+      return (
+        <PendingCard
+          key={g.item.id}
+          item={g.item}
+          onApprove={() => approve(g.item)}
+          onReject={() => reject(g.item.id)}
+          isApproving={isApproving}
+          isRejecting={isRejecting}
+          categoryName={getCategoryName(g.item.category)}
+          accountName={getAccountName(g.item)}
+        />
+      );
+    });
+
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-primary/10">
@@ -232,7 +448,6 @@ export default function AnalisesEva() {
         </div>
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="whatsapp">
         <TabsList>
           <TabsTrigger value="whatsapp" className="gap-1.5">
@@ -260,7 +475,7 @@ export default function AnalisesEva() {
             Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-32 w-full rounded-lg" />
             ))
-          ) : whatsappPending.length === 0 ? (
+          ) : whatsappGrouped.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
@@ -269,23 +484,12 @@ export default function AnalisesEva() {
               </CardContent>
             </Card>
           ) : (
-            whatsappPending.map((item) => (
-              <PendingCard
-                key={item.id}
-                item={item}
-                onApprove={() => approve(item)}
-                onReject={() => reject(item.id)}
-                isApproving={isApproving}
-                isRejecting={isRejecting}
-                categoryName={getCategoryName(item.category)}
-                accountName={getAccountName(item)}
-              />
-            ))
+            renderGrouped(whatsappGrouped)
           )}
         </TabsContent>
 
         <TabsContent value="outros" className="mt-4 space-y-3">
-          {otherPending.length === 0 ? (
+          {otherGrouped.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Mail className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
@@ -294,18 +498,7 @@ export default function AnalisesEva() {
               </CardContent>
             </Card>
           ) : (
-            otherPending.map((item) => (
-              <PendingCard
-                key={item.id}
-                item={item}
-                onApprove={() => approve(item)}
-                onReject={() => reject(item.id)}
-                isApproving={isApproving}
-                isRejecting={isRejecting}
-                categoryName={getCategoryName(item.category)}
-                accountName={getAccountName(item)}
-              />
-            ))
+            renderGrouped(otherGrouped)
           )}
         </TabsContent>
 
@@ -325,7 +518,7 @@ export default function AnalisesEva() {
                     <div>
                       <p className="font-medium text-sm">{item.description}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(item.amount)}
+                        {fmt(item.amount)}
                         {" · "}
                         {item.reviewed_at ? format(parseISO(item.reviewed_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : ""}
                       </p>
