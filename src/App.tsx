@@ -25,6 +25,7 @@ import Integracoes from "@/pages/Integracoes";
 import PrecificacaoV2 from "@/pages/PrecificacaoV2";
 import LandingPage from "@/pages/LandingPage";
 import Metas from "@/pages/Metas";
+import AnalisesEva from "@/pages/AnalisesEva";
 import { GraduationCap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,6 +56,7 @@ const App = () => {
               <Route element={<AppLayout />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/lancamentos" element={<Lancamentos />} />
+                <Route path="/analises-eva" element={<AnalisesEva />} />
                 <Route path="/plano-de-caixa" element={<PlanoDeCaixa />} />
                 <Route path="/dre" element={<DRE />} />
                 <Route path="/precificacao" element={<Precificacao />} />
