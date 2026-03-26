@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { HubProvider, useHub } from "@/contexts/HubContext";
 import { CompanyProvider } from "@/contexts/CompanyContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
@@ -10,6 +11,7 @@ import { OnboardingGuide } from "@/components/onboarding/OnboardingGuide";
 import { EvaChatButton } from "@/components/chat/EvaChatButton";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 
 export default function AppLayout() {
@@ -30,13 +32,23 @@ export default function AppLayout() {
     return <Navigate to="/" replace />;
   }
 
-  return <AppLayoutInner />;
+  return (
+    <HubProvider>
+      <AppLayoutInner />
+    </HubProvider>
+  );
 }
 
 function AppLayoutInner() {
   const location = useLocation();
   const isOnLancamentos = location.pathname === "/lancamentos";
   const [globalFormOpen, setGlobalFormOpen] = useState(false);
+  const { isHubMember, impersonatingOwnerId, impersonatingOwnerName, exitImpersonation } = useHub();
+
+  // Hub members without active impersonation go to /eva-hub
+  if (isHubMember && !impersonatingOwnerId && location.pathname !== "/eva-hub") {
+    return <Navigate to="/eva-hub" replace />;
+  }
 
   return (
     <CompanyProvider>
@@ -45,7 +57,14 @@ function AppLayoutInner() {
           <AppSidebar />
           <main className="flex-1 flex flex-col min-w-0">
              <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
-              <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
+              <div className="flex items-center gap-2">
+                <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
+                {impersonatingOwnerName && (
+                  <Badge variant="outline" className="gap-1 text-xs cursor-pointer hover:bg-destructive/10" onClick={exitImpersonation}>
+                    👤 {impersonatingOwnerName} ✕
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 {!isOnLancamentos && (
                   <Button

@@ -26,6 +26,7 @@ import PrecificacaoV2 from "@/pages/PrecificacaoV2";
 import LandingPage from "@/pages/LandingPage";
 import Metas from "@/pages/Metas";
 import AnalisesEva from "@/pages/AnalisesEva";
+import EvaHub from "@/pages/EvaHub";
 import { GraduationCap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -70,6 +71,7 @@ const App = () => {
                 <Route path="/eva-kids" element={<ComingSoon title="EVA Kids" description="Educação financeira para crianças. Em breve!" icon={GraduationCap} />} />
                 <Route path="/metas" element={<Metas />} />
                 <Route path="/precificacao-v2" element={<PrecificacaoV2 />} />
+                <Route path="/eva-hub" element={<EvaHub />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

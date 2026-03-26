@@ -18,11 +18,13 @@ import {
   BookOpen,
   Sparkles,
   Plug,
+  UsersRound,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions } from "@/hooks/useAIPendingTransactions";
+import { useHub } from "@/contexts/HubContext";
 import {
   Sidebar,
   SidebarContent,
@@ -75,6 +77,7 @@ export function AppSidebar() {
   const { companies, selectedCompanyId, setSelectedCompanyId, isPersonal } = useCompany();
   const { pendingCount } = useAIPendingTransactions();
   const { state } = useSidebar();
+  const { isHubMember, isOwnerWithMembers } = useHub();
   const collapsed = state === "collapsed";
 
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
@@ -203,6 +206,28 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {/* EVA Hub - visible for owners with members or hub members */}
+        {(isOwnerWithMembers || isHubMember) && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="EVA Hub">
+                    <NavLink
+                      to="/eva-hub"
+                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                    >
+                      <UsersRound className="h-4 w-4" />
+                      <span>EVA Hub</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
         <SidebarGroup>
           <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Novidades</SidebarGroupLabel>
           <SidebarGroupContent>
