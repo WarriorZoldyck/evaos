@@ -185,7 +185,7 @@ export default function AnalisesEva() {
   } = useAIPendingTransactions();
 
   const { categories } = useCategories();
-  const { accounts, creditCards, wallets } = useAccounts();
+  const { bankAccounts: accounts, creditCards, wallets } = useAccounts();
 
   const getCategoryName = (id: string | null) => {
     if (!id) return "";
