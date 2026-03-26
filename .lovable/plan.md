@@ -1,50 +1,69 @@
 
 
-# Análises EVA — Caixa de Entrada de Lançamentos da IA
+# Melhorias nos Lançamentos Parcelados na Análises EVA
 
-## Conceito
-Nova página "Análises EVA" no menu lateral onde todos os lançamentos gerados via WhatsApp (e futuramente e-mail) caem para aprovação do usuário antes de irem para o sistema. A IA do WhatsApp para de inserir direto na `transactions` e passa a inserir numa tabela staging `ai_pending_transactions`.
+## Problemas Identificados
 
-## Etapas
+### 1. Parcelas aparecem como cards separados
+No banco, a Pneulandia 6x está como 5 registros individuais (2/6 a 6/6) na `ai_pending_transactions`. Na UI, cada um vira um card separado. O correto é agrupar por `series_id` e mostrar como **um único card** com as parcelas destrinchadas dentro.
 
-### 1. Migration: tabela `ai_pending_transactions`
-Campos espelhando `transactions` + metadados:
-- `source` (whatsapp/email/upload), `status` (pending/approved/rejected)
-- `confidence_score`, `ai_response_message`, `original_message`
-- `reviewed_at`
-- RLS: `user_id = auth.uid()`
+### 2. Data errada (2025 em vez de 2026)
+A `competence_date` dos lançamentos da Paula está como `2025-03-26` — um ano atrás. Isso acontece porque a IA (GPT) está retornando o ano errado no campo `date`/`competence_date` e o webhook aceita sem validar. Solução: adicionar validação no webhook para corrigir datas com ano claramente errado.
 
-### 2. Webhook WhatsApp → redirecionar inserts
-Todos os `supabase.from("transactions").insert(...)` no `whatsapp-webhook/index.ts` passam a inserir em `ai_pending_transactions` com `status: 'pending'` e `source: 'whatsapp'`. A mensagem de confirmação muda para "Lançamento enviado para aprovação no app".
+### 3. Status "Pago" em parcelas futuras de cartão
+As parcelas com `payment_date` em abril-agosto estão com `transaction_status: Pago`. A linha 2233 do webhook faz `detail.due_date <= today` sem considerar que é cartão de crédito (que deveria ser sempre "Pendente"). Solução: forçar "Pendente" quando `creditCardId` existe.
 
-### 3. Hook: `src/hooks/useAIPendingTransactions.ts`
-- `fetchPending()` — lista pendentes
-- `approveTransaction(id)` — copia para `transactions`, marca approved
-- `rejectTransaction(id)` — marca rejected
-- `pendingCount` — para badge no sidebar
+### 4. Vencimento não aparece no card
+O card só mostra `competence_date`. Para cartão de crédito, o `payment_date` (vencimento da fatura) é a informação mais relevante e deve ser exibida.
 
-### 4. Página: `src/pages/AnalisesEva.tsx`
-Layout baseado na referência enviada:
-- Header com título "Análises EVA" + badge de pendentes + botão "Enviar documento"
-- Tabs: WhatsApp (com contador) | E-mail (em breve)
-- Cards interativos mostrando: descrição, valor, tipo, categoria, fornecedor, data, conta, confiança da IA
-- Botões por card: **Aprovar** (move para transactions), **Rejeitar**, **Visualizar** (attachment), **Editar** (abrir modal de edição antes de aprovar)
+## Plano de Implementação
 
-### 5. Sidebar + Rota
-- Novo item "Análises EVA" com ícone `Sparkles` no grupo "Principal" do `AppSidebar.tsx`
-- Badge dinâmico mostrando quantidade de pendentes
-- Rota `/analises-eva` em `App.tsx`
+### Etapa 1: Página AnalisesEva.tsx — Agrupar parcelas por series_id
 
-### 6. Upload direto na página
-Botão "Enviar documento" permite upload de imagem/PDF direto na página, chamando `eva-chat` para processar e inserindo em `ai_pending_transactions` com `source: 'upload'`.
+**No componente principal:**
+- Agrupar `pendingTransactions` por `series_id` (quando existir)
+- Para itens com `series_id`, renderizar um **card-mãe** mostrando:
+  - Descrição sem o sufixo "(X/N)"
+  - Valor total (soma de todas as parcelas)
+  - Badge "6x parcelas" (ou quantidade correspondente)
+  - Lista colapsável (accordion) com cada parcela: número, valor individual, data de vencimento
+  - Botões "Aprovar Todas" e "Rejeitar Todas"
+- Para itens sem `series_id`, manter o card individual atual
+
+**No hook `useAIPendingTransactions.ts`:**
+- Adicionar função `approveAll` que aprova todas as parcelas de uma série de uma vez (loop ou batch)
+
+### Etapa 2: Mostrar vencimento (payment_date) no card
+
+- Adicionar no card a exibição do `payment_date` quando for diferente de `competence_date`
+- Para cartão de crédito: mostrar "Vencimento: DD/MM/YYYY" com ícone de calendário
+
+### Etapa 3: Webhook — Corrigir datas e status de parcelas
+
+**Em `whatsapp-webhook/index.ts`:**
+
+**Correção de ano (validação de sanidade):**
+- Após definir `competenceDate`, verificar se o ano é menor que o ano atual. Se for, corrigir para o ano atual.
+- Mesma validação para `paymentDate` e `detail.due_date`.
+
+**Correção de status para parcelas de cartão (linha ~2233):**
+- Mudar de:
+  ```
+  transaction_status: (detail.due_date && detail.due_date <= today) ? "Pago" : "Pendente"
+  ```
+- Para:
+  ```
+  transaction_status: creditCardId ? "Pendente" : (detail.due_date && detail.due_date <= today) ? "Pago" : "Pendente"
+  ```
+
+**Cálculo de `payment_date` por parcela em cartão:**
+- Quando `creditCardId` existe e há parcelas, calcular o `payment_date` de cada parcela usando o ciclo do cartão (closing_day/due_day), incrementando mês a mês a partir da competência.
 
 ## Arquivos afetados
+
 | Arquivo | Ação |
 |---------|------|
-| Migration SQL | Criar tabela `ai_pending_transactions` |
-| `supabase/functions/whatsapp-webhook/index.ts` | Redirecionar ~5 inserts de `transactions` para `ai_pending_transactions` |
-| `src/hooks/useAIPendingTransactions.ts` | Criar — CRUD + contagem |
-| `src/pages/AnalisesEva.tsx` | Criar — página com cards de aprovação |
-| `src/components/layout/AppSidebar.tsx` | Adicionar item com badge |
-| `src/App.tsx` | Adicionar rota `/analises-eva` |
+| `src/pages/AnalisesEva.tsx` | Agrupar por `series_id`, card com accordion de parcelas, mostrar `payment_date` |
+| `src/hooks/useAIPendingTransactions.ts` | Adicionar `approveAll` para aprovar série inteira |
+| `supabase/functions/whatsapp-webhook/index.ts` | Validação de ano, status cartão em parcelas, cálculo de vencimento por parcela |
 
