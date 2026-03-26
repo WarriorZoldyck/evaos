@@ -754,7 +754,18 @@ serve(async (req) => {
             installments_total: installmentCount,
           }));
 
-          const { error: insertErr } = await supabase.from("transactions").insert(transactions);
+         const pendingTransactions = transactions.map((tx: any) => ({
+            ...tx,
+            transaction_status: tx.status,
+            source: "whatsapp",
+            status: "pending",
+            original_message: txPayload.original_user_text || null,
+            ai_response_message: `${installmentCount} parcelas - ${txPayload.description}`,
+          }));
+          // Remove 'status' key clash (transaction_status holds the real status)
+          pendingTransactions.forEach((pt: any) => { delete pt.status; pt.status = "pending"; });
+
+          const { error: insertErr } = await supabase.from("ai_pending_transactions").insert(pendingTransactions);
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
 
           if (insertErr) {
@@ -776,13 +787,15 @@ serve(async (req) => {
 
           return respond({
             success: true, intent: "lancamento",
-            message: `✅ ${installmentCount} parcelas registradas na conta "${chosenName}"!\n\n📝 ${txPayload.description}\n💰 Total: ${fmt(totalAmount)}\n\n📋 Parcelas:\n${parcelsDisplay}`,
+            message: `📋 ${installmentCount} parcelas enviadas para aprovação no app!\n\n📝 ${txPayload.description}\n💰 Total: ${fmt(totalAmount)}\n🏦 ${chosenName}\n\n📋 Parcelas:\n${parcelsDisplay}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
             transaction: { description: txPayload.description, amount: totalAmount, type: txType, installments: installmentCount },
           }, 200);
         }
 
-        const { error: insertErr } = await supabase.from("transactions").insert({
+        const { error: insertErr } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
+          source: "whatsapp",
+          status: "pending",
           description: txPayload.description || "Lançamento via WhatsApp",
           amount: Math.abs(txPayload.amount || 0),
           type: txType,
@@ -790,7 +803,7 @@ serve(async (req) => {
           subcategory: txPayload.subcategory_id || null,
           competence_date: competenceDate,
           payment_date: paymentDate,
-          status,
+          transaction_status: status,
           bank_account_id: matchedBankId,
           wallet_id: matchedWalletId,
           credit_card_id: matchedCardId,
@@ -801,6 +814,8 @@ serve(async (req) => {
           contact_name: txPayload.contact_name || null,
           notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
           attachment_url: txPayload.attachment_url || null,
+          original_message: txPayload.original_user_text || null,
+          ai_response_message: txPayload.description || null,
         });
 
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -822,7 +837,7 @@ serve(async (req) => {
 
         return respond({
           success: true, intent: "lancamento",
-          message: `✅ Lançamento registrado na conta "${chosenName}"!\n\n📝 ${txPayload.description}\n💰 ${fmt(txPayload.amount || 0)}\n📁 ${typeLabel} / ${txPayload.category_label || "Categoria"}\n🏢 ${contextLabel}\n📅 ${formatDate(competenceDate)}`,
+          message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${txPayload.description}\n💰 ${fmt(txPayload.amount || 0)}\n📁 ${typeLabel} / ${txPayload.category_label || "Categoria"}\n🏢 ${contextLabel}\n🏦 ${chosenName}\n📅 ${formatDate(competenceDate)}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: { description: txPayload.description, amount: txPayload.amount, type: txType, context: contextLabel },
         }, 200);
       }
