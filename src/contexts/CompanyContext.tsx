@@ -42,10 +42,11 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         .select("id, name, cnpj")
         .order("name");
 
-      // When impersonating, we need to filter by the owner's user_id
       if (impersonatingOwnerId) {
         query = query.eq("user_id", impersonatingOwnerId);
       }
+
+      const { data, error } = await query;
 
       if (!error && data) {
         setCompanies(data);
