@@ -14,6 +14,120 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_pending_transactions: {
+        Row: {
+          ai_response_message: string | null
+          amount: number
+          attachment_url: string | null
+          bank_account_id: string | null
+          barcode: string | null
+          card_terminal_id: string | null
+          category: string | null
+          client_id: string | null
+          company_id: string | null
+          competence_date: string | null
+          confidence_score: number | null
+          contact_name: string | null
+          created_at: string
+          credit_card_id: string | null
+          description: string
+          id: string
+          installment_number: number | null
+          installments: number | null
+          installments_total: number | null
+          notes: string | null
+          original_amount: number | null
+          original_message: string | null
+          payment_date: string | null
+          payment_method: string | null
+          reviewed_at: string | null
+          series_id: string | null
+          source: string
+          status: string
+          subcategory: string | null
+          subcategory2: string | null
+          supplier_id: string | null
+          transaction_status: string | null
+          type: string
+          user_id: string
+          wallet_id: string | null
+        }
+        Insert: {
+          ai_response_message?: string | null
+          amount: number
+          attachment_url?: string | null
+          bank_account_id?: string | null
+          barcode?: string | null
+          card_terminal_id?: string | null
+          category?: string | null
+          client_id?: string | null
+          company_id?: string | null
+          competence_date?: string | null
+          confidence_score?: number | null
+          contact_name?: string | null
+          created_at?: string
+          credit_card_id?: string | null
+          description: string
+          id?: string
+          installment_number?: number | null
+          installments?: number | null
+          installments_total?: number | null
+          notes?: string | null
+          original_amount?: number | null
+          original_message?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
+          reviewed_at?: string | null
+          series_id?: string | null
+          source?: string
+          status?: string
+          subcategory?: string | null
+          subcategory2?: string | null
+          supplier_id?: string | null
+          transaction_status?: string | null
+          type: string
+          user_id: string
+          wallet_id?: string | null
+        }
+        Update: {
+          ai_response_message?: string | null
+          amount?: number
+          attachment_url?: string | null
+          bank_account_id?: string | null
+          barcode?: string | null
+          card_terminal_id?: string | null
+          category?: string | null
+          client_id?: string | null
+          company_id?: string | null
+          competence_date?: string | null
+          confidence_score?: number | null
+          contact_name?: string | null
+          created_at?: string
+          credit_card_id?: string | null
+          description?: string
+          id?: string
+          installment_number?: number | null
+          installments?: number | null
+          installments_total?: number | null
+          notes?: string | null
+          original_amount?: number | null
+          original_message?: string | null
+          payment_date?: string | null
+          payment_method?: string | null
+          reviewed_at?: string | null
+          series_id?: string | null
+          source?: string
+          status?: string
+          subcategory?: string | null
+          subcategory2?: string | null
+          supplier_id?: string | null
+          transaction_status?: string | null
+          type?: string
+          user_id?: string
+          wallet_id?: string | null
+        }
+        Relationships: []
+      }
       bank_accounts: {
         Row: {
           account_number: string | null
