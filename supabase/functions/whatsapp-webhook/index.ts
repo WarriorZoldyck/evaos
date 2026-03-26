@@ -959,8 +959,10 @@ serve(async (req) => {
           status = "Pendente";
         }
 
-        const { error: insertError } = await supabase.from("transactions").insert({
+        const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
+          source: "whatsapp",
+          status: "pending",
           description: payload.description || "Lançamento via WhatsApp",
           amount: Math.abs(payload.amount || 0),
           type: txType,
@@ -968,7 +970,7 @@ serve(async (req) => {
           subcategory: null,
           competence_date: competenceDate,
           payment_date: paymentDate,
-          status: status,
+          transaction_status: status,
           bank_account_id: bankAccountId,
           wallet_id: walletId,
           credit_card_id: creditCardId,
@@ -979,6 +981,8 @@ serve(async (req) => {
           contact_name: payload.contact_name || null,
           notes: [payload.original_user_text, payload.notes].filter(Boolean).join("\n") || null,
           attachment_url: payload.attachment_url || null,
+          original_message: payload.original_user_text || null,
+          ai_response_message: payload.description || null,
         });
 
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -998,7 +1002,7 @@ serve(async (req) => {
         return respond({
           success: true,
           intent: "lancamento",
-          message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}`,
+          message: `✅ Categoria "${newCategory.name}" criada!\n\n📋 Lançamento enviado para aprovação no app:\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: {
             description: payload.description,
             amount: payload.amount,
