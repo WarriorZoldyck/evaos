@@ -16,12 +16,13 @@ import {
   LifeBuoy,
   TrendingUp,
   BookOpen,
-  
+  Sparkles,
   Plug,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAIPendingTransactions } from "@/hooks/useAIPendingTransactions";
 import {
   Sidebar,
   SidebarContent,
@@ -47,6 +48,7 @@ import evaLogo from "@/assets/eva-os-logo.jpeg";
 const mainMenuItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Lançamentos", url: "/lancamentos", icon: ArrowLeftRight },
+  { title: "Análises EVA", url: "/analises-eva", icon: Sparkles, hasBadge: true },
 ];
 
 const financeMenuItems = [
@@ -71,6 +73,7 @@ const comingSoonItems = [
 export function AppSidebar() {
   const { signOut, user } = useAuth();
   const { companies, selectedCompanyId, setSelectedCompanyId, isPersonal } = useCompany();
+  const { pendingCount } = useAIPendingTransactions();
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
