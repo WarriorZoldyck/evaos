@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,9 +72,10 @@ export default function Auth() {
           </div>
 
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
               <TabsTrigger value="login">Entrar</TabsTrigger>
               <TabsTrigger value="signup">Cadastrar</TabsTrigger>
+              <TabsTrigger value="hub">EVA Hub</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
@@ -83,6 +84,10 @@ export default function Auth() {
 
             <TabsContent value="signup">
               <SignupForm />
+            </TabsContent>
+
+            <TabsContent value="hub">
+              <HubLoginForm />
             </TabsContent>
           </Tabs>
         </div>
