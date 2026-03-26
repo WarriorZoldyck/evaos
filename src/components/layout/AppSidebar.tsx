@@ -206,9 +206,8 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {/* EVA Hub - visible for owners with members or hub members */}
-        {(isOwnerWithMembers || isHubMember) && (
-          <SidebarGroup>
+        {/* EVA Hub - always visible for authenticated users */}
+        <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
