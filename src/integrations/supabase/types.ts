@@ -1203,6 +1203,68 @@ export type Database = {
           },
         ]
       }
+      workspace_member_permissions: {
+        Row: {
+          id: string
+          resource_id: string
+          resource_type: string
+          workspace_member_id: string
+        }
+        Insert: {
+          id?: string
+          resource_id: string
+          resource_type: string
+          workspace_member_id: string
+        }
+        Update: {
+          id?: string
+          resource_id?: string
+          resource_type?: string
+          workspace_member_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_member_permissions_workspace_member_id_fkey"
+            columns: ["workspace_member_id"]
+            isOneToOne: false
+            referencedRelation: "workspace_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_members: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          member_name: string
+          member_user_id: string
+          owner_id: string
+          role: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          member_name?: string
+          member_user_id: string
+          owner_id: string
+          role?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          member_name?: string
+          member_user_id?: string
+          owner_id?: string
+          role?: string
+          status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -1217,6 +1279,10 @@ export type Database = {
         Returns: {
           table_name: string
         }[]
+      }
+      is_hub_member: {
+        Args: { _member_uid: string; _owner_uid: string }
+        Returns: boolean
       }
       list_tables: {
         Args: never
