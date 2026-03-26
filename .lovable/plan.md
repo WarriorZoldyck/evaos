@@ -1,51 +1,50 @@
 
 
-# Duas Melhorias: Transferência na Edição + Entendimento da Duplicação
+# Análises EVA — Caixa de Entrada de Lançamentos da IA
 
-## 1. Permitir "Transferência entre Contas" ao Editar
+## Conceito
+Nova página "Análises EVA" no menu lateral onde todos os lançamentos gerados via WhatsApp (e futuramente e-mail) caem para aprovação do usuário antes de irem para o sistema. A IA do WhatsApp para de inserir direto na `transactions` e passa a inserir numa tabela staging `ai_pending_transactions`.
 
-### Problema
-Quando o usuário edita um lançamento, o modal só mostra as abas "Receita" e "Despesa" (linha 900-904 do `TransactionFormModal.tsx`). A aba "Transf. entre Contas" é ocultada propositalmente no modo edição. Isso impede que o usuário converta um lançamento comum em transferência.
+## Etapas
 
-### Solução
-Permitir a aba "Transferência" também no modo edição, mas com comportamento especial:
+### 1. Migration: tabela `ai_pending_transactions`
+Campos espelhando `transactions` + metadados:
+- `source` (whatsapp/email/upload), `status` (pending/approved/rejected)
+- `confidence_score`, `ai_response_message`, `original_message`
+- `reviewed_at`
+- RLS: `user_id = auth.uid()`
 
-**No `TransactionFormModal.tsx`:**
-- Mudar o bloco de tabs (linhas 900-911) para sempre mostrar 3 abas, independente de `isEditing`
-- Quando o usuário estiver editando e mudar para a aba "transferencia":
-  - Pré-preencher o formulário de transferência com os dados do lançamento sendo editado (descrição, valor, data)
-  - Pré-selecionar a conta atual do lançamento como "Conta de Origem"
-- Ao salvar a transferência no modo edição:
-  - Deletar o lançamento original (via `onUpdate` ou chamada direta)
-  - Criar os 2 lançamentos de transferência (despesa na origem + receita no destino com `transfer_id` compartilhado)
-- Manter bloqueio para lançamentos que JÁ são transferências (`transfer_id` existente) — nesses casos, não permitir edição do tipo
+### 2. Webhook WhatsApp → redirecionar inserts
+Todos os `supabase.from("transactions").insert(...)` no `whatsapp-webhook/index.ts` passam a inserir em `ai_pending_transactions` com `status: 'pending'` e `source: 'whatsapp'`. A mensagem de confirmação muda para "Lançamento enviado para aprovação no app".
 
-### Exceção
-Se o lançamento já possui `transfer_id` (já é uma transferência), bloquear a troca de tipo para evitar inconsistências na reconciliação.
+### 3. Hook: `src/hooks/useAIPendingTransactions.ts`
+- `fetchPending()` — lista pendentes
+- `approveTransaction(id)` — copia para `transactions`, marca approved
+- `rejectTransaction(id)` — marca rejected
+- `pendingCount` — para badge no sidebar
 
-## 2. Duplicação por Sobreposição de Datas entre Extratos
+### 4. Página: `src/pages/AnalisesEva.tsx`
+Layout baseado na referência enviada:
+- Header com título "Análises EVA" + badge de pendentes + botão "Enviar documento"
+- Tabs: WhatsApp (com contador) | E-mail (em breve)
+- Cards interativos mostrando: descrição, valor, tipo, categoria, fornecedor, data, conta, confiança da IA
+- Botões por card: **Aprovar** (move para transactions), **Rejeitar**, **Visualizar** (attachment), **Editar** (abrir modal de edição antes de aprovar)
 
-### Entendimento
-A duplicação aconteceu porque dois extratos diferentes (janeiro e fevereiro) tinham transações na mesma data de fronteira, gerando o mesmo `external_id`. A migration com unique index que acabamos de criar **já resolve** esse problema para importações futuras — o banco agora rejeita inserções com `external_id` duplicado, e o `createMultipleTransactions` filtra antes de inserir.
+### 5. Sidebar + Rota
+- Novo item "Análises EVA" com ícone `Sparkles` no grupo "Principal" do `AppSidebar.tsx`
+- Badge dinâmico mostrando quantidade de pendentes
+- Rota `/analises-eva` em `App.tsx`
 
-**Nenhuma mudança adicional necessária** para esse ponto — já está corrigido.
+### 6. Upload direto na página
+Botão "Enviar documento" permite upload de imagem/PDF direto na página, chamando `eva-chat` para processar e inserindo em `ai_pending_transactions` com `source: 'upload'`.
 
-## Arquivo afetado
+## Arquivos afetados
 | Arquivo | Ação |
 |---------|------|
-| `src/components/lancamentos/TransactionFormModal.tsx` | Mostrar aba transferência na edição + lógica de conversão |
-
-## Detalhes Técnicos
-
-```text
-FLUXO DE CONVERSÃO (edição → transferência):
-  1. Usuário abre edição de lançamento comum (ex: despesa)
-  2. Clica na aba "Transf. entre Contas"
-  3. Formulário pré-preenchido com dados do lançamento
-  4. Seleciona conta destino
-  5. Ao salvar:
-     a) Deleta lançamento original (id)
-     b) Cria 2 novos lançamentos com transfer_id compartilhado
-     c) Fecha modal
-```
+| Migration SQL | Criar tabela `ai_pending_transactions` |
+| `supabase/functions/whatsapp-webhook/index.ts` | Redirecionar ~5 inserts de `transactions` para `ai_pending_transactions` |
+| `src/hooks/useAIPendingTransactions.ts` | Criar — CRUD + contagem |
+| `src/pages/AnalisesEva.tsx` | Criar — página com cards de aprovação |
+| `src/components/layout/AppSidebar.tsx` | Adicionar item com badge |
+| `src/App.tsx` | Adicionar rota `/analises-eva` |
 
