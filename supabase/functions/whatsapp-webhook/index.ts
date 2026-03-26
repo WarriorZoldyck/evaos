@@ -2165,9 +2165,21 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }, 200);
       }
 
+      // --- Date sanity: fix wrong year ---
+      const currentYear = new Date().getFullYear();
+      const fixYear = (d: string): string => {
+        if (!d) return d;
+        const parts = d.split("-");
+        if (parts.length >= 1 && parseInt(parts[0]) < currentYear) {
+          parts[0] = String(currentYear);
+          return parts.join("-");
+        }
+        return d;
+      };
+
       // --- Credit card cycle date calculation ---
-      const competenceDate = aiParsed.competence_date || aiParsed.date || today;
-      let paymentDate = aiParsed.payment_date || aiParsed.date || today;
+      const competenceDate = fixYear(aiParsed.competence_date || aiParsed.date || today);
+      let paymentDate = fixYear(aiParsed.payment_date || aiParsed.date || today);
 
       if (creditCardId) {
         const card = contextCards.find((c) => c.id === creditCardId);
@@ -2219,7 +2231,38 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
         // Create multiple transactions as a series
         const seriesId = crypto.randomUUID();
-        const pendingTxs = installmentDetails.map((detail: any, idx: number) => ({
+        const pendingTxs = installmentDetails.map((detail: any, idx: number) => {
+          // Calculate per-installment payment_date for credit cards
+          let installmentPaymentDate = fixYear(detail.due_date || paymentDate);
+          if (creditCardId) {
+            const card = contextCards.find((c) => c.id === creditCardId);
+            if (card) {
+              // Increment month from competence for each installment
+              const baseDate = new Date(competenceDate + "T12:00:00");
+              baseDate.setMonth(baseDate.getMonth() + idx);
+              const compDay = baseDate.getDate();
+              const compMonth = baseDate.getMonth();
+              const compYear = baseDate.getFullYear();
+              let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
+              let billYear = compYear;
+              let dueMonth = billMonth;
+              let dueYear = billYear;
+              if (card.due_day < card.closing_day) {
+                dueMonth = billMonth + 1;
+              }
+              if (dueMonth > 11) {
+                dueMonth -= 12;
+                dueYear++;
+              }
+              const dueDate = new Date(dueYear, dueMonth, card.due_day);
+              const pad2 = (n: number) => String(n).padStart(2, "0");
+              installmentPaymentDate = `${dueDate.getFullYear()}-${pad2(dueDate.getMonth() + 1)}-${pad2(dueDate.getDate())}`;
+            }
+          }
+
+          const installmentStatus = creditCardId ? "Pendente" : (installmentPaymentDate > today ? "Pendente" : "Pago");
+
+          return {
           user_id: userId,
           source: "whatsapp",
           status: "pending",
@@ -2229,8 +2272,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           category: categoryValue,
           subcategory: subcategoryValue,
           competence_date: competenceDate,
-          payment_date: detail.due_date || paymentDate,
-          transaction_status: (detail.due_date && detail.due_date <= today) ? "Pago" : "Pendente",
+          payment_date: installmentPaymentDate,
+          transaction_status: installmentStatus,
           bank_account_id: bankAccountId,
           wallet_id: walletId,
           credit_card_id: creditCardId,
@@ -2247,7 +2290,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           installments_total: installmentCount,
           original_message: originalUserText || null,
           ai_response_message: aiParsed.friendly_message || null,
-        }));
+        };});
+
 
         const { error: insertError } = await supabase.from("ai_pending_transactions").insert(pendingTxs);
 
