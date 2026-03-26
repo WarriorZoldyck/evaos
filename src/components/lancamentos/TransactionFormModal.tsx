@@ -783,6 +783,27 @@ export function TransactionFormModal({
     if (success) onClose();
   };
 
+  // Pre-fill transfer form when switching to transferencia tab during edit
+  useEffect(() => {
+    if (activeTab === "transferencia" && isEditing && editTransaction) {
+      const sourceKey = editTransaction.bank_account_id
+        ? `bank:${editTransaction.bank_account_id}`
+        : editTransaction.wallet_id
+          ? `wallet:${editTransaction.wallet_id}`
+          : editTransaction.credit_card_id
+            ? `card:${editTransaction.credit_card_id}`
+            : "";
+
+      transferForm.reset({
+        description: editTransaction.description || "Transferência entre contas",
+        amount: editTransaction.amount,
+        payment_date: new Date(editTransaction.payment_date + "T00:00:00"),
+        source_account_id: sourceKey,
+        dest_account_id: "",
+      });
+    }
+  }, [activeTab, isEditing, editTransaction]);
+
   const handleTransferSubmit = async (data: TransferFormData) => {
     if (!user) return;
     setSaving(true);
@@ -815,6 +836,18 @@ export function TransactionFormModal({
       }
       return null;
     };
+
+    // If editing, delete the original transaction first
+    if (isEditing && editTransaction) {
+      const { error: deleteError } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", editTransaction.id);
+      if (deleteError) {
+        setSaving(false);
+        return;
+      }
+    }
 
     const transferId = crypto.randomUUID();
     const dateStr = format(data.payment_date, "yyyy-MM-dd");
@@ -897,18 +930,16 @@ export function TransactionFormModal({
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as typeof activeTab)}
         >
-          {isEditing ? (
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="receita">Receita</TabsTrigger>
-              <TabsTrigger value="despesa">Despesa</TabsTrigger>
-            </TabsList>
-          ) : (
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="receita">Receita</TabsTrigger>
-              <TabsTrigger value="despesa">Despesa</TabsTrigger>
-              <TabsTrigger value="transferencia">Transf. entre Contas</TabsTrigger>
-            </TabsList>
-          )}
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="receita">Receita</TabsTrigger>
+            <TabsTrigger value="despesa">Despesa</TabsTrigger>
+            <TabsTrigger
+              value="transferencia"
+              disabled={isEditing && !!editTransaction?.transfer_id}
+            >
+              Transf. entre Contas
+            </TabsTrigger>
+          </TabsList>
 
           <TabsContent value="receita">
             <MainFormContent
