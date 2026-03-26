@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,9 +72,10 @@ export default function Auth() {
           </div>
 
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
               <TabsTrigger value="login">Entrar</TabsTrigger>
               <TabsTrigger value="signup">Cadastrar</TabsTrigger>
+              <TabsTrigger value="hub">EVA Hub</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
@@ -83,6 +84,10 @@ export default function Auth() {
 
             <TabsContent value="signup">
               <SignupForm />
+            </TabsContent>
+
+            <TabsContent value="hub">
+              <HubLoginForm />
             </TabsContent>
           </Tabs>
         </div>
@@ -323,6 +328,75 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
           >
             Voltar ao login
           </button>
+        </CardFooter>
+      </form>
+    </Card>
+  );
+}
+
+function HubLoginForm() {
+  const { signIn } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast.error("Erro ao entrar", { description: error.message });
+      } else {
+        navigate("/eva-hub", { replace: true });
+      }
+    } catch (err) {
+      console.error("Hub login error:", err);
+      toast.error("Erro inesperado ao entrar.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Card className="shadow-premium border-border/50">
+      <CardHeader>
+        <CardTitle className="text-xl font-display">EVA Hub</CardTitle>
+        <CardDescription>Acesse a área de trabalho compartilhada pelo administrador da conta</CardDescription>
+      </CardHeader>
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="hub-email">Email</Label>
+            <Input
+              id="hub-email"
+              type="email"
+              placeholder="seu@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="h-11"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="hub-password">Senha</Label>
+            <Input
+              id="hub-password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="h-11"
+            />
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" className="w-full h-11 bg-gradient-primary hover:opacity-90 transition-opacity font-semibold" disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Entrar no Hub
+          </Button>
         </CardFooter>
       </form>
     </Card>
