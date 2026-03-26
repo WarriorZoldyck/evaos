@@ -16,12 +16,13 @@ import {
   LifeBuoy,
   TrendingUp,
   BookOpen,
-  
+  Sparkles,
   Plug,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAIPendingTransactions } from "@/hooks/useAIPendingTransactions";
 import {
   Sidebar,
   SidebarContent,
@@ -47,6 +48,7 @@ import evaLogo from "@/assets/eva-os-logo.jpeg";
 const mainMenuItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Lançamentos", url: "/lancamentos", icon: ArrowLeftRight },
+  { title: "Análises EVA", url: "/analises-eva", icon: Sparkles, hasBadge: true },
 ];
 
 const financeMenuItems = [
@@ -71,6 +73,7 @@ const comingSoonItems = [
 export function AppSidebar() {
   const { signOut, user } = useAuth();
   const { companies, selectedCompanyId, setSelectedCompanyId, isPersonal } = useCompany();
+  const { pendingCount } = useAIPendingTransactions();
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
 
@@ -144,6 +147,11 @@ export function AppSidebar() {
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
+                      {item.hasBadge && pendingCount > 0 && (
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
+                          {pendingCount}
+                        </span>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

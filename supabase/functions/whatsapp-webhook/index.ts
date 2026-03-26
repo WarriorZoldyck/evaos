@@ -754,7 +754,18 @@ serve(async (req) => {
             installments_total: installmentCount,
           }));
 
-          const { error: insertErr } = await supabase.from("transactions").insert(transactions);
+         const pendingTransactions = transactions.map((tx: any) => ({
+            ...tx,
+            transaction_status: tx.status,
+            source: "whatsapp",
+            status: "pending",
+            original_message: txPayload.original_user_text || null,
+            ai_response_message: `${installmentCount} parcelas - ${txPayload.description}`,
+          }));
+          // Remove 'status' key clash (transaction_status holds the real status)
+          pendingTransactions.forEach((pt: any) => { delete pt.status; pt.status = "pending"; });
+
+          const { error: insertErr } = await supabase.from("ai_pending_transactions").insert(pendingTransactions);
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
 
           if (insertErr) {
@@ -776,13 +787,15 @@ serve(async (req) => {
 
           return respond({
             success: true, intent: "lancamento",
-            message: `✅ ${installmentCount} parcelas registradas na conta "${chosenName}"!\n\n📝 ${txPayload.description}\n💰 Total: ${fmt(totalAmount)}\n\n📋 Parcelas:\n${parcelsDisplay}`,
+            message: `📋 ${installmentCount} parcelas enviadas para aprovação no app!\n\n📝 ${txPayload.description}\n💰 Total: ${fmt(totalAmount)}\n🏦 ${chosenName}\n\n📋 Parcelas:\n${parcelsDisplay}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
             transaction: { description: txPayload.description, amount: totalAmount, type: txType, installments: installmentCount },
           }, 200);
         }
 
-        const { error: insertErr } = await supabase.from("transactions").insert({
+        const { error: insertErr } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
+          source: "whatsapp",
+          status: "pending",
           description: txPayload.description || "Lançamento via WhatsApp",
           amount: Math.abs(txPayload.amount || 0),
           type: txType,
@@ -790,7 +803,7 @@ serve(async (req) => {
           subcategory: txPayload.subcategory_id || null,
           competence_date: competenceDate,
           payment_date: paymentDate,
-          status,
+          transaction_status: status,
           bank_account_id: matchedBankId,
           wallet_id: matchedWalletId,
           credit_card_id: matchedCardId,
@@ -801,6 +814,8 @@ serve(async (req) => {
           contact_name: txPayload.contact_name || null,
           notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
           attachment_url: txPayload.attachment_url || null,
+          original_message: txPayload.original_user_text || null,
+          ai_response_message: txPayload.description || null,
         });
 
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -822,7 +837,7 @@ serve(async (req) => {
 
         return respond({
           success: true, intent: "lancamento",
-          message: `✅ Lançamento registrado na conta "${chosenName}"!\n\n📝 ${txPayload.description}\n💰 ${fmt(txPayload.amount || 0)}\n📁 ${typeLabel} / ${txPayload.category_label || "Categoria"}\n🏢 ${contextLabel}\n📅 ${formatDate(competenceDate)}`,
+          message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${txPayload.description}\n💰 ${fmt(txPayload.amount || 0)}\n📁 ${typeLabel} / ${txPayload.category_label || "Categoria"}\n🏢 ${contextLabel}\n🏦 ${chosenName}\n📅 ${formatDate(competenceDate)}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: { description: txPayload.description, amount: txPayload.amount, type: txType, context: contextLabel },
         }, 200);
       }
@@ -944,8 +959,10 @@ serve(async (req) => {
           status = "Pendente";
         }
 
-        const { error: insertError } = await supabase.from("transactions").insert({
+        const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
+          source: "whatsapp",
+          status: "pending",
           description: payload.description || "Lançamento via WhatsApp",
           amount: Math.abs(payload.amount || 0),
           type: txType,
@@ -953,7 +970,7 @@ serve(async (req) => {
           subcategory: null,
           competence_date: competenceDate,
           payment_date: paymentDate,
-          status: status,
+          transaction_status: status,
           bank_account_id: bankAccountId,
           wallet_id: walletId,
           credit_card_id: creditCardId,
@@ -964,6 +981,8 @@ serve(async (req) => {
           contact_name: payload.contact_name || null,
           notes: [payload.original_user_text, payload.notes].filter(Boolean).join("\n") || null,
           attachment_url: payload.attachment_url || null,
+          original_message: payload.original_user_text || null,
+          ai_response_message: payload.description || null,
         });
 
         await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -983,7 +1002,7 @@ serve(async (req) => {
         return respond({
           success: true,
           intent: "lancamento",
-          message: `✅ Categoria "${newCategory.name}" criada e lançamento registrado!\n\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}`,
+          message: `✅ Categoria "${newCategory.name}" criada!\n\n📋 Lançamento enviado para aprovação no app:\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: {
             description: payload.description,
             amount: payload.amount,
@@ -2200,8 +2219,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
         // Create multiple transactions as a series
         const seriesId = crypto.randomUUID();
-        const transactions = installmentDetails.map((detail: any, idx: number) => ({
+        const pendingTxs = installmentDetails.map((detail: any, idx: number) => ({
           user_id: userId,
+          source: "whatsapp",
+          status: "pending",
           description: `${aiParsed.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
           amount: Math.abs(detail.amount || 0),
           type: txType,
@@ -2209,7 +2230,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           subcategory: subcategoryValue,
           competence_date: competenceDate,
           payment_date: detail.due_date || paymentDate,
-          status: (detail.due_date && detail.due_date <= today) ? "Pago" as const : "Pendente" as const,
+          transaction_status: (detail.due_date && detail.due_date <= today) ? "Pago" : "Pendente",
           bank_account_id: bankAccountId,
           wallet_id: walletId,
           credit_card_id: creditCardId,
@@ -2224,9 +2245,11 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           series_id: seriesId,
           installment_number: idx + 1,
           installments_total: installmentCount,
+          original_message: originalUserText || null,
+          ai_response_message: aiParsed.friendly_message || null,
         }));
 
-        const { error: insertError } = await supabase.from("transactions").insert(transactions);
+        const { error: insertError } = await supabase.from("ai_pending_transactions").insert(pendingTxs);
 
         if (insertError) {
           console.error("Installment insert error:", insertError);
@@ -2249,7 +2272,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         return respond({
           success: true,
           intent: "lancamento",
-          message: `✅ ${installmentCount} parcelas criadas!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}\n\n📋 Parcelas:\n${parcelsDisplay}${barcodeNote}`,
+          message: `📋 ${installmentCount} parcelas enviadas para aprovação!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}\n\n📋 Parcelas:\n${parcelsDisplay}${barcodeNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: {
             description: aiParsed.description,
             amount: totalAmount,
@@ -2262,8 +2285,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
       // Single transaction (no installments)
-      const { error: insertError } = await supabase.from("transactions").insert({
+      const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
+        source: "whatsapp",
+        status: "pending",
         description: aiParsed.description || "Lançamento via WhatsApp",
         amount: Math.abs(aiParsed.amount || 0),
         type: txType,
@@ -2271,7 +2296,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         subcategory: subcategoryValue,
         competence_date: competenceDate,
         payment_date: paymentDate,
-        status: status,
+        transaction_status: status,
         bank_account_id: bankAccountId,
         wallet_id: walletId,
         credit_card_id: creditCardId,
@@ -2282,6 +2307,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         contact_name: contactName,
         notes: buildNotes(aiParsed.notes),
         attachment_url: attachmentUrl,
+        original_message: originalUserText || null,
+        ai_response_message: aiParsed.friendly_message || null,
       });
 
       if (insertError) {
@@ -2302,23 +2329,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
 
-      // Build the display message — never trust AI's friendly_message for status wording
-      const aiFriendly = aiParsed.friendly_message || "";
-      // If AI says "pago" but real status is Pendente (e.g. credit card), fix it
-      let displayMessage = aiFriendly;
-      if (status === "Pendente" && aiFriendly) {
-        displayMessage = aiFriendly
-          .replace(/já está marcado como pago/gi, "foi registrado como pendente (cartão de crédito)")
-          .replace(/marcado como pago/gi, "registrado como pendente")
-          .replace(/\bcomo pago\b/gi, "como pendente")
-          .replace(/\bjá pago\b/gi, "pendente");
-      }
-      const fallbackMessage = `✅ Lançamento criado!${statusDisplay}\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}`;
-
       return respond({
         success: true,
         intent: "lancamento",
-        message: displayMessage || fallbackMessage,
+        message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
         transaction: {
           description: aiParsed.description,
           amount: aiParsed.amount,
