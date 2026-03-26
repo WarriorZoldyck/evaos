@@ -2290,7 +2290,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           installments_total: installmentCount,
           original_message: originalUserText || null,
           ai_response_message: aiParsed.friendly_message || null,
-        }));
+        };});
+
 
         const { error: insertError } = await supabase.from("ai_pending_transactions").insert(pendingTxs);
 
