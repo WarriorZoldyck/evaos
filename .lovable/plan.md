@@ -1,32 +1,51 @@
 
 
-# Corrigir Duplicação na Importação de Extrato
+# Duas Melhorias: Transferência na Edição + Entendimento da Duplicação
 
-## Problema
-A importação de extratos não verifica se transações com o mesmo `external_id` já existem no banco. Quando o usuário importa o mesmo extrato duas vezes, as transações são duplicadas (ex: IOF R$7,70 e R$101,31 aparecendo 2x).
+## 1. Permitir "Transferência entre Contas" ao Editar
 
-Além disso, não há constraint de unicidade no campo `external_id` na tabela `transactions`.
+### Problema
+Quando o usuário edita um lançamento, o modal só mostra as abas "Receita" e "Despesa" (linha 900-904 do `TransactionFormModal.tsx`). A aba "Transf. entre Contas" é ocultada propositalmente no modo edição. Isso impede que o usuário converta um lançamento comum em transferência.
 
-## Correções
+### Solução
+Permitir a aba "Transferência" também no modo edição, mas com comportamento especial:
 
-### 1. Migration: Unique constraint no `external_id`
-- Adicionar um índice único parcial: `CREATE UNIQUE INDEX ON transactions (external_id) WHERE external_id IS NOT NULL`
-- Isso impede duplicatas no nível do banco
+**No `TransactionFormModal.tsx`:**
+- Mudar o bloco de tabs (linhas 900-911) para sempre mostrar 3 abas, independente de `isEditing`
+- Quando o usuário estiver editando e mudar para a aba "transferencia":
+  - Pré-preencher o formulário de transferência com os dados do lançamento sendo editado (descrição, valor, data)
+  - Pré-selecionar a conta atual do lançamento como "Conta de Origem"
+- Ao salvar a transferência no modo edição:
+  - Deletar o lançamento original (via `onUpdate` ou chamada direta)
+  - Criar os 2 lançamentos de transferência (despesa na origem + receita no destino com `transfer_id` compartilhado)
+- Manter bloqueio para lançamentos que JÁ são transferências (`transfer_id` existente) — nesses casos, não permitir edição do tipo
 
-### 2. `createMultipleTransactions` — verificação pré-insert
-- Antes do insert, buscar todos `external_id`s existentes do usuário que coincidam com os da importação
-- Filtrar do array as transações cujo `external_id` já existe
-- Se todas já existirem, avisar "Todas as transações já foram importadas anteriormente"
-- Se algumas já existirem, avisar quantas foram ignoradas por duplicidade
+### Exceção
+Se o lançamento já possui `transfer_id` (já é uma transferência), bloquear a troca de tipo para evitar inconsistências na reconciliação.
 
-### 3. `external_id` mais robusto
-- Usar `description.slice(0, 50)` em vez de `slice(0, 20)` para diferenciar melhor transações com descrições similares (ex: "IOF ADICIONAL - AUTOMATICO" vs "IOF IMPOSTO OPERACOES")
-- Normalizar o external_id removendo espaços extras
+## 2. Duplicação por Sobreposição de Datas entre Extratos
 
-## Arquivos afetados
+### Entendimento
+A duplicação aconteceu porque dois extratos diferentes (janeiro e fevereiro) tinham transações na mesma data de fronteira, gerando o mesmo `external_id`. A migration com unique index que acabamos de criar **já resolve** esse problema para importações futuras — o banco agora rejeita inserções com `external_id` duplicado, e o `createMultipleTransactions` filtra antes de inserir.
+
+**Nenhuma mudança adicional necessária** para esse ponto — já está corrigido.
+
+## Arquivo afetado
 | Arquivo | Ação |
 |---------|------|
-| `supabase/migrations/` | Nova migration — unique index parcial em `external_id` |
-| `src/hooks/useTransactions.ts` | Editar `createMultipleTransactions` — dedup pré-insert |
-| `src/components/lancamentos/ImportStatementModal.tsx` | Editar — `external_id` com slice maior |
+| `src/components/lancamentos/TransactionFormModal.tsx` | Mostrar aba transferência na edição + lógica de conversão |
+
+## Detalhes Técnicos
+
+```text
+FLUXO DE CONVERSÃO (edição → transferência):
+  1. Usuário abre edição de lançamento comum (ex: despesa)
+  2. Clica na aba "Transf. entre Contas"
+  3. Formulário pré-preenchido com dados do lançamento
+  4. Seleciona conta destino
+  5. Ao salvar:
+     a) Deleta lançamento original (id)
+     b) Cria 2 novos lançamentos com transfer_id compartilhado
+     c) Fecha modal
+```
 
