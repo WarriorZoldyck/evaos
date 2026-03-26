@@ -897,18 +897,16 @@ export function TransactionFormModal({
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as typeof activeTab)}
         >
-          {isEditing ? (
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="receita">Receita</TabsTrigger>
-              <TabsTrigger value="despesa">Despesa</TabsTrigger>
-            </TabsList>
-          ) : (
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="receita">Receita</TabsTrigger>
-              <TabsTrigger value="despesa">Despesa</TabsTrigger>
-              <TabsTrigger value="transferencia">Transf. entre Contas</TabsTrigger>
-            </TabsList>
-          )}
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="receita">Receita</TabsTrigger>
+            <TabsTrigger value="despesa">Despesa</TabsTrigger>
+            <TabsTrigger
+              value="transferencia"
+              disabled={isEditing && !!editTransaction?.transfer_id}
+            >
+              Transf. entre Contas
+            </TabsTrigger>
+          </TabsList>
 
           <TabsContent value="receita">
             <MainFormContent
