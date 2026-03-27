@@ -6,14 +6,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Folder, FolderPlus, Trash2, Loader2, Users } from "lucide-react";
+import {
+  Folder, FolderPlus, Trash2, Loader2, Users,
+  LayoutGrid, Calculator, Briefcase, ShoppingCart, Settings,
+} from "lucide-react";
 
 const PRESET_DEPARTMENTS = [
-  "Financeiro",
-  "Contabilidade",
-  "Comercial",
-  "Operações",
-  "Administrativo",
+  { name: "Financeiro", icon: Calculator },
+  { name: "Contabilidade", icon: Briefcase },
+  { name: "Comercial", icon: ShoppingCart },
+  { name: "Operações", icon: Settings },
+  { name: "Administrativo", icon: LayoutGrid },
 ];
 
 export default function HubWorkspaces() {
@@ -30,76 +33,88 @@ export default function HubWorkspaces() {
 
   const existingNames = workspaces.map((w) => w.name.toLowerCase());
   const suggestedPresets = PRESET_DEPARTMENTS.filter(
-    (p) => !existingNames.includes(p.toLowerCase())
+    (p) => !existingNames.includes(p.name.toLowerCase())
   );
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold font-display text-foreground flex items-center gap-2">
-            <Folder className="h-6 w-6 text-primary" />
-            Áreas de Trabalho
-          </h1>
-          <p className="text-muted-foreground text-sm">Crie departamentos para organizar sua equipe</p>
+        <div>
+          <h1 className="text-2xl font-bold font-display text-foreground">Áreas de Trabalho</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            {workspaces.length} {workspaces.length === 1 ? "departamento criado" : "departamentos criados"}
+          </p>
         </div>
         <Button onClick={() => setShowCreate(true)} className="gap-1.5">
           <FolderPlus className="h-4 w-4" />
-          Criar
+          <span className="hidden sm:inline">Criar</span>
         </Button>
       </div>
 
-      {/* Quick presets */}
+      {/* Quick presets — only when empty */}
       {suggestedPresets.length > 0 && workspaces.length === 0 && (
-        <Card>
-          <CardContent className="py-4 space-y-3">
-            <p className="text-sm font-medium text-foreground">Sugestões rápidas</p>
-            <div className="flex flex-wrap gap-2">
-              {suggestedPresets.map((name) => (
-                <Button
-                  key={name}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => createWorkspace(name)}
-                  className="gap-1.5"
-                >
-                  <FolderPlus className="h-3.5 w-3.5" />
-                  {name}
-                </Button>
-              ))}
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="py-5 space-y-3">
+            <p className="text-sm font-semibold text-foreground">Comece com sugestões prontas</p>
+            <p className="text-xs text-muted-foreground">Clique para criar departamentos comuns automaticamente</p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {suggestedPresets.map((dept) => {
+                const Icon = dept.icon;
+                return (
+                  <Button
+                    key={dept.name}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => createWorkspace(dept.name)}
+                    className="gap-1.5 bg-background hover:bg-primary/10 hover:border-primary/30"
+                  >
+                    <Icon className="h-3.5 w-3.5 text-primary" />
+                    {dept.name}
+                  </Button>
+                );
+              })}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {workspaces.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground text-sm">
-            Nenhuma área criada. Use as sugestões acima ou crie uma personalizada.
+      {workspaces.length === 0 && suggestedPresets.length === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="py-16 text-center">
+            <Folder className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="text-muted-foreground font-medium">Nenhuma área criada</p>
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      )}
+
+      {workspaces.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
           {workspaces.map((ws) => {
             const count = members.filter((m) => m.workspace_id === ws.id).length;
+            const preset = PRESET_DEPARTMENTS.find((p) => p.name.toLowerCase() === ws.name.toLowerCase());
+            const Icon = preset?.icon || Folder;
             return (
-              <Card key={ws.id} className="group">
-                <CardContent className="py-4 space-y-2 relative">
-                  <div className="flex items-center gap-2">
-                    <Folder className="h-4 w-4 text-primary" />
-                    <p className="font-medium text-foreground">{ws.name}</p>
-                  </div>
-                  {ws.description && (
-                    <p className="text-xs text-muted-foreground line-clamp-2">{ws.description}</p>
-                  )}
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Users className="h-3 w-3" />
-                    {count} {count === 1 ? "membro" : "membros"}
+              <Card key={ws.id} className="group hover:border-primary/30 hover:shadow-sm transition-all">
+                <CardContent className="py-5 relative">
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground">{ws.name}</p>
+                      {ws.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{ws.description}</p>
+                      )}
+                      <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                        <Users className="h-3.5 w-3.5" />
+                        <span>{count} {count === 1 ? "membro" : "membros"}</span>
+                      </div>
+                    </div>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                    className="absolute top-3 right-3 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
                     onClick={() => deleteWorkspace(ws.id)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -145,11 +160,11 @@ function CreateWorkspaceModal({ open, onClose, onCreate }: {
           <DialogTitle>Nova Área de Trabalho</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div>
+          <div className="space-y-2">
             <Label>Nome</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Financeiro, Comercial" />
           </div>
-          <div>
+          <div className="space-y-2">
             <Label>Descrição (opcional)</Label>
             <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descrição da área" rows={3} />
           </div>

@@ -9,13 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserPlus, User, Shield, Eye, Edit3,
-  Pause, Play, Loader2,
+  Pause, Play, Loader2, UserCheck, UserX, Folder,
 } from "lucide-react";
 
-const roleLabels: Record<string, string> = {
-  admin: "Administrador",
-  editor: "Editor",
-  viewer: "Visualizador",
+const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
+  admin: { label: "Administrador", icon: Shield, color: "text-amber-500 bg-amber-500/10" },
+  editor: { label: "Editor", icon: Edit3, color: "text-blue-500 bg-blue-500/10" },
+  viewer: { label: "Visualizador", icon: Eye, color: "text-muted-foreground bg-muted" },
 };
 
 export default function HubMembros() {
@@ -39,30 +39,57 @@ export default function HubMembros() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold font-display text-foreground flex items-center gap-2">
-            <Users className="h-6 w-6 text-primary" />
-            Membros
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {activeCount} ativo{activeCount !== 1 && "s"}
-            {suspendedCount > 0 && ` • ${suspendedCount} suspenso${suspendedCount !== 1 ? "s" : ""}`}
+        <div>
+          <h1 className="text-2xl font-bold font-display text-foreground">Membros</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Gerencie quem tem acesso à sua conta
           </p>
         </div>
         <Button onClick={() => setShowInvite(true)} className="gap-1.5">
           <UserPlus className="h-4 w-4" />
-          Convidar
+          <span className="hidden sm:inline">Convidar</span>
         </Button>
       </div>
 
-      {members.length === 0 ? (
+      {/* Summary stats */}
+      <div className="grid grid-cols-3 gap-3">
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground text-sm">
-            Nenhum membro adicionado. Convide alguém para começar.
+          <CardContent className="py-4 text-center">
+            <Users className="h-5 w-5 text-primary mx-auto mb-1" />
+            <p className="text-2xl font-bold text-foreground">{members.length}</p>
+            <p className="text-[11px] text-muted-foreground">Total</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4 text-center">
+            <UserCheck className="h-5 w-5 text-emerald-500 mx-auto mb-1" />
+            <p className="text-2xl font-bold text-foreground">{activeCount}</p>
+            <p className="text-[11px] text-muted-foreground">Ativos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4 text-center">
+            <UserX className="h-5 w-5 text-muted-foreground mx-auto mb-1" />
+            <p className="text-2xl font-bold text-foreground">{suspendedCount}</p>
+            <p className="text-[11px] text-muted-foreground">Suspensos</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {members.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-16 text-center">
+            <UserPlus className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
+            <p className="text-muted-foreground font-medium">Nenhum membro adicionado</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">Convide alguém para começar a gerenciar sua equipe.</p>
+            <Button onClick={() => setShowInvite(true)} className="mt-4 gap-1.5">
+              <UserPlus className="h-4 w-4" />
+              Convidar primeiro membro
+            </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3">
+        <div className="space-y-2">
           {members.map((m) => (
             <MemberCard
               key={m.id}
@@ -92,25 +119,39 @@ function MemberCard({
   onActivate: (id: string) => void;
   onAssignWorkspace: (id: string, wsId: string | null) => void;
 }) {
+  const role = roleConfig[member.role] || roleConfig.viewer;
+  const RoleIcon = role.icon;
+  const workspace = workspaces.find((w) => w.id === member.workspace_id);
+
   return (
-    <Card className={member.status === "suspended" ? "opacity-60" : ""}>
-      <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-            <User className="h-4 w-4 text-primary" />
+    <Card className={`transition-all ${member.status === "suspended" ? "opacity-50" : "hover:border-primary/20 hover:shadow-sm"}`}>
+      <CardContent className="py-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <User className="h-5 w-5 text-primary" />
           </div>
-          <div className="min-w-0">
-            <p className="font-medium text-sm text-foreground truncate">{member.member_name}</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-sm text-foreground truncate">{member.member_name}</p>
+              <Badge
+                variant={member.status === "active" ? "default" : "secondary"}
+                className="text-[9px] px-1.5 py-0 h-4 shrink-0"
+              >
+                {member.status === "active" ? "Ativo" : "Suspenso"}
+              </Badge>
+            </div>
             <p className="text-xs text-muted-foreground truncate">{member.email}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
           {workspaces.length > 0 && (
             <Select
               value={member.workspace_id || "none"}
               onValueChange={(v) => onAssignWorkspace(member.id, v === "none" ? null : v)}
             >
-              <SelectTrigger className="w-[130px] h-8 text-xs">
+              <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] max-w-[160px]">
+                <Folder className="h-3 w-3 mr-1 shrink-0 text-muted-foreground" />
                 <SelectValue placeholder="Área" />
               </SelectTrigger>
               <SelectContent>
@@ -122,7 +163,8 @@ function MemberCard({
             </Select>
           )}
           <Select value={member.role} onValueChange={(v) => onUpdateRole(member.id, v)}>
-            <SelectTrigger className="w-[130px] h-8 text-xs">
+            <SelectTrigger className="h-8 text-xs flex-1 min-w-[120px] max-w-[160px]">
+              <RoleIcon className="h-3 w-3 mr-1 shrink-0" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -131,18 +173,17 @@ function MemberCard({
               <SelectItem value="admin">Administrador</SelectItem>
             </SelectContent>
           </Select>
-          <Badge variant={member.status === "active" ? "default" : "secondary"} className="text-[10px]">
-            {member.status === "active" ? "Ativo" : "Suspenso"}
-          </Badge>
-          {member.status === "active" ? (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onSuspend(member.id)}>
-              <Pause className="h-3.5 w-3.5" />
-            </Button>
-          ) : (
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onActivate(member.id)}>
-              <Play className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <div className="ml-auto">
+            {member.status === "active" ? (
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onSuspend(member.id)} title="Suspender">
+                <Pause className="h-3.5 w-3.5" />
+              </Button>
+            ) : (
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-emerald-500" onClick={() => onActivate(member.id)} title="Reativar">
+                <Play className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -175,10 +216,19 @@ function InviteMemberModal({ open, onClose, onCreate }: {
       <DialogContent className="sm:max-w-md">
         <DialogHeader><DialogTitle>Convidar Membro</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" /></div>
-          <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" /></div>
-          <div><Label>Senha</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha de acesso" /></div>
-          <div>
+          <div className="space-y-2">
+            <Label>Nome</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" />
+          </div>
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
+          </div>
+          <div className="space-y-2">
+            <Label>Senha</Label>
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha de acesso" />
+          </div>
+          <div className="space-y-2">
             <Label>Permissão</Label>
             <Select value={role} onValueChange={setRole}>
               <SelectTrigger><SelectValue /></SelectTrigger>

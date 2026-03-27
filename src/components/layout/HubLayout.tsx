@@ -1,6 +1,6 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { HubProvider, useHub } from "@/contexts/HubContext";
+import { HubProvider } from "@/contexts/HubContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { HubSidebar } from "./HubSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -35,19 +35,19 @@ export default function HubLayout() {
 function HubLayoutInner() {
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <HubSidebar />
         <main className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
-            <div className="flex items-center gap-2">
+          <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 bg-background/80 backdrop-blur-sm sticky top-0 z-40">
+            <div className="flex items-center gap-3">
               <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
-              <Badge variant="outline" className="text-xs font-medium">
-                EVA Hub
+              <Badge variant="outline" className="text-[10px] font-semibold tracking-wide uppercase border-primary/30 text-primary">
+                Hub
               </Badge>
             </div>
             <ThemeToggle />
           </header>
-          <div className="flex-1 overflow-auto p-4 md:p-6">
+          <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
             <Outlet />
           </div>
         </main>
