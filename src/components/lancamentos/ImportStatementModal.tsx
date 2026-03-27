@@ -109,10 +109,62 @@ export function ImportStatementModal({
         return;
       }
 
-      const parsed = (result.transactions || []).map((t: any) => ({
+      const raw = (result.transactions || []).map((t: any) => ({
         ...t,
         selected: true,
       }));
+
+      // Detect and group installments by pattern in description
+      const installmentRegex = /[\s\-–](\d{1,2})\s*[\/\\]\s*(\d{1,2})\s*$/;
+      const parcRegex = /(?:PARC(?:ELA)?|INST)\s*(\d{1,2})\s*(?:\/|DE|\\)\s*(\d{1,2})/i;
+      
+      const groups: Record<string, { indices: number[]; total: number }> = {};
+      
+      raw.forEach((t: any, idx: number) => {
+        let match = t.description.match(installmentRegex) || t.description.match(parcRegex);
+        if (match) {
+          const num = parseInt(match[1]);
+          const total = parseInt(match[2]);
+          if (num > 0 && total > 1 && num <= total) {
+            // Extract base description (without the installment part)
+            const baseName = t.description
+              .replace(installmentRegex, '')
+              .replace(parcRegex, '')
+              .trim()
+              .replace(/[\s\-–]+$/, '');
+            const groupKey = `${baseName}__${total}__${t.type}`;
+            if (!groups[groupKey]) {
+              groups[groupKey] = { indices: [], total };
+            }
+            groups[groupKey].indices.push(idx);
+            raw[idx]._installment_number = num;
+            raw[idx]._installments_total = total;
+            raw[idx]._base_description = baseName;
+          }
+        }
+      });
+
+      // Apply series_id to grouped installments
+      for (const [, group] of Object.entries(groups)) {
+        if (group.indices.length > 1) {
+          const sid = crypto.randomUUID();
+          const totalAmount = group.indices.reduce((sum, i) => sum + Math.abs(raw[i].amount), 0);
+          group.indices.forEach((i) => {
+            raw[i].series_id = sid;
+            raw[i].installment_number = raw[i]._installment_number;
+            raw[i].installments_total = raw[i]._installments_total;
+            raw[i].original_amount = totalAmount;
+            raw[i].base_description = raw[i]._base_description;
+          });
+        }
+      }
+
+      // Clean temp fields
+      const parsed = raw.map((t: any) => {
+        const { _installment_number, _installments_total, _base_description, ...rest } = t;
+        return rest;
+      });
+
       setRows(parsed);
 
       // Auto-detect credit card by last 4 digits
