@@ -790,20 +790,25 @@ serve(async (req) => {
             installments_total: installmentCount,
           }));
 
+         // Check series-level duplicate
+          const totalSeriesAmount = installmentDetails.reduce((s: number, d: any) => s + Math.abs(d.amount || 0), 0);
+          const seriesFp = await generateSeriesFingerprint(txPayload.description || "", totalSeriesAmount, competenceDate);
+          const seriesStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp, true);
+
          const pendingTransactions = transactions.map((tx: any) => ({
             ...tx,
             transaction_status: tx.status,
             source: "whatsapp",
-            status: "pending",
+            status: seriesStatus,
             original_message: txPayload.original_user_text || null,
             ai_response_message: `${installmentCount} parcelas - ${txPayload.description}`,
           }));
           // Remove 'status' key clash (transaction_status holds the real status)
-           pendingTransactions.forEach((pt: any) => { delete pt.status; pt.status = "pending"; });
+           pendingTransactions.forEach((pt: any) => { delete pt.status; pt.status = seriesStatus; });
 
-          // Add fingerprint to each pending transaction
+          // Add fingerprint to each pending transaction (series-level fingerprint)
           for (const pt of pendingTransactions) {
-            pt.fingerprint = await generateFingerprint(pt.amount, pt.description, pt.competence_date);
+            pt.fingerprint = seriesFp;
           }
 
           const { error: insertErr } = await supabase.from("ai_pending_transactions").insert(pendingTransactions);
@@ -2346,10 +2351,15 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
           const installmentStatus = creditCardId ? "Pendente" : (installmentPaymentDate > today ? "Pendente" : "Pago");
 
+          // Check series-level duplicate
+          const totalSeriesAmt = installmentDetails.reduce((s: number, d: any) => s + Math.abs(d.amount || 0), 0);
+          const seriesFp2 = await generateSeriesFingerprint(aiParsed.description || "", totalSeriesAmt, competenceDate);
+          const seriesDupStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp2, true);
+
           return {
           user_id: userId,
           source: "whatsapp",
-          status: "pending",
+          status: seriesDupStatus,
           description: `${aiParsed.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
           amount: Math.abs(detail.amount || 0),
           type: txType,
@@ -2374,7 +2384,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           installments_total: installmentCount,
            original_message: originalUserText || null,
           ai_response_message: aiParsed.friendly_message || null,
-          fingerprint: await generateFingerprint(Math.abs(detail.amount || 0), aiParsed.description || "", competenceDate),
+          fingerprint: seriesFp2,
         };});
 
 
