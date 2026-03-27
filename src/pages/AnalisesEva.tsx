@@ -59,6 +59,8 @@ function EditPendingModal({
   const [bankAccountId, setBankAccountId] = useState(item?.bank_account_id || "");
   const [creditCardId, setCreditCardId] = useState(item?.credit_card_id || "");
   const [walletId, setWalletId] = useState(item?.wallet_id || "");
+  const [companyId, setCompanyId] = useState(item?.company_id || "");
+  const { companies } = useCompany();
 
   // Reset state when item changes
   const [prevId, setPrevId] = useState<string | null>(null);
