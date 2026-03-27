@@ -12,6 +12,7 @@ export interface WorkspaceMember {
   role: string;
   status: string;
   created_at: string;
+  workspace_id: string | null;
 }
 
 export interface AvailableWorkspace {
@@ -22,11 +23,48 @@ export interface AvailableWorkspace {
   member_id: string;
 }
 
+export interface Workspace {
+  id: string;
+  owner_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface OwnerProfile {
+  full_name: string | null;
+  companies: { id: string; name: string; cnpj: string }[];
+}
+
 export function useWorkspaceMembers() {
   const { user } = useAuth();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [availableWorkspaces, setAvailableWorkspaces] = useState<AvailableWorkspace[]>([]);
+  const [ownerProfile, setOwnerProfile] = useState<OwnerProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const fetchOwnerProfile = useCallback(async () => {
+    if (!user) return;
+    const [profileRes, companiesRes] = await Promise.all([
+      supabase.from("profiles").select("full_name").eq("id", user.id).single(),
+      supabase.from("companies").select("id, name, cnpj").eq("user_id", user.id),
+    ]);
+    setOwnerProfile({
+      full_name: profileRes.data?.full_name || null,
+      companies: (companiesRes.data as any[]) || [],
+    });
+  }, [user]);
+
+  const fetchWorkspaces = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("workspaces")
+      .select("*")
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: true });
+    if (data) setWorkspaces(data as Workspace[]);
+  }, [user]);
 
   const fetchMembers = useCallback(async () => {
     if (!user) return;
@@ -44,7 +82,6 @@ export function useWorkspaceMembers() {
 
   const fetchAvailableWorkspaces = useCallback(async () => {
     if (!user) return;
-    // Member: fetch workspaces where I'm a member
     const { data, error } = await supabase
       .from("workspace_members")
       .select("*")
@@ -52,9 +89,8 @@ export function useWorkspaceMembers() {
       .eq("status", "active");
 
     if (!error && data) {
-      // Fetch owner profiles for display
       const ownerIds = [...new Set((data as WorkspaceMember[]).map((m) => m.owner_id))];
-      const workspaces: AvailableWorkspace[] = [];
+      const wsList: AvailableWorkspace[] = [];
 
       for (const ownerId of ownerIds) {
         const { data: profile } = await supabase
@@ -65,7 +101,7 @@ export function useWorkspaceMembers() {
 
         const memberRecord = (data as WorkspaceMember[]).find((m) => m.owner_id === ownerId);
         if (memberRecord) {
-          workspaces.push({
+          wsList.push({
             owner_id: ownerId,
             owner_name: profile?.full_name || memberRecord.email || "Conta",
             owner_email: memberRecord.email,
@@ -74,7 +110,7 @@ export function useWorkspaceMembers() {
           });
         }
       }
-      setAvailableWorkspaces(workspaces);
+      setAvailableWorkspaces(wsList);
     }
     setLoading(false);
   }, [user]);
@@ -85,9 +121,9 @@ export function useWorkspaceMembers() {
     if (meta?.hub_member === true) {
       fetchAvailableWorkspaces();
     } else {
-      fetchMembers();
+      Promise.all([fetchMembers(), fetchWorkspaces(), fetchOwnerProfile()]);
     }
-  }, [user, fetchMembers, fetchAvailableWorkspaces]);
+  }, [user, fetchMembers, fetchAvailableWorkspaces, fetchWorkspaces, fetchOwnerProfile]);
 
   const createMember = async (name: string, email: string, password: string, role: string) => {
     try {
@@ -116,13 +152,8 @@ export function useWorkspaceMembers() {
       .from("workspace_members")
       .update({ role })
       .eq("id", memberId);
-
-    if (error) {
-      toast.error("Erro ao atualizar role");
-    } else {
-      toast.success("Role atualizado!");
-      await fetchMembers();
-    }
+    if (error) toast.error("Erro ao atualizar role");
+    else { toast.success("Role atualizado!"); await fetchMembers(); }
   };
 
   const suspendMember = async (memberId: string) => {
@@ -130,13 +161,8 @@ export function useWorkspaceMembers() {
       .from("workspace_members")
       .update({ status: "suspended" })
       .eq("id", memberId);
-
-    if (error) {
-      toast.error("Erro ao suspender membro");
-    } else {
-      toast.success("Membro suspenso!");
-      await fetchMembers();
-    }
+    if (error) toast.error("Erro ao suspender membro");
+    else { toast.success("Membro suspenso!"); await fetchMembers(); }
   };
 
   const activateMember = async (memberId: string) => {
@@ -144,23 +170,50 @@ export function useWorkspaceMembers() {
       .from("workspace_members")
       .update({ status: "active" })
       .eq("id", memberId);
+    if (error) toast.error("Erro ao ativar membro");
+    else { toast.success("Membro ativado!"); await fetchMembers(); }
+  };
 
-    if (error) {
-      toast.error("Erro ao ativar membro");
-    } else {
-      toast.success("Membro ativado!");
-      await fetchMembers();
-    }
+  const createWorkspace = async (name: string, description?: string) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("workspaces")
+      .insert({ owner_id: user.id, name, description: description || null });
+    if (error) toast.error("Erro ao criar área de trabalho");
+    else { toast.success("Área de trabalho criada!"); await fetchWorkspaces(); }
+  };
+
+  const deleteWorkspace = async (workspaceId: string) => {
+    const { error } = await supabase
+      .from("workspaces")
+      .delete()
+      .eq("id", workspaceId);
+    if (error) toast.error("Erro ao excluir área de trabalho");
+    else { toast.success("Área de trabalho excluída!"); await fetchWorkspaces(); }
+  };
+
+  const assignMemberToWorkspace = async (memberId: string, workspaceId: string | null) => {
+    const { error } = await supabase
+      .from("workspace_members")
+      .update({ workspace_id: workspaceId })
+      .eq("id", memberId);
+    if (error) toast.error("Erro ao atribuir área de trabalho");
+    else { toast.success("Membro atualizado!"); await fetchMembers(); }
   };
 
   return {
     members,
+    workspaces,
     availableWorkspaces,
+    ownerProfile,
     loading,
     createMember,
     updateMemberRole,
     suspendMember,
     activateMember,
+    createWorkspace,
+    deleteWorkspace,
+    assignMemberToWorkspace,
     refetch: fetchMembers,
   };
 }

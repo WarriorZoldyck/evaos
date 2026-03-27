@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, BarChart3, Wallet, Shield, Zap } from "lucide-react";
+import { Loader2, BarChart3, Wallet, Shield, Zap, Users } from "lucide-react";
 import evaLogo from "@/assets/eva-os-logo.jpeg";
 
 export default function Auth() {
@@ -360,10 +360,13 @@ function HubLoginForm() {
   };
 
   return (
-    <Card className="shadow-premium border-border/50">
+    <Card className="shadow-premium border-primary/20 bg-gradient-to-br from-background to-primary/5">
       <CardHeader>
-        <CardTitle className="text-xl font-display">EVA Hub</CardTitle>
-        <CardDescription>Acesse a área de trabalho compartilhada pelo administrador da conta</CardDescription>
+        <div className="flex items-center gap-2 mb-1">
+          <Users className="h-5 w-5 text-primary" />
+          <CardTitle className="text-xl font-display">Acesse seu Hub</CardTitle>
+        </div>
+        <CardDescription>Área exclusiva para membros convidados e gestores de equipe</CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
