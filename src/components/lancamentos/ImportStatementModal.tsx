@@ -425,7 +425,14 @@ export function ImportStatementModal({
                         <Checkbox checked={r.selected} onCheckedChange={() => toggleRow(idx)} />
                       </td>
                       <td className="p-2 text-muted-foreground whitespace-nowrap">{r.date}</td>
-                      <td className="p-2 max-w-[300px] truncate">{r.description}</td>
+                      <td className="p-2 max-w-[300px] truncate">
+                        {r.description}
+                        {r.series_id && (
+                          <Badge variant="outline" className="ml-2 text-[9px] px-1">
+                            {r.installment_number}/{r.installments_total}
+                          </Badge>
+                        )}
+                      </td>
                       <td className="p-2 text-right font-mono">{formatCurrency(r.amount)}</td>
                       <td className="p-2 text-center">
                         <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[10px]">
