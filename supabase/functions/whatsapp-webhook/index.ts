@@ -1463,6 +1463,11 @@ REGRA CRÍTICA — ESTABELECIMENTO NÃO É CATEGORIA:
 - Só sugira nova categoria quando NENHUMA categoria existente se aplicar E não houver histórico similar.
 ${historicalPatternsBlock}`;
 
+REGRA CRÍTICA DE DÍGITOS DO CARTÃO:
+- Se a imagem/comprovante mostrar os últimos 4 dígitos do cartão (ex: "****7993", "final 3552", "XXXX1234"), SEMPRE extraia e retorne no campo "visible_card_digits".
+- Isso é essencial para validar que o cartão correto foi selecionado.
+- Se não houver dígitos visíveis, retorne null.
+
 
     // Build user content: multimodal if media, text-only otherwise
     const defaultMediaPrompt = hasAudio
