@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -78,6 +79,7 @@ function EditPendingModal({
     setBankAccountId(item.bank_account_id || "");
     setCreditCardId(item.credit_card_id || "");
     setWalletId(item.wallet_id || "");
+    setCompanyId(item.company_id || "");
   }
 
   if (!item) return null;
@@ -100,6 +102,7 @@ function EditPendingModal({
         bank_account_id: bankAccountId || null,
         credit_card_id: creditCardId || null,
         wallet_id: walletId || null,
+        company_id: companyId || null,
       },
     });
     onClose();
@@ -112,6 +115,18 @@ function EditPendingModal({
           <DialogTitle>Editar Lançamento</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          <div>
+            <Label>Contexto</Label>
+            <Select value={companyId || "pessoal"} onValueChange={(v) => setCompanyId(v === "pessoal" ? "" : v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pessoal">Pessoal</SelectItem>
+                {companies.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div>
             <Label>Descrição</Label>
             <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
