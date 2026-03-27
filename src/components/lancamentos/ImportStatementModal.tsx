@@ -30,6 +30,11 @@ interface ParsedTransaction {
   amount: number;
   type: "receita" | "despesa";
   selected: boolean;
+  series_id?: string;
+  installment_number?: number;
+  installments_total?: number;
+  original_amount?: number;
+  base_description?: string;
 }
 
 interface ImportStatementModalProps {
