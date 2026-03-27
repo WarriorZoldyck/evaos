@@ -11,6 +11,31 @@ const corsHeaders = {
 const CONFIRM_PATTERNS = /^(sim|s|pode|pode criar|cria|ok|pode sim|sim pode|confirma|confirmar|yes|y|bora|manda|vai|faz|positivo|com certeza|claro)$/i;
 const CANCEL_PATTERNS = /^(não|nao|n|cancela|cancelar|cancel|no|deixa|esquece|nope|negativo|não precisa|nao precisa)$/i;
 
+// --- Fingerprint helper for duplicate detection ---
+async function generateFingerprint(amount: number, description: string, competenceDate: string | null): Promise<string> {
+  const normalized = (description || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const raw = `${Math.abs(amount)}|${normalized}|${competenceDate || ""}`;
+  const encoder = new TextEncoder();
+  const data = encoder.encode(raw);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function checkAndSetDuplicateStatus(
+  supabase: any, userId: string, fingerprint: string, isSeries: boolean
+): Promise<string> {
+  if (isSeries) return "pending"; // Series handled as group, skip individual duplicate check
+  const { data } = await supabase
+    .from("ai_pending_transactions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("fingerprint", fingerprint)
+    .eq("status", "pending")
+    .limit(1);
+  return (data && data.length > 0) ? "duplicate_suspect" : "pending";
+}
+
 // --- Evolution API helper: send reply back to WhatsApp ---
 async function sendEvolutionReply(phone: string, text: string) {
   const evoUrl = Deno.env.get("EVOLUTION_API_URL");
