@@ -1,53 +1,56 @@
 
 
-# Revisão do Sistema de Duplicatas — Correções
+# Diagnóstico: WhatsApp Webhook com Boot Failure
 
-## Problemas Encontrados
+## Situacao
 
-### 1. Duplicate suspects "órfãos" ficam invisíveis
-Se o usuário envia 2 lançamentos iguais, o 2o vira `duplicate_suspect`. Se o 1o (status `pending`) for aprovado antes do usuário resolver a duplicata, o suspect perde seu par no clustering (linha 213 do hook agrupa por amount+description+date e precisa de length > 1). Resultado: o suspect fica preso — não aparece em Pendentes, nem em Duplicatas, nem em Histórico.
+O erro **"Unexpected reserved word at line 2140"** (compilada) nos logs e um **erro real de codigo**, NAO um problema de instancia desconectada. A instancia Evolution pode estar conectada normalmente, mas o webhook nao consegue iniciar para processar mensagens.
 
-**Correção**: Duplicate suspects sem par devem aparecer como cluster de 1 na aba Duplicatas, com opção de "Manter" (mover para pending) ou "Rejeitar".
+## Causa Raiz
 
-### 2. Normalização inconsistente entre webhook e hook
-O webhook normaliza a descrição com `toLowerCase().replace(/\s+/g, " ").trim()` antes de gerar o SHA-256. O hook (client-side) agrupa por `toLowerCase().trim()` sem colapsar espaços múltiplos. Isso pode causar clusters que não se juntam corretamente.
+Linhas 2356-2357 do source usam `await` dentro de um `.map()` que NAO e `async`:
 
-**Correção**: Usar mesma normalização no hook.
+```typescript
+// Linha 2323 — callback NÃO é async
+const pendingTxs = installmentDetails.map((detail, idx) => {
+  // ...
+  const seriesFp2 = await generateSeriesFingerprint(...);  // ERRO
+  const seriesDupStatus = await checkAndSetDuplicateStatus(...); // ERRO
+  return { ... };
+});
+```
 
-### 3. Query filtra por company_id — suspects de outro contexto ficam ocultos
-A query principal filtra por `company_id`. Se o lançamento original foi de contexto pessoal e o duplicado foi de empresa (ou vice-versa), o suspect nunca aparece na mesma tela.
+Isso causa um SyntaxError que impede o boot da funcao inteira. Nenhuma mensagem do WhatsApp esta sendo processada enquanto isso persistir.
 
-**Correção**: Na aba Duplicatas, buscar suspects de TODOS os contextos do usuário (sem filtro de company_id), para não perder duplicatas cross-company.
+## Correção Necessária
 
-### 4. Series são ignoradas no fingerprint mas podem duplicar
-`checkAndSetDuplicateStatus` retorna "pending" para séries (isSeries = true). Se o usuário envia a mesma compra parcelada 2x, ambas entram como pending sem aviso.
-
-**Correção**: Para séries, gerar fingerprint baseado na descrição + amount total + competence_date da 1a parcela, e verificar se já existe série pendente com mesmo fingerprint.
-
-## Etapas
-
-### 1. Hook — corrigir clustering e normalização
-**Arquivo**: `src/hooks/useAIPendingTransactions.ts`
-- Normalizar descrição com `.replace(/\s+/g, " ")` antes de montar a key
-- Suspects sem par (órfãos) devem formar cluster de 1 com ações de "Manter" ou "Rejeitar"
-- Adicionar query separada para suspects sem filtro de company_id
-
-### 2. UI — tratar clusters de 1 item (suspect órfão)
-**Arquivo**: `src/pages/AnalisesEva.tsx`
-- Cluster com 1 item: mostrar card simplificado com "Manter como pendente" e "Rejeitar"
-- Cluster com 2+: manter UI atual com "Manter este"
-
-### 3. Webhook — habilitar detecção de séries duplicadas
 **Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
-- Em vez de `if (isSeries) return "pending"`, gerar fingerprint da série (description + total amount + 1a competence_date)
-- Verificar se já existe série pendente com esse fingerprint
-- Se sim, marcar todas as parcelas da nova série como `duplicate_suspect`
 
-## Arquivos afetados
+Mover o calculo de fingerprint e status de duplicata para **antes** do `.map()`, ja que sao valores identicos para todas as parcelas da serie:
 
-| Arquivo | Ação |
+```typescript
+// ANTES do .map() — calcular uma vez
+const totalSeriesAmt = installmentDetails.reduce((s, d) => s + Math.abs(d.amount || 0), 0);
+const seriesFp = await generateSeriesFingerprint(description, totalSeriesAmt, competenceDate);
+const seriesDupStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp, true);
+
+// .map() agora sem await — usa valores já resolvidos
+const pendingTxs = installmentDetails.map((detail, idx) => ({
+  // ... campos ...
+  status: seriesDupStatus,
+  fingerprint: seriesFp,
+}));
+```
+
+## Impacto
+
+- O webhook esta **100% parado** — nenhuma mensagem WhatsApp e processada
+- A correção e simples (mover 3 linhas) e restaura o funcionamento completo
+- Nao ha necessidade de reconectar a instancia Evolution
+
+## Arquivo afetado
+
+| Arquivo | Acao |
 |---------|------|
-| `src/hooks/useAIPendingTransactions.ts` | Normalização, orphan suspects, query cross-company |
-| `src/pages/AnalisesEva.tsx` | UI para clusters órfãos |
-| `supabase/functions/whatsapp-webhook/index.ts` | Detecção de séries duplicadas |
+| `supabase/functions/whatsapp-webhook/index.ts` | Mover `await` para fora do `.map()` + redeploy |
 
