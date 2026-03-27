@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
 import { useCategories } from "@/hooks/useCategories";
+import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Sparkles, Check, X, ExternalLink, MessageSquare, Mail, Upload,
   ArrowUpRight, ArrowDownLeft, Calendar, Tag, CreditCard, User,
-  FileText, Clock, ChevronDown, ChevronUp, Layers, Pencil,
+  FileText, Clock, ChevronDown, ChevronUp, Layers, Pencil, AlertTriangle, Copy,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
