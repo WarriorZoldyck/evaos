@@ -31,6 +31,7 @@ export type Database = {
           created_at: string
           credit_card_id: string | null
           description: string
+          fingerprint: string | null
           id: string
           installment_number: number | null
           installments: number | null
@@ -68,6 +69,7 @@ export type Database = {
           created_at?: string
           credit_card_id?: string | null
           description: string
+          fingerprint?: string | null
           id?: string
           installment_number?: number | null
           installments?: number | null
@@ -105,6 +107,7 @@ export type Database = {
           created_at?: string
           credit_card_id?: string | null
           description?: string
+          fingerprint?: string | null
           id?: string
           installment_number?: number | null
           installments?: number | null

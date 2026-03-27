@@ -11,6 +11,31 @@ const corsHeaders = {
 const CONFIRM_PATTERNS = /^(sim|s|pode|pode criar|cria|ok|pode sim|sim pode|confirma|confirmar|yes|y|bora|manda|vai|faz|positivo|com certeza|claro)$/i;
 const CANCEL_PATTERNS = /^(não|nao|n|cancela|cancelar|cancel|no|deixa|esquece|nope|negativo|não precisa|nao precisa)$/i;
 
+// --- Fingerprint helper for duplicate detection ---
+async function generateFingerprint(amount: number, description: string, competenceDate: string | null): Promise<string> {
+  const normalized = (description || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const raw = `${Math.abs(amount)}|${normalized}|${competenceDate || ""}`;
+  const encoder = new TextEncoder();
+  const data = encoder.encode(raw);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function checkAndSetDuplicateStatus(
+  supabase: any, userId: string, fingerprint: string, isSeries: boolean
+): Promise<string> {
+  if (isSeries) return "pending"; // Series handled as group, skip individual duplicate check
+  const { data } = await supabase
+    .from("ai_pending_transactions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("fingerprint", fingerprint)
+    .eq("status", "pending")
+    .limit(1);
+  return (data && data.length > 0) ? "duplicate_suspect" : "pending";
+}
+
 // --- Evolution API helper: send reply back to WhatsApp ---
 async function sendEvolutionReply(phone: string, text: string) {
   const evoUrl = Deno.env.get("EVOLUTION_API_URL");
@@ -763,7 +788,12 @@ serve(async (req) => {
             ai_response_message: `${installmentCount} parcelas - ${txPayload.description}`,
           }));
           // Remove 'status' key clash (transaction_status holds the real status)
-          pendingTransactions.forEach((pt: any) => { delete pt.status; pt.status = "pending"; });
+           pendingTransactions.forEach((pt: any) => { delete pt.status; pt.status = "pending"; });
+
+          // Add fingerprint to each pending transaction
+          for (const pt of pendingTransactions) {
+            pt.fingerprint = await generateFingerprint(pt.amount, pt.description, pt.competence_date);
+          }
 
           const { error: insertErr } = await supabase.from("ai_pending_transactions").insert(pendingTransactions);
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -792,10 +822,13 @@ serve(async (req) => {
           }, 200);
         }
 
+        const singleFp = await generateFingerprint(Math.abs(txPayload.amount || 0), txPayload.description || "", competenceDate);
+        const singleStatus = await checkAndSetDuplicateStatus(supabase, userId, singleFp, false);
         const { error: insertErr } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
           source: "whatsapp",
-          status: "pending",
+          status: singleStatus,
+          fingerprint: singleFp,
           description: txPayload.description || "Lançamento via WhatsApp",
           amount: Math.abs(txPayload.amount || 0),
           type: txType,
@@ -959,10 +992,13 @@ serve(async (req) => {
           status = "Pendente";
         }
 
+        const catFp = await generateFingerprint(Math.abs(payload.amount || 0), payload.description || "", competenceDate);
+        const catStatus = await checkAndSetDuplicateStatus(supabase, userId, catFp, false);
         const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
           source: "whatsapp",
-          status: "pending",
+          status: catStatus,
+          fingerprint: catFp,
           description: payload.description || "Lançamento via WhatsApp",
           amount: Math.abs(payload.amount || 0),
           type: txType,
@@ -2325,8 +2361,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           series_id: seriesId,
           installment_number: idx + 1,
           installments_total: installmentCount,
-          original_message: originalUserText || null,
+           original_message: originalUserText || null,
           ai_response_message: aiParsed.friendly_message || null,
+          fingerprint: await generateFingerprint(Math.abs(detail.amount || 0), aiParsed.description || "", competenceDate),
         };});
 
 
@@ -2366,10 +2403,13 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
       // Single transaction (no installments)
+      const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
+      const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
       const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
         source: "whatsapp",
-        status: "pending",
+        status: mainStatus,
+        fingerprint: mainFp,
         description: aiParsed.description || "Lançamento via WhatsApp",
         amount: Math.abs(aiParsed.amount || 0),
         type: txType,

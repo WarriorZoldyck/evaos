@@ -200,11 +200,85 @@ export function useAIPendingTransactions() {
   });
 
   const pending = pendingTransactions.filter((t) => t.status === "pending");
-  const reviewed = pendingTransactions.filter((t) => t.status !== "pending");
+  const reviewed = pendingTransactions.filter((t) => t.status !== "pending" && t.status !== "duplicate_suspect");
+  const duplicateSuspects = pendingTransactions.filter((t) => t.status === "duplicate_suspect");
+
+  // Group duplicate suspects into clusters by fingerprint or by matching amount+description
+  const duplicateClusters: AIPendingTransaction[][] = [];
+  const clusterMap = new Map<string, AIPendingTransaction[]>();
+
+  // Also check pending items that share fingerprint with suspects
+  const allForClustering = [...duplicateSuspects, ...pending];
+  for (const item of allForClustering) {
+    const key = `${Math.abs(item.amount)}|${(item.description || "").toLowerCase().trim()}|${item.competence_date || ""}`;
+    const list = clusterMap.get(key) || [];
+    list.push(item);
+    clusterMap.set(key, list);
+  }
+  for (const [, items] of clusterMap) {
+    if (items.length > 1) {
+      // Deduplicate by id
+      const unique = Array.from(new Map(items.map(i => [i.id, i])).values());
+      if (unique.length > 1) duplicateClusters.push(unique);
+    }
+  }
+
+  const keepOneMutation = useMutation({
+    mutationFn: async ({ keepId, rejectIds }: { keepId: string; rejectIds: string[] }) => {
+      // Approve the kept one by setting to pending
+      const { error: keepError } = await supabase
+        .from("ai_pending_transactions")
+        .update({ status: "pending" })
+        .eq("id", keepId);
+      if (keepError) throw keepError;
+      // Reject the others
+      const { error: rejectError } = await supabase
+        .from("ai_pending_transactions")
+        .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+        .in("id", rejectIds);
+      if (rejectError) throw rejectError;
+    },
+    onSuccess: () => {
+      toast.success("Duplicata resolvida!");
+      invalidateAll();
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const keepAllMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from("ai_pending_transactions")
+        .update({ status: "pending" })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Marcados como não-duplicatas!");
+      invalidateAll();
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
+
+  const rejectClusterMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from("ai_pending_transactions")
+        .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Duplicatas rejeitadas!");
+      invalidateAll();
+    },
+    onError: (err: any) => toast.error("Erro: " + err.message),
+  });
 
   return {
     pendingTransactions: pending,
     reviewedTransactions: reviewed,
+    duplicateClusters,
     pendingCount,
     isLoading,
     approve: approveMutation.mutate,
@@ -212,6 +286,9 @@ export function useAIPendingTransactions() {
     approveAll: approveAllMutation.mutate,
     rejectAll: rejectAllMutation.mutate,
     updatePending: updatePendingMutation.mutate,
+    keepOne: keepOneMutation.mutate,
+    keepAll: keepAllMutation.mutate,
+    rejectCluster: rejectClusterMutation.mutate,
     isApproving: approveMutation.isPending || approveAllMutation.isPending,
     isRejecting: rejectMutation.isPending || rejectAllMutation.isPending,
   };

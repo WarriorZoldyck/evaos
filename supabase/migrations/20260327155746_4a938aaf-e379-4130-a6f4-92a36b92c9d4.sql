@@ -1,0 +1,2 @@
+ALTER TABLE ai_pending_transactions ADD COLUMN IF NOT EXISTS fingerprint text;
+CREATE INDEX IF NOT EXISTS idx_ai_pending_fingerprint ON ai_pending_transactions(user_id, fingerprint) WHERE status = 'pending';
