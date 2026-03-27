@@ -540,8 +540,9 @@ function groupPending(items: AIPendingTransaction[]): GroupedItem[] {
 
 export default function AnalisesEva() {
   const {
-    pendingTransactions, reviewedTransactions, pendingCount,
+    pendingTransactions, reviewedTransactions, duplicateClusters, pendingCount,
     isLoading, approve, reject, approveAll, rejectAll, updatePending,
+    keepOne, keepAll, rejectCluster,
     isApproving, isRejecting,
   } = useAIPendingTransactions();
 
