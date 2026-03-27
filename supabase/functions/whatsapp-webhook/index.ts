@@ -788,7 +788,12 @@ serve(async (req) => {
             ai_response_message: `${installmentCount} parcelas - ${txPayload.description}`,
           }));
           // Remove 'status' key clash (transaction_status holds the real status)
-          pendingTransactions.forEach((pt: any) => { delete pt.status; pt.status = "pending"; });
+           pendingTransactions.forEach((pt: any) => { delete pt.status; pt.status = "pending"; });
+
+          // Add fingerprint to each pending transaction
+          for (const pt of pendingTransactions) {
+            pt.fingerprint = await generateFingerprint(pt.amount, pt.description, pt.competence_date);
+          }
 
           const { error: insertErr } = await supabase.from("ai_pending_transactions").insert(pendingTransactions);
           await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
@@ -817,10 +822,13 @@ serve(async (req) => {
           }, 200);
         }
 
+        const singleFp = await generateFingerprint(Math.abs(txPayload.amount || 0), txPayload.description || "", competenceDate);
+        const singleStatus = await checkAndSetDuplicateStatus(supabase, userId, singleFp, false);
         const { error: insertErr } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
           source: "whatsapp",
-          status: "pending",
+          status: singleStatus,
+          fingerprint: singleFp,
           description: txPayload.description || "Lançamento via WhatsApp",
           amount: Math.abs(txPayload.amount || 0),
           type: txType,
@@ -984,10 +992,13 @@ serve(async (req) => {
           status = "Pendente";
         }
 
+        const catFp = await generateFingerprint(Math.abs(payload.amount || 0), payload.description || "", competenceDate);
+        const catStatus = await checkAndSetDuplicateStatus(supabase, userId, catFp, false);
         const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
           source: "whatsapp",
-          status: "pending",
+          status: catStatus,
+          fingerprint: catFp,
           description: payload.description || "Lançamento via WhatsApp",
           amount: Math.abs(payload.amount || 0),
           type: txType,
