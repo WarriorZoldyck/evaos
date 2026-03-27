@@ -2269,7 +2269,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // --- NO CATEGORY MATCH → ask user ---
       if (!matchedCategory) {
         const suggestedName = aiParsed.suggested_category_name || aiParsed.description || "Nova Categoria";
-        const contextLabel = aiParsed.context || "Pessoal";
+        const contextLabel = companyId
+          ? (companies.find((c: any) => c.id === companyId)?.name || aiParsed.context || "Empresa")
+          : (aiParsed.context || "Pessoal");
 
         console.log("=== NO CATEGORY MATCH — ASKING FOR CONFIRMATION ===");
 
