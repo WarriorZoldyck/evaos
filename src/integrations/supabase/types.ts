@@ -1242,6 +1242,7 @@ export type Database = {
           owner_id: string
           role: string
           status: string
+          workspace_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1252,6 +1253,7 @@ export type Database = {
           owner_id: string
           role?: string
           status?: string
+          workspace_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1262,6 +1264,39 @@ export type Database = {
           owner_id?: string
           role?: string
           status?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          owner_id?: string
         }
         Relationships: []
       }
