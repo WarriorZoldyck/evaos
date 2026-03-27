@@ -75,7 +75,12 @@ const App = () => {
                 <Route path="/eva-kids" element={<ComingSoon title="EVA Kids" description="Educação financeira para crianças. Em breve!" icon={GraduationCap} />} />
                 <Route path="/metas" element={<Metas />} />
                 <Route path="/precificacao-v2" element={<PrecificacaoV2 />} />
-                <Route path="/eva-hub" element={<EvaHub />} />
+              </Route>
+              <Route element={<HubLayout />}>
+                <Route path="/eva-hub" element={<Navigate to="/eva-hub/contas" replace />} />
+                <Route path="/eva-hub/contas" element={<HubContas />} />
+                <Route path="/eva-hub/workspaces" element={<HubWorkspaces />} />
+                <Route path="/eva-hub/membros" element={<HubMembros />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
