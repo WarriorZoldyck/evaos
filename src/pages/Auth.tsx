@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, BarChart3, Wallet, Shield, Zap } from "lucide-react";
+import { Loader2, BarChart3, Wallet, Shield, Zap, Users } from "lucide-react";
 import evaLogo from "@/assets/eva-os-logo.jpeg";
 
 export default function Auth() {
