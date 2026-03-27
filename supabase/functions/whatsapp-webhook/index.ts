@@ -2269,7 +2269,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // --- NO CATEGORY MATCH → ask user ---
       if (!matchedCategory) {
         const suggestedName = aiParsed.suggested_category_name || aiParsed.description || "Nova Categoria";
-        const contextLabel = aiParsed.context || "Pessoal";
+        const contextLabel = companyId
+          ? (companies.find((c: any) => c.id === companyId)?.name || aiParsed.context || "Empresa")
+          : (aiParsed.context || "Pessoal");
 
         console.log("=== NO CATEGORY MATCH — ASKING FOR CONFIRMATION ===");
 
@@ -2345,7 +2347,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
       }
 
-      const contextLabel = aiParsed.context || "Pessoal";
+      // Resolve contextLabel from actual companyId (may have been corrected by digit validation / cross-context)
+      const contextLabel = companyId
+        ? (companies.find((c: any) => c.id === companyId)?.name || aiParsed.context || "Empresa")
+        : (aiParsed.context || "Pessoal");
 
       // --- BLOCK if no account/wallet/card (except boleto de compra) ---
       const isBoletoCompraFinal = txType === "despesa" && (paymentMethod === "Boleto" || paymentMethod === "boleto");
