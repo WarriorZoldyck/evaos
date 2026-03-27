@@ -1,53 +1,68 @@
 
 
-# Cartão por Número + Importação Parcelada no EVA IA
+# Detecção de Duplicatas nos Lançamentos da IA
 
-## Problemas Identificados
+## Situação Atual
 
-### 1. IA não reconhece cartão pelo número (apenas pelo nome)
-No prompt da IA (linha 1157), os cartões já aparecem como `Nome Final 1234[UUID]`. Porém, quando a IA retorna `credit_card_id`, a resolução (linha 1726-1733) só faz match exato por UUID. Se a IA errar ou o usuário mencionar "cartão final 1234", e a IA não retornar o UUID correto, o sistema não faz fallback por últimos 4 dígitos.
+Hoje a detecção de duplicatas existe **apenas na importação de extratos** — via `external_id` único gerado a partir da descrição normalizada. Para lançamentos via WhatsApp/IA, **não existe nenhuma proteção contra duplicatas**. Se o usuário enviar a mesma nota fiscal duas vezes, a IA cria dois registros independentes na `ai_pending_transactions`.
 
-**Solução**: Adicionar fallback de matching por `last_four_digits` quando `credit_card_id` não bate com nenhum cartão do contexto. Também melhorar o matching no `choose_account` (já funciona parcialmente na linha 661).
+## Proposta
 
-### 2. Importação de extrato de cartão com lançamentos parcelados
-Atualmente, a importação de extratos (`ImportStatementModal`) cria lançamentos individuais — não agrupa parcelas nem cria `series_id`. Parcelamentos de cartão no extrato precisam ser detectados e agrupados.
+### 1. Nova aba "Duplicatas" na página Análises EVA
 
-**Solução**: Na importação, detectar padrões de parcelas no `description` (ex: "COMPRA X 3/6", "PARCELA 2/4") e agrupá-las sob um `series_id` compartilhado com `installment_number` e `installments_total`.
+Adicionar uma terceira aba ao `TabsList` existente (Pendentes | Revisados | **Duplicatas**). Essa aba mostra grupos de lançamentos com suspeita de duplicação, permitindo ao usuário manter um e rejeitar os demais.
 
-### 3. EVA IA — parcelas caindo como cards separados
-Já resolvido anteriormente com `SeriesCard` agrupando por `series_id`. Confirmar que o fluxo de aprovação em lote (`approveAll`) preserva `series_id`, `installment_number`, `installments_total` e datas corretas por parcela.
+### 2. Algoritmo de detecção (client-side, sobre os pendentes)
 
-## Etapas
+Critérios para considerar duplicata — lançamentos que compartilhem **pelo menos 2 de 3**:
+- Mesmo `amount` (valor exato)
+- Descrição similar (normalizada: lowercase, sem espaços extras, similaridade > 80% ou mesma substring principal)
+- Mesma `competence_date` ou `payment_date`
 
-### 1. Webhook — fallback de matching de cartão por últimos dígitos
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
+Agrupados visualmente como clusters. Cada cluster mostra os lançamentos lado a lado com destaque nas diferenças.
 
-Após a verificação `if (aiParsed.credit_card_id)` na linha 1726, se não encontrar match, tentar:
-- Extrair 4 dígitos de `aiParsed.credit_card_id` ou da mensagem original
-- Buscar em `contextCards` por `last_four_digits`
-- Se encontrar exatamente 1, usar esse cartão
-- Se encontrar múltiplos, disparar `choose_account` com a lista
+### 3. Ações por cluster
 
-Também no `choose_account` (linha 658), melhorar o matching para aceitar apenas os 4 dígitos digitados (ex: usuário responde "1234").
+- **Manter este** — aprova um e rejeita os demais do grupo
+- **Manter todos** — marca como "não duplicata" (descarta o alerta)
+- **Rejeitar todos** — rejeita o grupo inteiro
 
-### 2. Importação — agrupar parcelas em séries
-**Arquivo**: `src/components/lancamentos/ImportStatementModal.tsx`
+### 4. Hash de fingerprint no webhook (prevenção futura)
 
-Na etapa de processamento pós-parse:
-- Regex para detectar padrões como `(N/M)`, `PARC N/M`, `PARCELA N DE M` na descrição
-- Agrupar transações com mesmo nome-base em séries
-- Gerar `series_id` compartilhado, preencher `installment_number`, `installments_total`, `original_amount` (soma da série)
-- Na UI, mostrar parcelas agrupadas visualmente antes da importação
+No `whatsapp-webhook`, ao inserir na `ai_pending_transactions`, gerar um campo `fingerprint` (hash de `amount + description_normalizada + competence_date`). Isso permite detecção server-side mais precisa e evita que a mesma nota fiscal gere dois registros.
 
-### 3. Aprovação no hook — preservar dados de série
-**Arquivo**: `src/hooks/useAIPendingTransactions.ts`
+## Etapas de implementação
 
-Verificar que `approveSingle` já passa `series_id`, `installment_number`, `installments_total` (já faz — linhas 69-73). Sem mudança necessária.
+### Etapa 1 — Migration: adicionar coluna `fingerprint`
+```sql
+ALTER TABLE ai_pending_transactions 
+  ADD COLUMN fingerprint text;
+CREATE INDEX idx_ai_pending_fingerprint 
+  ON ai_pending_transactions(user_id, fingerprint) 
+  WHERE status = 'pending';
+```
+
+### Etapa 2 — Webhook: gerar fingerprint ao inserir
+No `whatsapp-webhook`, antes de inserir na `ai_pending_transactions`, calcular:
+```
+fingerprint = SHA256(amount + "|" + normalize(description) + "|" + competence_date)
+```
+Se já existir um pending com mesmo `user_id` + `fingerprint`, marcar o novo como `status = 'duplicate_suspect'` em vez de `'pending'`.
+
+### Etapa 3 — Hook: expor duplicatas
+No `useAIPendingTransactions`, adicionar filtro para `status = 'duplicate_suspect'` e uma query que agrupa pendentes por fingerprint (onde count > 1).
+
+### Etapa 4 — UI: aba Duplicatas em AnalisesEva.tsx
+- Nova aba com clusters de duplicatas
+- Cada cluster mostra os lançamentos suspeitos lado a lado
+- Botões: "Manter este", "Manter todos", "Rejeitar duplicatas"
 
 ## Arquivos afetados
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Fallback de matching de cartão por últimos 4 dígitos |
-| `src/components/lancamentos/ImportStatementModal.tsx` | Agrupar parcelas detectadas em séries com `series_id` |
+| Migration SQL | Adicionar coluna `fingerprint` + índice |
+| `supabase/functions/whatsapp-webhook/index.ts` | Gerar fingerprint, detectar duplicata ao inserir |
+| `src/hooks/useAIPendingTransactions.ts` | Expor lista de duplicatas agrupadas |
+| `src/pages/AnalisesEva.tsx` | Nova aba "Duplicatas" com clusters e ações |
 
