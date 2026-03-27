@@ -2320,13 +2320,18 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
         // Create multiple transactions as a series
         const seriesId = crypto.randomUUID();
+
+        // Calculate series-level duplicate ONCE before the loop
+        const totalSeriesAmt = installmentDetails.reduce((s: number, d: any) => s + Math.abs(d.amount || 0), 0);
+        const seriesFp = await generateSeriesFingerprint(aiParsed.description || "", totalSeriesAmt, competenceDate);
+        const seriesDupStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp, true);
+
         const pendingTxs = installmentDetails.map((detail: any, idx: number) => {
           // Calculate per-installment payment_date for credit cards
           let installmentPaymentDate = fixYear(detail.due_date || paymentDate);
           if (creditCardId) {
             const card = contextCards.find((c) => c.id === creditCardId);
             if (card) {
-              // Increment month from competence for each installment
               const baseDate = new Date(competenceDate + "T12:00:00");
               baseDate.setMonth(baseDate.getMonth() + idx);
               const compDay = baseDate.getDate();
@@ -2351,41 +2356,37 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
           const installmentStatus = creditCardId ? "Pendente" : (installmentPaymentDate > today ? "Pendente" : "Pago");
 
-          // Check series-level duplicate
-          const totalSeriesAmt = installmentDetails.reduce((s: number, d: any) => s + Math.abs(d.amount || 0), 0);
-          const seriesFp2 = await generateSeriesFingerprint(aiParsed.description || "", totalSeriesAmt, competenceDate);
-          const seriesDupStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp2, true);
-
           return {
-          user_id: userId,
-          source: "whatsapp",
-          status: seriesDupStatus,
-          description: `${aiParsed.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
-          amount: Math.abs(detail.amount || 0),
-          type: txType,
-          category: categoryValue,
-          subcategory: subcategoryValue,
-          competence_date: competenceDate,
-          payment_date: installmentPaymentDate,
-          transaction_status: installmentStatus,
-          bank_account_id: bankAccountId,
-          wallet_id: walletId,
-          credit_card_id: creditCardId,
-          company_id: companyId,
-          payment_method: paymentMethod,
-          supplier_id: supplierId,
-          client_id: clientId,
-          contact_name: contactName,
-          notes: buildNotes(aiParsed.notes),
-          attachment_url: attachmentUrl,
-          barcode: detail.barcode || null,
-          series_id: seriesId,
-          installment_number: idx + 1,
-          installments_total: installmentCount,
-           original_message: originalUserText || null,
-          ai_response_message: aiParsed.friendly_message || null,
-          fingerprint: seriesFp2,
-        };});
+            user_id: userId,
+            source: "whatsapp",
+            status: seriesDupStatus,
+            description: `${aiParsed.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
+            amount: Math.abs(detail.amount || 0),
+            type: txType,
+            category: categoryValue,
+            subcategory: subcategoryValue,
+            competence_date: competenceDate,
+            payment_date: installmentPaymentDate,
+            transaction_status: installmentStatus,
+            bank_account_id: bankAccountId,
+            wallet_id: walletId,
+            credit_card_id: creditCardId,
+            company_id: companyId,
+            payment_method: paymentMethod,
+            supplier_id: supplierId,
+            client_id: clientId,
+            contact_name: contactName,
+            notes: buildNotes(aiParsed.notes),
+            attachment_url: attachmentUrl,
+            barcode: detail.barcode || null,
+            series_id: seriesId,
+            installment_number: idx + 1,
+            installments_total: installmentCount,
+            original_message: originalUserText || null,
+            ai_response_message: aiParsed.friendly_message || null,
+            fingerprint: seriesFp,
+          };
+        });
 
 
         const { error: insertError } = await supabase.from("ai_pending_transactions").insert(pendingTxs);
