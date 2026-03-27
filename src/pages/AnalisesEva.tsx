@@ -734,6 +734,45 @@ export default function AnalisesEva() {
           ) : (
             duplicateClusters.map((cluster, idx) => {
               const isReceita = cluster[0].type === "receita";
+              const isOrphan = cluster.length === 1;
+
+              if (isOrphan) {
+                const item = cluster[0];
+                return (
+                  <Card key={idx} className="border-l-4 border-l-amber-500">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        <span className="font-semibold text-sm">Suspeita de duplicata (original já processado)</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/40 text-sm">
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          <p className="font-medium truncate">{item.description}</p>
+                          <div className="flex gap-3 text-xs text-muted-foreground">
+                            <span>{fmtDate(item.competence_date)}</span>
+                            <span>{item.source}</span>
+                            {item.contact_name && <span>{item.contact_name}</span>}
+                            <span className={`font-semibold ${isReceita ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                              {fmt(item.amount)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-border/50">
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => keepAll([item.id])}>
+                          <Check className="h-3.5 w-3.5" />
+                          Manter como Pendente
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs text-destructive hover:text-destructive" onClick={() => rejectCluster([item.id])}>
+                          <X className="h-3.5 w-3.5" />
+                          Rejeitar
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
               return (
                 <Card key={idx} className="border-l-4 border-l-amber-500">
                   <CardContent className="p-4 space-y-3">

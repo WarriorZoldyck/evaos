@@ -25,15 +25,26 @@ async function generateFingerprint(amount: number, description: string, competen
 async function checkAndSetDuplicateStatus(
   supabase: any, userId: string, fingerprint: string, isSeries: boolean
 ): Promise<string> {
-  if (isSeries) return "pending"; // Series handled as group, skip individual duplicate check
+  // For series, generate a series-level fingerprint and check for existing pending series
   const { data } = await supabase
     .from("ai_pending_transactions")
     .select("id")
     .eq("user_id", userId)
     .eq("fingerprint", fingerprint)
-    .eq("status", "pending")
+    .in("status", ["pending", "duplicate_suspect"])
     .limit(1);
   return (data && data.length > 0) ? "duplicate_suspect" : "pending";
+}
+
+// Generate a series-level fingerprint based on description + total amount + first competence date
+async function generateSeriesFingerprint(description: string, totalAmount: number, firstCompetenceDate: string | null): Promise<string> {
+  const normalized = (description || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const raw = `series|${Math.abs(totalAmount)}|${normalized}|${firstCompetenceDate || ""}`;
+  const encoder = new TextEncoder();
+  const data = encoder.encode(raw);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 // --- Evolution API helper: send reply back to WhatsApp ---
