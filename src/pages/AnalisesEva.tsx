@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
 import { useCategories } from "@/hooks/useCategories";
-import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
