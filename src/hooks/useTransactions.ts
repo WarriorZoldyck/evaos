@@ -221,7 +221,9 @@ export function useTransactions() {
     if (filters.search.trim()) {
       query = query.or(`description.ilike.%${filters.search.trim()}%,contact_name.ilike.%${filters.search.trim()}%`);
     }
-    if (filters.categoryId) {
+    if (filters.categoryId === "__sem_categoria__") {
+      query = query.or("category.is.null,category.eq.");
+    } else if (filters.categoryId) {
       const selectedCat = allCategories.find(c => c.id === filters.categoryId);
       const childCats = allCategories.filter(c => c.parent_id === filters.categoryId);
       const allIds = [filters.categoryId, ...childCats.map(c => c.id)];

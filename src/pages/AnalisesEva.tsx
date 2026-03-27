@@ -8,25 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Sparkles,
-  Check,
-  X,
-  ExternalLink,
-  MessageSquare,
-  Mail,
-  Upload,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Calendar,
-  Tag,
-  CreditCard,
-  User,
-  FileText,
-  Clock,
-  ChevronDown,
-  ChevronUp,
-  Layers,
+  Sparkles, Check, X, ExternalLink, MessageSquare, Mail, Upload,
+  ArrowUpRight, ArrowDownLeft, Calendar, Tag, CreditCard, User,
+  FileText, Clock, ChevronDown, ChevronUp, Layers, Pencil,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -37,20 +27,193 @@ const fmt = (v: number) =>
 const fmtDate = (d: string | null) =>
   d ? format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }) : "—";
 
-// ── Single item card (used standalone or inside series) ──
-function PendingCard({
+// ── Edit Modal ──
+function EditPendingModal({
   item,
-  onApprove,
-  onReject,
-  isApproving,
-  isRejecting,
-  categoryName,
-  accountName,
-  compact = false,
+  open,
+  onClose,
+  onSave,
+  categories,
+  bankAccounts,
+  creditCards,
+  wallets,
+}: {
+  item: AIPendingTransaction | null;
+  open: boolean;
+  onClose: () => void;
+  onSave: (data: { id: string; updates: Partial<AIPendingTransaction> }) => void;
+  categories: { id: string; name: string; parent_id: string | null }[];
+  bankAccounts: { id: string; name: string }[];
+  creditCards: { id: string; name: string }[];
+  wallets: { id: string; name: string }[];
+}) {
+  const [desc, setDesc] = useState(item?.description || "");
+  const [amount, setAmount] = useState(String(item?.amount || 0));
+  const [type, setType] = useState(item?.type || "despesa");
+  const [categoryId, setCategoryId] = useState(item?.category || "");
+  const [competenceDate, setCompetenceDate] = useState(item?.competence_date || "");
+  const [paymentDate, setPaymentDate] = useState(item?.payment_date || "");
+  const [transactionStatus, setTransactionStatus] = useState(item?.transaction_status || "Pago");
+  const [contactName, setContactName] = useState(item?.contact_name || "");
+  const [notes, setNotes] = useState(item?.notes || "");
+  const [bankAccountId, setBankAccountId] = useState(item?.bank_account_id || "");
+  const [creditCardId, setCreditCardId] = useState(item?.credit_card_id || "");
+  const [walletId, setWalletId] = useState(item?.wallet_id || "");
+
+  // Reset state when item changes
+  const [prevId, setPrevId] = useState<string | null>(null);
+  if (item && item.id !== prevId) {
+    setPrevId(item.id);
+    setDesc(item.description);
+    setAmount(String(item.amount));
+    setType(item.type);
+    setCategoryId(item.category || "");
+    setCompetenceDate(item.competence_date || "");
+    setPaymentDate(item.payment_date || "");
+    setTransactionStatus(item.transaction_status || "Pago");
+    setContactName(item.contact_name || "");
+    setNotes(item.notes || "");
+    setBankAccountId(item.bank_account_id || "");
+    setCreditCardId(item.credit_card_id || "");
+    setWalletId(item.wallet_id || "");
+  }
+
+  if (!item) return null;
+
+  const rootCategories = categories.filter((c) => !c.parent_id);
+
+  const handleSave = () => {
+    onSave({
+      id: item.id,
+      updates: {
+        description: desc,
+        amount: parseFloat(amount) || 0,
+        type,
+        category: categoryId || null,
+        competence_date: competenceDate || null,
+        payment_date: paymentDate || null,
+        transaction_status: transactionStatus,
+        contact_name: contactName || null,
+        notes: notes || null,
+        bank_account_id: bankAccountId || null,
+        credit_card_id: creditCardId || null,
+        wallet_id: walletId || null,
+      },
+    });
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Editar Lançamento</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Descrição</Label>
+            <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Valor</Label>
+              <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+            <div>
+              <Label>Tipo</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="receita">Receita</SelectItem>
+                  <SelectItem value="despesa">Despesa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label>Categoria</Label>
+            <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem categoria</SelectItem>
+                {rootCategories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Data Competência</Label>
+              <Input type="date" value={competenceDate} onChange={(e) => setCompetenceDate(e.target.value)} />
+            </div>
+            <div>
+              <Label>Data Pagamento</Label>
+              <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <Label>Status</Label>
+            <Select value={transactionStatus} onValueChange={setTransactionStatus}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Pago">Pago</SelectItem>
+                <SelectItem value="Pendente">Pendente</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Contato</Label>
+            <Input value={contactName} onChange={(e) => setContactName(e.target.value)} />
+          </div>
+          <div>
+            <Label>Conta</Label>
+            <Select value={bankAccountId || creditCardId || walletId || "none"} onValueChange={(v) => {
+              setBankAccountId(""); setCreditCardId(""); setWalletId("");
+              if (v === "none") return;
+              const [accType, id] = v.split(":");
+              if (accType === "bank") setBankAccountId(id);
+              else if (accType === "card") setCreditCardId(id);
+              else if (accType === "wallet") setWalletId(id);
+            }}>
+              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhuma</SelectItem>
+                {bankAccounts.map((a) => (
+                  <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>🏦 {a.name}</SelectItem>
+                ))}
+                {creditCards.map((c) => (
+                  <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>💳 {c.name}</SelectItem>
+                ))}
+                {wallets.map((w) => (
+                  <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>👛 {w.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Observações</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave}>Salvar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Single item card ──
+function PendingCard({
+  item, onApprove, onReject, onEdit,
+  isApproving, isRejecting, categoryName, accountName, compact = false,
 }: {
   item: AIPendingTransaction;
   onApprove: () => void;
   onReject: () => void;
+  onEdit?: () => void;
   isApproving: boolean;
   isRejecting: boolean;
   categoryName: string;
@@ -171,6 +334,12 @@ function PendingCard({
             <X className="h-3.5 w-3.5" />
             Rejeitar
           </Button>
+          {onEdit && (
+            <Button size="sm" variant="ghost" onClick={onEdit} className="gap-1.5">
+              <Pencil className="h-3.5 w-3.5" />
+              Editar
+            </Button>
+          )}
           {item.attachment_url && (
             <Button size="sm" variant="ghost" asChild className="gap-1.5 ml-auto">
               <a href={item.attachment_url} target="_blank" rel="noopener noreferrer">
@@ -185,19 +354,15 @@ function PendingCard({
   );
 }
 
-// ── Series (installment group) card ──
+// ── Series card ──
 function SeriesCard({
-  items,
-  onApproveAll,
-  onRejectAll,
-  isApproving,
-  isRejecting,
-  getCategoryName,
-  getAccountName,
+  items, onApproveAll, onRejectAll, onEditItem,
+  isApproving, isRejecting, getCategoryName, getAccountName,
 }: {
   items: AIPendingTransaction[];
   onApproveAll: () => void;
   onRejectAll: () => void;
+  onEditItem: (item: AIPendingTransaction) => void;
   isApproving: boolean;
   isRejecting: boolean;
   getCategoryName: (id: string | null) => string;
@@ -268,7 +433,6 @@ function SeriesCard({
             )}
           </div>
 
-          {/* Collapsible installment list */}
           <Collapsible open={open} onOpenChange={setOpen}>
             <CollapsibleTrigger asChild>
               <Button variant="ghost" size="sm" className="gap-1.5 text-xs w-full justify-center mt-1">
@@ -303,6 +467,10 @@ function SeriesCard({
             <X className="h-3.5 w-3.5" />
             Rejeitar Todas
           </Button>
+          <Button size="sm" variant="ghost" onClick={() => onEditItem(first)} className="gap-1.5">
+            <Pencil className="h-3.5 w-3.5" />
+            Editar
+          </Button>
           {first.attachment_url && (
             <Button size="sm" variant="ghost" asChild className="gap-1.5 ml-auto">
               <a href={first.attachment_url} target="_blank" rel="noopener noreferrer">
@@ -317,7 +485,7 @@ function SeriesCard({
   );
 }
 
-// ── Group items: series grouped + standalone ──
+// ── Group items ──
 type GroupedItem =
   | { kind: "single"; item: AIPendingTransaction }
   | { kind: "series"; seriesId: string; items: AIPendingTransaction[] };
@@ -344,7 +512,6 @@ function groupPending(items: AIPendingTransaction[]): GroupedItem[] {
     result.push({ kind: "single", item });
   }
 
-  // Sort by most recent created_at
   result.sort((a, b) => {
     const aDate = a.kind === "single" ? a.item.created_at : a.items[0].created_at;
     const bDate = b.kind === "single" ? b.item.created_at : b.items[0].created_at;
@@ -356,20 +523,15 @@ function groupPending(items: AIPendingTransaction[]): GroupedItem[] {
 
 export default function AnalisesEva() {
   const {
-    pendingTransactions,
-    reviewedTransactions,
-    pendingCount,
-    isLoading,
-    approve,
-    reject,
-    approveAll,
-    rejectAll,
-    isApproving,
-    isRejecting,
+    pendingTransactions, reviewedTransactions, pendingCount,
+    isLoading, approve, reject, approveAll, rejectAll, updatePending,
+    isApproving, isRejecting,
   } = useAIPendingTransactions();
 
   const { categories } = useCategories();
   const { bankAccounts: accounts, creditCards, wallets } = useAccounts();
+
+  const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
 
   const getCategoryName = (id: string | null) => {
     if (!id) return "";
@@ -408,6 +570,7 @@ export default function AnalisesEva() {
             items={g.items}
             onApproveAll={() => approveAll(g.items)}
             onRejectAll={() => rejectAll(g.items)}
+            onEditItem={(item) => setEditingItem(item)}
             isApproving={isApproving}
             isRejecting={isRejecting}
             getCategoryName={getCategoryName}
@@ -421,6 +584,7 @@ export default function AnalisesEva() {
           item={g.item}
           onApprove={() => approve(g.item)}
           onReject={() => reject(g.item.id)}
+          onEdit={() => setEditingItem(g.item)}
           isApproving={isApproving}
           isRejecting={isRejecting}
           categoryName={getCategoryName(g.item.category)}
@@ -533,6 +697,17 @@ export default function AnalisesEva() {
           )}
         </TabsContent>
       </Tabs>
+
+      <EditPendingModal
+        item={editingItem}
+        open={!!editingItem}
+        onClose={() => setEditingItem(null)}
+        onSave={updatePending}
+        categories={categories}
+        bankAccounts={accounts}
+        creditCards={creditCards}
+        wallets={wallets}
+      />
     </div>
   );
 }

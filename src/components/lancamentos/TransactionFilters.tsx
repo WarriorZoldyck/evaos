@@ -176,6 +176,7 @@ export function TransactionFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todas">Todas as categorias</SelectItem>
+            <SelectItem value="__sem_categoria__">Sem categoria</SelectItem>
             {rootCategories.map((cat) => (
               <SelectItem key={cat.id} value={cat.id}>
                 {cat.name}
