@@ -46,8 +46,8 @@ function AppLayoutInner() {
   const { isHubMember, impersonatingOwnerId, impersonatingOwnerName, exitImpersonation } = useHub();
 
   // Hub members without active impersonation go to /eva-hub
-  if (isHubMember && !impersonatingOwnerId && location.pathname !== "/eva-hub") {
-    return <Navigate to="/eva-hub" replace />;
+  if (isHubMember && !impersonatingOwnerId && !location.pathname.startsWith("/eva-hub")) {
+    return <Navigate to="/eva-hub/contas" replace />;
   }
 
   return (
