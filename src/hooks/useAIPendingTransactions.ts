@@ -128,6 +128,7 @@ export function useAIPendingTransactions() {
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
     queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
+    queryClient.invalidateQueries({ queryKey: ["ai-duplicate-suspects"] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
   };
 
@@ -203,23 +204,54 @@ export function useAIPendingTransactions() {
   const reviewed = pendingTransactions.filter((t) => t.status !== "pending" && t.status !== "duplicate_suspect");
   const duplicateSuspects = pendingTransactions.filter((t) => t.status === "duplicate_suspect");
 
-  // Group duplicate suspects into clusters by fingerprint or by matching amount+description
+  // --- Duplicate suspect query without company_id filter ---
+  const { data: allSuspects = [] } = useQuery({
+    queryKey: ["ai-duplicate-suspects", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data, error } = await supabase
+        .from("ai_pending_transactions")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("status", "duplicate_suspect")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as AIPendingTransaction[];
+    },
+    enabled: !!user?.id,
+  });
+
+  // Group duplicate suspects into clusters by normalized fingerprint key
+  const normalizeDesc = (d: string) => (d || "").toLowerCase().replace(/\s+/g, " ").trim();
+
   const duplicateClusters: AIPendingTransaction[][] = [];
   const clusterMap = new Map<string, AIPendingTransaction[]>();
 
   // Also check pending items that share fingerprint with suspects
-  const allForClustering = [...duplicateSuspects, ...pending];
+  const allForClustering = [...allSuspects, ...pending];
   for (const item of allForClustering) {
-    const key = `${Math.abs(item.amount)}|${(item.description || "").toLowerCase().trim()}|${item.competence_date || ""}`;
+    const key = `${Math.abs(item.amount)}|${normalizeDesc(item.description)}|${item.competence_date || ""}`;
     const list = clusterMap.get(key) || [];
     list.push(item);
     clusterMap.set(key, list);
   }
+
+  // Clusters with 2+ items
+  const usedSuspectIds = new Set<string>();
   for (const [, items] of clusterMap) {
     if (items.length > 1) {
-      // Deduplicate by id
       const unique = Array.from(new Map(items.map(i => [i.id, i])).values());
-      if (unique.length > 1) duplicateClusters.push(unique);
+      if (unique.length > 1) {
+        duplicateClusters.push(unique);
+        unique.forEach(i => usedSuspectIds.add(i.id));
+      }
+    }
+  }
+
+  // Orphan suspects (no matching pair) — show as cluster of 1
+  for (const suspect of allSuspects) {
+    if (!usedSuspectIds.has(suspect.id)) {
+      duplicateClusters.push([suspect]);
     }
   }
 
