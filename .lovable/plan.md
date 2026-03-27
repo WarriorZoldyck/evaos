@@ -1,56 +1,30 @@
 
 
-# Diagnóstico: WhatsApp Webhook com Boot Failure
+# Resolução Cross-Context de Cartões de Crédito
 
-## Situacao
+## Problema
 
-O erro **"Unexpected reserved word at line 2140"** (compilada) nos logs e um **erro real de codigo**, NAO um problema de instancia desconectada. A instancia Evolution pode estar conectada normalmente, mas o webhook nao consegue iniciar para processar mensagens.
+Quando o usuário envia um comprovante de cartão PJ, a IA pode escolher o contexto "Pessoal" por engano. O sistema já tem lógica de **cross-context** para contas bancárias (linhas 1880-1912) — se a conta não é encontrada no contexto atual, busca em TODOS os contextos e reatribui automaticamente. Porém, **para cartões de crédito essa lógica não existe**. O match de cartão só busca dentro de `contextCards` (já filtrado pelo `companyId` da IA), então o cartão PJ nunca é encontrado quando a IA diz "Pessoal".
 
-## Causa Raiz
+## Correção
 
-Linhas 2356-2357 do source usam `await` dentro de um `.map()` que NAO e `async`:
+### `supabase/functions/whatsapp-webhook/index.ts`
 
-```typescript
-// Linha 2323 — callback NÃO é async
-const pendingTxs = installmentDetails.map((detail, idx) => {
-  // ...
-  const seriesFp2 = await generateSeriesFingerprint(...);  // ERRO
-  const seriesDupStatus = await checkAndSetDuplicateStatus(...); // ERRO
-  return { ... };
-});
-```
+Após o bloco de match de cartão por UUID, nome e dígitos dentro de `contextCards` (linhas 1778-1821), adicionar um **fallback cross-context** que busca em TODOS os cartões (`creditCards` sem filtro de company):
 
-Isso causa um SyntaxError que impede o boot da funcao inteira. Nenhuma mensagem do WhatsApp esta sendo processada enquanto isso persistir.
+1. Se `cardMatch` não foi encontrado em `contextCards`, repetir a busca por UUID, last_four_digits e nome em `creditCards` (lista completa)
+2. Se encontrar um match cross-context:
+   - Atualizar `companyId` para o `company_id` do cartão encontrado
+   - Re-filtrar `contextAccounts`, `contextWallets`, `contextCards`, `contextCategories` (mesmo padrão da linha 1894-1906)
+   - Atribuir `creditCardId` e `bankAccountId`
+   - Logar a resolução cross-context
+3. Se o cartão tem `last_four_digits` visíveis na imagem mas a IA não retornou `credit_card_id`, adicionar busca nos dígitos da imagem/mensagem contra TODOS os cartões (não só `contextCards`)
 
-## Correção Necessária
-
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
-
-Mover o calculo de fingerprint e status de duplicata para **antes** do `.map()`, ja que sao valores identicos para todas as parcelas da serie:
-
-```typescript
-// ANTES do .map() — calcular uma vez
-const totalSeriesAmt = installmentDetails.reduce((s, d) => s + Math.abs(d.amount || 0), 0);
-const seriesFp = await generateSeriesFingerprint(description, totalSeriesAmt, competenceDate);
-const seriesDupStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp, true);
-
-// .map() agora sem await — usa valores já resolvidos
-const pendingTxs = installmentDetails.map((detail, idx) => ({
-  // ... campos ...
-  status: seriesDupStatus,
-  fingerprint: seriesFp,
-}));
-```
-
-## Impacto
-
-- O webhook esta **100% parado** — nenhuma mensagem WhatsApp e processada
-- A correção e simples (mover 3 linhas) e restaura o funcionamento completo
-- Nao ha necessidade de reconectar a instancia Evolution
+Isso replica exatamente o padrão já usado para contas bancárias, garantindo que o cartão determine o contexto correto automaticamente.
 
 ## Arquivo afetado
 
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---------|------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Mover `await` para fora do `.map()` + redeploy |
+| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar fallback cross-context no bloco de resolução de cartão de crédito |
 
