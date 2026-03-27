@@ -1802,17 +1802,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
         }
         
-        // Also try matching from original message text for last 4 digits
-        if (!cardMatch && originalUserText) {
-          const msgDigits = originalUserText.match(/(?:final|cartão|cartao|card)\s*(\d{4})/i);
-          if (msgDigits) {
-            const last4 = msgDigits[1];
-            const digitMatches = contextCards.filter((c: any) => c.last_four_digits === last4);
-            if (digitMatches.length === 1) {
-              cardMatch = digitMatches[0];
-            }
-          }
-        }
+        // (message-text digit search moved to cross-context block below)
         
         // Cross-context fallback: if not found in contextCards, search ALL creditCards
         if (!cardMatch) {
