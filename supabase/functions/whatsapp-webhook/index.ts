@@ -1355,11 +1355,16 @@ MÉTODOS DE PAGAMENTO VÁLIDOS:
 - "transferencia" - Transferência bancária (TED/DOC)
 - Se não mencionado, retorne null
 
+REGRA CRÍTICA DE DÍGITOS DO CARTÃO:
+- Se a imagem/comprovante mostrar os últimos 4 dígitos do cartão (ex: "****7993", "final 3552", "XXXX1234"), SEMPRE extraia e retorne no campo "visible_card_digits".
+- Isso é essencial para validar que o cartão correto foi selecionado.
+- Se não houver dígitos visíveis, retorne null.
+
 DATA ATUAL: ${today}
 
 FORMATO DE RESPOSTA (JSON):
 Para lançamento:
-{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","installments":1,"installment_details":null,"friendly_message":"..."}
+{"intent":"lancamento","description":"...","amount":0.00,"type":"receita|despesa","category_id":"UUID-da-lista-ou-null","subcategory_id":"UUID-ou-null","suggested_category_name":"nome sugerido se category_id for null, senão null","context":"Pessoal|Nome da Empresa","account_id":"UUID-da-conta-ou-carteira-ou-null","credit_card_id":"UUID-do-cartao-ou-null","visible_card_digits":"últimos 4 dígitos do cartão visíveis na imagem/comprovante, ou null se não visível","payment_method":"pix|dinheiro|cartao_debito|cartao_credito|boleto|transferencia|null","contact_name":"nome do contato mencionado|null","supplier_id":"UUID-do-fornecedor-ou-null","client_id":"UUID-do-cliente-ou-null","competence_date":"YYYY-MM-DD","payment_date":"YYYY-MM-DD-ou-null","status":"Pago|Pendente","notes":"observações extras|null","date":"YYYY-MM-DD","installments":1,"installment_details":null,"friendly_message":"..."}
 
 REGRAS DE PARCELAMENTO:
 - Se o documento (NF, boleto) indicar PARCELAMENTO, preencha "installments" com o número de parcelas e "installment_details" com um array de objetos {"amount": valor, "due_date": "YYYY-MM-DD", "barcode": "código de barras ou linha digitável ou null"} para cada parcela.
@@ -1883,6 +1888,41 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                   companyId ? c.company_id === companyId : !c.company_id
                 );
               }
+            }
+          }
+        }
+
+        // === DIGIT VALIDATION: verify AI's card choice matches visible digits ===
+        if (cardMatch && aiParsed.visible_card_digits) {
+          const visibleDigits = String(aiParsed.visible_card_digits).replace(/\D/g, "");
+          if (visibleDigits.length === 4 && cardMatch.last_four_digits && visibleDigits !== cardMatch.last_four_digits) {
+            console.log(`Card digit mismatch: AI chose ${cardMatch.name} (final ${cardMatch.last_four_digits}) but image shows final ${visibleDigits}`);
+            // Search ALL cards for the correct digits
+            const correctCards = creditCards.filter((c: any) => c.last_four_digits === visibleDigits);
+            if (correctCards.length === 1) {
+              const correctedCard = correctCards[0];
+              console.log(`Card digit mismatch corrected: switching to ${correctedCard.name} (final ${correctedCard.last_four_digits})`);
+              cardMatch = correctedCard;
+              // Cross-context if needed
+              const newCompanyId = correctedCard.company_id || null;
+              if (newCompanyId !== companyId) {
+                console.log("Cross-context via digit validation:", { from: companyId, to: newCompanyId });
+                companyId = newCompanyId;
+                contextAccounts = accounts.filter((a: any) =>
+                  companyId ? a.company_id === companyId : !a.company_id
+                );
+                contextWallets = wallets.filter((w: any) =>
+                  companyId ? w.company_id === companyId : !w.company_id
+                );
+                contextCards = creditCards.filter((c: any) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+                contextCategories = categories.filter((c: any) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+              }
+            } else if (correctCards.length > 1) {
+              console.log(`Multiple cards found with digits ${visibleDigits}, keeping AI choice`);
             }
           }
         }
