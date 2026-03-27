@@ -1,6 +1,9 @@
-import { Building2, Folder, Users, LogOut } from "lucide-react";
+import { Building2, Folder, Users, LogOut, LayoutDashboard } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHub } from "@/contexts/HubContext";
+import { useWorkspaceMembers } from "@/hooks/useWorkspaceMembers";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -37,7 +40,7 @@ export function HubSidebar() {
           {!collapsed && (
             <div className="flex flex-col">
               <span className="text-lg font-bold font-display tracking-tight text-gradient-primary">EVA OS</span>
-              <span className="text-[10px] text-muted-foreground leading-none">EVA Hub</span>
+              <span className="text-[10px] text-muted-foreground leading-none">Hub de Gestão</span>
             </div>
           )}
         </div>
@@ -46,7 +49,7 @@ export function HubSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">
-            EVA Hub
+            Gestão
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -74,7 +77,7 @@ export function HubSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={signOut}
-              tooltip="Sair do Hub"
+              tooltip="Sair"
               className="hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all duration-200"
             >
               <LogOut className="h-4 w-4" />
@@ -84,7 +87,8 @@ export function HubSidebar() {
         </SidebarMenu>
         {!collapsed && user && (
           <div className="px-3 py-2.5 border-t border-sidebar-border mt-1">
-            <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+            <p className="text-xs font-medium text-foreground truncate">{user.user_metadata?.full_name || "Usuário"}</p>
+            <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
           </div>
         )}
       </SidebarFooter>
