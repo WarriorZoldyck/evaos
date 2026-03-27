@@ -1,73 +1,53 @@
 
 
-# EVA Hub — Layout e Navegação Próprios
+# Cartão por Número + Importação Parcelada no EVA IA
 
-## Problema
-Quando o usuario acessa o EVA Hub, ele ve o mesmo sidebar do app normal (Dashboard, Lancamentos, Financeiro, Cadastros...). O EVA Hub precisa ter **sua propria navegacao**, completamente separada, com menu proprio.
+## Problemas Identificados
 
-## Menu do EVA Hub (sidebar dedicado)
+### 1. IA não reconhece cartão pelo número (apenas pelo nome)
+No prompt da IA (linha 1157), os cartões já aparecem como `Nome Final 1234[UUID]`. Porém, quando a IA retorna `credit_card_id`, a resolução (linha 1726-1733) só faz match exato por UUID. Se a IA errar ou o usuário mencionar "cartão final 1234", e a IA não retornar o UUID correto, o sistema não faz fallback por últimos 4 dígitos.
 
-```text
-┌─────────────────────┐
-│  EVA OS (logo)      │
-│  ─── EVA Hub ───    │
-│                     │
-│  🏢 Contas          │  ← lista as contas/empresas do dono, clicar = entrar na conta
-│  📂 Áreas de Trabalho│  ← criar/gerenciar departamentos
-│  👥 Membros         │  ← ver membros, permissoes, convidar
-│                     │
-│  ─────────────────  │
-│  🔙 Sair do Hub     │
-└─────────────────────┘
-```
+**Solução**: Adicionar fallback de matching por `last_four_digits` quando `credit_card_id` não bate com nenhum cartão do contexto. Também melhorar o matching no `choose_account` (já funciona parcialmente na linha 661).
 
-## Implementacao
+### 2. Importação de extrato de cartão com lançamentos parcelados
+Atualmente, a importação de extratos (`ImportStatementModal`) cria lançamentos individuais — não agrupa parcelas nem cria `series_id`. Parcelamentos de cartão no extrato precisam ser detectados e agrupados.
 
-### 1. Criar `HubSidebar` — sidebar dedicado do EVA Hub
-Novo componente `src/components/layout/HubSidebar.tsx` com itens fixos:
-- **Contas** — `/eva-hub/contas`
-- **Áreas de Trabalho** — `/eva-hub/workspaces`
-- **Membros** — `/eva-hub/membros`
-- Botao "Sair" (logout)
+**Solução**: Na importação, detectar padrões de parcelas no `description` (ex: "COMPRA X 3/6", "PARCELA 2/4") e agrupá-las sob um `series_id` compartilhado com `installment_number` e `installments_total`.
 
-### 2. Criar `HubLayout` — layout wrapper separado
-Novo componente `src/components/layout/HubLayout.tsx`:
-- Usa `HubSidebar` em vez de `AppSidebar`
-- NAO mostra botao "Novo Lancamento"
-- NAO mostra OnboardingGuide nem EvaChatButton
-- Header simples com badge "EVA Hub" e ThemeToggle
+### 3. EVA IA — parcelas caindo como cards separados
+Já resolvido anteriormente com `SeriesCard` agrupando por `series_id`. Confirmar que o fluxo de aprovação em lote (`approveAll`) preserva `series_id`, `installment_number`, `installments_total` e datas corretas por parcela.
 
-### 3. Criar 3 sub-paginas do Hub
-- `src/pages/hub/HubContas.tsx` — mostra a conta principal do usuario (nome, empresa, CNPJ). Botao "Entrar" faz impersonation e navega pro /dashboard
-- `src/pages/hub/HubWorkspaces.tsx` — CRUD de areas de trabalho. Departamentos pre-setados sugeridos: "Financeiro", "Contabilidade", "Comercial", "Operacoes", "Administrativo"
-- `src/pages/hub/HubMembros.tsx` — lista membros, quantos ativos, quantos suspensos, convidar novos. Mover logica existente do EvaHub.tsx (MemberCard, InviteMemberModal)
+## Etapas
 
-### 4. Atualizar rotas em App.tsx
-Trocar a rota unica `/eva-hub` por um grupo com layout proprio:
+### 1. Webhook — fallback de matching de cartão por últimos dígitos
+**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
 
-```text
-<Route element={<HubLayout />}>
-  <Route path="/eva-hub" element={<Navigate to="/eva-hub/contas" />} />
-  <Route path="/eva-hub/contas" element={<HubContas />} />
-  <Route path="/eva-hub/workspaces" element={<HubWorkspaces />} />
-  <Route path="/eva-hub/membros" element={<HubMembros />} />
-</Route>
-```
+Após a verificação `if (aiParsed.credit_card_id)` na linha 1726, se não encontrar match, tentar:
+- Extrair 4 dígitos de `aiParsed.credit_card_id` ou da mensagem original
+- Buscar em `contextCards` por `last_four_digits`
+- Se encontrar exatamente 1, usar esse cartão
+- Se encontrar múltiplos, disparar `choose_account` com a lista
 
-### 5. AppLayout — nao renderizar sidebar do app normal quando em /eva-hub
-O redirect em `AppLayoutInner` ja manda hub_members sem impersonation para `/eva-hub`. Agora `/eva-hub` tera seu proprio layout, entao sai do `<Route element={<AppLayout />}>`.
+Também no `choose_account` (linha 658), melhorar o matching para aceitar apenas os 4 dígitos digitados (ex: usuário responde "1234").
 
-### 6. EvaHub.tsx — manter MemberWorkspaceSelector para membros convidados
-Membros com `hub_member=true` continuam vendo a tela de selecao de workspace. Essa tela pode ser a pagina `/eva-hub/contas` para membros (com visual de selecao em vez de gestao).
+### 2. Importação — agrupar parcelas em séries
+**Arquivo**: `src/components/lancamentos/ImportStatementModal.tsx`
+
+Na etapa de processamento pós-parse:
+- Regex para detectar padrões como `(N/M)`, `PARC N/M`, `PARCELA N DE M` na descrição
+- Agrupar transações com mesmo nome-base em séries
+- Gerar `series_id` compartilhado, preencher `installment_number`, `installments_total`, `original_amount` (soma da série)
+- Na UI, mostrar parcelas agrupadas visualmente antes da importação
+
+### 3. Aprovação no hook — preservar dados de série
+**Arquivo**: `src/hooks/useAIPendingTransactions.ts`
+
+Verificar que `approveSingle` já passa `series_id`, `installment_number`, `installments_total` (já faz — linhas 69-73). Sem mudança necessária.
 
 ## Arquivos afetados
-| Arquivo | Acao |
+
+| Arquivo | Ação |
 |---------|------|
-| `src/components/layout/HubSidebar.tsx` | Criar — sidebar dedicado |
-| `src/components/layout/HubLayout.tsx` | Criar — layout wrapper |
-| `src/pages/hub/HubContas.tsx` | Criar — visao de contas |
-| `src/pages/hub/HubWorkspaces.tsx` | Criar — gestao de departamentos |
-| `src/pages/hub/HubMembros.tsx` | Criar — gestao de membros |
-| `src/App.tsx` | Mover `/eva-hub` para grupo com HubLayout |
-| `src/pages/EvaHub.tsx` | Simplificar ou remover (logica distribuida nas sub-paginas) |
+| `supabase/functions/whatsapp-webhook/index.ts` | Fallback de matching de cartão por últimos 4 dígitos |
+| `src/components/lancamentos/ImportStatementModal.tsx` | Agrupar parcelas detectadas em séries com `series_id` |
 
