@@ -244,6 +244,10 @@ export function ImportStatementModal({
       wallet_id: accType === "wallet" ? accId : null,
       credit_card_id: importType === "cartao" ? targetCard : null,
       external_id: `import_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}`,
+      series_id: r.series_id || null,
+      installment_number: r.installment_number || null,
+      installments_total: r.installments_total || null,
+      original_amount: r.original_amount || null,
     }));
 
     const success = await onImport(transactions);
