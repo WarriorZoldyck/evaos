@@ -3,10 +3,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AppLayout from "@/components/layout/AppLayout";
+import HubLayout from "@/components/layout/HubLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Lancamentos from "@/pages/Lancamentos";
@@ -26,8 +27,11 @@ import PrecificacaoV2 from "@/pages/PrecificacaoV2";
 import LandingPage from "@/pages/LandingPage";
 import Metas from "@/pages/Metas";
 import AnalisesEva from "@/pages/AnalisesEva";
-import EvaHub from "@/pages/EvaHub";
+import HubContas from "@/pages/hub/HubContas";
+import HubWorkspaces from "@/pages/hub/HubWorkspaces";
+import HubMembros from "@/pages/hub/HubMembros";
 import { GraduationCap } from "lucide-react";
+
 import { toast } from "sonner";
 
 const queryClient = new QueryClient();
@@ -71,7 +75,12 @@ const App = () => {
                 <Route path="/eva-kids" element={<ComingSoon title="EVA Kids" description="Educação financeira para crianças. Em breve!" icon={GraduationCap} />} />
                 <Route path="/metas" element={<Metas />} />
                 <Route path="/precificacao-v2" element={<PrecificacaoV2 />} />
-                <Route path="/eva-hub" element={<EvaHub />} />
+              </Route>
+              <Route element={<HubLayout />}>
+                <Route path="/eva-hub" element={<Navigate to="/eva-hub/contas" replace />} />
+                <Route path="/eva-hub/contas" element={<HubContas />} />
+                <Route path="/eva-hub/workspaces" element={<HubWorkspaces />} />
+                <Route path="/eva-hub/membros" element={<HubMembros />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
