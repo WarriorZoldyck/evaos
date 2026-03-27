@@ -2345,7 +2345,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
       }
 
-      const contextLabel = aiParsed.context || "Pessoal";
+      // Resolve contextLabel from actual companyId (may have been corrected by digit validation / cross-context)
+      const contextLabel = companyId
+        ? (companies.find((c: any) => c.id === companyId)?.name || aiParsed.context || "Empresa")
+        : (aiParsed.context || "Pessoal");
 
       // --- BLOCK if no account/wallet/card (except boleto de compra) ---
       const isBoletoCompraFinal = txType === "despesa" && (paymentMethod === "Boleto" || paymentMethod === "boleto");
