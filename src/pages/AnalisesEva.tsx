@@ -650,6 +650,13 @@ export default function AnalisesEva() {
             <Clock className="h-4 w-4" />
             Histórico
           </TabsTrigger>
+          <TabsTrigger value="duplicatas" className="gap-1.5">
+            <Copy className="h-4 w-4" />
+            Duplicatas
+            {duplicateClusters.length > 0 && (
+              <Badge variant="destructive" className="ml-1 h-5 px-1.5 text-xs">{duplicateClusters.length}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="whatsapp" className="mt-4 space-y-3">
