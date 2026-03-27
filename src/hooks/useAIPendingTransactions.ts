@@ -184,6 +184,21 @@ export function useAIPendingTransactions() {
     onError: (err: any) => toast.error("Erro ao rejeitar parcelas: " + err.message),
   });
 
+  const updatePendingMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<AIPendingTransaction> }) => {
+      const { error } = await supabase
+        .from("ai_pending_transactions")
+        .update(updates as any)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Lançamento atualizado!");
+      invalidateAll();
+    },
+    onError: (err: any) => toast.error("Erro ao atualizar: " + err.message),
+  });
+
   const pending = pendingTransactions.filter((t) => t.status === "pending");
   const reviewed = pendingTransactions.filter((t) => t.status !== "pending");
 
@@ -196,6 +211,7 @@ export function useAIPendingTransactions() {
     reject: rejectMutation.mutate,
     approveAll: approveAllMutation.mutate,
     rejectAll: rejectAllMutation.mutate,
+    updatePending: updatePendingMutation.mutate,
     isApproving: approveMutation.isPending || approveAllMutation.isPending,
     isRejecting: rejectMutation.isPending || rejectAllMutation.isPending,
   };
