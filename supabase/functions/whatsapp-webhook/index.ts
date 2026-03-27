@@ -1802,18 +1802,91 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
         }
         
-        // Also try matching from original message text for last 4 digits
+        // (message-text digit search moved to cross-context block below)
+        
+        // Cross-context fallback: if not found in contextCards, search ALL creditCards
+        if (!cardMatch) {
+          console.log("Card not found in context, trying cross-context fallback...");
+          // Try UUID match in all cards
+          cardMatch = creditCards.find((c: any) => c.id === aiParsed.credit_card_id);
+          // Try last 4 digits in all cards
+          if (!cardMatch) {
+            const digitsMatch2 = (aiParsed.credit_card_id || "").match(/(\d{4})/);
+            if (digitsMatch2) {
+              const last4 = digitsMatch2[1];
+              const digitMatches = creditCards.filter((c: any) => c.last_four_digits === last4);
+              if (digitMatches.length === 1) cardMatch = digitMatches[0];
+            }
+          }
+          // Try name match in all cards
+          if (!cardMatch) {
+            const aiCardRef = (aiParsed.credit_card_id || "").toLowerCase();
+            if (aiCardRef.length > 3) {
+              cardMatch = creditCards.find((c: any) =>
+                c.name.toLowerCase().includes(aiCardRef) || aiCardRef.includes(c.name.toLowerCase())
+              );
+            }
+          }
+          // If found cross-context, update companyId and re-filter all context lists
+          if (cardMatch) {
+            const newCompanyId = cardMatch.company_id || null;
+            console.log("Cross-context CARD resolution:", {
+              card: cardMatch.name,
+              last4: cardMatch.last_four_digits,
+              originalContext: aiParsed.context,
+              resolvedCompanyId: newCompanyId,
+            });
+            companyId = newCompanyId;
+            contextAccounts = accounts.filter((a: any) =>
+              companyId ? a.company_id === companyId : !a.company_id
+            );
+            contextWallets = wallets.filter((w: any) =>
+              companyId ? w.company_id === companyId : !w.company_id
+            );
+            contextCards = creditCards.filter((c: any) =>
+              companyId ? c.company_id === companyId : !c.company_id
+            );
+            contextCategories = categories.filter((c: any) =>
+              companyId ? c.company_id === companyId : !c.company_id
+            );
+            console.log("Re-filtered context after cross-context card resolution:", contextCategories.length, "categories");
+          }
+        }
+
+        // Also try cross-context search from message text digits
         if (!cardMatch && originalUserText) {
           const msgDigits = originalUserText.match(/(?:final|cartão|cartao|card)\s*(\d{4})/i);
           if (msgDigits) {
             const last4 = msgDigits[1];
-            const digitMatches = contextCards.filter((c: any) => c.last_four_digits === last4);
+            // Search ALL cards, not just contextCards
+            const digitMatches = creditCards.filter((c: any) => c.last_four_digits === last4);
             if (digitMatches.length === 1) {
               cardMatch = digitMatches[0];
+              const newCompanyId = cardMatch.company_id || null;
+              if (newCompanyId !== companyId) {
+                console.log("Cross-context CARD resolution (from message digits):", {
+                  card: cardMatch.name,
+                  last4: cardMatch.last_four_digits,
+                  resolvedCompanyId: newCompanyId,
+                });
+                companyId = newCompanyId;
+                contextAccounts = accounts.filter((a: any) =>
+                  companyId ? a.company_id === companyId : !a.company_id
+                );
+                contextWallets = wallets.filter((w: any) =>
+                  companyId ? w.company_id === companyId : !w.company_id
+                );
+                contextCards = creditCards.filter((c: any) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+                contextCategories = categories.filter((c: any) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+              }
             }
           }
         }
-        
+
         if (cardMatch) {
           creditCardId = cardMatch.id;
           bankAccountId = cardMatch.bank_account_id;
