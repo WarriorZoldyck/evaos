@@ -1,30 +1,41 @@
 
 
-# Resolução Cross-Context de Cartões de Crédito
+# Validação de Dígitos do Cartão na Imagem vs Escolha da IA
 
-## Problema
+## Problema Real
 
-Quando o usuário envia um comprovante de cartão PJ, a IA pode escolher o contexto "Pessoal" por engano. O sistema já tem lógica de **cross-context** para contas bancárias (linhas 1880-1912) — se a conta não é encontrada no contexto atual, busca em TODOS os contextos e reatribui automaticamente. Porém, **para cartões de crédito essa lógica não existe**. O match de cartão só busca dentro de `contextCards` (já filtrado pelo `companyId` da IA), então o cartão PJ nunca é encontrado quando a IA diz "Pessoal".
+O cross-context funciona, mas **nunca dispara** neste caso. A IA retorna o UUID do cartão "VISA Azul" (final 3552, Pessoal), que existe no contexto Pessoal. O match acontece na linha 1780 imediatamente. Porém, a imagem mostra um comprovante do cartão Itaú PJ (final 7993).
 
-## Correção
+O problema: a IA faz uma escolha errada de cartão, e o sistema aceita sem questionar, porque o cartão escolhido existe.
 
-### `supabase/functions/whatsapp-webhook/index.ts`
+## Solução
 
-Após o bloco de match de cartão por UUID, nome e dígitos dentro de `contextCards` (linhas 1778-1821), adicionar um **fallback cross-context** que busca em TODOS os cartões (`creditCards` sem filtro de company):
+Após o match inicial do cartão (linha 1890+), adicionar uma **validação por dígitos visíveis**: a IA já extrai informações da imagem, então podemos instruí-la a retornar os últimos 4 dígitos visíveis no comprovante. Se os dígitos retornados pela IA não batem com o cartão que ela mesma escolheu, corrigir buscando o cartão correto em TODOS os cartões.
 
-1. Se `cardMatch` não foi encontrado em `contextCards`, repetir a busca por UUID, last_four_digits e nome em `creditCards` (lista completa)
-2. Se encontrar um match cross-context:
-   - Atualizar `companyId` para o `company_id` do cartão encontrado
-   - Re-filtrar `contextAccounts`, `contextWallets`, `contextCards`, `contextCategories` (mesmo padrão da linha 1894-1906)
-   - Atribuir `creditCardId` e `bankAccountId`
-   - Logar a resolução cross-context
-3. Se o cartão tem `last_four_digits` visíveis na imagem mas a IA não retornou `credit_card_id`, adicionar busca nos dígitos da imagem/mensagem contra TODOS os cartões (não só `contextCards`)
+### Mudanças em `supabase/functions/whatsapp-webhook/index.ts`
 
-Isso replica exatamente o padrão já usado para contas bancárias, garantindo que o cartão determine o contexto correto automaticamente.
+**1. Prompt da IA** — Adicionar campo `visible_card_digits` no schema de retorno, instruindo a IA a extrair os últimos 4 dígitos visíveis no comprovante/imagem.
+
+**2. Pós-match de cartão** — Após a linha 1890 (quando `cardMatch` foi encontrado), verificar:
+```
+Se aiParsed.visible_card_digits existe E é diferente de cardMatch.last_four_digits:
+  → Buscar em TODOS os creditCards por last_four_digits === visible_card_digits
+  → Se encontrar exatamente 1 match, substituir cardMatch
+  → Se o novo match tem company_id diferente, fazer cross-context (re-filtrar tudo)
+  → Logar: "Card digit mismatch corrected: AI chose X but image shows Y"
+```
+
+**3. Fallback da caption/mensagem** — Também extrair dígitos da caption do usuário (ex: "cartão final 7993") e aplicar a mesma lógica.
+
+## Impacto
+
+- Resolve o caso onde a IA escolhe o cartão certo pelo tipo mas erra na empresa
+- Não quebra nenhum fluxo existente (é apenas uma validação extra pós-match)
+- Custo zero — os dígitos já estão na imagem, só precisam ser extraídos
 
 ## Arquivo afetado
 
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar fallback cross-context no bloco de resolução de cartão de crédito |
+| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar `visible_card_digits` ao prompt + validação pós-match |
 
