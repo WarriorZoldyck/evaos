@@ -2361,8 +2361,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           series_id: seriesId,
           installment_number: idx + 1,
           installments_total: installmentCount,
-          original_message: originalUserText || null,
+           original_message: originalUserText || null,
           ai_response_message: aiParsed.friendly_message || null,
+          fingerprint: await generateFingerprint(Math.abs(detail.amount || 0), aiParsed.description || "", competenceDate),
         };});
 
 
@@ -2402,10 +2403,13 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
       // Single transaction (no installments)
+      const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
+      const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
       const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
         source: "whatsapp",
-        status: "pending",
+        status: mainStatus,
+        fingerprint: mainFp,
         description: aiParsed.description || "Lançamento via WhatsApp",
         amount: Math.abs(aiParsed.amount || 0),
         type: txType,
