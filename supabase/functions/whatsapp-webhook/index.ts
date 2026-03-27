@@ -1724,7 +1724,44 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
       if (aiParsed.credit_card_id) {
-        const cardMatch = contextCards.find((c) => c.id === aiParsed.credit_card_id);
+        // Try exact UUID match first
+        let cardMatch = contextCards.find((c) => c.id === aiParsed.credit_card_id);
+        
+        // Fallback: try matching by last 4 digits extracted from the AI response
+        if (!cardMatch) {
+          const digitsMatch = (aiParsed.credit_card_id || "").match(/(\d{4})/);
+          if (digitsMatch) {
+            const last4 = digitsMatch[1];
+            const digitMatches = contextCards.filter((c: any) => c.last_four_digits === last4);
+            if (digitMatches.length === 1) {
+              cardMatch = digitMatches[0];
+            }
+            // If multiple matches, fall through to choose_account below
+          }
+          // Also try matching by name substring from AI response
+          if (!cardMatch) {
+            const aiCardRef = (aiParsed.credit_card_id || "").toLowerCase();
+            if (aiCardRef.length > 3) {
+              const nameMatch = contextCards.find((c: any) => 
+                c.name.toLowerCase().includes(aiCardRef) || aiCardRef.includes(c.name.toLowerCase())
+              );
+              if (nameMatch) cardMatch = nameMatch;
+            }
+          }
+        }
+        
+        // Also try matching from original message text for last 4 digits
+        if (!cardMatch && originalUserText) {
+          const msgDigits = originalUserText.match(/(?:final|cartão|cartao|card)\s*(\d{4})/i);
+          if (msgDigits) {
+            const last4 = msgDigits[1];
+            const digitMatches = contextCards.filter((c: any) => c.last_four_digits === last4);
+            if (digitMatches.length === 1) {
+              cardMatch = digitMatches[0];
+            }
+          }
+        }
+        
         if (cardMatch) {
           creditCardId = cardMatch.id;
           bankAccountId = cardMatch.bank_account_id;
