@@ -137,27 +137,23 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
       messages: [
         {
           role: "system",
-          content: `You are a bank statement parser. Extract all transactions from the provided PDF bank statement.
-Return ONLY a valid JSON object with these fields:
-{
-  "card_digits": "last 4 digits of the card number if visible in the document, or null",
-  "transactions": [array of transaction objects]
-}
+          content: `You are a credit card / bank statement parser. Extract ALL transactions from the provided PDF.
 
-Each transaction object must have:
+Return ONLY a valid JSON array of transaction objects. Each object must have:
 - "date": string in "YYYY-MM-DD" format
-- "description": string with the transaction description
+- "description": string with the transaction description  
 - "amount": number (always positive)
-- "type": "receita" for credits/deposits/income/payments, "despesa" for debits/withdrawals/expenses/purchases
+- "type": "receita" for credits/deposits/income/payments, "despesa" for debits/purchases/expenses
+- "card_digits": last 4 digits of the card this transaction belongs to (string), or null if not identifiable
 
-Rules:
-- Parse ALL transactions found in the document
-- Convert dates from any format (dd/mm/yyyy, etc.) to YYYY-MM-DD
-- Amount must always be a positive number
-- Determine type based on credit/debit indicators in the statement
-- Do NOT include opening/closing balances as transactions
-- Look for the credit card number on the statement header (usually last 4 digits like "Final 1234" or "****1234" or partial number)
-- Return ONLY the JSON object, no markdown, no explanation`
+CRITICAL RULES:
+- Credit card statements often have MULTIPLE cards in one PDF. Each card section has a header like "NOME DO TITULAR - 4258 XXXX XXXX 7014". The last 4 digits identify which card each transaction belongs to.
+- For each section/card, set "card_digits" to those last 4 digits for ALL transactions under that section.
+- Convert dates from dd/mm to YYYY-MM-DD using the statement's billing period year.
+- Amount must always be positive.
+- Do NOT include opening/closing balances, payment summaries, or anuidade R$0.00 entries.
+- Installment info in the "Parcela" column (like "3/6") should be included in the description.
+- Return ONLY the JSON array, no markdown, no wrapping object, no explanation.`
         },
         {
           role: "user",
@@ -171,13 +167,13 @@ Rules:
             },
             {
               type: "text",
-              text: "Extract all transactions from this bank statement PDF. Return only the JSON array."
+              text: "Extract all transactions from this statement. Each transaction must include card_digits identifying which card it belongs to. Return only the JSON array."
             }
           ],
         },
       ],
       temperature: 0,
-      max_tokens: 16000,
+      max_tokens: 32000,
     }),
   });
 
@@ -200,31 +196,32 @@ Rules:
   try {
     const parsed = JSON.parse(jsonStr);
     
-    // Support both formats: { card_digits, transactions } or plain array
-    let cardDigits: string | undefined;
+    // Support both: plain array or { transactions: [...] }
     let txArray: any[];
-    
     if (Array.isArray(parsed)) {
       txArray = parsed;
     } else if (parsed.transactions && Array.isArray(parsed.transactions)) {
       txArray = parsed.transactions;
-      if (parsed.card_digits) {
-        const digits = String(parsed.card_digits).replace(/\D/g, "");
-        if (digits.length >= 4) {
-          cardDigits = digits.slice(-4);
-        }
-      }
     } else {
-      throw new Error("Expected array or object with transactions");
+      throw new Error("Expected array of transactions");
     }
     
-    return txArray.map((t: any) => ({
-      date: String(t.date || ""),
-      description: String(t.description || "Sem descrição"),
-      amount: Math.abs(Number(t.amount) || 0),
-      type: t.type === "receita" ? "receita" as const : "despesa" as const,
-      ...(cardDigits ? { detected_card_digits: cardDigits } : {}),
-    })).filter((t: ParsedTransaction) => t.amount > 0 && t.date);
+    return txArray.map((t: any) => {
+      let detectedDigits: string | undefined;
+      if (t.card_digits) {
+        const digits = String(t.card_digits).replace(/\D/g, "");
+        if (digits.length >= 4) {
+          detectedDigits = digits.slice(-4);
+        }
+      }
+      return {
+        date: String(t.date || ""),
+        description: String(t.description || "Sem descrição"),
+        amount: Math.abs(Number(t.amount) || 0),
+        type: t.type === "receita" ? "receita" as const : "despesa" as const,
+        ...(detectedDigits ? { detected_card_digits: detectedDigits } : {}),
+      };
+    }).filter((t: ParsedTransaction) => t.amount > 0 && t.date);
   } catch (e) {
     console.error("Failed to parse AI response:", content);
     throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
