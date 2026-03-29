@@ -16,9 +16,9 @@ const GROUP_LABELS: Record<CostGroup, string> = {
 };
 
 const CATEGORIES: Record<CostGroup, string[]> = {
-  fixos_clinica: ["Prediais", "Salários", "Administrativos", "Outros"],
-  variaveis_clinica: ["Dentais", "Salário (parceiros)", "Laboratório", "Honorários", "Implantes", "Administrativo", "Diversos"],
-  pessoais: ["Educação", "Moradia", "Salários", "Lazer", "Planejamento", "Vestuário", "Supérfluos", "Alimentação", "Transporte", "Saúde", "Outros"],
+  fixos_clinica: ["Prediais", "Salários", "Administrativos", "Outros", "Importado"],
+  variaveis_clinica: ["Dentais", "Salário (parceiros)", "Laboratório", "Honorários", "Implantes", "Administrativo", "Diversos", "Importado"],
+  pessoais: ["Educação", "Moradia", "Salários", "Lazer", "Planejamento", "Vestuário", "Supérfluos", "Alimentação", "Transporte", "Saúde", "Outros", "Importado"],
 };
 
 interface CostItemsTabProps {
