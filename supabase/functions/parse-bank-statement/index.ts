@@ -173,7 +173,7 @@ CRITICAL RULES:
         },
       ],
       temperature: 0,
-      max_tokens: 32000,
+      max_tokens: 65000,
     }),
   });
 
@@ -185,7 +185,8 @@ CRITICAL RULES:
 
   const result = await response.json();
   const content = result.choices?.[0]?.message?.content || "";
-
+  const finishReason = result.choices?.[0]?.finish_reason || "unknown";
+  console.log(`AI response: finish_reason=${finishReason}, content_length=${content.length}`);
   // Extract JSON from the response (handle markdown code blocks)
   let jsonStr = content.trim();
   const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -193,9 +194,28 @@ CRITICAL RULES:
     jsonStr = jsonMatch[1].trim();
   }
 
+  let parsed: any;
   try {
-    const parsed = JSON.parse(jsonStr);
-    
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    // Try to salvage truncated JSON array by finding last complete object
+    const lastBrace = jsonStr.lastIndexOf("}");
+    if (lastBrace > 0) {
+      const salvaged = jsonStr.slice(0, lastBrace + 1) + "]";
+      try {
+        parsed = JSON.parse(salvaged);
+        console.warn(`Salvaged truncated JSON: recovered up to position ${lastBrace}`);
+      } catch {
+        console.error("Failed to salvage truncated JSON");
+      }
+    }
+    if (!parsed) {
+      console.error("Failed to parse AI response:", jsonStr.slice(0, 500));
+      throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
+    }
+  }
+
+  try {
     // Support both: plain array or { transactions: [...] }
     let txArray: any[];
     if (Array.isArray(parsed)) {
@@ -206,6 +226,18 @@ CRITICAL RULES:
       throw new Error("Expected array of transactions");
     }
     
+    // Log per-card breakdown
+    const cardBreakdown: Record<string, number> = {};
+    txArray.forEach((t: any) => {
+      const digits = t.card_digits ? String(t.card_digits) : "unknown";
+      cardBreakdown[digits] = (cardBreakdown[digits] || 0) + 1;
+    });
+    console.log(`Parsed ${txArray.length} transactions. Cards breakdown:`, JSON.stringify(cardBreakdown));
+
+    if (finishReason === "length") {
+      console.warn("WARNING: AI response was truncated (finish_reason=length). Some transactions may be missing.");
+    }
+
     return txArray.map((t: any) => {
       let detectedDigits: string | undefined;
       if (t.card_digits) {
