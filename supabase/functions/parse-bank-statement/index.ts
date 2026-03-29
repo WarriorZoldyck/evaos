@@ -207,6 +207,18 @@ CRITICAL RULES:
       throw new Error("Expected array of transactions");
     }
     
+    // Log per-card breakdown
+    const cardBreakdown: Record<string, number> = {};
+    txArray.forEach((t: any) => {
+      const digits = t.card_digits ? String(t.card_digits) : "unknown";
+      cardBreakdown[digits] = (cardBreakdown[digits] || 0) + 1;
+    });
+    console.log(`Parsed ${txArray.length} transactions. Cards breakdown:`, JSON.stringify(cardBreakdown));
+
+    if (finishReason === "length") {
+      console.warn("WARNING: AI response was truncated (finish_reason=length). Some transactions may be missing.");
+    }
+
     return txArray.map((t: any) => {
       let detectedDigits: string | undefined;
       if (t.card_digits) {
