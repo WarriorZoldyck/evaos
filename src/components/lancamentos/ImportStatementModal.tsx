@@ -82,21 +82,27 @@ export function ImportStatementModal({
 
   const rootCategories = categories.filter((c) => !c.parent_id);
 
-  // Derive detected cards summary
+  // Derive detected cards summary (use real card IDs, not collapsed to parent)
   const detectedCards = useMemo(() => {
     const cardIds = new Set(rows.map((r) => r.matched_card_id).filter(Boolean));
     return creditCards.filter((c) => cardIds.has(c.id));
   }, [rows, creditCards]);
 
-  const detectedParentCards = useMemo(() => {
-    const resolvedIds = new Set(
-      detectedCards.map((card) => card.parent_card_id || card.id)
-    );
-    return creditCards.filter((card) => resolvedIds.has(card.id));
-  }, [detectedCards, creditCards]);
+  const isMultiCard = detectedCards.length > 1;
 
-  const isMultiCard = detectedParentCards.length > 1;
-  const isSingleAutoCard = detectedParentCards.length === 1;
+  // Per-card summary for display
+  const cardSummary = useMemo(() => {
+    const summary: Record<string, { count: number; total: number }> = {};
+    rows.forEach((r) => {
+      if (r.matched_card_id) {
+        if (!summary[r.matched_card_id]) summary[r.matched_card_id] = { count: 0, total: 0 };
+        summary[r.matched_card_id].count++;
+        summary[r.matched_card_id].total += r.amount;
+      }
+    });
+    return summary;
+  }, [rows]);
+  const isSingleAutoCard = detectedCards.length === 1;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -188,16 +194,14 @@ export function ImportStatementModal({
 
         let matchedCardId: string | undefined;
         if (t.detected_card_digits) {
+          // Keep the real card ID (child), don't collapse to parent
           const card = creditCards.find((c) => c.last_four_digits === t.detected_card_digits);
-          if (card) matchedCardId = card.parent_card_id || card.id;
+          if (card) matchedCardId = card.id;
         }
 
         if (!matchedCardId) {
           const descriptionMatch = detectDigitsInDescription(t.description, creditCards);
-          if (descriptionMatch) {
-            const matchedCard = creditCards.find((c) => c.id === descriptionMatch);
-            matchedCardId = matchedCard ? (matchedCard.parent_card_id || matchedCard.id) : descriptionMatch;
-          }
+          if (descriptionMatch) matchedCardId = descriptionMatch;
         }
 
         return { ...rest, matched_card_id: matchedCardId };
@@ -214,9 +218,24 @@ export function ImportStatementModal({
           const detectedCard = resolvedDetectedCards[0];
           if (detectedCard) {
             setTargetCard(detectedCard.id);
-            if (detectedCard.bank_account_id) {
-              setTargetBankAccount(`bank:${detectedCard.bank_account_id}`);
+            // Use the parent's bank_account_id if this is a child card
+            const parentCard = detectedCard.parent_card_id
+              ? creditCards.find(c => c.id === detectedCard.parent_card_id)
+              : detectedCard;
+            const bankAccId = parentCard?.bank_account_id || detectedCard.bank_account_id;
+            if (bankAccId) {
+              setTargetBankAccount(`bank:${bankAccId}`);
             }
+          }
+        } else {
+          // Multi-card: use the first parent's bank account
+          const firstCard = resolvedDetectedCards[0];
+          const parentCard = firstCard?.parent_card_id
+            ? creditCards.find(c => c.id === firstCard.parent_card_id)
+            : firstCard;
+          const bankAccId = parentCard?.bank_account_id || firstCard?.bank_account_id;
+          if (bankAccId) {
+            setTargetBankAccount(`bank:${bankAccId}`);
           }
         }
       }
@@ -301,7 +320,7 @@ export function ImportStatementModal({
         bank_account_id: accType === "bank" ? accId : null,
         wallet_id: accType === "wallet" ? accId : null,
         credit_card_id: cardId,
-        external_id: `import_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}`,
+        external_id: `import_${cardId || 'nocrd'}_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}`,
         series_id: r.series_id || null,
         installment_number: r.installment_number || null,
         installments_total: r.installments_total || null,
@@ -476,19 +495,32 @@ export function ImportStatementModal({
             </div>
 
             {/* Auto-detection feedback */}
-            {detectedParentCards.length > 0 && (
-              <div className="text-xs font-medium flex items-center gap-1 flex-wrap text-primary">
-                <CreditCard className="h-3.5 w-3.5" />
-                {isMultiCard ? (
-                  <span>
-                    Múltiplos cartões detectados: {detectedParentCards.map((c) =>
-                      `${c.name}${c.last_four_digits ? ` (****${c.last_four_digits})` : ""}`
-                    ).join(", ")} — cada transação será atribuída ao cartão correto
-                  </span>
-                ) : (
-                  <span>
-                    Cartão "{detectedParentCards[0].name}"{detectedParentCards[0].last_four_digits ? ` (****${detectedParentCards[0].last_four_digits})` : ""} detectado automaticamente
-                  </span>
+            {detectedCards.length > 0 && (
+              <div className="text-xs font-medium flex flex-col gap-1 text-primary">
+                <div className="flex items-center gap-1">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  {isMultiCard ? (
+                    <span>
+                      {detectedCards.length} cartões detectados — cada transação será atribuída ao cartão correto
+                    </span>
+                  ) : (
+                    <span>
+                      Cartão "{detectedCards[0].name}"{detectedCards[0].last_four_digits ? ` (****${detectedCards[0].last_four_digits})` : ""} detectado automaticamente
+                    </span>
+                  )}
+                </div>
+                {isMultiCard && (
+                  <div className="flex flex-wrap gap-2 ml-5">
+                    {detectedCards.map((c) => {
+                      const s = cardSummary[c.id];
+                      return (
+                        <Badge key={c.id} variant="outline" className="text-[10px] px-1.5 gap-1">
+                          {c.name}{c.last_four_digits ? ` ****${c.last_four_digits}` : ""}
+                          {s ? ` (${s.count} • ${formatCurrency(s.total)})` : ""}
+                        </Badge>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}
