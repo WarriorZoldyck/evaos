@@ -194,9 +194,28 @@ CRITICAL RULES:
     jsonStr = jsonMatch[1].trim();
   }
 
+  let parsed: any;
   try {
-    const parsed = JSON.parse(jsonStr);
-    
+    parsed = JSON.parse(jsonStr);
+  } catch {
+    // Try to salvage truncated JSON array by finding last complete object
+    const lastBrace = jsonStr.lastIndexOf("}");
+    if (lastBrace > 0) {
+      const salvaged = jsonStr.slice(0, lastBrace + 1) + "]";
+      try {
+        parsed = JSON.parse(salvaged);
+        console.warn(`Salvaged truncated JSON: recovered up to position ${lastBrace}`);
+      } catch {
+        console.error("Failed to salvage truncated JSON");
+      }
+    }
+    if (!parsed) {
+      console.error("Failed to parse AI response:", jsonStr.slice(0, 500));
+      throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
+    }
+  }
+
+  try {
     // Support both: plain array or { transactions: [...] }
     let txArray: any[];
     if (Array.isArray(parsed)) {
