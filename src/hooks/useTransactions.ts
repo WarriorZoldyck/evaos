@@ -35,6 +35,8 @@ export interface CreditCard {
   closing_day: number;
   due_day: number;
   bank_account_id: string;
+  parent_card_id?: string | null;
+  company_id?: string | null;
 }
 
 interface Wallet {
@@ -113,7 +115,7 @@ export function useTransactions() {
   const [allAccounts, setAllAccounts] = useState<{
     bankAccounts: { id: string; name: string; company_id: string | null; company_name: string }[];
     wallets: { id: string; name: string; company_id: string | null; company_name: string }[];
-    creditCards: { id: string; name: string; last_four_digits: string | null; company_id: string | null; company_name: string }[];
+    creditCards: { id: string; name: string; last_four_digits: string | null; company_id: string | null; company_name: string; bank_account_id: string; parent_card_id: string | null }[];
   }>({ bankAccounts: [], wallets: [], creditCards: [] });
 
   // All card terminals across all contexts (for context switching in modal)
@@ -137,7 +139,7 @@ export function useTransactions() {
     const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes, termRes, allCatRes] =
       await Promise.all([
         companyFilter(supabase.from("bank_accounts").select("id, name, type")).order("name"),
-        companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, bank_account_id")).order("name"),
+        companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, bank_account_id, parent_card_id, company_id")).order("name"),
         companyFilter(supabase.from("wallets").select("id, name")).order("name"),
         supabase.from("suppliers").select("id, name").order("name"),
         supabase.from("clients").select("id, name").order("name"),
@@ -164,7 +166,7 @@ export function useTransactions() {
       const [allAccRes, allWalletRes, allCardRes, companiesRes, allTermRes] = await Promise.all([
         supabase.from("bank_accounts").select("id, name, company_id").order("name"),
         supabase.from("wallets").select("id, name, company_id").order("name"),
-        supabase.from("credit_cards").select("id, name, last_four_digits, company_id").order("name"),
+        supabase.from("credit_cards").select("id, name, last_four_digits, company_id, bank_account_id, parent_card_id").order("name"),
         supabase.from("companies").select("id, name").order("name"),
         supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation, company_id").order("name"),
       ]);
