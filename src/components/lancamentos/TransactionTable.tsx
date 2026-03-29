@@ -473,36 +473,113 @@ export function TransactionTable({
     );
   }
 
-  const rowProps = { categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails };
+  const rowProps = { categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, selectionMode, onToggleSelect: toggleSelect };
 
   return (
     <div className="space-y-0 divide-y divide-border">
+      {/* Bulk action bar */}
+      {selectionMode && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-accent/50 rounded-md mb-1">
+          <Checkbox
+            checked={selectedIds.size === transactions.length}
+            onCheckedChange={toggleSelectAll}
+          />
+          <span className="text-sm font-medium text-foreground">
+            {selectedIds.size} selecionado{selectedIds.size > 1 ? "s" : ""}
+          </span>
+          <div className="flex-1" />
+          {onDeleteMultiple && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => {
+                onDeleteMultiple(Array.from(selectedIds));
+                clearSelection();
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Excluir {selectedIds.size}
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={clearSelection}>
+            Cancelar
+          </Button>
+        </div>
+      )}
+
+      {/* Select all toggle when not in selection mode */}
+      {!selectionMode && transactions.length > 0 && onDeleteMultiple && (
+        <div className="flex items-center gap-2 px-4 py-1.5">
+          <Checkbox
+            checked={false}
+            onCheckedChange={() => toggleSelectAll()}
+            className="opacity-40 hover:opacity-100 transition-opacity"
+          />
+          <span className="text-xs text-muted-foreground">Selecionar</span>
+        </div>
+      )}
+
       {renderItems.map((item) => {
         if (item.type === "transaction") {
           return (
-            <TransactionRow key={item.data.id} t={item.data} {...rowProps} />
+            <TransactionRow
+              key={item.data.id}
+              t={item.data}
+              {...rowProps}
+              isSelected={selectedIds.has(item.data.id)}
+            />
           );
         }
 
         const group = item.data;
         const isOpen = expandedCards.has(group.cardId);
+        const allGroupSelected = group.transactions.every((t) => selectedIds.has(t.id));
+        const someGroupSelected = group.transactions.some((t) => selectedIds.has(t.id));
 
         return (
           <div key={`card-group-${group.cardId}`}>
-            <CardGroupHeader
-              group={group}
-              isOpen={isOpen}
-              onToggle={() => toggleCard(group.cardId)}
-              onLiquidate={() => {
-                // Use the first pending transaction to trigger card bill payment
-                const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
-                if (firstPending) onLiquidate(firstPending);
-              }}
-            />
+            <div className="flex items-center">
+              {selectionMode && (
+                <div className="pl-4 shrink-0">
+                  <Checkbox
+                    checked={allGroupSelected}
+                    onCheckedChange={() => {
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        if (allGroupSelected) {
+                          group.transactions.forEach((t) => next.delete(t.id));
+                        } else {
+                          group.transactions.forEach((t) => next.add(t.id));
+                        }
+                        return next;
+                      });
+                    }}
+                  />
+                </div>
+              )}
+              <div className="flex-1">
+                <CardGroupHeader
+                  group={group}
+                  isOpen={isOpen}
+                  onToggle={() => toggleCard(group.cardId)}
+                  onLiquidate={() => {
+                    const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
+                    if (firstPending) onLiquidate(firstPending);
+                  }}
+                />
+              </div>
+            </div>
             {isOpen && (
               <div className="border-l-2 border-primary/20 ml-6">
                 {group.transactions.map((t) => (
-                  <TransactionRow key={t.id} t={t} {...rowProps} indented />
+                  <TransactionRow
+                    key={t.id}
+                    t={t}
+                    {...rowProps}
+                    indented
+                    isSelected={selectedIds.has(t.id)}
+                  />
                 ))}
               </div>
             )}
