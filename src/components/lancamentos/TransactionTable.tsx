@@ -147,9 +147,18 @@ function TransactionRow({
 
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group cursor-pointer ${indented ? "pl-10" : ""}`}
-      onClick={() => onViewDetails(t)}
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors group cursor-pointer ${indented ? "pl-10" : ""} ${isSelected ? "bg-accent/40" : ""}`}
+      onClick={() => selectionMode && onToggleSelect ? onToggleSelect(t.id) : onViewDetails(t)}
     >
+      {/* Checkbox */}
+      {selectionMode && (
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={() => onToggleSelect?.(t.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0"
+        />
+      )}
       {/* Date */}
       <div className="text-center shrink-0 w-12">
         <div className="text-lg font-bold leading-tight text-foreground">
