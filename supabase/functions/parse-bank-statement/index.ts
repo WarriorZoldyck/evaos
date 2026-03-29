@@ -249,12 +249,18 @@ CRITICAL RULES:
           detectedDigits = digits.slice(-4);
         }
       }
+
+      const statementDueDate = t.statement_due_date
+        ? String(t.statement_due_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
+        : undefined;
+
       return {
         date: String(t.date || ""),
         description: String(t.description || "Sem descrição"),
         amount: Math.abs(Number(t.amount) || 0),
         type: t.type === "receita" ? "receita" as const : "despesa" as const,
         ...(detectedDigits ? { detected_card_digits: detectedDigits } : {}),
+        ...(statementDueDate ? { statement_due_date: statementDueDate } : {}),
       };
     }).filter((t: ParsedTransaction) => t.amount > 0 && t.date);
   } catch (e) {

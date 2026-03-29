@@ -310,38 +310,7 @@ export function useTransactions() {
   };
 
   const createMultipleTransactions = async (data: TransactionInsert[]) => {
-    // Pre-filter duplicates by checking existing external_ids
-    const externalIds = data
-      .map((t) => t.external_id)
-      .filter((eid): eid is string => eid != null && eid !== "");
-
-    let filteredData = data;
-    let skippedCount = 0;
-
-    if (externalIds.length > 0) {
-      const { data: existing } = await supabase
-        .from("transactions")
-        .select("external_id")
-        .in("external_id", externalIds);
-
-      if (existing && existing.length > 0) {
-        const existingSet = new Set(existing.map((e) => e.external_id));
-        filteredData = data.filter(
-          (t) => !t.external_id || !existingSet.has(t.external_id)
-        );
-        skippedCount = data.length - filteredData.length;
-      }
-    }
-
-    if (filteredData.length === 0) {
-      toast({
-        title: "Nenhuma transação nova",
-        description: `Todas as ${skippedCount} transações já foram importadas anteriormente.`,
-      });
-      return true;
-    }
-
-    const { error } = await supabase.from("transactions").insert(filteredData);
+    const { error } = await supabase.from("transactions").insert(data);
     if (error) {
       toast({
         title: "Erro ao criar lançamentos",
@@ -351,10 +320,7 @@ export function useTransactions() {
       return false;
     }
 
-    const msg = skippedCount > 0
-      ? `${filteredData.length} lançamentos criados! (${skippedCount} duplicados ignorados)`
-      : `${filteredData.length} lançamentos criados com sucesso!`;
-    toast({ title: msg });
+    toast({ title: `${data.length} lançamentos criados com sucesso!` });
     fetchTransactions();
     fetchAux();
     return true;
