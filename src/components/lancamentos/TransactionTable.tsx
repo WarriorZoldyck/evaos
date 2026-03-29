@@ -367,10 +367,32 @@ export function TransactionTable({
   onEdit,
   onDuplicate,
   onDelete,
+  onDeleteMultiple,
   onLiquidate,
   onViewDetails,
 }: TransactionTableProps) {
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectionMode = selectedIds.size > 0;
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === transactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transactions.map((t) => t.id)));
+    }
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
 
   const toggleCard = (cardId: string) => {
     setExpandedCards((prev) => {
