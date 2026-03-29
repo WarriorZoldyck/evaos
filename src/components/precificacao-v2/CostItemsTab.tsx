@@ -3,10 +3,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Download } from "lucide-react";
 import type { CostItem, CostGroup } from "@/hooks/usePricingV2";
+import { ImportCategoriesModal } from "./ImportCategoriesModal";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const GROUP_LABELS: Record<CostGroup, string> = {
+  fixos_clinica: "Fixos Clínica",
+  variaveis_clinica: "Variáveis Clínica",
+  pessoais: "Pessoais (Casa)",
+};
 
 const CATEGORIES: Record<CostGroup, string[]> = {
   fixos_clinica: ["Prediais", "Salários", "Administrativos", "Outros"],
@@ -28,6 +35,7 @@ export function CostItemsTab({ group, items, onAdd, onUpdate, onDelete }: CostIt
   const [newDesc, setNewDesc] = useState("");
   const [newVal, setNewVal] = useState("");
   const [newFreq, setNewFreq] = useState("M");
+  const [importOpen, setImportOpen] = useState(false);
 
   const groupItems = items.filter((i) => i.cost_group === group);
   const categories = CATEGORIES[group];
@@ -54,6 +62,18 @@ export function CostItemsTab({ group, items, onAdd, onUpdate, onDelete }: CostIt
     setNewDesc("");
     setNewVal("");
     setAdding(false);
+  };
+
+  const handleImportCategories = async (importedItems: { description: string; value: number }[]) => {
+    for (const item of importedItems) {
+      await onAdd({
+        cost_group: group,
+        category: "Importado",
+        description: item.description,
+        value: item.value,
+        frequency: "M",
+      });
+    }
   };
 
   return (
