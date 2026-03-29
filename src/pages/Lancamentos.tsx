@@ -54,6 +54,7 @@ export default function Lancamentos() {
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
   const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
 
   // Open modal from query param (?new=true) or custom event
   useEffect(() => {
