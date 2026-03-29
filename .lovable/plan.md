@@ -1,105 +1,63 @@
 
-# Diagnóstico da importação multi-cartão da Paula
 
-## O que os logs mostram
-- A edge function `parse-bank-statement` está funcionando corretamente.
-- Ela extraiu **115 transações** da fatura.
-- Breakdown no log:
-  - **7014: 92**
-  - **5178: 13**
-  - **7239: 7**
-  - **8021: 3**
+# Correção da Importação de Fatura — Valores e Distribuição por Cartão
 
-Ou seja: a IA reconheceu os cartões da fatura. O problema não está na leitura do PDF.
+## Problemas Encontrados
 
-## Causa raiz encontrada
-### 1. O modal colapsa cartões filhos no cartão principal
-Em `src/components/lancamentos/ImportStatementModal.tsx`, na detecção por linha, o código faz isso:
+### 1. Importações duplicadas no banco
+- **3/28**: 115 transações = R$ 40.111,30
+- **3/29**: 102 transações = R$ 38.112,32
+- **Total no banco**: 217 transações = R$ 78.223,62
+- **Todas no cartão 7014** (nenhuma nos filhos 5178, 7239, 8021)
 
-```ts
-if (card) matchedCardId = card.parent_card_id || card.id;
+### 2. Valores inflados por entradas indevidas
+A última importação (102 tx) contém:
+- **4 receitas** (R$ 19.225,79) — incluem "DEB AUTOM DE FATURA EM C/" (R$ 19.075,85) que é o pagamento da fatura anterior, **não é transação real**
+- **98 despesas** (R$ 18.886,53)
+- Total bruto: R$ 38.112,32 — quase o dobro do valor real da fatura (R$ 20.739,08)
+
+O prompt da IA já diz "Do NOT include payment summaries" mas a IA incluiu mesmo assim.
+
+### 3. Cartões filhos não estão sendo atribuídos
+O código do modal ainda está mandando tudo para o cartão principal (7014). Os cartões 5178, 7239 e 8021 não receberam nenhuma transação.
+
+### 4. payment_date não alinhada com a fatura
+As transações mostram a data de compra como `payment_date` ao invés da data de vencimento da fatura.
+
+## Plano de Correção
+
+### Passo 1 — Limpar dados duplicados
+Excluir TODAS as transações importadas da Paula (ambos os lotes de 3/28 e 3/29) para reimportar limpo:
+```sql
+DELETE FROM transactions 
+WHERE user_id = '...' AND external_id LIKE 'import_%' 
+AND credit_card_id = 'd1ef5ba8-...';
 ```
 
-Na prática:
-- 5178 vira 7014
-- 7239 vira 7014
-- 8021 vira 7014
+### Passo 2 — Melhorar o prompt da IA (edge function)
+Reforçar no prompt do `parse-bank-statement`:
+- **Excluir explicitamente**: "DEB AUTOM DE FATURA", pagamentos anteriores, créditos de estorno que não são compras
+- Adicionar regra: "Entries like 'DEB AUTOM DE FATURA' or 'PAGAMENTO FATURA' are bill payments, NOT transactions — exclude them"
 
-Então a fatura multi-cartão é tratada como se fosse de **um único cartão**.
+### Passo 3 — Distribuir transações por cartão real (modal)
+No `ImportStatementModal.tsx`, ao fazer o match de `detected_card_digits` com os cartões do sistema:
+- Usar o `card.id` real (filho) ao invés de `card.parent_card_id`
+- Garantir que cada transação receba o `credit_card_id` do cartão correspondente aos seus dígitos
 
-### 2. Por isso os lançamentos “não aparecem por cartão”
-Como tudo vira o pai:
-- `isMultiCard` tende a ficar falso
-- a coluna “Cartão” não representa os filhos corretamente
-- os lançamentos acabam indo todos para o **cartão principal 7014**
+### Passo 4 — Alinhar payment_date com vencimento da fatura
+Para importações de cartão, setar `payment_date` = `statement_due_date` (vencimento) e `competence_date` = data de compra original.
 
-### 3. A chave de deduplicação não considera o cartão
-Hoje o `external_id` é gerado assim:
+### Passo 5 — Validação pós-correção
+Após reimportação:
+- Verificar que o total de despesas bate com R$ 20.739,08 da fatura
+- Verificar distribuição: 7014, 5178, 7239, 8021 cada um com suas transações
+- Confirmar que não há entradas de pagamento/crédito de fatura
 
-```ts
-import_${r.date}_${r.amount}_${r.description...}
-```
+## Arquivos Afetados
 
-Ele **não inclui o cartão** nem os 4 dígitos detectados.
-
-Resultado:
-- se já existe um lançamento com mesma data + valor + descrição
-- mesmo que seja de outro cartão da mesma fatura
-- o sistema entende como duplicado e ignora
-
-### 4. O hook reforça esse descarte
-Em `src/hooks/useTransactions.ts`, `createMultipleTransactions()` consulta `external_id` existente e pula os itens repetidos antes de inserir. Além disso, há índice único no banco por `(user_id, external_id)`.
-
-## Por que a Paula viu “13 lançados e 102 ignorados”
-Porque:
-1. a fatura foi lida com **115 transações**
-2. os cartões filhos foram convertidos para o pai
-3. a deduplicação comparou tudo sem distinguir cartão
-4. só **13** ficaram com `external_id` “novo”
-5. os outros **102** bateram como já existentes e foram ignorados
-
-## O que precisa ser corrigido
-### 1. Preservar o cartão real da transação
-- `matched_card_id` deve guardar o **cartão detectado de verdade**
-- não o `parent_card_id`
-- se precisar, criar derivação separada só para exibir o principal
-
-### 2. Corrigir a UI de multi-cartão
-- detectar multi-cartão com base nos **cartões reais detectados**
-- exibir cada linha com seu cartão correspondente
-- mostrar resumo por cartão no preview (quantidade + total)
-
-### 3. Gravar cada lançamento no cartão correto
-No `handleImport`:
-- cada linha deve receber seu `credit_card_id` real
-- pai e filhos podem compartilhar conta bancária, mas o lançamento precisa ficar no cartão certo
-
-### 4. Corrigir a deduplicação
-Gerar `external_id` incluindo o cartão, por exemplo:
-```ts
-import_card_${cardId || digits}_${date}_${amount}_${descricaoNormalizada}
-```
-
-Assim:
-- compras iguais em cartões diferentes não colidem
-- reimportação da mesma fatura continua protegida
-- o índice único atual continua válido
-
-### 5. Corrigir o lote já importado errado
-Depois da correção:
-- revisar os lançamentos que foram parar no 7014 indevidamente
-- excluir o lote incorreto
-- reimportar a fatura
-
-## Validação esperada após a correção
-- Preview deve mostrar os **4 cartões** detectados: 7014, 5178, 7239, 8021
-- As **115 transações** devem aparecer distribuídas por cartão
-- A importação deve lançar cada item no cartão correto
-- Reimportar o mesmo PDF depois deve ignorar apenas duplicatas do **mesmo cartão**, não dos outros
-
-## Arquivos afetados
 | Arquivo | Ação |
 |---------|------|
-| `src/components/lancamentos/ImportStatementModal.tsx` | Parar de colapsar filho no pai; exibir cartão real por linha; gerar `external_id` com cartão |
-| `src/hooks/useTransactions.ts` | Manter dedupe, mas com a nova chave por cartão |
-| `src/pages/Lancamentos.tsx` | Sem mudança estrutural grande; manter envio de todos os cartões para o modal |
+| `supabase/functions/parse-bank-statement/index.ts` | Reforçar exclusão de pagamentos de fatura no prompt |
+| `src/components/lancamentos/ImportStatementModal.tsx` | Atribuir cartão real (não pai); alinhar payment_date |
+| Migration SQL | Limpar lotes duplicados da Paula |
+
