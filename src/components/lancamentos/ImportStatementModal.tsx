@@ -44,7 +44,7 @@ interface ImportStatementModalProps {
   onImport: (data: TransactionInsert[]) => Promise<boolean>;
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
-  creditCards: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null }[];
+  creditCards: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null; bank_account_id?: string; company_id?: string | null; company_name?: string }[];
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
 }
 
@@ -276,10 +276,17 @@ export function ImportStatementModal({
     const accId = idParts.join(":");
 
     const transactions: TransactionInsert[] = selectedRows.map((r) => {
-      // For multi-card imports, use per-transaction detected card
+      const detectedCard = r.matched_card_id
+        ? creditCards.find((c) => c.id === r.matched_card_id)
+        : undefined;
+
       const cardId = isMultiCard
         ? (r.matched_card_id || targetCard || null)
         : (importType === "cartao" ? targetCard : null);
+
+      const companyIdForTransaction = importType === "cartao"
+        ? (detectedCard?.company_id ?? creditCards.find((c) => c.id === targetCard)?.company_id ?? selectedCompanyId ?? null)
+        : (selectedCompanyId || null);
 
       return {
         description: r.description,
@@ -290,7 +297,7 @@ export function ImportStatementModal({
         status: "Pago" as const,
         category: defaultCategory || "Sem Categoria",
         user_id: user.id,
-        company_id: selectedCompanyId || null,
+        company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
         wallet_id: accType === "wallet" ? accId : null,
         credit_card_id: cardId,
