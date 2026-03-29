@@ -1,6 +1,5 @@
-import { useState, useRef } from "react";
-import { format } from "date-fns";
-import { Upload, FileText, Loader2, Check, X } from "lucide-react";
+import { useState, useRef, useMemo } from "react";
+import { Upload, FileText, Loader2, Check, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -35,6 +34,8 @@ interface ParsedTransaction {
   installments_total?: number;
   original_amount?: number;
   base_description?: string;
+  detected_card_digits?: string;
+  matched_card_id?: string;
 }
 
 interface ImportStatementModalProps {
@@ -45,6 +46,15 @@ interface ImportStatementModalProps {
   wallets: { id: string; name: string }[];
   creditCards: { id: string; name: string; last_four_digits: string | null }[];
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+}
+
+/** Try to find 4-digit card numbers in a description */
+function detectDigitsInDescription(desc: string, cards: { id: string; last_four_digits: string | null }[]): string | undefined {
+  for (const card of cards) {
+    if (!card.last_four_digits) continue;
+    if (desc.includes(card.last_four_digits)) return card.id;
+  }
+  return undefined;
 }
 
 export function ImportStatementModal({
@@ -69,9 +79,17 @@ export function ImportStatementModal({
   const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
   const [targetCard, setTargetCard] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
-  const [autoDetectedCard, setAutoDetectedCard] = useState("");
 
   const rootCategories = categories.filter((c) => !c.parent_id);
+
+  // Derive detected cards summary
+  const detectedCards = useMemo(() => {
+    const cardIds = new Set(rows.map(r => r.matched_card_id).filter(Boolean));
+    return creditCards.filter(c => cardIds.has(c.id));
+  }, [rows, creditCards]);
+
+  const isMultiCard = detectedCards.length > 1;
+  const isSingleAutoCard = detectedCards.length === 1;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,7 +144,6 @@ export function ImportStatementModal({
           const num = parseInt(match[1]);
           const total = parseInt(match[2]);
           if (num > 0 && total > 1 && num <= total) {
-            // Extract base description (without the installment part)
             const baseName = t.description
               .replace(installmentRegex, '')
               .replace(parcRegex, '')
@@ -144,7 +161,6 @@ export function ImportStatementModal({
         }
       });
 
-      // Apply series_id to grouped installments
       for (const [, group] of Object.entries(groups)) {
         if (group.indices.length > 1) {
           const sid = crypto.randomUUID();
@@ -159,32 +175,44 @@ export function ImportStatementModal({
         }
       }
 
-      // Clean temp fields
-      const parsed = raw.map((t: any) => {
+      // Per-transaction card detection
+      const parsed: ParsedTransaction[] = raw.map((t: any) => {
         const { _installment_number, _installments_total, _base_description, ...rest } = t;
-        return rest;
+        
+        // 1. Check if edge function already detected digits (from OFX ACCTID)
+        let matchedCardId: string | undefined;
+        if (t.detected_card_digits) {
+          const card = creditCards.find(c => c.last_four_digits === t.detected_card_digits);
+          if (card) matchedCardId = card.id;
+        }
+        
+        // 2. If not matched yet, scan description for known card digits
+        if (!matchedCardId) {
+          matchedCardId = detectDigitsInDescription(t.description, creditCards);
+        }
+
+        return { ...rest, matched_card_id: matchedCardId };
       });
 
       setRows(parsed);
 
-      // Auto-detect credit card by last 4 digits
-      const allDescriptions = parsed.map((t: any) => t.description).join(" ");
-      const detectedCard = creditCards.find((c) => {
-        if (!c.last_four_digits) return false;
-        return allDescriptions.includes(c.last_four_digits);
-      });
-      if (detectedCard) {
+      // Auto-set import type if cards were detected
+      const detectedCardIds = new Set(parsed.map(r => r.matched_card_id).filter(Boolean));
+      if (detectedCardIds.size >= 1) {
         setImportType("cartao");
-        setTargetCard(detectedCard.id);
-        setAutoDetectedCard(detectedCard.name);
-      } else {
-        setAutoDetectedCard("");
+        if (detectedCardIds.size === 1) {
+          setTargetCard([...detectedCardIds][0]!);
+        }
       }
+
+      const cardNames = creditCards
+        .filter(c => detectedCardIds.has(c.id))
+        .map(c => c.name);
 
       toast({
         title: `${result.count} transações encontradas`,
-        description: detectedCard
-          ? `Cartão "${detectedCard.name}" detectado automaticamente.`
+        description: cardNames.length > 0
+          ? `Cartão(ões) detectado(s): ${cardNames.join(", ")}`
           : `Revise antes de importar.`,
       });
     } catch (err: any) {
@@ -220,7 +248,8 @@ export function ImportStatementModal({
       toast({ title: "Selecione o tipo de extrato", variant: "destructive" });
       return;
     }
-    if (importType === "cartao" && !targetCard) {
+    // For single-card mode, require card selection
+    if (importType === "cartao" && !isMultiCard && !targetCard) {
       toast({ title: "Selecione o cartão de crédito", variant: "destructive" });
       return;
     }
@@ -230,25 +259,32 @@ export function ImportStatementModal({
     const [accType, ...idParts] = targetBankAccount.split(":");
     const accId = idParts.join(":");
 
-    const transactions: TransactionInsert[] = selectedRows.map((r) => ({
-      description: r.description,
-      amount: r.amount,
-      type: r.type,
-      payment_date: r.date,
-      competence_date: r.date,
-      status: "Pago" as const,
-      category: defaultCategory || "Sem Categoria",
-      user_id: user.id,
-      company_id: selectedCompanyId || null,
-      bank_account_id: accType === "bank" ? accId : null,
-      wallet_id: accType === "wallet" ? accId : null,
-      credit_card_id: importType === "cartao" ? targetCard : null,
-      external_id: `import_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}`,
-      series_id: r.series_id || null,
-      installment_number: r.installment_number || null,
-      installments_total: r.installments_total || null,
-      original_amount: r.original_amount || null,
-    }));
+    const transactions: TransactionInsert[] = selectedRows.map((r) => {
+      // For multi-card imports, use per-transaction detected card
+      const cardId = isMultiCard
+        ? (r.matched_card_id || targetCard || null)
+        : (importType === "cartao" ? targetCard : null);
+
+      return {
+        description: r.description,
+        amount: r.amount,
+        type: r.type,
+        payment_date: r.date,
+        competence_date: r.date,
+        status: "Pago" as const,
+        category: defaultCategory || "Sem Categoria",
+        user_id: user.id,
+        company_id: selectedCompanyId || null,
+        bank_account_id: accType === "bank" ? accId : null,
+        wallet_id: accType === "wallet" ? accId : null,
+        credit_card_id: cardId,
+        external_id: `import_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}`,
+        series_id: r.series_id || null,
+        installment_number: r.installment_number || null,
+        installments_total: r.installments_total || null,
+        original_amount: r.original_amount || null,
+      };
+    });
 
     const success = await onImport(transactions);
     setImporting(false);
@@ -267,12 +303,17 @@ export function ImportStatementModal({
     setImportType("");
     setTargetCard("");
     setDefaultCategory("");
-    setAutoDetectedCard("");
     onClose();
   };
 
   const formatCurrency = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  const getCardLabel = (cardId: string) => {
+    const card = creditCards.find(c => c.id === cardId);
+    if (!card) return null;
+    return `${card.name}${card.last_four_digits ? ` ****${card.last_four_digits}` : ""}`;
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
@@ -322,7 +363,7 @@ export function ImportStatementModal({
               {/* Account select */}
               <div className="flex-1 min-w-[200px]">
                 <label className="text-xs text-muted-foreground mb-1 block">Conta destino *</label>
-                <Select value={targetBankAccount} onValueChange={(v) => { setTargetBankAccount(v); }}>
+                <Select value={targetBankAccount} onValueChange={setTargetBankAccount}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a conta" />
                   </SelectTrigger>
@@ -356,7 +397,7 @@ export function ImportStatementModal({
                 </div>
               )}
 
-              {importType === "cartao" && (
+              {importType === "cartao" && !isMultiCard && (
                 <div className="flex-1 min-w-[200px]">
                   <label className="text-xs text-muted-foreground mb-1 block">Cartão *</label>
                   <Select value={targetCard} onValueChange={setTargetCard}>
@@ -392,9 +433,21 @@ export function ImportStatementModal({
               </div>
             </div>
 
-            {autoDetectedCard && (
-              <div className="text-xs text-primary font-medium flex items-center gap-1">
-                💳 Cartão "{autoDetectedCard}" detectado automaticamente pelos últimos 4 dígitos
+            {/* Auto-detection feedback */}
+            {detectedCards.length > 0 && (
+              <div className="text-xs font-medium flex items-center gap-1 flex-wrap text-primary">
+                <CreditCard className="h-3.5 w-3.5" />
+                {isMultiCard ? (
+                  <span>
+                    Múltiplos cartões detectados: {detectedCards.map(c => 
+                      `${c.name} (****${c.last_four_digits})`
+                    ).join(", ")} — cada transação será atribuída ao cartão correto
+                  </span>
+                ) : (
+                  <span>
+                    Cartão "{detectedCards[0].name}" (****{detectedCards[0].last_four_digits}) detectado automaticamente
+                  </span>
+                )}
               </div>
             )}
 
@@ -416,6 +469,9 @@ export function ImportStatementModal({
                     <th className="p-2 text-left font-medium">Descrição</th>
                     <th className="p-2 text-right font-medium">Valor</th>
                     <th className="p-2 text-center font-medium">Tipo</th>
+                    {isMultiCard && (
+                      <th className="p-2 text-center font-medium">Cartão</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -425,7 +481,7 @@ export function ImportStatementModal({
                         <Checkbox checked={r.selected} onCheckedChange={() => toggleRow(idx)} />
                       </td>
                       <td className="p-2 text-muted-foreground whitespace-nowrap">{r.date}</td>
-                      <td className="p-2 max-w-[300px] truncate">
+                      <td className="p-2 max-w-[250px] truncate">
                         {r.description}
                         {r.series_id && (
                           <Badge variant="outline" className="ml-2 text-[9px] px-1">
@@ -439,6 +495,17 @@ export function ImportStatementModal({
                           {r.type === "receita" ? "Entrada" : "Saída"}
                         </Badge>
                       </td>
+                      {isMultiCard && (
+                        <td className="p-2 text-center">
+                          {r.matched_card_id ? (
+                            <Badge variant="outline" className="text-[9px] px-1.5">
+                              {getCardLabel(r.matched_card_id)}
+                            </Badge>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -454,7 +521,7 @@ export function ImportStatementModal({
             </Button>
             <Button
               onClick={handleImport}
-              disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !targetCard)}
+              disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !isMultiCard && !targetCard)}
               className="gap-2"
             >
               {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
