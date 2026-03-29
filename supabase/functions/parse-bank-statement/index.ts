@@ -12,10 +12,24 @@ interface ParsedTransaction {
   description: string;
   amount: number;
   type: "receita" | "despesa";
+  detected_card_digits?: string;
+}
+
+function extractOFXAccountDigits(content: string): string | undefined {
+  // Extract ACCTID from OFX — often contains card number or account number
+  const acctMatch = content.match(/<ACCTID>\s*([^<\n]+)/i);
+  if (acctMatch) {
+    const acctId = acctMatch[1].trim().replace(/\D/g, "");
+    if (acctId.length >= 4) {
+      return acctId.slice(-4);
+    }
+  }
+  return undefined;
 }
 
 function parseOFX(content: string): ParsedTransaction[] {
   const transactions: ParsedTransaction[] = [];
+  const accountDigits = extractOFXAccountDigits(content);
   const stmtTrnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
   let match;
 
@@ -37,6 +51,7 @@ function parseOFX(content: string): ParsedTransaction[] {
         description,
         amount: Math.abs(amount),
         type: amount >= 0 ? "receita" : "despesa",
+        ...(accountDigits ? { detected_card_digits: accountDigits } : {}),
       });
     }
   }
