@@ -394,6 +394,22 @@ export function useTransactions() {
     return true;
   };
 
+  const deleteMultipleTransactions = async (ids: string[]) => {
+    if (ids.length === 0) return false;
+    const { error } = await supabase.from("transactions").delete().in("id", ids);
+    if (error) {
+      toast({
+        title: "Erro ao excluir lançamentos",
+        description: error.message,
+        variant: "destructive",
+      });
+      return false;
+    }
+    toast({ title: `${ids.length} lançamento${ids.length > 1 ? "s" : ""} excluído${ids.length > 1 ? "s" : ""}!` });
+    fetchTransactions();
+    return true;
+  };
+
   const deleteSeriesTransactions = async (
     seriesId: string,
     mode: "only" | "from" | "all",
@@ -512,6 +528,7 @@ export function useTransactions() {
     createMultipleTransactions,
     updateTransaction,
     deleteTransaction,
+    deleteMultipleTransactions,
     deleteSeriesTransactions,
     duplicateTransaction,
     redistributeSeriesAmounts,

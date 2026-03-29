@@ -37,7 +37,7 @@ export default function Lancamentos() {
     transactions, loading, totalCount, page, setPage, totalPages,
     filters, setFilters,
     createTransaction, createMultipleTransactions, updateTransaction,
-    deleteTransaction, deleteSeriesTransactions, duplicateTransaction,
+    deleteTransaction, deleteMultipleTransactions, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions, updateMultipleTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
     cardTerminals, allCardTerminals, allAccounts, allCategories,
@@ -54,6 +54,7 @@ export default function Lancamentos() {
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
   const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
 
   // Open modal from query param (?new=true) or custom event
   useEffect(() => {
@@ -251,6 +252,7 @@ export default function Lancamentos() {
             onEdit={handleEdit}
             onDuplicate={duplicateTransaction}
             onDelete={handleDelete}
+            onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
             onLiquidate={(t) => {
               // If it's a credit card transaction, open bill payment flow
               if (t.credit_card_id) {
@@ -337,6 +339,35 @@ export default function Lancamentos() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog
+        open={!!bulkDeleteIds}
+        onOpenChange={(o) => !o && setBulkDeleteIds(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {bulkDeleteIds?.length} lançamento{(bulkDeleteIds?.length ?? 0) > 1 ? "s" : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {bulkDeleteIds?.length} lançamento{(bulkDeleteIds?.length ?? 0) > 1 ? "s" : ""} selecionado{(bulkDeleteIds?.length ?? 0) > 1 ? "s" : ""}? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (bulkDeleteIds) {
+                  await deleteMultipleTransactions(bulkDeleteIds);
+                  setBulkDeleteIds(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir {bulkDeleteIds?.length}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
