@@ -37,7 +37,7 @@ export default function Lancamentos() {
     transactions, loading, totalCount, page, setPage, totalPages,
     filters, setFilters,
     createTransaction, createMultipleTransactions, updateTransaction,
-    deleteTransaction, deleteSeriesTransactions, duplicateTransaction,
+    deleteTransaction, deleteMultipleTransactions, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions, updateMultipleTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
     cardTerminals, allCardTerminals, allAccounts, allCategories,
