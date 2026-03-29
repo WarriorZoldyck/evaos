@@ -173,7 +173,7 @@ CRITICAL RULES:
         },
       ],
       temperature: 0,
-      max_tokens: 32000,
+      max_tokens: 65000,
     }),
   });
 
