@@ -138,13 +138,13 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
       messages: [
         {
           role: "system",
-          content: `You are a credit card / bank statement parser. Extract ALL transactions from the provided PDF.
+          content: `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
 
 Return ONLY a valid JSON array of transaction objects. Each object must have:
 - "date": string in "YYYY-MM-DD" format
 - "description": string with the transaction description  
 - "amount": number (always positive)
-- "type": "receita" for credits/deposits/income/payments, "despesa" for debits/purchases/expenses
+- "type": "despesa" for purchases/expenses, "receita" ONLY for actual refunds/chargebacks (estornos)
 - "card_digits": last 4 digits of the card this transaction belongs to (string), or null if not identifiable
 - "statement_due_date": statement/fatura due date in "YYYY-MM-DD" format, repeated on every transaction object, or null if not identifiable
 
@@ -154,7 +154,16 @@ CRITICAL RULES:
 - All transactions from the same statement should carry the same "statement_due_date" when the PDF shows the due date.
 - Convert dates from dd/mm to YYYY-MM-DD using the statement's billing period year.
 - Amount must always be positive.
-- Do NOT include opening/closing balances, payment summaries, or anuidade R$0.00 entries.
+
+EXCLUDE THESE ENTRIES (they are NOT real transactions):
+- "DEB AUTOM DE FATURA" or "PAGAMENTO DE FATURA" or "PAGAMENTO FATURA" — these are bill payments
+- Opening/closing balances, total summaries, saldo anterior
+- "ANUIDADE" with R$0.00 value
+- Any line that represents a payment toward the credit card bill itself
+- Credits labeled as "PAGAMENTO" or "PAG FATURA" — these are bill payments, NOT refunds
+
+Only classify as "receita" actual purchase refunds/chargebacks (e.g., "ESTORNO", "DEVOLUCAO").
+
 - Installment info in the "Parcela" column (like "3/6") should be included in the description.
 - Return ONLY the JSON array, no markdown, no wrapping object, no explanation.`
         },

@@ -1,0 +1,1 @@
+DELETE FROM transactions WHERE user_id = '0b1eb160-7199-4965-928e-e5f929b31c55' AND external_id LIKE 'import_%' AND credit_card_id = 'd1ef5ba8-4653-45d4-b0b9-0f62a3d8cbd9'
