@@ -1,41 +1,105 @@
 
+# Diagnóstico da importação multi-cartão da Paula
 
-# Validação de Dígitos do Cartão na Imagem vs Escolha da IA
+## O que os logs mostram
+- A edge function `parse-bank-statement` está funcionando corretamente.
+- Ela extraiu **115 transações** da fatura.
+- Breakdown no log:
+  - **7014: 92**
+  - **5178: 13**
+  - **7239: 7**
+  - **8021: 3**
 
-## Problema Real
+Ou seja: a IA reconheceu os cartões da fatura. O problema não está na leitura do PDF.
 
-O cross-context funciona, mas **nunca dispara** neste caso. A IA retorna o UUID do cartão "VISA Azul" (final 3552, Pessoal), que existe no contexto Pessoal. O match acontece na linha 1780 imediatamente. Porém, a imagem mostra um comprovante do cartão Itaú PJ (final 7993).
+## Causa raiz encontrada
+### 1. O modal colapsa cartões filhos no cartão principal
+Em `src/components/lancamentos/ImportStatementModal.tsx`, na detecção por linha, o código faz isso:
 
-O problema: a IA faz uma escolha errada de cartão, e o sistema aceita sem questionar, porque o cartão escolhido existe.
-
-## Solução
-
-Após o match inicial do cartão (linha 1890+), adicionar uma **validação por dígitos visíveis**: a IA já extrai informações da imagem, então podemos instruí-la a retornar os últimos 4 dígitos visíveis no comprovante. Se os dígitos retornados pela IA não batem com o cartão que ela mesma escolheu, corrigir buscando o cartão correto em TODOS os cartões.
-
-### Mudanças em `supabase/functions/whatsapp-webhook/index.ts`
-
-**1. Prompt da IA** — Adicionar campo `visible_card_digits` no schema de retorno, instruindo a IA a extrair os últimos 4 dígitos visíveis no comprovante/imagem.
-
-**2. Pós-match de cartão** — Após a linha 1890 (quando `cardMatch` foi encontrado), verificar:
-```
-Se aiParsed.visible_card_digits existe E é diferente de cardMatch.last_four_digits:
-  → Buscar em TODOS os creditCards por last_four_digits === visible_card_digits
-  → Se encontrar exatamente 1 match, substituir cardMatch
-  → Se o novo match tem company_id diferente, fazer cross-context (re-filtrar tudo)
-  → Logar: "Card digit mismatch corrected: AI chose X but image shows Y"
+```ts
+if (card) matchedCardId = card.parent_card_id || card.id;
 ```
 
-**3. Fallback da caption/mensagem** — Também extrair dígitos da caption do usuário (ex: "cartão final 7993") e aplicar a mesma lógica.
+Na prática:
+- 5178 vira 7014
+- 7239 vira 7014
+- 8021 vira 7014
 
-## Impacto
+Então a fatura multi-cartão é tratada como se fosse de **um único cartão**.
 
-- Resolve o caso onde a IA escolhe o cartão certo pelo tipo mas erra na empresa
-- Não quebra nenhum fluxo existente (é apenas uma validação extra pós-match)
-- Custo zero — os dígitos já estão na imagem, só precisam ser extraídos
+### 2. Por isso os lançamentos “não aparecem por cartão”
+Como tudo vira o pai:
+- `isMultiCard` tende a ficar falso
+- a coluna “Cartão” não representa os filhos corretamente
+- os lançamentos acabam indo todos para o **cartão principal 7014**
 
-## Arquivo afetado
+### 3. A chave de deduplicação não considera o cartão
+Hoje o `external_id` é gerado assim:
 
-| Arquivo | Acao |
+```ts
+import_${r.date}_${r.amount}_${r.description...}
+```
+
+Ele **não inclui o cartão** nem os 4 dígitos detectados.
+
+Resultado:
+- se já existe um lançamento com mesma data + valor + descrição
+- mesmo que seja de outro cartão da mesma fatura
+- o sistema entende como duplicado e ignora
+
+### 4. O hook reforça esse descarte
+Em `src/hooks/useTransactions.ts`, `createMultipleTransactions()` consulta `external_id` existente e pula os itens repetidos antes de inserir. Além disso, há índice único no banco por `(user_id, external_id)`.
+
+## Por que a Paula viu “13 lançados e 102 ignorados”
+Porque:
+1. a fatura foi lida com **115 transações**
+2. os cartões filhos foram convertidos para o pai
+3. a deduplicação comparou tudo sem distinguir cartão
+4. só **13** ficaram com `external_id` “novo”
+5. os outros **102** bateram como já existentes e foram ignorados
+
+## O que precisa ser corrigido
+### 1. Preservar o cartão real da transação
+- `matched_card_id` deve guardar o **cartão detectado de verdade**
+- não o `parent_card_id`
+- se precisar, criar derivação separada só para exibir o principal
+
+### 2. Corrigir a UI de multi-cartão
+- detectar multi-cartão com base nos **cartões reais detectados**
+- exibir cada linha com seu cartão correspondente
+- mostrar resumo por cartão no preview (quantidade + total)
+
+### 3. Gravar cada lançamento no cartão correto
+No `handleImport`:
+- cada linha deve receber seu `credit_card_id` real
+- pai e filhos podem compartilhar conta bancária, mas o lançamento precisa ficar no cartão certo
+
+### 4. Corrigir a deduplicação
+Gerar `external_id` incluindo o cartão, por exemplo:
+```ts
+import_card_${cardId || digits}_${date}_${amount}_${descricaoNormalizada}
+```
+
+Assim:
+- compras iguais em cartões diferentes não colidem
+- reimportação da mesma fatura continua protegida
+- o índice único atual continua válido
+
+### 5. Corrigir o lote já importado errado
+Depois da correção:
+- revisar os lançamentos que foram parar no 7014 indevidamente
+- excluir o lote incorreto
+- reimportar a fatura
+
+## Validação esperada após a correção
+- Preview deve mostrar os **4 cartões** detectados: 7014, 5178, 7239, 8021
+- As **115 transações** devem aparecer distribuídas por cartão
+- A importação deve lançar cada item no cartão correto
+- Reimportar o mesmo PDF depois deve ignorar apenas duplicatas do **mesmo cartão**, não dos outros
+
+## Arquivos afetados
+| Arquivo | Ação |
 |---------|------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Adicionar `visible_card_digits` ao prompt + validação pós-match |
-
+| `src/components/lancamentos/ImportStatementModal.tsx` | Parar de colapsar filho no pai; exibir cartão real por linha; gerar `external_id` com cartão |
+| `src/hooks/useTransactions.ts` | Manter dedupe, mas com a nova chave por cartão |
+| `src/pages/Lancamentos.tsx` | Sem mudança estrutural grande; manter envio de todos os cartões para o modal |
