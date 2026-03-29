@@ -252,6 +252,7 @@ export default function Lancamentos() {
             onEdit={handleEdit}
             onDuplicate={duplicateTransaction}
             onDelete={handleDelete}
+            onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
             onLiquidate={(t) => {
               // If it's a credit card transaction, open bill payment flow
               if (t.credit_card_id) {
