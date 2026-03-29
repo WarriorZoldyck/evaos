@@ -84,12 +84,19 @@ export function ImportStatementModal({
 
   // Derive detected cards summary
   const detectedCards = useMemo(() => {
-    const cardIds = new Set(rows.map(r => r.matched_card_id).filter(Boolean));
-    return creditCards.filter(c => cardIds.has(c.id));
+    const cardIds = new Set(rows.map((r) => r.matched_card_id).filter(Boolean));
+    return creditCards.filter((c) => cardIds.has(c.id));
   }, [rows, creditCards]);
 
-  const isMultiCard = detectedCards.length > 1;
-  const isSingleAutoCard = detectedCards.length === 1;
+  const detectedParentCards = useMemo(() => {
+    const resolvedIds = new Set(
+      detectedCards.map((card) => card.parent_card_id || card.id)
+    );
+    return creditCards.filter((card) => resolvedIds.has(card.id));
+  }, [detectedCards, creditCards]);
+
+  const isMultiCard = detectedParentCards.length > 1;
+  const isSingleAutoCard = detectedParentCards.length === 1;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -178,17 +185,19 @@ export function ImportStatementModal({
       // Per-transaction card detection
       const parsed: ParsedTransaction[] = raw.map((t: any) => {
         const { _installment_number, _installments_total, _base_description, ...rest } = t;
-        
-        // 1. Check if edge function already detected digits (from OFX ACCTID)
+
         let matchedCardId: string | undefined;
         if (t.detected_card_digits) {
-          const card = creditCards.find(c => c.last_four_digits === t.detected_card_digits);
-          if (card) matchedCardId = card.id;
+          const card = creditCards.find((c) => c.last_four_digits === t.detected_card_digits);
+          if (card) matchedCardId = card.parent_card_id || card.id;
         }
-        
-        // 2. If not matched yet, scan description for known card digits
+
         if (!matchedCardId) {
-          matchedCardId = detectDigitsInDescription(t.description, creditCards);
+          const descriptionMatch = detectDigitsInDescription(t.description, creditCards);
+          if (descriptionMatch) {
+            const matchedCard = creditCards.find((c) => c.id === descriptionMatch);
+            matchedCardId = matchedCard ? (matchedCard.parent_card_id || matchedCard.id) : descriptionMatch;
+          }
         }
 
         return { ...rest, matched_card_id: matchedCardId };
@@ -196,18 +205,25 @@ export function ImportStatementModal({
 
       setRows(parsed);
 
-      // Auto-set import type if cards were detected
-      const detectedCardIds = new Set(parsed.map(r => r.matched_card_id).filter(Boolean));
+      const detectedCardIds = new Set(parsed.map((r) => r.matched_card_id).filter(Boolean));
+      const resolvedDetectedCards = creditCards.filter((c) => detectedCardIds.has(c.id));
+
       if (detectedCardIds.size >= 1) {
         setImportType("cartao");
         if (detectedCardIds.size === 1) {
-          setTargetCard([...detectedCardIds][0]!);
+          const detectedCard = resolvedDetectedCards[0];
+          if (detectedCard) {
+            setTargetCard(detectedCard.id);
+            if (detectedCard.bank_account_id) {
+              setTargetBankAccount(`bank:${detectedCard.bank_account_id}`);
+            }
+          }
         }
       }
 
-      const cardNames = creditCards
-        .filter(c => detectedCardIds.has(c.id))
-        .map(c => c.name);
+      const cardNames = resolvedDetectedCards.map((c) =>
+        `${c.name}${c.last_four_digits ? ` (****${c.last_four_digits})` : ""}`
+      );
 
       toast({
         title: `${result.count} transações encontradas`,
@@ -453,18 +469,18 @@ export function ImportStatementModal({
             </div>
 
             {/* Auto-detection feedback */}
-            {detectedCards.length > 0 && (
+            {detectedParentCards.length > 0 && (
               <div className="text-xs font-medium flex items-center gap-1 flex-wrap text-primary">
                 <CreditCard className="h-3.5 w-3.5" />
                 {isMultiCard ? (
                   <span>
-                    Múltiplos cartões detectados: {detectedCards.map(c => 
-                      `${c.name} (****${c.last_four_digits})`
+                    Múltiplos cartões detectados: {detectedParentCards.map((c) =>
+                      `${c.name}${c.last_four_digits ? ` (****${c.last_four_digits})` : ""}`
                     ).join(", ")} — cada transação será atribuída ao cartão correto
                   </span>
                 ) : (
                   <span>
-                    Cartão "{detectedCards[0].name}" (****{detectedCards[0].last_four_digits}) detectado automaticamente
+                    Cartão "{detectedParentCards[0].name}"{detectedParentCards[0].last_four_digits ? ` (****${detectedParentCards[0].last_four_digits})` : ""} detectado automaticamente
                   </span>
                 )}
               </div>
