@@ -3,15 +3,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Download } from "lucide-react";
 import type { CostItem, CostGroup } from "@/hooks/usePricingV2";
+import { ImportCategoriesModal } from "./ImportCategoriesModal";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const GROUP_LABELS: Record<CostGroup, string> = {
+  fixos_clinica: "Fixos Clínica",
+  variaveis_clinica: "Variáveis Clínica",
+  pessoais: "Pessoais (Casa)",
+};
+
 const CATEGORIES: Record<CostGroup, string[]> = {
-  fixos_clinica: ["Prediais", "Salários", "Administrativos", "Outros"],
-  variaveis_clinica: ["Dentais", "Salário (parceiros)", "Laboratório", "Honorários", "Implantes", "Administrativo", "Diversos"],
-  pessoais: ["Educação", "Moradia", "Salários", "Lazer", "Planejamento", "Vestuário", "Supérfluos", "Alimentação", "Transporte", "Saúde", "Outros"],
+  fixos_clinica: ["Prediais", "Salários", "Administrativos", "Outros", "Importado"],
+  variaveis_clinica: ["Dentais", "Salário (parceiros)", "Laboratório", "Honorários", "Implantes", "Administrativo", "Diversos", "Importado"],
+  pessoais: ["Educação", "Moradia", "Salários", "Lazer", "Planejamento", "Vestuário", "Supérfluos", "Alimentação", "Transporte", "Saúde", "Outros", "Importado"],
 };
 
 interface CostItemsTabProps {
@@ -28,6 +35,7 @@ export function CostItemsTab({ group, items, onAdd, onUpdate, onDelete }: CostIt
   const [newDesc, setNewDesc] = useState("");
   const [newVal, setNewVal] = useState("");
   const [newFreq, setNewFreq] = useState("M");
+  const [importOpen, setImportOpen] = useState(false);
 
   const groupItems = items.filter((i) => i.cost_group === group);
   const categories = CATEGORIES[group];
@@ -54,6 +62,18 @@ export function CostItemsTab({ group, items, onAdd, onUpdate, onDelete }: CostIt
     setNewDesc("");
     setNewVal("");
     setAdding(false);
+  };
+
+  const handleImportCategories = async (importedItems: { description: string; value: number }[]) => {
+    for (const item of importedItems) {
+      await onAdd({
+        cost_group: group,
+        category: "Importado",
+        description: item.description,
+        value: item.value,
+        frequency: "M",
+      });
+    }
   };
 
   return (
@@ -182,7 +202,19 @@ export function CostItemsTab({ group, items, onAdd, onUpdate, onDelete }: CostIt
         <Button onClick={handleAdd} disabled={adding || !newDesc.trim()} size="sm" className="gap-1 h-8">
           <Plus className="h-3.5 w-3.5" /> Adicionar
         </Button>
+        <Button variant="outline" size="sm" className="gap-1 h-8" onClick={() => setImportOpen(true)}>
+          <Download className="h-3.5 w-3.5" /> Importar do Sistema
+        </Button>
       </div>
+
+      <ImportCategoriesModal
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        group={group}
+        groupLabel={GROUP_LABELS[group]}
+        existingDescriptions={groupItems.map(i => i.description)}
+        onImport={handleImportCategories}
+      />
     </div>
   );
 }
