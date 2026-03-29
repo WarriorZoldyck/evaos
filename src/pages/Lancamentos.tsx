@@ -400,7 +400,7 @@ export default function Lancamentos() {
         onImport={createMultipleTransactions}
         bankAccounts={bankAccounts}
         wallets={wallets}
-        creditCards={creditCards}
+        creditCards={allAccounts.creditCards}
         categories={categories}
       />
     </div>
