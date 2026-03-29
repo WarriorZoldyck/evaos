@@ -1,0 +1,1 @@
+UPDATE transactions SET payment_date = '2026-01-15' WHERE user_id = '0b1eb160-7199-4965-928e-e5f929b31c55' AND external_id LIKE 'import_%' AND created_at > '2026-03-29T18:00:00Z';
