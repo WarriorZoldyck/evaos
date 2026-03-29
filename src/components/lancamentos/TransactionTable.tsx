@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,7 @@ interface TransactionTableProps {
   onEdit: (transaction: Transaction) => void;
   onDuplicate: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
+  onDeleteMultiple?: (ids: string[]) => void;
   onLiquidate: (transaction: Transaction) => void;
   onViewDetails: (transaction: Transaction) => void;
 }
