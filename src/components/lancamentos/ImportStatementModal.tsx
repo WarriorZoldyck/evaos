@@ -36,6 +36,7 @@ interface ParsedTransaction {
   base_description?: string;
   detected_card_digits?: string;
   matched_card_id?: string;
+  statement_due_date?: string;
 }
 
 interface ImportStatementModalProps {
@@ -307,11 +308,15 @@ export function ImportStatementModal({
         ? (detectedCard?.company_id ?? creditCards.find((c) => c.id === targetCard)?.company_id ?? selectedCompanyId ?? null)
         : (selectedCompanyId || null);
 
+      const billingDate = importType === "cartao"
+        ? (r.statement_due_date || r.date)
+        : r.date;
+
       return {
         description: r.description,
         amount: r.amount,
         type: r.type,
-        payment_date: r.date,
+        payment_date: billingDate,
         competence_date: r.date,
         status: "Pago" as const,
         category: defaultCategory || "Sem Categoria",
@@ -320,7 +325,7 @@ export function ImportStatementModal({
         bank_account_id: accType === "bank" ? accId : null,
         wallet_id: accType === "wallet" ? accId : null,
         credit_card_id: cardId,
-        external_id: `import_${cardId || 'nocrd'}_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}`,
+        external_id: `import_${cardId || 'nocrd'}_${billingDate}_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}_${crypto.randomUUID()}`,
         series_id: r.series_id || null,
         installment_number: r.installment_number || null,
         installments_total: r.installments_total || null,

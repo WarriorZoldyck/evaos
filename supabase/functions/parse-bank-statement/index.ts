@@ -13,6 +13,7 @@ interface ParsedTransaction {
   amount: number;
   type: "receita" | "despesa";
   detected_card_digits?: string;
+  statement_due_date?: string;
 }
 
 function extractOFXAccountDigits(content: string): string | undefined {
@@ -145,10 +146,12 @@ Return ONLY a valid JSON array of transaction objects. Each object must have:
 - "amount": number (always positive)
 - "type": "receita" for credits/deposits/income/payments, "despesa" for debits/purchases/expenses
 - "card_digits": last 4 digits of the card this transaction belongs to (string), or null if not identifiable
+- "statement_due_date": statement/fatura due date in "YYYY-MM-DD" format, repeated on every transaction object, or null if not identifiable
 
 CRITICAL RULES:
 - Credit card statements often have MULTIPLE cards in one PDF. Each card section has a header like "NOME DO TITULAR - 4258 XXXX XXXX 7014". The last 4 digits identify which card each transaction belongs to.
 - For each section/card, set "card_digits" to those last 4 digits for ALL transactions under that section.
+- All transactions from the same statement should carry the same "statement_due_date" when the PDF shows the due date.
 - Convert dates from dd/mm to YYYY-MM-DD using the statement's billing period year.
 - Amount must always be positive.
 - Do NOT include opening/closing balances, payment summaries, or anuidade R$0.00 entries.
@@ -167,7 +170,7 @@ CRITICAL RULES:
             },
             {
               type: "text",
-              text: "Extract all transactions from this statement. Each transaction must include card_digits identifying which card it belongs to. Return only the JSON array."
+              text: "Extract all transactions from this statement. Each transaction must include card_digits and statement_due_date. Return only the JSON array."
             }
           ],
         },
@@ -246,12 +249,18 @@ CRITICAL RULES:
           detectedDigits = digits.slice(-4);
         }
       }
+
+      const statementDueDate = t.statement_due_date
+        ? String(t.statement_due_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
+        : undefined;
+
       return {
         date: String(t.date || ""),
         description: String(t.description || "Sem descrição"),
         amount: Math.abs(Number(t.amount) || 0),
         type: t.type === "receita" ? "receita" as const : "despesa" as const,
         ...(detectedDigits ? { detected_card_digits: detectedDigits } : {}),
+        ...(statementDueDate ? { statement_due_date: statementDueDate } : {}),
       };
     }).filter((t: ParsedTransaction) => t.amount > 0 && t.date);
   } catch (e) {
