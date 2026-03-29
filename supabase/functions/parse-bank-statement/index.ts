@@ -185,7 +185,8 @@ CRITICAL RULES:
 
   const result = await response.json();
   const content = result.choices?.[0]?.message?.content || "";
-
+  const finishReason = result.choices?.[0]?.finish_reason || "unknown";
+  console.log(`AI response: finish_reason=${finishReason}, content_length=${content.length}`);
   // Extract JSON from the response (handle markdown code blocks)
   let jsonStr = content.trim();
   const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
