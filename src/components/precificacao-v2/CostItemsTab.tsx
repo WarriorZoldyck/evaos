@@ -202,7 +202,19 @@ export function CostItemsTab({ group, items, onAdd, onUpdate, onDelete }: CostIt
         <Button onClick={handleAdd} disabled={adding || !newDesc.trim()} size="sm" className="gap-1 h-8">
           <Plus className="h-3.5 w-3.5" /> Adicionar
         </Button>
+        <Button variant="outline" size="sm" className="gap-1 h-8" onClick={() => setImportOpen(true)}>
+          <Download className="h-3.5 w-3.5" /> Importar do Sistema
+        </Button>
       </div>
+
+      <ImportCategoriesModal
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        group={group}
+        groupLabel={GROUP_LABELS[group]}
+        existingDescriptions={groupItems.map(i => i.description)}
+        onImport={handleImportCategories}
+      />
     </div>
   );
 }
