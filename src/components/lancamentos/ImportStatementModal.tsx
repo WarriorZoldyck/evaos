@@ -44,12 +44,12 @@ interface ImportStatementModalProps {
   onImport: (data: TransactionInsert[]) => Promise<boolean>;
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
-  creditCards: { id: string; name: string; last_four_digits: string | null }[];
+  creditCards: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null }[];
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
 }
 
 /** Try to find 4-digit card numbers in a description */
-function detectDigitsInDescription(desc: string, cards: { id: string; last_four_digits: string | null }[]): string | undefined {
+function detectDigitsInDescription(desc: string, cards: { id: string; last_four_digits: string | null; parent_card_id?: string | null }[]): string | undefined {
   for (const card of cards) {
     if (!card.last_four_digits) continue;
     if (desc.includes(card.last_four_digits)) return card.id;
@@ -405,11 +405,30 @@ export function ImportStatementModal({
                       <SelectValue placeholder="Selecione o cartão" />
                     </SelectTrigger>
                     <SelectContent>
-                      {creditCards.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
-                        </SelectItem>
-                      ))}
+                      {/* Parent cards first, then children grouped under them */}
+                      {creditCards
+                        .filter(c => !c.parent_card_id)
+                        .map((parent) => {
+                          const children = creditCards.filter(c => c.parent_card_id === parent.id);
+                          return [
+                            <SelectItem key={parent.id} value={parent.id}>
+                              💳 {parent.name}{parent.last_four_digits ? ` (****${parent.last_four_digits})` : ""}
+                            </SelectItem>,
+                            ...children.map(child => (
+                              <SelectItem key={child.id} value={child.id} className="pl-8">
+                                ↳ {child.name}{child.last_four_digits ? ` (****${child.last_four_digits})` : ""}
+                              </SelectItem>
+                            ))
+                          ];
+                        })}
+                      {/* Orphan cards (parent_card_id set but parent not in list) */}
+                      {creditCards
+                        .filter(c => c.parent_card_id && !creditCards.some(p => p.id === c.parent_card_id))
+                        .map(c => (
+                          <SelectItem key={c.id} value={c.id}>
+                            💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
