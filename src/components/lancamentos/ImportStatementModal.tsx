@@ -102,7 +102,7 @@ export function ImportStatementModal({
     });
     return summary;
   }, [rows]);
-  const isSingleAutoCard = detectedParentCards.length === 1;
+  const isSingleAutoCard = detectedCards.length === 1;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -495,19 +495,32 @@ export function ImportStatementModal({
             </div>
 
             {/* Auto-detection feedback */}
-            {detectedParentCards.length > 0 && (
-              <div className="text-xs font-medium flex items-center gap-1 flex-wrap text-primary">
-                <CreditCard className="h-3.5 w-3.5" />
-                {isMultiCard ? (
-                  <span>
-                    Múltiplos cartões detectados: {detectedParentCards.map((c) =>
-                      `${c.name}${c.last_four_digits ? ` (****${c.last_four_digits})` : ""}`
-                    ).join(", ")} — cada transação será atribuída ao cartão correto
-                  </span>
-                ) : (
-                  <span>
-                    Cartão "{detectedParentCards[0].name}"{detectedParentCards[0].last_four_digits ? ` (****${detectedParentCards[0].last_four_digits})` : ""} detectado automaticamente
-                  </span>
+            {detectedCards.length > 0 && (
+              <div className="text-xs font-medium flex flex-col gap-1 text-primary">
+                <div className="flex items-center gap-1">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  {isMultiCard ? (
+                    <span>
+                      {detectedCards.length} cartões detectados — cada transação será atribuída ao cartão correto
+                    </span>
+                  ) : (
+                    <span>
+                      Cartão "{detectedCards[0].name}"{detectedCards[0].last_four_digits ? ` (****${detectedCards[0].last_four_digits})` : ""} detectado automaticamente
+                    </span>
+                  )}
+                </div>
+                {isMultiCard && (
+                  <div className="flex flex-wrap gap-2 ml-5">
+                    {detectedCards.map((c) => {
+                      const s = cardSummary[c.id];
+                      return (
+                        <Badge key={c.id} variant="outline" className="text-[10px] px-1.5 gap-1">
+                          {c.name}{c.last_four_digits ? ` ****${c.last_four_digits}` : ""}
+                          {s ? ` (${s.count} • ${formatCurrency(s.total)})` : ""}
+                        </Badge>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             )}
