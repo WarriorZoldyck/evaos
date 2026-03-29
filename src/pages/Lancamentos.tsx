@@ -344,6 +344,35 @@ export default function Lancamentos() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Bulk delete confirmation */}
+      <AlertDialog
+        open={!!bulkDeleteIds}
+        onOpenChange={(o) => !o && setBulkDeleteIds(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {bulkDeleteIds?.length} lançamento{(bulkDeleteIds?.length ?? 0) > 1 ? "s" : ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {bulkDeleteIds?.length} lançamento{(bulkDeleteIds?.length ?? 0) > 1 ? "s" : ""} selecionado{(bulkDeleteIds?.length ?? 0) > 1 ? "s" : ""}? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (bulkDeleteIds) {
+                  await deleteMultipleTransactions(bulkDeleteIds);
+                  setBulkDeleteIds(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir {bulkDeleteIds?.length}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Series dialog */}
       <SeriesEditDialog
         open={seriesDialogOpen}
