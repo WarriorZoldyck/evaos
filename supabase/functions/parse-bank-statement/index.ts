@@ -138,11 +138,17 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
         {
           role: "system",
           content: `You are a bank statement parser. Extract all transactions from the provided PDF bank statement.
-Return ONLY a valid JSON array of objects with these exact fields:
+Return ONLY a valid JSON object with these fields:
+{
+  "card_digits": "last 4 digits of the card number if visible in the document, or null",
+  "transactions": [array of transaction objects]
+}
+
+Each transaction object must have:
 - "date": string in "YYYY-MM-DD" format
 - "description": string with the transaction description
 - "amount": number (always positive)
-- "type": "receita" for credits/deposits/income, "despesa" for debits/withdrawals/expenses
+- "type": "receita" for credits/deposits/income/payments, "despesa" for debits/withdrawals/expenses/purchases
 
 Rules:
 - Parse ALL transactions found in the document
@@ -150,7 +156,8 @@ Rules:
 - Amount must always be a positive number
 - Determine type based on credit/debit indicators in the statement
 - Do NOT include opening/closing balances as transactions
-- Return ONLY the JSON array, no markdown, no explanation`
+- Look for the credit card number on the statement header (usually last 4 digits like "Final 1234" or "****1234" or partial number)
+- Return ONLY the JSON object, no markdown, no explanation`
         },
         {
           role: "user",
@@ -192,13 +199,31 @@ Rules:
 
   try {
     const parsed = JSON.parse(jsonStr);
-    if (!Array.isArray(parsed)) throw new Error("Expected array");
     
-    return parsed.map((t: any) => ({
+    // Support both formats: { card_digits, transactions } or plain array
+    let cardDigits: string | undefined;
+    let txArray: any[];
+    
+    if (Array.isArray(parsed)) {
+      txArray = parsed;
+    } else if (parsed.transactions && Array.isArray(parsed.transactions)) {
+      txArray = parsed.transactions;
+      if (parsed.card_digits) {
+        const digits = String(parsed.card_digits).replace(/\D/g, "");
+        if (digits.length >= 4) {
+          cardDigits = digits.slice(-4);
+        }
+      }
+    } else {
+      throw new Error("Expected array or object with transactions");
+    }
+    
+    return txArray.map((t: any) => ({
       date: String(t.date || ""),
       description: String(t.description || "Sem descrição"),
       amount: Math.abs(Number(t.amount) || 0),
       type: t.type === "receita" ? "receita" as const : "despesa" as const,
+      ...(cardDigits ? { detected_card_digits: cardDigits } : {}),
     })).filter((t: ParsedTransaction) => t.amount > 0 && t.date);
   } catch (e) {
     console.error("Failed to parse AI response:", content);
