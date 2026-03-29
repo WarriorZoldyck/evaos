@@ -128,11 +128,15 @@ interface TransactionRowProps {
   onLiquidate: (t: Transaction) => void;
   onViewDetails: (t: Transaction) => void;
   indented?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  selectionMode?: boolean;
 }
 
 function TransactionRow({
   t, categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients,
   onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, indented,
+  isSelected, onToggleSelect, selectionMode,
 }: TransactionRowProps) {
   const { getCategoryHierarchy } = useCategoryHelpers(categories, allCategories);
   const installment = getInstallmentLabel(t);
