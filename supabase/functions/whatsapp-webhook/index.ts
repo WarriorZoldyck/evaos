@@ -2842,11 +2842,16 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }).join("\n");
         const barcodeCount = installmentDetails.filter((d: any) => d.barcode).length;
         const barcodeNote = barcodeCount > 0 ? `\n\n📄 ${barcodeCount} boleto(s) com código de barras registrado(s)` : "";
+        const instCardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
+        const instBankName = bankAccountId ? contextAccounts.find((a: any) => a.id === bankAccountId)?.name : null;
+        const instWalletName = walletId ? contextWallets.find((w: any) => w.id === walletId)?.name : null;
+        const instAccountName = instCardName || instBankName || instWalletName;
+        const instAccountDisplay = instAccountName ? `\n🏦 ${instAccountName}` : "";
 
         return respond({
           success: true,
           intent: "lancamento",
-          message: `📋 ${installmentCount} parcelas enviadas para aprovação!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}\n\n📋 Parcelas:\n${parcelsDisplay}${barcodeNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+          message: `📋 ${installmentCount} parcelas enviadas para aprovação!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}${instAccountDisplay}\n\n📋 Parcelas:\n${parcelsDisplay}${barcodeNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: {
             description: aiParsed.description,
             amount: totalAmount,
