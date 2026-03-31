@@ -2192,10 +2192,11 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               walletId = contextWallets[0].id;
             }
           } else if (totalOptions > 1) {
-            const optionsList = [
-              ...contextAccounts.map((a) => `• ${a.name}`),
-              ...contextWallets.map((w) => `• ${w.name} (carteira)`),
-            ].join("\n");
+            const allOptions = [
+              ...contextAccounts.map((a) => a.name),
+              ...contextWallets.map((w) => `${w.name} (carteira)`),
+            ];
+            const optionsList = allOptions.map((name, i) => `${i + 1} - ${name}`).join("\n");
             
             await supabase.from("whatsapp_pending_actions").insert({
               user_id: userId,
