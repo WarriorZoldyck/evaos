@@ -624,33 +624,77 @@ export function TransactionTable({
           return (
             <TransactionRow
               key={item.data.id}
-              t={item.data}
+              t={item.data as Transaction}
               {...rowProps}
-              isSelected={selectedIds.has(item.data.id)}
+              isSelected={selectedIds.has((item.data as Transaction).id)}
             />
           );
         }
 
-        const group = item.data;
-        const isOpen = expandedCards.has(group.cardId);
-        const allGroupSelected = group.transactions.every((t) => selectedIds.has(t.id));
-        const someGroupSelected = group.transactions.some((t) => selectedIds.has(t.id));
+        if (item.type === "cardGroup") {
+          const group = item.data as CardGroupItem;
+          const isOpen = expandedCards.has(group.cardId);
+          const allGroupSelected = group.transactions.every((t) => selectedIds.has(t.id));
+
+          return (
+            <div key={`card-group-${group.cardId}`}>
+              <div className="flex items-center">
+                {selectionMode && (
+                  <div className="pl-4 shrink-0">
+                    <Checkbox
+                      checked={allGroupSelected}
+                      onCheckedChange={() => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (allGroupSelected) group.transactions.forEach((t) => next.delete(t.id));
+                          else group.transactions.forEach((t) => next.add(t.id));
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <CardGroupHeader
+                    group={{ cardName: group.cardName, totalAmount: group.totalAmount, pendingCount: group.pendingCount }}
+                    isOpen={isOpen}
+                    txCount={group.transactions.length}
+                    onToggle={() => toggleCard(group.cardId)}
+                    onLiquidate={() => {
+                      const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
+                      if (firstPending) onLiquidate(firstPending);
+                    }}
+                  />
+                </div>
+              </div>
+              {isOpen && (
+                <div className="border-l-2 border-primary/20 ml-6">
+                  {group.transactions.map((t) => (
+                    <TransactionRow key={t.id} t={t} {...rowProps} indented isSelected={selectedIds.has(t.id)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // cardHierarchy — 2-level expansion
+        const hierarchy = item.data as CardHierarchyItem;
+        const isParentOpen = expandedCards.has(`parent-${hierarchy.parentCardId}`);
+        const allHierarchySelected = hierarchy.allTransactions.every((t) => selectedIds.has(t.id));
 
         return (
-          <div key={`card-group-${group.cardId}`}>
+          <div key={`card-hierarchy-${hierarchy.parentCardId}`}>
             <div className="flex items-center">
               {selectionMode && (
                 <div className="pl-4 shrink-0">
                   <Checkbox
-                    checked={allGroupSelected}
+                    checked={allHierarchySelected}
                     onCheckedChange={() => {
                       setSelectedIds((prev) => {
                         const next = new Set(prev);
-                        if (allGroupSelected) {
-                          group.transactions.forEach((t) => next.delete(t.id));
-                        } else {
-                          group.transactions.forEach((t) => next.add(t.id));
-                        }
+                        if (allHierarchySelected) hierarchy.allTransactions.forEach((t) => next.delete(t.id));
+                        else hierarchy.allTransactions.forEach((t) => next.add(t.id));
                         return next;
                       });
                     }}
@@ -659,27 +703,65 @@ export function TransactionTable({
               )}
               <div className="flex-1">
                 <CardGroupHeader
-                  group={group}
-                  isOpen={isOpen}
-                  onToggle={() => toggleCard(group.cardId)}
+                  group={{ cardName: hierarchy.parentCardName, totalAmount: hierarchy.totalAmount, pendingCount: hierarchy.pendingCount }}
+                  isOpen={isParentOpen}
+                  txCount={hierarchy.allTransactions.length}
+                  onToggle={() => toggleCard(`parent-${hierarchy.parentCardId}`)}
                   onLiquidate={() => {
-                    const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
+                    const firstPending = hierarchy.allTransactions.find((tx) => tx.status === "Pendente");
                     if (firstPending) onLiquidate(firstPending);
                   }}
                 />
               </div>
             </div>
-            {isOpen && (
+            {isParentOpen && (
               <div className="border-l-2 border-primary/20 ml-6">
-                {group.transactions.map((t) => (
-                  <TransactionRow
-                    key={t.id}
-                    t={t}
-                    {...rowProps}
-                    indented
-                    isSelected={selectedIds.has(t.id)}
-                  />
-                ))}
+                {hierarchy.childGroups.map((childGroup) => {
+                  const isChildOpen = expandedCards.has(`child-${childGroup.cardId}`);
+                  const allChildSelected = childGroup.transactions.every((t) => selectedIds.has(t.id));
+
+                  return (
+                    <div key={`child-group-${childGroup.cardId}`}>
+                      <div className="flex items-center">
+                        {selectionMode && (
+                          <div className="pl-4 shrink-0">
+                            <Checkbox
+                              checked={allChildSelected}
+                              onCheckedChange={() => {
+                                setSelectedIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (allChildSelected) childGroup.transactions.forEach((t) => next.delete(t.id));
+                                  else childGroup.transactions.forEach((t) => next.add(t.id));
+                                  return next;
+                                });
+                              }}
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <CardGroupHeader
+                            group={{ cardName: childGroup.cardName, totalAmount: childGroup.totalAmount, pendingCount: childGroup.pendingCount }}
+                            isOpen={isChildOpen}
+                            txCount={childGroup.transactions.length}
+                            onToggle={() => toggleCard(`child-${childGroup.cardId}`)}
+                            indented
+                            onLiquidate={() => {
+                              const firstPending = childGroup.transactions.find((tx) => tx.status === "Pendente");
+                              if (firstPending) onLiquidate(firstPending);
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {isChildOpen && (
+                        <div className="border-l-2 border-primary/10 ml-12">
+                          {childGroup.transactions.map((t) => (
+                            <TransactionRow key={t.id} t={t} {...rowProps} indented isSelected={selectedIds.has(t.id)} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
