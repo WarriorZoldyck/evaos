@@ -2904,7 +2904,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const contactDisplay = contactName ? `\n👤 ${contactName}` : "";
       const statusDisplay = status === "Pendente" ? " (Pendente)" : "";
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
-      const accountDisplay = cardName ? `\n🏦 ${cardName}` : "";
+      const bankName = bankAccountId ? contextAccounts.find((a: any) => a.id === bankAccountId)?.name : null;
+      const walletName = walletId ? contextWallets.find((w: any) => w.id === walletId)?.name : null;
+      const accountDisplayName = cardName || bankName || walletName;
+      const accountDisplay = accountDisplayName ? `\n🏦 ${accountDisplayName}` : "";
 
       return respond({
         success: true,
