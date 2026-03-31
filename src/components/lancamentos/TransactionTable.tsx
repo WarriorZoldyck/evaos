@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Transaction, Category } from "@/hooks/useTransactions";
 
+interface CreditCardWithHierarchy {
+  id: string;
+  name: string;
+  parent_card_id?: string | null;
+  last_four_digits?: string | null;
+}
+
 interface TransactionTableProps {
   transactions: Transaction[];
   loading: boolean;
@@ -24,7 +31,7 @@ interface TransactionTableProps {
   allCategories?: Category[];
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
-  creditCards: { id: string; name: string }[];
+  creditCards: CreditCardWithHierarchy[];
   suppliers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
   page: number;
@@ -85,7 +92,7 @@ function getAccountName(
   t: Transaction,
   bankAccounts: { id: string; name: string }[],
   wallets: { id: string; name: string }[],
-  creditCards: { id: string; name: string }[],
+  creditCards: CreditCardWithHierarchy[],
 ) {
   if (t.bank_account_id) return bankAccounts.find((a) => a.id === t.bank_account_id)?.name;
   if (t.wallet_id) return wallets.find((w) => w.id === t.wallet_id)?.name;
@@ -119,7 +126,7 @@ interface TransactionRowProps {
   allCategories?: Category[];
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
-  creditCards: { id: string; name: string }[];
+  creditCards: CreditCardWithHierarchy[];
   suppliers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
   onEdit: (t: Transaction) => void;
@@ -277,7 +284,7 @@ function TransactionRow({
   );
 }
 
-// ── Card Group Header ───────────────────────────────────
+// ── Card Group Types ────────────────────────────────────
 
 interface CardGroupItem {
   cardId: string;
@@ -288,20 +295,40 @@ interface CardGroupItem {
   firstDate: string;
 }
 
+interface CardHierarchyItem {
+  parentCardId: string;
+  parentCardName: string;
+  childGroups: CardGroupItem[];
+  allTransactions: Transaction[];
+  totalAmount: number;
+  pendingCount: number;
+}
+
+type RenderItem =
+  | { type: "transaction"; data: Transaction }
+  | { type: "cardGroup"; data: CardGroupItem }
+  | { type: "cardHierarchy"; data: CardHierarchyItem };
+
+// ── Card Group Header ───────────────────────────────────
+
 function CardGroupHeader({
   group,
   isOpen,
   onToggle,
   onLiquidate,
+  indented,
+  txCount,
 }: {
-  group: CardGroupItem;
+  group: { cardName: string; totalAmount: number; pendingCount: number };
   isOpen: boolean;
   onToggle: () => void;
   onLiquidate: () => void;
+  indented?: boolean;
+  txCount: number;
 }) {
   return (
     <div
-      className="flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer bg-muted/20"
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer ${indented ? "bg-muted/10 pl-10" : "bg-muted/20"}`}
       onClick={onToggle}
     >
       <div className="shrink-0 w-12 flex items-center justify-center">
@@ -319,13 +346,13 @@ function CardGroupHeader({
             {group.cardName}
           </span>
           <Badge variant="secondary" className="text-[10px] shrink-0">
-            {group.transactions.length} lançamento{group.transactions.length !== 1 ? "s" : ""}
+            {txCount} lançamento{txCount !== 1 ? "s" : ""}
           </Badge>
         </div>
       </div>
 
       <div className="text-right shrink-0">
-        <span className="text-sm font-semibold text-red-600 dark:text-red-400">
+        <span className="text-sm font-semibold text-destructive">
           - {formatCurrency(group.totalAmount)}
         </span>
       </div>
@@ -403,21 +430,39 @@ export function TransactionTable({
     });
   };
 
-  // Build ordered render list: group card transactions, keep others inline
+  // Identify parent cards (those that have children)
+  const parentCardIds = useMemo(() => {
+    const parents = new Set<string>();
+    creditCards.forEach((c) => {
+      if (c.parent_card_id) parents.add(c.parent_card_id);
+    });
+    return parents;
+  }, [creditCards]);
+
+  // Build ordered render list with hierarchy support
   const renderItems = useMemo(() => {
-    const items: Array<{ type: "transaction"; data: Transaction } | { type: "cardGroup"; data: CardGroupItem }> = [];
-    const cardGroups = new Map<string, Transaction[]>();
+    const items: RenderItem[] = [];
+    // Group all card transactions by their effective parent
+    const cardTxnMap = new Map<string, Transaction[]>(); // cardId -> txns
     const nonCardTransactions: Array<{ index: number; t: Transaction }> = [];
+    const cardFirstSeen = new Map<string, number>(); // effective group key -> first index
 
     transactions.forEach((t, i) => {
       if (t.credit_card_id) {
-        const existing = cardGroups.get(t.credit_card_id);
+        const existing = cardTxnMap.get(t.credit_card_id);
         if (existing) {
           existing.push(t);
         } else {
-          cardGroups.set(t.credit_card_id, [t]);
-          // Mark position of first occurrence
-          nonCardTransactions.push({ index: i, t: { ...t, __cardGroupMarker: true } as any });
+          cardTxnMap.set(t.credit_card_id, [t]);
+        }
+
+        // Determine effective group key (parent or self)
+        const card = creditCards.find((c) => c.id === t.credit_card_id);
+        const groupKey = card?.parent_card_id || t.credit_card_id;
+
+        if (!cardFirstSeen.has(groupKey)) {
+          cardFirstSeen.set(groupKey, i);
+          nonCardTransactions.push({ index: i, t: { ...t, __cardGroupKey: groupKey } as any });
         }
       } else {
         nonCardTransactions.push({ index: i, t });
@@ -425,36 +470,90 @@ export function TransactionTable({
     });
 
     // Re-assemble in order
-    for (const { t } of nonCardTransactions) {
-      if ((t as any).__cardGroupMarker && t.credit_card_id) {
-        const cardTxns = cardGroups.get(t.credit_card_id)!;
-        const cardName = creditCards.find((c) => c.id === t.credit_card_id)?.name || "Cartão";
-        const totalAmount = cardTxns.reduce((s, tx) => s + tx.amount, 0);
-        const pendingCount = cardTxns.filter((tx) => tx.status === "Pendente").length;
+    const processedGroupKeys = new Set<string>();
 
-        if (cardTxns.length === 1) {
-          // Single card transaction — render as normal row
-          items.push({ type: "transaction", data: cardTxns[0] });
-        } else {
+    for (const { t } of nonCardTransactions) {
+      const groupKey = (t as any).__cardGroupKey as string | undefined;
+
+      if (groupKey && !processedGroupKeys.has(groupKey)) {
+        processedGroupKeys.add(groupKey);
+
+        // Check if this is a parent card with children
+        const isParentCard = parentCardIds.has(groupKey);
+        const childCards = creditCards.filter((c) => c.parent_card_id === groupKey);
+
+        if (isParentCard && childCards.length > 0) {
+          // Build hierarchy: parent + children
+          const parentTxns = cardTxnMap.get(groupKey) || [];
+          const childGroups: CardGroupItem[] = [];
+
+          // Parent's own transactions as a sub-group
+          if (parentTxns.length > 0) {
+            const parentCard = creditCards.find((c) => c.id === groupKey);
+            childGroups.push({
+              cardId: groupKey,
+              cardName: parentCard?.name || "Principal",
+              transactions: parentTxns,
+              totalAmount: parentTxns.reduce((s, tx) => s + tx.amount, 0),
+              pendingCount: parentTxns.filter((tx) => tx.status === "Pendente").length,
+              firstDate: parentTxns[0]?.payment_date || "",
+            });
+          }
+
+          // Children sub-groups
+          for (const child of childCards) {
+            const childTxns = cardTxnMap.get(child.id) || [];
+            if (childTxns.length > 0) {
+              childGroups.push({
+                cardId: child.id,
+                cardName: child.name,
+                transactions: childTxns,
+                totalAmount: childTxns.reduce((s, tx) => s + tx.amount, 0),
+                pendingCount: childTxns.filter((tx) => tx.status === "Pendente").length,
+                firstDate: childTxns[0]?.payment_date || "",
+              });
+            }
+          }
+
+          const allTxns = childGroups.flatMap((g) => g.transactions);
+          const parentCard = creditCards.find((c) => c.id === groupKey);
+
+          if (allTxns.length === 0) continue;
+
           items.push({
-            type: "cardGroup",
+            type: "cardHierarchy",
             data: {
-              cardId: t.credit_card_id!,
-              cardName,
-              transactions: cardTxns,
-              totalAmount,
-              pendingCount,
-              firstDate: cardTxns[0].payment_date,
+              parentCardId: groupKey,
+              parentCardName: parentCard?.name || "Cartão Principal",
+              childGroups,
+              allTransactions: allTxns,
+              totalAmount: allTxns.reduce((s, tx) => s + tx.amount, 0),
+              pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
             },
           });
+        } else {
+          // Standalone card or child card without siblings in this view
+          const cardTxns = cardTxnMap.get(groupKey) || [];
+          const cardName = creditCards.find((c) => c.id === groupKey)?.name || "Cartão";
+          const totalAmount = cardTxns.reduce((s, tx) => s + tx.amount, 0);
+          const pendingCount = cardTxns.filter((tx) => tx.status === "Pendente").length;
+
+          if (cardTxns.length === 1) {
+            items.push({ type: "transaction", data: cardTxns[0] });
+          } else {
+            items.push({
+              type: "cardGroup",
+              data: { cardId: groupKey, cardName, transactions: cardTxns, totalAmount, pendingCount, firstDate: cardTxns[0].payment_date },
+            });
+          }
         }
-      } else {
+      } else if (!groupKey) {
         items.push({ type: "transaction", data: t });
       }
     }
 
     return items;
-  }, [transactions, creditCards]);
+  }, [transactions, creditCards, parentCardIds]);
 
   if (loading) {
     return (
@@ -525,33 +624,77 @@ export function TransactionTable({
           return (
             <TransactionRow
               key={item.data.id}
-              t={item.data}
+              t={item.data as Transaction}
               {...rowProps}
-              isSelected={selectedIds.has(item.data.id)}
+              isSelected={selectedIds.has((item.data as Transaction).id)}
             />
           );
         }
 
-        const group = item.data;
-        const isOpen = expandedCards.has(group.cardId);
-        const allGroupSelected = group.transactions.every((t) => selectedIds.has(t.id));
-        const someGroupSelected = group.transactions.some((t) => selectedIds.has(t.id));
+        if (item.type === "cardGroup") {
+          const group = item.data as CardGroupItem;
+          const isOpen = expandedCards.has(group.cardId);
+          const allGroupSelected = group.transactions.every((t) => selectedIds.has(t.id));
+
+          return (
+            <div key={`card-group-${group.cardId}`}>
+              <div className="flex items-center">
+                {selectionMode && (
+                  <div className="pl-4 shrink-0">
+                    <Checkbox
+                      checked={allGroupSelected}
+                      onCheckedChange={() => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (allGroupSelected) group.transactions.forEach((t) => next.delete(t.id));
+                          else group.transactions.forEach((t) => next.add(t.id));
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
+                )}
+                <div className="flex-1">
+                  <CardGroupHeader
+                    group={{ cardName: group.cardName, totalAmount: group.totalAmount, pendingCount: group.pendingCount }}
+                    isOpen={isOpen}
+                    txCount={group.transactions.length}
+                    onToggle={() => toggleCard(group.cardId)}
+                    onLiquidate={() => {
+                      const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
+                      if (firstPending) onLiquidate(firstPending);
+                    }}
+                  />
+                </div>
+              </div>
+              {isOpen && (
+                <div className="border-l-2 border-primary/20 ml-6">
+                  {group.transactions.map((t) => (
+                    <TransactionRow key={t.id} t={t} {...rowProps} indented isSelected={selectedIds.has(t.id)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // cardHierarchy — 2-level expansion
+        const hierarchy = item.data as CardHierarchyItem;
+        const isParentOpen = expandedCards.has(`parent-${hierarchy.parentCardId}`);
+        const allHierarchySelected = hierarchy.allTransactions.every((t) => selectedIds.has(t.id));
 
         return (
-          <div key={`card-group-${group.cardId}`}>
+          <div key={`card-hierarchy-${hierarchy.parentCardId}`}>
             <div className="flex items-center">
               {selectionMode && (
                 <div className="pl-4 shrink-0">
                   <Checkbox
-                    checked={allGroupSelected}
+                    checked={allHierarchySelected}
                     onCheckedChange={() => {
                       setSelectedIds((prev) => {
                         const next = new Set(prev);
-                        if (allGroupSelected) {
-                          group.transactions.forEach((t) => next.delete(t.id));
-                        } else {
-                          group.transactions.forEach((t) => next.add(t.id));
-                        }
+                        if (allHierarchySelected) hierarchy.allTransactions.forEach((t) => next.delete(t.id));
+                        else hierarchy.allTransactions.forEach((t) => next.add(t.id));
                         return next;
                       });
                     }}
@@ -560,27 +703,65 @@ export function TransactionTable({
               )}
               <div className="flex-1">
                 <CardGroupHeader
-                  group={group}
-                  isOpen={isOpen}
-                  onToggle={() => toggleCard(group.cardId)}
+                  group={{ cardName: hierarchy.parentCardName, totalAmount: hierarchy.totalAmount, pendingCount: hierarchy.pendingCount }}
+                  isOpen={isParentOpen}
+                  txCount={hierarchy.allTransactions.length}
+                  onToggle={() => toggleCard(`parent-${hierarchy.parentCardId}`)}
                   onLiquidate={() => {
-                    const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
+                    const firstPending = hierarchy.allTransactions.find((tx) => tx.status === "Pendente");
                     if (firstPending) onLiquidate(firstPending);
                   }}
                 />
               </div>
             </div>
-            {isOpen && (
+            {isParentOpen && (
               <div className="border-l-2 border-primary/20 ml-6">
-                {group.transactions.map((t) => (
-                  <TransactionRow
-                    key={t.id}
-                    t={t}
-                    {...rowProps}
-                    indented
-                    isSelected={selectedIds.has(t.id)}
-                  />
-                ))}
+                {hierarchy.childGroups.map((childGroup) => {
+                  const isChildOpen = expandedCards.has(`child-${childGroup.cardId}`);
+                  const allChildSelected = childGroup.transactions.every((t) => selectedIds.has(t.id));
+
+                  return (
+                    <div key={`child-group-${childGroup.cardId}`}>
+                      <div className="flex items-center">
+                        {selectionMode && (
+                          <div className="pl-4 shrink-0">
+                            <Checkbox
+                              checked={allChildSelected}
+                              onCheckedChange={() => {
+                                setSelectedIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (allChildSelected) childGroup.transactions.forEach((t) => next.delete(t.id));
+                                  else childGroup.transactions.forEach((t) => next.add(t.id));
+                                  return next;
+                                });
+                              }}
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <CardGroupHeader
+                            group={{ cardName: childGroup.cardName, totalAmount: childGroup.totalAmount, pendingCount: childGroup.pendingCount }}
+                            isOpen={isChildOpen}
+                            txCount={childGroup.transactions.length}
+                            onToggle={() => toggleCard(`child-${childGroup.cardId}`)}
+                            indented
+                            onLiquidate={() => {
+                              const firstPending = childGroup.transactions.find((tx) => tx.status === "Pendente");
+                              if (firstPending) onLiquidate(firstPending);
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {isChildOpen && (
+                        <div className="border-l-2 border-primary/10 ml-12">
+                          {childGroup.transactions.map((t) => (
+                            <TransactionRow key={t.id} t={t} {...rowProps} indented isSelected={selectedIds.has(t.id)} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
