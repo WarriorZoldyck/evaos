@@ -17,6 +17,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { Transaction, Category } from "@/hooks/useTransactions";
 
+interface CreditCardWithHierarchy {
+  id: string;
+  name: string;
+  parent_card_id?: string | null;
+  last_four_digits?: string | null;
+}
+
 interface TransactionTableProps {
   transactions: Transaction[];
   loading: boolean;
@@ -24,7 +31,7 @@ interface TransactionTableProps {
   allCategories?: Category[];
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
-  creditCards: { id: string; name: string }[];
+  creditCards: CreditCardWithHierarchy[];
   suppliers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
   page: number;
