@@ -1203,7 +1203,7 @@ serve(async (req) => {
 
     const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes, historyTxRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
-      supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
+      supabase.from("bank_accounts").select("id, name, type, company_id, agency_number, account_number").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
       supabase.from("companies").select("id, name, cnpj").eq("user_id", userId),
       supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
