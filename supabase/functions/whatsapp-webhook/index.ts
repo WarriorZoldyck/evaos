@@ -2091,6 +2091,27 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             if (walMatch) {
               walletId = walMatch.id;
             } else {
+              // Try matching by name (AI may return the account name instead of UUID)
+              const aiAccRef = String(aiParsed.account_id || "").toLowerCase();
+              if (aiAccRef.length > 2) {
+                const nameAcc = contextAccounts.find((a) =>
+                  a.name.toLowerCase().includes(aiAccRef) || aiAccRef.includes(a.name.toLowerCase())
+                );
+                if (nameAcc) {
+                  bankAccountId = nameAcc.id;
+                  console.log("Account resolved by name from account_id field:", nameAcc.name);
+                } else {
+                  const nameWal = contextWallets.find((w) =>
+                    w.name.toLowerCase().includes(aiAccRef) || aiAccRef.includes(w.name.toLowerCase())
+                  );
+                  if (nameWal) {
+                    walletId = nameWal.id;
+                    console.log("Wallet resolved by name from account_id field:", nameWal.name);
+                  }
+                }
+              }
+
+              if (!bankAccountId && !walletId) {
               // Cross-context fallback: search ALL accounts/wallets
               const crossAcc = accounts.find((a) => a.id === aiParsed.account_id);
               const crossWal = !crossAcc ? wallets.find((w) => w.id === aiParsed.account_id) : null;
@@ -2123,6 +2144,39 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 } else {
                   walletId = crossWal!.id;
                 }
+              }
+              }
+            }
+          }
+        }
+        if (!bankAccountId && !walletId) {
+          // Also try resolving from document party extraction (bank name in receipt)
+          if (documentPartyExtraction && !bankAccountId && !walletId) {
+            const issuerName = normalizeText(documentPartyExtraction.issuer_name || "");
+            const recipientName = normalizeText(documentPartyExtraction.recipient_name || "");
+            // For expenses (sent money), the issuer is likely the user's bank
+            // For receipts (received money), the recipient's bank info may help
+            const bankKeywords = [issuerName, recipientName].filter(Boolean);
+            
+            for (const keyword of bankKeywords) {
+              if (keyword.length < 3) continue;
+              const accByName = contextAccounts.find((a) => {
+                const accNorm = normalizeText(a.name);
+                return accNorm.includes(keyword) || keyword.includes(accNorm);
+              });
+              if (accByName) {
+                bankAccountId = accByName.id;
+                console.log("Account resolved from document party:", accByName.name, "keyword:", keyword);
+                break;
+              }
+              const walByName = contextWallets.find((w) => {
+                const walNorm = normalizeText(w.name);
+                return walNorm.includes(keyword) || keyword.includes(walNorm);
+              });
+              if (walByName) {
+                walletId = walByName.id;
+                console.log("Wallet resolved from document party:", walByName.name, "keyword:", keyword);
+                break;
               }
             }
           }
