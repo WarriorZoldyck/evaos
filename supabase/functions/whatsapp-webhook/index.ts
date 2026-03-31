@@ -1454,6 +1454,13 @@ IMPORTANTE:
 - Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.
 - NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.
 
+REGRA CRÍTICA — VALOR DE IMAGENS/DOCUMENTOS:
+- Se uma IMAGEM ou DOCUMENTO foi enviado, você DEVE extrair o valor monetário correto do conteúdo visual.
+- NUNCA retorne amount=0 ou amount=0.00 quando há uma imagem/documento. Se não conseguir ler o valor, pergunte ao usuário qual é o valor.
+- Procure por "R$", "Total", "Valor", "Vlr", "Montante", "Subtotal" no documento/imagem.
+- Se o usuário informar o valor na legenda/caption da imagem, use esse valor.
+- Se realmente não conseguir identificar o valor, retorne intent="conversa" com friendly_message perguntando o valor, em vez de retornar amount=0.
+
 REGRA OBRIGATÓRIA — contact_name:
 - Quando houver documento/recibo/comprovante/NF, o campo "contact_name" DEVE SEMPRE conter o nome do ESTABELECIMENTO/EMISSOR identificado no documento (ex: "Empório Moscato", "Dentais Comércio", "Posto Shell").
 - NUNCA deixe contact_name como null quando o documento mostra claramente o nome do estabelecimento.
