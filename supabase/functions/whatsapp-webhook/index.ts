@@ -144,6 +144,59 @@ function normalizeText(value: string | null | undefined) {
     .trim();
 }
 
+function coerceCurrencyNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const cleaned = trimmed.replace(/\s+/g, "").replace(/[^\d,.-]/g, "");
+  if (!cleaned || !/\d/.test(cleaned)) return null;
+
+  const signal = cleaned.startsWith("-") ? -1 : 1;
+  const unsigned = cleaned.replace(/-/g, "");
+  const lastComma = unsigned.lastIndexOf(",");
+  const lastDot = unsigned.lastIndexOf(".");
+  const separatorIndex = Math.max(lastComma, lastDot);
+
+  let normalized = unsigned;
+
+  if (separatorIndex >= 0) {
+    const integerRaw = unsigned.slice(0, separatorIndex);
+    const fractionRaw = unsigned.slice(separatorIndex + 1);
+    const integerDigits = integerRaw.replace(/\D/g, "");
+    const fractionDigits = fractionRaw.replace(/\D/g, "");
+    const separatorCount = (unsigned.match(/[.,]/g) || []).length;
+
+    if (!fractionDigits) {
+      normalized = integerDigits;
+    } else if (fractionDigits.length === 3 && separatorCount === 1) {
+      normalized = `${integerDigits}${fractionDigits}`;
+    } else {
+      normalized = `${integerDigits || "0"}.${fractionDigits}`;
+    }
+  } else {
+    normalized = unsigned.replace(/\D/g, "");
+  }
+
+  if (!normalized || normalized === ".") return null;
+
+  const parsed = Number(normalized) * signal;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function coercePositiveInteger(value: unknown): number | null {
+  const parsed = coerceCurrencyNumber(value);
+  if (parsed === null) return null;
+
+  const rounded = Math.round(parsed);
+  return Number.isFinite(rounded) && rounded > 0 ? rounded : null;
+}
+
 function hasStrongCompanyNameMatch(companyName: string, extractedName: string) {
   const normalizedCompany = normalizeText(companyName);
   const normalizedExtracted = normalizeText(extractedName);
@@ -1456,6 +1509,7 @@ IMPORTANTE:
 
 REGRA CRÍTICA — VALOR DE IMAGENS/DOCUMENTOS:
 - Se uma IMAGEM ou DOCUMENTO foi enviado, você DEVE extrair o valor monetário correto do conteúdo visual.
+- O campo "amount" deve ser SEMPRE um número JSON puro (ex: 1234.56), nunca string como "R$ 1.234,56".
 - NUNCA retorne amount=0 ou amount=0.00 quando há uma imagem/documento. Se não conseguir ler o valor, pergunte ao usuário qual é o valor.
 - Procure por "R$", "Total", "Valor", "Vlr", "Montante", "Subtotal" no documento/imagem.
 - Se o usuário informar o valor na legenda/caption da imagem, use esse valor.
@@ -1634,6 +1688,37 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }, 200);
     }
 
+    if (aiParsed && typeof aiParsed === "object") {
+      if (aiParsed.intent === "lancamento") {
+        const normalizedAmount = coerceCurrencyNumber(aiParsed.amount);
+        aiParsed.amount = normalizedAmount === null ? 0 : Math.abs(normalizedAmount);
+
+        const normalizedInstallments = coercePositiveInteger(aiParsed.installments);
+        aiParsed.installments = normalizedInstallments
+          ?? (Array.isArray(aiParsed.installment_details) && aiParsed.installment_details.length > 0
+            ? aiParsed.installment_details.length
+            : 1);
+
+        if (Array.isArray(aiParsed.installment_details)) {
+          aiParsed.installment_details = aiParsed.installment_details.map((detail: any) => {
+            const normalizedDetailAmount = coerceCurrencyNumber(detail?.amount);
+            return {
+              ...detail,
+              amount: normalizedDetailAmount === null ? 0 : Math.abs(normalizedDetailAmount),
+            };
+          });
+        }
+      }
+
+      console.log("AI parsed normalized:", {
+        intent: aiParsed.intent || null,
+        amount: aiParsed.amount ?? null,
+        amountType: typeof aiParsed.amount,
+        installments: aiParsed.installments ?? null,
+        hasMedia,
+      });
+    }
+
     // --- Resolve context to company_id ---
     const resolveContext = (contextName: string | undefined): string | null => {
       if (!contextName || contextName === "Pessoal") return null;
@@ -1651,7 +1736,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     // 7. Execute action based on intent
     if (aiParsed.intent === "lancamento") {
       // SAFEGUARD: If media was sent and amount is 0, ask the user for the value
-      if (hasMedia && (!aiParsed.amount || aiParsed.amount === 0)) {
+      if (hasMedia && (!aiParsed.amount || aiParsed.amount <= 0)) {
         console.warn("AMOUNT ZERO WITH MEDIA — asking user for value", { description: aiParsed.description, hasImage, hasDocument });
         return respond({
           success: true,
