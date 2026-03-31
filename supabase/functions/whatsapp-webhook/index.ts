@@ -1454,6 +1454,13 @@ IMPORTANTE:
 - Para ÁUDIOS: transcreva o conteúdo do áudio e interprete como se o usuário tivesse digitado a mensagem.
 - NUNCA diga que executou uma ação que o sistema não suporta. Se não sabe se é possível, pergunte ou informe as limitações.
 
+REGRA CRÍTICA — VALOR DE IMAGENS/DOCUMENTOS:
+- Se uma IMAGEM ou DOCUMENTO foi enviado, você DEVE extrair o valor monetário correto do conteúdo visual.
+- NUNCA retorne amount=0 ou amount=0.00 quando há uma imagem/documento. Se não conseguir ler o valor, pergunte ao usuário qual é o valor.
+- Procure por "R$", "Total", "Valor", "Vlr", "Montante", "Subtotal" no documento/imagem.
+- Se o usuário informar o valor na legenda/caption da imagem, use esse valor.
+- Se realmente não conseguir identificar o valor, retorne intent="conversa" com friendly_message perguntando o valor, em vez de retornar amount=0.
+
 REGRA OBRIGATÓRIA — contact_name:
 - Quando houver documento/recibo/comprovante/NF, o campo "contact_name" DEVE SEMPRE conter o nome do ESTABELECIMENTO/EMISSOR identificado no documento (ex: "Empório Moscato", "Dentais Comércio", "Posto Shell").
 - NUNCA deixe contact_name como null quando o documento mostra claramente o nome do estabelecimento.
@@ -1643,6 +1650,16 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // 7. Execute action based on intent
     if (aiParsed.intent === "lancamento") {
+      // SAFEGUARD: If media was sent and amount is 0, ask the user for the value
+      if (hasMedia && (!aiParsed.amount || aiParsed.amount === 0)) {
+        console.warn("AMOUNT ZERO WITH MEDIA — asking user for value", { description: aiParsed.description, hasImage, hasDocument });
+        return respond({
+          success: true,
+          intent: "conversa",
+          message: `📋 Identifiquei o lançamento "${aiParsed.description || ""}", mas não consegui ler o valor no documento/imagem.\n\nPode me informar o valor? (ex: R$ 150,00)`,
+          transaction: null,
+        }, 200);
+      }
       if (documentContextMatch) {
         if (aiParsed.context !== documentContextMatch.company.name) {
           console.log("Overriding AI context from document match:", {
@@ -2261,6 +2278,38 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 htxCategory: htx.category,
                 contextCategoryCount: contextCategories.length,
               });
+            }
+          }
+        }
+      }
+
+      // --- FUZZY SUBCATEGORY MATCH: try matching suggested_category_name against subcategory names ---
+      if (!matchedCategory && (aiParsed.suggested_category_name || aiParsed.category)) {
+        const suggestedNorm = normalizeText(aiParsed.suggested_category_name || aiParsed.category || "");
+        if (suggestedNorm && suggestedNorm.length >= 3) {
+          // Search subcategories first (more specific match)
+          for (const sub of contextCategories.filter((c: any) => c.parent_id)) {
+            const subNorm = normalizeText(sub.name);
+            if (subNorm === suggestedNorm || subNorm.includes(suggestedNorm) || suggestedNorm.includes(subNorm)) {
+              const parentCat = contextCategories.find((c: any) => c.id === sub.parent_id && !c.parent_id);
+              if (parentCat && typeMatches(parentCat)) {
+                matchedCategory = parentCat;
+                subcategoryValue = sub.id;
+                subcategoryLabel = sub.name;
+                console.log("FUZZY SUBCATEGORY MATCH:", { suggested: suggestedNorm, matched: sub.name, parent: parentCat.name });
+                break;
+              }
+            }
+          }
+          // If still no match, try root categories with fuzzy matching
+          if (!matchedCategory) {
+            for (const cat of contextCategories.filter((c: any) => !c.parent_id && typeMatches(c))) {
+              const catNorm = normalizeText(cat.name);
+              if (catNorm.includes(suggestedNorm) || suggestedNorm.includes(catNorm)) {
+                matchedCategory = cat;
+                console.log("FUZZY ROOT CATEGORY MATCH:", { suggested: suggestedNorm, matched: cat.name });
+                break;
+              }
             }
           }
         }
