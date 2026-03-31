@@ -1,46 +1,46 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calculator, Plus, Loader2 } from "lucide-react";
-import { usePricing, type Procedure } from "@/hooks/usePricing";
-import { PricingConfigCard } from "@/components/precificacao/PricingConfigCard";
-import { ProcedureTable } from "@/components/precificacao/ProcedureTable";
-import { ProcedureFormModal } from "@/components/precificacao/ProcedureFormModal";
-import { CostBreakdownCard } from "@/components/precificacao/CostBreakdownCard";
+import { usePricingV2, type ProcedureV2, type CostGroup, COST_GROUP_LABELS } from "@/hooks/usePricingV2";
+import { ConfigCard } from "@/components/precificacao-v2/ConfigCard";
+import { CostItemsTab } from "@/components/precificacao-v2/CostItemsTab";
+import { CostSummaryCards } from "@/components/precificacao-v2/CostSummaryCards";
+import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2";
+import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
+import { ProcedureBreakdownV2 } from "@/components/precificacao-v2/ProcedureBreakdownV2";
+
+const GROUPS: CostGroup[] = ["fixos_clinica", "variaveis_clinica", "pessoais"];
+const GROUP_TAB_LABELS: Record<CostGroup, string> = {
+  fixos_clinica: "Fixos Clínica",
+  variaveis_clinica: "Variáveis Clínica",
+  pessoais: "Pessoais (Casa)",
+};
 
 export default function Precificacao() {
   const {
-    config, costSummary, procedures, loading,
+    costItems, procedures, loading,
+    groupTotals, custoHora, fmm, fmmPorSala, custoHoraPorSala,
+    hoursPerMonth, numRooms, taxRate,
     selectedProcedure, selectedProcedureId, setSelectedProcedureId,
-    saveConfig, createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcPrice,
-  } = usePricing();
+    saveConfig, addCostItem, updateCostItem, deleteCostItem,
+    createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
+  } = usePricingV2();
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingProcedure, setEditingProcedure] = useState<Procedure | null>(null);
+  const [editingProcedure, setEditingProcedure] = useState<ProcedureV2 | null>(null);
 
-  const handleNew = () => {
-    setEditingProcedure(null);
-    setModalOpen(true);
-  };
-
-  const handleEdit = (proc: Procedure) => {
-    setEditingProcedure(proc);
-    setModalOpen(true);
-  };
+  const handleNew = () => { setEditingProcedure(null); setModalOpen(true); };
+  const handleEdit = (proc: ProcedureV2) => { setEditingProcedure(proc); setModalOpen(true); };
 
   const handleSaveProcedure = async (data: {
-    name: string;
-    execution_time: number;
-    desired_price: number;
+    name: string; execution_time: number; desired_price: number;
     items: { description: string; value: number }[];
   }) => {
-    if (editingProcedure) {
-      return updateProcedure(editingProcedure.id, data);
-    }
+    if (editingProcedure) return updateProcedure(editingProcedure.id, data);
     return createProcedure(data);
   };
-
-  const profitMargin = config?.profit_margin ?? 30;
 
   if (loading) {
     return (
@@ -55,19 +55,23 @@ export default function Precificacao() {
       <div>
         <h1 className="text-2xl font-bold font-display text-foreground">Precificação</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Formação de Hora Clínica (FHC) — calcule o preço ideal dos seus procedimentos
+          FHC completo com custo de vida pessoal integrado — cadastre todos os custos e calcule lucratividade por procedimento
         </p>
       </div>
 
-      {/* Config + Cost Summary */}
-      <PricingConfigCard
-        config={config}
-        costSummary={costSummary}
-        onSave={saveConfig}
-        loading={loading}
+      {/* Seção 1: Config */}
+      <ConfigCard hoursPerMonth={hoursPerMonth} numRooms={numRooms} taxRate={taxRate} onSave={saveConfig} />
+
+      {/* Seção 2: Resumo */}
+      <CostSummaryCards
+        groupTotals={groupTotals}
+        custoHora={custoHora}
+        fmm={fmm}
+        fmmPorSala={fmmPorSala}
+        custoHoraPorSala={custoHoraPorSala}
       />
 
-      {/* Procedures Table */}
+      {/* Seção 3: Procedimentos */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
@@ -81,37 +85,62 @@ export default function Precificacao() {
           </div>
         </CardHeader>
         <CardContent>
-          <ProcedureTable
+          <ProcedureTableV2
             procedures={procedures}
-            costSummary={costSummary}
-            profitMargin={profitMargin}
+            calcProcedure={calcProcedure}
             selectedId={selectedProcedureId}
             onSelect={setSelectedProcedureId}
             onEdit={handleEdit}
             onDuplicate={duplicateProcedure}
             onDelete={deleteProcedure}
-            calcPrice={calcPrice}
           />
         </CardContent>
       </Card>
 
-      {/* Cost Breakdown for selected procedure */}
+      {/* Breakdown */}
       {selectedProcedure && (
-        <CostBreakdownCard
+        <ProcedureBreakdownV2
           procedure={selectedProcedure}
-          costSummary={costSummary}
-          profitMargin={profitMargin}
-          calcPrice={calcPrice}
+          custoHora={custoHora}
+          taxRate={taxRate}
+          calcProcedure={calcProcedure}
         />
       )}
 
-      {/* Form Modal */}
-      <ProcedureFormModal
+      {/* Seção 4: Despesas em Tabs */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Despesas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="fixos_clinica">
+            <TabsList className="w-full grid grid-cols-3">
+              {GROUPS.map((g) => (
+                <TabsTrigger key={g} value={g}>{GROUP_TAB_LABELS[g]}</TabsTrigger>
+              ))}
+            </TabsList>
+            {GROUPS.map((g) => (
+              <TabsContent key={g} value={g}>
+                <CostItemsTab
+                  group={g}
+                  items={costItems}
+                  onAdd={addCostItem}
+                  onUpdate={updateCostItem}
+                  onDelete={deleteCostItem}
+                />
+              </TabsContent>
+            ))}
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {/* Modal */}
+      <ProcedureFormModalV2
         open={modalOpen}
         onOpenChange={setModalOpen}
         procedure={editingProcedure}
-        costSummary={costSummary}
-        profitMargin={profitMargin}
+        custoHora={custoHora}
+        taxRate={taxRate}
         onSave={handleSaveProcedure}
       />
     </div>
