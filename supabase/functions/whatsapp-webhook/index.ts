@@ -1440,8 +1440,15 @@ IMPORTANTE SOBRE CONTEXTO DAS CONTAS:
 
 - SEMPRE tente identificar a conta correta. Se o usuário mencionar o nome do banco (ex: "Nubank", "Itaú", "BTG", "Inter", "C6"), encontre a conta correspondente na lista e retorne o UUID dela.
 - Se o contexto tem APENAS UMA conta bancária, use essa conta.
-- Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne null e pergunte no friendly_message qual conta usar, listando as opções disponíveis.
+- Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne account_id=null e pergunte no friendly_message qual conta usar, listando as opções disponíveis com números.
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
+- NUNCA tente adivinhar a conta baseado em informações parciais do documento. Se não tiver CERTEZA ABSOLUTA (UUID exato ou nome exato mencionado pelo usuário), retorne account_id=null.
+
+REGRA DE DATA EM COMPROVANTES:
+- Se o documento é um COMPROVANTE de pagamento já realizado (PIX realizado, transferência feita, recibo de pagamento, comprovante de débito), payment_date = data da operação mostrada no comprovante. Se a data da operação não estiver visível, use a data de HOJE (${today}).
+- Se o documento é um BOLETO/FATURA com vencimento futuro e NÃO há comprovante de pagamento, payment_date = data de vencimento, status = "Pendente".
+- competence_date = data de competência/emissão/compra original do documento.
+- NUNCA confunda data de VENCIMENTO com data de PAGAMENTO. Se o comprovante mostra que o pagamento foi REALIZADO, payment_date é a data da operação, NÃO a data de vencimento do boleto.
 
 Para gerenciamento de categorias:
 {"intent":"gerenciar_categoria","action":"criar|criar_subcategoria|renomear|mover|excluir","category_name":"nome da nova categoria (para criar)","category_id":"UUID da categoria alvo (para renomear/mover/excluir)","new_name":"novo nome (para renomear)","parent_category_id":"UUID-da-categoria-pai-se-subcategoria|null","new_parent_category_id":"UUID do novo pai ou null para tornar raiz (para mover)","category_type":"receita|despesa|ambos","context":"Pessoal|Nome da Empresa","friendly_message":"mensagem descrevendo a ação"}
@@ -2091,23 +2098,30 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             if (walMatch) {
               walletId = walMatch.id;
             } else {
-              // Try matching by name (AI may return the account name instead of UUID)
-              const aiAccRef = String(aiParsed.account_id || "").toLowerCase();
-              if (aiAccRef.length > 2) {
-                const nameAcc = contextAccounts.find((a) =>
-                  a.name.toLowerCase().includes(aiAccRef) || aiAccRef.includes(a.name.toLowerCase())
-                );
-                if (nameAcc) {
-                  bankAccountId = nameAcc.id;
-                  console.log("Account resolved by name from account_id field:", nameAcc.name);
-                } else {
-                  const nameWal = contextWallets.find((w) =>
-                    w.name.toLowerCase().includes(aiAccRef) || aiAccRef.includes(w.name.toLowerCase())
-                  );
-                  if (nameWal) {
-                    walletId = nameWal.id;
-                    console.log("Wallet resolved by name from account_id field:", nameWal.name);
+              // Try matching by name — STRICT: only accept exact start-of-name match or single match
+              const aiAccRef = String(aiParsed.account_id || "").toLowerCase().trim();
+              if (aiAccRef.length >= 3) {
+                // Find ALL matches, only use if exactly 1
+                const matchingAccounts = contextAccounts.filter((a) => {
+                  const accLower = a.name.toLowerCase();
+                  return accLower.startsWith(aiAccRef) || accLower === aiAccRef;
+                });
+                const matchingWallets = contextWallets.filter((w) => {
+                  const walLower = w.name.toLowerCase();
+                  return walLower.startsWith(aiAccRef) || walLower === aiAccRef;
+                });
+                const totalMatches = matchingAccounts.length + matchingWallets.length;
+                if (totalMatches === 1) {
+                  if (matchingAccounts.length === 1) {
+                    bankAccountId = matchingAccounts[0].id;
+                    console.log("Account resolved by strict name match:", matchingAccounts[0].name);
+                  } else {
+                    walletId = matchingWallets[0].id;
+                    console.log("Wallet resolved by strict name match:", matchingWallets[0].name);
                   }
+                } else if (totalMatches > 1) {
+                  console.log("Multiple name matches for account_id ref, skipping auto-resolve:", aiAccRef, "matches:", totalMatches);
+                  // Will fall through to choose_account flow
                 }
               }
 
@@ -2151,32 +2165,36 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
         if (!bankAccountId && !walletId) {
           // Also try resolving from document party extraction (bank name in receipt)
+          // STRICT: only accept if exactly 1 account matches with high confidence
           if (documentPartyExtraction && !bankAccountId && !walletId) {
             const issuerName = normalizeText(documentPartyExtraction.issuer_name || "");
             const recipientName = normalizeText(documentPartyExtraction.recipient_name || "");
-            // For expenses (sent money), the issuer is likely the user's bank
-            // For receipts (received money), the recipient's bank info may help
             const bankKeywords = [issuerName, recipientName].filter(Boolean);
             
             for (const keyword of bankKeywords) {
-              if (keyword.length < 3) continue;
-              const accByName = contextAccounts.find((a) => {
+              if (keyword.length < 4) continue; // Require at least 4 chars for document party match
+              const matchingAccs = contextAccounts.filter((a) => {
                 const accNorm = normalizeText(a.name);
-                return accNorm.includes(keyword) || keyword.includes(accNorm);
+                // Strict: account name must START with the keyword or be an exact match
+                return accNorm.startsWith(keyword) || keyword.startsWith(accNorm);
               });
-              if (accByName) {
-                bankAccountId = accByName.id;
-                console.log("Account resolved from document party:", accByName.name, "keyword:", keyword);
-                break;
-              }
-              const walByName = contextWallets.find((w) => {
+              const matchingWals = contextWallets.filter((w) => {
                 const walNorm = normalizeText(w.name);
-                return walNorm.includes(keyword) || keyword.includes(walNorm);
+                return walNorm.startsWith(keyword) || keyword.startsWith(walNorm);
               });
-              if (walByName) {
-                walletId = walByName.id;
-                console.log("Wallet resolved from document party:", walByName.name, "keyword:", keyword);
+              const totalDocMatches = matchingAccs.length + matchingWals.length;
+              if (totalDocMatches === 1) {
+                if (matchingAccs.length === 1) {
+                  bankAccountId = matchingAccs[0].id;
+                  console.log("Account resolved from document party (strict):", matchingAccs[0].name, "keyword:", keyword);
+                } else {
+                  walletId = matchingWals[0].id;
+                  console.log("Wallet resolved from document party (strict):", matchingWals[0].name, "keyword:", keyword);
+                }
                 break;
+              } else if (totalDocMatches > 1) {
+                console.log("Multiple document party matches, skipping auto-resolve. keyword:", keyword, "matches:", totalDocMatches);
+                // Don't resolve — will fall to choose_account
               }
             }
           }
@@ -2575,6 +2593,19 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // --- Credit card cycle date calculation ---
       const competenceDate = fixYear(aiParsed.competence_date || aiParsed.date || today);
       let paymentDate = fixYear(aiParsed.payment_date || aiParsed.date || today);
+
+      // --- Safeguard: comprovantes de pagamento direto não podem ter payment_date no futuro ---
+      const directPaymentMethods = ["pix", "transferencia", "dinheiro", "Pix", "Transferência", "Dinheiro"];
+      const isDirectPayment = directPaymentMethods.some(m => 
+        paymentMethod?.toLowerCase() === m.toLowerCase() || 
+        aiParsed.payment_method?.toLowerCase() === m.toLowerCase()
+      );
+      if (hasMedia && isDirectPayment && !creditCardId && paymentDate > today) {
+        console.log("Safeguard: Direct payment with future date detected. Forcing payment_date to today.", {
+          original: paymentDate, corrected: today, method: paymentMethod
+        });
+        paymentDate = today;
+      }
 
       if (creditCardId) {
         const card = contextCards.find((c) => c.id === creditCardId);
