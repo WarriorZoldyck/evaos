@@ -1650,6 +1650,16 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // 7. Execute action based on intent
     if (aiParsed.intent === "lancamento") {
+      // SAFEGUARD: If media was sent and amount is 0, ask the user for the value
+      if (hasMedia && (!aiParsed.amount || aiParsed.amount === 0)) {
+        console.warn("AMOUNT ZERO WITH MEDIA — asking user for value", { description: aiParsed.description, hasImage, hasDocument });
+        return respond({
+          success: true,
+          intent: "conversa",
+          message: `📋 Identifiquei o lançamento "${aiParsed.description || ""}", mas não consegui ler o valor no documento/imagem.\n\nPode me informar o valor? (ex: R$ 150,00)`,
+          transaction: null,
+        }, 200);
+      }
       if (documentContextMatch) {
         if (aiParsed.context !== documentContextMatch.company.name) {
           console.log("Overriding AI context from document match:", {
