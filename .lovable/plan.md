@@ -1,72 +1,48 @@
 
 
-# Agrupamento Hierárquico de Cartões na Listagem de Lançamentos
+# Correção da Resolução de Conta e Data no WhatsApp
 
-## O que muda
+## Problemas Identificados
 
-Hoje, cada cartão de crédito aparece como um grupo independente na tabela. A ideia é criar uma **hierarquia de 2 níveis** (igual à árvore de categorias):
+### 1. Conta selecionada errada (BTG ao invés de Itaú)
+O sistema tenta resolver a conta pelo nome retornado pela IA ou pelo nome do banco no documento. Se o match é impreciso (ex: IA diz "BTG" mas o comprovante mostra dados do Itaú), ele aceita mesmo assim. Quando há múltiplas contas e nenhum UUID exato, ele deveria **perguntar ao usuário** com a lista numerada, mas o fallback de name-matching pode selecionar a conta errada antes de chegar nessa etapa.
 
-```text
-┌─────────────────────────────────────────────────────┐
-│ 💳 VISA Azul (Principal)         - R$ 20.739,08    │
-│    Total da fatura (todos os cartões)               │
-├─────────────────────────────────────────────────────┤
-│   ▸ VISA Azul (7014)       92 tx  - R$ 15.200,00   │
-│   ▸ Virtual Maria (5178)   13 tx  - R$ 3.100,00    │
-│   ▸ Virtual João (7239)     7 tx  - R$ 1.800,00    │
-│   ▸ Virtual Ana (8021)      3 tx  - R$   639,08    │
-├─────────────────────────────────────────────────────┤
-│   (ao expandir um sub-cartão, mostra os lançamentos)│
-└─────────────────────────────────────────────────────┘
-```
+### 2. Data de pagamento errada (vencimento ao invés de hoje)
+A IA retorna `payment_date` como a data de vencimento do boleto (02/04), mas o comprovante mostra que o pagamento foi feito **hoje**. Para comprovantes de pagamento (PIX, transferência, etc), a `payment_date` deveria ser a data do pagamento real (hoje), e a `competence_date` a data do documento/vencimento.
 
-- **Nível 1 (Cartão Principal)**: mostra o valor total somado de TODOS os cartões filhos + dele mesmo. Clique expande para ver os sub-cartões.
-- **Nível 2 (Sub-cartão)**: mostra o subtotal daquele cartão e a quantidade de lançamentos. Clique expande para ver as transações individuais.
-- Cartões sem filhos continuam com o comportamento atual (grupo simples).
+## Correções
 
-## Como implementar
+### Arquivo: `supabase/functions/whatsapp-webhook/index.ts`
 
-### Arquivo: `src/components/lancamentos/TransactionTable.tsx`
+**Correção 1 — Account resolution mais rigoroso**
+- Na resolução por nome (linhas ~2095-2111), tornar o match mais estrito: exigir que o nome da conta **comece** com o termo buscado ou que o termo buscado **seja exatamente** o nome do banco (não substring parcial)
+- Se o match por nome não é de alta confiança (ex: nome com <5 chars, ou múltiplos matches), **não usar** e deixar cair no fluxo de "choose_account" que pergunta ao usuário
+- Na resolução por `documentPartyExtraction` (linhas ~2154-2182), aplicar a mesma restrição: só aceitar se houver **exatamente 1 match** de alta confiança
 
-1. **Alterar o `useMemo` de `renderItems`** para detectar hierarquia pai/filho:
-   - Receber `creditCards` com `parent_card_id` (já disponível via `useTransactions`)
-   - Agrupar transações de cartões filhos sob o cartão pai
-   - Criar um novo tipo de item `cardHierarchy` com sub-grupos
+**Correção 2 — Data de pagamento em comprovantes**
+- Adicionar lógica no prompt do sistema para instruir a IA:
+  - Se o documento é um **comprovante de pagamento** (PIX realizado, transferência feita, recibo de pagamento), a `payment_date` deve ser a data da operação (geralmente hoje)
+  - A `competence_date` preserva a data do documento/vencimento
+- Adicionar safeguard no código: se `hasMedia` e o `payment_method` indica um pagamento direto (PIX, transferência, dinheiro) e o status é "Pago", forçar `payment_date = today` se a IA retornou uma data futura
 
-2. **Criar componente `CardHierarchyGroup`**:
-   - Header do cartão pai com total consolidado e badge de quantidade total
-   - Ao expandir: lista de sub-cartões (cada um com seu header + subtotal)
-   - Ao expandir sub-cartão: lista de transações individuais (como já funciona)
+**Correção 3 — Prompt reforçado**
+- Adicionar no system prompt uma regra clara:
+  ```
+  REGRA DE DATA EM COMPROVANTES:
+  - Se o documento é um COMPROVANTE de pagamento já realizado (PIX, transferência, débito), 
+    payment_date = data da operação mostrada no comprovante (ou hoje se não visível)
+  - Se o documento é um BOLETO/FATURA com vencimento futuro, 
+    payment_date = data de vencimento, status = "Pendente"
+  - competence_date = data de competência/emissão/compra original
+  ```
 
-3. **Atualizar interface de `creditCards` prop** para incluir `parent_card_id`:
-   ```typescript
-   creditCards: { id: string; name: string; parent_card_id?: string | null }[];
-   ```
+## Resumo de Mudanças
 
-4. **Manter compatibilidade**: cartões sem `parent_card_id` e sem filhos continuam como `cardGroup` simples.
-
-### Arquivo: `src/pages/Lancamentos.tsx`
-
-5. **Passar `parent_card_id`** na prop `creditCards` do `TransactionTable` (já vem do hook, só precisa incluir na tipagem).
-
-### Arquivo: `src/hooks/useTransactions.ts`
-
-6. Já retorna `parent_card_id` nos creditCards — apenas garantir que o tipo exportado inclui o campo na interface usada pelo componente.
-
-## Lógica de agrupamento
-
-```text
-Para cada transação com credit_card_id:
-  1. Se o cartão tem parent_card_id → agrupa sob o pai
-  2. Se o cartão É pai (tem filhos) → agrupa como pai
-  3. Se o cartão é standalone → comportamento atual
-
-Resultado: Map<parentCardId, { parentTxns, childGroups: Map<childId, txns[]> }>
-```
-
-## Detalhes técnicos
-
-- O estado `expandedCards` passa a ter 2 níveis: `expanded-parent-{id}` e `expanded-child-{id}`
-- Seleção em massa continua funcionando: checkbox no pai seleciona TODOS (dele + filhos)
-- Botão "Pagar Fatura" no header do pai liquida tudo
+| Local | Mudança |
+|-------|---------|
+| System prompt (~linha 1441-1444) | Reforçar regra de conta: NUNCA selecionar aleatoriamente |
+| System prompt (novo bloco) | Adicionar regra de data para comprovantes vs boletos |
+| Account name resolution (~2095-2111) | Exigir match exato ou alta confiança; senão, ir para choose_account |
+| Document party resolution (~2154-2182) | Mesmo: match estrito ou pular |
+| Date logic (~2576-2577) | Safeguard: se comprovante de pagamento direto com status Pago, payment_date não pode ser futuro |
 
