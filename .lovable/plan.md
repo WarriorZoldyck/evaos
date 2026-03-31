@@ -1,48 +1,50 @@
 
 
-# Correção da Resolução de Conta e Data no WhatsApp
+# Resolução de Conta por Agência e Número da Conta
 
-## Problemas Identificados
+## Problema
+O sistema hoje tenta resolver a conta apenas pelo **nome** (ex: "Itaú", "BTG"). Mas os comprovantes de PIX/transferência mostram claramente o número da agência e conta. O sistema não extrai esses dados do comprovante e não os compara com os dados cadastrados nas contas do usuário.
 
-### 1. Conta selecionada errada (BTG ao invés de Itaú)
-O sistema tenta resolver a conta pelo nome retornado pela IA ou pelo nome do banco no documento. Se o match é impreciso (ex: IA diz "BTG" mas o comprovante mostra dados do Itaú), ele aceita mesmo assim. Quando há múltiplas contas e nenhum UUID exato, ele deveria **perguntar ao usuário** com a lista numerada, mas o fallback de name-matching pode selecionar a conta errada antes de chegar nessa etapa.
-
-### 2. Data de pagamento errada (vencimento ao invés de hoje)
-A IA retorna `payment_date` como a data de vencimento do boleto (02/04), mas o comprovante mostra que o pagamento foi feito **hoje**. Para comprovantes de pagamento (PIX, transferência, etc), a `payment_date` deveria ser a data do pagamento real (hoje), e a `competence_date` a data do documento/vencimento.
+## Causa Raiz
+1. **`extractDocumentParties`** não pede agência/conta no JSON de retorno
+2. **Query de `bank_accounts`** não busca `agency_number` nem `account_number`
+3. **Lógica de resolução** não compara esses campos
 
 ## Correções
 
-### Arquivo: `supabase/functions/whatsapp-webhook/index.ts`
+### 1. Atualizar o prompt de `extractDocumentParties` (linha ~229-244)
+Adicionar ao JSON de retorno:
+- `issuer_agency` — agência do remetente (se visível)
+- `issuer_account` — número da conta do remetente (se visível)
+- `recipient_agency` — agência do destinatário (se visível)
+- `recipient_account` — número da conta do destinatário (se visível)
+- `issuer_bank_name` — nome do banco do remetente (ex: "Itaú", "Nubank")
+- `recipient_bank_name` — nome do banco do destinatário
 
-**Correção 1 — Account resolution mais rigoroso**
-- Na resolução por nome (linhas ~2095-2111), tornar o match mais estrito: exigir que o nome da conta **comece** com o termo buscado ou que o termo buscado **seja exatamente** o nome do banco (não substring parcial)
-- Se o match por nome não é de alta confiança (ex: nome com <5 chars, ou múltiplos matches), **não usar** e deixar cair no fluxo de "choose_account" que pergunta ao usuário
-- Na resolução por `documentPartyExtraction` (linhas ~2154-2182), aplicar a mesma restrição: só aceitar se houver **exatamente 1 match** de alta confiança
+### 2. Incluir `agency_number` e `account_number` nas queries de `bank_accounts`
+Nas 3 queries (linhas ~726, ~984, ~1204), adicionar esses campos ao `select`.
 
-**Correção 2 — Data de pagamento em comprovantes**
-- Adicionar lógica no prompt do sistema para instruir a IA:
-  - Se o documento é um **comprovante de pagamento** (PIX realizado, transferência feita, recibo de pagamento), a `payment_date` deve ser a data da operação (geralmente hoje)
-  - A `competence_date` preserva a data do documento/vencimento
-- Adicionar safeguard no código: se `hasMedia` e o `payment_method` indica um pagamento direto (PIX, transferência, dinheiro) e o status é "Pago", forçar `payment_date = today` se a IA retornou uma data futura
+### 3. Nova lógica de resolução por agência/conta (após linha ~2200)
+Antes de cair no `choose_account`, tentar:
+1. Extrair agência e conta do `documentPartyExtraction`
+2. Comparar com `contextAccounts` que tenham `agency_number` e/ou `account_number` preenchidos
+3. Se houver **exatamente 1 match**, usar essa conta
+4. Se houver 0 ou múltiplos matches, continuar para o fluxo normal (perguntar ao usuário)
 
-**Correção 3 — Prompt reforçado**
-- Adicionar no system prompt uma regra clara:
-  ```
-  REGRA DE DATA EM COMPROVANTES:
-  - Se o documento é um COMPROVANTE de pagamento já realizado (PIX, transferência, débito), 
-    payment_date = data da operação mostrada no comprovante (ou hoje se não visível)
-  - Se o documento é um BOLETO/FATURA com vencimento futuro, 
-    payment_date = data de vencimento, status = "Pendente"
-  - competence_date = data de competência/emissão/compra original
-  ```
+A comparação deve normalizar os números (remover pontos, traços, zeros à esquerda) para garantir match correto.
 
-## Resumo de Mudanças
+### 4. Ordem de prioridade na resolução
+```text
+1. UUID exato retornado pela IA
+2. Match por agência + conta (novo)
+3. Match por nome do banco (existente, já estrito)
+4. Match por document party name (existente, já estrito)
+5. Conta única no contexto → usa automaticamente
+6. Múltiplas contas → pergunta ao usuário (lista numerada)
+```
 
-| Local | Mudança |
-|-------|---------|
-| System prompt (~linha 1441-1444) | Reforçar regra de conta: NUNCA selecionar aleatoriamente |
-| System prompt (novo bloco) | Adicionar regra de data para comprovantes vs boletos |
-| Account name resolution (~2095-2111) | Exigir match exato ou alta confiança; senão, ir para choose_account |
-| Document party resolution (~2154-2182) | Mesmo: match estrito ou pular |
-| Date logic (~2576-2577) | Safeguard: se comprovante de pagamento direto com status Pago, payment_date não pode ser futuro |
+## Arquivo Afetado
+| Arquivo | Mudança |
+|---------|---------|
+| `supabase/functions/whatsapp-webhook/index.ts` | Prompt do extractDocumentParties, queries de bank_accounts, nova lógica de match por ag/conta |
 
