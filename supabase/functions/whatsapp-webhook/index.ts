@@ -229,7 +229,7 @@ async function extractDocumentParties(apiKey: string, userContent: any) {
             content: `Você analisa notas fiscais, boletos, recibos e comprovantes.
 
 Retorne APENAS um JSON válido no formato:
-{"document_type":"nota_fiscal|boleto|recibo|comprovante_pix|comprovante_transferencia|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","transaction_direction":"sent|received|unknown","reason":"breve explicação"}
+{"document_type":"nota_fiscal|boleto|recibo|comprovante_pix|comprovante_transferencia|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","issuer_bank_name":"nome do banco do remetente ou null","issuer_agency":"número da agência do remetente ou null","issuer_account":"número da conta do remetente ou null","recipient_bank_name":"nome do banco do destinatário ou null","recipient_agency":"número da agência do destinatário ou null","recipient_account":"número da conta do destinatário ou null","transaction_direction":"sent|received|unknown","reason":"breve explicação"}
 
 REGRAS:
 - "recipient" = destinatário/tomador/comprador/pagador/sacado (quem vai pagar ou recebeu a nota)
@@ -239,6 +239,8 @@ REGRAS:
   - "issuer" = quem ENVIOU o dinheiro (remetente/pagador/origem)
   - "recipient" = quem RECEBEU o dinheiro (beneficiário/favorecido/destino)
   - "transaction_direction" = "sent" se o documento mostra um ENVIO/PAGAMENTO, "received" se mostra um RECEBIMENTO
+  - Extraia agência e conta EXATAMENTE como aparecem no comprovante (ex: "0001", "12345-6")
+  - issuer_bank_name/recipient_bank_name = nome do banco visível (ex: "Itaú", "Nubank", "BTG Pactual")
 - Se não conseguir ler um campo com segurança, retorne null nesse campo
 - "transaction_direction" indica se o dinheiro está SAINDO ("sent") ou ENTRANDO ("received") do ponto de vista de quem enviou o documento. Se não for claro, use "unknown"
 - Não escreva texto fora do JSON`,
