@@ -367,7 +367,7 @@ serve(async (req) => {
     try {
       parsed = JSON.parse(rawBody);
     } catch (e) {
-      console.log("JSON PARSE ERROR:", e.message);
+      console.log("JSON PARSE ERROR:", e instanceof Error ? e.message : String(e));
       return new Response(JSON.stringify({ success: false, error: "Invalid JSON body" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -2066,7 +2066,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               original_user_text: originalUserText,
               installments: aiParsed.installments || 1,
               installment_details: aiParsed.installment_details || null,
-              original_user_text: originalUserText,
             },
             suggested_category_name: matchedCategory?.name || "N/A",
             category_type: txType,
