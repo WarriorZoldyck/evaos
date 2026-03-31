@@ -2040,7 +2040,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           creditCardId = contextCards[0].id;
           bankAccountId = contextCards[0].bank_account_id;
         } else if (contextCards.length > 1) {
-          const cardList = contextCards.map((c) => `• ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
+          const cardList = contextCards.map((c, i) => `${i + 1} - ${c.name}${c.last_four_digits ? ` (final ${c.last_four_digits})` : ""}`).join("\n");
           
           // Save pending action for card choice
           await supabase.from("whatsapp_pending_actions").insert({
