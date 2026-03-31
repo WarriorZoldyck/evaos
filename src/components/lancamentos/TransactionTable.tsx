@@ -92,7 +92,7 @@ function getAccountName(
   t: Transaction,
   bankAccounts: { id: string; name: string }[],
   wallets: { id: string; name: string }[],
-  creditCards: { id: string; name: string }[],
+  creditCards: CreditCardWithHierarchy[],
 ) {
   if (t.bank_account_id) return bankAccounts.find((a) => a.id === t.bank_account_id)?.name;
   if (t.wallet_id) return wallets.find((w) => w.id === t.wallet_id)?.name;
