@@ -2098,23 +2098,30 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             if (walMatch) {
               walletId = walMatch.id;
             } else {
-              // Try matching by name (AI may return the account name instead of UUID)
-              const aiAccRef = String(aiParsed.account_id || "").toLowerCase();
-              if (aiAccRef.length > 2) {
-                const nameAcc = contextAccounts.find((a) =>
-                  a.name.toLowerCase().includes(aiAccRef) || aiAccRef.includes(a.name.toLowerCase())
-                );
-                if (nameAcc) {
-                  bankAccountId = nameAcc.id;
-                  console.log("Account resolved by name from account_id field:", nameAcc.name);
-                } else {
-                  const nameWal = contextWallets.find((w) =>
-                    w.name.toLowerCase().includes(aiAccRef) || aiAccRef.includes(w.name.toLowerCase())
-                  );
-                  if (nameWal) {
-                    walletId = nameWal.id;
-                    console.log("Wallet resolved by name from account_id field:", nameWal.name);
+              // Try matching by name — STRICT: only accept exact start-of-name match or single match
+              const aiAccRef = String(aiParsed.account_id || "").toLowerCase().trim();
+              if (aiAccRef.length >= 3) {
+                // Find ALL matches, only use if exactly 1
+                const matchingAccounts = contextAccounts.filter((a) => {
+                  const accLower = a.name.toLowerCase();
+                  return accLower.startsWith(aiAccRef) || accLower === aiAccRef;
+                });
+                const matchingWallets = contextWallets.filter((w) => {
+                  const walLower = w.name.toLowerCase();
+                  return walLower.startsWith(aiAccRef) || walLower === aiAccRef;
+                });
+                const totalMatches = matchingAccounts.length + matchingWallets.length;
+                if (totalMatches === 1) {
+                  if (matchingAccounts.length === 1) {
+                    bankAccountId = matchingAccounts[0].id;
+                    console.log("Account resolved by strict name match:", matchingAccounts[0].name);
+                  } else {
+                    walletId = matchingWallets[0].id;
+                    console.log("Wallet resolved by strict name match:", matchingWallets[0].name);
                   }
+                } else if (totalMatches > 1) {
+                  console.log("Multiple name matches for account_id ref, skipping auto-resolve:", aiAccRef, "matches:", totalMatches);
+                  // Will fall through to choose_account flow
                 }
               }
 
