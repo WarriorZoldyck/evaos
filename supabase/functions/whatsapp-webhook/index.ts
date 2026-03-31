@@ -229,7 +229,7 @@ async function extractDocumentParties(apiKey: string, userContent: any) {
             content: `Você analisa notas fiscais, boletos, recibos e comprovantes.
 
 Retorne APENAS um JSON válido no formato:
-{"document_type":"nota_fiscal|boleto|recibo|comprovante_pix|comprovante_transferencia|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","transaction_direction":"sent|received|unknown","reason":"breve explicação"}
+{"document_type":"nota_fiscal|boleto|recibo|comprovante_pix|comprovante_transferencia|outro","recipient_name":"texto ou null","recipient_cnpj":"somente dígitos ou null","issuer_name":"texto ou null","issuer_cnpj":"somente dígitos ou null","issuer_bank_name":"nome do banco do remetente ou null","issuer_agency":"número da agência do remetente ou null","issuer_account":"número da conta do remetente ou null","recipient_bank_name":"nome do banco do destinatário ou null","recipient_agency":"número da agência do destinatário ou null","recipient_account":"número da conta do destinatário ou null","transaction_direction":"sent|received|unknown","reason":"breve explicação"}
 
 REGRAS:
 - "recipient" = destinatário/tomador/comprador/pagador/sacado (quem vai pagar ou recebeu a nota)
@@ -239,6 +239,8 @@ REGRAS:
   - "issuer" = quem ENVIOU o dinheiro (remetente/pagador/origem)
   - "recipient" = quem RECEBEU o dinheiro (beneficiário/favorecido/destino)
   - "transaction_direction" = "sent" se o documento mostra um ENVIO/PAGAMENTO, "received" se mostra um RECEBIMENTO
+  - Extraia agência e conta EXATAMENTE como aparecem no comprovante (ex: "0001", "12345-6")
+  - issuer_bank_name/recipient_bank_name = nome do banco visível (ex: "Itaú", "Nubank", "BTG Pactual")
 - Se não conseguir ler um campo com segurança, retorne null nesse campo
 - "transaction_direction" indica se o dinheiro está SAINDO ("sent") ou ENTRANDO ("received") do ponto de vista de quem enviou o documento. Se não for claro, use "unknown"
 - Não escreva texto fora do JSON`,
@@ -723,7 +725,7 @@ serve(async (req) => {
         
         // Fetch accounts for matching
         const [accsRes, wltsRes, ccsRes] = await Promise.all([
-          supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
+         supabase.from("bank_accounts").select("id, name, company_id, agency_number, account_number").eq("user_id", userId),
           supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
           supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
         ]);
@@ -981,7 +983,7 @@ serve(async (req) => {
 
         // Resolve account from payload
         const [accountsRes, walletsRes, creditCardsRes] = await Promise.all([
-          supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
+          supabase.from("bank_accounts").select("id, name, company_id, agency_number, account_number").eq("user_id", userId),
           supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
           supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
         ]);
@@ -1201,7 +1203,7 @@ serve(async (req) => {
 
     const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes, historyTxRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
-      supabase.from("bank_accounts").select("id, name, type, company_id").eq("user_id", userId),
+      supabase.from("bank_accounts").select("id, name, type, company_id, agency_number, account_number").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
       supabase.from("companies").select("id, name, cnpj").eq("user_id", userId),
       supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
@@ -2163,6 +2165,101 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             }
           }
         }
+        // === NEW: Try resolving by agency + account number from document ===
+        if (!bankAccountId && !walletId && documentPartyExtraction) {
+          const normalizeAccNum = (s: string | null | undefined) => (s || "").replace(/[.\-\s]/g, "").replace(/^0+/, "");
+          
+          // Get agency/account from both sides of the document
+          const docAgencies = [
+            documentPartyExtraction.issuer_agency,
+            documentPartyExtraction.recipient_agency,
+          ].filter(Boolean);
+          const docAccounts = [
+            documentPartyExtraction.issuer_account,
+            documentPartyExtraction.recipient_account,
+          ].filter(Boolean);
+          
+          if (docAgencies.length > 0 || docAccounts.length > 0) {
+            const matchingByAgAcc = contextAccounts.filter((a) => {
+              if (!a.agency_number && !a.account_number) return false;
+              const normAgency = normalizeAccNum(a.agency_number);
+              const normAccount = normalizeAccNum(a.account_number);
+              
+              // Check if any doc agency+account pair matches this account
+              for (const docAg of docAgencies) {
+                for (const docAcc of docAccounts) {
+                  const normDocAg = normalizeAccNum(docAg);
+                  const normDocAcc = normalizeAccNum(docAcc);
+                  if (normAgency && normDocAg && normAgency === normDocAg &&
+                      normAccount && normDocAcc && normAccount === normDocAcc) {
+                    return true;
+                  }
+                }
+              }
+              // Also try just account number match if agency is empty
+              if (!normAgency || docAgencies.length === 0) {
+                for (const docAcc of docAccounts) {
+                  const normDocAcc = normalizeAccNum(docAcc);
+                  if (normAccount && normDocAcc && normAccount === normDocAcc) {
+                    return true;
+                  }
+                }
+              }
+              return false;
+            });
+            
+            if (matchingByAgAcc.length === 1) {
+              bankAccountId = matchingByAgAcc[0].id;
+              console.log("Account resolved by agency/account number match:", matchingByAgAcc[0].name, 
+                "ag:", matchingByAgAcc[0].agency_number, "cc:", matchingByAgAcc[0].account_number);
+            } else if (matchingByAgAcc.length > 1) {
+              console.log("Multiple agency/account matches, skipping auto-resolve:", matchingByAgAcc.map(a => a.name));
+            } else {
+              // Try cross-context (all accounts, not just context)
+              const crossMatchByAgAcc = accounts.filter((a) => {
+                if (!a.agency_number && !a.account_number) return false;
+                const normAgency = normalizeAccNum(a.agency_number);
+                const normAccount = normalizeAccNum(a.account_number);
+                for (const docAg of docAgencies) {
+                  for (const docAcc of docAccounts) {
+                    const normDocAg = normalizeAccNum(docAg);
+                    const normDocAcc = normalizeAccNum(docAcc);
+                    if (normAgency && normDocAg && normAgency === normDocAg &&
+                        normAccount && normDocAcc && normAccount === normDocAcc) {
+                      return true;
+                    }
+                  }
+                }
+                if (!normAgency || docAgencies.length === 0) {
+                  for (const docAcc of docAccounts) {
+                    if (normAccount && normalizeAccNum(docAcc) === normAccount) return true;
+                  }
+                }
+                return false;
+              });
+              
+              if (crossMatchByAgAcc.length === 1) {
+                const crossAcc = crossMatchByAgAcc[0];
+                console.log("Cross-context account resolved by agency/account:", crossAcc.name);
+                bankAccountId = crossAcc.id;
+                companyId = crossAcc.company_id || null;
+                contextAccounts = accounts.filter((a) =>
+                  companyId ? a.company_id === companyId : !a.company_id
+                );
+                contextWallets = wallets.filter((w) =>
+                  companyId ? w.company_id === companyId : !w.company_id
+                );
+                contextCards = creditCards.filter((c) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+                contextCategories = categories.filter((c) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+              }
+            }
+          }
+        }
+        
         if (!bankAccountId && !walletId) {
           // Also try resolving from document party extraction (bank name in receipt)
           // STRICT: only accept if exactly 1 account matches with high confidence
