@@ -295,13 +295,21 @@ export function ImportStatementModal({
     const [accType, ...idParts] = targetBankAccount.split(":");
     const accId = idParts.join(":");
 
+    // Resolve category name from UUID
+    const catName = rootCategories.find(c => c.id === defaultCategory)?.name || "Sem Categoria";
+
+    // Find parent card for multi-card fallback
+    const parentCardId = isMultiCard
+      ? (detectedCards.find(c => !c.parent_card_id)?.id || detectedCards[0]?.id || null)
+      : null;
+
     const transactions: TransactionInsert[] = selectedRows.map((r) => {
       const detectedCard = r.matched_card_id
         ? creditCards.find((c) => c.id === r.matched_card_id)
         : undefined;
 
       const cardId = isMultiCard
-        ? (r.matched_card_id || targetCard || null)
+        ? (r.matched_card_id || parentCardId)
         : (importType === "cartao" ? targetCard : null);
 
       const companyIdForTransaction = importType === "cartao"
@@ -319,7 +327,7 @@ export function ImportStatementModal({
         payment_date: billingDate,
         competence_date: r.date,
         status: "Pago" as const,
-        category: defaultCategory || "Sem Categoria",
+        category: catName,
         user_id: user.id,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
