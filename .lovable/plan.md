@@ -1,42 +1,72 @@
 
 
-# Revisão da Importação Multi-Cartão — Problemas Encontrados
+# Agrupamento Hierárquico de Cartões na Listagem de Lançamentos
 
-## Bug 1: Categoria salva como UUID em vez de nome
-**Linha 322** do `ImportStatementModal.tsx`:
-```typescript
-category: defaultCategory || "Sem Categoria"
+## O que muda
+
+Hoje, cada cartão de crédito aparece como um grupo independente na tabela. A ideia é criar uma **hierarquia de 2 níveis** (igual à árvore de categorias):
+
+```text
+┌─────────────────────────────────────────────────────┐
+│ 💳 VISA Azul (Principal)         - R$ 20.739,08    │
+│    Total da fatura (todos os cartões)               │
+├─────────────────────────────────────────────────────┤
+│   ▸ VISA Azul (7014)       92 tx  - R$ 15.200,00   │
+│   ▸ Virtual Maria (5178)   13 tx  - R$ 3.100,00    │
+│   ▸ Virtual João (7239)     7 tx  - R$ 1.800,00    │
+│   ▸ Virtual Ana (8021)      3 tx  - R$   639,08    │
+├─────────────────────────────────────────────────────┤
+│   (ao expandir um sub-cartão, mostra os lançamentos)│
+└─────────────────────────────────────────────────────┘
 ```
-O `defaultCategory` vem de um `<Select>` cujo `value` é `c.id` (UUID). Porém, a coluna `category` na tabela `transactions` espera o **nome** da categoria (string texto), não o UUID. Resultado: transações importadas ficam com uma categoria ilegível/não reconhecida pelo sistema.
 
-**Correção**: Buscar o nome da categoria selecionada:
-```typescript
-const catName = rootCategories.find(c => c.id === defaultCategory)?.name || "Sem Categoria";
-// usar catName no map
+- **Nível 1 (Cartão Principal)**: mostra o valor total somado de TODOS os cartões filhos + dele mesmo. Clique expande para ver os sub-cartões.
+- **Nível 2 (Sub-cartão)**: mostra o subtotal daquele cartão e a quantidade de lançamentos. Clique expande para ver as transações individuais.
+- Cartões sem filhos continuam com o comportamento atual (grupo simples).
+
+## Como implementar
+
+### Arquivo: `src/components/lancamentos/TransactionTable.tsx`
+
+1. **Alterar o `useMemo` de `renderItems`** para detectar hierarquia pai/filho:
+   - Receber `creditCards` com `parent_card_id` (já disponível via `useTransactions`)
+   - Agrupar transações de cartões filhos sob o cartão pai
+   - Criar um novo tipo de item `cardHierarchy` com sub-grupos
+
+2. **Criar componente `CardHierarchyGroup`**:
+   - Header do cartão pai com total consolidado e badge de quantidade total
+   - Ao expandir: lista de sub-cartões (cada um com seu header + subtotal)
+   - Ao expandir sub-cartão: lista de transações individuais (como já funciona)
+
+3. **Atualizar interface de `creditCards` prop** para incluir `parent_card_id`:
+   ```typescript
+   creditCards: { id: string; name: string; parent_card_id?: string | null }[];
+   ```
+
+4. **Manter compatibilidade**: cartões sem `parent_card_id` e sem filhos continuam como `cardGroup` simples.
+
+### Arquivo: `src/pages/Lancamentos.tsx`
+
+5. **Passar `parent_card_id`** na prop `creditCards` do `TransactionTable` (já vem do hook, só precisa incluir na tipagem).
+
+### Arquivo: `src/hooks/useTransactions.ts`
+
+6. Já retorna `parent_card_id` nos creditCards — apenas garantir que o tipo exportado inclui o campo na interface usada pelo componente.
+
+## Lógica de agrupamento
+
+```text
+Para cada transação com credit_card_id:
+  1. Se o cartão tem parent_card_id → agrupa sob o pai
+  2. Se o cartão É pai (tem filhos) → agrupa como pai
+  3. Se o cartão é standalone → comportamento atual
+
+Resultado: Map<parentCardId, { parentTxns, childGroups: Map<childId, txns[]> }>
 ```
 
-## Bug 2: Transações sem match de cartão ficam sem cartão em modo multi-card
-**Linha 303-304**:
-```typescript
-const cardId = isMultiCard
-  ? (r.matched_card_id || targetCard || null)  // targetCard está vazio em multi-card!
-  : (importType === "cartao" ? targetCard : null);
-```
-Em modo multi-card, `targetCard` nunca é setado (o select de cartão só aparece quando `!isMultiCard`). Transações sem `matched_card_id` recebem `credit_card_id = null`.
+## Detalhes técnicos
 
-**Correção**: Para transações sem match em modo multi-card, atribuir ao cartão principal (pai) da fatura. Podemos derivar o cartão pai do primeiro `detectedCards` que não tenha `parent_card_id`, ou do cartão com mais transações.
-
-## Bug 3: Prompt da IA pode não processar faturas muito grandes
-O `max_tokens: 65000` pode não ser suficiente para faturas com 100+ transações. O JSON de 115 transações pode ter ~50k tokens. Se truncar, a lógica de salvage recupera parcialmente mas perde transações do final.
-
-**Não precisa de mudança agora** — já tem lógica de salvage. Mas vale monitorar.
-
-## Resumo das Correções
-
-| Arquivo | Correção |
-|---------|----------|
-| `ImportStatementModal.tsx` | Linha 322: usar nome da categoria em vez de UUID |
-| `ImportStatementModal.tsx` | Linha 303: fallback para cartão pai quando sem match em multi-card |
-
-Impacto: 2 bugs que afetam diretamente a qualidade dos dados importados. Correção simples, sem risco de quebrar outros fluxos.
+- O estado `expandedCards` passa a ter 2 níveis: `expanded-parent-{id}` e `expanded-child-{id}`
+- Seleção em massa continua funcionando: checkbox no pai seleciona TODOS (dele + filhos)
+- Botão "Pagar Fatura" no header do pai liquida tudo
 
