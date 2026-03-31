@@ -1440,8 +1440,15 @@ IMPORTANTE SOBRE CONTEXTO DAS CONTAS:
 
 - SEMPRE tente identificar a conta correta. Se o usuário mencionar o nome do banco (ex: "Nubank", "Itaú", "BTG", "Inter", "C6"), encontre a conta correspondente na lista e retorne o UUID dela.
 - Se o contexto tem APENAS UMA conta bancária, use essa conta.
-- Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne null e pergunte no friendly_message qual conta usar, listando as opções disponíveis.
+- Se o contexto tem MÚLTIPLAS contas e o usuário NÃO especificou qual, retorne account_id=null e pergunte no friendly_message qual conta usar, listando as opções disponíveis com números.
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
+- NUNCA tente adivinhar a conta baseado em informações parciais do documento. Se não tiver CERTEZA ABSOLUTA (UUID exato ou nome exato mencionado pelo usuário), retorne account_id=null.
+
+REGRA DE DATA EM COMPROVANTES:
+- Se o documento é um COMPROVANTE de pagamento já realizado (PIX realizado, transferência feita, recibo de pagamento, comprovante de débito), payment_date = data da operação mostrada no comprovante. Se a data da operação não estiver visível, use a data de HOJE (${today}).
+- Se o documento é um BOLETO/FATURA com vencimento futuro e NÃO há comprovante de pagamento, payment_date = data de vencimento, status = "Pendente".
+- competence_date = data de competência/emissão/compra original do documento.
+- NUNCA confunda data de VENCIMENTO com data de PAGAMENTO. Se o comprovante mostra que o pagamento foi REALIZADO, payment_date é a data da operação, NÃO a data de vencimento do boleto.
 
 Para gerenciamento de categorias:
 {"intent":"gerenciar_categoria","action":"criar|criar_subcategoria|renomear|mover|excluir","category_name":"nome da nova categoria (para criar)","category_id":"UUID da categoria alvo (para renomear/mover/excluir)","new_name":"novo nome (para renomear)","parent_category_id":"UUID-da-categoria-pai-se-subcategoria|null","new_parent_category_id":"UUID do novo pai ou null para tornar raiz (para mover)","category_type":"receita|despesa|ambos","context":"Pessoal|Nome da Empresa","friendly_message":"mensagem descrevendo a ação"}
