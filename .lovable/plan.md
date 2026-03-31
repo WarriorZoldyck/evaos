@@ -1,63 +1,42 @@
 
 
-# Correção da Importação de Fatura — Valores e Distribuição por Cartão
+# Revisão da Importação Multi-Cartão — Problemas Encontrados
 
-## Problemas Encontrados
+## Bug 1: Categoria salva como UUID em vez de nome
+**Linha 322** do `ImportStatementModal.tsx`:
+```typescript
+category: defaultCategory || "Sem Categoria"
+```
+O `defaultCategory` vem de um `<Select>` cujo `value` é `c.id` (UUID). Porém, a coluna `category` na tabela `transactions` espera o **nome** da categoria (string texto), não o UUID. Resultado: transações importadas ficam com uma categoria ilegível/não reconhecida pelo sistema.
 
-### 1. Importações duplicadas no banco
-- **3/28**: 115 transações = R$ 40.111,30
-- **3/29**: 102 transações = R$ 38.112,32
-- **Total no banco**: 217 transações = R$ 78.223,62
-- **Todas no cartão 7014** (nenhuma nos filhos 5178, 7239, 8021)
-
-### 2. Valores inflados por entradas indevidas
-A última importação (102 tx) contém:
-- **4 receitas** (R$ 19.225,79) — incluem "DEB AUTOM DE FATURA EM C/" (R$ 19.075,85) que é o pagamento da fatura anterior, **não é transação real**
-- **98 despesas** (R$ 18.886,53)
-- Total bruto: R$ 38.112,32 — quase o dobro do valor real da fatura (R$ 20.739,08)
-
-O prompt da IA já diz "Do NOT include payment summaries" mas a IA incluiu mesmo assim.
-
-### 3. Cartões filhos não estão sendo atribuídos
-O código do modal ainda está mandando tudo para o cartão principal (7014). Os cartões 5178, 7239 e 8021 não receberam nenhuma transação.
-
-### 4. payment_date não alinhada com a fatura
-As transações mostram a data de compra como `payment_date` ao invés da data de vencimento da fatura.
-
-## Plano de Correção
-
-### Passo 1 — Limpar dados duplicados
-Excluir TODAS as transações importadas da Paula (ambos os lotes de 3/28 e 3/29) para reimportar limpo:
-```sql
-DELETE FROM transactions 
-WHERE user_id = '...' AND external_id LIKE 'import_%' 
-AND credit_card_id = 'd1ef5ba8-...';
+**Correção**: Buscar o nome da categoria selecionada:
+```typescript
+const catName = rootCategories.find(c => c.id === defaultCategory)?.name || "Sem Categoria";
+// usar catName no map
 ```
 
-### Passo 2 — Melhorar o prompt da IA (edge function)
-Reforçar no prompt do `parse-bank-statement`:
-- **Excluir explicitamente**: "DEB AUTOM DE FATURA", pagamentos anteriores, créditos de estorno que não são compras
-- Adicionar regra: "Entries like 'DEB AUTOM DE FATURA' or 'PAGAMENTO FATURA' are bill payments, NOT transactions — exclude them"
+## Bug 2: Transações sem match de cartão ficam sem cartão em modo multi-card
+**Linha 303-304**:
+```typescript
+const cardId = isMultiCard
+  ? (r.matched_card_id || targetCard || null)  // targetCard está vazio em multi-card!
+  : (importType === "cartao" ? targetCard : null);
+```
+Em modo multi-card, `targetCard` nunca é setado (o select de cartão só aparece quando `!isMultiCard`). Transações sem `matched_card_id` recebem `credit_card_id = null`.
 
-### Passo 3 — Distribuir transações por cartão real (modal)
-No `ImportStatementModal.tsx`, ao fazer o match de `detected_card_digits` com os cartões do sistema:
-- Usar o `card.id` real (filho) ao invés de `card.parent_card_id`
-- Garantir que cada transação receba o `credit_card_id` do cartão correspondente aos seus dígitos
+**Correção**: Para transações sem match em modo multi-card, atribuir ao cartão principal (pai) da fatura. Podemos derivar o cartão pai do primeiro `detectedCards` que não tenha `parent_card_id`, ou do cartão com mais transações.
 
-### Passo 4 — Alinhar payment_date com vencimento da fatura
-Para importações de cartão, setar `payment_date` = `statement_due_date` (vencimento) e `competence_date` = data de compra original.
+## Bug 3: Prompt da IA pode não processar faturas muito grandes
+O `max_tokens: 65000` pode não ser suficiente para faturas com 100+ transações. O JSON de 115 transações pode ter ~50k tokens. Se truncar, a lógica de salvage recupera parcialmente mas perde transações do final.
 
-### Passo 5 — Validação pós-correção
-Após reimportação:
-- Verificar que o total de despesas bate com R$ 20.739,08 da fatura
-- Verificar distribuição: 7014, 5178, 7239, 8021 cada um com suas transações
-- Confirmar que não há entradas de pagamento/crédito de fatura
+**Não precisa de mudança agora** — já tem lógica de salvage. Mas vale monitorar.
 
-## Arquivos Afetados
+## Resumo das Correções
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/parse-bank-statement/index.ts` | Reforçar exclusão de pagamentos de fatura no prompt |
-| `src/components/lancamentos/ImportStatementModal.tsx` | Atribuir cartão real (não pai); alinhar payment_date |
-| Migration SQL | Limpar lotes duplicados da Paula |
+| Arquivo | Correção |
+|---------|----------|
+| `ImportStatementModal.tsx` | Linha 322: usar nome da categoria em vez de UUID |
+| `ImportStatementModal.tsx` | Linha 303: fallback para cartão pai quando sem match em multi-card |
+
+Impacto: 2 bugs que afetam diretamente a qualidade dos dados importados. Correção simples, sem risco de quebrar outros fluxos.
 
