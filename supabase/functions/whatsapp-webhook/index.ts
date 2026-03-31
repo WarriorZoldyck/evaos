@@ -2594,6 +2594,19 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const competenceDate = fixYear(aiParsed.competence_date || aiParsed.date || today);
       let paymentDate = fixYear(aiParsed.payment_date || aiParsed.date || today);
 
+      // --- Safeguard: comprovantes de pagamento direto não podem ter payment_date no futuro ---
+      const directPaymentMethods = ["pix", "transferencia", "dinheiro", "Pix", "Transferência", "Dinheiro"];
+      const isDirectPayment = directPaymentMethods.some(m => 
+        paymentMethod?.toLowerCase() === m.toLowerCase() || 
+        aiParsed.payment_method?.toLowerCase() === m.toLowerCase()
+      );
+      if (hasMedia && isDirectPayment && !creditCardId && paymentDate > today) {
+        console.log("Safeguard: Direct payment with future date detected. Forcing payment_date to today.", {
+          original: paymentDate, corrected: today, method: paymentMethod
+        });
+        paymentDate = today;
+      }
+
       if (creditCardId) {
         const card = contextCards.find((c) => c.id === creditCardId);
         if (card) {
