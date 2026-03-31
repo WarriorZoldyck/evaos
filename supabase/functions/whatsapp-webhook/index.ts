@@ -2165,32 +2165,36 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
         if (!bankAccountId && !walletId) {
           // Also try resolving from document party extraction (bank name in receipt)
+          // STRICT: only accept if exactly 1 account matches with high confidence
           if (documentPartyExtraction && !bankAccountId && !walletId) {
             const issuerName = normalizeText(documentPartyExtraction.issuer_name || "");
             const recipientName = normalizeText(documentPartyExtraction.recipient_name || "");
-            // For expenses (sent money), the issuer is likely the user's bank
-            // For receipts (received money), the recipient's bank info may help
             const bankKeywords = [issuerName, recipientName].filter(Boolean);
             
             for (const keyword of bankKeywords) {
-              if (keyword.length < 3) continue;
-              const accByName = contextAccounts.find((a) => {
+              if (keyword.length < 4) continue; // Require at least 4 chars for document party match
+              const matchingAccs = contextAccounts.filter((a) => {
                 const accNorm = normalizeText(a.name);
-                return accNorm.includes(keyword) || keyword.includes(accNorm);
+                // Strict: account name must START with the keyword or be an exact match
+                return accNorm.startsWith(keyword) || keyword.startsWith(accNorm);
               });
-              if (accByName) {
-                bankAccountId = accByName.id;
-                console.log("Account resolved from document party:", accByName.name, "keyword:", keyword);
-                break;
-              }
-              const walByName = contextWallets.find((w) => {
+              const matchingWals = contextWallets.filter((w) => {
                 const walNorm = normalizeText(w.name);
-                return walNorm.includes(keyword) || keyword.includes(walNorm);
+                return walNorm.startsWith(keyword) || keyword.startsWith(walNorm);
               });
-              if (walByName) {
-                walletId = walByName.id;
-                console.log("Wallet resolved from document party:", walByName.name, "keyword:", keyword);
+              const totalDocMatches = matchingAccs.length + matchingWals.length;
+              if (totalDocMatches === 1) {
+                if (matchingAccs.length === 1) {
+                  bankAccountId = matchingAccs[0].id;
+                  console.log("Account resolved from document party (strict):", matchingAccs[0].name, "keyword:", keyword);
+                } else {
+                  walletId = matchingWals[0].id;
+                  console.log("Wallet resolved from document party (strict):", matchingWals[0].name, "keyword:", keyword);
+                }
                 break;
+              } else if (totalDocMatches > 1) {
+                console.log("Multiple document party matches, skipping auto-resolve. keyword:", keyword, "matches:", totalDocMatches);
+                // Don't resolve — will fall to choose_account
               }
             }
           }
