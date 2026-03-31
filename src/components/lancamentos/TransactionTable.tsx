@@ -126,7 +126,7 @@ interface TransactionRowProps {
   allCategories?: Category[];
   bankAccounts: { id: string; name: string }[];
   wallets: { id: string; name: string }[];
-  creditCards: { id: string; name: string }[];
+  creditCards: CreditCardWithHierarchy[];
   suppliers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
   onEdit: (t: Transaction) => void;
