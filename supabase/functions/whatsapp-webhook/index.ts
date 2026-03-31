@@ -725,7 +725,7 @@ serve(async (req) => {
         
         // Fetch accounts for matching
         const [accsRes, wltsRes, ccsRes] = await Promise.all([
-          supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
+         supabase.from("bank_accounts").select("id, name, company_id, agency_number, account_number").eq("user_id", userId),
           supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
           supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
         ]);
