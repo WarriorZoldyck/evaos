@@ -2165,6 +2165,101 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             }
           }
         }
+        // === NEW: Try resolving by agency + account number from document ===
+        if (!bankAccountId && !walletId && documentPartyExtraction) {
+          const normalizeAccNum = (s: string | null | undefined) => (s || "").replace(/[.\-\s]/g, "").replace(/^0+/, "");
+          
+          // Get agency/account from both sides of the document
+          const docAgencies = [
+            documentPartyExtraction.issuer_agency,
+            documentPartyExtraction.recipient_agency,
+          ].filter(Boolean);
+          const docAccounts = [
+            documentPartyExtraction.issuer_account,
+            documentPartyExtraction.recipient_account,
+          ].filter(Boolean);
+          
+          if (docAgencies.length > 0 || docAccounts.length > 0) {
+            const matchingByAgAcc = contextAccounts.filter((a) => {
+              if (!a.agency_number && !a.account_number) return false;
+              const normAgency = normalizeAccNum(a.agency_number);
+              const normAccount = normalizeAccNum(a.account_number);
+              
+              // Check if any doc agency+account pair matches this account
+              for (const docAg of docAgencies) {
+                for (const docAcc of docAccounts) {
+                  const normDocAg = normalizeAccNum(docAg);
+                  const normDocAcc = normalizeAccNum(docAcc);
+                  if (normAgency && normDocAg && normAgency === normDocAg &&
+                      normAccount && normDocAcc && normAccount === normDocAcc) {
+                    return true;
+                  }
+                }
+              }
+              // Also try just account number match if agency is empty
+              if (!normAgency || docAgencies.length === 0) {
+                for (const docAcc of docAccounts) {
+                  const normDocAcc = normalizeAccNum(docAcc);
+                  if (normAccount && normDocAcc && normAccount === normDocAcc) {
+                    return true;
+                  }
+                }
+              }
+              return false;
+            });
+            
+            if (matchingByAgAcc.length === 1) {
+              bankAccountId = matchingByAgAcc[0].id;
+              console.log("Account resolved by agency/account number match:", matchingByAgAcc[0].name, 
+                "ag:", matchingByAgAcc[0].agency_number, "cc:", matchingByAgAcc[0].account_number);
+            } else if (matchingByAgAcc.length > 1) {
+              console.log("Multiple agency/account matches, skipping auto-resolve:", matchingByAgAcc.map(a => a.name));
+            } else {
+              // Try cross-context (all accounts, not just context)
+              const crossMatchByAgAcc = accounts.filter((a) => {
+                if (!a.agency_number && !a.account_number) return false;
+                const normAgency = normalizeAccNum(a.agency_number);
+                const normAccount = normalizeAccNum(a.account_number);
+                for (const docAg of docAgencies) {
+                  for (const docAcc of docAccounts) {
+                    const normDocAg = normalizeAccNum(docAg);
+                    const normDocAcc = normalizeAccNum(docAcc);
+                    if (normAgency && normDocAg && normAgency === normDocAg &&
+                        normAccount && normDocAcc && normAccount === normDocAcc) {
+                      return true;
+                    }
+                  }
+                }
+                if (!normAgency || docAgencies.length === 0) {
+                  for (const docAcc of docAccounts) {
+                    if (normAccount && normalizeAccNum(docAcc) === normAccount) return true;
+                  }
+                }
+                return false;
+              });
+              
+              if (crossMatchByAgAcc.length === 1) {
+                const crossAcc = crossMatchByAgAcc[0];
+                console.log("Cross-context account resolved by agency/account:", crossAcc.name);
+                bankAccountId = crossAcc.id;
+                companyId = crossAcc.company_id || null;
+                contextAccounts = accounts.filter((a) =>
+                  companyId ? a.company_id === companyId : !a.company_id
+                );
+                contextWallets = wallets.filter((w) =>
+                  companyId ? w.company_id === companyId : !w.company_id
+                );
+                contextCards = creditCards.filter((c) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+                contextCategories = categories.filter((c) =>
+                  companyId ? c.company_id === companyId : !c.company_id
+                );
+              }
+            }
+          }
+        }
+        
         if (!bankAccountId && !walletId) {
           // Also try resolving from document party extraction (bank name in receipt)
           // STRICT: only accept if exactly 1 account matches with high confidence
