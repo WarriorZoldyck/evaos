@@ -2266,6 +2266,38 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
       }
 
+      // --- FUZZY SUBCATEGORY MATCH: try matching suggested_category_name against subcategory names ---
+      if (!matchedCategory && (aiParsed.suggested_category_name || aiParsed.category)) {
+        const suggestedNorm = normalizeText(aiParsed.suggested_category_name || aiParsed.category || "");
+        if (suggestedNorm && suggestedNorm.length >= 3) {
+          // Search subcategories first (more specific match)
+          for (const sub of contextCategories.filter((c: any) => c.parent_id)) {
+            const subNorm = normalizeText(sub.name);
+            if (subNorm === suggestedNorm || subNorm.includes(suggestedNorm) || suggestedNorm.includes(subNorm)) {
+              const parentCat = contextCategories.find((c: any) => c.id === sub.parent_id && !c.parent_id);
+              if (parentCat && typeMatches(parentCat)) {
+                matchedCategory = parentCat;
+                subcategoryValue = sub.id;
+                subcategoryLabel = sub.name;
+                console.log("FUZZY SUBCATEGORY MATCH:", { suggested: suggestedNorm, matched: sub.name, parent: parentCat.name });
+                break;
+              }
+            }
+          }
+          // If still no match, try root categories with fuzzy matching
+          if (!matchedCategory) {
+            for (const cat of contextCategories.filter((c: any) => !c.parent_id && typeMatches(c))) {
+              const catNorm = normalizeText(cat.name);
+              if (catNorm.includes(suggestedNorm) || suggestedNorm.includes(catNorm)) {
+                matchedCategory = cat;
+                console.log("FUZZY ROOT CATEGORY MATCH:", { suggested: suggestedNorm, matched: cat.name });
+                break;
+              }
+            }
+          }
+        }
+      }
+
       // --- NO CATEGORY MATCH → ask user ---
       if (!matchedCategory) {
         const suggestedName = aiParsed.suggested_category_name || aiParsed.description || "Nova Categoria";
