@@ -423,6 +423,9 @@ export function CreditCardBillPaymentModal({
                           {t.description}
                         </p>
                         <p className="text-xs text-muted-foreground">
+                          {(t as any).purchase_date_original && (t as any).purchase_date_original !== t.competence_date
+                            ? `Compra: ${format(new Date((t as any).purchase_date_original + "T12:00:00"), "dd/MM/yyyy")} • `
+                            : ""}
                           {format(new Date(t.competence_date + "T12:00:00"), "dd/MM")}
                           {t.installment_number && t.installments_total
                             ? ` • ${t.installment_number}/${t.installments_total}`
