@@ -37,6 +37,10 @@ interface ParsedTransaction {
   detected_card_digits?: string;
   matched_card_id?: string;
   statement_due_date?: string;
+  statement_close_date?: string;
+  raw_statement_date?: string;
+  resolved_competence_date?: string;
+  purchase_date_original?: string;
 }
 
 interface ImportStatementModalProps {
