@@ -268,15 +268,26 @@ Only classify as "receita" actual purchase refunds/chargebacks (e.g., "ESTORNO",
         ? String(t.statement_due_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
         : undefined;
 
+      const statementCloseDate = t.statement_close_date
+        ? String(t.statement_close_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
+        : undefined;
+
+      // Use raw_date if available, fallback to date field
+      const rawDate = t.raw_date ? String(t.raw_date).trim() : undefined;
+      // If AI returned a full YYYY-MM-DD date, use it as fallback
+      const dateField = String(t.date || t.raw_date || "");
+
       return {
-        date: String(t.date || ""),
+        date: dateField,
         description: String(t.description || "Sem descrição"),
         amount: Math.abs(Number(t.amount) || 0),
         type: t.type === "receita" ? "receita" as const : "despesa" as const,
         ...(detectedDigits ? { detected_card_digits: detectedDigits } : {}),
         ...(statementDueDate ? { statement_due_date: statementDueDate } : {}),
+        ...(statementCloseDate ? { statement_close_date: statementCloseDate } : {}),
+        ...(rawDate ? { raw_statement_date: rawDate } : {}),
       };
-    }).filter((t: ParsedTransaction) => t.amount > 0 && t.date);
+    }).filter((t: ParsedTransaction) => t.amount > 0 && (t.date || t.raw_statement_date));
   } catch (e) {
     console.error("Failed to parse AI response:", content);
     throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
