@@ -621,7 +621,10 @@ export function ImportStatementModal({
                         onCheckedChange={(c) => toggleAll(!!c)}
                       />
                     </th>
-                    <th className="p-2 text-left font-medium">Data</th>
+                    <th className="p-2 text-left font-medium">Data Compra</th>
+                    {importType === "cartao" && (
+                      <th className="p-2 text-left font-medium">Competência</th>
+                    )}
                     <th className="p-2 text-left font-medium">Descrição</th>
                     <th className="p-2 text-right font-medium">Valor</th>
                     <th className="p-2 text-center font-medium">Tipo</th>
@@ -636,7 +639,14 @@ export function ImportStatementModal({
                       <td className="p-2">
                         <Checkbox checked={r.selected} onCheckedChange={() => toggleRow(idx)} />
                       </td>
-                      <td className="p-2 text-muted-foreground whitespace-nowrap">{r.date}</td>
+                      <td className="p-2 text-muted-foreground whitespace-nowrap">
+                        {r.raw_statement_date || r.date}
+                      </td>
+                      {importType === "cartao" && (
+                        <td className="p-2 text-muted-foreground whitespace-nowrap text-xs">
+                          {r.resolved_competence_date || r.date}
+                        </td>
+                      )}
                       <td className="p-2 max-w-[250px] truncate">
                         {r.description}
                         {r.series_id && (
