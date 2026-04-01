@@ -37,6 +37,10 @@ interface ParsedTransaction {
   detected_card_digits?: string;
   matched_card_id?: string;
   statement_due_date?: string;
+  statement_close_date?: string;
+  raw_statement_date?: string;
+  resolved_competence_date?: string;
+  purchase_date_original?: string;
 }
 
 interface ImportStatementModalProps {
@@ -56,6 +60,53 @@ function detectDigitsInDescription(desc: string, cards: { id: string; last_four_
     if (desc.includes(card.last_four_digits)) return card.id;
   }
   return undefined;
+}
+
+/**
+ * Resolve year for a raw DD/MM date using the statement's close date.
+ * Rule: candidate = raw_date with close_date's year. If candidate > close_date, subtract 1 year.
+ * Returns YYYY-MM-DD string.
+ */
+function resolveRawDateToISO(rawDate: string, closeDateStr: string | undefined, dueDateStr: string | undefined): { competenceDate: string; purchaseDate: string } | null {
+  // rawDate can be "DD/MM" or already "YYYY-MM-DD"
+  const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return { competenceDate: rawDate, purchaseDate: rawDate };
+  }
+
+  const ddmmMatch = rawDate.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!ddmmMatch) return null;
+
+  const day = parseInt(ddmmMatch[1]);
+  const month = parseInt(ddmmMatch[2]);
+
+  // Determine reference date for year resolution
+  const refStr = closeDateStr || dueDateStr;
+  if (!refStr) {
+    // Fallback: use current year
+    const year = new Date().getFullYear();
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return { competenceDate: iso, purchaseDate: iso };
+  }
+
+  const refDate = new Date(refStr + "T00:00:00");
+  const refYear = refDate.getFullYear();
+
+  // Build candidate with reference year
+  const candidate = new Date(refYear, month - 1, day);
+
+  // If candidate is after the close/due date, the purchase was from the previous year
+  if (candidate > refDate) {
+    candidate.setFullYear(refYear - 1);
+  }
+
+  const purchaseISO = `${candidate.getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  // For competence: if close_date exists, use close_date's month as competence
+  // (all items in this statement belong to the same billing cycle)
+  const competenceISO = closeDateStr || purchaseISO;
+
+  return { competenceDate: competenceISO, purchaseDate: purchaseISO };
 }
 
 export function ImportStatementModal({
@@ -189,13 +240,12 @@ export function ImportStatementModal({
         }
       }
 
-      // Per-transaction card detection
+      // Per-transaction card detection + date resolution
       const parsed: ParsedTransaction[] = raw.map((t: any) => {
         const { _installment_number, _installments_total, _base_description, ...rest } = t;
 
         let matchedCardId: string | undefined;
         if (t.detected_card_digits) {
-          // Keep the real card ID (child), don't collapse to parent
           const card = creditCards.find((c) => c.last_four_digits === t.detected_card_digits);
           if (card) matchedCardId = card.id;
         }
@@ -205,7 +255,17 @@ export function ImportStatementModal({
           if (descriptionMatch) matchedCardId = descriptionMatch;
         }
 
-        return { ...rest, matched_card_id: matchedCardId };
+        // Resolve dates deterministically
+        const rawDate = t.raw_statement_date || t.date;
+        const resolved = resolveRawDateToISO(rawDate, t.statement_close_date, t.statement_due_date);
+
+        return {
+          ...rest,
+          matched_card_id: matchedCardId,
+          date: resolved?.purchaseDate || t.date,
+          resolved_competence_date: resolved?.competenceDate || t.date,
+          purchase_date_original: resolved?.purchaseDate || t.date,
+        };
       });
 
       setRows(parsed);
@@ -320,12 +380,20 @@ export function ImportStatementModal({
         ? (r.statement_due_date || r.date)
         : r.date;
 
+      // For credit cards: competence = close date (billing cycle), not original purchase date
+      const competenceDate = importType === "cartao"
+        ? (r.resolved_competence_date || r.statement_close_date || r.statement_due_date || r.date)
+        : r.date;
+
+      // Preserve original purchase date for credit card imports
+      const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
+
       return {
         description: r.description,
         amount: r.amount,
         type: r.type,
         payment_date: billingDate,
-        competence_date: r.date,
+        competence_date: competenceDate,
         status: "Pago" as const,
         category: catName,
         user_id: user.id,
@@ -338,6 +406,7 @@ export function ImportStatementModal({
         installment_number: r.installment_number || null,
         installments_total: r.installments_total || null,
         original_amount: r.original_amount || null,
+        purchase_date_original: purchaseDateOriginal || null,
       };
     });
 
@@ -552,7 +621,10 @@ export function ImportStatementModal({
                         onCheckedChange={(c) => toggleAll(!!c)}
                       />
                     </th>
-                    <th className="p-2 text-left font-medium">Data</th>
+                    <th className="p-2 text-left font-medium">Data Compra</th>
+                    {importType === "cartao" && (
+                      <th className="p-2 text-left font-medium">Competência</th>
+                    )}
                     <th className="p-2 text-left font-medium">Descrição</th>
                     <th className="p-2 text-right font-medium">Valor</th>
                     <th className="p-2 text-center font-medium">Tipo</th>
@@ -567,7 +639,14 @@ export function ImportStatementModal({
                       <td className="p-2">
                         <Checkbox checked={r.selected} onCheckedChange={() => toggleRow(idx)} />
                       </td>
-                      <td className="p-2 text-muted-foreground whitespace-nowrap">{r.date}</td>
+                      <td className="p-2 text-muted-foreground whitespace-nowrap">
+                        {r.raw_statement_date || r.date}
+                      </td>
+                      {importType === "cartao" && (
+                        <td className="p-2 text-muted-foreground whitespace-nowrap text-xs">
+                          {r.resolved_competence_date || r.date}
+                        </td>
+                      )}
                       <td className="p-2 max-w-[250px] truncate">
                         {r.description}
                         {r.series_id && (

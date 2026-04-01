@@ -152,6 +152,9 @@ export function TransactionDetailModal({
           {/* Dates */}
           <InfoRow label="Data de Pagamento" value={format(new Date(t.payment_date + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })} />
           <InfoRow label="Data de Competência" value={format(new Date(t.competence_date + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })} />
+          {(t as any).purchase_date_original && (t as any).purchase_date_original !== t.competence_date && (
+            <InfoRow label="Data Original da Compra" value={format(new Date((t as any).purchase_date_original + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR })} />
+          )}
 
           {/* Category */}
           {catParts.length > 0 && <InfoRow label="Categoria" value={catParts.join(" › ")} />}

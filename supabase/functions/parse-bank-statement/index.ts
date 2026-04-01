@@ -14,6 +14,8 @@ interface ParsedTransaction {
   type: "receita" | "despesa";
   detected_card_digits?: string;
   statement_due_date?: string;
+  statement_close_date?: string;
+  raw_statement_date?: string;
 }
 
 function extractOFXAccountDigits(content: string): string | undefined {
@@ -141,19 +143,22 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
           content: `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
 
 Return ONLY a valid JSON array of transaction objects. Each object must have:
-- "date": string in "YYYY-MM-DD" format
+- "raw_date": string — the date EXACTLY as printed on the statement line, in "DD/MM" format (e.g. "23/12", "01/01", "08/03"). Do NOT convert or guess the year. Just the day and month as they appear.
 - "description": string with the transaction description  
 - "amount": number (always positive)
 - "type": "despesa" for purchases/expenses, "receita" ONLY for actual refunds/chargebacks (estornos)
 - "card_digits": last 4 digits of the card this transaction belongs to (string), or null if not identifiable
 - "statement_due_date": statement/fatura due date in "YYYY-MM-DD" format, repeated on every transaction object, or null if not identifiable
+- "statement_close_date": the closing date of the billing cycle in "YYYY-MM-DD" format (the date up to which purchases are included in this statement), repeated on every transaction object, or null if not identifiable
 
 CRITICAL RULES:
 - Credit card statements often have MULTIPLE cards in one PDF. Each card section has a header like "NOME DO TITULAR - 4258 XXXX XXXX 7014". The last 4 digits identify which card each transaction belongs to.
 - For each section/card, set "card_digits" to those last 4 digits for ALL transactions under that section.
-- All transactions from the same statement should carry the same "statement_due_date" when the PDF shows the due date.
-- Convert dates from dd/mm to YYYY-MM-DD using the statement's billing period year.
+- All transactions from the same statement should carry the same "statement_due_date" and "statement_close_date" when the PDF shows them.
+- Brazilian statements ALWAYS use DD/MM date format, NEVER MM/DD. Return raw_date as DD/MM exactly as printed.
+- DO NOT try to resolve the year for raw_date. The year will be resolved deterministically by the importing system using the billing cycle.
 - Amount must always be positive.
+- For installment purchases (parcelas), the date printed is often the ORIGINAL purchase date from months/years ago. Still return it as raw_date — the system will handle it.
 
 EXCLUDE THESE ENTRIES (they are NOT real transactions):
 - "DEB AUTOM DE FATURA" or "PAGAMENTO DE FATURA" or "PAGAMENTO FATURA" — these are bill payments
@@ -179,7 +184,7 @@ Only classify as "receita" actual purchase refunds/chargebacks (e.g., "ESTORNO",
             },
             {
               type: "text",
-              text: "Extract all transactions from this statement. Each transaction must include card_digits and statement_due_date. Return only the JSON array."
+              text: "Extract all transactions from this statement. Each transaction must include raw_date (DD/MM as printed), card_digits, statement_due_date, and statement_close_date. Return only the JSON array."
             }
           ],
         },
@@ -263,15 +268,26 @@ Only classify as "receita" actual purchase refunds/chargebacks (e.g., "ESTORNO",
         ? String(t.statement_due_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
         : undefined;
 
+      const statementCloseDate = t.statement_close_date
+        ? String(t.statement_close_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
+        : undefined;
+
+      // Use raw_date if available, fallback to date field
+      const rawDate = t.raw_date ? String(t.raw_date).trim() : undefined;
+      // If AI returned a full YYYY-MM-DD date, use it as fallback
+      const dateField = String(t.date || t.raw_date || "");
+
       return {
-        date: String(t.date || ""),
+        date: dateField,
         description: String(t.description || "Sem descrição"),
         amount: Math.abs(Number(t.amount) || 0),
         type: t.type === "receita" ? "receita" as const : "despesa" as const,
         ...(detectedDigits ? { detected_card_digits: detectedDigits } : {}),
         ...(statementDueDate ? { statement_due_date: statementDueDate } : {}),
+        ...(statementCloseDate ? { statement_close_date: statementCloseDate } : {}),
+        ...(rawDate ? { raw_statement_date: rawDate } : {}),
       };
-    }).filter((t: ParsedTransaction) => t.amount > 0 && t.date);
+    }).filter((t: ParsedTransaction) => t.amount > 0 && (t.date || t.raw_statement_date));
   } catch (e) {
     console.error("Failed to parse AI response:", content);
     throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");

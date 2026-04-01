@@ -962,6 +962,7 @@ export type Database = {
           parent_id: string | null
           payment_date: string
           payment_method: string | null
+          purchase_date_original: string | null
           series_id: string | null
           status: Database["public"]["Enums"]["transaction_status"]
           subcategory: string | null
@@ -998,6 +999,7 @@ export type Database = {
           parent_id?: string | null
           payment_date: string
           payment_method?: string | null
+          purchase_date_original?: string | null
           series_id?: string | null
           status: Database["public"]["Enums"]["transaction_status"]
           subcategory?: string | null
@@ -1034,6 +1036,7 @@ export type Database = {
           parent_id?: string | null
           payment_date?: string
           payment_method?: string | null
+          purchase_date_original?: string | null
           series_id?: string | null
           status?: Database["public"]["Enums"]["transaction_status"]
           subcategory?: string | null
