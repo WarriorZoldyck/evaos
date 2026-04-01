@@ -184,7 +184,7 @@ Only classify as "receita" actual purchase refunds/chargebacks (e.g., "ESTORNO",
             },
             {
               type: "text",
-              text: "Extract all transactions from this statement. Each transaction must include card_digits and statement_due_date. Return only the JSON array."
+              text: "Extract all transactions from this statement. Each transaction must include raw_date (DD/MM as printed), card_digits, statement_due_date, and statement_close_date. Return only the JSON array."
             }
           ],
         },
