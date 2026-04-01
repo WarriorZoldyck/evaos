@@ -380,12 +380,20 @@ export function ImportStatementModal({
         ? (r.statement_due_date || r.date)
         : r.date;
 
+      // For credit cards: competence = close date (billing cycle), not original purchase date
+      const competenceDate = importType === "cartao"
+        ? (r.resolved_competence_date || r.statement_close_date || r.statement_due_date || r.date)
+        : r.date;
+
+      // Preserve original purchase date for credit card imports
+      const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
+
       return {
         description: r.description,
         amount: r.amount,
         type: r.type,
         payment_date: billingDate,
-        competence_date: r.date,
+        competence_date: competenceDate,
         status: "Pago" as const,
         category: catName,
         user_id: user.id,
@@ -398,6 +406,7 @@ export function ImportStatementModal({
         installment_number: r.installment_number || null,
         installments_total: r.installments_total || null,
         original_amount: r.original_amount || null,
+        purchase_date_original: purchaseDateOriginal || null,
       };
     });
 
