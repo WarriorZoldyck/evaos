@@ -14,6 +14,8 @@ interface ParsedTransaction {
   type: "receita" | "despesa";
   detected_card_digits?: string;
   statement_due_date?: string;
+  statement_close_date?: string;
+  raw_statement_date?: string;
 }
 
 function extractOFXAccountDigits(content: string): string | undefined {
