@@ -62,6 +62,53 @@ function detectDigitsInDescription(desc: string, cards: { id: string; last_four_
   return undefined;
 }
 
+/**
+ * Resolve year for a raw DD/MM date using the statement's close date.
+ * Rule: candidate = raw_date with close_date's year. If candidate > close_date, subtract 1 year.
+ * Returns YYYY-MM-DD string.
+ */
+function resolveRawDateToISO(rawDate: string, closeDateStr: string | undefined, dueDateStr: string | undefined): { competenceDate: string; purchaseDate: string } | null {
+  // rawDate can be "DD/MM" or already "YYYY-MM-DD"
+  const isoMatch = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return { competenceDate: rawDate, purchaseDate: rawDate };
+  }
+
+  const ddmmMatch = rawDate.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!ddmmMatch) return null;
+
+  const day = parseInt(ddmmMatch[1]);
+  const month = parseInt(ddmmMatch[2]);
+
+  // Determine reference date for year resolution
+  const refStr = closeDateStr || dueDateStr;
+  if (!refStr) {
+    // Fallback: use current year
+    const year = new Date().getFullYear();
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return { competenceDate: iso, purchaseDate: iso };
+  }
+
+  const refDate = new Date(refStr + "T00:00:00");
+  const refYear = refDate.getFullYear();
+
+  // Build candidate with reference year
+  const candidate = new Date(refYear, month - 1, day);
+
+  // If candidate is after the close/due date, the purchase was from the previous year
+  if (candidate > refDate) {
+    candidate.setFullYear(refYear - 1);
+  }
+
+  const purchaseISO = `${candidate.getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  // For competence: if close_date exists, use close_date's month as competence
+  // (all items in this statement belong to the same billing cycle)
+  const competenceISO = closeDateStr || purchaseISO;
+
+  return { competenceDate: competenceISO, purchaseDate: purchaseISO };
+}
+
 export function ImportStatementModal({
   open,
   onClose,
