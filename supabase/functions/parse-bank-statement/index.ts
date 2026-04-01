@@ -143,19 +143,22 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
           content: `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
 
 Return ONLY a valid JSON array of transaction objects. Each object must have:
-- "date": string in "YYYY-MM-DD" format
+- "raw_date": string — the date EXACTLY as printed on the statement line, in "DD/MM" format (e.g. "23/12", "01/01", "08/03"). Do NOT convert or guess the year. Just the day and month as they appear.
 - "description": string with the transaction description  
 - "amount": number (always positive)
 - "type": "despesa" for purchases/expenses, "receita" ONLY for actual refunds/chargebacks (estornos)
 - "card_digits": last 4 digits of the card this transaction belongs to (string), or null if not identifiable
 - "statement_due_date": statement/fatura due date in "YYYY-MM-DD" format, repeated on every transaction object, or null if not identifiable
+- "statement_close_date": the closing date of the billing cycle in "YYYY-MM-DD" format (the date up to which purchases are included in this statement), repeated on every transaction object, or null if not identifiable
 
 CRITICAL RULES:
 - Credit card statements often have MULTIPLE cards in one PDF. Each card section has a header like "NOME DO TITULAR - 4258 XXXX XXXX 7014". The last 4 digits identify which card each transaction belongs to.
 - For each section/card, set "card_digits" to those last 4 digits for ALL transactions under that section.
-- All transactions from the same statement should carry the same "statement_due_date" when the PDF shows the due date.
-- Convert dates from dd/mm to YYYY-MM-DD using the statement's billing period year.
+- All transactions from the same statement should carry the same "statement_due_date" and "statement_close_date" when the PDF shows them.
+- Brazilian statements ALWAYS use DD/MM date format, NEVER MM/DD. Return raw_date as DD/MM exactly as printed.
+- DO NOT try to resolve the year for raw_date. The year will be resolved deterministically by the importing system using the billing cycle.
 - Amount must always be positive.
+- For installment purchases (parcelas), the date printed is often the ORIGINAL purchase date from months/years ago. Still return it as raw_date — the system will handle it.
 
 EXCLUDE THESE ENTRIES (they are NOT real transactions):
 - "DEB AUTOM DE FATURA" or "PAGAMENTO DE FATURA" or "PAGAMENTO FATURA" — these are bill payments
