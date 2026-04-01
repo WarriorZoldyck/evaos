@@ -259,12 +259,33 @@ export function ImportStatementModal({
         const rawDate = t.raw_statement_date || t.date;
         const resolved = resolveRawDateToISO(rawDate, t.statement_close_date, t.statement_due_date);
 
+        // Ensure date is always a valid YYYY-MM-DD, never DD/MM
+        const resolvedPurchaseDate = resolved?.purchaseDate;
+        const resolvedCompetenceDate = resolved?.competenceDate;
+        const safeDate = resolvedPurchaseDate && /^\d{4}-\d{2}-\d{2}$/.test(resolvedPurchaseDate)
+          ? resolvedPurchaseDate
+          : (t.date && /^\d{4}-\d{2}-\d{2}$/.test(t.date) ? t.date : null);
+        const safeCompetence = resolvedCompetenceDate && /^\d{4}-\d{2}-\d{2}$/.test(resolvedCompetenceDate)
+          ? resolvedCompetenceDate
+          : safeDate;
+
+        // If we still can't resolve, try brute-force from DD/MM with current year
+        const finalDate = safeDate || (() => {
+          const ddmm = rawDate.match(/^(\d{1,2})\/(\d{1,2})$/);
+          if (ddmm) {
+            const y = new Date().getFullYear();
+            return `${y}-${ddmm[2].padStart(2, '0')}-${ddmm[1].padStart(2, '0')}`;
+          }
+          return new Date().toISOString().slice(0, 10);
+        })();
+
         return {
           ...rest,
           matched_card_id: matchedCardId,
-          date: resolved?.purchaseDate || t.date,
-          resolved_competence_date: resolved?.competenceDate || t.date,
-          purchase_date_original: resolved?.purchaseDate || t.date,
+          date: finalDate,
+          resolved_competence_date: safeCompetence || finalDate,
+          purchase_date_original: finalDate,
+          raw_statement_date: t.raw_statement_date || rawDate,
         };
       });
 
