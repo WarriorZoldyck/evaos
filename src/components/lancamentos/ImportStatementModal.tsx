@@ -240,13 +240,12 @@ export function ImportStatementModal({
         }
       }
 
-      // Per-transaction card detection
+      // Per-transaction card detection + date resolution
       const parsed: ParsedTransaction[] = raw.map((t: any) => {
         const { _installment_number, _installments_total, _base_description, ...rest } = t;
 
         let matchedCardId: string | undefined;
         if (t.detected_card_digits) {
-          // Keep the real card ID (child), don't collapse to parent
           const card = creditCards.find((c) => c.last_four_digits === t.detected_card_digits);
           if (card) matchedCardId = card.id;
         }
@@ -256,7 +255,17 @@ export function ImportStatementModal({
           if (descriptionMatch) matchedCardId = descriptionMatch;
         }
 
-        return { ...rest, matched_card_id: matchedCardId };
+        // Resolve dates deterministically
+        const rawDate = t.raw_statement_date || t.date;
+        const resolved = resolveRawDateToISO(rawDate, t.statement_close_date, t.statement_due_date);
+
+        return {
+          ...rest,
+          matched_card_id: matchedCardId,
+          date: resolved?.purchaseDate || t.date,
+          resolved_competence_date: resolved?.competenceDate || t.date,
+          purchase_date_original: resolved?.purchaseDate || t.date,
+        };
       });
 
       setRows(parsed);
