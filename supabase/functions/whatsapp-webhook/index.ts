@@ -745,28 +745,50 @@ serve(async (req) => {
         let matchedCardId: string | null = null;
         let matchedCardBankId: string | null = null;
 
+        // --- Numeric selection support ---
+        const numericChoice = Number(trimmedMsg);
+        const isNumericSelection = Number.isInteger(numericChoice) && numericChoice >= 1;
+
         if (payload.choose_type === "credit_card") {
-          const cardMatch = allCcs.find((c: any) => 
-            c.name.toLowerCase().includes(userChoice) || 
-            userChoice.includes(c.name.toLowerCase()) ||
-            (c.last_four_digits && userChoice.includes(c.last_four_digits))
-          );
-          if (cardMatch) {
-            matchedCardId = cardMatch.id;
-            matchedCardBankId = cardMatch.bank_account_id;
+          if (isNumericSelection && numericChoice <= allCcs.length) {
+            const picked = allCcs[numericChoice - 1];
+            matchedCardId = picked.id;
+            matchedCardBankId = picked.bank_account_id;
+          } else {
+            const cardMatch = allCcs.find((c: any) => 
+              c.name.toLowerCase().includes(userChoice) || 
+              userChoice.includes(c.name.toLowerCase()) ||
+              (c.last_four_digits && userChoice.includes(c.last_four_digits))
+            );
+            if (cardMatch) {
+              matchedCardId = cardMatch.id;
+              matchedCardBankId = cardMatch.bank_account_id;
+            }
           }
         } else {
-          // Try bank accounts first, then wallets
-          const accMatch = allAccs.find((a: any) => 
-            a.name.toLowerCase().includes(userChoice) || userChoice.includes(a.name.toLowerCase())
-          );
-          if (accMatch) {
-            matchedBankId = accMatch.id;
+          // Build ordered list matching the displayed order: accounts first, then wallets
+          const orderedOptions: Array<{ type: "bank" | "wallet"; id: string; bankAccountId?: string }> = [
+            ...allAccs.map((a: any) => ({ type: "bank" as const, id: a.id })),
+            ...allWlts.map((w: any) => ({ type: "wallet" as const, id: w.id })),
+          ];
+
+          if (isNumericSelection && numericChoice <= orderedOptions.length) {
+            const picked = orderedOptions[numericChoice - 1];
+            if (picked.type === "bank") matchedBankId = picked.id;
+            else matchedWalletId = picked.id;
           } else {
-            const walMatch = allWlts.find((w: any) => 
-              w.name.toLowerCase().includes(userChoice) || userChoice.includes(w.name.toLowerCase())
+            // Fallback: match by name
+            const accMatch = allAccs.find((a: any) => 
+              a.name.toLowerCase().includes(userChoice) || userChoice.includes(a.name.toLowerCase())
             );
-            if (walMatch) matchedWalletId = walMatch.id;
+            if (accMatch) {
+              matchedBankId = accMatch.id;
+            } else {
+              const walMatch = allWlts.find((w: any) => 
+                w.name.toLowerCase().includes(userChoice) || userChoice.includes(w.name.toLowerCase())
+              );
+              if (walMatch) matchedWalletId = walMatch.id;
+            }
           }
         }
 
@@ -775,7 +797,7 @@ serve(async (req) => {
           return respond({
             success: true,
             intent: "lancamento",
-            message: `❓ Não entendi qual conta. Por favor, responda com o nome exato da conta ou *não* para cancelar.`,
+            message: `❓ Não entendi qual conta. Por favor, responda com o *número da opção* ou o nome exato da conta, ou *não* para cancelar.`,
             transaction: null,
           }, 200);
         }
@@ -2084,7 +2106,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           return respond({
             success: true,
             intent: "lancamento",
-            message: `💳 Entendi a compra de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão ou *não* para cancelar.`,
+            message: `💳 Entendi a compra de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o *número da opção* ou o nome do cartão, ou *não* para cancelar.`,
             transaction: null,
           }, 200);
         }
@@ -2298,62 +2320,65 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
         if (!bankAccountId && !walletId) {
           const isBoletoCompra = txType === "despesa" && (paymentMethod === "Boleto" || aiParsed.payment_method === "boleto");
-          const totalOptions = contextAccounts.length + contextWallets.length;
           
-          if (totalOptions === 1) {
-            if (contextAccounts.length === 1) {
-              bankAccountId = contextAccounts[0].id;
-            } else {
-              walletId = contextWallets[0].id;
+          if (isBoletoCompra) {
+            // Boleto de despesa NUNCA pergunta conta — registra sem conta
+            console.log("Boleto de compra (despesa): bypass de seleção de conta");
+          } else {
+            const totalOptions = contextAccounts.length + contextWallets.length;
+            
+            if (totalOptions === 1) {
+              if (contextAccounts.length === 1) {
+                bankAccountId = contextAccounts[0].id;
+              } else {
+                walletId = contextWallets[0].id;
+              }
+            } else if (totalOptions > 1) {
+              const allOptions = [
+                ...contextAccounts.map((a) => a.name),
+                ...contextWallets.map((w) => `${w.name} (carteira)`),
+              ];
+              const optionsList = allOptions.map((name, i) => `${i + 1} - ${name}`).join("\n");
+              
+              await supabase.from("whatsapp_pending_actions").insert({
+                user_id: userId,
+                action_type: "choose_account",
+                payload: {
+                  choose_type: "bank_account",
+                  description: aiParsed.description,
+                  amount: aiParsed.amount,
+                  type: txType,
+                  context: aiParsed.context,
+                  category_id: matchedCategory?.id || null,
+                  category_label: matchedCategory?.name || null,
+                  subcategory_id: subcategoryValue,
+                  payment_method: paymentMethod,
+                  date: aiParsed.date || today,
+                  competence_date: aiParsed.competence_date || aiParsed.date || today,
+                  payment_date: aiParsed.payment_date || null,
+                  contact_name: aiParsed.contact_name || null,
+                  supplier_id: aiParsed.supplier_id || null,
+                  client_id: aiParsed.client_id || null,
+                  notes: aiParsed.notes || null,
+                  attachment_url: attachmentUrl,
+                  original_user_text: originalUserText,
+                  installments: aiParsed.installments || 1,
+                  installment_details: aiParsed.installment_details || null,
+                },
+                suggested_category_name: matchedCategory?.name || "N/A",
+                category_type: txType,
+                context_company_id: companyId,
+              });
+              
+              return respond({
+                success: true,
+                intent: "lancamento",
+                message: `📋 Entendi o lançamento de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o *número da opção* ou o nome da conta, ou *não* para cancelar.`,
+                transaction: null,
+              }, 200);
             }
-          } else if (totalOptions > 1) {
-            const allOptions = [
-              ...contextAccounts.map((a) => a.name),
-              ...contextWallets.map((w) => `${w.name} (carteira)`),
-            ];
-            const optionsList = allOptions.map((name, i) => `${i + 1} - ${name}`).join("\n");
-            
-            await supabase.from("whatsapp_pending_actions").insert({
-              user_id: userId,
-              action_type: "choose_account",
-              payload: {
-                choose_type: "bank_account",
-                description: aiParsed.description,
-                amount: aiParsed.amount,
-                type: txType,
-                context: aiParsed.context,
-                category_id: matchedCategory?.id || null,
-                category_label: matchedCategory?.name || null,
-                subcategory_id: subcategoryValue,
-                payment_method: paymentMethod,
-                date: aiParsed.date || today,
-                competence_date: aiParsed.competence_date || aiParsed.date || today,
-                payment_date: aiParsed.payment_date || null,
-                contact_name: aiParsed.contact_name || null,
-                supplier_id: aiParsed.supplier_id || null,
-                client_id: aiParsed.client_id || null,
-                notes: aiParsed.notes || null,
-                attachment_url: attachmentUrl,
-                original_user_text: originalUserText,
-                installments: aiParsed.installments || 1,
-                installment_details: aiParsed.installment_details || null,
-              },
-              suggested_category_name: matchedCategory?.name || "N/A",
-              category_type: txType,
-              context_company_id: companyId,
-            });
-            
-            return respond({
-              success: true,
-              intent: "lancamento",
-              message: `📋 Entendi o lançamento de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nMas em qual conta devo registrar?\n\n${optionsList}\n\nResponda com o nome da conta ou *não* para cancelar.`,
-              transaction: null,
-            }, 200);
-          } else if (isBoletoCompra) {
-            // totalOptions === 0 e é boleto de compra → registra sem conta
-            console.log("Boleto de compra (despesa) sem contas no contexto: registrando sem conta bancária");
+            // else: totalOptions === 0 → cai no fluxo existente de cross-context ou erro
           }
-          // else: totalOptions === 0 e não é boleto → cai no fluxo existente de cross-context ou erro
         }
       }
 
