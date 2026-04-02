@@ -2106,7 +2106,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           return respond({
             success: true,
             intent: "lancamento",
-            message: `💳 Entendi a compra de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o nome do cartão ou *não* para cancelar.`,
+            message: `💳 Entendi a compra de ${fmt(aiParsed.amount || 0)} — "${aiParsed.description || ""}"\n\nEm qual cartão foi essa compra?\n\n${cardList}\n\nResponda com o *número da opção* ou o nome do cartão, ou *não* para cancelar.`,
             transaction: null,
           }, 200);
         }
