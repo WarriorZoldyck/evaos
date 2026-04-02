@@ -745,28 +745,50 @@ serve(async (req) => {
         let matchedCardId: string | null = null;
         let matchedCardBankId: string | null = null;
 
+        // --- Numeric selection support ---
+        const numericChoice = Number(trimmedMsg);
+        const isNumericSelection = Number.isInteger(numericChoice) && numericChoice >= 1;
+
         if (payload.choose_type === "credit_card") {
-          const cardMatch = allCcs.find((c: any) => 
-            c.name.toLowerCase().includes(userChoice) || 
-            userChoice.includes(c.name.toLowerCase()) ||
-            (c.last_four_digits && userChoice.includes(c.last_four_digits))
-          );
-          if (cardMatch) {
-            matchedCardId = cardMatch.id;
-            matchedCardBankId = cardMatch.bank_account_id;
+          if (isNumericSelection && numericChoice <= allCcs.length) {
+            const picked = allCcs[numericChoice - 1];
+            matchedCardId = picked.id;
+            matchedCardBankId = picked.bank_account_id;
+          } else {
+            const cardMatch = allCcs.find((c: any) => 
+              c.name.toLowerCase().includes(userChoice) || 
+              userChoice.includes(c.name.toLowerCase()) ||
+              (c.last_four_digits && userChoice.includes(c.last_four_digits))
+            );
+            if (cardMatch) {
+              matchedCardId = cardMatch.id;
+              matchedCardBankId = cardMatch.bank_account_id;
+            }
           }
         } else {
-          // Try bank accounts first, then wallets
-          const accMatch = allAccs.find((a: any) => 
-            a.name.toLowerCase().includes(userChoice) || userChoice.includes(a.name.toLowerCase())
-          );
-          if (accMatch) {
-            matchedBankId = accMatch.id;
+          // Build ordered list matching the displayed order: accounts first, then wallets
+          const orderedOptions: Array<{ type: "bank" | "wallet"; id: string; bankAccountId?: string }> = [
+            ...allAccs.map((a: any) => ({ type: "bank" as const, id: a.id })),
+            ...allWlts.map((w: any) => ({ type: "wallet" as const, id: w.id })),
+          ];
+
+          if (isNumericSelection && numericChoice <= orderedOptions.length) {
+            const picked = orderedOptions[numericChoice - 1];
+            if (picked.type === "bank") matchedBankId = picked.id;
+            else matchedWalletId = picked.id;
           } else {
-            const walMatch = allWlts.find((w: any) => 
-              w.name.toLowerCase().includes(userChoice) || userChoice.includes(w.name.toLowerCase())
+            // Fallback: match by name
+            const accMatch = allAccs.find((a: any) => 
+              a.name.toLowerCase().includes(userChoice) || userChoice.includes(a.name.toLowerCase())
             );
-            if (walMatch) matchedWalletId = walMatch.id;
+            if (accMatch) {
+              matchedBankId = accMatch.id;
+            } else {
+              const walMatch = allWlts.find((w: any) => 
+                w.name.toLowerCase().includes(userChoice) || userChoice.includes(w.name.toLowerCase())
+              );
+              if (walMatch) matchedWalletId = walMatch.id;
+            }
           }
         }
 
@@ -775,7 +797,7 @@ serve(async (req) => {
           return respond({
             success: true,
             intent: "lancamento",
-            message: `❓ Não entendi qual conta. Por favor, responda com o nome exato da conta ou *não* para cancelar.`,
+            message: `❓ Não entendi qual conta. Por favor, responda com o *número da opção* ou o nome exato da conta, ou *não* para cancelar.`,
             transaction: null,
           }, 200);
         }
