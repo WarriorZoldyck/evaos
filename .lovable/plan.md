@@ -1,118 +1,173 @@
 
-## Diagnóstico
+## Objetivo
 
-Com base na fatura anexada, o problema não parece ser “só formato americano”. O PDF está claramente em `DD/MM` e mistura 3 cenários na mesma fatura:
+Corrigir 2 regressões no `supabase/functions/whatsapp-webhook/index.ts`:
 
-- compras normais do ciclo atual: `23/12`, `30/12`, `01/01`, `02/01`
-- parcelas antigas com a data original da compra: `08/03 11/12`, `15/05 08/10`, `19/11 02/03`
-- múltiplos cartões na mesma fatura: `7014` e `7239`
+1. Quando a EVA lista opções numeradas de conta/cartão, a resposta `1`, `2`, `3` etc. deve selecionar corretamente a opção.
+2. Em boleto de despesa, a EVA não deve perguntar banco/conta.
 
-Hoje a lógica tem 2 fragilidades:
-1. o parser pede para a IA devolver a `date` já em `YYYY-MM-DD`
-2. a importação salva `competence_date: r.date`
+## O que encontrei
 
-Isso faz a IA “adivinhar” cedo demais o ano/mês da linha, e depois o app trata essa data como definitiva. Para parcelas antigas, isso empurra o lançamento para 2025 ou troca o mês/dia.
+### 1) A lista é numerada, mas o parser da resposta não aceita número
+No fluxo `choose_account` (linhas ~720-780), a resposta do usuário é comparada apenas por texto/nome:
 
-## Como esta fatura deveria ser lida
+- conta: `a.name.toLowerCase().includes(userChoice)`
+- carteira: `w.name.toLowerCase().includes(userChoice)`
+- cartão: nome e final do cartão
 
-Dados visíveis no PDF:
-- vencimento: `15/01/2026`
-- fechamento: compras realizadas até `08/01`
+Hoje não existe tratamento para:
+- `1`
+- `2`
+- `3`
 
-Leitura correta dos exemplos:
-- `23/12 BURITI SHOP` → compra do ciclo atual: `2025-12-23`
-- `01/01 WAHIB FARUK` → compra do ciclo atual: `2026-01-01`
-- `08/03 SPAY *POLIMPORT 11/12` → compra original `2025-03-08`, mas a parcela pertence à fatura de jan/2026
-- `15/05 IBERIA 08/10` → compra original `2025-05-15`, mas a parcela pertence à fatura de jan/2026
-
-Ou seja: para cartão, precisamos separar:
-- data original impressa na linha
-- data/ciclo em que a parcela entra na fatura atual
-- vencimento da fatura
-
-## Plano de correção
-
-### 1. Parar de confiar na IA para gerar a data final
-No `supabase/functions/parse-bank-statement/index.ts`:
-- mudar o parser para extrair:
-  - `raw_statement_date` exatamente como aparece no PDF (`DD/MM`)
-  - `statement_due_date`
-  - `statement_close_date`
-  - `card_digits`
-  - info de parcela
-- reforçar no prompt que a fatura usa `DD/MM`, nunca `MM/DD`
-- pedir para a IA não converter sozinha datas ambíguas de parcela em data final contábil
-
-### 2. Resolver ano e ciclo no código
-No `src/components/lancamentos/ImportStatementModal.tsx`:
-- criar uma normalização determinística da data usando `statement_close_date`
-- regra:
-```text
-candidate = raw_date com ano do fechamento
-se candidate > statement_close_date:
-  candidate = candidate - 1 ano
+Por isso o usuário responde `1` e cai em:
+```ts
+❓ Não entendi qual conta...
 ```
 
-Exemplo com fechamento `2026-01-08`:
-```text
-23/12 -> 2025-12-23
-01/01 -> 2026-01-01
-08/03 -> 2025-03-08
+### 2) A mensagem pede nome, apesar de exibir números
+As mensagens atuais mostram lista numerada, mas instruem:
+- `Responda com o nome da conta...`
+- `Responda com o nome do cartão...`
+
+Isso contradiz o UX que vocês já querem usar no WhatsApp.
+
+### 3) A regra de boleto está incompleta
+Existe regra de prompt dizendo:
+- boleto de despesa não precisa perguntar conta
+
+Mas no código real (linhas ~2299-2355), o `isBoletoCompra` só evita erro quando `totalOptions === 0`.
+
+Se houver 1 ou várias contas/carteiras no contexto, o fluxo ainda:
+- autoatribui uma conta, ou
+- cria `choose_account`
+
+Ou seja: boleto de despesa continua entrando na lógica de seleção de conta quando não deveria.
+
+## Plano de implementação
+
+### Etapa 1 — Corrigir seleção por número no pending action
+No bloco `pendingAction.action_type === "choose_account"`:
+
+- detectar se `trimmedMsg` é um número inteiro positivo
+- montar a mesma ordem exibida ao usuário:
+  - para conta: primeiro `allAccs`, depois `allWlts`
+  - para cartão: `allCcs`
+- converter `1` em índice `0`, `2` em índice `1`, etc.
+- se o índice existir, preencher:
+  - `matchedBankId`
+  - `matchedWalletId`
+  - `matchedCardId`
+  - `matchedCardBankId` quando for cartão
+
+Fallback:
+- se não for número válido, continuar com matching por nome/texto como hoje
+
+Resultado esperado:
+- usuário responde `1`
+- EVA entende e segue com o lançamento corretamente
+
+### Etapa 2 — Atualizar os textos para refletir seleção numérica
+Ajustar as mensagens de escolha para algo como:
+
+- conta:
+  - `Responda com o número da opção ou com o nome da conta.`
+- cartão:
+  - `Responda com o número da opção ou com o nome do cartão.`
+
+E no erro de retry:
+- trocar `responda com o nome exato da conta`
+- por algo como `responda com o número da opção ou o nome exato`
+
+Isso deixa o texto alinhado com o comportamento real.
+
+### Etapa 3 — Boleto de despesa deve sair do fluxo de conta antes
+No trecho onde resolve conta/carteira principal (linhas ~2299+):
+
+- calcular `isBoletoCompra` antes de qualquer autoatribuição/pergunta
+- se for:
+  - `txType === "despesa"`
+  - `paymentMethod === "Boleto"` ou `aiParsed.payment_method === "boleto"`
+
+então:
+- não autoatribuir conta única
+- não abrir `choose_account`
+- manter `bankAccountId = null` e `walletId = null`
+- seguir para criação do lançamento normalmente
+
+Isso vale mesmo se existirem várias contas/carteiras cadastradas.
+
+### Etapa 4 — Garantir consistência no bloqueio final
+Manter o safeguard final:
+```ts
+if (!bankAccountId && !walletId && !creditCardId && !isBoletoCompraFinal)
 ```
 
-### 3. Tratar parcelas antigas como itens da fatura atual
-Para importação de cartão:
-- `payment_date` continua sendo o vencimento da fatura (`statement_due_date`)
-- se a linha for parcelada e a data original cair fora do ciclo atual, ela não pode continuar comandando a competência
-- nesses casos:
-  - `competence_date` = `statement_close_date` (ou outro marcador do ciclo atual)
-  - a data original da compra precisa ser preservada separadamente
+Mas alinhar a variável de boleto com a mesma regra usada no fluxo principal, para não haver divergência entre:
+- decisão de perguntar
+- decisão de bloquear
 
-### 4. Preservar a data original da compra
-Recomendação: adicionar uma coluna nova em `transactions`, por exemplo:
-- `purchase_date_original date null`
+## Arquivo afetado
 
-Assim a Eva pode guardar:
-- Data original da compra: `08/03/2025`
-- Competência da fatura: `08/01/2026` (ciclo atual)
-- Vencimento/pagamento da fatura: `15/01/2026`
+- `supabase/functions/whatsapp-webhook/index.ts`
 
-Isso deixa o comportamento mais “bancário” e evita perder informação histórica.
+## Resultado esperado
 
-### 5. Melhorar a conferência antes de importar
-No preview da importação:
-- mostrar lado a lado:
-  - data original do PDF
-  - data final de competência
-  - vencimento da fatura
-  - parcela
-  - cartão detectado
-- se alguma linha ficar fora do ciclo sem ser parcelada, marcar alerta para revisão
+Depois da correção:
 
-### 6. Ajustar as telas que exibem a data
-Atualizar:
-- `src/components/contas/CreditCardBillPaymentModal.tsx`
-- `src/components/lancamentos/TransactionDetailModal.tsx`
+1. Se a EVA mandar:
+```text
+1 - Banco do Brasil
+2 - Dinheiro Clínica PF (carteira)
+```
 
-Para exibir, quando existir:
-- data original da compra
-- competência da fatura
-- vencimento da fatura
+e o usuário responder:
+```text
+1
+```
 
-Assim o cálculo da fatura fica correto e a auditoria continua clara.
+a conta 1 será selecionada corretamente.
+
+2. Se responder:
+```text
+2
+```
+
+a carteira 2 será selecionada corretamente.
+
+3. Em boleto de despesa:
+- a EVA não pergunta banco/conta
+- registra sem conta
+- o usuário pode associar depois
 
 ## Detalhes técnicos
 
-### Arquivos afetados
-- `supabase/functions/parse-bank-statement/index.ts`
-- `src/components/lancamentos/ImportStatementModal.tsx`
-- `src/components/contas/CreditCardBillPaymentModal.tsx`
-- `src/components/lancamentos/TransactionDetailModal.tsx`
-- migration SQL para adicionar `purchase_date_original` na tabela `transactions`
+### Ajuste de parsing numérico
+Criar uma lista ordenada com tipo + id para refletir exatamente a ordem exibida na mensagem.
 
-### Resultado esperado com esta fatura
-- compras normais de dezembro/janeiro entram com datas reais corretas
-- parcelas antigas não “caem em 2025” na competência da fatura de jan/2026
-- a origem da compra continua preservada
-- os cartões `7014` e `7239` continuam separados corretamente
-- o erro deixa de depender da interpretação livre da IA, porque a data passa a ser resolvida por regra determinística
+Exemplo:
+```ts
+const numericChoice = Number(trimmedMsg);
+if (Number.isInteger(numericChoice) && numericChoice >= 1) {
+  // usa mesma ordem exibida ao usuário
+}
+```
+
+### Ordem que precisa bater com a UI
+Para `bank_account`:
+```text
+1..N = contas bancárias
+N+1..M = carteiras
+```
+
+Para `credit_card`:
+```text
+1..N = cartões exibidos no cardList
+```
+
+### Ajuste de negócio para boleto
+O bypass de boleto precisa acontecer antes do bloco:
+- autoatribuição da única conta
+- criação do pending action `choose_account`
+
+Hoje ele está tarde demais e por isso a EVA ainda pergunta conta.
