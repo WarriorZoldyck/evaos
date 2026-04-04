@@ -352,8 +352,14 @@ function CardGroupHeader({
       </div>
 
       <div className="text-right shrink-0">
-        <span className="text-sm font-semibold text-destructive">
-          - {formatCurrency(group.totalAmount)}
+        <span className={`text-sm font-semibold ${
+          group.totalAmount > 0
+            ? "text-red-600 dark:text-red-400"
+            : group.totalAmount < 0
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-muted-foreground"
+        }`}>
+          {group.totalAmount > 0 ? "- " : group.totalAmount < 0 ? "+ " : ""}{formatCurrency(Math.abs(group.totalAmount))}
         </span>
       </div>
 
