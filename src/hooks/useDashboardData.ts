@@ -301,6 +301,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name")
         .gte("payment_date", twoYearsAgo)
+        .is("transfer_id", null)
         .order("payment_date", { ascending: true })
         .limit(5000);
 
