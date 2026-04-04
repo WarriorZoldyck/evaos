@@ -54,7 +54,7 @@ interface TransactionFiltersProps {
   categories: Category[];
   bankAccounts?: { id: string; name: string }[];
   wallets?: { id: string; name: string }[];
-  creditCards?: { id: string; name: string; last_four_digits: string | null }[];
+  creditCards?: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null }[];
   suppliers?: { id: string; name: string }[];
   clients?: { id: string; name: string }[];
 }
