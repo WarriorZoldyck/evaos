@@ -535,17 +535,39 @@ export function TransactionTable({
 
           if (allTxns.length === 0) continue;
 
-          items.push({
-            type: "cardHierarchy",
-            data: {
-              parentCardId: groupKey,
-              parentCardName: parentCard?.name || "Cartão Principal",
-              childGroups,
-              allTransactions: allTxns,
-              totalAmount: calcNetAmount(allTxns),
-              pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
-            },
-          });
+          // If the only sub-group is the parent's own transactions (no children have txns),
+          // render as a flat cardGroup to avoid redundant nesting
+          const childGroupsWithTxns = childGroups.filter(g => g.cardId !== groupKey);
+          if (childGroupsWithTxns.length === 0) {
+            // Only parent's own transactions — no need for hierarchy
+            if (allTxns.length === 1) {
+              items.push({ type: "transaction", data: allTxns[0] });
+            } else {
+              items.push({
+                type: "cardGroup",
+                data: {
+                  cardId: groupKey,
+                  cardName: parentCard?.name || "Cartão",
+                  transactions: allTxns,
+                  totalAmount: calcNetAmount(allTxns),
+                  pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
+                  firstDate: allTxns[0].payment_date,
+                },
+              });
+            }
+          } else {
+            items.push({
+              type: "cardHierarchy",
+              data: {
+                parentCardId: groupKey,
+                parentCardName: parentCard?.name || "Cartão Principal",
+                childGroups,
+                allTransactions: allTxns,
+                totalAmount: calcNetAmount(allTxns),
+                pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
+              },
+            });
+          }
         } else {
           // Standalone card (not a parent, not a child — or child whose parent isn't registered)
           const cardTxns = cardTxnMap.get(groupKey) || [];
