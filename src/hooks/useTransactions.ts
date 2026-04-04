@@ -252,7 +252,7 @@ export function useTransactions() {
         query = query.eq("wallet_id", accId);
       } else if (accType === "card") {
         // Check if this card has children — if so, include all child card IDs
-        const children = creditCardsRef.current.filter(c => c.parent_card_id === accId);
+        const children = creditCards.filter(c => c.parent_card_id === accId);
         if (children.length > 0) {
           const allIds = [accId, ...children.map(c => c.id)];
           query = query.in("credit_card_id", allIds);
