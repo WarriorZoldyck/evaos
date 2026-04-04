@@ -54,7 +54,7 @@ interface TransactionFiltersProps {
   categories: Category[];
   bankAccounts?: { id: string; name: string }[];
   wallets?: { id: string; name: string }[];
-  creditCards?: { id: string; name: string; last_four_digits: string | null }[];
+  creditCards?: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null }[];
   suppliers?: { id: string; name: string }[];
   clients?: { id: string; name: string }[];
 }
@@ -211,11 +211,23 @@ export function TransactionFilters({
                   👛 {w.name}
                 </SelectItem>
               ))}
-              {creditCards.map((cc) => (
-                <SelectItem key={`card:${cc.id}`} value={`card:${cc.id}`}>
-                  💳 {cc.name}{cc.last_four_digits ? ` •${cc.last_four_digits}` : ""}
-                </SelectItem>
-              ))}
+              {(() => {
+                const parentCards = creditCards.filter(cc => !cc.parent_card_id);
+                const childCards = creditCards.filter(cc => !!cc.parent_card_id);
+                return parentCards.map((parent) => {
+                  const children = childCards.filter(c => c.parent_card_id === parent.id);
+                  return [
+                    <SelectItem key={`card:${parent.id}`} value={`card:${parent.id}`}>
+                      💳 {parent.name}{parent.last_four_digits ? ` •${parent.last_four_digits}` : ""}{children.length > 0 ? ` (+${children.length})` : ""}
+                    </SelectItem>,
+                    ...children.map((child) => (
+                      <SelectItem key={`card:${child.id}`} value={`card:${child.id}`}>
+                        &nbsp;&nbsp;↳ {child.name}{child.last_four_digits ? ` •${child.last_four_digits}` : ""}
+                      </SelectItem>
+                    )),
+                  ];
+                });
+              })()}
             </SelectContent>
           </Select>
         )}
