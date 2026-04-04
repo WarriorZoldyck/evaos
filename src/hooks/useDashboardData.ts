@@ -181,13 +181,8 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     const fetchCategories = async () => {
-      let query = supabase.from("categories").select("id, name, parent_id");
-      if (isPersonal) {
-        query = query.is("company_id", null);
-      } else if (selectedCompanyId) {
-        query = query.eq("company_id", selectedCompanyId);
-      }
-      const { data } = await query;
+      // Fetch ALL user categories (no company filter) to resolve names consistently across views
+      const { data } = await supabase.from("categories").select("id, name, parent_id");
       if (data) setCategoryRecords(data);
     };
 
