@@ -261,7 +261,8 @@ export function useDashboardData(filters: DashboardFilters) {
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("competence_date", startStr)
-        .lte("competence_date", endStr);
+        .lte("competence_date", endStr)
+        .is("transfer_id", null);
 
       if (isPersonal) {
         query = query.is("company_id", null);
@@ -271,11 +272,19 @@ export function useDashboardData(filters: DashboardFilters) {
 
       query = applyAccountFilter(query, accountId, linkedCardIds);
 
-      const { data, error } = await query;
-
-      if (!error && data) {
-        setCompetenceTransactions(data as Transaction[]);
+      // Paginate
+      const allData: Transaction[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await query.range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        allData.push(...(data as Transaction[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
       }
+
+      setCompetenceTransactions(allData);
     };
 
     fetchTransactions();
