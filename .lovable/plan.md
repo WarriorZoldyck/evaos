@@ -1,55 +1,84 @@
 
 
-# Filtro de Cartões: Mostrar apenas cartão pai com filhos agrupados
+# Transferências Operacionais vs Internas — Detecção Automática por Contexto
 
-## Problemas
+## Dados reais confirmam a abordagem
 
-1. **Dropdown de contas** lista todos os cartões (pai e filhos) no mesmo nível. Deveria mostrar apenas cartões pai (ou standalone). Cartões filhos ficam escondidos até expandir/selecionar o pai.
+Analisei todas as transferências no banco. O padrão é claro e 100% determinístico:
 
-2. **Query do filtro** filtra por `credit_card_id = X` exato. Quando o usuário seleciona um cartão pai, deveria trazer transações do pai E de todos os filhos.
+| Tipo | Exemplo | source_company | dest_company | Classificação |
+|------|---------|---------------|-------------|--------------|
+| Pro-labore PJ→PF | "Pró-labore" | `5b3cf59b` (empresa) | `null` (pessoal) | **CROSS-CONTEXT** = despesa real |
+| Faxina PJ→PF | "Faxina" | `cb0f2473` (empresa) | `null` (pessoal) | **CROSS-CONTEXT** = despesa real |
+| Entre contas PJ→PJ | "TRANSFERENCIA ENTRE CONTAS" | `b958c0a4` | `b958c0a4` | **INTERNAL** = não é despesa |
+| Entre contas PF→PF | "RESG POUP" | `null` | `null` | **INTERNAL** = não é despesa |
 
-## Correções
+**Não precisa detectar pela categoria.** O contexto (company_id da origem vs destino) resolve 100% dos casos sem nenhuma configuração do usuário. Pro-labore, faxina, energia — tudo que sai da PJ para a PF é automaticamente despesa operacional da empresa.
 
-### 1. TransactionFilters.tsx — Dropdown hierárquico de cartões
+## Solução: coluna `is_internal_transfer`
 
-**Props**: adicionar `parent_card_id` ao tipo de `creditCards`.
+### 1. Migration SQL
 
-**Lógica**: separar cartões em pais (sem `parent_card_id`) e filhos (com `parent_card_id`). No dropdown:
-- Mostrar apenas cartões pai/standalone como opções principais com valor `card:ID`
-- Abaixo de cada pai, indentar os filhos com prefixo visual (ex: `  ↳ VITORIA •8021`) com valor `card-child:ID`
-- Adicionar opção `card-parent:ID` = "Ver todos do grupo" para o pai
+```sql
+ALTER TABLE transactions 
+  ADD COLUMN is_internal_transfer boolean DEFAULT false;
 
-Resultado visual no Select:
+-- Classificar transferências existentes automaticamente
+UPDATE transactions t1
+SET is_internal_transfer = true
+FROM transactions t2
+WHERE t1.transfer_id IS NOT NULL
+  AND t1.transfer_id = t2.transfer_id
+  AND t1.id != t2.id
+  AND t1.company_id IS NOT DISTINCT FROM t2.company_id;
 ```
-💳 PAULA REGINA (7014) •7014        ← seleciona PAI + todos filhos
-  ↳ VITORIA (8021) •8021            ← seleciona só este filho
-  ↳ PAULARS (5178) •5178
-  ↳ GEOVANNA (7239) •7239
+
+Regra: `is_internal_transfer = true` quando ambas as pontas têm o mesmo `company_id` (incluindo ambas `null` = pessoal↔pessoal).
+
+### 2. Queries dos relatórios (Dashboard, DRE, Caixa)
+
+Trocar `.is("transfer_id", null)` por:
+```typescript
+.or("transfer_id.is.null,is_internal_transfer.eq.false")
 ```
 
-### 2. useTransactions.ts — Query inclui filhos quando filtra por pai
+Isso inclui:
+- Transações normais (sem transfer_id) ✓
+- Transferências cross-context (PJ→PF pro-labore) ✓
 
-No bloco `if (accType === "card")` (linha ~253):
-- Se o filtro for `card:ID` E esse ID é um cartão pai (tem filhos), buscar com `.in("credit_card_id", [paiId, ...filhosIds])` em vez de `.eq("credit_card_id", accId)`
-- Se for um cartão filho individual, manter `.eq("credit_card_id", accId)`
+E exclui:
+- Transferências internas (PJ→PJ ou PF→PF) ✓
 
-Para isso, o hook precisa consultar `creditCards` (que já tem `parent_card_id`) para montar a lista de IDs filhos.
+### 3. Formulário de transferência
 
-### 3. Lancamentos.tsx — Passar creditCards com parent_card_id
+No `TransactionFormModal.tsx`, ao criar a transferência, calcular automaticamente:
+```typescript
+const isInternal = sourceCompanyId === destCompanyId 
+  || (sourceCompanyId == null && destCompanyId == null);
 
-Já passa `creditCards` que vem do hook com `parent_card_id`. Só precisa ajustar o tipo na interface de `TransactionFilters`.
+// Setar em ambas as pontas
+{ ...transfer, is_internal_transfer: isInternal }
+```
+
+### 4. WhatsApp webhook
+
+No `whatsapp-webhook/index.ts`, mesma lógica ao criar transferências via Eva.
 
 ## Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/lancamentos/TransactionFilters.tsx` | Tipo de creditCards ganha `parent_card_id`, dropdown hierárquico |
-| `src/hooks/useTransactions.ts` | Query de filtro por cartão pai inclui filhos via `.in()` |
+| Migration SQL | Adicionar coluna + classificar existentes |
+| `src/hooks/useDashboardData.ts` | 3 queries: trocar filtro |
+| `src/hooks/useDREData.ts` | 1 query: trocar filtro |
+| `src/hooks/useCashFlowData.ts` | 1 query: trocar filtro |
+| `src/components/lancamentos/TransactionFormModal.tsx` | Setar `is_internal_transfer` ao criar |
+| `supabase/functions/whatsapp-webhook/index.ts` | Setar `is_internal_transfer` ao criar |
 
 ## Resultado esperado
 
-- Dropdown mostra cartões organizados hierarquicamente
-- Selecionar cartão pai → mostra transações de todos os cartões do grupo
-- Selecionar cartão filho individual → mostra só as dele
-- A tabela continua agrupando hierarquicamente como já faz hoje
+- Pro-labore do usuário `espclin@hotmail` volta a aparecer como R$ 38.240 em despesas de março
+- Transferências "ENTRE CONTAS" da mesma empresa continuam excluídas
+- Zero configuração para o usuário — é automático
+- Funciona para todos os usuários, presente e futuro
 
