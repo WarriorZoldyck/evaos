@@ -856,6 +856,10 @@ export function TransactionFormModal({
     const sourceCompanyId = getCompanyIdForAccount(data.source_account_id);
     const destCompanyId = getCompanyIdForAccount(data.dest_account_id);
 
+    // Detect if transfer is internal (same context) or operational (cross-context)
+    const isInternal = sourceCompanyId === destCompanyId
+      || (sourceCompanyId == null && destCompanyId == null);
+
     const transfers: TransactionInsert[] = [
       {
         user_id: user.id,
@@ -869,7 +873,8 @@ export function TransactionFormModal({
         category: "Transferência",
         ...sourceAccount,
         transfer_id: transferId,
-      },
+        is_internal_transfer: isInternal,
+      } as any,
       {
         user_id: user.id,
         company_id: destCompanyId,
@@ -882,7 +887,8 @@ export function TransactionFormModal({
         category: "Transferência",
         ...destAccount,
         transfer_id: transferId,
-      },
+        is_internal_transfer: isInternal,
+      } as any,
     ];
 
     const success = await onSaveMultiple(transfers);
