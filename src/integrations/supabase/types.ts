@@ -955,6 +955,7 @@ export type Database = {
           installment_number: number | null
           installments: number | null
           installments_total: number | null
+          is_internal_transfer: boolean | null
           is_reconciled: boolean | null
           liquidation_notes: string | null
           notes: string | null
@@ -992,6 +993,7 @@ export type Database = {
           installment_number?: number | null
           installments?: number | null
           installments_total?: number | null
+          is_internal_transfer?: boolean | null
           is_reconciled?: boolean | null
           liquidation_notes?: string | null
           notes?: string | null
@@ -1029,6 +1031,7 @@ export type Database = {
           installment_number?: number | null
           installments?: number | null
           installments_total?: number | null
+          is_internal_transfer?: boolean | null
           is_reconciled?: boolean | null
           liquidation_notes?: string | null
           notes?: string | null
