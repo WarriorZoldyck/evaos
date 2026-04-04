@@ -222,7 +222,36 @@ export function TransactionFilters({
           </Select>
         )}
 
-        {/* Supplier filter */}
+        {/* Child card sub-filter — only when a parent card with children is selected */}
+        {filters.accountId?.startsWith("card:") && (() => {
+          const selectedCardId = filters.accountId.split(":").slice(1).join(":");
+          const children = creditCards.filter(cc => cc.parent_card_id === selectedCardId);
+          if (children.length === 0) return null;
+          return (
+            <Select
+              value={filters.accountId}
+              onValueChange={(value) =>
+                onFiltersChange({ ...filters, accountId: value })
+              }
+            >
+              <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Sub-cartão" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={`card:${selectedCardId}`}>
+                  Todos do grupo
+                </SelectItem>
+                {children.map((child) => (
+                  <SelectItem key={`card:${child.id}`} value={`card:${child.id}`}>
+                    ↳ {child.name}{child.last_four_digits ? ` •${child.last_four_digits}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        })()}
+
+
         {suppliers.length > 0 && (
           <Select
             value={filters.supplierId || "todos"}
