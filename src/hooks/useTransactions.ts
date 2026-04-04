@@ -208,6 +208,14 @@ export function useTransactions() {
     if (!user) return;
     setLoading(true);
 
+    const selectedCardId = filters.accountId.startsWith("card:")
+      ? filters.accountId.split(":").slice(1).join(":")
+      : "";
+    const selectedCardChildren = selectedCardId
+      ? creditCards.filter((card) => card.parent_card_id === selectedCardId)
+      : [];
+    const isGroupedParentCardFilter = selectedCardChildren.length > 0;
+
     let query = supabase
       .from("transactions")
       .select("*", { count: "exact" });
@@ -226,13 +234,13 @@ export function useTransactions() {
     if (filters.categoryId === "__sem_categoria__") {
       query = query.or("category.is.null,category.eq.");
     } else if (filters.categoryId) {
-      const selectedCat = allCategories.find(c => c.id === filters.categoryId);
-      const childCats = allCategories.filter(c => c.parent_id === filters.categoryId);
-      const allIds = [filters.categoryId, ...childCats.map(c => c.id)];
-      const allNames = [selectedCat?.name, ...childCats.map(c => c.name)].filter(Boolean);
+      const selectedCat = allCategories.find((c) => c.id === filters.categoryId);
+      const childCats = allCategories.filter((c) => c.parent_id === filters.categoryId);
+      const allIds = [filters.categoryId, ...childCats.map((c) => c.id)];
+      const allNames = [selectedCat?.name, ...childCats.map((c) => c.name)].filter(Boolean);
       const conditions = [
-        ...allIds.map(id => `category.eq.${id}`),
-        ...allNames.map(name => `category.eq.${name}`),
+        ...allIds.map((id) => `category.eq.${id}`),
+        ...allNames.map((name) => `category.eq.${name}`),
       ];
       query = query.or(conditions.join(","));
     }
@@ -243,7 +251,6 @@ export function useTransactions() {
       query = query.lte("payment_date", filters.dateTo);
     }
     if (filters.accountId) {
-      // Could be bank:id or wallet:id
       const [accType, ...idParts] = filters.accountId.split(":");
       const accId = idParts.join(":");
       if (accType === "bank") {
@@ -251,11 +258,9 @@ export function useTransactions() {
       } else if (accType === "wallet") {
         query = query.eq("wallet_id", accId);
       } else if (accType === "card") {
-        // Check if this card has children — if so, include all child card IDs
-        const children = creditCards.filter(c => c.parent_card_id === accId);
+        const children = creditCards.filter((c) => c.parent_card_id === accId);
         if (children.length > 0) {
-          const allIds = [accId, ...children.map(c => c.id)];
-          query = query.in("credit_card_id", allIds);
+          query = query.in("credit_card_id", [accId, ...children.map((c) => c.id)]);
         } else {
           query = query.eq("credit_card_id", accId);
         }
@@ -268,15 +273,56 @@ export function useTransactions() {
       query = query.eq("client_id", filters.clientId);
     }
 
+    const ascending = filters.sortOrder === "asc";
+    const orderedQuery = query
+      .order("payment_date", { ascending })
+      .order("created_at", { ascending });
+
+    if (isGroupedParentCardFilter) {
+      const allData: Transaction[] = [];
+      let batchPage = 0;
+      const batchSize = 1000;
+      let resolvedCount: number | null = null;
+
+      while (true) {
+        const { data, count, error } = await orderedQuery.range(
+          batchPage * batchSize,
+          (batchPage + 1) * batchSize - 1
+        );
+
+        if (error) {
+          toast({
+            title: "Erro ao carregar lançamentos",
+            description: error.message,
+            variant: "destructive",
+          });
+          setTransactions([]);
+          setTotalCount(0);
+          setLoading(false);
+          return;
+        }
+
+        if (resolvedCount === null) {
+          resolvedCount = count ?? null;
+        }
+        if (!data || data.length === 0) break;
+
+        allData.push(...data);
+
+        if (data.length < batchSize) break;
+        batchPage++;
+      }
+
+      setTransactions(allData);
+      setTotalCount(resolvedCount ?? allData.length);
+      setLoading(false);
+      return;
+    }
+
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    const ascending = filters.sortOrder === "asc";
-
-    const { data, count, error } = await query
-      .order("payment_date", { ascending })
-      .order("created_at", { ascending })
-      .range(from, to);
+    const { data, count, error } = await orderedQuery.range(from, to);
 
     if (error) {
       toast({
@@ -289,7 +335,7 @@ export function useTransactions() {
       setTotalCount(count || 0);
     }
     setLoading(false);
-  }, [user, companyFilter, filters, page, toast, allCategories]);
+  }, [user, companyFilter, filters, page, toast, allCategories, creditCards]);
 
   useEffect(() => {
     fetchTransactions();
@@ -484,13 +530,24 @@ export function useTransactions() {
     return true;
   };
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const groupedParentCardFilterActive = (() => {
+    if (!filters.accountId.startsWith("card:")) return false;
+    const selectedCardId = filters.accountId.split(":").slice(1).join(":");
+    return creditCards.some((card) => card.parent_card_id === selectedCardId);
+  })();
+
+  const totalPages = groupedParentCardFilterActive
+    ? totalCount > 0
+      ? 1
+      : 0
+    : Math.ceil(totalCount / PAGE_SIZE);
+  const effectivePage = groupedParentCardFilterActive ? 0 : page;
 
   return {
     transactions,
     loading,
     totalCount,
-    page,
+    page: effectivePage,
     setPage,
     totalPages,
     filters,
