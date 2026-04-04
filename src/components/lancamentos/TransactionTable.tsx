@@ -454,13 +454,16 @@ export function TransactionTable({
     return map;
   }, [creditCards]);
 
+  // Helper: calculate net amount (despesas positive, receitas negative)
+  const calcNetAmount = (txns: Transaction[]) =>
+    txns.reduce((s, tx) => s + (tx.type === "receita" ? -tx.amount : tx.amount), 0);
+
   // Build ordered render list with hierarchy support
   const renderItems = useMemo(() => {
     const items: RenderItem[] = [];
-    // Group all card transactions by their effective parent
-    const cardTxnMap = new Map<string, Transaction[]>(); // cardId -> txns
+    const cardTxnMap = new Map<string, Transaction[]>();
     const nonCardTransactions: Array<{ index: number; t: Transaction }> = [];
-    const cardFirstSeen = new Map<string, number>(); // effective group key -> first index
+    const cardFirstSeen = new Map<string, number>();
 
     transactions.forEach((t, i) => {
       if (t.credit_card_id) {
@@ -471,9 +474,8 @@ export function TransactionTable({
           cardTxnMap.set(t.credit_card_id, [t]);
         }
 
-        // Determine effective group key (parent or self)
-        const card = creditCards.find((c) => c.id === t.credit_card_id);
-        const groupKey = card?.parent_card_id || t.credit_card_id;
+        // Determine effective group key: use parent if this is a child card
+        const groupKey = childToParentMap.get(t.credit_card_id) || t.credit_card_id;
 
         if (!cardFirstSeen.has(groupKey)) {
           cardFirstSeen.set(groupKey, i);
@@ -484,7 +486,6 @@ export function TransactionTable({
       }
     });
 
-    // Re-assemble in order
     const processedGroupKeys = new Set<string>();
 
     for (const { t } of nonCardTransactions) {
@@ -493,12 +494,11 @@ export function TransactionTable({
       if (groupKey && !processedGroupKeys.has(groupKey)) {
         processedGroupKeys.add(groupKey);
 
-        // Check if this is a parent card with children
+        // Check if this groupKey is a parent card (has children registered)
         const isParentCard = parentCardIds.has(groupKey);
         const childCards = creditCards.filter((c) => c.parent_card_id === groupKey);
 
         if (isParentCard && childCards.length > 0) {
-          // Build hierarchy: parent + children
           const parentTxns = cardTxnMap.get(groupKey) || [];
           const childGroups: CardGroupItem[] = [];
 
@@ -509,7 +509,7 @@ export function TransactionTable({
               cardId: groupKey,
               cardName: parentCard?.name || "Principal",
               transactions: parentTxns,
-              totalAmount: parentTxns.reduce((s, tx) => s + tx.amount, 0),
+              totalAmount: calcNetAmount(parentTxns),
               pendingCount: parentTxns.filter((tx) => tx.status === "Pendente").length,
               firstDate: parentTxns[0]?.payment_date || "",
             });
@@ -523,7 +523,7 @@ export function TransactionTable({
                 cardId: child.id,
                 cardName: child.name,
                 transactions: childTxns,
-                totalAmount: childTxns.reduce((s, tx) => s + tx.amount, 0),
+                totalAmount: calcNetAmount(childTxns),
                 pendingCount: childTxns.filter((tx) => tx.status === "Pendente").length,
                 firstDate: childTxns[0]?.payment_date || "",
               });
@@ -542,15 +542,15 @@ export function TransactionTable({
               parentCardName: parentCard?.name || "Cartão Principal",
               childGroups,
               allTransactions: allTxns,
-              totalAmount: allTxns.reduce((s, tx) => s + tx.amount, 0),
+              totalAmount: calcNetAmount(allTxns),
               pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
             },
           });
         } else {
-          // Standalone card or child card without siblings in this view
+          // Standalone card (not a parent, not a child — or child whose parent isn't registered)
           const cardTxns = cardTxnMap.get(groupKey) || [];
           const cardName = creditCards.find((c) => c.id === groupKey)?.name || "Cartão";
-          const totalAmount = cardTxns.reduce((s, tx) => s + tx.amount, 0);
+          const totalAmount = calcNetAmount(cardTxns);
           const pendingCount = cardTxns.filter((tx) => tx.status === "Pendente").length;
 
           if (cardTxns.length === 1) {
@@ -568,7 +568,7 @@ export function TransactionTable({
     }
 
     return items;
-  }, [transactions, creditCards, parentCardIds]);
+  }, [transactions, creditCards, parentCardIds, childToParentMap]);
 
   if (loading) {
     return (
