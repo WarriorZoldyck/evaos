@@ -181,13 +181,8 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     const fetchCategories = async () => {
-      let query = supabase.from("categories").select("id, name, parent_id");
-      if (isPersonal) {
-        query = query.is("company_id", null);
-      } else if (selectedCompanyId) {
-        query = query.eq("company_id", selectedCompanyId);
-      }
-      const { data } = await query;
+      // Fetch ALL user categories (no company filter) to resolve names consistently across views
+      const { data } = await supabase.from("categories").select("id, name, parent_id");
       if (data) setCategoryRecords(data);
     };
 
@@ -234,7 +229,8 @@ export function useDashboardData(filters: DashboardFilters) {
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("payment_date", startStr)
-        .lte("payment_date", endStr);
+        .lte("payment_date", endStr)
+        .is("transfer_id", null);
 
       if (isPersonal) {
         query = query.is("company_id", null);
@@ -244,11 +240,19 @@ export function useDashboardData(filters: DashboardFilters) {
 
       query = applyAccountFilter(query, accountId, linkedCardIds);
 
-      const { data, error } = await query.order("payment_date", { ascending: true });
-
-      if (!error && data) {
-        setTransactions(data as Transaction[]);
+      // Paginate to avoid 1000-row limit
+      const allData: Transaction[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await query.order("payment_date", { ascending: true }).range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        allData.push(...(data as Transaction[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
       }
+
+      setTransactions(allData);
       setLoading(false);
     };
 
@@ -257,7 +261,8 @@ export function useDashboardData(filters: DashboardFilters) {
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("competence_date", startStr)
-        .lte("competence_date", endStr);
+        .lte("competence_date", endStr)
+        .is("transfer_id", null);
 
       if (isPersonal) {
         query = query.is("company_id", null);
@@ -267,11 +272,19 @@ export function useDashboardData(filters: DashboardFilters) {
 
       query = applyAccountFilter(query, accountId, linkedCardIds);
 
-      const { data, error } = await query;
-
-      if (!error && data) {
-        setCompetenceTransactions(data as Transaction[]);
+      // Paginate
+      const allData: Transaction[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await query.range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        allData.push(...(data as Transaction[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
       }
+
+      setCompetenceTransactions(allData);
     };
 
     fetchTransactions();
@@ -288,6 +301,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name")
         .gte("payment_date", twoYearsAgo)
+        .is("transfer_id", null)
         .order("payment_date", { ascending: true })
         .limit(5000);
 
