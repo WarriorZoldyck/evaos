@@ -445,6 +445,15 @@ export function TransactionTable({
     return parents;
   }, [creditCards]);
 
+  // Build a map of child card IDs to their parent for quick lookup
+  const childToParentMap = useMemo(() => {
+    const map = new Map<string, string>();
+    creditCards.forEach((c) => {
+      if (c.parent_card_id) map.set(c.id, c.parent_card_id);
+    });
+    return map;
+  }, [creditCards]);
+
   // Build ordered render list with hierarchy support
   const renderItems = useMemo(() => {
     const items: RenderItem[] = [];
