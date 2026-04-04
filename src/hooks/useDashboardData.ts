@@ -230,7 +230,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("payment_date", startStr)
         .lte("payment_date", endStr)
-        .is("transfer_id", null);
+        .or("transfer_id.is.null,is_internal_transfer.eq.false");
 
       if (isPersonal) {
         query = query.is("company_id", null);
@@ -262,7 +262,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr)
-        .is("transfer_id", null);
+        .or("transfer_id.is.null,is_internal_transfer.eq.false");
 
       if (isPersonal) {
         query = query.is("company_id", null);
@@ -301,7 +301,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name")
         .gte("payment_date", twoYearsAgo)
-        .is("transfer_id", null)
+        .or("transfer_id.is.null,is_internal_transfer.eq.false")
         .order("payment_date", { ascending: true })
         .limit(5000);
 

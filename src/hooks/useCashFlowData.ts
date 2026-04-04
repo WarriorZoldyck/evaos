@@ -75,7 +75,7 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
         .select("id, amount, type, status, category, subcategory, subcategory2, bank_account_id, credit_card_id, transfer_id")
         .gte(dateField, startStr)
         .lte(dateField, endStr)
-        .is("transfer_id", null);
+        .or("transfer_id.is.null,is_internal_transfer.eq.false");
 
       if (mode === "caixa") {
         query = query.eq("status", "Pago");
