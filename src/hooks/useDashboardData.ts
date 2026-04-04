@@ -252,9 +252,7 @@ export function useDashboardData(filters: DashboardFilters) {
         from += PAGE;
       }
 
-      if (!error && data) {
-        setTransactions(data as Transaction[]);
-      }
+      setTransactions(allData);
       setLoading(false);
     };
 
