@@ -7,20 +7,51 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import type { DREFilters, DREGranularity } from "@/hooks/useDREData";
 
 interface DREPeriodFilterProps {
   filters: DREFilters;
   onChange: (partial: Partial<DREFilters>) => void;
   bankAccounts: { id: string; name: string }[];
+  showVerticalAnalysis: boolean;
+  onToggleVerticalAnalysis: (v: boolean) => void;
 }
 
-export function DREPeriodFilter({ filters, onChange, bankAccounts }: DREPeriodFilterProps) {
+export function DREPeriodFilter({ filters, onChange, bankAccounts, showVerticalAnalysis, onToggleVerticalAnalysis }: DREPeriodFilterProps) {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
+  const isContabil = filters.viewMode === "contabil";
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
+      {/* View mode toggle */}
+      <div className="flex items-center gap-2 mr-2">
+        <Label htmlFor="dre-mode" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+          {isContabil ? "Contábil" : "Gerencial"}
+        </Label>
+        <Switch
+          id="dre-mode"
+          checked={isContabil}
+          onCheckedChange={(v) => onChange({ viewMode: v ? "contabil" : "gerencial" })}
+        />
+      </div>
+
+      {/* Vertical analysis toggle (contábil only) */}
+      {isContabil && (
+        <div className="flex items-center gap-1.5 mr-2">
+          <Label htmlFor="dre-av" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+            AV %
+          </Label>
+          <Switch
+            id="dre-av"
+            checked={showVerticalAnalysis}
+            onCheckedChange={onToggleVerticalAnalysis}
+          />
+        </div>
+      )}
+
       {/* Account filter */}
       <Select
         value={filters.accountId || "__all__"}
