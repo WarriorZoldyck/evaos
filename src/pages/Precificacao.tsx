@@ -10,6 +10,10 @@ import { CostSummaryCards } from "@/components/precificacao-v2/CostSummaryCards"
 import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2";
 import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
 import { ProcedureBreakdownV2 } from "@/components/precificacao-v2/ProcedureBreakdownV2";
+import { SuggestedPriceCalculator } from "@/components/precificacao-v2/SuggestedPriceCalculator";
+import { ProcedureComparisonChart } from "@/components/precificacao-v2/ProcedureComparisonChart";
+import { WhatIfSimulator } from "@/components/precificacao-v2/WhatIfSimulator";
+import { ExportPricingButton } from "@/components/precificacao-v2/ExportPricingButton";
 
 const GROUPS: CostGroup[] = ["fixos_clinica", "variaveis_clinica", "pessoais"];
 const GROUP_TAB_LABELS: Record<CostGroup, string> = {
@@ -52,11 +56,24 @@ export default function Precificacao() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold font-display text-foreground">Precificação</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          FHC completo com custo de vida pessoal integrado — cadastre todos os custos e calcule lucratividade por procedimento
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold font-display text-foreground">Precificação</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            FHC completo com custo de vida pessoal integrado — cadastre todos os custos e calcule lucratividade por procedimento
+          </p>
+        </div>
+        <ExportPricingButton
+          procedures={procedures}
+          costItems={costItems}
+          groupTotals={groupTotals}
+          custoHora={custoHora}
+          fmm={fmm}
+          taxRate={taxRate}
+          hoursPerMonth={hoursPerMonth}
+          numRooms={numRooms}
+          calcProcedure={calcProcedure}
+        />
       </div>
 
       {/* Seção 1: Config */}
@@ -106,6 +123,21 @@ export default function Precificacao() {
           calcProcedure={calcProcedure}
         />
       )}
+
+      {/* Comparativo de Procedimentos */}
+      <ProcedureComparisonChart procedures={procedures} calcProcedure={calcProcedure} />
+
+      {/* Calculadora de Preço Sugerido + Simulador lado a lado */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SuggestedPriceCalculator custoHora={custoHora} taxRate={taxRate} />
+        <WhatIfSimulator
+          procedures={procedures}
+          groupTotals={groupTotals}
+          realHours={hoursPerMonth}
+          realRooms={numRooms}
+          realTaxRate={taxRate}
+        />
+      </div>
 
       {/* Seção 4: Despesas em Tabs */}
       <Card>
