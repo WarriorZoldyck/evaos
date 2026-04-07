@@ -196,8 +196,7 @@ export function DRETableContabil({ periods, sections, loading, showVerticalAnaly
             const grand = Object.values(section.monthlyTotals).reduce((s, v) => s + v, 0);
             const hasCategories = section.categoryRows.length > 0;
             const isOpen = openSections.has(section.key);
-            const rowCounter = useRef(0);
-            rowCounter.current = 0;
+            const rowCounter = { current: 0 };
 
             // Display values: for subtraction sections, show negative
             const displaySign = section.sign === "-" ? -1 : 1;
