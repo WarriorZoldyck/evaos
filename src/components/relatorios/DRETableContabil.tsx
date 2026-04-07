@@ -1,4 +1,4 @@
-import { useState, useRef, Fragment } from "react";
+import { useState, Fragment } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
