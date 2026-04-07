@@ -1,84 +1,122 @@
 
 
-# Transferências Operacionais vs Internas — Detecção Automática por Contexto
+# Reestruturação do DRE — Formato Contábil Padrão
 
-## Dados reais confirmam a abordagem
+## Problema atual
 
-Analisei todas as transferências no banco. O padrão é claro e 100% determinístico:
+O DRE atual tem apenas 3 linhas:
+- (+) RECEITAS (agrupadas por categoria)
+- (-) DESPESAS (agrupadas por categoria)
+- = RESULTADO
 
-| Tipo | Exemplo | source_company | dest_company | Classificação |
-|------|---------|---------------|-------------|--------------|
-| Pro-labore PJ→PF | "Pró-labore" | `5b3cf59b` (empresa) | `null` (pessoal) | **CROSS-CONTEXT** = despesa real |
-| Faxina PJ→PF | "Faxina" | `cb0f2473` (empresa) | `null` (pessoal) | **CROSS-CONTEXT** = despesa real |
-| Entre contas PJ→PJ | "TRANSFERENCIA ENTRE CONTAS" | `b958c0a4` | `b958c0a4` | **INTERNAL** = não é despesa |
-| Entre contas PF→PF | "RESG POUP" | `null` | `null` | **INTERNAL** = não é despesa |
+Isso **não** segue a estrutura contábil padrão da DRE conforme a planilha e o material fornecido.
 
-**Não precisa detectar pela categoria.** O contexto (company_id da origem vs destino) resolve 100% dos casos sem nenhuma configuração do usuário. Pro-labore, faxina, energia — tudo que sai da PJ para a PF é automaticamente despesa operacional da empresa.
+## Estrutura-alvo (baseada na planilha)
 
-## Solução: coluna `is_internal_transfer`
+A nova DRE terá linhas fixas contábeis, com as categorias do usuário mapeadas para cada seção:
 
-### 1. Migration SQL
-
-```sql
-ALTER TABLE transactions 
-  ADD COLUMN is_internal_transfer boolean DEFAULT false;
-
--- Classificar transferências existentes automaticamente
-UPDATE transactions t1
-SET is_internal_transfer = true
-FROM transactions t2
-WHERE t1.transfer_id IS NOT NULL
-  AND t1.transfer_id = t2.transfer_id
-  AND t1.id != t2.id
-  AND t1.company_id IS NOT DISTINCT FROM t2.company_id;
+```text
+(+) Receita Operacional          ← soma de todas as receitas
+(-) Impostos sobre a venda       ← categorias de impostos sobre venda
+(=) Receita Líquida              ← calculado
+(-) Custo das mercadorias/serv.  ← categorias de CMV/CPV/CSP
+(=) Lucro Bruto                  ← calculado
+(-) Despesas com vendas           ← categorias de desp. vendas
+(-) Despesas operacionais/adm     ← categorias operacionais
+(-) Despesas financeiras          ← categorias financeiras
+(+) Receita financeira            ← categorias de receita financeira
+(-) Despesas gerais e adm         ← demais despesas
+(=) Lucro Líquido                ← calculado (resultado final)
 ```
 
-Regra: `is_internal_transfer = true` quando ambas as pontas têm o mesmo `company_id` (incluindo ambas `null` = pessoal↔pessoal).
+## Como mapear categorias automaticamente
 
-### 2. Queries dos relatórios (Dashboard, DRE, Caixa)
+O sistema não tem hoje um campo `dre_section` nas categorias. Para resolver isso sem exigir migração complexa:
 
-Trocar `.is("transfer_id", null)` por:
+1. **Mapeamento por nome** com heurísticas (palavras-chave): categorias que contenham "imposto", "tributo", "ISS", "ICMS" etc. vão para "Impostos sobre venda". Categorias com "comissão", "frete" vão para "Despesas com vendas". Etc.
+
+2. **Fallback inteligente**: categorias de receita que não casam vão para "Receita Operacional". Categorias de despesa que não casam vão para "Despesas gerais e adm".
+
+3. **Futuramente**: adicionar campo `dre_section` na tabela `categories` para o usuário personalizar (não nesta fase).
+
+## Implementação
+
+### 1. `useDREData.ts` — Reestruturar saída
+
+Em vez de retornar `revenueRows` e `expenseRows` como árvores de categorias, retornar um objeto com as **seções fixas da DRE**, cada uma contendo seus totais por período e as linhas de categoria dentro dela:
+
 ```typescript
-.or("transfer_id.is.null,is_internal_transfer.eq.false")
+interface DRESection {
+  key: string;           // "receita_operacional", "impostos_venda", etc.
+  label: string;         // "(+) Receita Operacional"
+  type: "sum" | "sub" | "result"; // soma, subtração, ou resultado calculado
+  monthlyTotals: Record<string, number>;
+  categoryRows: DRECategoryRow[];  // categorias dentro desta seção (colapsáveis)
+  isCalculated: boolean; // linhas como "Receita Líquida" não têm categorias
+}
 ```
 
-Isso inclui:
-- Transações normais (sem transfer_id) ✓
-- Transferências cross-context (PJ→PF pro-labore) ✓
+Função de classificação por palavras-chave:
+- **Impostos sobre venda**: imposto, tributo, ISS, ICMS, PIS, COFINS, simples nacional
+- **CMV/CPV/CSP**: custo de mercadoria, CMV, CPV, CSP, matéria-prima, insumo
+- **Despesas com vendas**: comissão, frete de venda, propaganda, marketing, publicidade
+- **Despesas financeiras**: juros, tarifa bancária, IOF, taxa bancária, multa
+- **Receita financeira**: rendimento, aplicação, juros recebidos (tipo receita + keywords)
+- **Despesas operacionais/adm**: aluguel, energia, água, salário, pro-labore, contabilidade, software, internet, telefone
+- **Fallback**: receita → Receita Operacional; despesa → Despesas gerais e adm
 
-E exclui:
-- Transferências internas (PJ→PJ ou PF→PF) ✓
+### 2. `DRETable.tsx` — Layout contábil
 
-### 3. Formulário de transferência
+Redesenhar a tabela para mostrar as linhas fixas da DRE na ordem correta:
+- Linhas de seção (colapsáveis, mostram categorias dentro)
+- Linhas de resultado (calculadas, destacadas com fundo)
+- Análise vertical: coluna extra de `%` em relação à Receita Operacional
+- Análise horizontal: tooltip ou indicador mostrando variação vs período anterior
 
-No `TransactionFormModal.tsx`, ao criar a transferência, calcular automaticamente:
-```typescript
-const isInternal = sourceCompanyId === destCompanyId 
-  || (sourceCompanyId == null && destCompanyId == null);
+### 3. `DRE.tsx` — Adicionar indicadores
 
-// Setar em ambas as pontas
-{ ...transfer, is_internal_transfer: isInternal }
-```
+Abaixo da tabela principal, cards com:
+- **Lucratividade**: (Lucro Líquido / Receita Operacional) x 100
+- **Margem de Contribuição**: Lucro Bruto - Despesas Variáveis
+- **Margem Bruta %**: (Lucro Bruto / Receita Operacional) x 100
+- **Margem Líquida %**: (Lucro Líquido / Receita Operacional) x 100
 
-### 4. WhatsApp webhook
+### 4. Toggle Gerencial vs Contábil
 
-No `whatsapp-webhook/index.ts`, mesma lógica ao criar transferências via Eva.
+Adicionar um switch no filtro para alternar entre:
+- **Contábil**: estrutura fixa padrão descrita acima
+- **Gerencial**: visão atual por categorias (receitas vs despesas simples)
 
 ## Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| Migration SQL | Adicionar coluna + classificar existentes |
-| `src/hooks/useDashboardData.ts` | 3 queries: trocar filtro |
-| `src/hooks/useDREData.ts` | 1 query: trocar filtro |
-| `src/hooks/useCashFlowData.ts` | 1 query: trocar filtro |
-| `src/components/lancamentos/TransactionFormModal.tsx` | Setar `is_internal_transfer` ao criar |
-| `supabase/functions/whatsapp-webhook/index.ts` | Setar `is_internal_transfer` ao criar |
+| `src/hooks/useDREData.ts` | Nova interface `DRESection[]`, função de classificação por keywords, cálculo de linhas intermediárias |
+| `src/components/relatorios/DRETable.tsx` | Novo layout com linhas fixas contábeis, coluna de % (análise vertical), seções colapsáveis |
+| `src/components/relatorios/DREPeriodFilter.tsx` | Toggle "Contábil / Gerencial" |
+| `src/pages/DRE.tsx` | Cards de indicadores financeiros (Lucratividade, Margem Bruta, Margem Líquida, Margem de Contribuição) |
 
-## Resultado esperado
+## Resultado visual esperado
 
-- Pro-labore do usuário `espclin@hotmail` volta a aparecer como R$ 38.240 em despesas de março
-- Transferências "ENTRE CONTAS" da mesma empresa continuam excluídas
-- Zero configuração para o usuário — é automático
-- Funciona para todos os usuários, presente e futuro
+```text
+┌─────────────────────────┬──────────┬──────────┬──────────┬──────────┐
+│ DRE                     │   Jan    │   Fev    │   Mar    │  Total   │
+├─────────────────────────┼──────────┼──────────┼──────────┼──────────┤
+│ (+) Receita Operacional │ 50.000   │ 48.000   │ 55.000   │ 153.000  │
+│   ▸ Consultas           │ 30.000   │ 28.000   │ 35.000   │  93.000  │
+│   ▸ Procedimentos       │ 20.000   │ 20.000   │ 20.000   │  60.000  │
+│ (-) Impostos s/ venda   │ -4.220   │ -4.051   │ -4.642   │ -12.913  │
+│ (=) Receita Líquida     │ 45.780   │ 43.949   │ 50.358   │ 140.087  │
+│ (-) CMV/CSP             │ -5.000   │ -4.800   │ -5.500   │ -15.300  │
+│ (=) Lucro Bruto         │ 40.780   │ 39.149   │ 44.858   │ 124.787  │
+│ (-) Desp. com vendas    │ -2.000   │ -1.500   │ -2.500   │  -6.000  │
+│ (-) Desp. operacionais  │-15.000   │-15.000   │-15.000   │ -45.000  │
+│ (-) Desp. financeiras   │   -800   │   -750   │   -900   │  -2.450  │
+│ (+) Receita financeira  │    200   │    180   │    250   │     630  │
+│ (-) Desp. gerais e adm  │ -3.000   │ -3.000   │ -3.000   │  -9.000  │
+│ (=) Lucro Líquido       │ 20.180   │ 19.079   │ 23.708   │  62.967  │
+└─────────────────────────┴──────────┴──────────┴──────────┴──────────┘
+
+ Lucratividade: 41,2%  │  Margem Bruta: 81,6%  │  Margem Líquida: 41,2%
+```
 
