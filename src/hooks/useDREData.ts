@@ -162,8 +162,8 @@ export function useDREData(filters: DREFilters) {
   useEffect(() => {
     if (!user) return;
     const fetchCats = async () => {
-      const { data } = await supabase.from("categories").select("id, name, parent_id");
-      if (data) setCategories(data);
+      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section");
+      if (data) setCategories(data as CategoryRecord[]);
     };
     const fetchCards = async () => {
       let q = supabase.from("credit_cards").select("id, bank_account_id");
