@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,12 +25,11 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { CategoryFormModal } from "@/components/categorias/CategoryFormModal";
 import { CategoryTreeItem } from "@/components/categorias/CategoryTreeItem";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 
 export default function Categorias() {
   const { isPersonal } = useCompany();
   const {
-    tree, loading, search, setSearch,
+    categories, tree, loading, search, setSearch,
     createCategory, updateCategory, moveCategory, deleteCategory,
   } = useCategories();
 
@@ -40,6 +39,23 @@ export default function Categorias() {
   const [editData, setEditData] = useState<{ id: string; name: string; type: string | null; dre_section?: string | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [defaultType, setDefaultType] = useState("receita");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+
+  // Listen for native drag events from CategoryTreeItem
+  useEffect(() => {
+    const onStart = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setDraggedId(detail.id);
+    };
+    const onEnd = () => setDraggedId(null);
+
+    window.addEventListener("category-drag-start", onStart);
+    window.addEventListener("category-drag-end", onEnd);
+    return () => {
+      window.removeEventListener("category-drag-start", onStart);
+      window.removeEventListener("category-drag-end", onEnd);
+    };
+  }, []);
 
   const openCreateRoot = (type: string) => {
     setParentId(null);
@@ -86,21 +102,38 @@ export default function Categorias() {
     setDeleteTarget(null);
   };
 
-  const handleDragEnd = async (result: DropResult) => {
-    const { draggableId, destination } = result;
-    if (!destination) return;
+  // Handle drop from native drag & drop
+  const handleDrop = useCallback(async (droppedId: string, targetId: string | null, mode: "inside" | "before" | "after") => {
+    if (!targetId) return;
 
-    const droppableId = destination.droppableId;
-    let newParentId: string | null = null;
-
-    if (droppableId.startsWith("children-")) {
-      newParentId = droppableId.replace("children-", "");
-    } else if (droppableId === "root-revenue" || droppableId === "root-expense") {
-      newParentId = null;
+    if (mode === "inside") {
+      // Make droppedId a child of targetId
+      await moveCategory(droppedId, targetId);
+    } else {
+      // "before" or "after": place at same level as target
+      const targetCat = categories.find(c => c.id === targetId);
+      if (!targetCat) return;
+      const parentOfTarget = targetCat.parent_id;
+      const siblings = categories
+        .filter(c => c.parent_id === parentOfTarget && c.id !== droppedId)
+        .sort((a, b) => a.sort_order - b.sort_order);
+      const targetIndex = siblings.findIndex(c => c.id === targetId);
+      const insertAt = mode === "before" ? targetIndex : targetIndex + 1;
+      await moveCategory(droppedId, parentOfTarget, insertAt);
     }
+  }, [categories, moveCategory]);
 
-    await moveCategory(draggableId, newParentId);
-  };
+  // Handle drop on root zone
+  const handleRootDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const droppedId = e.dataTransfer.getData("text/plain");
+    if (!droppedId) return;
+    moveCategory(droppedId, null);
+  }, [moveCategory]);
+
+  const handleRootDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
 
   // Split tree into revenue and expense
   const revenueTree = tree.filter(cat => cat.type === "receita" || cat.type === "ambos");
@@ -152,7 +185,7 @@ export default function Categorias() {
         </div>
       </div>
 
-      {/* Two Column Layout with Drag & Drop */}
+      {/* Two Column Layout */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[0, 1].map((i) => (
@@ -166,115 +199,105 @@ export default function Categorias() {
           ))}
         </div>
       ) : (
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Revenue Column */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <div
-                    className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center cursor-pointer hover:bg-emerald-500/20 transition-colors"
-                    onClick={() => openCreateRoot("receita")}
-                    title="Criar categoria de receita"
-                  >
-                    <TrendingUp className="h-4 w-4 text-emerald-500" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Revenue Column */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div
+                  className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center cursor-pointer hover:bg-emerald-500/20 transition-colors"
+                  onClick={() => openCreateRoot("receita")}
+                  title="Criar categoria de receita"
+                >
+                  <TrendingUp className="h-4 w-4 text-emerald-500" />
+                </div>
+                Canais de Receita
+                {revenueTree.length > 0 && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {revenueTree.length} grupo{revenueTree.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div
+                onDrop={handleRootDrop}
+                onDragOver={handleRootDragOver}
+                className={`min-h-[60px] transition-colors rounded-md ${draggedId ? "ring-1 ring-dashed ring-primary/20" : ""}`}
+              >
+                {revenueTree.length === 0 ? (
+                  <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+                    {search ? "Nenhuma encontrada" : "Nenhuma categoria de receita"}
                   </div>
-                  Canais de Receita
-                  {revenueTree.length > 0 && (
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      {revenueTree.length} grupo{revenueTree.length !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <Droppable droppableId="root-revenue" type="CATEGORY">
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`min-h-[60px] transition-colors rounded-md ${snapshot.isDraggingOver ? "bg-primary/5" : ""}`}
-                    >
-                      {revenueTree.length === 0 ? (
-                        <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
-                          {search ? "Nenhuma encontrada" : "Nenhuma categoria de receita"}
-                        </div>
-                      ) : (
-                        <div className="space-y-0.5">
-                          {revenueTree.map((cat, index) => (
-                            <CategoryTreeItem
-                              key={cat.id}
-                              category={cat}
-                              level={0}
-                              index={index}
-                              onAdd={openCreateChild}
-                              onEdit={openEdit}
-                              onDelete={setDeleteTarget}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </CardContent>
-            </Card>
+                ) : (
+                  <div className="space-y-0.5">
+                    {revenueTree.map((cat) => (
+                      <CategoryTreeItem
+                        key={cat.id}
+                        category={cat}
+                        level={0}
+                        onAdd={openCreateChild}
+                        onEdit={openEdit}
+                        onDelete={setDeleteTarget}
+                        onDrop={handleDrop}
+                        draggedId={draggedId}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Expense Column */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <div
-                    className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center cursor-pointer hover:bg-red-500/20 transition-colors"
-                    onClick={() => openCreateRoot("despesa")}
-                    title="Criar categoria de despesa"
-                  >
-                    <TrendingDown className="h-4 w-4 text-red-500" />
+          {/* Expense Column */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <div
+                  className="h-8 w-8 rounded-lg bg-red-500/10 flex items-center justify-center cursor-pointer hover:bg-red-500/20 transition-colors"
+                  onClick={() => openCreateRoot("despesa")}
+                  title="Criar categoria de despesa"
+                >
+                  <TrendingDown className="h-4 w-4 text-red-500" />
+                </div>
+                Centros de Despesa
+                {expenseTree.length > 0 && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    {expenseTree.length} grupo{expenseTree.length !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div
+                onDrop={handleRootDrop}
+                onDragOver={handleRootDragOver}
+                className={`min-h-[60px] transition-colors rounded-md ${draggedId ? "ring-1 ring-dashed ring-primary/20" : ""}`}
+              >
+                {expenseTree.length === 0 ? (
+                  <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+                    {search ? "Nenhuma encontrada" : "Nenhuma categoria de despesa"}
                   </div>
-                  Centros de Despesa
-                  {expenseTree.length > 0 && (
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      {expenseTree.length} grupo{expenseTree.length !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <Droppable droppableId="root-expense" type="CATEGORY">
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`min-h-[60px] transition-colors rounded-md ${snapshot.isDraggingOver ? "bg-primary/5" : ""}`}
-                    >
-                      {expenseTree.length === 0 ? (
-                        <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
-                          {search ? "Nenhuma encontrada" : "Nenhuma categoria de despesa"}
-                        </div>
-                      ) : (
-                        <div className="space-y-0.5">
-                          {expenseTree.map((cat, index) => (
-                            <CategoryTreeItem
-                              key={cat.id}
-                              category={cat}
-                              level={0}
-                              index={index}
-                              onAdd={openCreateChild}
-                              onEdit={openEdit}
-                              onDelete={setDeleteTarget}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </CardContent>
-            </Card>
-          </div>
-        </DragDropContext>
+                ) : (
+                  <div className="space-y-0.5">
+                    {expenseTree.map((cat) => (
+                      <CategoryTreeItem
+                        key={cat.id}
+                        category={cat}
+                        level={0}
+                        onAdd={openCreateChild}
+                        onEdit={openEdit}
+                        onDelete={setDeleteTarget}
+                        onDrop={handleDrop}
+                        draggedId={draggedId}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Form Modal */}
