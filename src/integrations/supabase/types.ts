@@ -248,6 +248,7 @@ export type Database = {
         Row: {
           company_id: string | null
           created_at: string | null
+          dre_section: string | null
           id: string
           name: string
           parent_id: string | null
@@ -257,6 +258,7 @@ export type Database = {
         Insert: {
           company_id?: string | null
           created_at?: string | null
+          dre_section?: string | null
           id?: string
           name: string
           parent_id?: string | null
@@ -266,6 +268,7 @@ export type Database = {
         Update: {
           company_id?: string | null
           created_at?: string | null
+          dre_section?: string | null
           id?: string
           name?: string
           parent_id?: string | null

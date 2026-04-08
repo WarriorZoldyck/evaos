@@ -1,0 +1,1 @@
+ALTER TABLE public.categories ADD COLUMN dre_section text DEFAULT NULL;

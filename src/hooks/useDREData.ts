@@ -32,6 +32,7 @@ interface CategoryRecord {
   id: string;
   name: string;
   parent_id: string | null;
+  dre_section: string | null;
 }
 
 // ── Keyword-based classification ──────────────────────────────
@@ -82,8 +83,14 @@ const SECTION_KEYWORDS: Record<DreSectionKey, string[]> = {
 function classifyCategory(
   catName: string,
   txType: "receita" | "despesa",
-  fullChainNames: string[]
+  fullChainNames: string[],
+  explicitSection?: string | null
 ): DreSectionKey {
+  // Priority: explicit dre_section from database
+  if (explicitSection && explicitSection in SECTION_KEYWORDS) {
+    return explicitSection as DreSectionKey;
+  }
+
   const lower = fullChainNames.map((n) => n.toLowerCase()).join(" ") + " " + catName.toLowerCase();
 
   // For receita, check receita_financeira first
@@ -161,8 +168,8 @@ export function useDREData(filters: DREFilters) {
   useEffect(() => {
     if (!user) return;
     const fetchCats = async () => {
-      const { data } = await supabase.from("categories").select("id, name, parent_id");
-      if (data) setCategories(data);
+      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section");
+      if (data) setCategories(data as CategoryRecord[]);
     };
     const fetchCards = async () => {
       let q = supabase.from("credit_cards").select("id, bank_account_id");
@@ -330,7 +337,10 @@ export function useDREData(filters: DREFilters) {
 
       const chain = buildChain(t.category, t.subcategory, t.subcategory2);
       const chainNames = chain.map((c) => c.name);
-      const sectionKey = classifyCategory(chain[0]?.name || t.category, t.type, chainNames);
+      // Look up the root category's explicit dre_section
+      const rootCat = categories.find((c) => c.id === chain[0]?.id);
+      const explicitSection = rootCat?.dre_section || null;
+      const sectionKey = classifyCategory(chain[0]?.name || t.category, t.type, chainNames, explicitSection);
 
       const tree = sectionTrees[sectionKey];
       let currentLevel = tree;

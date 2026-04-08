@@ -374,7 +374,16 @@ export function useDashboardData(filters: DashboardFilters) {
       .filter((t) => t.type === "despesa" && t.status === "Pendente")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    return { faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista };
+    // MDR: taxas de maquininha
+    const mdrTransactions = paidTransactions.filter(
+      (t) => t.original_amount && Number(t.original_amount) > 0
+    );
+    const mdrBruto = mdrTransactions.reduce((acc, t) => acc + Number(t.original_amount!), 0);
+    const mdrLiquido = mdrTransactions.reduce((acc, t) => acc + Number(t.amount), 0);
+    const mdrTaxas = mdrBruto - mdrLiquido;
+    const mdrPercent = mdrBruto > 0 ? (mdrTaxas / mdrBruto) * 100 : 0;
+
+    return { faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent };
   }, [transactions, competenceTransactions]);
 
   // Upcoming (Pendente) transactions
