@@ -32,6 +32,7 @@ interface CategoryRecord {
   id: string;
   name: string;
   parent_id: string | null;
+  dre_section: string | null;
 }
 
 // ── Keyword-based classification ──────────────────────────────
