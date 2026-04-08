@@ -337,7 +337,10 @@ export function useDREData(filters: DREFilters) {
 
       const chain = buildChain(t.category, t.subcategory, t.subcategory2);
       const chainNames = chain.map((c) => c.name);
-      const sectionKey = classifyCategory(chain[0]?.name || t.category, t.type, chainNames);
+      // Look up the root category's explicit dre_section
+      const rootCat = categories.find((c) => c.id === chain[0]?.id);
+      const explicitSection = rootCat?.dre_section || null;
+      const sectionKey = classifyCategory(chain[0]?.name || t.category, t.type, chainNames, explicitSection);
 
       const tree = sectionTrees[sectionKey];
       let currentLevel = tree;
