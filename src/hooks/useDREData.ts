@@ -83,8 +83,14 @@ const SECTION_KEYWORDS: Record<DreSectionKey, string[]> = {
 function classifyCategory(
   catName: string,
   txType: "receita" | "despesa",
-  fullChainNames: string[]
+  fullChainNames: string[],
+  explicitSection?: string | null
 ): DreSectionKey {
+  // Priority: explicit dre_section from database
+  if (explicitSection && explicitSection in SECTION_KEYWORDS) {
+    return explicitSection as DreSectionKey;
+  }
+
   const lower = fullChainNames.map((n) => n.toLowerCase()).join(" ") + " " + catName.toLowerCase();
 
   // For receita, check receita_financeira first
