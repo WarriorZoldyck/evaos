@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, CreditCard } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -10,6 +10,10 @@ interface SummaryCardsProps {
   saldo: number;
   entradaPrevista: number;
   saidaPrevista: number;
+  mdrBruto: number;
+  mdrLiquido: number;
+  mdrTaxas: number;
+  mdrPercent: number;
   loading: boolean;
   dateFrom: string;
   dateTo: string;
@@ -74,9 +78,10 @@ interface ForecastCardProps {
   valueClassName?: string;
   loading: boolean;
   onClick?: () => void;
+  subtitle?: string;
 }
 
-function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName, loading, onClick }: ForecastCardProps) {
+function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName, loading, onClick, subtitle }: ForecastCardProps) {
   return (
     <Card className="cursor-pointer hover:border-primary/20 transition-colors" onClick={onClick}>
       <CardContent className="p-5 flex items-center gap-3">
@@ -90,13 +95,14 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
               {formatCurrency(value)}
             </p>
           )}
+          {subtitle && <p className="text-[10px] text-muted-foreground">{subtitle}</p>}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, loading, dateFrom, dateTo }: SummaryCardsProps) {
+export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent, loading, dateFrom, dateTo }: SummaryCardsProps) {
   const navigate = useNavigate();
 
   const go = (params: Record<string, string>) => {
@@ -151,8 +157,8 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
         />
       </div>
 
-      {/* Forecast cards — clean style like Agenda */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Forecast cards + MDR */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <ForecastCard
           title="Entradas previstas"
           value={entradaPrevista}
@@ -182,6 +188,17 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
           loading={loading}
           onClick={() => go({ status: "Pendente" })}
         />
+        {mdrBruto > 0 && (
+          <ForecastCard
+            title="Taxas MDR (Maquininha)"
+            value={mdrTaxas}
+            icon={CreditCard}
+            iconClassName="text-orange-500"
+            valueClassName="text-destructive"
+            loading={loading}
+            subtitle={`${mdrPercent.toFixed(1)}% sobre ${formatCurrency(mdrBruto)} bruto`}
+          />
+        )}
       </div>
     </div>
   );

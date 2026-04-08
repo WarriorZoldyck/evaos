@@ -82,6 +82,10 @@ export default function Dashboard() {
         saldo={summary.saldo}
         entradaPrevista={summary.entradaPrevista}
         saidaPrevista={summary.saidaPrevista}
+        mdrBruto={summary.mdrBruto}
+        mdrLiquido={summary.mdrLiquido}
+        mdrTaxas={summary.mdrTaxas}
+        mdrPercent={summary.mdrPercent}
         loading={loading}
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
