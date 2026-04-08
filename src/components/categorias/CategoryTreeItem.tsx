@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronDown, Plus, Pencil, Trash2, FolderTree, Folder, FileText } from "lucide-react";
+import { ChevronRight, ChevronDown, Plus, Pencil, Trash2, FolderTree, Folder, FileText, GripVertical } from "lucide-react";
 import type { Category } from "@/hooks/useCategories";
 import { cn } from "@/lib/utils";
+import { Draggable, Droppable } from "@hello-pangea/dnd";
 
 interface CategoryTreeItemProps {
   category: Category;
   level: number;
+  index: number;
   maxLevel?: number;
   onAdd: (parentId: string, parentName: string) => void;
   onEdit: (category: Category) => void;
@@ -17,6 +19,7 @@ interface CategoryTreeItemProps {
 export function CategoryTreeItem({
   category,
   level,
+  index,
   maxLevel = 3,
   onAdd,
   onEdit,
@@ -36,89 +39,123 @@ export function CategoryTreeItem({
   const typeLabels: Record<string, string> = { receita: "Receita", despesa: "Despesa", ambos: "Ambos" };
 
   return (
-    <div>
-      <div
-        className={cn(
-          "group flex items-center gap-2 py-2 px-3 rounded-md hover:bg-accent/50 transition-colors",
-          level > 0 && "ml-6"
-        )}
-      >
-        {/* Expand toggle */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className={cn("h-5 w-5 shrink-0 flex items-center justify-center", !hasChildren && "invisible")}
+    <Draggable draggableId={category.id} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          className={cn(snapshot.isDragging && "opacity-70")}
         >
-          {expanded ? (
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-          )}
-        </button>
+          <div
+            className={cn(
+              "group flex items-center gap-2 py-2 px-3 rounded-md hover:bg-accent/50 transition-colors",
+              level > 0 && "ml-6",
+              snapshot.isDragging && "bg-accent shadow-lg ring-2 ring-primary/20"
+            )}
+          >
+            {/* Drag handle */}
+            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing shrink-0">
+              <GripVertical className="h-4 w-4 text-muted-foreground/50 hover:text-muted-foreground" />
+            </div>
 
-        <Icon className="h-4 w-4 text-primary shrink-0" />
-
-        <span className="flex-1 text-sm font-medium truncate">{category.name}</span>
-
-        {level === 0 && category.type && (
-          <Badge variant="outline" className="text-xs shrink-0">
-            {typeLabels[category.type] || category.type}
-          </Badge>
-        )}
-
-        {totalDescendants > 0 && (
-          <Badge variant="secondary" className="text-xs shrink-0">
-            {totalDescendants} sub-{totalDescendants === 1 ? "item" : "itens"}
-          </Badge>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-          {canAddChild && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onAdd(category.id, category.name)}
-              title="Adicionar subcategoria"
+            {/* Expand toggle */}
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className={cn("h-5 w-5 shrink-0 flex items-center justify-center", !hasChildren && "invisible")}
             >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => onEdit(category)}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-destructive hover:text-destructive"
-            onClick={() => onDelete(category)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
+              {expanded ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
 
-      {/* Children */}
-      {expanded && hasChildren && (
-        <div>
-          {category.children!.map((child) => (
-            <CategoryTreeItem
-              key={child.id}
-              category={child}
-              level={level + 1}
-              maxLevel={maxLevel}
-              onAdd={onAdd}
-              onEdit={onEdit}
-              onDelete={onDelete}
-            />
-          ))}
+            <Icon className="h-4 w-4 text-primary shrink-0" />
+
+            <span className="flex-1 text-sm font-medium truncate">{category.name}</span>
+
+            {level === 0 && category.type && (
+              <Badge variant="outline" className="text-xs shrink-0">
+                {typeLabels[category.type] || category.type}
+              </Badge>
+            )}
+
+            {category.dre_section && (
+              <Badge variant="secondary" className="text-xs shrink-0 hidden sm:inline-flex">
+                DRE
+              </Badge>
+            )}
+
+            {totalDescendants > 0 && (
+              <Badge variant="secondary" className="text-xs shrink-0">
+                {totalDescendants} sub-{totalDescendants === 1 ? "item" : "itens"}
+              </Badge>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              {canAddChild && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onAdd(category.id, category.name)}
+                  title="Adicionar subcategoria"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => onEdit(category)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-destructive hover:text-destructive"
+                onClick={() => onDelete(category)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Children as droppable zone */}
+          {expanded && (
+            <Droppable droppableId={`children-${category.id}`} type="CATEGORY">
+              {(dropProvided, dropSnapshot) => (
+                <div
+                  ref={dropProvided.innerRef}
+                  {...dropProvided.droppableProps}
+                  className={cn(
+                    "min-h-[4px] transition-colors rounded-md",
+                    dropSnapshot.isDraggingOver && "bg-primary/5 ring-1 ring-primary/20"
+                  )}
+                >
+                  {hasChildren &&
+                    category.children!.map((child, childIndex) => (
+                      <CategoryTreeItem
+                        key={child.id}
+                        category={child}
+                        level={level + 1}
+                        index={childIndex}
+                        maxLevel={maxLevel}
+                        onAdd={onAdd}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                      />
+                    ))}
+                  {dropProvided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          )}
         </div>
       )}
-    </div>
+    </Draggable>
   );
 }

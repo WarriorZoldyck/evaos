@@ -9,6 +9,7 @@ export interface Category {
   name: string;
   parent_id: string | null;
   type: string | null;
+  dre_section: string | null;
   company_id: string | null;
   user_id: string;
   created_at: string | null;
@@ -39,7 +40,7 @@ export function useCategories() {
     if (error) {
       toast({ title: "Erro ao carregar categorias", description: error.message, variant: "destructive" });
     } else {
-      setCategories(data || []);
+      setCategories((data as Category[]) || []);
     }
     setLoading(false);
   }, [user, isPersonal, selectedCompanyId, toast]);
@@ -48,12 +49,13 @@ export function useCategories() {
     fetchCategories();
   }, [fetchCategories]);
 
-  const createCategory = async (data: { name: string; parent_id?: string | null; type?: string }) => {
+  const createCategory = async (data: { name: string; parent_id?: string | null; type?: string; dre_section?: string | null }) => {
     if (!user) return false;
     const { error } = await supabase.from("categories").insert({
       name: data.name,
       parent_id: data.parent_id || null,
       type: data.type || "ambos",
+      dre_section: data.dre_section || null,
       user_id: user.id,
       company_id: selectedCompanyId || null,
     });
@@ -66,7 +68,7 @@ export function useCategories() {
     return true;
   };
 
-  const updateCategory = async (id: string, data: { name?: string; type?: string }) => {
+  const updateCategory = async (id: string, data: { name?: string; type?: string; dre_section?: string | null }) => {
     const { error } = await supabase.from("categories").update(data).eq("id", id);
     if (error) {
       toast({ title: "Erro ao atualizar categoria", description: error.message, variant: "destructive" });
@@ -77,8 +79,33 @@ export function useCategories() {
     return true;
   };
 
+  const moveCategory = async (id: string, newParentId: string | null) => {
+    // Validate max 3 levels
+    if (newParentId) {
+      let depth = 1;
+      let current = categories.find((c) => c.id === newParentId);
+      while (current?.parent_id) {
+        depth++;
+        current = categories.find((c) => c.id === current!.parent_id);
+      }
+      // The item being moved would be at depth+1
+      if (depth >= 3) {
+        toast({ title: "Limite de 3 níveis atingido", variant: "destructive" });
+        return false;
+      }
+    }
+
+    const { error } = await supabase.from("categories").update({ parent_id: newParentId }).eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao mover categoria", description: error.message, variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Categoria movida!" });
+    fetchCategories();
+    return true;
+  };
+
   const deleteCategory = async (id: string) => {
-    // Check for children
     const children = categories.filter((c) => c.parent_id === id);
     if (children.length > 0) {
       toast({ title: "Erro", description: "Exclua as subcategorias primeiro.", variant: "destructive" });
@@ -98,13 +125,6 @@ export function useCategories() {
   const buildTree = (items: Category[], parentId: string | null = null): Category[] => {
     return items
       .filter((c) => c.parent_id === parentId)
-      .filter((c) =>
-        search
-          ? c.name.toLowerCase().includes(search.toLowerCase())
-            || items.some((child) => child.parent_id === c.id && child.name.toLowerCase().includes(search.toLowerCase()))
-            || (c.parent_id && items.find((p) => p.id === c.parent_id)?.name.toLowerCase().includes(search.toLowerCase()))
-          : true
-      )
       .map((c) => ({ ...c, children: buildTree(items, c.id) }));
   };
 
@@ -118,6 +138,7 @@ export function useCategories() {
     setSearch,
     createCategory,
     updateCategory,
+    moveCategory,
     deleteCategory,
     refetch: fetchCategories,
   };
@@ -127,11 +148,9 @@ function buildFilteredTree(items: Category[], search: string): Category[] {
   const lower = search.toLowerCase();
   const matchingIds = new Set<string>();
 
-  // Find all matching items and their ancestors
   items.forEach((c) => {
     if (c.name.toLowerCase().includes(lower)) {
       matchingIds.add(c.id);
-      // Add ancestors
       let current = c;
       while (current.parent_id) {
         matchingIds.add(current.parent_id);
