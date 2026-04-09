@@ -1,3 +1,4 @@
+import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -63,7 +64,7 @@ export function useAccounts() {
       company_id: selectedCompanyId || null,
     });
     if (error) {
-      toast({ title: "Erro ao criar conta", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao criar conta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Conta criada!" });
@@ -74,7 +75,7 @@ export function useAccounts() {
   const updateBankAccount = async (id: string, data: Partial<BankAccount>) => {
     const { error } = await supabase.from("bank_accounts").update(data).eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar conta", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar conta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Conta atualizada!" });
@@ -85,7 +86,7 @@ export function useAccounts() {
   const deleteBankAccount = async (id: string) => {
     const { error } = await supabase.from("bank_accounts").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir conta", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir conta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Conta excluída!" });
@@ -104,7 +105,7 @@ export function useAccounts() {
       company_id: selectedCompanyId || null,
     });
     if (error) {
-      toast({ title: "Erro ao criar cartão", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao criar cartão", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Cartão criado!" });
@@ -115,7 +116,7 @@ export function useAccounts() {
   const updateCreditCard = async (id: string, data: Partial<CreditCard>) => {
     const { error } = await supabase.from("credit_cards").update(data).eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar cartão", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar cartão", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Cartão atualizado!" });
@@ -126,7 +127,7 @@ export function useAccounts() {
   const deleteCreditCard = async (id: string) => {
     const { error } = await supabase.from("credit_cards").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir cartão", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir cartão", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Cartão excluído!" });
@@ -143,7 +144,7 @@ export function useAccounts() {
       company_id: selectedCompanyId || null,
     });
     if (error) {
-      toast({ title: "Erro ao criar carteira", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao criar carteira", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Carteira criada!" });
@@ -154,7 +155,7 @@ export function useAccounts() {
   const updateWallet = async (id: string, data: Partial<Wallet>) => {
     const { error } = await supabase.from("wallets").update(data).eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar carteira", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar carteira", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Carteira atualizada!" });
@@ -165,7 +166,7 @@ export function useAccounts() {
   const deleteWallet = async (id: string) => {
     const { error } = await supabase.from("wallets").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir carteira", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir carteira", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Carteira excluída!" });
@@ -196,7 +197,7 @@ export function useAccounts() {
       company_id: selectedCompanyId || null,
     });
     if (error) {
-      toast({ title: "Erro ao criar maquininha", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao criar maquininha", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Maquininha criada!" });
@@ -207,7 +208,7 @@ export function useAccounts() {
   const updateCardTerminal = async (id: string, data: Partial<CardTerminal>) => {
     const { error } = await supabase.from("card_terminals").update(data).eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar maquininha", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar maquininha", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Maquininha atualizada!" });
@@ -218,7 +219,7 @@ export function useAccounts() {
   const deleteCardTerminal = async (id: string) => {
     const { error } = await supabase.from("card_terminals").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir maquininha", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir maquininha", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Maquininha excluída!" });

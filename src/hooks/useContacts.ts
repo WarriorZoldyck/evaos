@@ -1,3 +1,4 @@
+import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -56,7 +57,7 @@ export function useContacts() {
       user_id: user.id,
     });
     if (error) {
-      toast({ title: "Erro ao criar fornecedor", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao criar fornecedor", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Fornecedor criado!" });
@@ -70,7 +71,7 @@ export function useContacts() {
       .update({ name: data.name, cnpj: data.cnpj || null })
       .eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar fornecedor", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar fornecedor", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Fornecedor atualizado!" });
@@ -81,7 +82,7 @@ export function useContacts() {
   const deleteSupplier = async (id: string) => {
     const { error } = await supabase.from("suppliers").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir fornecedor", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir fornecedor", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Fornecedor excluído!" });
@@ -97,7 +98,7 @@ export function useContacts() {
       user_id: user.id,
     });
     if (error) {
-      toast({ title: "Erro ao criar cliente", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao criar cliente", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Cliente criado!" });
@@ -111,7 +112,7 @@ export function useContacts() {
       .update({ name: data.name, cnpj_cpf: data.cnpj_cpf || null })
       .eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar cliente", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar cliente", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Cliente atualizado!" });
@@ -122,7 +123,7 @@ export function useContacts() {
   const deleteClient = async (id: string) => {
     const { error } = await supabase.from("clients").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir cliente", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir cliente", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Cliente excluído!" });

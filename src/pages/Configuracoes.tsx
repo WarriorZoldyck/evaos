@@ -146,20 +146,12 @@ export default function Configuracoes() {
         return;
       }
 
-      const res = await fetch(
-        `https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/delete-account`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const { error: fnError } = await supabase.functions.invoke('delete-account', {
+        method: 'POST',
+      });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Erro ao excluir conta");
+      if (fnError) {
+        throw new Error(fnError.message || "Erro ao excluir conta");
       }
 
       toast.success("Conta excluída com sucesso.");

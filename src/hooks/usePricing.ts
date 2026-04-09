@@ -1,3 +1,4 @@
+import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -78,7 +79,7 @@ export function usePricing() {
       .maybeSingle();
 
     if (error) {
-      toast({ title: "Erro ao carregar configuração", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao carregar configuração", description: mapDatabaseError(error), variant: "destructive" });
       return null;
     }
 
@@ -112,7 +113,7 @@ export function usePricing() {
         .eq("id", config.id);
 
       if (error) {
-        toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+        toast({ title: "Erro ao salvar", description: mapDatabaseError(error), variant: "destructive" });
         return false;
       }
     } else {
@@ -124,7 +125,7 @@ export function usePricing() {
       });
 
       if (error) {
-        toast({ title: "Erro ao criar configuração", description: error.message, variant: "destructive" });
+        toast({ title: "Erro ao criar configuração", description: mapDatabaseError(error), variant: "destructive" });
         return false;
       }
     }
@@ -194,7 +195,7 @@ export function usePricing() {
       .order("name");
 
     if (error) {
-      toast({ title: "Erro ao carregar procedimentos", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao carregar procedimentos", description: mapDatabaseError(error), variant: "destructive" });
       return;
     }
 
@@ -271,7 +272,7 @@ export function usePricing() {
       .eq("id", id);
 
     if (error) {
-      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
 
@@ -327,7 +328,7 @@ export function usePricing() {
     const { error } = await supabase.from("pricing_procedures").delete().eq("id", id);
 
     if (error) {
-      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
 
