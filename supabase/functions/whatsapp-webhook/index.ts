@@ -1778,6 +1778,14 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       return companies.some((c) => c.name.toLowerCase() === contextName.toLowerCase());
     };
 
+    // Validate that intent is one of expected values to prevent AI manipulation
+    const VALID_INTENTS = ["lancamento", "editar_lancamento", "consulta", "gerenciar_categoria", "conversa"];
+    if (aiParsed.intent && !VALID_INTENTS.includes(aiParsed.intent)) {
+      console.warn("Invalid AI intent detected, defaulting to conversa:", aiParsed.intent);
+      aiParsed.intent = "conversa";
+      aiParsed.message = aiParsed.message || "Como posso ajudar?";
+    }
+
     // 7. Execute action based on intent
     if (aiParsed.intent === "lancamento") {
       // SAFEGUARD: If media was sent and amount is 0, ask the user for the value
