@@ -182,16 +182,6 @@ export function ImportStatementModal({
         return;
       }
 
-      if (!response.ok) {
-        toast({
-          title: "Erro ao processar arquivo",
-          description: result.error || "Erro desconhecido",
-          variant: "destructive",
-        });
-        setParsing(false);
-        return;
-      }
-
       const raw = (result.transactions || []).map((t: any) => ({
         ...t,
         selected: true,
