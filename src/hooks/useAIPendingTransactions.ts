@@ -271,7 +271,7 @@ export function useAIPendingTransactions() {
       if (rejectError) throw rejectError;
     },
     onSuccess: () => {
-      toast.success("Duplicata resolvida!");
+      toast.success("Duplicata resolvida! O item mantido foi movido para a aba Pendentes para aprovação.");
       invalidateAll();
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
