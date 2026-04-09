@@ -168,19 +168,19 @@ export function ImportStatementModal({
       const formData = new FormData();
       formData.append("file", file);
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/parse-bank-statement`,
-        {
-          method: "POST",
-          body: formData,
-          headers: {
-            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-        }
-      );
+      const { data: result, error: fnError } = await supabase.functions.invoke('parse-bank-statement', {
+        body: formData,
+      });
 
-      const result = await response.json();
+      if (fnError) {
+        toast({
+          title: "Erro ao processar arquivo",
+          description: "Não foi possível processar o arquivo. Tente novamente.",
+          variant: "destructive",
+        });
+        setParsing(false);
+        return;
+      }
 
       if (!response.ok) {
         toast({
