@@ -188,17 +188,6 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
           loading={loading}
           onClick={() => go({ status: "Pendente" })}
         />
-        {mdrBruto > 0 && (
-          <ForecastCard
-            title="Taxas MDR (Maquininha)"
-            value={mdrTaxas}
-            icon={CreditCard}
-            iconClassName="text-orange-500"
-            valueClassName="text-destructive"
-            loading={loading}
-            subtitle={`${mdrPercent.toFixed(1)}% sobre ${formatCurrency(mdrBruto)} bruto`}
-          />
-        )}
       </div>
     </div>
   );
