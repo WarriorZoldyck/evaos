@@ -1,5 +1,7 @@
+import { useState, useRef, useEffect } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreHorizontal, Edit, Copy, Trash2, Eye } from "lucide-react";
 import type { ProcedureV2 } from "@/hooks/usePricingV2";
@@ -15,12 +17,76 @@ interface ProcedureTableV2Props {
   onEdit: (proc: ProcedureV2) => void;
   onDuplicate: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
+  onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number }) => Promise<boolean>;
 }
 
-export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSelect, onEdit, onDuplicate, onDelete }: ProcedureTableV2Props) {
+function InlineEditCell({ value, onSave, prefix, suffix, className }: {
+  value: number;
+  onSave: (v: number) => void;
+  prefix?: string;
+  suffix?: string;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(String(value));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      setEditValue(String(value));
+      setTimeout(() => inputRef.current?.select(), 0);
+    }
+  }, [editing]);
+
+  const commit = () => {
+    const num = parseFloat(editValue);
+    if (!isNaN(num) && num >= 0) {
+      onSave(num);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <Input
+        ref={inputRef}
+        type="number"
+        min={0}
+        step={0.01}
+        className="w-24 h-7 text-right text-sm"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`cursor-text hover:bg-muted/50 rounded px-1 py-0.5 transition-colors ${className || ""}`}
+      onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); }}
+      title="Duplo clique para editar"
+    >
+      {prefix}{typeof value === "number" ? (prefix === "R$" ? fmt(value) : value) : value}{suffix}
+    </span>
+  );
+}
+
+export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSelect, onEdit, onDuplicate, onDelete, onInlineUpdate }: ProcedureTableV2Props) {
   if (procedures.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-8">Nenhum procedimento cadastrado.</p>;
   }
+
+  const handleInlineUpdate = (procId: string, field: "desired_price" | "execution_time", value: number) => {
+    if (onInlineUpdate) {
+      onInlineUpdate(procId, { [field]: value });
+    }
+  };
 
   return (
     <Table>
@@ -51,8 +117,23 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
               onClick={() => onSelect(isSelected ? null : proc.id)}
             >
               <TableCell className="font-medium">{proc.name}</TableCell>
-              <TableCell className="text-right">{proc.execution_time}</TableCell>
-              <TableCell className="text-right">{fmt(proc.desired_price)}</TableCell>
+              <TableCell className="text-right">
+                {onInlineUpdate ? (
+                  <InlineEditCell
+                    value={proc.execution_time}
+                    onSave={(v) => handleInlineUpdate(proc.id, "execution_time", v)}
+                  />
+                ) : proc.execution_time}
+              </TableCell>
+              <TableCell className="text-right">
+                {onInlineUpdate ? (
+                  <InlineEditCell
+                    value={proc.desired_price}
+                    prefix="R$"
+                    onSave={(v) => handleInlineUpdate(proc.id, "desired_price", v)}
+                  />
+                ) : fmt(proc.desired_price)}
+              </TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cf)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cv)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.nf)}</TableCell>
