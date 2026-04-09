@@ -1,3 +1,4 @@
+import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -39,7 +40,7 @@ export function useCategories() {
 
     const { data, error } = await query.order("sort_order").order("name");
     if (error) {
-      toast({ title: "Erro ao carregar categorias", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao carregar categorias", description: mapDatabaseError(error), variant: "destructive" });
     } else {
       setCategories((data as Category[]) || []);
     }
@@ -66,7 +67,7 @@ export function useCategories() {
       sort_order: maxSort,
     });
     if (error) {
-      toast({ title: "Erro ao criar categoria", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao criar categoria", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Categoria criada!" });
@@ -77,7 +78,7 @@ export function useCategories() {
   const updateCategory = async (id: string, data: { name?: string; type?: string; dre_section?: string | null }) => {
     const { error } = await supabase.from("categories").update(data).eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar categoria", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar categoria", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Categoria atualizada!" });
@@ -163,7 +164,7 @@ export function useCategories() {
       .eq("id", id);
 
     if (error) {
-      toast({ title: "Erro ao mover categoria", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao mover categoria", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
 
@@ -192,7 +193,7 @@ export function useCategories() {
     }
     const { error } = await supabase.from("categories").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir categoria", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir categoria", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Categoria excluída!" });

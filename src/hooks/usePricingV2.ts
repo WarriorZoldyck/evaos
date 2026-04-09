@@ -1,3 +1,4 @@
+import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -99,7 +100,7 @@ export function usePricingV2() {
       .maybeSingle();
 
     if (error) {
-      toast({ title: "Erro ao carregar configuração V2", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao carregar configuração V2", description: mapDatabaseError(error), variant: "destructive" });
       return null;
     }
     if (data) {
@@ -126,7 +127,7 @@ export function usePricingV2() {
         .update({ hours_per_month: hours, num_rooms: rooms, tax_rate: tax, updated_at: new Date().toISOString() })
         .eq("id", config.id);
       if (error) {
-        toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+        toast({ title: "Erro ao salvar", description: mapDatabaseError(error), variant: "destructive" });
         return false;
       }
     } else {
@@ -137,7 +138,7 @@ export function usePricingV2() {
         tax_rate: tax,
       });
       if (error) {
-        toast({ title: "Erro ao criar configuração", description: error.message, variant: "destructive" });
+        toast({ title: "Erro ao criar configuração", description: mapDatabaseError(error), variant: "destructive" });
         return false;
       }
     }
@@ -156,7 +157,7 @@ export function usePricingV2() {
       .order("sort_order", { ascending: true });
 
     if (error) {
-      toast({ title: "Erro ao carregar itens de custo", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao carregar itens de custo", description: mapDatabaseError(error), variant: "destructive" });
       return;
     }
     setCostItems(
@@ -202,7 +203,7 @@ export function usePricingV2() {
           ...item,
         });
         if (error) {
-          toast({ title: "Erro ao adicionar item", description: error.message, variant: "destructive" });
+          toast({ title: "Erro ao adicionar item", description: mapDatabaseError(error), variant: "destructive" });
           return false;
         }
       }
@@ -213,7 +214,7 @@ export function usePricingV2() {
         ...item,
       });
       if (error) {
-        toast({ title: "Erro ao adicionar item", description: error.message, variant: "destructive" });
+        toast({ title: "Erro ao adicionar item", description: mapDatabaseError(error), variant: "destructive" });
         return false;
       }
     }
@@ -225,7 +226,7 @@ export function usePricingV2() {
   const updateCostItem = async (id: string, updates: Partial<Pick<CostItem, "category" | "description" | "value" | "frequency">>) => {
     const { error } = await supabase.from("pricing_v2_cost_items").update(updates).eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     await fetchCostItems();
@@ -236,7 +237,7 @@ export function usePricingV2() {
   const deleteCostItem = async (id: string) => {
     const { error } = await supabase.from("pricing_v2_cost_items").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     await fetchCostItems();
@@ -253,7 +254,7 @@ export function usePricingV2() {
       .order("name");
 
     if (error) {
-      toast({ title: "Erro ao carregar procedimentos", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao carregar procedimentos", description: mapDatabaseError(error), variant: "destructive" });
       return;
     }
     if (!procs || procs.length === 0) {
@@ -319,7 +320,7 @@ export function usePricingV2() {
       .update({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price })
       .eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     await supabase.from("pricing_v2_procedure_items").delete().eq("procedure_id", id);
@@ -356,7 +357,7 @@ export function usePricingV2() {
     await supabase.from("pricing_v2_procedure_items").delete().eq("procedure_id", id);
     const { error } = await supabase.from("pricing_v2_procedures").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     if (selectedProcedureId === id) setSelectedProcedureId(null);

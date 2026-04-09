@@ -1,3 +1,4 @@
+import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -48,7 +49,7 @@ export function useGoals() {
 
     const { data, error } = await query;
     if (error) {
-      toast({ title: "Erro ao carregar metas", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao carregar metas", description: mapDatabaseError(error), variant: "destructive" });
     } else {
       setGoals((data as Goal[]) || []);
     }
@@ -67,7 +68,7 @@ export function useGoals() {
       company_id: selectedCompanyId || null,
     } as any);
     if (error) {
-      toast({ title: "Erro ao criar meta", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao criar meta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Meta criada!" });
@@ -78,7 +79,7 @@ export function useGoals() {
   const updateGoal = async (id: string, data: Partial<Goal>) => {
     const { error } = await supabase.from("goals").update(data as any).eq("id", id);
     if (error) {
-      toast({ title: "Erro ao atualizar meta", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao atualizar meta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Meta atualizada!" });
@@ -89,7 +90,7 @@ export function useGoals() {
   const deleteGoal = async (id: string) => {
     const { error } = await supabase.from("goals").delete().eq("id", id);
     if (error) {
-      toast({ title: "Erro ao excluir meta", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao excluir meta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
     toast({ title: "Meta excluída!" });

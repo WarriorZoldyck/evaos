@@ -1,3 +1,4 @@
+import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -293,7 +294,7 @@ export function useTransactions() {
         if (error) {
           toast({
             title: "Erro ao carregar lançamentos",
-            description: error.message,
+            description: mapDatabaseError(error),
             variant: "destructive",
           });
           setTransactions([]);
@@ -327,7 +328,7 @@ export function useTransactions() {
     if (error) {
       toast({
         title: "Erro ao carregar lançamentos",
-        description: error.message,
+        description: mapDatabaseError(error),
         variant: "destructive",
       });
     } else {
@@ -351,7 +352,7 @@ export function useTransactions() {
     if (error) {
       toast({
         title: "Erro ao criar lançamento",
-        description: error.message,
+        description: mapDatabaseError(error),
         variant: "destructive",
       });
       return false;
@@ -367,7 +368,7 @@ export function useTransactions() {
     if (error) {
       toast({
         title: "Erro ao criar lançamentos",
-        description: error.message,
+        description: mapDatabaseError(error),
         variant: "destructive",
       });
       return false;
@@ -387,7 +388,7 @@ export function useTransactions() {
     if (error) {
       toast({
         title: "Erro ao atualizar lançamento",
-        description: error.message,
+        description: mapDatabaseError(error),
         variant: "destructive",
       });
       return false;
@@ -403,7 +404,7 @@ export function useTransactions() {
     if (error) {
       toast({
         title: "Erro ao excluir lançamento",
-        description: error.message,
+        description: mapDatabaseError(error),
         variant: "destructive",
       });
       return false;
@@ -419,7 +420,7 @@ export function useTransactions() {
     if (error) {
       toast({
         title: "Erro ao excluir lançamentos",
-        description: error.message,
+        description: mapDatabaseError(error),
         variant: "destructive",
       });
       return false;
@@ -446,7 +447,7 @@ export function useTransactions() {
     if (error) {
       toast({
         title: "Erro ao excluir série",
-        description: error.message,
+        description: mapDatabaseError(error),
         variant: "destructive",
       });
       return false;
@@ -499,7 +500,7 @@ export function useTransactions() {
     if (updateError) {
       toast({
         title: "Erro ao redistribuir parcelas",
-        description: updateError.message,
+        description: mapDatabaseError(updateError),
         variant: "destructive",
       });
       return { success: false, count: 0 };
@@ -520,7 +521,7 @@ export function useTransactions() {
     if (failed?.error) {
       toast({
         title: "Erro ao atualizar parcelas",
-        description: failed.error.message,
+        description: mapDatabaseError(failed.error),
         variant: "destructive",
       });
       return false;
