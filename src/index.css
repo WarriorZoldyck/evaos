@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Ensure number input spinners are always visible */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: inner-spin-button;
+  opacity: 1;
+  height: auto;
+}
+
 @layer base {
   :root {
     --background: 210 30% 98%;
