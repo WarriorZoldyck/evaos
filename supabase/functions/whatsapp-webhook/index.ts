@@ -1537,6 +1537,18 @@ REGRAS DE EDIÇÃO DE LANÇAMENTO:
 - Para field="status", new_value deve ser "Pago" ou "Pendente"
 - Para field="payment_date" ou "competence_date", new_value deve ser "YYYY-MM-DD"
 
+REGRA CRÍTICA — DETECÇÃO DE CORREÇÃO/RECATEGORIZAÇÃO:
+- Se o usuário enviar uma mensagem CURTA (1-3 palavras) logo após um lançamento ter sido criado na conversa, e essa mensagem parece ser um NOME DE CATEGORIA ou SUBCATEGORIA (ex: "Supérfluos saídas", "Alimentação", "Bar", "Pet cachorra"), interprete como uma CORREÇÃO DE CATEGORIA do lançamento anterior, NÃO como um novo lançamento.
+- Nesse caso, use intent="editar_lancamento" com field="category" e new_value contendo o nome da categoria/subcategoria desejada.
+- NUNCA crie um novo lançamento duplicado com o mesmo valor quando o usuário está claramente tentando recategorizar.
+- Sinais de que é uma correção: mensagem curta sem valor monetário, enviada logo após um lançamento, texto corresponde a uma categoria existente ou subcategoria.
+- Quando for uma correção de categoria, tente encontrar o UUID da categoria na lista de categorias acima. Se houver match, use o UUID. Se não, trate como sugestão de nova categoria.
+
+REGRA CRÍTICA — DESCRIÇÃO NUNCA DEVE SER NOME DE CATEGORIA:
+- O campo "description" NUNCA deve conter APENAS o nome de uma categoria ou subcategoria (ex: "Saídas", "Alimentação", "Supérfluos").
+- A descrição deve ser o nome do estabelecimento, do fornecedor, do produto ou uma descrição significativa da transação (ex: "Compra no Empório Moscato", "PIX para João Silva", "Material dentário Neodent").
+- Se o usuário não fornecer uma descrição específica, use o contact_name ou o nome do estabelecimento como descrição.
+
 LANÇAMENTOS RECENTES DO USUÁRIO (use para identificar o lançamento correto):
 ${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.id}] ${t.description} | ${fmt(t.amount)} | ${t.type} | ${t.status} | ${t.payment_date}`).join("\n") : "Nenhum lançamento recente"}
 
