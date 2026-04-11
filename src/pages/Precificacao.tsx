@@ -88,51 +88,63 @@ export default function Precificacao() {
         custoHoraPorSala={custoHoraPorSala}
       />
 
-      {/* Seção 3: Procedimentos */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-primary" />
-              Procedimentos
-            </CardTitle>
-            <Button onClick={handleNew} size="sm" className="gap-1">
-              <Plus className="h-4 w-4" /> Novo Procedimento
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ProcedureTableV2
-            procedures={procedures}
-            calcProcedure={calcProcedure}
-            selectedId={selectedProcedureId}
-            onSelect={setSelectedProcedureId}
-            onEdit={handleEdit}
-            onDuplicate={duplicateProcedure}
-            onDelete={deleteProcedure}
-            onInlineUpdate={async (id, data) => {
-              const proc = procedures.find((p) => p.id === id);
-              if (!proc) return false;
-              return updateProcedure(id, {
-                name: proc.name,
-                execution_time: data.execution_time ?? proc.execution_time,
-                desired_price: data.desired_price ?? proc.desired_price,
-                items: proc.items?.map((i) => ({ description: i.description, value: i.value })) ?? [],
-              });
-            }}
-          />
-        </CardContent>
-      </Card>
+      {/* Seção 3: Procedimentos + Breakdown lado a lado */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calculator className="h-5 w-5 text-primary" />
+                Procedimentos
+              </CardTitle>
+              <Button onClick={handleNew} size="sm" className="gap-1">
+                <Plus className="h-4 w-4" /> Novo Procedimento
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ProcedureTableV2
+              procedures={procedures}
+              calcProcedure={calcProcedure}
+              selectedId={selectedProcedureId}
+              onSelect={setSelectedProcedureId}
+              onEdit={handleEdit}
+              onDuplicate={duplicateProcedure}
+              onDelete={deleteProcedure}
+              onInlineUpdate={async (id, data) => {
+                const proc = procedures.find((p) => p.id === id);
+                if (!proc) return false;
+                return updateProcedure(id, {
+                  name: proc.name,
+                  execution_time: data.execution_time ?? proc.execution_time,
+                  desired_price: data.desired_price ?? proc.desired_price,
+                  items: proc.items?.map((i) => ({ description: i.description, value: i.value })) ?? [],
+                });
+              }}
+            />
+          </CardContent>
+        </Card>
 
-      {/* Breakdown */}
-      {selectedProcedure && (
-        <ProcedureBreakdownV2
-          procedure={selectedProcedure}
-          custoHora={custoHora}
-          taxRate={taxRate}
-          calcProcedure={calcProcedure}
-        />
-      )}
+        {/* Breakdown ao lado */}
+        <div className="lg:col-span-1">
+          {selectedProcedure ? (
+            <ProcedureBreakdownV2
+              procedure={selectedProcedure}
+              custoHora={custoHora}
+              taxRate={taxRate}
+              calcProcedure={calcProcedure}
+            />
+          ) : (
+            <Card className="h-full flex items-center justify-center">
+              <CardContent className="py-8">
+                <p className="text-sm text-muted-foreground text-center">
+                  Selecione um procedimento para ver o detalhamento
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </div>
 
       {/* Comparativo de Procedimentos */}
       <ProcedureComparisonChart procedures={procedures} calcProcedure={calcProcedure} />

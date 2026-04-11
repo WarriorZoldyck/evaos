@@ -56,8 +56,6 @@ export function WhatIfSimulator({ procedures, groupTotals, realHours, realRooms,
     return { lucro };
   };
 
-  if (procedures.length === 0) return null;
-
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -115,40 +113,46 @@ export function WhatIfSimulator({ procedures, groupTotals, realHours, realRooms,
 
         <Separator />
 
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-muted-foreground mb-2">Impacto nos procedimentos</p>
-          <div className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground text-xs">
-                  <th className="text-left py-1 pr-2">Procedimento</th>
-                  <th className="text-right py-1 px-2">Lucro Atual</th>
-                  <th className="text-right py-1 px-2">Lucro Simulado</th>
-                  <th className="text-right py-1 pl-2">Δ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {procedures.map((proc) => {
-                  const sim = calcSim(proc);
-                  const real = calcReal(proc);
-                  const delta = sim.lucro - real.lucro;
-                  return (
-                    <tr key={proc.id} className="border-b border-border/30">
-                      <td className="py-1.5 pr-2 font-medium">{proc.name}</td>
-                      <td className="py-1.5 px-2 text-right">{fmt(real.lucro)}</td>
-                      <td className={`py-1.5 px-2 text-right font-bold ${sim.lucro < 0 ? "text-destructive" : "text-emerald-600"}`}>
-                        {fmt(sim.lucro)}
-                      </td>
-                      <td className={`py-1.5 pl-2 text-right text-xs ${delta > 0 ? "text-emerald-600" : delta < 0 ? "text-destructive" : ""}`}>
-                        {delta > 0 ? "+" : ""}{fmt(delta)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {procedures.length > 0 ? (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-muted-foreground mb-2">Impacto nos procedimentos</p>
+            <div className="overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-muted-foreground text-xs">
+                    <th className="text-left py-1 pr-2">Procedimento</th>
+                    <th className="text-right py-1 px-2">Lucro Atual</th>
+                    <th className="text-right py-1 px-2">Lucro Simulado</th>
+                    <th className="text-right py-1 pl-2">Δ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {procedures.map((proc) => {
+                    const sim = calcSim(proc);
+                    const real = calcReal(proc);
+                    const delta = sim.lucro - real.lucro;
+                    return (
+                      <tr key={proc.id} className="border-b border-border/30">
+                        <td className="py-1.5 pr-2 font-medium">{proc.name}</td>
+                        <td className="py-1.5 px-2 text-right">{fmt(real.lucro)}</td>
+                        <td className={`py-1.5 px-2 text-right font-bold ${sim.lucro < 0 ? "text-destructive" : "text-emerald-600"}`}>
+                          {fmt(sim.lucro)}
+                        </td>
+                        <td className={`py-1.5 pl-2 text-right text-xs ${delta > 0 ? "text-emerald-600" : delta < 0 ? "text-destructive" : ""}`}>
+                          {delta > 0 ? "+" : ""}{fmt(delta)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        ) : (
+          <p className="text-xs text-muted-foreground text-center py-3">
+            Cadastre procedimentos para ver o impacto da simulação.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
