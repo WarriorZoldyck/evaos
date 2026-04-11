@@ -11,7 +11,7 @@ const plans = [
       "1 conta bancária",
       "Dashboard básico",
       "Lançamentos ilimitados",
-      "Categorias personalizadas",
+      "10 interações com EVA IA",
       "Suporte por email",
     ],
     cta: "Começar grátis",
@@ -19,7 +19,7 @@ const plans = [
   },
   {
     name: "Pro",
-    price: "R$ 49",
+    price: "R$ 47",
     period: "/mês",
     description: "Para profissionais que querem controle total",
     features: [
@@ -28,7 +28,7 @@ const plans = [
       "Precificação FHC completa",
       "DRE automático",
       "Plano de caixa",
-      "Múltiplas empresas",
+      "50 interações com EVA IA",
       "Cartões de crédito",
       "Suporte prioritário",
     ],
@@ -37,18 +37,35 @@ const plans = [
   },
   {
     name: "Clínica",
-    price: "R$ 99",
+    price: "R$ 97",
     period: "/mês",
     description: "Para clínicas e consultórios com múltiplos profissionais",
     features: [
       "Tudo do plano Pro",
       "Precificação V2 avançada",
-      "Relatórios gerenciais",
+      "200 interações com EVA IA",
+      "EVA via WhatsApp",
       "Importação de extratos",
-      "Integrações WhatsApp",
+      "Relatórios gerenciais",
       "Suporte dedicado",
     ],
     cta: "Assinar Clínica",
+    highlighted: false,
+  },
+  {
+    name: "Empresarial",
+    price: "R$ 197",
+    period: "/mês",
+    description: "Para empresas com múltiplas unidades e equipes",
+    features: [
+      "Tudo do plano Clínica",
+      "Múltiplas empresas consolidadas",
+      "Hub de gestão com membros",
+      "Interações EVA ilimitadas",
+      "Relatórios consolidados",
+      "Suporte VIP dedicado",
+    ],
+    cta: "Assinar Empresarial",
     highlighted: false,
   },
 ];
@@ -73,7 +90,7 @@ export function LandingPricing() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 items-start">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
           {plans.map((plan, i) => (
             <div
               key={i}
