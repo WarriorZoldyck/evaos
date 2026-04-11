@@ -3164,9 +3164,14 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }, 200);
       }
 
+      // For ai_pending_transactions, map 'status' field to 'transaction_status' to avoid conflict
+      const tableUpdateData = editTable === "ai_pending_transactions" && updateData.status
+        ? { ...updateData, transaction_status: updateData.status, status: undefined }
+        : updateData;
+
       const { error: updateErr } = await supabase
-        .from("transactions")
-        .update(updateData)
+        .from(editTable)
+        .update(tableUpdateData)
         .eq("id", transactionId)
         .eq("user_id", userId);
 
