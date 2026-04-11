@@ -172,6 +172,7 @@ export function useDashboardData(filters: DashboardFilters) {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCardInfo[]>([]);
   const [initialBalances, setInitialBalances] = useState<number>(0);
+  const [saldoAtual, setSaldoAtual] = useState<number>(0);
   const [categoryRecords, setCategoryRecords] = useState<CategoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchTrigger, setFetchTrigger] = useState(0);
@@ -197,56 +198,83 @@ export function useDashboardData(filters: DashboardFilters) {
   useEffect(() => {
     if (!user) return;
 
+    const companyCtx = { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
+
     const fetchCards = async () => {
       let query = supabase
         .from("credit_cards")
         .select("id, name, closing_day, due_day, last_four_digits, bank_account_id");
-      if (isPersonal) {
-        query = query.is("company_id", null);
-      } else if (selectedCompanyId) {
-        query = query.eq("company_id", selectedCompanyId);
-      }
+      query = applyCompanyFilter(query, companyCtx);
       const { data } = await query;
       if (data) setCreditCards(data);
     };
 
     const fetchCategories = async () => {
-      // Fetch ALL user categories (no company filter) to resolve names consistently across views
       const { data } = await supabase.from("categories").select("id, name, parent_id");
       if (data) setCategoryRecords(data);
     };
 
     const fetchBalances = async () => {
       // Bank accounts
-      let bankQuery = supabase.from("bank_accounts").select("initial_balance");
-      if (isPersonal) {
-        bankQuery = bankQuery.is("company_id", null);
-      } else if (selectedCompanyId) {
-        bankQuery = bankQuery.eq("company_id", selectedCompanyId);
-      }
+      let bankQuery = supabase.from("bank_accounts").select("id, initial_balance");
+      bankQuery = applyCompanyFilter(bankQuery, companyCtx);
       if (accountId) {
         bankQuery = bankQuery.eq("id", accountId);
       }
       const { data: bankData } = await bankQuery;
 
       // Wallets
-      let walletQuery = supabase.from("wallets").select("initial_balance");
-      if (isPersonal) {
-        walletQuery = walletQuery.is("company_id", null);
-      } else if (selectedCompanyId) {
-        walletQuery = walletQuery.eq("company_id", selectedCompanyId);
-      }
+      let walletQuery = supabase.from("wallets").select("id, initial_balance");
+      walletQuery = applyCompanyFilter(walletQuery, companyCtx);
       const { data: walletData } = await walletQuery;
 
       const bankSum = bankData?.reduce((s, a) => s + Number(a.initial_balance), 0) || 0;
       const walletSum = accountId ? 0 : (walletData?.reduce((s, w) => s + Number(w.initial_balance), 0) || 0);
       setInitialBalances(bankSum + walletSum);
+
+      // Calculate saldo atual (initial + all paid transactions)
+      const bankIds = bankData?.map(b => b.id) || [];
+      const walletIds = accountId ? [] : (walletData?.map(w => w.id) || []);
+
+      let totalPaidDelta = 0;
+
+      if (bankIds.length > 0) {
+        const orParts: string[] = [];
+        orParts.push(`bank_account_id.in.(${bankIds.join(",")})`);
+        if (walletIds.length > 0) {
+          orParts.push(`wallet_id.in.(${walletIds.join(",")})`);
+        }
+        
+        let txQuery = supabase
+          .from("transactions")
+          .select("type, amount")
+          .eq("status", "Pago")
+          .or(orParts.join(","));
+
+        const { data: txData } = await txQuery;
+        if (txData) {
+          totalPaidDelta = txData.reduce((acc, t) => acc + (t.type === "receita" ? Number(t.amount) : -Number(t.amount)), 0);
+        }
+      } else if (walletIds.length > 0) {
+        let txQuery = supabase
+          .from("transactions")
+          .select("type, amount")
+          .eq("status", "Pago")
+          .in("wallet_id", walletIds);
+
+        const { data: txData } = await txQuery;
+        if (txData) {
+          totalPaidDelta = txData.reduce((acc, t) => acc + (t.type === "receita" ? Number(t.amount) : -Number(t.amount)), 0);
+        }
+      }
+
+      setSaldoAtual(bankSum + walletSum + totalPaidDelta);
     };
 
     fetchCards();
     fetchCategories();
     fetchBalances();
-  }, [user, selectedCompanyId, isPersonal, accountId, fetchTrigger]);
+  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, accountId, fetchTrigger]);
 
   // Fetch filtered transactions for the period
   useEffect(() => {
