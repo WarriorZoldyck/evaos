@@ -208,6 +208,8 @@ export function usePricingV2() {
           hours_per_month: newConfig.hours_per_month ?? 160,
           num_rooms: newConfig.num_rooms ?? 1,
           tax_rate: Number(newConfig.tax_rate) ?? 8.44,
+          days_per_week: newConfig.days_per_week != null ? Number(newConfig.days_per_week) : null,
+          hours_per_day: newConfig.hours_per_day != null ? Number(newConfig.hours_per_day) : null,
           updated_at: newConfig.updated_at,
         });
         const { error } = await supabase.from("pricing_v2_cost_items").insert({
