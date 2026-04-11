@@ -26,7 +26,7 @@ export function CategoryTreeItem({
   onDrop,
   draggedId,
 }: CategoryTreeItemProps) {
-  const [expanded, setExpanded] = useState(level === 0);
+  const [expanded, setExpanded] = useState(false);
   const [dropZone, setDropZone] = useState<"before" | "inside" | "after" | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

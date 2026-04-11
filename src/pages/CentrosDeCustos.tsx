@@ -120,7 +120,7 @@ export default function CentrosDeCustos() {
         <div className="space-y-3">
           {sectionsToShow.map(section => {
             const sectionCats = rootCategories.filter(c => c.dre_section === section.key);
-            const isExpanded = expandedSections[section.key] ?? false;
+            const isExpanded = expandedSections[section.key] ?? sectionCats.length > 0;
 
             return (
               <CostCenterFolder

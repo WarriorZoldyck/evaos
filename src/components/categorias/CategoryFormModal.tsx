@@ -19,15 +19,15 @@ import {
 import { Loader2 } from "lucide-react";
 
 const DRE_SECTIONS = [
-  { value: "__none__", label: "Automático (por palavras-chave)" },
-  { value: "receita_operacional", label: "Receita Operacional" },
-  { value: "impostos_venda", label: "Impostos sobre Venda" },
-  { value: "cmv_csp", label: "CMV / CSP (Custos)" },
-  { value: "despesas_vendas", label: "Despesas com Vendas" },
-  { value: "despesas_operacionais", label: "Despesas Operacionais e Adm." },
-  { value: "despesas_financeiras", label: "Despesas Financeiras" },
-  { value: "receita_financeira", label: "Receita Financeira" },
-  { value: "despesas_gerais", label: "Despesas Gerais e Adm." },
+  { value: "__none__", label: "Nenhum", sign: null },
+  { value: "receita_operacional", label: "Receita Operacional", sign: "+" },
+  { value: "impostos_venda", label: "Impostos sobre Venda", sign: "-" },
+  { value: "cmv_csp", label: "CMV / CSP (Custos)", sign: "-" },
+  { value: "despesas_vendas", label: "Despesas com Vendas", sign: "-" },
+  { value: "despesas_operacionais", label: "Despesas Operacionais e Adm.", sign: "-" },
+  { value: "despesas_financeiras", label: "Despesas Financeiras", sign: "-" },
+  { value: "receita_financeira", label: "Receita Financeira", sign: "+" },
+  { value: "despesas_gerais", label: "Despesas Gerais e Adm.", sign: "-" },
 ];
 
 interface CategoryFormModalProps {
@@ -102,17 +102,24 @@ export function CategoryFormModal({ open, onClose, parentName, editData, default
             </div>
           )}
           <div className="space-y-2">
-            <Label>Seção do DRE</Label>
+            <Label>Centro de Custo</Label>
             <Select value={dreSection} onValueChange={setDreSection}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {DRE_SECTIONS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                ))}
+                {DRE_SECTIONS
+                  .filter((s) => {
+                    if (s.sign === null) return true;
+                    if (type === "receita") return s.sign === "+";
+                    if (type === "despesa") return s.sign === "-";
+                    return true;
+                  })
+                  .map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Define em qual linha do DRE esta categoria aparece. Deixe "Automático" para usar a classificação por palavras-chave.
+              Vincule esta categoria a um centro de custo para o DRE. Deixe "Nenhum" para usar a classificação automática.
             </p>
           </div>
           <DialogFooter>
