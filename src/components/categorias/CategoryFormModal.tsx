@@ -19,15 +19,15 @@ import {
 import { Loader2 } from "lucide-react";
 
 const DRE_SECTIONS = [
-  { value: "__none__", label: "Automático (por palavras-chave)" },
-  { value: "receita_operacional", label: "Receita Operacional" },
-  { value: "impostos_venda", label: "Impostos sobre Venda" },
-  { value: "cmv_csp", label: "CMV / CSP (Custos)" },
-  { value: "despesas_vendas", label: "Despesas com Vendas" },
-  { value: "despesas_operacionais", label: "Despesas Operacionais e Adm." },
-  { value: "despesas_financeiras", label: "Despesas Financeiras" },
-  { value: "receita_financeira", label: "Receita Financeira" },
-  { value: "despesas_gerais", label: "Despesas Gerais e Adm." },
+  { value: "__none__", label: "Nenhum", sign: null },
+  { value: "receita_operacional", label: "Receita Operacional", sign: "+" },
+  { value: "impostos_venda", label: "Impostos sobre Venda", sign: "-" },
+  { value: "cmv_csp", label: "CMV / CSP (Custos)", sign: "-" },
+  { value: "despesas_vendas", label: "Despesas com Vendas", sign: "-" },
+  { value: "despesas_operacionais", label: "Despesas Operacionais e Adm.", sign: "-" },
+  { value: "despesas_financeiras", label: "Despesas Financeiras", sign: "-" },
+  { value: "receita_financeira", label: "Receita Financeira", sign: "+" },
+  { value: "despesas_gerais", label: "Despesas Gerais e Adm.", sign: "-" },
 ];
 
 interface CategoryFormModalProps {
