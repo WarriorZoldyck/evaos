@@ -11,7 +11,7 @@ const fmtPct = (v: number) => `${v.toFixed(1)}%`;
 
 interface ProcedureTableV2Props {
   procedures: ProcedureV2[];
-  calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; lucro: number; lucratividadeHora: number; lucratividadePct: number };
+  calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; liquido: number; lucro: number; lucratividadeHora: number; lucratividadePct: number; lucratividadeHoraTotal: number };
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onEdit: (proc: ProcedureV2) => void;
@@ -98,9 +98,11 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           <TableHead className="text-right">CF</TableHead>
           <TableHead className="text-right">CV</TableHead>
           <TableHead className="text-right">NF</TableHead>
+          <TableHead className="text-right">Líquido</TableHead>
           <TableHead className="text-right">Lucro</TableHead>
           <TableHead className="text-right">Lucr./h</TableHead>
           <TableHead className="text-right">Lucr. %</TableHead>
+          <TableHead className="text-right">Lucr./h total</TableHead>
           <TableHead className="w-[50px]" />
         </TableRow>
       </TableHeader>
@@ -137,11 +139,13 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cf)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cv)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.nf)}</TableCell>
+              <TableCell className="text-right font-medium">{fmt(calc.liquido)}</TableCell>
               <TableCell className={`text-right font-bold ${isNegative ? "text-destructive" : "text-emerald-600"}`}>
                 {fmt(calc.lucro)}
               </TableCell>
               <TableCell className={`text-right ${isNegative ? "text-destructive" : ""}`}>{fmt(calc.lucratividadeHora)}</TableCell>
               <TableCell className={`text-right ${isNegative ? "text-destructive" : ""}`}>{fmtPct(calc.lucratividadePct)}</TableCell>
+              <TableCell className="text-right text-muted-foreground">{fmt(calc.lucratividadeHoraTotal)}</TableCell>
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>

@@ -9,7 +9,7 @@ interface Props {
   procedure: ProcedureV2;
   custoHora: number;
   taxRate: number;
-  calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; lucro: number; lucratividadeHora: number; lucratividadePct: number };
+  calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; liquido: number; lucro: number; lucratividadeHora: number; lucratividadePct: number; lucratividadeHoraTotal: number };
 }
 
 export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProcedure }: Props) {
@@ -53,6 +53,11 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
         <Separator />
 
         <div className="flex justify-between">
+          <span className="text-muted-foreground">Líquido (Preço − NF)</span>
+          <span className="font-medium">{fmt(calc.liquido)}</span>
+        </div>
+
+        <div className="flex justify-between">
           <span className="text-muted-foreground">Valor Cobrado</span>
           <span className="font-bold">{fmt(procedure.desired_price)}</span>
         </div>
@@ -62,7 +67,7 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
           <span>{fmt(calc.lucro)}</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mt-2">
+        <div className="grid grid-cols-3 gap-4 mt-2">
           <div className="rounded-lg bg-muted p-3 text-center">
             <p className="text-xs text-muted-foreground">Lucratividade / hora</p>
             <p className={`text-lg font-bold ${calc.lucro < 0 ? "text-destructive" : ""}`}>{fmt(calc.lucratividadeHora)}</p>
@@ -70,6 +75,10 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
           <div className="rounded-lg bg-muted p-3 text-center">
             <p className="text-xs text-muted-foreground">Lucratividade %</p>
             <p className={`text-lg font-bold ${calc.lucro < 0 ? "text-destructive" : ""}`}>{calc.lucratividadePct.toFixed(1)}%</p>
+          </div>
+          <div className="rounded-lg bg-muted p-3 text-center">
+            <p className="text-xs text-muted-foreground">Lucr./h total</p>
+            <p className="text-lg font-bold">{fmt(calc.lucratividadeHoraTotal)}</p>
           </div>
         </div>
       </CardContent>

@@ -24,7 +24,7 @@ export function WhatIfSimulator({ procedures, groupTotals, realHours, realRooms,
   const [simTax, setSimTax] = useState(String(realTaxRate));
 
   const hoursNum = parseInt(simHours) || realHours;
-  const roomsNum = parseInt(simRooms) || realRooms;
+  const roomsNum = parseFloat(simRooms) || realRooms;
   const taxNum = parseFloat(simTax) || realTaxRate;
 
   const simCustoHora = hoursNum > 0 ? groupTotals.total / hoursNum : 0;
@@ -89,7 +89,7 @@ export function WhatIfSimulator({ procedures, groupTotals, realHours, realRooms,
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Salas</Label>
-            <Input type="number" min={1} value={simRooms} onChange={(e) => setSimRooms(e.target.value)} />
+            <Input type="number" min={0.1} step={0.01} value={simRooms} onChange={(e) => setSimRooms(e.target.value)} />
             {roomsNum !== realRooms && (
               <p className="text-[10px] text-muted-foreground">Atual: {realRooms}</p>
             )}

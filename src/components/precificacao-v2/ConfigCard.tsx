@@ -26,7 +26,7 @@ export function ConfigCard({ hoursPerMonth, numRooms, taxRate, onSave }: ConfigC
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave(parseInt(hours) || 160, parseInt(rooms) || 1, parseFloat(tax) || 8.44);
+    await onSave(parseInt(hours) || 160, parseFloat(rooms) || 1, parseFloat(tax) || 8.44);
     setSaving(false);
   };
 
@@ -46,7 +46,8 @@ export function ConfigCard({ hoursPerMonth, numRooms, taxRate, onSave }: ConfigC
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="v2-rooms">Quantidade de salas</Label>
-            <Input id="v2-rooms" type="number" min={1} value={rooms} onChange={(e) => setRooms(e.target.value)} />
+            <Input id="v2-rooms" type="number" min={0.1} step={0.01} value={rooms} onChange={(e) => setRooms(e.target.value)} />
+            <p className="text-[10px] text-muted-foreground">Aceita valores decimais (ex: 0,546)</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="v2-tax">Alíquota IR (%)</Label>

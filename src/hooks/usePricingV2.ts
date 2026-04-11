@@ -87,8 +87,8 @@ export function usePricingV2() {
 
   const custoHora = hoursPerMonth > 0 ? groupTotals.total / hoursPerMonth : 0;
   const fmm = groupTotals.total;
-  const fmmPorSala = numRooms > 0 ? fmm / numRooms : 0;
-  const custoHoraPorSala = numRooms > 0 ? custoHora / numRooms : 0;
+  const fmmPorSala = numRooms > 0 ? fmm / numRooms : fmm;
+  const custoHoraPorSala = numRooms > 0 ? custoHora / numRooms : custoHora;
 
   // ─── Fetch config ───
   const fetchConfig = useCallback(async () => {
@@ -124,7 +124,7 @@ export function usePricingV2() {
     if (config) {
       const { error } = await supabase
         .from("pricing_v2_configurations")
-        .update({ hours_per_month: hours, num_rooms: rooms, tax_rate: tax, updated_at: new Date().toISOString() })
+        .update({ hours_per_month: hours, num_rooms: Math.round(rooms * 1000) / 1000, tax_rate: tax, updated_at: new Date().toISOString() })
         .eq("id", config.id);
       if (error) {
         toast({ title: "Erro ao salvar", description: mapDatabaseError(error), variant: "destructive" });
@@ -134,7 +134,7 @@ export function usePricingV2() {
       const { error } = await supabase.from("pricing_v2_configurations").insert({
         user_id: user.id,
         hours_per_month: hours,
-        num_rooms: rooms,
+        num_rooms: Math.round(rooms * 1000) / 1000,
         tax_rate: tax,
       });
       if (error) {
@@ -371,10 +371,12 @@ export function usePricingV2() {
     const cf = custoHora * proc.execution_time;
     const cv = proc.items.reduce((s, i) => s + i.value, 0);
     const nf = proc.desired_price * (taxRate / 100);
+    const liquido = proc.desired_price - nf;
     const lucro = proc.desired_price - cf - cv - nf;
     const lucratividadeHora = proc.execution_time > 0 ? lucro / proc.execution_time : 0;
     const lucratividadePct = proc.desired_price > 0 ? (lucro / proc.desired_price) * 100 : 0;
-    return { cf, cv, nf, lucro, lucratividadeHora, lucratividadePct };
+    const lucratividadeHoraTotal = proc.execution_time > 0 ? liquido / proc.execution_time : 0;
+    return { cf, cv, nf, liquido, lucro, lucratividadeHora, lucratividadePct, lucratividadeHoraTotal };
   };
 
   // ─── Init ───
