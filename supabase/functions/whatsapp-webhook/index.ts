@@ -1231,7 +1231,7 @@ serve(async (req) => {
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const ninetyDaysAgoStr = `${ninetyDaysAgo.getFullYear()}-${String(ninetyDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(ninetyDaysAgo.getDate()).padStart(2, "0")}`;
 
-    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes, historyTxRes] = await Promise.all([
+    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes, historyTxRes, recentPendingRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id, agency_number, account_number").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
@@ -1241,6 +1241,7 @@ serve(async (req) => {
       supabase.from("clients").select("id, name").eq("user_id", userId),
       supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
       supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(1000),
+      supabase.from("ai_pending_transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).eq("status", "pending").order("created_at", { ascending: false }).limit(5),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -1250,7 +1251,12 @@ serve(async (req) => {
     const creditCards = creditCardsRes.data || [];
     const suppliersList = suppliersRes.data || [];
     const clientsList = clientsRes.data || [];
-    const recentTransactions = recentTxRes.data || [];
+    const recentPending = recentPendingRes.data || [];
+    // Merge recent transactions with recent pending (pending first, as they're the most recent context)
+    const recentTransactions = [
+      ...recentPending.map((p: any) => ({ ...p, _source: "pending" })),
+      ...(recentTxRes.data || []).map((t: any) => ({ ...t, _source: "approved" })),
+    ].slice(0, 10);
     const historicalTransactions = historyTxRes.data || [];
 
     const today = new Date().toISOString().split("T")[0];
