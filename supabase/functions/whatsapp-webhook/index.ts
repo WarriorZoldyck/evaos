@@ -1555,8 +1555,9 @@ REGRA CRÍTICA — DESCRIÇÃO NUNCA DEVE SER NOME DE CATEGORIA:
 - A descrição deve ser o nome do estabelecimento, do fornecedor, do produto ou uma descrição significativa da transação (ex: "Compra no Empório Moscato", "PIX para João Silva", "Material dentário Neodent").
 - Se o usuário não fornecer uma descrição específica, use o contact_name ou o nome do estabelecimento como descrição.
 
-LANÇAMENTOS RECENTES DO USUÁRIO (use para identificar o lançamento correto):
-${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.id}] ${t.description} | ${fmt(t.amount)} | ${t.type} | ${t.status} | ${t.payment_date}`).join("\n") : "Nenhum lançamento recente"}
+LANÇAMENTOS RECENTES DO USUÁRIO (use para identificar o lançamento correto ao editar):
+${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.id}]${t._source === "pending" ? " (PENDENTE-APROVAÇÃO)" : ""} ${t.description} | ${fmt(t.amount)} | ${t.type} | ${t.status} | ${t.payment_date}`).join("\n") : "Nenhum lançamento recente"}
+- Lançamentos marcados com (PENDENTE-APROVAÇÃO) estão na fila de aprovação e podem ser editados.
 
 Para conversa:
 {"intent":"conversa","friendly_message":"..."}
