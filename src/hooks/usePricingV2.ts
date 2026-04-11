@@ -386,8 +386,8 @@ export function usePricingV2() {
     const cf = custoHora * proc.execution_time;
     const cv = proc.items.reduce((s, i) => s + i.value, 0);
     const nf = proc.desired_price * (taxRate / 100);
-    const liquido = proc.desired_price - nf;
-    const lucro = proc.desired_price - cf - cv - nf;
+    const liquido = proc.desired_price - cf - cv - nf;
+    const lucro = liquido;
     const lucratividadeHora = proc.execution_time > 0 ? lucro / proc.execution_time : 0;
     const lucratividadePct = proc.desired_price > 0 ? (lucro / proc.desired_price) * 100 : 0;
     const lucratividadeHoraTotal = proc.execution_time > 0 ? liquido / proc.execution_time : 0;
