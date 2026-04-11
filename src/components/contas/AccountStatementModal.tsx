@@ -61,6 +61,7 @@ export function AccountStatementModal({
       let query = supabase
         .from("transactions")
         .select("id, payment_date, description, type, amount, status, category")
+        .eq("status", "Pago")
         .gte("payment_date", dateFrom)
         .lte("payment_date", dateTo)
         .order("payment_date", { ascending: true })
