@@ -133,6 +133,36 @@ function applyAccountFilter(
   return query.eq("bank_account_id", accountId);
 }
 
+// Helper to apply multi-company filter for dashboard
+function applyCompanyFilter(
+  query: any,
+  { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected }: {
+    viewAll: boolean;
+    selectedCompanyId: string | null;
+    isPersonal: boolean;
+    selectedCompanyIds: string[];
+    personalSelected: boolean;
+  }
+) {
+  if (viewAll) return query; // No company filter — show everything
+  
+  // Multi-select mode
+  if (selectedCompanyIds.length > 0 || personalSelected) {
+    const parts: string[] = [];
+    if (personalSelected) parts.push("company_id.is.null");
+    if (selectedCompanyIds.length > 0) parts.push(`company_id.in.(${selectedCompanyIds.join(",")})`);
+    return query.or(parts.join(","));
+  }
+  
+  // Fallback to single-select
+  if (isPersonal) {
+    return query.is("company_id", null);
+  } else if (selectedCompanyId) {
+    return query.eq("company_id", selectedCompanyId);
+  }
+  return query;
+}
+
 export function useDashboardData(filters: DashboardFilters) {
   const { user } = useAuth();
   const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
