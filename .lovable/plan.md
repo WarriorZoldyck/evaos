@@ -1,20 +1,28 @@
 
 
-## Plano: Remover custos não-mapeados do PDF de Análise
+## Plano: Regenerar PDF corrigido no formato original
 
-### O que muda
+### Problemas identificados no PDF atual (v1 anexado)
 
-No documento `EVA_OS_Analise_Negocio_v2.pdf`, na seção de **Custos Operacionais**:
+1. **"Franquia" aparece em 6+ lugares** -- precisa ser "Empresarial" em todos (tabela de planos, unit economics, projeção de receita, LTV/CAC)
+2. **Custos de infra com valores fictícios** -- Supabase $25/mês, Bandwidth $5-15, etc. ainda aparecem na seção 3.1. Devem virar "— A ser mapeado"
+3. **Preços inconsistentes** -- PDF mostra R$49/R$99/R$199, mas o acordado foi R$47/R$97/R$197
+4. **Sem logo** -- A capa não tem a logo da EVA OS, só texto
+5. **Recalcular unit economics** -- com preços corretos (R$47/R$97/R$197) e sem custos de infra fixos
 
-- **Remover** valores específicos de Supabase (~$25/mês), Lovable, e qualquer outro custo de infraestrutura que ainda não foi validado
-- **Substituir** por "—" (travessão) com nota "A ser mapeado"
-- **Manter** apenas os custos reais já confirmados: custo de IA por interação (~R$0.28/usuário/mês baseado em uso real)
-- **Recalcular** unit economics sem os custos de infra — deixar margem como "A definir após mapeamento completo" onde depender desses valores
+### O que será feito
 
-### Execução
-- Regenerar `EVA_OS_Analise_Negocio_v2.pdf` com mesmo visual Dark Tech
-- QA visual obrigatório em todas as páginas
+**Regenerar `EVA_OS_Analise_Negocio_v2.pdf`** com:
 
-### Arquivo afetado
-- `/mnt/documents/EVA_OS_Analise_Negocio_v2.pdf` — atualizado
+- **Mesmo layout visual** do v1: fundo escuro (#0B1120), títulos em ciano (#48CAE4), tabelas com header dark, separadores, cards de destaque
+- **Logo EVA OS** (`src/assets/eva-os-logo.jpeg`) na capa
+- **"Franquia" → "Empresarial"** em todas as ocorrências
+- **Seção 3.1 Infraestrutura**: valores substituídos por "— A ser mapeado"
+- **Preços corrigidos**: Starter R$0, Pro R$47, Clínica R$97, Empresarial R$197
+- **Unit economics recalculados** com os preços corretos
+- **Seção 3.2 (custos IA)**: mantida intacta (dados reais confirmados)
+- **QA visual** em todas as 7 páginas antes de entregar
+
+### Arquivo gerado
+- `/mnt/documents/EVA_OS_Analise_Negocio_v2.pdf`
 
