@@ -99,10 +99,8 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           <TableHead className="text-right">CV</TableHead>
           <TableHead className="text-right">NF</TableHead>
           <TableHead className="text-right">Líquido</TableHead>
-          <TableHead className="text-right">Lucro</TableHead>
           <TableHead className="text-right">Lucr./h</TableHead>
           <TableHead className="text-right">Lucr. %</TableHead>
-          <TableHead className="text-right">Lucr./h total</TableHead>
           <TableHead className="w-[50px]" />
         </TableRow>
       </TableHeader>
