@@ -1,76 +1,55 @@
 
 
-## Plano: Página de Centros de Custos + Drag-and-Drop de Categorias
+## Análise: Checklist da Planilha vs App
 
-### Resumo
-Criar uma nova página "Centros de Custos" que exibe as seções do DRE como pastas visuais (mesmo layout da tela de Categorias), onde o usuário pode arrastar categorias para dentro de cada centro de custo. Isso atualiza o campo `dre_section` da categoria, que o DRE contábil já usa para classificar as linhas. MDR será opcional via toggle.
+### O que JÁ ESTÁ no app (sem necessidade de mudança)
 
-### Como funciona
+| Item | Onde está |
+|------|-----------|
+| Cadastro separado de despesas Casa vs Negócio | Precificação V1 — 3 abas (Fixos Clínica, Variáveis, Pessoais) |
+| Custo de Vida como base do preço | FMM inclui despesas pessoais no cálculo |
+| Subcategorias detalhadas (Educação, Moradia, etc.) | CostItemsTab com categorias iguais à planilha |
+| Método de pagamento nas transações | TransactionFormModal (PIX, boleto, cartão, etc.) |
+| Custo/Hora, FMM, FMM/Sala, CF/H/Sala | CostSummaryCards |
+| Lucratividade por procedimento (Lucro, Lucr./h, %) | ProcedureBreakdownV2 e ProcedureTableV2 |
+| Líquido (Preço − NF), Total Ano | Já implementados na rodada anterior |
+| Distribuição % por subcategoria | Barra de breakdown no CostItemsTab |
+| Faturamento Mínimo Anual | Card dedicado no CostSummaryCards |
 
-```text
-┌─────────────────────────────────────────────┐
-│  Centros de Custos                          │
-│  ─────────────────                          │
-│  [toggle MDR ativado/desativado]            │
-│                                             │
-│  📁 (+) Receita Operacional                 │
-│     └─ Consultas (arrastada aqui)           │
-│     └─ Procedimentos                        │
-│                                             │
-│  📁 (-) Impostos sobre Venda                │
-│     └─ Simples Nacional                     │
-│                                             │
-│  📁 (-) CMV / CSP                           │
-│     └─ Materiais                            │
-│                                             │
-│  📁 (-) Despesas Operacionais               │
-│     └─ Aluguel                              │
-│     └─ Energia                              │
-│                                             │
-│  📁 (-) Despesas Financeiras                │
-│                                             │
-│  📁 (+) Receita Financeira                  │
-│                                             │
-│  📁 (-) Despesas com Vendas                 │
-│                                             │
-│  📁 (-) Despesas Gerais                     │
-│                                             │
-│  📁 (-) Taxas MDR  ← (só aparece se toggle) │
-│                                             │
-│  ── Categorias sem centro de custo ──       │
-│     └─ Categoria X (arrastar para cima)     │
-│     └─ Categoria Y                          │
-└─────────────────────────────────────────────┘
-```
+### O que FALTA (itens para implementar na Precificação)
 
-### Etapas de implementação
+**1. Cálculo detalhado de horas (Dias × Horas/dia)**
+A planilha calcula horas/mês a partir de "dias trabalhados por semana × horas por dia × semanas no mês". O app tem apenas um campo inteiro "Horas/mês". Implementar campos adicionais opcionais:
+- Dias trabalhados / semana
+- Horas / dia
+- O campo "Horas/mês" é preenchido automaticamente (dias × horas × 4.33)
+- O usuário pode ainda editar manualmente se quiser
 
-1. **Nova página `src/pages/CentrosDeCustos.tsx`**
-   - Exibe as seções DRE como "pastas" fixas (não editáveis), cada uma expansível
-   - Dentro de cada pasta, lista as categorias cujo `dre_section` corresponde àquela seção
-   - Abaixo, uma seção "Sem centro de custo" com categorias que têm `dre_section = null`
-   - Drag-and-drop: arrastar uma categoria para dentro de um centro de custo atualiza `dre_section` no banco
-   - Toggle para MDR: quando desativado, esconde a pasta "Taxas MDR" e remove o `dre_section` das categorias ali
+**2. Dashboard: Lucro Real após despesas pessoais**
+O Dashboard mostra receita − despesa, mas NÃO isola "lucro após custo de vida". Este item NÃO pertence à precificação — pertence ao Dashboard. Porém, o Dashboard já mostra o resultado líquido (receitas - despesas). Se as despesas pessoais estão registradas como transações, o resultado já reflete isso. **Nenhuma mudança necessária** — o dado já está lá implicitamente.
 
-2. **Componente `src/components/centros-de-custo/CostCenterTreeItem.tsx`**
-   - Reutiliza o visual do `CategoryTreeItem` mas simplificado (sem editar/excluir pastas-mãe, pois são fixas)
-   - Categorias dentro são arrastáveis para fora ou entre centros
+**3. Previsto vs Consolidado**
+A planilha compara valores planejados vs realizados. Isso é uma funcionalidade de **orçamento/budget**, que não existe no app em nenhum lugar. Isso é um módulo novo, não pertence à precificação.
 
-3. **Sidebar: adicionar link "Centros de Custos"** abaixo de "Categorias" em `AppSidebar.tsx`
+### Plano de implementação
 
-4. **Rota em `App.tsx`**: `/centros-de-custos` apontando para a nova página
+Apenas o item 1 precisa ser implementado na Precificação. Os outros itens ou já existem ou pertencem a módulos diferentes (Dashboard, Orçamento).
 
-5. **Hook `useCostCenters`** (ou reutilizar `useCategories`):
-   - Busca todas as categorias do usuário/empresa
-   - Agrupa por `dre_section`
-   - Função para atualizar `dre_section` de uma categoria (update simples no banco)
+**Alterações no `ConfigCard.tsx`:**
+- Adicionar campos opcionais "Dias/semana" e "Horas/dia" acima do campo "Horas/mês"
+- Quando preenchidos, calcular automaticamente: `dias × horas × 4.33` e preencher o campo Horas/mês
+- Manter o campo Horas/mês editável como override manual
+- Persistir dias/semana e horas/dia no banco (nova coluna ou usar o JSON existente)
 
-6. **Toggle MDR**: estado salvo no `profiles.transaction_form_fields` (campo JSON já existente) como `mdr_cost_center_enabled`. Quando desativado, esconde a pasta MDR da página.
+**Migração de banco:**
+- Adicionar colunas `days_per_week` (numeric, nullable) e `hours_per_day` (numeric, nullable) na tabela `pricing_v2_configurations`
+
+**Alterações no `usePricingV2.ts`:**
+- Incluir `days_per_week` e `hours_per_day` no fetch/save do config
+- Calcular horas automáticas quando ambos campos estão preenchidos
 
 ### Detalhes técnicos
-
-- **Sem migração de banco**: o campo `dre_section` já existe na tabela `categories` e já é usado pelo DRE contábil
-- **DRE sections fixas**: `receita_operacional`, `impostos_venda`, `cmv_csp`, `despesas_vendas`, `despesas_operacionais`, `despesas_financeiras`, `receita_financeira`, `despesas_gerais` + novo `mdr` (opcional)
-- **Drag & Drop**: mesmo padrão nativo (HTML5 drag) já usado em Categorias
-- **MDR**: ao arrastar uma categoria para "Taxas MDR", o sistema atualiza `dre_section = 'mdr'`; o DRE contábil precisará de ajuste menor para reconhecer essa nova seção
+- Fórmula: `hoursPerMonth = daysPerWeek × hoursPerDay × 4.33` (4.33 = média de semanas/mês)
+- Os campos são opcionais — se vazios, o campo horas/mês funciona como antes
+- Sem impacto em nenhum outro módulo
 
