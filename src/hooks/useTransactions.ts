@@ -279,7 +279,9 @@ export function useTransactions() {
       .order("payment_date", { ascending })
       .order("created_at", { ascending });
 
-    if (isGroupedParentCardFilter) {
+    const isExhaustiveSearch = isGroupedParentCardFilter || filters.status === "Pendente";
+
+    if (isExhaustiveSearch) {
       const allData: Transaction[] = [];
       let batchPage = 0;
       const batchSize = 1000;
@@ -537,12 +539,14 @@ export function useTransactions() {
     return creditCards.some((card) => card.parent_card_id === selectedCardId);
   })();
 
-  const totalPages = groupedParentCardFilterActive
+  const exhaustiveActive = groupedParentCardFilterActive || filters.status === "Pendente";
+
+  const totalPages = exhaustiveActive
     ? totalCount > 0
       ? 1
       : 0
     : Math.ceil(totalCount / PAGE_SIZE);
-  const effectivePage = groupedParentCardFilterActive ? 0 : page;
+  const effectivePage = exhaustiveActive ? 0 : page;
 
   return {
     transactions,
