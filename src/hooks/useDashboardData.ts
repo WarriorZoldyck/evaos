@@ -580,6 +580,7 @@ export function useDashboardData(filters: DashboardFilters) {
   return {
     transactions,
     summary,
+    saldoAtual,
     upcomingTransactions,
     categoryBreakdown,
     getProjectionData,
