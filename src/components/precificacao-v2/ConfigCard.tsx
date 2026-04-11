@@ -9,24 +9,51 @@ interface ConfigCardProps {
   hoursPerMonth: number;
   numRooms: number;
   taxRate: number;
-  onSave: (hours: number, rooms: number, tax: number) => Promise<boolean>;
+  daysPerWeek: number | null;
+  hoursPerDay: number | null;
+  onSave: (hours: number, rooms: number, tax: number, daysPerWeek?: number | null, hoursPerDay?: number | null) => Promise<boolean>;
 }
 
-export function ConfigCard({ hoursPerMonth, numRooms, taxRate, onSave }: ConfigCardProps) {
+export function ConfigCard({ hoursPerMonth, numRooms, taxRate, daysPerWeek, hoursPerDay, onSave }: ConfigCardProps) {
   const [hours, setHours] = useState(String(hoursPerMonth));
   const [rooms, setRooms] = useState(String(numRooms));
   const [tax, setTax] = useState(String(taxRate));
+  const [days, setDays] = useState(daysPerWeek != null ? String(daysPerWeek) : "");
+  const [hpd, setHpd] = useState(hoursPerDay != null ? String(hoursPerDay) : "");
   const [saving, setSaving] = useState(false);
+  const [autoCalc, setAutoCalc] = useState(false);
 
   useEffect(() => {
     setHours(String(hoursPerMonth));
     setRooms(String(numRooms));
     setTax(String(taxRate));
-  }, [hoursPerMonth, numRooms, taxRate]);
+    setDays(daysPerWeek != null ? String(daysPerWeek) : "");
+    setHpd(hoursPerDay != null ? String(hoursPerDay) : "");
+  }, [hoursPerMonth, numRooms, taxRate, daysPerWeek, hoursPerDay]);
+
+  useEffect(() => {
+    const d = parseFloat(days);
+    const h = parseFloat(hpd);
+    if (d > 0 && h > 0) {
+      const calc = Math.round(d * h * 4.33);
+      setHours(String(calc));
+      setAutoCalc(true);
+    } else {
+      setAutoCalc(false);
+    }
+  }, [days, hpd]);
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave(parseInt(hours) || 160, parseFloat(rooms) || 1, parseFloat(tax) || 8.44);
+    const dVal = parseFloat(days);
+    const hVal = parseFloat(hpd);
+    await onSave(
+      parseInt(hours) || 160,
+      parseFloat(rooms) || 1,
+      parseFloat(tax) || 8.44,
+      dVal > 0 ? dVal : null,
+      hVal > 0 ? hVal : null
+    );
     setSaving(false);
   };
 
@@ -39,15 +66,24 @@ export function ConfigCard({ hoursPerMonth, numRooms, taxRate, onSave }: ConfigC
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-1.5">
-            <Label htmlFor="v2-hours">Horas trabalhadas / mês</Label>
-            <Input id="v2-hours" type="number" min={1} value={hours} onChange={(e) => setHours(e.target.value)} />
+            <Label htmlFor="v2-days">Dias trab. / semana</Label>
+            <Input id="v2-days" type="number" min={1} max={7} step={1} value={days} onChange={(e) => setDays(e.target.value)} placeholder="Ex: 5" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="v2-rooms">Quantidade de salas</Label>
+            <Label htmlFor="v2-hpd">Horas / dia</Label>
+            <Input id="v2-hpd" type="number" min={0.5} step={0.5} value={hpd} onChange={(e) => setHpd(e.target.value)} placeholder="Ex: 8" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="v2-hours">Horas / mês</Label>
+            <Input id="v2-hours" type="number" min={1} value={hours} onChange={(e) => { setHours(e.target.value); setAutoCalc(false); }} className={autoCalc ? "bg-muted" : ""} />
+            {autoCalc && <p className="text-[10px] text-muted-foreground">Calculado: {days}d × {hpd}h × 4,33</p>}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="v2-rooms">Qtd. de salas</Label>
             <Input id="v2-rooms" type="number" min={0.1} step={0.01} value={rooms} onChange={(e) => setRooms(e.target.value)} />
-            <p className="text-[10px] text-muted-foreground">Aceita valores decimais (ex: 0,546)</p>
+            <p className="text-[10px] text-muted-foreground">Aceita decimais (ex: 0,546)</p>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="v2-tax">Alíquota IR (%)</Label>
