@@ -3039,15 +3039,37 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
       }
 
-      // Validate transaction belongs to user
-      const { data: txToEdit, error: txErr } = await supabase
+      // Validate transaction belongs to user — check both transactions and ai_pending_transactions
+      let txToEdit: any = null;
+      let editTable = "transactions";
+
+      const { data: txData, error: txErr } = await supabase
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, notes")
         .eq("id", transactionId)
         .eq("user_id", userId)
         .single();
 
-      if (txErr || !txToEdit) {
+      if (txData) {
+        txToEdit = txData;
+        editTable = "transactions";
+      } else {
+        // Try ai_pending_transactions (recently created, awaiting approval)
+        const { data: pendingData } = await supabase
+          .from("ai_pending_transactions")
+          .select("id, description, amount, type, transaction_status, payment_date, competence_date, category, notes")
+          .eq("id", transactionId)
+          .eq("user_id", userId)
+          .eq("status", "pending")
+          .single();
+
+        if (pendingData) {
+          txToEdit = { ...pendingData, status: pendingData.transaction_status };
+          editTable = "ai_pending_transactions";
+        }
+      }
+
+      if (!txToEdit) {
         console.error("Transaction not found for edit:", transactionId, txErr);
         return respond({
           success: false, intent: "editar_lancamento",
