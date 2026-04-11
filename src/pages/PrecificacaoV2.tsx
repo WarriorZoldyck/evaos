@@ -20,7 +20,7 @@ const GROUP_TAB_LABELS: Record<CostGroup, string> = {
 
 export default function PrecificacaoV2() {
   const {
-    costItems, procedures, loading,
+    config, costItems, procedures, loading,
     groupTotals, custoHora, fmm, fmmPorSala, custoHoraPorSala,
     hoursPerMonth, numRooms, taxRate,
     selectedProcedure, selectedProcedureId, setSelectedProcedureId,
