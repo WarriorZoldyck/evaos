@@ -124,7 +124,7 @@ export function usePricingV2() {
     if (config) {
       const { error } = await supabase
         .from("pricing_v2_configurations")
-        .update({ hours_per_month: hours, num_rooms: rooms, tax_rate: tax, updated_at: new Date().toISOString() })
+        .update({ hours_per_month: hours, num_rooms: Math.round(rooms * 1000) / 1000, tax_rate: tax, updated_at: new Date().toISOString() })
         .eq("id", config.id);
       if (error) {
         toast({ title: "Erro ao salvar", description: mapDatabaseError(error), variant: "destructive" });
@@ -134,7 +134,7 @@ export function usePricingV2() {
       const { error } = await supabase.from("pricing_v2_configurations").insert({
         user_id: user.id,
         hours_per_month: hours,
-        num_rooms: rooms,
+        num_rooms: Math.round(rooms * 1000) / 1000,
         tax_rate: tax,
       });
       if (error) {
