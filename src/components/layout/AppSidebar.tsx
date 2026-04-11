@@ -19,6 +19,7 @@ import {
   Sparkles,
   Plug,
   UsersRound,
+  Layers,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -62,6 +63,7 @@ const financeMenuItems = [
 const registrationMenuItems = [
   { title: "Contas & Cartões", url: "/contas", icon: CreditCard },
   { title: "Categorias", url: "/categorias", icon: FolderTree },
+  { title: "Centros de Custos", url: "/centros-de-custos", icon: Layers },
   { title: "Fornecedores e Clientes", url: "/contatos", icon: Users },
   { title: "Integrações", url: "/integracoes", icon: Plug },
 ];

@@ -27,6 +27,7 @@ import PrecificacaoV2 from "@/pages/PrecificacaoV2";
 import LandingPage from "@/pages/LandingPage";
 import Metas from "@/pages/Metas";
 import AnalisesEva from "@/pages/AnalisesEva";
+import CentrosDeCustos from "@/pages/CentrosDeCustos";
 import HubContas from "@/pages/hub/HubContas";
 import HubWorkspaces from "@/pages/hub/HubWorkspaces";
 import HubMembros from "@/pages/hub/HubMembros";
@@ -67,6 +68,7 @@ const App = () => {
                 <Route path="/precificacao" element={<Precificacao />} />
                 <Route path="/contas" element={<Contas />} />
                 <Route path="/categorias" element={<Categorias />} />
+                <Route path="/centros-de-custos" element={<CentrosDeCustos />} />
                 <Route path="/contatos" element={<Contatos />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />
                 
