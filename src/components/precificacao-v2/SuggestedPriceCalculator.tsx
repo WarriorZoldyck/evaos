@@ -94,7 +94,7 @@ export function SuggestedPriceCalculator({ custoHora, taxRate }: Props) {
               type="number"
               min={0}
               step={0.01}
-              className="w-28 h-7 text-right text-sm"
+              className="w-32 h-7 text-right text-sm"
               value={cfOverride !== null ? cfOverride : cf.toFixed(2)}
               onChange={(e) => setCfOverride(e.target.value)}
             />
@@ -105,7 +105,7 @@ export function SuggestedPriceCalculator({ custoHora, taxRate }: Props) {
               type="number"
               min={0}
               step={0.01}
-              className="w-28 h-7 text-right text-sm"
+              className="w-32 h-7 text-right text-sm"
               value={cvOverride !== null ? cvOverride : cvNum.toFixed(2)}
               onChange={(e) => setCvOverride(e.target.value)}
             />
@@ -117,7 +117,7 @@ export function SuggestedPriceCalculator({ custoHora, taxRate }: Props) {
               min={0}
               max={99}
               step={0.1}
-              className="w-28 h-7 text-right text-sm"
+              className="w-32 h-7 text-right text-sm"
               value={nfRateOverride !== null ? nfRateOverride : effectiveTaxRate.toFixed(1)}
               onChange={(e) => setNfRateOverride(e.target.value)}
             />
