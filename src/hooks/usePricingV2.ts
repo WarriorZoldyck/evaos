@@ -10,6 +10,8 @@ export interface PricingV2Config {
   hours_per_month: number;
   num_rooms: number;
   tax_rate: number;
+  days_per_week: number | null;
+  hours_per_day: number | null;
   updated_at: string | null;
 }
 
@@ -110,6 +112,8 @@ export function usePricingV2() {
         hours_per_month: data.hours_per_month ?? 160,
         num_rooms: data.num_rooms ?? 1,
         tax_rate: Number(data.tax_rate) ?? 8.44,
+        days_per_week: data.days_per_week != null ? Number(data.days_per_week) : null,
+        hours_per_day: data.hours_per_day != null ? Number(data.hours_per_day) : null,
         updated_at: data.updated_at,
       };
       setConfig(parsed);
@@ -119,12 +123,19 @@ export function usePricingV2() {
   }, [user, toast]);
 
   // ─── Save config ───
-  const saveConfig = async (hours: number, rooms: number, tax: number) => {
+  const saveConfig = async (hours: number, rooms: number, tax: number, daysPerWeek?: number | null, hoursPerDay?: number | null) => {
     if (!user) return false;
     if (config) {
       const { error } = await supabase
         .from("pricing_v2_configurations")
-        .update({ hours_per_month: hours, num_rooms: Math.round(rooms * 1000) / 1000, tax_rate: tax, updated_at: new Date().toISOString() })
+        .update({
+          hours_per_month: hours,
+          num_rooms: Math.round(rooms * 1000) / 1000,
+          tax_rate: tax,
+          days_per_week: daysPerWeek ?? null,
+          hours_per_day: hoursPerDay ?? null,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", config.id);
       if (error) {
         toast({ title: "Erro ao salvar", description: mapDatabaseError(error), variant: "destructive" });
@@ -136,6 +147,8 @@ export function usePricingV2() {
         hours_per_month: hours,
         num_rooms: Math.round(rooms * 1000) / 1000,
         tax_rate: tax,
+        days_per_week: daysPerWeek ?? null,
+        hours_per_day: hoursPerDay ?? null,
       });
       if (error) {
         toast({ title: "Erro ao criar configuração", description: mapDatabaseError(error), variant: "destructive" });
