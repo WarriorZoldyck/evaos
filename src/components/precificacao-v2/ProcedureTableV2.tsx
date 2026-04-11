@@ -99,10 +99,8 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           <TableHead className="text-right">CV</TableHead>
           <TableHead className="text-right">NF</TableHead>
           <TableHead className="text-right">Líquido</TableHead>
-          <TableHead className="text-right">Lucro</TableHead>
           <TableHead className="text-right">Lucr./h</TableHead>
           <TableHead className="text-right">Lucr. %</TableHead>
-          <TableHead className="text-right">Lucr./h total</TableHead>
           <TableHead className="w-[50px]" />
         </TableRow>
       </TableHeader>
@@ -139,13 +137,11 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cf)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cv)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.nf)}</TableCell>
-              <TableCell className="text-right font-medium">{fmt(calc.liquido)}</TableCell>
               <TableCell className={`text-right font-bold ${isNegative ? "text-destructive" : "text-emerald-600"}`}>
-                {fmt(calc.lucro)}
+                {fmt(calc.liquido)}
               </TableCell>
               <TableCell className={`text-right ${isNegative ? "text-destructive" : ""}`}>{fmt(calc.lucratividadeHora)}</TableCell>
               <TableCell className={`text-right ${isNegative ? "text-destructive" : ""}`}>{fmtPct(calc.lucratividadePct)}</TableCell>
-              <TableCell className="text-right text-muted-foreground">{fmt(calc.lucratividadeHoraTotal)}</TableCell>
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
