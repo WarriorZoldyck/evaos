@@ -27,6 +27,7 @@ export default function Dashboard() {
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
   const {
     summary,
+    saldoAtual,
     upcomingTransactions,
     categoryBreakdown,
     getProjectionData,
@@ -80,6 +81,7 @@ export default function Dashboard() {
         entradas={summary.entradas}
         saidas={summary.saidas}
         saldo={summary.saldo}
+        saldoAtual={saldoAtual}
         entradaPrevista={summary.entradaPrevista}
         saidaPrevista={summary.saidaPrevista}
         mdrBruto={summary.mdrBruto}

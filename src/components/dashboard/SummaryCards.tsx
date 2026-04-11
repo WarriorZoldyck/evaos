@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, CreditCard } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, CreditCard, Landmark } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -8,6 +8,7 @@ interface SummaryCardsProps {
   entradas: number;
   saidas: number;
   saldo: number;
+  saldoAtual: number;
   entradaPrevista: number;
   saidaPrevista: number;
   mdrBruto: number;
@@ -102,7 +103,7 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
   );
 }
 
-export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent, loading, dateFrom, dateTo }: SummaryCardsProps) {
+export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual, entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent, loading, dateFrom, dateTo }: SummaryCardsProps) {
   const navigate = useNavigate();
 
   const go = (params: Record<string, string>) => {
@@ -118,7 +119,15 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, entradaPrev
   return (
     <div className="space-y-4">
       {/* Main cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <SummaryCard
+          title="Saldo Atual"
+          value={saldoAtual}
+          icon={Landmark}
+          trend={saldoAtual >= 0 ? "up" : "down"}
+          gradient={saldoAtual >= 0 ? "bg-gradient-primary" : "bg-gradient-destructive"}
+          loading={loading}
+        />
         <SummaryCard
           title="Faturamento"
           value={faturamento}
