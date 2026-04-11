@@ -135,7 +135,7 @@ function applyAccountFilter(
 
 export function useDashboardData(filters: DashboardFilters) {
   const { user } = useAuth();
-  const { selectedCompanyId, isPersonal } = useCompany();
+  const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const { occurrences: recurringOccurrences, loading: recurringLoading, refetch: refetchRecurring } = useRecurringTransactions(90);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [competenceTransactions, setCompetenceTransactions] = useState<Transaction[]>([]);
