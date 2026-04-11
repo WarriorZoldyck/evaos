@@ -1,43 +1,25 @@
 
 
-## Plano: Melhorias no layout e UX da Precificação V1
+## Plano: Projetado sem paginação + Filtro de contexto
 
-### 3 alterações
+### Problemas identificados
 
----
+1. **Paginação no "Projetado"**: A aba "Projetado" aplica `status: "Pendente"` mas mantém a paginação padrão de 20 itens por página. Para transações pendentes/projetadas, faz mais sentido carregar tudo de uma vez (assim como já acontece para filtro de cartão agrupado), pois o usuário precisa ver o panorama completo das obrigações futuras.
 
-### 1. Setas (spinners) nos campos do simulador "E se?" e Calculadora de Preço Sugerido
+2. **Aparentemente só mostra pessoal**: Preciso verificar se o `companyFilter` está sendo aplicado corretamente ou se o seletor de contexto está em "Pessoal" na sidebar. Pela screenshot, parece que o filtro de empresa está correto (mostra Mastercard Black que pode ser pessoal), mas vou garantir que o filtro de conta reflita o contexto selecionado.
 
-Os inputs já são `type="number"`, e na rodada anterior aplicamos CSS global para mostrar spinners em todos os `input[type="number"]`. Isso já deveria estar funcionando. Porém, os inputs com classe `w-28 h-7` na Calculadora de Preço Sugerido podem estar escondendo os spinners por falta de espaço. Vou verificar e garantir que todos os inputs numéricos nesses dois componentes tenham tamanho adequado para exibir as setas.
+### Alterações
 
-**Arquivos**: `WhatIfSimulator.tsx`, `SuggestedPriceCalculator.tsx` — ajustar largura dos inputs inline se necessário.
+**1. `src/hooks/useTransactions.ts` — Busca exaustiva para "Projetado"**
+- Quando `filters.status === "Pendente"`, usar o mesmo padrão de busca em lote já existente para cartões agrupados (linhas 282-320): loop com `.range()` em batches de 1000 até esgotar os dados
+- Isso elimina a paginação e mostra todos os lançamentos pendentes de uma vez
+- A variável `isGroupedParentCardFilter` será expandida para incluir `filters.status === "Pendente"` como condição alternativa para ativar a busca completa
 
----
-
-### 2. Simulador "E se?" não aparece para todos os usuários
-
-O problema está na linha 59 do `WhatIfSimulator.tsx`: `if (procedures.length === 0) return null;`. Quando o usuário não tem nenhum procedimento cadastrado, o simulador inteiro desaparece — incluindo os campos de simulação de Horas/Salas/Alíquota que são úteis independentemente.
-
-**Solução**: Sempre mostrar o simulador. Quando não houver procedimentos, exibir os campos de simulação (Horas, Salas, Alíquota) e o Custo/Hora simulado, mas omitir apenas a tabela de impacto nos procedimentos (ou mostrar uma mensagem "Cadastre procedimentos para ver o impacto").
-
----
-
-### 3. Layout: Procedimentos embaixo, valores ao lado
-
-Atualmente a Calculadora de Preço Sugerido e o Simulador "E se?" ficam lado a lado numa grid 2 colunas. O usuário quer um layout que escale melhor com mais dados: **procedimentos em lista vertical (embaixo)** e **valores/detalhes ao lado**.
-
-**Solução**: Reorganizar a seção de Procedimentos + Breakdown para usar um layout de 2 colunas:
-- **Coluna esquerda**: Tabela de procedimentos (lista vertical)
-- **Coluna direita**: Breakdown do procedimento selecionado
-
-A Calculadora e o Simulador permanecem abaixo, lado a lado (já estão bons assim).
-
-**Arquivo**: `Precificacao.tsx` — envolver a tabela de procedimentos e o breakdown em `grid grid-cols-1 lg:grid-cols-3` (2/3 tabela, 1/3 breakdown).
-
----
+**2. `src/hooks/useTransactions.ts` — totalPages = 1 para Projetado**
+- Na linha 542-544 onde calcula `totalPages`, incluir a condição de status "Pendente" para retornar 1 página (sem paginação visual)
 
 ### Detalhes técnicos
-
-- Nenhuma migração de banco
-- Impacto apenas em 3 arquivos: `Precificacao.tsx`, `WhatIfSimulator.tsx`, `SuggestedPriceCalculator.tsx`
+- Reutiliza o padrão de "Pagination Override" já implementado para cartões hierárquicos
+- Sem migração de banco
+- Arquivo único afetado: `src/hooks/useTransactions.ts`
 
