@@ -279,6 +279,7 @@ export function useDashboardData(filters: DashboardFilters) {
   // Fetch filtered transactions for the period
   useEffect(() => {
     if (!user) return;
+    const companyCtx = { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
 
     const fetchTransactions = async () => {
       setLoading(true);
@@ -290,15 +291,9 @@ export function useDashboardData(filters: DashboardFilters) {
         .lte("payment_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false");
 
-      if (isPersonal) {
-        query = query.is("company_id", null);
-      } else if (selectedCompanyId) {
-        query = query.eq("company_id", selectedCompanyId);
-      }
-
+      query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
 
-      // Paginate to avoid 1000-row limit
       const allData: Transaction[] = [];
       let from = 0;
       const PAGE = 1000;
@@ -322,15 +317,9 @@ export function useDashboardData(filters: DashboardFilters) {
         .lte("competence_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false");
 
-      if (isPersonal) {
-        query = query.is("company_id", null);
-      } else if (selectedCompanyId) {
-        query = query.eq("company_id", selectedCompanyId);
-      }
-
+      query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
 
-      // Paginate
       const allData: Transaction[] = [];
       let from = 0;
       const PAGE = 1000;
@@ -347,11 +336,12 @@ export function useDashboardData(filters: DashboardFilters) {
 
     fetchTransactions();
     fetchCompetenceTransactions();
-  }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId, linkedCardIds, fetchTrigger]);
+  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, fetchTrigger]);
 
   // Fetch transactions for projections (limited to 2 years back)
   useEffect(() => {
     if (!user) return;
+    const companyCtx = { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
 
     const fetchAll = async () => {
       const twoYearsAgo = format(subYears(new Date(), 2), "yyyy-MM-dd");
@@ -363,12 +353,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .order("payment_date", { ascending: true })
         .limit(5000);
 
-      if (isPersonal) {
-        query = query.is("company_id", null);
-      } else if (selectedCompanyId) {
-        query = query.eq("company_id", selectedCompanyId);
-      }
-
+      query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
 
       const { data, error } = await query;
@@ -379,7 +364,7 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     fetchAll();
-  }, [user, selectedCompanyId, isPersonal, accountId, linkedCardIds, fetchTrigger]);
+  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, accountId, linkedCardIds, fetchTrigger]);
 
   // Category name resolver
   const resolveCategoryName = useCallback(
