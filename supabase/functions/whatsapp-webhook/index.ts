@@ -3108,11 +3108,33 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           break;
         }
         case "category": {
-          // Try to resolve category by UUID or name
+          // Try to resolve category by UUID or name (supports "Parent > Child" or "Parent Child" format)
           const allCats = categoriesRes.data || [];
           let cat = allCats.find((c: any) => c.id === newValue);
           if (!cat) {
             cat = allCats.find((c: any) => c.name.toLowerCase() === String(newValue).toLowerCase());
+          }
+          // Try splitting "Parent Child" or "Parent > Child" to find subcategory
+          if (!cat) {
+            const parts = String(newValue).split(/\s*[>\/]\s*|\s+/).filter(Boolean);
+            if (parts.length >= 2) {
+              // Find parent first
+              const parentCat = allCats.find((c: any) => 
+                c.name.toLowerCase() === parts[0].toLowerCase() && !c.parent_id
+              );
+              if (parentCat) {
+                // Find child under parent
+                const childCat = allCats.find((c: any) => 
+                  c.name.toLowerCase() === parts.slice(1).join(" ").toLowerCase() && c.parent_id === parentCat.id
+                );
+                cat = childCat || parentCat;
+              }
+            }
+          }
+          // Fuzzy match: partial name match
+          if (!cat) {
+            const searchLower = String(newValue).toLowerCase();
+            cat = allCats.find((c: any) => c.name.toLowerCase().includes(searchLower) || searchLower.includes(c.name.toLowerCase()));
           }
           if (!cat) {
             return respond({
@@ -3123,7 +3145,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
           updateData.category = cat.id;
           fieldLabel = "Categoria";
-          oldValueLabel = txToEdit.category;
+          const oldCat = allCats.find((c: any) => c.id === txToEdit.category);
+          oldValueLabel = oldCat?.name || txToEdit.category;
           newValueLabel = cat.name;
           break;
         }
