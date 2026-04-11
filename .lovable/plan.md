@@ -1,22 +1,20 @@
 
 
-## Plano: Renomear tier "Franquia" → "Empresarial" + Atualizar PDF v2
+## Plano: Remover custos não-mapeados do PDF de Análise
 
-### Mudanças
+### O que muda
 
-**1. Landing page (`src/components/landing/LandingPricing.tsx`)**
-- Renomear o 4º plano de "Franquia" para "Empresarial"
-- Atualizar descrição para "Para empresas com múltiplas unidades e equipes"
-- CTA: "Assinar Empresarial"
+No documento `EVA_OS_Analise_Negocio_v2.pdf`, na seção de **Custos Operacionais**:
 
-**2. PDF de análise de negócio — gerar `EVA_OS_Analise_Negocio_v2.pdf`**
-- Substituir todas as referências de "Franquia" por "Empresarial"
-- Manter análise de mercado atualizada com os concorrentes dos screenshots (Conta Azul, Mordomize, MeuAssessor)
-- Incluir custos reais de IA já levantados (255 interações, ~R$0.28/usuário/mês)
-- Recalcular unit economics com os preços revisados (Starter grátis, Pro R$47, Clínica R$97, Empresarial R$197)
-- Visual Dark Tech mantido
+- **Remover** valores específicos de Supabase (~$25/mês), Lovable, e qualquer outro custo de infraestrutura que ainda não foi validado
+- **Substituir** por "—" (travessão) com nota "A ser mapeado"
+- **Manter** apenas os custos reais já confirmados: custo de IA por interação (~R$0.28/usuário/mês baseado em uso real)
+- **Recalcular** unit economics sem os custos de infra — deixar margem como "A definir após mapeamento completo" onde depender desses valores
 
-### Arquivos afetados
-- `src/components/landing/LandingPricing.tsx` — rename do plano
-- `/mnt/documents/EVA_OS_Analise_Negocio_v2.pdf` — novo documento gerado
+### Execução
+- Regenerar `EVA_OS_Analise_Negocio_v2.pdf` com mesmo visual Dark Tech
+- QA visual obrigatório em todas as páginas
+
+### Arquivo afetado
+- `/mnt/documents/EVA_OS_Analise_Negocio_v2.pdf` — atualizado
 
