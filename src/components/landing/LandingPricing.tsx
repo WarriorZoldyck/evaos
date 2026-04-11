@@ -90,7 +90,7 @@ export function LandingPricing() {
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 items-start">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
           {plans.map((plan, i) => (
             <div
               key={i}
