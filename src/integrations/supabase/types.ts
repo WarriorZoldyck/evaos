@@ -589,6 +589,8 @@ export type Database = {
       }
       pricing_v2_configurations: {
         Row: {
+          days_per_week: number | null
+          hours_per_day: number | null
           hours_per_month: number
           id: string
           num_rooms: number
@@ -597,6 +599,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          days_per_week?: number | null
+          hours_per_day?: number | null
           hours_per_month?: number
           id?: string
           num_rooms?: number
@@ -605,6 +609,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          days_per_week?: number | null
+          hours_per_day?: number | null
           hours_per_month?: number
           id?: string
           num_rooms?: number
