@@ -1231,7 +1231,7 @@ serve(async (req) => {
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const ninetyDaysAgoStr = `${ninetyDaysAgo.getFullYear()}-${String(ninetyDaysAgo.getMonth() + 1).padStart(2, "0")}-${String(ninetyDaysAgo.getDate()).padStart(2, "0")}`;
 
-    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes, historyTxRes] = await Promise.all([
+    const [categoriesRes, accountsRes, walletsRes, companiesRes, creditCardsRes, suppliersRes, clientsRes, recentTxRes, historyTxRes, recentPendingRes] = await Promise.all([
       supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
       supabase.from("bank_accounts").select("id, name, type, company_id, agency_number, account_number").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
@@ -1241,6 +1241,7 @@ serve(async (req) => {
       supabase.from("clients").select("id, name").eq("user_id", userId),
       supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
       supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(1000),
+      supabase.from("ai_pending_transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).eq("status", "pending").order("created_at", { ascending: false }).limit(5),
     ]);
 
     const categories = categoriesRes.data || [];
@@ -1250,7 +1251,12 @@ serve(async (req) => {
     const creditCards = creditCardsRes.data || [];
     const suppliersList = suppliersRes.data || [];
     const clientsList = clientsRes.data || [];
-    const recentTransactions = recentTxRes.data || [];
+    const recentPending = recentPendingRes.data || [];
+    // Merge recent transactions with recent pending (pending first, as they're the most recent context)
+    const recentTransactions = [
+      ...recentPending.map((p: any) => ({ ...p, _source: "pending" })),
+      ...(recentTxRes.data || []).map((t: any) => ({ ...t, _source: "approved" })),
+    ].slice(0, 10);
     const historicalTransactions = historyTxRes.data || [];
 
     const today = new Date().toISOString().split("T")[0];
@@ -1537,8 +1543,21 @@ REGRAS DE EDIÇÃO DE LANÇAMENTO:
 - Para field="status", new_value deve ser "Pago" ou "Pendente"
 - Para field="payment_date" ou "competence_date", new_value deve ser "YYYY-MM-DD"
 
-LANÇAMENTOS RECENTES DO USUÁRIO (use para identificar o lançamento correto):
-${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.id}] ${t.description} | ${fmt(t.amount)} | ${t.type} | ${t.status} | ${t.payment_date}`).join("\n") : "Nenhum lançamento recente"}
+REGRA CRÍTICA — DETECÇÃO DE CORREÇÃO/RECATEGORIZAÇÃO:
+- Se o usuário enviar uma mensagem CURTA (1-3 palavras) logo após um lançamento ter sido criado na conversa, e essa mensagem parece ser um NOME DE CATEGORIA ou SUBCATEGORIA (ex: "Supérfluos saídas", "Alimentação", "Bar", "Pet cachorra"), interprete como uma CORREÇÃO DE CATEGORIA do lançamento anterior, NÃO como um novo lançamento.
+- Nesse caso, use intent="editar_lancamento" com field="category" e new_value contendo o nome da categoria/subcategoria desejada.
+- NUNCA crie um novo lançamento duplicado com o mesmo valor quando o usuário está claramente tentando recategorizar.
+- Sinais de que é uma correção: mensagem curta sem valor monetário, enviada logo após um lançamento, texto corresponde a uma categoria existente ou subcategoria.
+- Quando for uma correção de categoria, tente encontrar o UUID da categoria na lista de categorias acima. Se houver match, use o UUID. Se não, trate como sugestão de nova categoria.
+
+REGRA CRÍTICA — DESCRIÇÃO NUNCA DEVE SER NOME DE CATEGORIA:
+- O campo "description" NUNCA deve conter APENAS o nome de uma categoria ou subcategoria (ex: "Saídas", "Alimentação", "Supérfluos").
+- A descrição deve ser o nome do estabelecimento, do fornecedor, do produto ou uma descrição significativa da transação (ex: "Compra no Empório Moscato", "PIX para João Silva", "Material dentário Neodent").
+- Se o usuário não fornecer uma descrição específica, use o contact_name ou o nome do estabelecimento como descrição.
+
+LANÇAMENTOS RECENTES DO USUÁRIO (use para identificar o lançamento correto ao editar):
+${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.id}]${t._source === "pending" ? " (PENDENTE-APROVAÇÃO)" : ""} ${t.description} | ${fmt(t.amount)} | ${t.type} | ${t.status} | ${t.payment_date}`).join("\n") : "Nenhum lançamento recente"}
+- Lançamentos marcados com (PENDENTE-APROVAÇÃO) estão na fila de aprovação e podem ser editados.
 
 Para conversa:
 {"intent":"conversa","friendly_message":"..."}
@@ -3020,15 +3039,37 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
       }
 
-      // Validate transaction belongs to user
-      const { data: txToEdit, error: txErr } = await supabase
+      // Validate transaction belongs to user — check both transactions and ai_pending_transactions
+      let txToEdit: any = null;
+      let editTable = "transactions";
+
+      const { data: txData, error: txErr } = await supabase
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, notes")
         .eq("id", transactionId)
         .eq("user_id", userId)
         .single();
 
-      if (txErr || !txToEdit) {
+      if (txData) {
+        txToEdit = txData;
+        editTable = "transactions";
+      } else {
+        // Try ai_pending_transactions (recently created, awaiting approval)
+        const { data: pendingData } = await supabase
+          .from("ai_pending_transactions")
+          .select("id, description, amount, type, transaction_status, payment_date, competence_date, category, notes")
+          .eq("id", transactionId)
+          .eq("user_id", userId)
+          .eq("status", "pending")
+          .single();
+
+        if (pendingData) {
+          txToEdit = { ...pendingData, status: pendingData.transaction_status };
+          editTable = "ai_pending_transactions";
+        }
+      }
+
+      if (!txToEdit) {
         console.error("Transaction not found for edit:", transactionId, txErr);
         return respond({
           success: false, intent: "editar_lancamento",
@@ -3067,11 +3108,33 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           break;
         }
         case "category": {
-          // Try to resolve category by UUID or name
+          // Try to resolve category by UUID or name (supports "Parent > Child" or "Parent Child" format)
           const allCats = categoriesRes.data || [];
           let cat = allCats.find((c: any) => c.id === newValue);
           if (!cat) {
             cat = allCats.find((c: any) => c.name.toLowerCase() === String(newValue).toLowerCase());
+          }
+          // Try splitting "Parent Child" or "Parent > Child" to find subcategory
+          if (!cat) {
+            const parts = String(newValue).split(/\s*[>\/]\s*|\s+/).filter(Boolean);
+            if (parts.length >= 2) {
+              // Find parent first
+              const parentCat = allCats.find((c: any) => 
+                c.name.toLowerCase() === parts[0].toLowerCase() && !c.parent_id
+              );
+              if (parentCat) {
+                // Find child under parent
+                const childCat = allCats.find((c: any) => 
+                  c.name.toLowerCase() === parts.slice(1).join(" ").toLowerCase() && c.parent_id === parentCat.id
+                );
+                cat = childCat || parentCat;
+              }
+            }
+          }
+          // Fuzzy match: partial name match
+          if (!cat) {
+            const searchLower = String(newValue).toLowerCase();
+            cat = allCats.find((c: any) => c.name.toLowerCase().includes(searchLower) || searchLower.includes(c.name.toLowerCase()));
           }
           if (!cat) {
             return respond({
@@ -3082,7 +3145,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
           updateData.category = cat.id;
           fieldLabel = "Categoria";
-          oldValueLabel = txToEdit.category;
+          const oldCat = allCats.find((c: any) => c.id === txToEdit.category);
+          oldValueLabel = oldCat?.name || txToEdit.category;
           newValueLabel = cat.name;
           break;
         }
@@ -3123,9 +3187,14 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }, 200);
       }
 
+      // For ai_pending_transactions, map 'status' field to 'transaction_status' to avoid conflict
+      const tableUpdateData = editTable === "ai_pending_transactions" && updateData.status
+        ? { ...updateData, transaction_status: updateData.status, status: undefined }
+        : updateData;
+
       const { error: updateErr } = await supabase
-        .from("transactions")
-        .update(updateData)
+        .from(editTable)
+        .update(tableUpdateData)
         .eq("id", transactionId)
         .eq("user_id", userId);
 
