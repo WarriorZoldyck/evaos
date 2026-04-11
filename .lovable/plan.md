@@ -1,72 +1,43 @@
 
 
-## Plano: Multi-conta no Dashboard + Saldo atual + Extrato sem pendentes
+## Plano: Melhorias no layout e UX da Precificação V1
 
-### 3 entregas
-
----
-
-### 1. Seletor multi-conta na sidebar (visão consolidada)
-
-**Problema**: Hoje o seletor de contexto na sidebar permite apenas "Pessoal" OU uma empresa. O usuário quer selecionar múltiplas contas (Pessoal + Empresa X) e ver o dashboard consolidado.
-
-**Solução**: Transformar o dropdown da sidebar em um menu com checkboxes:
-- Opção "Todas as contas" no topo (atalho para selecionar tudo)
-- Cada conta (Pessoal, Empresa A, Empresa B...) com checkbox
-- Quando mais de uma está selecionada, o label mostra "Todas as contas" ou "2 contas selecionadas"
-- O `CompanyContext` ganha um novo estado: `selectedCompanyIds: string[]` (array) + `viewAll: boolean`
-- Os hooks de dados (`useDashboardData`, `useAccounts`, etc.) passam a aceitar o array e fazem queries com `.in("company_id", [...ids])` ou removem o filtro de company quando `viewAll = true`
-
-**Arquivos afetados**:
-- `src/contexts/CompanyContext.tsx` — adicionar `selectedCompanyIds`, `viewAll`, `setViewAll`
-- `src/components/layout/AppSidebar.tsx` — trocar dropdown por menu com checkboxes
-- `src/hooks/useDashboardData.ts` — adaptar queries para aceitar múltiplas companies
-- `src/hooks/useAccounts.ts` — idem
-
-**Nota**: As demais páginas (Lançamentos, DRE, etc.) continuam usando `selectedCompanyId` (single). A visão multi-conta é exclusiva do Dashboard por enquanto — o filtro de conta existente no Dashboard (`Select` de contas bancárias) continua funcionando normalmente como filtro adicional.
+### 3 alterações
 
 ---
 
-### 2. Card de saldo atual das contas no Dashboard
+### 1. Setas (spinners) nos campos do simulador "E se?" e Calculadora de Preço Sugerido
 
-**Problema**: O Dashboard mostra receitas, despesas e saldo do período, mas NÃO mostra o saldo atual real das contas bancárias/carteiras.
+Os inputs já são `type="number"`, e na rodada anterior aplicamos CSS global para mostrar spinners em todos os `input[type="number"]`. Isso já deveria estar funcionando. Porém, os inputs com classe `w-28 h-7` na Calculadora de Preço Sugerido podem estar escondendo os spinners por falta de espaço. Vou verificar e garantir que todos os inputs numéricos nesses dois componentes tenham tamanho adequado para exibir as setas.
 
-**Solução**: Adicionar um card "Saldo Atual" na linha principal do Dashboard (SummaryCards), que mostra a soma dos saldos reais de todas as contas (banco + carteira) usando o `initial_balance + transações pagas`. Quando um filtro de conta específica está ativo, mostra apenas o saldo daquela conta.
-
-**Arquivos afetados**:
-- `src/hooks/useDashboardData.ts` — calcular saldo atual real (já tem `initialBalances`, basta adicionar soma das transações pagas)
-- `src/components/dashboard/SummaryCards.tsx` — adicionar card "Saldo Atual" com ícone de carteira
-- `src/pages/Dashboard.tsx` — passar o novo dado para SummaryCards
+**Arquivos**: `WhatIfSimulator.tsx`, `SuggestedPriceCalculator.tsx` — ajustar largura dos inputs inline se necessário.
 
 ---
 
-### 3. Extrato: ocultar transações pendentes
+### 2. Simulador "E se?" não aparece para todos os usuários
 
-**Problema**: O extrato da conta mostra transações pendentes com badge "Pendente", mesmo que elas não afetem o saldo. Não faz sentido aparecerem no extrato.
+O problema está na linha 59 do `WhatIfSimulator.tsx`: `if (procedures.length === 0) return null;`. Quando o usuário não tem nenhum procedimento cadastrado, o simulador inteiro desaparece — incluindo os campos de simulação de Horas/Salas/Alíquota que são úteis independentemente.
 
-**Solução**: Adicionar `.eq("status", "Pago")` na query do extrato (linha 62-73 do `AccountStatementModal.tsx`). Simples — uma linha.
+**Solução**: Sempre mostrar o simulador. Quando não houver procedimentos, exibir os campos de simulação (Horas, Salas, Alíquota) e o Custo/Hora simulado, mas omitir apenas a tabela de impacto nos procedimentos (ou mostrar uma mensagem "Cadastre procedimentos para ver o impacto").
 
-**Arquivo afetado**:
-- `src/components/contas/AccountStatementModal.tsx` — adicionar filtro `status = Pago` na query principal
+---
+
+### 3. Layout: Procedimentos embaixo, valores ao lado
+
+Atualmente a Calculadora de Preço Sugerido e o Simulador "E se?" ficam lado a lado numa grid 2 colunas. O usuário quer um layout que escale melhor com mais dados: **procedimentos em lista vertical (embaixo)** e **valores/detalhes ao lado**.
+
+**Solução**: Reorganizar a seção de Procedimentos + Breakdown para usar um layout de 2 colunas:
+- **Coluna esquerda**: Tabela de procedimentos (lista vertical)
+- **Coluna direita**: Breakdown do procedimento selecionado
+
+A Calculadora e o Simulador permanecem abaixo, lado a lado (já estão bons assim).
+
+**Arquivo**: `Precificacao.tsx` — envolver a tabela de procedimentos e o breakdown em `grid grid-cols-1 lg:grid-cols-3` (2/3 tabela, 1/3 breakdown).
 
 ---
 
 ### Detalhes técnicos
 
-**CompanyContext — novo estado multi-select**:
-```text
-selectedCompanyIds: string[]    // IDs das empresas selecionadas
-viewAll: boolean                // true = ignora filtro de company
-setViewAll(v: boolean)          // toggle
-toggleCompanyId(id: string)     // adiciona/remove do array
-```
-
-O `selectedCompanyId` (singular) continua existindo para as páginas que não suportam multi-conta. O Dashboard usa o `viewAll`/`selectedCompanyIds` quando disponível.
-
-**Query multi-conta no Dashboard**:
-Quando `viewAll = true`, remove os filtros `.is("company_id", null)` e `.eq("company_id", ...)`. Quando `selectedCompanyIds` tem itens, usa `.or(...)` com combinação de `company_id.is.null` (pessoal) e `company_id.in.(ids)`.
-
-**Saldo atual**: Usa a função `get_account_balance` do banco (já existe como DB function) ou calcula client-side somando `initial_balance + Σ(receitas pagas) - Σ(despesas pagas)` de todas as contas visíveis.
-
-**Nenhuma migração de banco necessária.**
+- Nenhuma migração de banco
+- Impacto apenas em 3 arquivos: `Precificacao.tsx`, `WhatIfSimulator.tsx`, `SuggestedPriceCalculator.tsx`
 
