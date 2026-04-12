@@ -1,28 +1,29 @@
 
 
-## Plano: Regenerar PDF corrigido no formato original
+## Plano: Corrigir R$ duplicado e tornar edição em tempo real na Precificação
 
-### Problemas identificados no PDF atual (v1 anexado)
+### Problemas identificados
 
-1. **"Franquia" aparece em 6+ lugares** -- precisa ser "Empresarial" em todos (tabela de planos, unit economics, projeção de receita, LTV/CAC)
-2. **Custos de infra com valores fictícios** -- Supabase $25/mês, Bandwidth $5-15, etc. ainda aparecem na seção 3.1. Devem virar "— A ser mapeado"
-3. **Preços inconsistentes** -- PDF mostra R$49/R$99/R$199, mas o acordado foi R$47/R$97/R$197
-4. **Sem logo** -- A capa não tem a logo da EVA OS, só texto
-5. **Recalcular unit economics** -- com preços corretos (R$47/R$97/R$197) e sem custos de infra fixos
+1. **R$ duplicado na tabela** -- `InlineEditCell` recebe `prefix="R$"` e renderiza `prefix + fmt(value)`, mas `fmt()` já inclui "R$", resultando em "R$R$ 0,00"
+2. **Edição por duplo clique** -- tanto na tabela quanto no breakdown, o usuário precisa dar duplo clique e depois Enter/blur para salvar. Deveria funcionar como a Calculadora de Preço Sugerido: inputs sempre visíveis com spinners, atualizando em tempo real
 
-### O que será feito
+### Mudanças
 
-**Regenerar `EVA_OS_Analise_Negocio_v2.pdf`** com:
+**1. `ProcedureTableV2.tsx` -- Corrigir R$ duplicado + inputs sempre visíveis**
+- Remover o `prefix="R$"` da chamada de `InlineEditCell` para o campo preço, ou ajustar a lógica para não duplicar o símbolo
+- Substituir `InlineEditCell` (double-click) por inputs `type="number"` sempre visíveis com spinners nativos nos campos Preço e Tempo
+- `onChange` dispara atualização imediata (com debounce leve) em vez de exigir Enter/blur
 
-- **Mesmo layout visual** do v1: fundo escuro (#0B1120), títulos em ciano (#48CAE4), tabelas com header dark, separadores, cards de destaque
-- **Logo EVA OS** (`src/assets/eva-os-logo.jpeg`) na capa
-- **"Franquia" → "Empresarial"** em todas as ocorrências
-- **Seção 3.1 Infraestrutura**: valores substituídos por "— A ser mapeado"
-- **Preços corrigidos**: Starter R$0, Pro R$47, Clínica R$97, Empresarial R$197
-- **Unit economics recalculados** com os preços corretos
-- **Seção 3.2 (custos IA)**: mantida intacta (dados reais confirmados)
-- **QA visual** em todas as 7 páginas antes de entregar
+**2. `ProcedureBreakdownV2.tsx` -- Inputs sempre visíveis com atualização em tempo real**
+- Substituir `InlineValue` (double-click) por inputs numéricos sempre visíveis com spinners para Valor Cobrado e Tempo de Execução
+- Usar estado local temporário que atualiza o cálculo visualmente em tempo real enquanto o usuário ajusta
+- Salvar no banco via `onBlur` ou após debounce, mas o breakdown recalcula instantaneamente
 
-### Arquivo gerado
-- `/mnt/documents/EVA_OS_Analise_Negocio_v2.pdf`
+**3. Lógica de atualização em tempo real**
+- O breakdown já recebe `calcProcedure(procedure)` -- ao mudar o valor local, os cálculos (CF, CV, NF, Líquido) atualizam automaticamente na tela
+- Manter sincronia: quando o input do breakdown muda, a tabela também reflete e vice-versa
+
+### Arquivos afetados
+- `src/components/precificacao-v2/ProcedureTableV2.tsx`
+- `src/components/precificacao-v2/ProcedureBreakdownV2.tsx`
 
