@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
@@ -6,54 +6,6 @@ import { BarChart3 } from "lucide-react";
 import type { ProcedureV2 } from "@/hooks/usePricingV2";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-function InlineValue({ value, onSave, label }: { value: number; onSave: (v: number) => void; label?: string }) {
-  const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState(String(value));
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing) {
-      setEditValue(String(value));
-      setTimeout(() => inputRef.current?.select(), 0);
-    }
-  }, [editing, value]);
-
-  const commit = () => {
-    const num = parseFloat(editValue);
-    if (!isNaN(num) && num >= 0) onSave(num);
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <Input
-        ref={inputRef}
-        type="number"
-        min={0}
-        step={0.01}
-        className="w-28 h-7 text-right text-sm"
-        value={editValue}
-        onChange={(e) => setEditValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          if (e.key === "Escape") setEditing(false);
-        }}
-      />
-    );
-  }
-
-  return (
-    <span
-      className="cursor-text hover:bg-muted/50 rounded px-1 py-0.5 transition-colors font-bold"
-      onDoubleClick={() => setEditing(true)}
-      title="Duplo clique para editar"
-    >
-      {fmt(value)}
-    </span>
-  );
-}
 
 interface Props {
   procedure: ProcedureV2;
@@ -65,7 +17,44 @@ interface Props {
 }
 
 export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProcedure, onUpdatePrice, onUpdateTime }: Props) {
-  const calc = calcProcedure(procedure);
+  const [localPrice, setLocalPrice] = useState<number | null>(null);
+  const [localTime, setLocalTime] = useState<number | null>(null);
+
+  const effectivePrice = localPrice ?? procedure.desired_price;
+  const effectiveTime = localTime ?? procedure.execution_time;
+
+  // Build a temporary procedure with local overrides for real-time calc
+  const liveProcedure = useMemo(() => ({
+    ...procedure,
+    desired_price: effectivePrice,
+    execution_time: effectiveTime,
+  }), [procedure, effectivePrice, effectiveTime]);
+
+  const calc = calcProcedure(liveProcedure);
+
+  const handlePriceChange = (val: string) => {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0) {
+      setLocalPrice(num);
+      onUpdatePrice?.(procedure.id, num);
+    }
+  };
+
+  const handleTimeChange = (val: string) => {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0) {
+      setLocalTime(num);
+      onUpdateTime?.(procedure.id, num);
+    }
+  };
+
+  // Reset local overrides when procedure changes from parent
+  const [prevId, setPrevId] = useState(procedure.id);
+  if (procedure.id !== prevId) {
+    setPrevId(procedure.id);
+    setLocalPrice(null);
+    setLocalTime(null);
+  }
 
   return (
     <Card>
@@ -76,21 +65,41 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        {/* Valor Cobrado — editável */}
+        {/* Valor Cobrado */}
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Valor Cobrado</span>
           {onUpdatePrice ? (
-            <InlineValue value={procedure.desired_price} onSave={(v) => onUpdatePrice(procedure.id, v)} />
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-muted-foreground">R$</span>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                className="w-28 h-7 text-right text-sm font-bold"
+                value={effectivePrice}
+                onChange={(e) => handlePriceChange(e.target.value)}
+              />
+            </div>
           ) : (
             <span className="font-bold">{fmt(procedure.desired_price)}</span>
           )}
         </div>
 
-        {/* Tempo — editável */}
+        {/* Tempo */}
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Tempo de Execução</span>
           {onUpdateTime ? (
-            <InlineValue value={procedure.execution_time} onSave={(v) => onUpdateTime(procedure.id, v)} />
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                min={0}
+                step={0.5}
+                className="w-28 h-7 text-right text-sm font-bold"
+                value={effectiveTime}
+                onChange={(e) => handleTimeChange(e.target.value)}
+              />
+              <span className="text-xs text-muted-foreground">h</span>
+            </div>
           ) : (
             <span className="font-medium">{procedure.execution_time}h</span>
           )}
@@ -100,7 +109,7 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
 
         {/* Deduções */}
         <div className="flex justify-between">
-          <span className="text-muted-foreground">(-) Custo Fixo (CF) = {procedure.execution_time}h × {fmt(custoHora)}/h</span>
+          <span className="text-muted-foreground">(-) Custo Fixo (CF) = {effectiveTime}h × {fmt(custoHora)}/h</span>
           <span className="font-medium text-destructive">-{fmt(calc.cf)}</span>
         </div>
 
@@ -121,13 +130,13 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
         )}
 
         <div className="flex justify-between">
-          <span className="text-muted-foreground">(-) NF (Imposto) = {taxRate}% × {fmt(procedure.desired_price)}</span>
+          <span className="text-muted-foreground">(-) NF (Imposto) = {taxRate}% × {fmt(effectivePrice)}</span>
           <span className="font-medium text-destructive">-{fmt(calc.nf)}</span>
         </div>
 
         <Separator />
 
-        {/* Líquido = Preço - CF - CV - NF */}
+        {/* Líquido */}
         <div className={`flex justify-between text-base font-bold ${calc.liquido < 0 ? "text-destructive" : "text-emerald-600"}`}>
           <span>Líquido (Preço − CF − CV − NF)</span>
           <span>{fmt(calc.liquido)}</span>
