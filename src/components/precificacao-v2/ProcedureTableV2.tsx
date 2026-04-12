@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,60 +20,51 @@ interface ProcedureTableV2Props {
   onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number }) => Promise<boolean>;
 }
 
-function InlineEditCell({ value, onSave, prefix, suffix, className }: {
+function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0, className }: {
   value: number;
-  onSave: (v: number) => void;
+  onCommit: (v: number) => void;
   prefix?: string;
   suffix?: string;
+  step?: number;
+  min?: number;
   className?: string;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [editValue, setEditValue] = useState(String(value));
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [localValue, setLocalValue] = useState(String(value));
+  const [focused, setFocused] = useState(false);
 
-  useEffect(() => {
-    if (editing) {
-      setEditValue(String(value));
-      setTimeout(() => inputRef.current?.select(), 0);
-    }
-  }, [editing]);
-
-  const commit = () => {
-    const num = parseFloat(editValue);
-    if (!isNaN(num) && num >= 0) {
-      onSave(num);
-    }
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <Input
-        ref={inputRef}
-        type="number"
-        min={0}
-        step={0.01}
-        className="w-24 h-7 text-right text-sm"
-        value={editValue}
-        onChange={(e) => setEditValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commit();
-          if (e.key === "Escape") setEditing(false);
-        }}
-        onClick={(e) => e.stopPropagation()}
-      />
-    );
-  }
+  // Sync from parent when not focused
+  const displayValue = focused ? localValue : String(value);
 
   return (
-    <span
-      className={`cursor-text hover:bg-muted/50 rounded px-1 py-0.5 transition-colors ${className || ""}`}
-      onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); }}
-      title="Duplo clique para editar"
-    >
-      {prefix}{typeof value === "number" ? (prefix === "R$" ? fmt(value) : value) : value}{suffix}
-    </span>
+    <div className={`flex items-center gap-1 ${className || ""}`} onClick={(e) => e.stopPropagation()}>
+      {prefix && <span className="text-xs text-muted-foreground">{prefix}</span>}
+      <Input
+        type="number"
+        min={min}
+        step={step}
+        className="w-24 h-7 text-right text-sm"
+        value={displayValue}
+        onFocus={() => {
+          setFocused(true);
+          setLocalValue(String(value));
+        }}
+        onChange={(e) => {
+          setLocalValue(e.target.value);
+          const num = parseFloat(e.target.value);
+          if (!isNaN(num) && num >= min) {
+            onCommit(num);
+          }
+        }}
+        onBlur={() => {
+          setFocused(false);
+          const num = parseFloat(localValue);
+          if (!isNaN(num) && num >= min) {
+            onCommit(num);
+          }
+        }}
+      />
+      {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
+    </div>
   );
 }
 
@@ -81,12 +72,6 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
   if (procedures.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-8">Nenhum procedimento cadastrado.</p>;
   }
-
-  const handleInlineUpdate = (procId: string, field: "desired_price" | "execution_time", value: number) => {
-    if (onInlineUpdate) {
-      onInlineUpdate(procId, { [field]: value });
-    }
-  };
 
   return (
     <Table>
@@ -119,20 +104,22 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
               <TableCell className="font-medium">{proc.name}</TableCell>
               <TableCell className="text-right">
                 {onInlineUpdate ? (
-                  <InlineEditCell
+                  <LiveNumberInput
                     value={proc.execution_time}
-                    onSave={(v) => handleInlineUpdate(proc.id, "execution_time", v)}
+                    step={0.5}
+                    suffix="h"
+                    onCommit={(v) => onInlineUpdate(proc.id, { execution_time: v })}
                   />
-                ) : proc.execution_time}
+                ) : <span>{proc.execution_time}h</span>}
               </TableCell>
               <TableCell className="text-right">
                 {onInlineUpdate ? (
-                  <InlineEditCell
+                  <LiveNumberInput
                     value={proc.desired_price}
                     prefix="R$"
-                    onSave={(v) => handleInlineUpdate(proc.id, "desired_price", v)}
+                    onCommit={(v) => onInlineUpdate(proc.id, { desired_price: v })}
                   />
-                ) : fmt(proc.desired_price)}
+                ) : <span>{fmt(proc.desired_price)}</span>}
               </TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cf)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cv)}</TableCell>
