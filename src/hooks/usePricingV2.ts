@@ -413,6 +413,44 @@ export function usePricingV2() {
     init();
   }, [fetchConfig, fetchCostItems, fetchProcedures]);
 
+  // ─── Inline update (local + simple DB, no delete/re-insert) ───
+  const inlineDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const inlineUpdateProcedure = (id: string, data: { desired_price?: number; execution_time?: number }) => {
+    // 1. Update local state immediately
+    setProcedures((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              desired_price: data.desired_price ?? p.desired_price,
+              execution_time: data.execution_time ?? p.execution_time,
+            }
+          : p
+      )
+    );
+
+    // 2. Debounce DB persistence
+    if (inlineDebounceRef.current[id]) {
+      clearTimeout(inlineDebounceRef.current[id]);
+    }
+    inlineDebounceRef.current[id] = setTimeout(async () => {
+      delete inlineDebounceRef.current[id];
+      const updatePayload: Record<string, number> = {};
+      if (data.desired_price !== undefined) updatePayload.desired_price = data.desired_price;
+      if (data.execution_time !== undefined) updatePayload.execution_time = data.execution_time;
+
+      const { error } = await supabase
+        .from("pricing_v2_procedures")
+        .update(updatePayload)
+        .eq("id", id);
+
+      if (error) {
+        toast({ title: "Erro ao salvar", description: mapDatabaseError(error), variant: "destructive" });
+      }
+    }, 800);
+  };
+
   const selectedProcedure = procedures.find((p) => p.id === selectedProcedureId) ?? null;
 
   return {
@@ -440,6 +478,7 @@ export function usePricingV2() {
     duplicateProcedure,
     deleteProcedure,
     calcProcedure,
+    inlineUpdateProcedure,
     refetch: async () => {
       await fetchConfig();
       await fetchCostItems();

@@ -17,7 +17,7 @@ interface ProcedureTableV2Props {
   onEdit: (proc: ProcedureV2) => void;
   onDuplicate: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
-  onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number }) => Promise<boolean>;
+  onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number }) => void;
 }
 
 function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0, className }: {
@@ -50,10 +50,6 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
         }}
         onChange={(e) => {
           setLocalValue(e.target.value);
-          const num = parseFloat(e.target.value);
-          if (!isNaN(num) && num >= min) {
-            onCommit(num);
-          }
         }}
         onBlur={() => {
           setFocused(false);
