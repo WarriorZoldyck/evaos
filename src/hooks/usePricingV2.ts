@@ -331,23 +331,29 @@ export function usePricingV2() {
     desired_price: number;
     items: { description: string; value: number }[];
   }) => {
-    const { error } = await supabase
-      .from("pricing_v2_procedures")
-      .update({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price })
-      .eq("id", id);
-    if (error) {
-      toast({ title: "Erro ao atualizar", description: mapDatabaseError(error), variant: "destructive" });
-      return false;
+    if (updatingProcRef.current.has(id)) return false;
+    updatingProcRef.current.add(id);
+    try {
+      const { error } = await supabase
+        .from("pricing_v2_procedures")
+        .update({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price })
+        .eq("id", id);
+      if (error) {
+        toast({ title: "Erro ao atualizar", description: mapDatabaseError(error), variant: "destructive" });
+        return false;
+      }
+      await supabase.from("pricing_v2_procedure_items").delete().eq("procedure_id", id);
+      if (data.items.length > 0) {
+        await supabase.from("pricing_v2_procedure_items").insert(
+          data.items.map((i) => ({ procedure_id: id, description: i.description, value: i.value }))
+        );
+      }
+      toast({ title: "Procedimento atualizado!" });
+      await fetchProcedures();
+      return true;
+    } finally {
+      updatingProcRef.current.delete(id);
     }
-    await supabase.from("pricing_v2_procedure_items").delete().eq("procedure_id", id);
-    if (data.items.length > 0) {
-      await supabase.from("pricing_v2_procedure_items").insert(
-        data.items.map((i) => ({ procedure_id: id, description: i.description, value: i.value }))
-      );
-    }
-    toast({ title: "Procedimento atualizado!" });
-    await fetchProcedures();
-    return true;
   };
 
   const duplicateProcedure = async (id: string) => {
