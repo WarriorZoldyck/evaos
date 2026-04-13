@@ -1,19 +1,19 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
+import { useContacts } from "@/hooks/useContacts";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
+import type { Transaction, Category as TxCategory } from "@/hooks/useTransactions";
 import {
   Sparkles, Check, X, ExternalLink, MessageSquare, Mail, Upload,
   ArrowUpRight, ArrowDownLeft, Calendar, Tag, CreditCard, User,
@@ -21,13 +21,13 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 const fmtDate = (d: string | null) =>
   d ? format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }) : "—";
-
 // ── Edit Modal ──
 function EditPendingModal({
   item,
