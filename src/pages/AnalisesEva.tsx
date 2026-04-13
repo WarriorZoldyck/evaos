@@ -753,15 +753,22 @@ export default function AnalisesEva() {
         </TabsContent>
       </Tabs>
 
-      <EditPendingModal
-        item={editingItem}
+      <TransactionFormModal
         open={!!editingItem}
         onClose={() => setEditingItem(null)}
-        onSave={updatePending}
-        categories={categories}
+        editTransaction={editTransaction}
+        onSave={dummySave}
+        onSaveMultiple={dummySaveMultiple}
+        onUpdate={handlePendingUpdate}
         bankAccounts={accounts}
         creditCards={creditCards}
         wallets={wallets}
+        suppliers={suppliers}
+        clients={clients}
+        categories={txCategories}
+        cardTerminals={cardTerminalInfos}
+        companies={companies}
+        fieldSettings={fieldSettings}
       />
     </div>
   );
