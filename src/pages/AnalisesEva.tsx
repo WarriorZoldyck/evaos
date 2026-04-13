@@ -395,9 +395,73 @@ export default function AnalisesEva() {
   } = useAIPendingTransactions();
 
   const { categories } = useCategories();
-  const { bankAccounts: accounts, creditCards, wallets } = useAccounts();
+  const { bankAccounts: accounts, creditCards, wallets, cardTerminals } = useAccounts();
+  const { suppliers, clients } = useContacts();
+  const { companies } = useCompany();
+  const { settings: fieldSettings } = useFormFieldSettings();
 
   const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
+
+  // Convert categories to the format TransactionFormModal expects
+  const txCategories: TxCategory[] = useMemo(() =>
+    categories.map((c) => ({ id: c.id, name: c.name, parent_id: c.parent_id, type: c.type || null })),
+    [categories]
+  );
+
+  // Convert cardTerminals to CardTerminalInfo format
+  const cardTerminalInfos = useMemo(() =>
+    cardTerminals.map((t) => ({
+      id: t.id,
+      name: t.name,
+      acquirer: t.acquirer,
+      bank_account_id: t.bank_account_id,
+      debit_rate: t.debit_rate,
+      credit_rate: t.credit_rate,
+      settlement_days_debit: t.settlement_days_debit,
+      settlement_days_credit: t.settlement_days_credit,
+      rates_info: t.rates_info,
+      auto_anticipation: t.auto_anticipation,
+    })),
+    [cardTerminals]
+  );
+
+  // Handler: intercept TransactionFormModal's onUpdate to save to ai_pending_transactions
+  const handlePendingUpdate = async (id: string, data: Partial<Transaction>): Promise<boolean> => {
+    const updates: Partial<AIPendingTransaction> = {
+      description: data.description,
+      amount: data.amount,
+      type: data.type,
+      category: data.category || null,
+      subcategory: data.subcategory || null,
+      subcategory2: data.subcategory2 || null,
+      competence_date: data.competence_date || null,
+      payment_date: data.payment_date || null,
+      transaction_status: data.status || null,
+      bank_account_id: data.bank_account_id || null,
+      wallet_id: data.wallet_id || null,
+      credit_card_id: data.credit_card_id || null,
+      card_terminal_id: data.card_terminal_id || null,
+      company_id: data.company_id || null,
+      payment_method: data.payment_method || null,
+      supplier_id: data.supplier_id || null,
+      client_id: data.client_id || null,
+      contact_name: data.contact_name || null,
+      notes: data.notes || null,
+      attachment_url: data.attachment_url || null,
+      barcode: data.barcode || null,
+    };
+    updatePending({ id, updates });
+    return true;
+  };
+
+  // Dummy handlers (not used for pending edits but required by TransactionFormModal)
+  const dummySave = async (): Promise<boolean> => false;
+  const dummySaveMultiple = async (): Promise<boolean> => false;
+
+  const editTransaction = useMemo(() =>
+    editingItem ? pendingToTransaction(editingItem) : null,
+    [editingItem]
+  );
 
   const getCategoryName = (id: string | null) => {
     if (!id) return "";
