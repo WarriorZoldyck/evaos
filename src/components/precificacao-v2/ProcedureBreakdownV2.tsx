@@ -1,7 +1,5 @@
-import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
 import { BarChart3 } from "lucide-react";
 import type { ProcedureV2 } from "@/hooks/usePricingV2";
 
@@ -12,49 +10,10 @@ interface Props {
   custoHora: number;
   taxRate: number;
   calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; liquido: number; lucro: number; lucratividadeHora: number; lucratividadePct: number; lucratividadeHoraTotal: number };
-  onUpdatePrice?: (id: string, price: number) => Promise<boolean>;
-  onUpdateTime?: (id: string, time: number) => Promise<boolean>;
 }
 
-export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProcedure, onUpdatePrice, onUpdateTime }: Props) {
-  const [localPrice, setLocalPrice] = useState<number | null>(null);
-  const [localTime, setLocalTime] = useState<number | null>(null);
-
-  const effectivePrice = localPrice ?? procedure.desired_price;
-  const effectiveTime = localTime ?? procedure.execution_time;
-
-  // Build a temporary procedure with local overrides for real-time calc
-  const liveProcedure = useMemo(() => ({
-    ...procedure,
-    desired_price: effectivePrice,
-    execution_time: effectiveTime,
-  }), [procedure, effectivePrice, effectiveTime]);
-
-  const calc = calcProcedure(liveProcedure);
-
-  const handlePriceChange = (val: string) => {
-    const num = parseFloat(val);
-    if (!isNaN(num) && num >= 0) {
-      setLocalPrice(num);
-      onUpdatePrice?.(procedure.id, num);
-    }
-  };
-
-  const handleTimeChange = (val: string) => {
-    const num = parseFloat(val);
-    if (!isNaN(num) && num >= 0) {
-      setLocalTime(num);
-      onUpdateTime?.(procedure.id, num);
-    }
-  };
-
-  // Reset local overrides when procedure changes from parent
-  const [prevId, setPrevId] = useState(procedure.id);
-  if (procedure.id !== prevId) {
-    setPrevId(procedure.id);
-    setLocalPrice(null);
-    setLocalTime(null);
-  }
+export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProcedure }: Props) {
+  const calc = calcProcedure(procedure);
 
   return (
     <Card>
@@ -68,48 +27,20 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
         {/* Valor Cobrado */}
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Valor Cobrado</span>
-          {onUpdatePrice ? (
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-muted-foreground">R$</span>
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                className="w-28 h-7 text-right text-sm font-bold"
-                value={effectivePrice}
-                onChange={(e) => handlePriceChange(e.target.value)}
-              />
-            </div>
-          ) : (
-            <span className="font-bold">{fmt(procedure.desired_price)}</span>
-          )}
+          <span className="font-bold">{fmt(procedure.desired_price)}</span>
         </div>
 
         {/* Tempo */}
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Tempo de Execução</span>
-          {onUpdateTime ? (
-            <div className="flex items-center gap-1">
-              <Input
-                type="number"
-                min={0}
-                step={0.5}
-                className="w-28 h-7 text-right text-sm font-bold"
-                value={effectiveTime}
-                onChange={(e) => handleTimeChange(e.target.value)}
-              />
-              <span className="text-xs text-muted-foreground">h</span>
-            </div>
-          ) : (
-            <span className="font-medium">{procedure.execution_time}h</span>
-          )}
+          <span className="font-medium">{procedure.execution_time}h</span>
         </div>
 
         <Separator />
 
         {/* Deduções */}
         <div className="flex justify-between">
-          <span className="text-muted-foreground">(-) Custo Fixo (CF) = {effectiveTime}h × {fmt(custoHora)}/h</span>
+          <span className="text-muted-foreground">(-) Custo Fixo (CF) = {procedure.execution_time}h × {fmt(custoHora)}/h</span>
           <span className="font-medium text-destructive">-{fmt(calc.cf)}</span>
         </div>
 
@@ -130,7 +61,7 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
         )}
 
         <div className="flex justify-between">
-          <span className="text-muted-foreground">(-) NF (Imposto) = {taxRate}% × {fmt(effectivePrice)}</span>
+          <span className="text-muted-foreground">(-) NF (Imposto) = {taxRate}% × {fmt(procedure.desired_price)}</span>
           <span className="font-medium text-destructive">-{fmt(calc.nf)}</span>
         </div>
 
