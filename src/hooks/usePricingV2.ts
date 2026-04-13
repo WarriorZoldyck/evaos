@@ -74,6 +74,7 @@ export function usePricingV2() {
   const [procedures, setProcedures] = useState<ProcedureV2[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProcedureId, setSelectedProcedureId] = useState<string | null>(null);
+  const updatingProcRef = useRef<Set<string>>(new Set());
 
   // ─── Computed totals ───
   const groupTotals: CostGroupTotals = (() => {
