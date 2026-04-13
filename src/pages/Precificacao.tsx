@@ -133,16 +133,6 @@ export default function Precificacao() {
               custoHora={custoHora}
               taxRate={taxRate}
               calcProcedure={calcProcedure}
-              onUpdatePrice={async (id, price) => {
-                const proc = procedures.find((p) => p.id === id);
-                if (!proc) return false;
-                return updateProcedure(id, { name: proc.name, execution_time: proc.execution_time, desired_price: price, items: proc.items.map(i => ({ description: i.description, value: i.value })) });
-              }}
-              onUpdateTime={async (id, time) => {
-                const proc = procedures.find((p) => p.id === id);
-                if (!proc) return false;
-                return updateProcedure(id, { name: proc.name, execution_time: time, desired_price: proc.desired_price, items: proc.items.map(i => ({ description: i.description, value: i.value })) });
-              }}
             />
           ) : (
             <Card className="h-full flex items-center justify-center">
