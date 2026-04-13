@@ -30,6 +30,7 @@ export default function Precificacao() {
     selectedProcedure, selectedProcedureId, setSelectedProcedureId,
     saveConfig, addCostItem, updateCostItem, deleteCostItem,
     createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
+    inlineUpdateProcedure,
   } = usePricingV2();
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -111,15 +112,8 @@ export default function Precificacao() {
               onEdit={handleEdit}
               onDuplicate={duplicateProcedure}
               onDelete={deleteProcedure}
-              onInlineUpdate={async (id, data) => {
-                const proc = procedures.find((p) => p.id === id);
-                if (!proc) return false;
-                return updateProcedure(id, {
-                  name: proc.name,
-                  execution_time: data.execution_time ?? proc.execution_time,
-                  desired_price: data.desired_price ?? proc.desired_price,
-                  items: proc.items?.map((i) => ({ description: i.description, value: i.value })) ?? [],
-                });
+              onInlineUpdate={(id, data) => {
+                inlineUpdateProcedure(id, data);
               }}
             />
           </CardContent>
