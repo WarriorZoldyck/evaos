@@ -1,19 +1,19 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
+import { useContacts } from "@/hooks/useContacts";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
+import type { Transaction, Category as TxCategory } from "@/hooks/useTransactions";
 import {
   Sparkles, Check, X, ExternalLink, MessageSquare, Mail, Upload,
   ArrowUpRight, ArrowDownLeft, Calendar, Tag, CreditCard, User,
@@ -21,207 +21,55 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 const fmtDate = (d: string | null) =>
   d ? format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }) : "—";
-
-// ── Edit Modal ──
-function EditPendingModal({
-  item,
-  open,
-  onClose,
-  onSave,
-  categories,
-  bankAccounts,
-  creditCards,
-  wallets,
-}: {
-  item: AIPendingTransaction | null;
-  open: boolean;
-  onClose: () => void;
-  onSave: (data: { id: string; updates: Partial<AIPendingTransaction> }) => void;
-  categories: { id: string; name: string; parent_id: string | null }[];
-  bankAccounts: { id: string; name: string }[];
-  creditCards: { id: string; name: string }[];
-  wallets: { id: string; name: string }[];
-}) {
-  const [desc, setDesc] = useState(item?.description || "");
-  const [amount, setAmount] = useState(String(item?.amount || 0));
-  const [type, setType] = useState(item?.type || "despesa");
-  const [categoryId, setCategoryId] = useState(item?.category || "");
-  const [competenceDate, setCompetenceDate] = useState(item?.competence_date || "");
-  const [paymentDate, setPaymentDate] = useState(item?.payment_date || "");
-  const [transactionStatus, setTransactionStatus] = useState(item?.transaction_status || "Pago");
-  const [contactName, setContactName] = useState(item?.contact_name || "");
-  const [notes, setNotes] = useState(item?.notes || "");
-  const [bankAccountId, setBankAccountId] = useState(item?.bank_account_id || "");
-  const [creditCardId, setCreditCardId] = useState(item?.credit_card_id || "");
-  const [walletId, setWalletId] = useState(item?.wallet_id || "");
-  const [companyId, setCompanyId] = useState(item?.company_id || "");
-  const { companies } = useCompany();
-
-  // Reset state when item changes
-  const [prevId, setPrevId] = useState<string | null>(null);
-  if (item && item.id !== prevId) {
-    setPrevId(item.id);
-    setDesc(item.description);
-    setAmount(String(item.amount));
-    setType(item.type);
-    setCategoryId(item.category || "");
-    setCompetenceDate(item.competence_date || "");
-    setPaymentDate(item.payment_date || "");
-    setTransactionStatus(item.transaction_status || "Pago");
-    setContactName(item.contact_name || "");
-    setNotes(item.notes || "");
-    setBankAccountId(item.bank_account_id || "");
-    setCreditCardId(item.credit_card_id || "");
-    setWalletId(item.wallet_id || "");
-    setCompanyId(item.company_id || "");
-  }
-
-  if (!item) return null;
-
-  const rootCategories = categories.filter((c) => !c.parent_id);
-
-  const handleSave = () => {
-    onSave({
-      id: item.id,
-      updates: {
-        description: desc,
-        amount: parseFloat(amount) || 0,
-        type,
-        category: categoryId || null,
-        competence_date: competenceDate || null,
-        payment_date: paymentDate || null,
-        transaction_status: transactionStatus,
-        contact_name: contactName || null,
-        notes: notes || null,
-        bank_account_id: bankAccountId || null,
-        credit_card_id: creditCardId || null,
-        wallet_id: walletId || null,
-        company_id: companyId || null,
-      },
-    });
-    onClose();
+// Helper: convert AIPendingTransaction to Transaction-like object for TransactionFormModal
+function pendingToTransaction(item: AIPendingTransaction): Transaction {
+  return {
+    id: item.id,
+    user_id: item.user_id,
+    description: item.description,
+    amount: item.amount,
+    type: item.type as "receita" | "despesa",
+    category: item.category || "",
+    subcategory: item.subcategory || null,
+    subcategory2: item.subcategory2 || null,
+    competence_date: item.competence_date || new Date().toISOString().split("T")[0],
+    payment_date: item.payment_date || new Date().toISOString().split("T")[0],
+    status: (item.transaction_status || "Pago") as "Pago" | "Pendente",
+    bank_account_id: item.bank_account_id,
+    wallet_id: item.wallet_id,
+    credit_card_id: item.credit_card_id,
+    card_terminal_id: item.card_terminal_id,
+    company_id: item.company_id,
+    payment_method: item.payment_method,
+    supplier_id: item.supplier_id,
+    client_id: item.client_id,
+    contact_name: item.contact_name,
+    notes: item.notes,
+    attachment_url: item.attachment_url,
+    barcode: item.barcode,
+    installments: item.installments,
+    installment_number: item.installment_number,
+    installments_total: item.installments_total,
+    series_id: item.series_id,
+    original_amount: item.original_amount,
+    created_at: item.created_at,
+    // Fields not present in AIPendingTransaction but required by Transaction type
+    external_id: null,
+    is_internal_transfer: null,
+    is_reconciled: null,
+    liquidation_notes: null,
+    parent_id: null,
+    purchase_date_original: null,
+    transfer_id: null,
   };
-
-  return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Editar Lançamento</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label>Contexto</Label>
-            <Select value={companyId || "pessoal"} onValueChange={(v) => setCompanyId(v === "pessoal" ? "" : v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pessoal">Pessoal</SelectItem>
-                {companies.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Descrição</Label>
-            <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Valor</Label>
-              <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </div>
-            <div>
-              <Label>Tipo</Label>
-              <Select value={type} onValueChange={setType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="receita">Receita</SelectItem>
-                  <SelectItem value="despesa">Despesa</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div>
-            <Label>Categoria</Label>
-            <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sem categoria</SelectItem>
-                {rootCategories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>Data Competência</Label>
-              <Input type="date" value={competenceDate} onChange={(e) => setCompetenceDate(e.target.value)} />
-            </div>
-            <div>
-              <Label>Data Pagamento</Label>
-              <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <Label>Status</Label>
-            <Select value={transactionStatus} onValueChange={setTransactionStatus}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Pago">Pago</SelectItem>
-                <SelectItem value="Pendente">Pendente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Contato</Label>
-            <Input value={contactName} onChange={(e) => setContactName(e.target.value)} />
-          </div>
-          <div>
-            <Label>Conta</Label>
-            <Select value={bankAccountId || creditCardId || walletId || "none"} onValueChange={(v) => {
-              setBankAccountId(""); setCreditCardId(""); setWalletId("");
-              if (v === "none") return;
-              const [accType, id] = v.split(":");
-              if (accType === "bank") setBankAccountId(id);
-              else if (accType === "card") setCreditCardId(id);
-              else if (accType === "wallet") setWalletId(id);
-            }}>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhuma</SelectItem>
-                {bankAccounts.map((a) => (
-                  <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`}>🏦 {a.name}</SelectItem>
-                ))}
-                {creditCards.map((c) => (
-                  <SelectItem key={`card:${c.id}`} value={`card:${c.id}`}>💳 {c.name}</SelectItem>
-                ))}
-                {wallets.map((w) => (
-                  <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`}>👛 {w.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Observações</Label>
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave}>Salvar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
 }
-
 // ── Single item card ──
 function PendingCard({
   item, onApprove, onReject, onEdit,
@@ -547,9 +395,73 @@ export default function AnalisesEva() {
   } = useAIPendingTransactions();
 
   const { categories } = useCategories();
-  const { bankAccounts: accounts, creditCards, wallets } = useAccounts();
+  const { bankAccounts: accounts, creditCards, wallets, cardTerminals } = useAccounts();
+  const { suppliers, clients } = useContacts();
+  const { companies } = useCompany();
+  const { settings: fieldSettings } = useFormFieldSettings();
 
   const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
+
+  // Convert categories to the format TransactionFormModal expects
+  const txCategories: TxCategory[] = useMemo(() =>
+    categories.map((c) => ({ id: c.id, name: c.name, parent_id: c.parent_id, type: c.type || null })),
+    [categories]
+  );
+
+  // Convert cardTerminals to CardTerminalInfo format
+  const cardTerminalInfos = useMemo(() =>
+    cardTerminals.map((t) => ({
+      id: t.id,
+      name: t.name,
+      acquirer: t.acquirer,
+      bank_account_id: t.bank_account_id,
+      debit_rate: t.debit_rate,
+      credit_rate: t.credit_rate,
+      settlement_days_debit: t.settlement_days_debit,
+      settlement_days_credit: t.settlement_days_credit,
+      rates_info: t.rates_info,
+      auto_anticipation: t.auto_anticipation,
+    })),
+    [cardTerminals]
+  );
+
+  // Handler: intercept TransactionFormModal's onUpdate to save to ai_pending_transactions
+  const handlePendingUpdate = async (id: string, data: Partial<Transaction>): Promise<boolean> => {
+    const updates: Partial<AIPendingTransaction> = {
+      description: data.description,
+      amount: data.amount,
+      type: data.type,
+      category: data.category || null,
+      subcategory: data.subcategory || null,
+      subcategory2: data.subcategory2 || null,
+      competence_date: data.competence_date || null,
+      payment_date: data.payment_date || null,
+      transaction_status: data.status || null,
+      bank_account_id: data.bank_account_id || null,
+      wallet_id: data.wallet_id || null,
+      credit_card_id: data.credit_card_id || null,
+      card_terminal_id: data.card_terminal_id || null,
+      company_id: data.company_id || null,
+      payment_method: data.payment_method || null,
+      supplier_id: data.supplier_id || null,
+      client_id: data.client_id || null,
+      contact_name: data.contact_name || null,
+      notes: data.notes || null,
+      attachment_url: data.attachment_url || null,
+      barcode: data.barcode || null,
+    };
+    updatePending({ id, updates });
+    return true;
+  };
+
+  // Dummy handlers (not used for pending edits but required by TransactionFormModal)
+  const dummySave = async (): Promise<boolean> => false;
+  const dummySaveMultiple = async (): Promise<boolean> => false;
+
+  const editTransaction = useMemo(() =>
+    editingItem ? pendingToTransaction(editingItem) : null,
+    [editingItem]
+  );
 
   const getCategoryName = (id: string | null) => {
     if (!id) return "";
@@ -841,15 +753,22 @@ export default function AnalisesEva() {
         </TabsContent>
       </Tabs>
 
-      <EditPendingModal
-        item={editingItem}
+      <TransactionFormModal
         open={!!editingItem}
         onClose={() => setEditingItem(null)}
-        onSave={updatePending}
-        categories={categories}
+        editTransaction={editTransaction}
+        onSave={dummySave}
+        onSaveMultiple={dummySaveMultiple}
+        onUpdate={handlePendingUpdate}
         bankAccounts={accounts}
         creditCards={creditCards}
         wallets={wallets}
+        suppliers={suppliers}
+        clients={clients}
+        categories={txCategories}
+        cardTerminals={cardTerminalInfos}
+        companies={companies}
+        fieldSettings={fieldSettings}
       />
     </div>
   );
