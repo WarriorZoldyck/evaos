@@ -50,10 +50,6 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
         }}
         onChange={(e) => {
           setLocalValue(e.target.value);
-          const num = parseFloat(e.target.value);
-          if (!isNaN(num) && num >= min) {
-            onCommit(num);
-          }
         }}
         onBlur={() => {
           setFocused(false);
