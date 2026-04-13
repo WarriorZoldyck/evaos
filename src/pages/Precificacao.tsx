@@ -12,7 +12,7 @@ import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureForm
 import { ProcedureBreakdownV2 } from "@/components/precificacao-v2/ProcedureBreakdownV2";
 import { SuggestedPriceCalculator } from "@/components/precificacao-v2/SuggestedPriceCalculator";
 import { ProcedureComparisonChart } from "@/components/precificacao-v2/ProcedureComparisonChart";
-import { WhatIfSimulator } from "@/components/precificacao-v2/WhatIfSimulator";
+
 import { ExportPricingButton } from "@/components/precificacao-v2/ExportPricingButton";
 
 const GROUPS: CostGroup[] = ["fixos_clinica", "variaveis_clinica", "pessoais"];
@@ -159,17 +159,8 @@ export default function Precificacao() {
       {/* Comparativo de Procedimentos */}
       <ProcedureComparisonChart procedures={procedures} calcProcedure={calcProcedure} />
 
-      {/* Calculadora de Preço Sugerido + Simulador lado a lado */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SuggestedPriceCalculator custoHora={custoHora} taxRate={taxRate} />
-        <WhatIfSimulator
-          procedures={procedures}
-          groupTotals={groupTotals}
-          realHours={hoursPerMonth}
-          realRooms={numRooms}
-          realTaxRate={taxRate}
-        />
-      </div>
+      {/* Calculadora de Preço Sugerido */}
+      <SuggestedPriceCalculator custoHora={custoHora} taxRate={taxRate} />
 
       {/* Seção 4: Despesas em Tabs */}
       <Card>
