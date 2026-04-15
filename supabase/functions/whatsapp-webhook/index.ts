@@ -351,6 +351,21 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Validate webhook secret
+  const webhookSecret = Deno.env.get("WHATSAPP_WEBHOOK_SECRET");
+  if (webhookSecret) {
+    const incomingSecret = req.headers.get("x-webhook-secret") || req.headers.get("apikey") || "";
+    if (incomingSecret !== webhookSecret) {
+      console.error("Webhook secret mismatch — rejecting request");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  } else {
+    console.warn("WHATSAPP_WEBHOOK_SECRET not set — webhook is unprotected");
+  }
+
   // Declare phone early so error handler can use it
   let phone = "";
 
