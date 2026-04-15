@@ -118,6 +118,7 @@ export default function Precificacao() {
                 }}
               />
             </div>
+          </CardContent>
         </Card>
 
         {/* Breakdown ao lado */}
