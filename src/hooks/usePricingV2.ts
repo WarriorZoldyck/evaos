@@ -282,11 +282,18 @@ export function usePricingV2() {
   // ─── Procedures ───
   const fetchProcedures = useCallback(async () => {
     if (!user) return;
-    const { data: procs, error } = await supabase
+    let query = supabase
       .from("pricing_v2_procedures")
       .select("*")
-      .eq("user_id", user.id)
-      .order("name");
+      .eq("user_id", user.id);
+
+    if (isPersonal) {
+      query = query.is("company_id", null);
+    } else if (selectedCompanyId) {
+      query = query.eq("company_id", selectedCompanyId);
+    }
+
+    const { data: procs, error } = await query.order("name");
 
     if (error) {
       toast({ title: "Erro ao carregar procedimentos", description: mapDatabaseError(error), variant: "destructive" });
@@ -313,7 +320,7 @@ export function usePricingV2() {
           .map((i) => ({ ...i, value: Number(i.value) || 0 })),
       }))
     );
-  }, [user, toast]);
+  }, [user, toast, isPersonal, selectedCompanyId]);
 
   const createProcedure = async (data: {
     name: string;
