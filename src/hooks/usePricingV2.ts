@@ -154,6 +154,7 @@ export function usePricingV2() {
     } else {
       const { error } = await supabase.from("pricing_v2_configurations").insert({
         user_id: user.id,
+        company_id: selectedCompanyId || null,
         hours_per_month: hours,
         num_rooms: Math.round(rooms * 1000) / 1000,
         tax_rate: tax,
