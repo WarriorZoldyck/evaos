@@ -124,7 +124,7 @@ export default function Precificacao() {
           {selectedProcedure ? (
             <ProcedureBreakdownV2
               procedure={selectedProcedure}
-              custoHora={custoHora}
+              custoHora={custoHoraPorSala}
               taxRate={taxRate}
               calcProcedure={calcProcedure}
             />
@@ -178,7 +178,7 @@ export default function Precificacao() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         procedure={editingProcedure}
-        custoHora={custoHora}
+        custoHora={custoHoraPorSala}
         taxRate={taxRate}
         onSave={handleSaveProcedure}
       />

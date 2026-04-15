@@ -9,7 +9,7 @@ interface Props {
   procedure: ProcedureV2;
   custoHora: number;
   taxRate: number;
-  calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; liquido: number; lucro: number; lucratividadeHora: number; lucratividadePct: number; lucratividadeHoraTotal: number };
+  calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; liquido: number; lucro: number; lucratividadeHora: number; lucratividadePct: number };
 }
 
 export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProcedure }: Props) {
@@ -24,13 +24,11 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
-        {/* Valor Cobrado */}
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Valor Cobrado</span>
           <span className="font-bold">{fmt(procedure.desired_price)}</span>
         </div>
 
-        {/* Tempo */}
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Tempo de Execução</span>
           <span className="font-medium">{procedure.execution_time}h</span>
@@ -38,7 +36,6 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
 
         <Separator />
 
-        {/* Deduções */}
         <div className="flex justify-between">
           <span className="text-muted-foreground">(-) Custo Fixo (CF) = {procedure.execution_time}h × {fmt(custoHora)}/h</span>
           <span className="font-medium text-destructive">-{fmt(calc.cf)}</span>
@@ -67,13 +64,12 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
 
         <Separator />
 
-        {/* Líquido */}
         <div className={`flex justify-between text-base font-bold ${calc.liquido < 0 ? "text-destructive" : "text-emerald-600"}`}>
           <span>Líquido (Preço − CF − CV − NF)</span>
           <span>{fmt(calc.liquido)}</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mt-2">
+        <div className="grid grid-cols-2 gap-4 mt-2">
           <div className="rounded-lg bg-muted p-3 text-center">
             <p className="text-xs text-muted-foreground">Lucratividade / hora</p>
             <p className={`text-lg font-bold ${calc.liquido < 0 ? "text-destructive" : ""}`}>{fmt(calc.lucratividadeHora)}</p>
@@ -81,10 +77,6 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
           <div className="rounded-lg bg-muted p-3 text-center">
             <p className="text-xs text-muted-foreground">Lucratividade %</p>
             <p className={`text-lg font-bold ${calc.liquido < 0 ? "text-destructive" : ""}`}>{calc.lucratividadePct.toFixed(1)}%</p>
-          </div>
-          <div className="rounded-lg bg-muted p-3 text-center">
-            <p className="text-xs text-muted-foreground">Lucr./h total</p>
-            <p className="text-lg font-bold">{fmt(calc.lucratividadeHoraTotal)}</p>
           </div>
         </div>
       </CardContent>

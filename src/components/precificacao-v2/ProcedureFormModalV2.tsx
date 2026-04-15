@@ -51,10 +51,10 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
     const u = [...items]; u[idx] = { ...u[idx], [field]: val }; setItems(u);
   };
 
-  const timeNum = parseFloat(time) || 0;
-  const priceNum = parseFloat(desiredPrice) || 0;
+  const timeNum = parseFloat(String(time).replace(",", ".")) || 0;
+  const priceNum = parseFloat(String(desiredPrice).replace(",", ".")) || 0;
   const cf = custoHora * timeNum;
-  const cv = items.reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+  const cv = items.reduce((s, i) => s + (parseFloat(String(i.value).replace(",", ".")) || 0), 0);
   const nf = priceNum * (taxRate / 100);
   const lucro = priceNum - cf - cv - nf;
   const lucratividadePct = priceNum > 0 ? (lucro / priceNum) * 100 : 0;

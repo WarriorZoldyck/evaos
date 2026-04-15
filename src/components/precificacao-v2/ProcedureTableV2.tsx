@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +9,15 @@ import type { ProcedureV2 } from "@/hooks/usePricingV2";
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
 
+/** Parse pt-BR number: replaces comma with dot */
+function parsePtBR(raw: string): number {
+  const cleaned = raw.replace(/\s/g, "").replace(",", ".");
+  return parseFloat(cleaned);
+}
+
 interface ProcedureTableV2Props {
   procedures: ProcedureV2[];
-  calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; liquido: number; lucro: number; lucratividadeHora: number; lucratividadePct: number; lucratividadeHoraTotal: number };
+  calcProcedure: (proc: ProcedureV2) => { cf: number; cv: number; nf: number; liquido: number; lucro: number; lucratividadeHora: number; lucratividadePct: number };
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onEdit: (proc: ProcedureV2) => void;
@@ -31,8 +37,41 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
 }) {
   const [localValue, setLocalValue] = useState(String(value));
   const [focused, setFocused] = useState(false);
+  const lastExternalValue = useRef(value);
 
-  // Sync from parent when not focused
+  // Sync from parent when not focused and value actually changed externally
+  useEffect(() => {
+    if (!focused && value !== lastExternalValue.current) {
+      setLocalValue(String(value));
+      lastExternalValue.current = value;
+    }
+  }, [value, focused]);
+
+  const commit = useCallback((raw: string) => {
+    const num = parsePtBR(raw);
+    if (!isNaN(num) && num >= min) {
+      lastExternalValue.current = num;
+      onCommit(num);
+    }
+  }, [onCommit, min]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setLocalValue(raw);
+    // Fire update on every valid change for live preview
+    const num = parsePtBR(raw);
+    if (!isNaN(num) && num >= min) {
+      onCommit(num);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      commit(localValue);
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
   const displayValue = focused ? localValue : String(value);
 
   return (
@@ -48,16 +87,12 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
           setFocused(true);
           setLocalValue(String(value));
         }}
-        onChange={(e) => {
-          setLocalValue(e.target.value);
-        }}
+        onChange={handleChange}
         onBlur={() => {
           setFocused(false);
-          const num = parseFloat(localValue);
-          if (!isNaN(num) && num >= min) {
-            onCommit(num);
-          }
+          commit(localValue);
         }}
+        onKeyDown={handleKeyDown}
       />
       {suffix && <span className="text-xs text-muted-foreground">{suffix}</span>}
     </div>
