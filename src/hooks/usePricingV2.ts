@@ -387,7 +387,7 @@ export function usePricingV2() {
     if (!proc || !user) return false;
     const { data: newProc, error } = await supabase
       .from("pricing_v2_procedures")
-      .insert({ name: `${proc.name} (cópia)`, execution_time: proc.execution_time, desired_price: proc.desired_price, user_id: user.id })
+      .insert({ name: `${proc.name} (cópia)`, execution_time: proc.execution_time, desired_price: proc.desired_price, user_id: user.id, company_id: selectedCompanyId || null })
       .select()
       .single();
     if (error || !newProc) return false;
