@@ -17,7 +17,7 @@ interface Props {
   numRooms: number;
   calcProcedure: (proc: ProcedureV2) => {
     cf: number; cv: number; nf: number; liquido: number; lucro: number;
-    lucratividadeHora: number; lucratividadePct: number; lucratividadeHoraTotal: number;
+    lucratividadeHora: number; lucratividadePct: number;
   };
 }
 
