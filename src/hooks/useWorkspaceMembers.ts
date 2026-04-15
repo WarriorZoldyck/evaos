@@ -118,7 +118,8 @@ export function useWorkspaceMembers() {
   useEffect(() => {
     if (!user) return;
     const meta = user.user_metadata as Record<string, unknown> | undefined;
-    if (meta?.hub_member === true) {
+    const appMeta = (user as any).app_metadata as Record<string, unknown> | undefined;
+    if (appMeta?.hub_member === true || meta?.hub_member === true) {
       fetchAvailableWorkspaces();
     } else {
       Promise.all([fetchMembers(), fetchWorkspaces(), fetchOwnerProfile()]);

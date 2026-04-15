@@ -33,7 +33,8 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
     }
 
     const meta = user.user_metadata as Record<string, unknown> | undefined;
-    const hubMember = meta?.hub_member === true;
+    const appMeta = (user as any).app_metadata as Record<string, unknown> | undefined;
+    const hubMember = appMeta?.hub_member === true || meta?.hub_member === true;
     setIsHubMember(hubMember);
 
     // Check if this user is an owner with members
