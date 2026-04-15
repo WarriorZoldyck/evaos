@@ -589,6 +589,7 @@ export type Database = {
       }
       pricing_v2_configurations: {
         Row: {
+          company_id: string | null
           days_per_week: number | null
           hours_per_day: number | null
           hours_per_month: number
@@ -599,6 +600,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          company_id?: string | null
           days_per_week?: number | null
           hours_per_day?: number | null
           hours_per_month?: number
@@ -609,6 +611,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          company_id?: string | null
           days_per_week?: number | null
           hours_per_day?: number | null
           hours_per_month?: number
@@ -618,11 +621,20 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pricing_v2_configurations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pricing_v2_cost_items: {
         Row: {
           category: string
+          company_id: string | null
           config_id: string
           cost_group: string
           description: string
@@ -634,6 +646,7 @@ export type Database = {
         }
         Insert: {
           category?: string
+          company_id?: string | null
           config_id: string
           cost_group: string
           description?: string
@@ -645,6 +658,7 @@ export type Database = {
         }
         Update: {
           category?: string
+          company_id?: string | null
           config_id?: string
           cost_group?: string
           description?: string
@@ -655,6 +669,13 @@ export type Database = {
           value?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "pricing_v2_cost_items_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pricing_v2_cost_items_config_id_fkey"
             columns: ["config_id"]
@@ -695,6 +716,7 @@ export type Database = {
       }
       pricing_v2_procedures: {
         Row: {
+          company_id: string | null
           created_at: string | null
           desired_price: number
           execution_time: number
@@ -703,6 +725,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string | null
           desired_price?: number
           execution_time?: number
@@ -711,6 +734,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string | null
           desired_price?: number
           execution_time?: number
@@ -718,7 +742,15 @@ export type Database = {
           name?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pricing_v2_procedures_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
