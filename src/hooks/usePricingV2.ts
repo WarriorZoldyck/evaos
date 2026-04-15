@@ -174,11 +174,18 @@ export function usePricingV2() {
   // ─── Fetch cost items ───
   const fetchCostItems = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase
+    let query = supabase
       .from("pricing_v2_cost_items")
       .select("*")
-      .eq("user_id", user.id)
-      .order("sort_order", { ascending: true });
+      .eq("user_id", user.id);
+
+    if (isPersonal) {
+      query = query.is("company_id", null);
+    } else if (selectedCompanyId) {
+      query = query.eq("company_id", selectedCompanyId);
+    }
+
+    const { data, error } = await query.order("sort_order", { ascending: true });
 
     if (error) {
       toast({ title: "Erro ao carregar itens de custo", description: mapDatabaseError(error), variant: "destructive" });
@@ -191,7 +198,7 @@ export function usePricingV2() {
         sort_order: d.sort_order ?? 0,
       }))
     );
-  }, [user, toast]);
+  }, [user, toast, isPersonal, selectedCompanyId]);
 
   // ─── Add cost item ───
   const addCostItem = async (item: {
