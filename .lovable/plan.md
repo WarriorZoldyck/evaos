@@ -1,47 +1,30 @@
 
 
-## Plano: Corrigir edição inline que salva valor parcial (ex: 1 em vez de 1500)
+## Plano: Corrigir EVA Chat In-App para usar staging area (ai_pending_transactions)
 
-### Causa raiz
+### Problema
 
-O `LiveNumberInput` dispara `onCommit` a cada tecla digitada via `onChange`. O `onInlineUpdate` chama `updateProcedure`, que:
-1. Faz update no DB + delete/re-insert de itens
-2. Tem o guard de concorrência (`updatingProcRef`) que **bloqueia** chamadas subsequentes
+A edge function `eva-chat` insere lançamentos diretamente na tabela `transactions`, pulando a etapa de revisão em `ai_pending_transactions`. Isso faz com que lançamentos criados pelo chat in-app não passem pela aprovação no "Análises EVA", ao contrário do fluxo via WhatsApp que funciona corretamente. As mensagens de retorno também são enganosas ("✅ Criado!") quando deveriam indicar que o lançamento foi para aprovação.
 
-Resultado: usuário digita "1500" → a primeira tecla "1" dispara o update → as teclas "5", "0", "0" são bloqueadas pelo guard → o DB salva "1" → `fetchProcedures()` recarrega "1" do banco → breakdown mostra R$ 1,00.
+### Mudanças em `supabase/functions/eva-chat/index.ts`
 
-### Solução
+**1. Parcelas (linhas ~525-567)** — trocar `supabase.from("transactions").insert(...)` por `supabase.from("ai_pending_transactions").insert(...)`:
+- Adicionar campos obrigatórios: `source: "in_app"`, `status: "pending"`, `fingerprint`, `ai_response_message`, `original_message`
+- Mapear `status` para `transaction_status` (campo da tabela pending)
+- Gerar `series_id` e incluir `installment_number`, `installments_total`
+- Alterar resposta de "✅ X parcelas criadas!" para "📋 X parcelas enviadas para aprovação!"
 
-**1. Separar atualização local da persistência no banco**
+**2. Transação simples (linhas ~570-607)** — mesma troca:
+- Inserir em `ai_pending_transactions` com `source: "in_app"`, `status: "pending"`, `fingerprint`
+- Mapear `status` para `transaction_status`
+- Alterar resposta de "✅ Lançamento criado!" para "📋 Lançamento enviado para aprovação!"
+- Adicionar fingerprint e detecção de duplicatas (reutilizar lógica similar ao WhatsApp)
 
-- Criar uma função `inlineUpdateProcedure` no hook `usePricingV2.ts` que:
-  - Atualiza o state local `procedures` imediatamente (sem DB)
-  - Agenda um debounce de ~800ms para persistir no banco
-  - Usa update simples no DB (só `desired_price` e/ou `execution_time`), sem delete/re-insert de itens
+**3. Action labels** — trocar `action: "created_transaction"` / `"created_installments"` por `"pending_approval"` para que o frontend saiba que não é definitivo
 
-**2. Simplificar `LiveNumberInput` em `ProcedureTableV2.tsx`**
+### Arquivo afetado
+- `supabase/functions/eva-chat/index.ts`
 
-- Manter `onCommit` apenas no `onBlur` (quando sai do campo)
-- Durante digitação (`onChange`), só atualizar o state local do componente
-- Isso evita chamadas ao DB enquanto o usuário ainda está digitando
-
-**3. Fluxo corrigido**
-
-```text
-Usuário digita "1500" no campo Preço
-  ↓
-onChange: atualiza só o valor visual local do input
-  ↓
-onBlur (sai do campo): chama onCommit(1500)
-  ↓
-inlineUpdateProcedure: atualiza state local + salva no DB
-  ↓
-Breakdown recalcula instantaneamente com o valor correto
-```
-
-### Arquivos afetados
-- `src/hooks/usePricingV2.ts` — nova função `inlineUpdateProcedure` (update local + DB simples sem delete/re-insert de items)
-- `src/components/precificacao-v2/ProcedureTableV2.tsx` — `LiveNumberInput` dispara `onCommit` só no `onBlur`
-- `src/pages/Precificacao.tsx` — usar `inlineUpdateProcedure` no `onInlineUpdate`
-- `src/pages/PrecificacaoV2.tsx` — idem
+### Resultado esperado
+Lançamentos via chat in-app vão para "Análises EVA" para revisão, igual ao WhatsApp. O usuário recebe feedback claro de que precisa aprovar no app.
 
