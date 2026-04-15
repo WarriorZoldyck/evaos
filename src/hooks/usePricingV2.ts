@@ -213,7 +213,7 @@ export function usePricingV2() {
       if (!config) {
         const { data: newConfig, error: cfgErr } = await supabase
           .from("pricing_v2_configurations")
-          .insert({ user_id: user!.id })
+          .insert({ user_id: user!.id, company_id: selectedCompanyId || null })
           .select()
           .single();
         if (cfgErr || !newConfig) {
@@ -233,6 +233,7 @@ export function usePricingV2() {
         const { error } = await supabase.from("pricing_v2_cost_items").insert({
           config_id: newConfig.id,
           user_id: user!.id,
+          company_id: selectedCompanyId || null,
           ...item,
         });
         if (error) {
