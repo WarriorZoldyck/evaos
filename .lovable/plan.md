@@ -1,30 +1,48 @@
 
+Objetivo
+- Fazer preço e tempo atualizarem o breakdown e os demais indicadores enquanto o usuário digita, sem depender de clicar fora.
+- Corrigir a base dos cálculos para que CF, líquido e lucratividade batam.
 
-## Plano: Corrigir EVA Chat In-App para usar staging area (ai_pending_transactions)
+O que encontrei
+- `ProcedureTableV2` só envia a mudança no `onBlur`; por isso a visualização ao lado não acompanha a digitação.
+- Os inputs usam `parseFloat` direto, sem tratar número em pt-BR. Isso pode truncar valores como `1,5` para `1`.
+- `calcProcedure` usa `custoHora`, mas o módulo já expõe `custoHoraPorSala`; isso pode inflar o CF do procedimento quando existe mais de uma sala.
+- A lógica de cálculo está espalhada em mais de um ponto, o que facilita divergência visual.
 
-### Problema
+Plano
+1. Edição realmente ao vivo
+- Refatorar `LiveNumberInput` para input controlado com suporte a decimal pt-BR.
+- Atualizar o estado local do procedimento a cada alteração válida.
+- Manter a persistência no banco com debounce no hook.
+- Fazer Enter confirmar imediatamente e blur virar apenas fallback.
 
-A edge function `eva-chat` insere lançamentos diretamente na tabela `transactions`, pulando a etapa de revisão em `ai_pending_transactions`. Isso faz com que lançamentos criados pelo chat in-app não passem pela aprovação no "Análises EVA", ao contrário do fluxo via WhatsApp que funciona corretamente. As mensagens de retorno também são enganosas ("✅ Criado!") quando deveriam indicar que o lançamento foi para aprovação.
+2. Corrigir e centralizar a conta do procedimento
+- Revisar `calcProcedure` para virar a única fonte de verdade.
+- Alinhar o CF com a base correta do módulo, usando a lógica por sala já refletida no resumo.
+- Manter explícita a fórmula:
+  `Líquido = Preço - CF - CV - NF`
+  `NF = Preço × alíquota`
+  `Lucratividade/h = Líquido / tempo`
 
-### Mudanças em `supabase/functions/eva-chat/index.ts`
+3. Sincronizar todos os pontos visuais
+- Fazer tabela, breakdown, gráfico e demais blocos consumirem a mesma conta centralizada.
+- Revisar nomes como `Líquido`, `Lucro` e `Lucr./h total` para evitar métricas duplicadas ou confusas.
 
-**1. Parcelas (linhas ~525-567)** — trocar `supabase.from("transactions").insert(...)` por `supabase.from("ai_pending_transactions").insert(...)`:
-- Adicionar campos obrigatórios: `source: "in_app"`, `status: "pending"`, `fingerprint`, `ai_response_message`, `original_message`
-- Mapear `status` para `transaction_status` (campo da tabela pending)
-- Gerar `series_id` e incluir `installment_number`, `installments_total`
-- Alterar resposta de "✅ X parcelas criadas!" para "📋 X parcelas enviadas para aprovação!"
+4. Padronizar parsing numérico na V2
+- Aplicar o mesmo parser pt-BR nos pontos críticos da precificação: tabela de procedimentos, modal e campos que afetam o cálculo.
+- Remover dependência de `parseFloat` cru onde o usuário pode digitar vírgula.
 
-**2. Transação simples (linhas ~570-607)** — mesma troca:
-- Inserir em `ai_pending_transactions` com `source: "in_app"`, `status: "pending"`, `fingerprint`
-- Mapear `status` para `transaction_status`
-- Alterar resposta de "✅ Lançamento criado!" para "📋 Lançamento enviado para aprovação!"
-- Adicionar fingerprint e detecção de duplicatas (reutilizar lógica similar ao WhatsApp)
+Arquivos principais
+- `src/hooks/usePricingV2.ts`
+- `src/components/precificacao-v2/ProcedureTableV2.tsx`
+- `src/components/precificacao-v2/ProcedureBreakdownV2.tsx`
+- `src/components/precificacao-v2/ProcedureFormModalV2.tsx`
+- `src/components/precificacao-v2/ProcedureComparisonChart.tsx`
+- `src/pages/Precificacao.tsx`
+- `src/pages/PrecificacaoV2.tsx`
 
-**3. Action labels** — trocar `action: "created_transaction"` / `"created_installments"` por `"pending_approval"` para que o frontend saiba que não é definitivo
-
-### Arquivo afetado
-- `supabase/functions/eva-chat/index.ts`
-
-### Resultado esperado
-Lançamentos via chat in-app vão para "Análises EVA" para revisão, igual ao WhatsApp. O usuário recebe feedback claro de que precisa aprovar no app.
-
+Validação na implementação
+- Digitar `1500` e ver tabela + breakdown atualizando sem clicar fora.
+- Digitar `1,5` hora e confirmar que não vira `1`.
+- Testar cenário com mais de uma sala para validar o CF.
+- Confirmar que o vermelho só aparece quando o líquido realmente ficar negativo.
