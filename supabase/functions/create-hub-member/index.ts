@@ -42,9 +42,10 @@ Deno.serve(async (req) => {
 
     const ownerId = claimsData.claims.sub;
 
-    // Check the caller is NOT a hub member themselves
-    const ownerMeta = claimsData.claims.user_metadata as Record<string, unknown> | undefined;
-    if (ownerMeta?.hub_member === true) {
+    // Check the caller is NOT a hub member themselves (use app_metadata which is not user-writable)
+    const ownerAppMeta = claimsData.claims.app_metadata as Record<string, unknown> | undefined;
+    const ownerUserMeta = claimsData.claims.user_metadata as Record<string, unknown> | undefined;
+    if (ownerAppMeta?.hub_member === true || ownerUserMeta?.hub_member === true) {
       return new Response(
         JSON.stringify({ error: "Hub members cannot create other members" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -75,9 +76,11 @@ Deno.serve(async (req) => {
       email,
       password,
       email_confirm: true,
-      user_metadata: {
+      app_metadata: {
         hub_member: true,
         owner_id: ownerId,
+      },
+      user_metadata: {
         full_name: name,
       },
     });
