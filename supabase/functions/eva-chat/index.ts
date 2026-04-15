@@ -522,9 +522,25 @@ ${historicalPatternsBlock}`;
       const installmentCount = aiParsed.installments || 1;
       const installmentDetails = aiParsed.installment_details || null;
 
+      // Helper: generate fingerprint for duplicate detection
+      const generateFingerprint = (desc: string, amount: number, date: string) => {
+        const raw = `${normalizeText(desc)}|${Math.abs(amount)}|${date}|${userId}`;
+        let hash = 0;
+        for (let i = 0; i < raw.length; i++) {
+          const chr = raw.charCodeAt(i);
+          hash = ((hash << 5) - hash) + chr;
+          hash |= 0;
+        }
+        return `eva_${Math.abs(hash).toString(36)}`;
+      };
+
+      // Get the original user message for reference
+      const lastUserMsg = messages.filter((m: any) => m.role === "user").pop();
+      const originalMessage = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "[imagem]";
+
       if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
         const seriesId = crypto.randomUUID();
-        const transactions = installmentDetails.map((detail: any, idx: number) => ({
+        const pendingInstallments = installmentDetails.map((detail: any, idx: number) => ({
           user_id: userId,
           description: `${aiParsed.description || "Lançamento via EVA"} (${idx + 1}/${installmentCount})`,
           amount: Math.abs(detail.amount || 0),
@@ -533,7 +549,7 @@ ${historicalPatternsBlock}`;
           subcategory: subcategoryValue,
           competence_date: competenceDate,
           payment_date: detail.due_date || paymentDate,
-          status: (detail.due_date && detail.due_date <= today) ? "Pago" as const : "Pendente" as const,
+          transaction_status: (detail.due_date && detail.due_date <= today) ? "Pago" : "Pendente",
           bank_account_id: bankAccountId,
           wallet_id: walletId,
           credit_card_id: creditCardId,
@@ -547,10 +563,16 @@ ${historicalPatternsBlock}`;
           series_id: seriesId,
           installment_number: idx + 1,
           installments_total: installmentCount,
+          source: "in_app",
+          status: "pending",
+          fingerprint: generateFingerprint(aiParsed.description || "", detail.amount || 0, detail.due_date || paymentDate),
+          original_message: originalMessage,
+          ai_response_message: aiParsed.friendly_message || null,
         }));
 
-        const { error: insertErr } = await supabase.from("transactions").insert(transactions);
+        const { error: insertErr } = await supabase.from("ai_pending_transactions").insert(pendingInstallments);
         if (insertErr) {
+          console.error("Insert pending installments error:", insertErr);
           return new Response(JSON.stringify({ reply: "❌ Erro ao criar as parcelas. Tente novamente.", action: null }), {
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -562,13 +584,31 @@ ${historicalPatternsBlock}`;
         ).join("\n");
 
         return new Response(JSON.stringify({
-          reply: `✅ ${installmentCount} parcelas criadas!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${matchedCategory.name}\n\n📋 Parcelas:\n${parcelsDisplay}`,
-          action: "created_installments",
+          reply: `📋 ${installmentCount} parcelas enviadas para aprovação!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${matchedCategory.name}\n\n📋 Parcelas:\n${parcelsDisplay}\n\n👉 Revise e aprove em **Análises EVA**.`,
+          action: "pending_approval",
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
-      // Single transaction
-      const { error: insertError } = await supabase.from("transactions").insert({
+      // Single transaction → staging area
+      const fingerprint = generateFingerprint(aiParsed.description || "", aiParsed.amount || 0, paymentDate);
+
+      // Check for duplicates
+      const { data: existingDup } = await supabase
+        .from("ai_pending_transactions")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("fingerprint", fingerprint)
+        .eq("status", "pending")
+        .limit(1);
+
+      if (existingDup && existingDup.length > 0) {
+        return new Response(JSON.stringify({
+          reply: `⚠️ Já existe um lançamento pendente similar (${aiParsed.description} — ${fmt(aiParsed.amount || 0)}). Revise em **Análises EVA** antes de criar outro.`,
+          action: null,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
         description: aiParsed.description || "Lançamento via EVA",
         amount: Math.abs(aiParsed.amount || 0),
@@ -577,7 +617,7 @@ ${historicalPatternsBlock}`;
         subcategory: subcategoryValue,
         competence_date: competenceDate,
         payment_date: paymentDate,
-        status,
+        transaction_status: status,
         bank_account_id: bankAccountId,
         wallet_id: walletId,
         credit_card_id: creditCardId,
@@ -587,10 +627,15 @@ ${historicalPatternsBlock}`;
         client_id: clientId,
         contact_name: contactName,
         notes: aiParsed.notes || null,
+        source: "in_app",
+        status: "pending",
+        fingerprint,
+        original_message: originalMessage,
+        ai_response_message: aiParsed.friendly_message || null,
       });
 
       if (insertError) {
-        console.error("Insert error:", insertError);
+        console.error("Insert pending error:", insertError);
         return new Response(JSON.stringify({ reply: "❌ Erro ao criar lançamento. Tente novamente.", action: null }), {
           status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -602,8 +647,8 @@ ${historicalPatternsBlock}`;
       const cardName = creditCardId ? contextCards.find((c: any) => c.id === creditCardId)?.name : null;
 
       return new Response(JSON.stringify({
-        reply: `✅ Lançamento criado!${statusDisplay}\n\n📝 ${aiParsed.description}\n💰 ${fmt(aiParsed.amount || 0)}\n📁 ${typeLabel} / ${matchedCategory.name}\n🏢 ${contextLabel}\n📅 ${formatDate(competenceDate)}${cardName ? `\n💳 ${cardName}` : ""}${contactName ? `\n👤 ${contactName}` : ""}`,
-        action: "created_transaction",
+        reply: `📋 Lançamento enviado para aprovação!${statusDisplay}\n\n📝 ${aiParsed.description}\n💰 ${fmt(aiParsed.amount || 0)}\n📁 ${typeLabel} / ${matchedCategory.name}\n🏢 ${contextLabel}\n📅 ${formatDate(competenceDate)}${cardName ? `\n💳 ${cardName}` : ""}${contactName ? `\n👤 ${contactName}` : ""}\n\n👉 Revise e aprove em **Análises EVA**.`,
+        action: "pending_approval",
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
