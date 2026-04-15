@@ -104,18 +104,20 @@ export default function Precificacao() {
             </div>
           </CardHeader>
           <CardContent>
-            <ProcedureTableV2
-              procedures={procedures}
-              calcProcedure={calcProcedure}
-              selectedId={selectedProcedureId}
-              onSelect={setSelectedProcedureId}
-              onEdit={handleEdit}
-              onDuplicate={duplicateProcedure}
-              onDelete={deleteProcedure}
-              onInlineUpdate={(id, data) => {
-                inlineUpdateProcedure(id, data);
-              }}
-            />
+            <div className="max-h-[400px] overflow-y-auto">
+              <ProcedureTableV2
+                procedures={procedures}
+                calcProcedure={calcProcedure}
+                selectedId={selectedProcedureId}
+                onSelect={setSelectedProcedureId}
+                onEdit={handleEdit}
+                onDuplicate={duplicateProcedure}
+                onDelete={deleteProcedure}
+                onInlineUpdate={(id, data) => {
+                  inlineUpdateProcedure(id, data);
+                }}
+              />
+            </div>
           </CardContent>
         </Card>
 

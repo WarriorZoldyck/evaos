@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 
 export interface PricingV2Config {
@@ -67,6 +68,7 @@ function monthlyValue(item: CostItem): number {
 
 export function usePricingV2() {
   const { user } = useAuth();
+  const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
   const [config, setConfig] = useState<PricingV2Config | null>(null);
@@ -96,11 +98,18 @@ export function usePricingV2() {
   // ─── Fetch config ───
   const fetchConfig = useCallback(async () => {
     if (!user) return null;
-    const { data, error } = await supabase
+    let query = supabase
       .from("pricing_v2_configurations")
       .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .eq("user_id", user.id);
+
+    if (isPersonal) {
+      query = query.is("company_id", null);
+    } else if (selectedCompanyId) {
+      query = query.eq("company_id", selectedCompanyId);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
       toast({ title: "Erro ao carregar configuração V2", description: mapDatabaseError(error), variant: "destructive" });
@@ -121,7 +130,7 @@ export function usePricingV2() {
       return parsed;
     }
     return null;
-  }, [user, toast]);
+  }, [user, toast, isPersonal, selectedCompanyId]);
 
   // ─── Save config ───
   const saveConfig = async (hours: number, rooms: number, tax: number, daysPerWeek?: number | null, hoursPerDay?: number | null) => {
@@ -145,6 +154,7 @@ export function usePricingV2() {
     } else {
       const { error } = await supabase.from("pricing_v2_configurations").insert({
         user_id: user.id,
+        company_id: selectedCompanyId || null,
         hours_per_month: hours,
         num_rooms: Math.round(rooms * 1000) / 1000,
         tax_rate: tax,
@@ -164,11 +174,18 @@ export function usePricingV2() {
   // ─── Fetch cost items ───
   const fetchCostItems = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await supabase
+    let query = supabase
       .from("pricing_v2_cost_items")
       .select("*")
-      .eq("user_id", user.id)
-      .order("sort_order", { ascending: true });
+      .eq("user_id", user.id);
+
+    if (isPersonal) {
+      query = query.is("company_id", null);
+    } else if (selectedCompanyId) {
+      query = query.eq("company_id", selectedCompanyId);
+    }
+
+    const { data, error } = await query.order("sort_order", { ascending: true });
 
     if (error) {
       toast({ title: "Erro ao carregar itens de custo", description: mapDatabaseError(error), variant: "destructive" });
@@ -181,7 +198,7 @@ export function usePricingV2() {
         sort_order: d.sort_order ?? 0,
       }))
     );
-  }, [user, toast]);
+  }, [user, toast, isPersonal, selectedCompanyId]);
 
   // ─── Add cost item ───
   const addCostItem = async (item: {
@@ -196,7 +213,7 @@ export function usePricingV2() {
       if (!config) {
         const { data: newConfig, error: cfgErr } = await supabase
           .from("pricing_v2_configurations")
-          .insert({ user_id: user!.id })
+          .insert({ user_id: user!.id, company_id: selectedCompanyId || null })
           .select()
           .single();
         if (cfgErr || !newConfig) {
@@ -216,6 +233,7 @@ export function usePricingV2() {
         const { error } = await supabase.from("pricing_v2_cost_items").insert({
           config_id: newConfig.id,
           user_id: user!.id,
+          company_id: selectedCompanyId || null,
           ...item,
         });
         if (error) {
@@ -227,6 +245,7 @@ export function usePricingV2() {
       const { error } = await supabase.from("pricing_v2_cost_items").insert({
         config_id: config.id,
         user_id: user.id,
+        company_id: selectedCompanyId || null,
         ...item,
       });
       if (error) {
@@ -263,11 +282,18 @@ export function usePricingV2() {
   // ─── Procedures ───
   const fetchProcedures = useCallback(async () => {
     if (!user) return;
-    const { data: procs, error } = await supabase
+    let query = supabase
       .from("pricing_v2_procedures")
       .select("*")
-      .eq("user_id", user.id)
-      .order("name");
+      .eq("user_id", user.id);
+
+    if (isPersonal) {
+      query = query.is("company_id", null);
+    } else if (selectedCompanyId) {
+      query = query.eq("company_id", selectedCompanyId);
+    }
+
+    const { data: procs, error } = await query.order("name");
 
     if (error) {
       toast({ title: "Erro ao carregar procedimentos", description: mapDatabaseError(error), variant: "destructive" });
@@ -294,7 +320,7 @@ export function usePricingV2() {
           .map((i) => ({ ...i, value: Number(i.value) || 0 })),
       }))
     );
-  }, [user, toast]);
+  }, [user, toast, isPersonal, selectedCompanyId]);
 
   const createProcedure = async (data: {
     name: string;
@@ -305,7 +331,7 @@ export function usePricingV2() {
     if (!user) return false;
     const { data: proc, error } = await supabase
       .from("pricing_v2_procedures")
-      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: user.id })
+      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: user.id, company_id: selectedCompanyId || null })
       .select()
       .single();
 
@@ -361,7 +387,7 @@ export function usePricingV2() {
     if (!proc || !user) return false;
     const { data: newProc, error } = await supabase
       .from("pricing_v2_procedures")
-      .insert({ name: `${proc.name} (cópia)`, execution_time: proc.execution_time, desired_price: proc.desired_price, user_id: user.id })
+      .insert({ name: `${proc.name} (cópia)`, execution_time: proc.execution_time, desired_price: proc.desired_price, user_id: user.id, company_id: selectedCompanyId || null })
       .select()
       .single();
     if (error || !newProc) return false;
