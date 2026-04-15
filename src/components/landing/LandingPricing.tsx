@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 const plans = [
   {
     name: "Starter",
-    price: "Grátis",
+    price: "R$ 0",
     period: "",
     description: "Para começar a organizar suas finanças",
     features: [
@@ -19,7 +19,7 @@ const plans = [
   },
   {
     name: "Pro",
-    price: "R$ 47",
+    price: "R$ 0",
     period: "/mês",
     description: "Para profissionais que querem controle total",
     features: [
@@ -37,7 +37,7 @@ const plans = [
   },
   {
     name: "Clínica",
-    price: "R$ 97",
+    price: "R$ 0",
     period: "/mês",
     description: "Para clínicas e consultórios com múltiplos profissionais",
     features: [
@@ -54,7 +54,7 @@ const plans = [
   },
   {
     name: "Empresarial",
-    price: "R$ 197",
+    price: "R$ 0",
     period: "/mês",
     description: "Para empresas com múltiplas unidades e equipes",
     features: [
