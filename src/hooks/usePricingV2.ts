@@ -245,6 +245,7 @@ export function usePricingV2() {
       const { error } = await supabase.from("pricing_v2_cost_items").insert({
         config_id: config.id,
         user_id: user.id,
+        company_id: selectedCompanyId || null,
         ...item,
       });
       if (error) {
