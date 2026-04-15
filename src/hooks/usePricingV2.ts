@@ -68,6 +68,7 @@ function monthlyValue(item: CostItem): number {
 
 export function usePricingV2() {
   const { user } = useAuth();
+  const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
   const [config, setConfig] = useState<PricingV2Config | null>(null);
