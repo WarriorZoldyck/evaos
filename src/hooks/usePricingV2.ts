@@ -98,11 +98,18 @@ export function usePricingV2() {
   // ─── Fetch config ───
   const fetchConfig = useCallback(async () => {
     if (!user) return null;
-    const { data, error } = await supabase
+    let query = supabase
       .from("pricing_v2_configurations")
       .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .eq("user_id", user.id);
+
+    if (isPersonal) {
+      query = query.is("company_id", null);
+    } else if (selectedCompanyId) {
+      query = query.eq("company_id", selectedCompanyId);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) {
       toast({ title: "Erro ao carregar configuração V2", description: mapDatabaseError(error), variant: "destructive" });
@@ -123,7 +130,7 @@ export function usePricingV2() {
       return parsed;
     }
     return null;
-  }, [user, toast]);
+  }, [user, toast, isPersonal, selectedCompanyId]);
 
   // ─── Save config ───
   const saveConfig = async (hours: number, rooms: number, tax: number, daysPerWeek?: number | null, hoursPerDay?: number | null) => {
