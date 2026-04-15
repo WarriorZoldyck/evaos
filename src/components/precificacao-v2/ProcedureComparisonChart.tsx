@@ -31,6 +31,13 @@ export function ProcedureComparisonChart({ procedures, calcProcedure }: Props) {
     };
   });
 
+  const COLORS = {
+    cf: "#ef4444",     // red-500 — custo fixo
+    cv: "#f87171",     // red-400 — custo variável
+    nf: "#f59e0b",     // amber-500 — imposto
+    lucro: "#22c55e",  // green-500 — lucro
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -44,20 +51,21 @@ export function ProcedureComparisonChart({ procedures, calcProcedure }: Props) {
           {/* Stacked cost breakdown */}
           <div>
             <p className="text-xs text-muted-foreground mb-2">Composição de custos por procedimento</p>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={data} margin={{ left: 10, right: 20, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={data} margin={{ left: 10, right: 20, bottom: 20 }} barSize={32}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="name" fontSize={11} angle={-15} textAnchor="end" height={60} />
-                <YAxis tickFormatter={(v) => `R$${(v / 1).toFixed(0)}`} fontSize={11} />
+                <YAxis tickFormatter={(v) => `R$${v.toFixed(0)}`} fontSize={11} />
                 <Tooltip
                   formatter={(value: number, name: string) => [fmt(value), name]}
                   labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
+                  contentStyle={{ borderRadius: 8, fontSize: 12 }}
                 />
                 <Legend fontSize={11} />
-                <Bar dataKey="cf" name="Custo Fixo" stackId="a" fill="hsl(var(--chart-1))" />
-                <Bar dataKey="cv" name="Custo Variável" stackId="a" fill="hsl(var(--chart-2))" />
-                <Bar dataKey="nf" name="Imposto" stackId="a" fill="hsl(var(--chart-3))" />
-                <Bar dataKey="lucro" name="Lucro" stackId="a" fill="hsl(var(--chart-4))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="cf" name="Custo Fixo" stackId="a" fill={COLORS.cf} />
+                <Bar dataKey="cv" name="Custo Variável" stackId="a" fill={COLORS.cv} />
+                <Bar dataKey="nf" name="Imposto" stackId="a" fill={COLORS.nf} />
+                <Bar dataKey="lucro" name="Lucro" stackId="a" fill={COLORS.lucro} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -65,20 +73,21 @@ export function ProcedureComparisonChart({ procedures, calcProcedure }: Props) {
           {/* Profitability per hour */}
           <div>
             <p className="text-xs text-muted-foreground mb-2">Lucratividade por hora (R$/h)</p>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={data} margin={{ left: 10, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={data} margin={{ left: 10, right: 20 }} barSize={28}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
                 <XAxis dataKey="name" fontSize={11} angle={-15} textAnchor="end" height={50} />
                 <YAxis tickFormatter={(v) => `R$${v}`} fontSize={11} />
                 <Tooltip
                   formatter={(value: number) => [fmt(value), "Lucro/h"]}
                   labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label}
+                  contentStyle={{ borderRadius: 8, fontSize: 12 }}
                 />
                 <Bar dataKey="lucroHora" name="Lucro/h" radius={[4, 4, 0, 0]}>
                   {data.map((entry, index) => (
                     <Cell
                       key={index}
-                      fill={entry.lucroHora >= 0 ? "hsl(var(--chart-4))" : "hsl(var(--destructive))"}
+                      fill={entry.lucroHora >= 0 ? COLORS.lucro : COLORS.cf}
                     />
                   ))}
                 </Bar>
