@@ -1,23 +1,15 @@
 
 
-## Plano: Corrigir rejeição do webhook do WhatsApp
+## Plano: Redeployar o webhook do WhatsApp
 
-### Causa raiz
-A correção de segurança anterior adicionou validação de `WHATSAPP_WEBHOOK_SECRET` no `whatsapp-webhook`. Como esse secret está configurado no Supabase mas a Evolution API não envia o header correspondente (`x-webhook-secret` ou `apikey`), **todas as requisições estão sendo rejeitadas com 401**.
+### Situação
+O código no repositório já está correto — o bloco de validação do `WHATSAPP_WEBHOOK_SECRET` foi removido na correção anterior. Porém, a versão **deployada** ainda é a antiga (os logs mostram "Webhook secret mismatch" às 00:29). A função precisa apenas ser redeployada.
 
-### Solução
-Remover a validação condicional do `WHATSAPP_WEBHOOK_SECRET` no webhook. A Evolution API já autentica via sua própria `apikey` no lado da instância — o webhook do Supabase não tem como impor um secret que a Evolution não envia.
+### Ação
+1. Redeployar a edge function `whatsapp-webhook`
+2. Verificar nos logs que requisições passam a ser processadas (sem 401)
+3. Pedir ao Renato para reenviar o áudio de teste
 
-Em vez disso, manter a validação existente baseada no `apikey` header que a Evolution já envia (conforme documentado em `mem://whatsapp/security-auth`).
-
-### Alteração
-
-**Arquivo**: `supabase/functions/whatsapp-webhook/index.ts`
-
-- Remover o bloco de validação de `WHATSAPP_WEBHOOK_SECRET` (linhas 354-367)
-- Manter o fluxo existente que já valida o `apikey` da Evolution API (conforme a memória do projeto)
-
-### Verificação
-- Após deploy, confirmar nos logs que as mensagens voltam a ser processadas
-- Pedir ao Renato para reenviar o áudio
+### Nenhuma alteração de código necessária
+O arquivo `supabase/functions/whatsapp-webhook/index.ts` já está correto.
 
