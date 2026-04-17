@@ -1426,6 +1426,17 @@ REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR DOCUMENTO:
 - Se não encontrar match com nenhuma empresa, aí sim use "Pessoal".
 - CNPJs das empresas: ${companies.map((c) => `${c.cnpj} = "${c.name}"`).join(", ") || "nenhuma empresa cadastrada"}
 
+REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR CARTÃO:
+- Se o documento/imagem citar o NOME, APELIDO, BANDEIRA ou ÚLTIMOS 4 DÍGITOS de um cartão de crédito (ex: "Business Empresas", "Personnalite", "Black", "Platinum", "Gold", "final 7993", "****3552"), procure esse cartão em TODOS os contextos listados em CONTAS, CARTEIRAS E CARTÕES DE CRÉDITO POR CONTEXTO abaixo.
+- Se o cartão identificado estiver listado dentro de um bloco [NomeDaEmpresa], TROQUE o contexto da transação para essa empresa AUTOMATICAMENTE — mesmo sem CNPJ visível no documento. O cartão dita o contexto.
+- Exemplo: documento mostra "Business Empresas Aprovado". Se há um cartão chamado "Business Empresas" dentro do bloco [MinhaEmpresa], o contexto é "MinhaEmpresa", NÃO "Pessoal".
+
+REGRA CRÍTICA — COMPROVANTE DE APROVAÇÃO DE CARTÃO ≠ DÉBITO EM CONTA:
+- Comprovantes contendo "Aprovado", "Aprovada", "Compra aprovada", "Transação aprovada", junto com nome de estabelecimento + bandeira (Visa/Master/Elo/Hiper) ou produto de cartão (Personnalite, Business, Black, Platinum, Gold) → SEMPRE são CARTÃO DE CRÉDITO.
+- Nesse caso: payment_method = "cartao_credito", credit_card_id = UUID do cartão correspondente, account_id = null.
+- NUNCA use account_id (conta bancária) para um comprovante de aprovação de cartão, mesmo que o nome do banco da conta coincida com o emissor do cartão (ex: conta "Itaú Personnalite" ≠ cartão Itaú).
+- Só use account_id quando o comprovante for claramente PIX, TED/DOC, débito em conta, boleto pago via débito, ou saque.
+
 CATEGORIAS POR CONTEXTO (formato: Nome[UUID] (TIPO)):
 ${categoryListByContext || "Nenhuma categoria cadastrada"}
 
