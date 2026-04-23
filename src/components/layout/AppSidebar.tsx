@@ -78,28 +78,28 @@ const comingSoonItems = [
 
 export function AppSidebar() {
   const { signOut, user } = useAuth();
-  const { companies, selectedCompanyId, setSelectedCompanyId, isPersonal, viewAll, setViewAll, toggleCompanyId, togglePersonal, personalSelected, selectedCompanyIds } = useCompany();
+  const { companies, viewAll, setViewAll, toggleCompanyId, togglePersonal, personalSelected, selectedCompanyIds } = useCompany();
   const { pendingCount } = useAIPendingTransactions();
   const { state } = useSidebar();
   const { isHubMember, isOwnerWithMembers } = useHub();
   const collapsed = state === "collapsed";
 
-  const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
-  
-  // Multi-select label
-  const getMultiLabel = () => {
-    if (viewAll) return "Todas as contas";
-    const count = (personalSelected ? 1 : 0) + selectedCompanyIds.length;
-    if (count === 0) return "Nenhuma selecionada";
-    if (count === 1 && personalSelected) return "Pessoal";
-    if (count === 1 && selectedCompanyIds.length === 1) {
-      return companies.find(c => c.id === selectedCompanyIds[0])?.name ?? "1 conta";
-    }
-    return `${count} contas selecionadas`;
-  };
-
-  // Single-select label (for pages that aren't Dashboard)
-  const contextLabel = isPersonal ? "Pessoal" : selectedCompany?.name ?? "Pessoal";
+  // Unified label + icon
+  const selectedCount = (personalSelected ? 1 : 0) + selectedCompanyIds.length;
+  const ContextIcon = viewAll || selectedCount > 1
+    ? Layers
+    : (selectedCount === 1 && personalSelected) || selectedCount === 0
+      ? User
+      : Building2;
+  const contextLabel = viewAll
+    ? "Todas as contas"
+    : selectedCount === 0
+      ? "Nenhum contexto"
+      : selectedCount === 1
+        ? (personalSelected
+            ? "Pessoal"
+            : companies.find(c => c.id === selectedCompanyIds[0])?.name ?? "1 contexto")
+        : `${selectedCount} contextos`;
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -117,73 +117,47 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      {/* Context Selector — single select (pages) */}
+      {/* Unified Context Selector — supports single + multi-select via checkboxes */}
       {!collapsed && (
-        <div className="px-3 pb-1">
+        <div className="px-3 pb-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="w-full flex items-center gap-2 rounded-lg bg-sidebar-accent/80 px-3 py-2.5 text-sm text-sidebar-accent-foreground hover:bg-accent transition-all duration-200 border border-transparent hover:border-primary/20">
-                {isPersonal ? (
-                  <User className="h-4 w-4 text-primary shrink-0" />
-                ) : (
-                  <Building2 className="h-4 w-4 text-primary shrink-0" />
-                )}
+                <ContextIcon className="h-4 w-4 text-primary shrink-0" />
                 <span className="truncate flex-1 text-left font-medium">{contextLabel}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
-              <DropdownMenuItem onClick={() => setSelectedCompanyId(null)}>
-                <User className="mr-2 h-4 w-4" />
-                Pessoal
-                {isPersonal && <Check className="ml-auto h-4 w-4 text-primary" />}
-              </DropdownMenuItem>
-              {companies.length > 0 && <DropdownMenuSeparator />}
-              {companies.map((company) => (
-                <DropdownMenuItem
-                  key={company.id}
-                  onClick={() => setSelectedCompanyId(company.id)}
-                >
-                  <Building2 className="mr-2 h-4 w-4" />
-                  {company.name}
-                  {selectedCompanyId === company.id && <Check className="ml-auto h-4 w-4 text-primary" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
-
-      {/* Dashboard multi-select */}
-      {!collapsed && companies.length > 0 && (
-        <div className="px-3 pb-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-accent transition-all duration-200 border border-dashed border-border hover:border-primary/20">
-                <Layers className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate flex-1 text-left">Dashboard: {getMultiLabel()}</span>
-                <ChevronDown className="h-3 w-3 shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuContent align="start" className="w-64">
               <DropdownMenuItem onClick={() => setViewAll(true)}>
                 <Layers className="mr-2 h-4 w-4" />
                 Todas as contas
                 {viewAll && <Check className="ml-auto h-4 w-4 text-primary" />}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={(e) => { e.preventDefault(); togglePersonal(); }}>
-                <Checkbox checked={viewAll || personalSelected} className="mr-2" />
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); togglePersonal(); }}>
+                <Checkbox checked={viewAll || personalSelected} className="mr-2 pointer-events-none" />
                 <User className="mr-2 h-4 w-4" />
                 Pessoal
               </DropdownMenuItem>
               {companies.map((company) => (
-                <DropdownMenuItem key={company.id} onClick={(e) => { e.preventDefault(); toggleCompanyId(company.id); }}>
-                  <Checkbox checked={viewAll || selectedCompanyIds.includes(company.id)} className="mr-2" />
+                <DropdownMenuItem
+                  key={company.id}
+                  onSelect={(e) => { e.preventDefault(); toggleCompanyId(company.id); }}
+                >
+                  <Checkbox checked={viewAll || selectedCompanyIds.includes(company.id)} className="mr-2 pointer-events-none" />
                   <Building2 className="mr-2 h-4 w-4" />
-                  {company.name}
+                  <span className="truncate">{company.name}</span>
                 </DropdownMenuItem>
               ))}
+              {selectedCount > 1 && !viewAll && (
+                <>
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
+                    Multi-seleção ativa em Dashboard, Plano de Caixa e DRE
+                  </div>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
