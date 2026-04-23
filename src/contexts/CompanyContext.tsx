@@ -78,26 +78,44 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     fetchCompanies();
   }, [effectiveUserId]);
 
+  // Sync single-context selection (selectedCompanyId/isPersonal) when exactly 1 is selected.
+  // This keeps single-context pages (Lançamentos, Categorias, Metas, etc.) consistent with the unified selector.
+  const syncSingleFromMulti = useCallback((personal: boolean, companyIds: string[]) => {
+    const total = (personal ? 1 : 0) + companyIds.length;
+    if (total === 1) {
+      if (personal) setSelectedCompanyId(null);
+      else setSelectedCompanyId(companyIds[0]);
+    }
+    // For 0 or 2+: keep last selectedCompanyId as fallback for single-context pages.
+  }, []);
+
   const setViewAll = useCallback((v: boolean) => {
     setViewAllState(v);
     if (v) {
       setSelectedCompanyIds([]);
       setPersonalSelected(true);
+      // "Todas as contas" defaults single-context pages to Pessoal
+      setSelectedCompanyId(null);
     }
   }, []);
 
   const toggleCompanyId = useCallback((id: string) => {
     setViewAllState(false);
     setSelectedCompanyIds(prev => {
-      if (prev.includes(id)) return prev.filter(x => x !== id);
-      return [...prev, id];
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      syncSingleFromMulti(personalSelected, next);
+      return next;
     });
-  }, []);
+  }, [personalSelected, syncSingleFromMulti]);
 
   const togglePersonal = useCallback(() => {
     setViewAllState(false);
-    setPersonalSelected(prev => !prev);
-  }, []);
+    setPersonalSelected(prev => {
+      const next = !prev;
+      syncSingleFromMulti(next, selectedCompanyIds);
+      return next;
+    });
+  }, [selectedCompanyIds, syncSingleFromMulti]);
 
   return (
     <CompanyContext.Provider
