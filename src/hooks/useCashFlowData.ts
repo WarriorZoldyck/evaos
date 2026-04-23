@@ -5,6 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { format } from "date-fns";
 import type { DashboardFilters } from "@/hooks/useDashboardData";
 import { getDateRangeExported } from "@/hooks/useDashboardData";
+import { applyCompanyFilter } from "@/lib/companyFilter";
 
 export type CashFlowMode = "caixa" | "competencia";
 
@@ -23,7 +24,7 @@ export interface CategoryGroup {
 
 export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
   const { user } = useAuth();
-  const { selectedCompanyId, isPersonal } = useCompany();
+  const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
@@ -52,15 +53,14 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
 
     const fetchCards = async () => {
       let query = supabase.from("credit_cards").select("id, bank_account_id");
-      if (isPersonal) query = query.is("company_id", null);
-      else if (selectedCompanyId) query = query.eq("company_id", selectedCompanyId);
+      query = applyCompanyFilter(query, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       const { data } = await query;
       if (data) setCreditCards(data);
     };
 
     fetchCategories();
     fetchCards();
-  }, [user, selectedCompanyId, isPersonal]);
+  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
 
   // Fetch transactions with pagination and transfer filter
   useEffect(() => {
@@ -81,8 +81,7 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
         query = query.eq("status", "Pago");
       }
 
-      if (isPersonal) query = query.is("company_id", null);
-      else if (selectedCompanyId) query = query.eq("company_id", selectedCompanyId);
+      query = applyCompanyFilter(query, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
 
       // Account filter
       if (accountId) {
@@ -112,7 +111,7 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
     };
 
     fetchTx();
-  }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId, linkedCardIds, mode]);
+  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, mode]);
 
   // Resolve a category name/id to its display name
   const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { applyCompanyFilter } from "@/lib/companyFilter";
 
 export type DREGranularity = "monthly" | "quarterly" | "semiannual";
 
@@ -150,7 +151,7 @@ function dateToPeriodKey(dateStr: string, granularity: DREGranularity): string {
 
 export function useDREData(filters: DREFilters) {
   const { user } = useAuth();
-  const { selectedCompanyId, isPersonal } = useCompany();
+  const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
@@ -173,14 +174,13 @@ export function useDREData(filters: DREFilters) {
     };
     const fetchCards = async () => {
       let q = supabase.from("credit_cards").select("id, bank_account_id");
-      if (isPersonal) q = q.is("company_id", null);
-      else if (selectedCompanyId) q = q.eq("company_id", selectedCompanyId);
+      q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       const { data } = await q;
       if (data) setCreditCards(data);
     };
     fetchCats();
     fetchCards();
-  }, [user, selectedCompanyId, isPersonal]);
+  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
 
   useEffect(() => {
     if (!user) return;
@@ -193,9 +193,7 @@ export function useDREData(filters: DREFilters) {
         .lte("competence_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false");
 
-      if (isPersonal) q = q.is("company_id", null);
-      else if (selectedCompanyId) q = q.eq("company_id", selectedCompanyId);
-
+      q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       if (accountId) {
         if (linkedCardIds.length > 0) {
           q = q.or(`bank_account_id.eq.${accountId},credit_card_id.in.(${linkedCardIds.join(",")})`);
@@ -219,7 +217,7 @@ export function useDREData(filters: DREFilters) {
       setLoading(false);
     };
     fetchTx();
-  }, [user, selectedCompanyId, isPersonal, startStr, endStr, accountId, linkedCardIds]);
+  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds]);
 
   const resolveName = useCallback(
     (value: string | null | undefined): { id: string; name: string } | null => {
