@@ -5,6 +5,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { format } from "date-fns";
 import type { DashboardFilters } from "@/hooks/useDashboardData";
 import { getDateRangeExported } from "@/hooks/useDashboardData";
+import { applyCompanyFilter } from "@/lib/companyFilter";
 
 export type CashFlowMode = "caixa" | "competencia";
 
@@ -23,7 +24,7 @@ export interface CategoryGroup {
 
 export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
   const { user } = useAuth();
-  const { selectedCompanyId, isPersonal } = useCompany();
+  const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
