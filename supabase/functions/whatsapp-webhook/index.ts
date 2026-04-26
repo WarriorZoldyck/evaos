@@ -479,34 +479,22 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // --- Upload media to storage and get public URL ---
+    // --- Prepare media for private, owner-scoped storage after user resolution ---
     let attachmentUrl: string | null = null;
+    let attachmentBody: ArrayBuffer | null = null;
+    let attachmentExt = "jpg";
     if (imageBase64 && !mediaIsAudio) {
       try {
         const ext = mediaMimetype.includes("pdf") ? "pdf"
           : mediaMimetype.includes("png") ? "png"
           : "jpg";
-        const timestamp = Date.now();
-        const filePath = `${phone}/${timestamp}.${ext}`;
         const binaryStr = atob(imageBase64);
         const bytes = new Uint8Array(binaryStr.length);
         for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-
-        const { error: uploadErr } = await supabase.storage
-          .from("whatsapp-attachments")
-          .upload(filePath, bytes.buffer, { contentType: mediaMimetype, upsert: false });
-
-        if (uploadErr) {
-          console.error("Storage upload error:", uploadErr);
-        } else {
-          const { data: urlData } = supabase.storage
-            .from("whatsapp-attachments")
-            .getPublicUrl(filePath);
-          attachmentUrl = urlData?.publicUrl || null;
-          console.log("Media uploaded, URL:", attachmentUrl);
-        }
+        attachmentBody = bytes.buffer;
+        attachmentExt = ext;
       } catch (uploadEx) {
-        console.error("Storage upload exception:", uploadEx);
+        console.error("Storage preparation exception:", uploadEx);
       }
     }
 
@@ -623,6 +611,20 @@ serve(async (req) => {
     console.log("Matched profile:", profile.id.slice(0, 8), "| Stored number:", profile.whatsapp_number);
 
     const userId = profile.id;
+
+    if (attachmentBody) {
+      const filePath = `${userId}/${Date.now()}.${attachmentExt}`;
+      const { error: uploadErr } = await supabase.storage
+        .from("whatsapp-attachments")
+        .upload(filePath, attachmentBody, { contentType: mediaMimetype, upsert: false });
+
+      if (uploadErr) {
+        console.error("Storage upload error:", uploadErr);
+      } else {
+        attachmentUrl = `supabase://whatsapp-attachments/${filePath}`;
+        console.log("Media uploaded to private storage path:", filePath);
+      }
+    }
 
     // ============================================================
     // CONVERSATION MEMORY: Load recent history + save user message
