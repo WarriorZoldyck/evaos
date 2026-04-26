@@ -479,7 +479,7 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // --- Upload media to storage and get public URL ---
+    // --- Upload media to private storage and keep only an internal object URI ---
     let attachmentUrl: string | null = null;
     if (imageBase64 && !mediaIsAudio) {
       try {
@@ -499,11 +499,8 @@ serve(async (req) => {
         if (uploadErr) {
           console.error("Storage upload error:", uploadErr);
         } else {
-          const { data: urlData } = supabase.storage
-            .from("whatsapp-attachments")
-            .getPublicUrl(filePath);
-          attachmentUrl = urlData?.publicUrl || null;
-          console.log("Media uploaded, URL:", attachmentUrl);
+          attachmentUrl = `supabase://whatsapp-attachments/${filePath}`;
+          console.log("Media uploaded to private storage path:", filePath);
         }
       } catch (uploadEx) {
         console.error("Storage upload exception:", uploadEx);
