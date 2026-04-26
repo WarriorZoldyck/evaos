@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Edit, Copy, CheckCircle2, Trash2, ExternalLink } from "lucide-react";
 import type { Transaction, Category, CardTerminalInfo } from "@/hooks/useTransactions";
+import { useSignedAttachmentUrl } from "@/hooks/useSignedAttachmentUrl";
 
 interface TransactionDetailModalProps {
   transaction: Transaction | null;
@@ -46,6 +47,8 @@ export function TransactionDetailModal({
   onLiquidate,
   onDelete,
 }: TransactionDetailModalProps) {
+  const signedAttachmentUrl = useSignedAttachmentUrl(t?.attachment_url);
+
   if (!t) return null;
 
   const formatCurrency = (v: number) =>
@@ -213,11 +216,11 @@ export function TransactionDetailModal({
           )}
           {t.liquidation_notes && <InfoRow label="Notas de Liquidação" value={t.liquidation_notes} />}
           {t.barcode && <InfoRow label="Código de Barras" value={t.barcode} />}
-          {t.attachment_url && (
+          {t.attachment_url && signedAttachmentUrl && (
             <InfoRow
               label="Anexo"
               value={
-                <a href={t.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+                <a href={signedAttachmentUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
                   Ver Anexo <ExternalLink className="h-3 w-3" />
                 </a>
               }

@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
+import { useSignedAttachmentUrl } from "@/hooks/useSignedAttachmentUrl";
 import type { Transaction, Category as TxCategory } from "@/hooks/useTransactions";
 import {
   Sparkles, Check, X, ExternalLink, MessageSquare, Mail, Upload,
@@ -86,6 +87,7 @@ function PendingCard({
   compact?: boolean;
 }) {
   const isReceita = item.type === "receita";
+  const signedAttachmentUrl = useSignedAttachmentUrl(item.attachment_url);
 
   if (compact) {
     return (
@@ -205,9 +207,9 @@ function PendingCard({
               Editar
             </Button>
           )}
-          {item.attachment_url && (
+          {item.attachment_url && signedAttachmentUrl && (
             <Button size="sm" variant="ghost" asChild className="gap-1.5 ml-auto">
-              <a href={item.attachment_url} target="_blank" rel="noopener noreferrer">
+              <a href={signedAttachmentUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
                 Ver anexo
               </a>
@@ -244,6 +246,7 @@ function SeriesCard({
 
   const sourceIcon = first.source === "whatsapp" ? MessageSquare : first.source === "email" ? Mail : Upload;
   const SourceIcon = sourceIcon;
+  const signedAttachmentUrl = useSignedAttachmentUrl(first.attachment_url);
 
   return (
     <Card className="border-l-4 transition-all hover:shadow-md" style={{ borderLeftColor: isReceita ? "hsl(var(--chart-2))" : "hsl(var(--chart-1))" }}>
@@ -336,9 +339,9 @@ function SeriesCard({
             <Pencil className="h-3.5 w-3.5" />
             Editar
           </Button>
-          {first.attachment_url && (
+          {first.attachment_url && signedAttachmentUrl && (
             <Button size="sm" variant="ghost" asChild className="gap-1.5 ml-auto">
-              <a href={first.attachment_url} target="_blank" rel="noopener noreferrer">
+              <a href={signedAttachmentUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
                 Ver anexo
               </a>
