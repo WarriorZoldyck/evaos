@@ -1,52 +1,43 @@
+Verifiquei a integração EVA WhatsApp em modo somente leitura.
 
+Constatações atuais:
+- A Edge Function `whatsapp-webhook` está publicada e responde corretamente a uma chamada de healthcheck.
+- Os secrets necessários existem: Evolution API, Supabase, Lovable API e webhook secret.
+- Existem 4 perfis com número de WhatsApp cadastrado.
+- Não há mensagens processadas nas últimas 24h.
+- A última mensagem gravada em `whatsapp_messages` é de 23/04/2026.
+- Os logs recentes da `whatsapp-webhook` só mostram o meu healthcheck; não há chamadas recentes vindas da Evolution API.
+- A função auxiliar `evolution-webhook-config` está retornando 401 no teste, porque exige usuário autenticado no preview; não consegui consultar a configuração atual da Evolution por ela nesta sessão.
 
-# Unificar seletor de contexto no menu lateral
+Diagnóstico provável:
+A lógica principal da EVA WhatsApp parece disponível, mas a Evolution API provavelmente não está entregando eventos para o webhook atualmente, ou o webhook da instância não está configurado/apontando para a URL correta.
 
-## Objetivo
-Remover o seletor secundário "Dashboard: ..." do menu lateral (redundante) e transformar o **seletor de contexto principal** em um seletor que aceita múltipla seleção via checkboxes. A multi-seleção afeta apenas as **páginas analíticas** (Dashboard, Plano de Caixa, DRE). Demais páginas continuam operando com um único contexto.
+Plano para corrigir:
+1. Fortalecer a autenticação do webhook
+   - Reativar/confirmar validação do header `x-webhook-secret` dentro da `whatsapp-webhook`, alinhando com a documentação do app.
+   - Garantir que requisições inválidas retornem 401 sem processar payloads.
 
-## Mudanças
+2. Corrigir a configuração automática da Evolution
+   - Ajustar `evolution-webhook-config` para configurar o webhook usando a URL correta do projeto via variável de ambiente, evitando URL hardcoded.
+   - Incluir suporte ao header/secret esperado pela `whatsapp-webhook`, se a Evolution API permitir headers/customização no payload.
+   - Melhorar logs e respostas para mostrar claramente se o webhook foi configurado ou se a Evolution rejeitou a configuração.
 
-### 1. `AppSidebar.tsx` — Unificar em um único dropdown
-- Remover completamente o bloco "Dashboard multi-select" (linhas 157–190).
-- Substituir o seletor principal (linhas 120–155) por um dropdown único com:
-  - Item **"Todas as contas"** (atalho que ativa `viewAll = true`).
-  - Separador.
-  - Item **"Pessoal"** com Checkbox.
-  - Um item por empresa, cada um com Checkbox.
-- Label do botão exibe:
-  - `"Todas as contas"` quando `viewAll`.
-  - Nome único quando exatamente 1 selecionado (ex: `"Pessoal"` ou `"Acme LTDA"`).
-  - `"N contextos"` quando múltiplos selecionados.
-- Ícone: `User` se só Pessoal, `Building2` se empresa única, `Layers` se múltiplos/todos.
+3. Adicionar um teste/endpoint de diagnóstico seguro
+   - Criar uma resposta de diagnóstico autenticada para validar: secrets presentes, webhook acessível, bucket de anexos, perfis com WhatsApp e últimas mensagens.
+   - Evitar expor valores de secrets; mostrar apenas `SET/MISSING`.
 
-### 2. `CompanyContext.tsx` — Sincronização single↔multi
-Manter o contrato existente para não quebrar consumidores, mas garantir consistência:
-- Quando o usuário marca **exatamente 1** contexto no dropdown, atualizar também `selectedCompanyId` (e `isPersonal`) com aquele valor → páginas single-context (Lançamentos, Categorias, Metas, Contas, etc.) refletem automaticamente a escolha.
-- Quando o usuário marca **2+** contextos, manter o `selectedCompanyId` no último valor escolhido (para fallback) — páginas single-context simplesmente ignoram o multi-select.
-- `viewAll = true` reseta para Pessoal como single ativo.
-- Adicionar handler `setSingleContext(id|null)` interno chamado quando count === 1 para sincronizar.
+4. Validar o fluxo após ajustes
+   - Testar `whatsapp-webhook` com evento `messages.upsert` ignorado (`fromMe`) para confirmar disponibilidade.
+   - Testar bloqueio de chamadas sem secret, caso a validação seja ativada.
+   - Consultar logs da função para confirmar recebimento e processamento.
+   - Se possível, chamar `evolution-webhook-config` autenticado para configurar a instância e depois verificar se novas mensagens chegam.
 
-### 3. Hooks que consomem o contexto — Sem alterações
-- `useDashboardData.ts`, `useCashFlowData.ts`, `useDREData.ts` → já recebem o multi-state correto.
-  - `useDashboardData` já lê `viewAll/selectedCompanyIds/personalSelected` ✓
-  - `useCashFlowData` e `useDREData` hoje só leem single → **passam a ler também** `viewAll/selectedCompanyIds/personalSelected` e aplicam o mesmo `applyCompanyFilter` do dashboard.
-- Demais hooks (`useTransactions`, `useRecurringTransactions`, `useAccounts`, `useCategories`, `useGoals`, `usePricing`, etc.) → continuam usando apenas `selectedCompanyId/isPersonal`. Comportamento intacto.
+5. Pontos que dependem de acesso externo/conta
+   - Se a Evolution API não permitir setar o header `x-webhook-secret`, será necessário escolher entre: usar webhook sem header secreto e validar por outro mecanismo, ou configurar o header diretamente no painel/instância da Evolution.
+   - Se o usuário não estiver autenticado no preview, a função `evolution-webhook-config` continuará retornando 401 para chamadas feitas como usuário final.
 
-### 4. Refatorar `applyCompanyFilter` para reuso
-Mover a função de `useDashboardData.ts` para um util compartilhado `src/lib/companyFilter.ts` e importar nos 3 hooks analíticos (Dashboard, CashFlow, DRE).
-
-## Resultado para o usuário
-- **Um único seletor** no menu lateral, mais limpo.
-- Marcar 1 contexto = comportamento idêntico ao atual (filtra todas as páginas).
-- Marcar 2+ contextos = Dashboard / Plano de Caixa / DRE consolidam os contextos selecionados; outras páginas continuam usando o último contexto único marcado.
-- "Todas as contas" continua disponível como atalho rápido.
-
-## Arquivos afetados
-- `src/components/layout/AppSidebar.tsx` (refatora seletor, remove o segundo bloco)
-- `src/contexts/CompanyContext.tsx` (sincroniza single↔multi)
-- `src/lib/companyFilter.ts` (novo — helper compartilhado)
-- `src/hooks/useDashboardData.ts` (importa helper)
-- `src/hooks/useCashFlowData.ts` (passa a aplicar multi-filter)
-- `src/hooks/useDREData.ts` (passa a aplicar multi-filter)
-
+Resultado esperado:
+- EVA WhatsApp volta a receber eventos da Evolution.
+- Mensagens recentes voltam a aparecer em `whatsapp_messages`.
+- Falhas de configuração ficam visíveis nos logs/resposta diagnóstica.
+- Webhook fica protegido contra chamadas não autorizadas.
