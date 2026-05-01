@@ -6,6 +6,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -14,9 +21,7 @@ serve(async (req) => {
   // --- Auth check: require authenticated user ---
   const authHeader = req.headers.get('Authorization');
   if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return jsonResponse({ error: 'Unauthorized' }, 401);
   }
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -26,70 +31,78 @@ serve(async (req) => {
   const token = authHeader.replace('Bearer ', '');
   const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
   if (claimsError || !claimsData?.claims) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return jsonResponse({ error: 'Unauthorized' }, 401);
   }
 
   const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
   const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
   const EVOLUTION_INSTANCE = Deno.env.get('EVOLUTION_INSTANCE');
+  const WHATSAPP_WEBHOOK_SECRET = Deno.env.get('WHATSAPP_WEBHOOK_SECRET') || '';
 
   if (!EVOLUTION_API_URL || !EVOLUTION_API_KEY || !EVOLUTION_INSTANCE) {
-    return new Response(JSON.stringify({ error: 'Missing Evolution API secrets' }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return jsonResponse({ error: 'Missing Evolution API secrets' }, 500);
   }
+
+  // Build webhook URL dynamically from SUPABASE_URL.
+  // Append ?secret= as a fallback for providers that cannot set custom headers.
+  const baseFnUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
+  const webhookUrl = WHATSAPP_WEBHOOK_SECRET
+    ? `${baseFnUrl}?secret=${encodeURIComponent(WHATSAPP_WEBHOOK_SECRET)}`
+    : baseFnUrl;
 
   try {
     if (req.method === 'GET') {
-      // Consultar configuração atual do webhook
       const res = await fetch(`${EVOLUTION_API_URL}/webhook/find/${EVOLUTION_INSTANCE}`, {
-        headers: { 'apikey': EVOLUTION_API_KEY }
+        headers: { 'apikey': EVOLUTION_API_KEY },
       });
-      const data = await res.json();
-      return new Response(JSON.stringify(data), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      const data = await res.json().catch(() => ({}));
+      return jsonResponse({
+        status: res.status,
+        expected_webhook_url: baseFnUrl,
+        evolution_instance: EVOLUTION_INSTANCE,
+        secret_configured: !!WHATSAPP_WEBHOOK_SECRET,
+        data,
       });
     }
 
     if (req.method === 'POST') {
-      // Atualizar webhook com MESSAGES_UPSERT
-      const webhookUrl = `https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook`;
-      
       const payload = {
         webhook: {
           url: webhookUrl,
           webhookByEvents: false,
           webhookBase64: true,
           enabled: true,
-          events: [
-            "MESSAGES_UPSERT"
-          ]
-        }
+          headers: WHATSAPP_WEBHOOK_SECRET
+            ? { 'x-webhook-secret': WHATSAPP_WEBHOOK_SECRET, 'content-type': 'application/json' }
+            : { 'content-type': 'application/json' },
+          events: ['MESSAGES_UPSERT'],
+        },
       };
 
       const res = await fetch(`${EVOLUTION_API_URL}/webhook/set/${EVOLUTION_INSTANCE}`, {
         method: 'POST',
         headers: {
           'apikey': EVOLUTION_API_KEY,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
-      const data = await res.json();
-      return new Response(JSON.stringify({ status: res.status, data, payload }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      const data = await res.json().catch(() => ({}));
+      console.log('Evolution webhook/set response:', res.status, JSON.stringify(data).slice(0, 500));
+      return jsonResponse({
+        status: res.status,
+        ok: res.ok,
+        webhook_url: baseFnUrl,
+        secret_configured: !!WHATSAPP_WEBHOOK_SECRET,
+        data,
+        sent_payload: payload,
       });
     }
 
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return jsonResponse({ error: 'Method not allowed' }, 405);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    console.error('evolution-webhook-config error:', message);
+    return jsonResponse({ error: message }, 500);
   }
 });
