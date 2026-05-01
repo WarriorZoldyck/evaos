@@ -351,6 +351,55 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // --- Diagnostic endpoint (GET): safe status check, no secrets exposed ---
+  if (req.method === "GET") {
+    const url = new URL(req.url);
+    if (url.searchParams.get("diag") === "1") {
+      const adminKey = req.headers.get("x-webhook-secret");
+      const expected = Deno.env.get("WHATSAPP_WEBHOOK_SECRET");
+      if (!expected || adminKey !== expected) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const status = {
+        ok: true,
+        timestamp: new Date().toISOString(),
+        secrets: {
+          SUPABASE_URL: !!Deno.env.get("SUPABASE_URL"),
+          SUPABASE_SERVICE_ROLE_KEY: !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+          LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
+          EVOLUTION_API_URL: !!Deno.env.get("EVOLUTION_API_URL"),
+          EVOLUTION_API_KEY: !!Deno.env.get("EVOLUTION_API_KEY"),
+          EVOLUTION_INSTANCE: !!Deno.env.get("EVOLUTION_INSTANCE"),
+          WHATSAPP_WEBHOOK_SECRET: !!Deno.env.get("WHATSAPP_WEBHOOK_SECRET"),
+        },
+      };
+      return new Response(JSON.stringify(status), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ ok: true, hint: "POST messages.upsert payloads here" }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // --- Optional shared-secret validation for incoming POSTs ---
+  // If WHATSAPP_WEBHOOK_SECRET is set, require either:
+  //   - header "x-webhook-secret" matching the secret, OR
+  //   - query param ?secret=... matching the secret (for providers that can't set headers).
+  const expectedSecret = Deno.env.get("WHATSAPP_WEBHOOK_SECRET");
+  if (req.method === "POST" && expectedSecret) {
+    const headerSecret = req.headers.get("x-webhook-secret");
+    let querySecret: string | null = null;
+    try { querySecret = new URL(req.url).searchParams.get("secret"); } catch (_) {}
+    if (headerSecret !== expectedSecret && querySecret !== expectedSecret) {
+      console.warn("Rejected webhook call: invalid or missing x-webhook-secret");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+  }
 
   // Declare phone early so error handler can use it
   let phone = "";
