@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plug, MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Plug, MessageCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import logoAsaas from "@/assets/logo-asaas.png";
@@ -50,7 +52,9 @@ const staticIntegrations = [
 
 export default function Integracoes() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [whatsappActive, setWhatsappActive] = useState(false);
+  const [isSyncingWhatsapp, setIsSyncingWhatsapp] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -63,6 +67,32 @@ export default function Integracoes() {
         setWhatsappActive(!!data?.whatsapp_number);
       });
   }, [user]);
+
+  const handleSyncWhatsappWebhook = async () => {
+    setIsSyncingWhatsapp(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("evolution-webhook-config", {
+        method: "POST",
+      });
+
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.data?.message || "A Evolution não confirmou a configuração.");
+
+      toast({
+        title: "Webhook reconfigurado",
+        description: "Envie uma mensagem de teste para a EVA no WhatsApp.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível reconfigurar o WhatsApp.";
+      toast({
+        title: "Falha ao reconfigurar",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingWhatsapp(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -100,6 +130,21 @@ export default function Integracoes() {
             <p className="text-sm text-muted-foreground">
               Envie lançamentos e consulte seus dados financeiros pelo WhatsApp com a EVA.
             </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-4 w-full"
+              onClick={handleSyncWhatsappWebhook}
+              disabled={isSyncingWhatsapp || !user}
+            >
+              {isSyncingWhatsapp ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Reconfigurar webhook
+            </Button>
             {!whatsappActive && (
               <p className="text-xs text-muted-foreground mt-2">
                 Cadastre seu número em <strong>Configurações</strong> para ativar.
