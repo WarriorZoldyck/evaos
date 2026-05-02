@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -11,6 +11,24 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+function redactSecrets(value: unknown, secret: string): unknown {
+  if (typeof value === 'string') {
+    let redacted = value.replace(/([?&]secret=)[^&\s"']+/gi, '$1[REDACTED]');
+    if (secret) redacted = redacted.split(secret).join('[REDACTED]');
+    return redacted;
+  }
+  if (Array.isArray(value)) return value.map((item) => redactSecrets(item, secret));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        /secret|apikey|api_key|authorization|token/i.test(key) ? '[REDACTED]' : redactSecrets(item, secret),
+      ]),
+    );
+  }
+  return value;
 }
 
 serve(async (req) => {
@@ -61,7 +79,7 @@ serve(async (req) => {
         expected_webhook_url: baseFnUrl,
         evolution_instance: EVOLUTION_INSTANCE,
         secret_configured: !!WHATSAPP_WEBHOOK_SECRET,
-        data,
+        data: redactSecrets(data, WHATSAPP_WEBHOOK_SECRET),
       });
     }
 
@@ -94,8 +112,8 @@ serve(async (req) => {
         ok: res.ok,
         webhook_url: baseFnUrl,
         secret_configured: !!WHATSAPP_WEBHOOK_SECRET,
-        data,
-        sent_payload: payload,
+        data: redactSecrets(data, WHATSAPP_WEBHOOK_SECRET),
+        configured_events: payload.webhook.events,
       });
     }
 
