@@ -36,24 +36,29 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // --- Auth check: require authenticated user ---
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
-  }
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const token = authHeader.replace('Bearer ', '');
-  const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-  if (claimsError || !claimsData?.claims) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
-  }
-
   const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL');
   const EVOLUTION_API_KEY = Deno.env.get('EVOLUTION_API_KEY');
+
+  // --- Auth check: accept authenticated user OR admin key (Evolution API key) ---
+  const adminKey = req.headers.get('x-admin-key');
+  const authHeader = req.headers.get('Authorization');
+  const isAdmin = !!adminKey && !!EVOLUTION_API_KEY && adminKey === EVOLUTION_API_KEY;
+
+  if (!isAdmin) {
+    if (!authHeader?.startsWith('Bearer ')) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return jsonResponse({ error: 'Unauthorized' }, 401);
+    }
+  }
   const EVOLUTION_INSTANCE = Deno.env.get('EVOLUTION_INSTANCE');
   const WHATSAPP_WEBHOOK_SECRET = Deno.env.get('WHATSAPP_WEBHOOK_SECRET') || '';
 
