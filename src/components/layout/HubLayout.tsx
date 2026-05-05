@@ -1,11 +1,12 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { HubProvider } from "@/contexts/HubContext";
+import { HubProvider, useHub } from "@/contexts/HubContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { HubSidebar } from "./HubSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Loader2 } from "lucide-react";
 
 export default function HubLayout() {
   const { user, loading } = useAuth();
