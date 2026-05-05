@@ -191,6 +191,16 @@ export default function Lancamentos() {
               </Button>
             ) : null;
           })()}
+          <ExportTransactionsButton
+            filters={filters}
+            categories={categories}
+            allCategories={allCategories}
+            creditCards={creditCards}
+            bankAccounts={bankAccounts}
+            wallets={wallets}
+            suppliers={suppliers}
+            clients={clients}
+          />
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
