@@ -25,6 +25,7 @@ import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
 import { ImportStatementModal } from "@/components/lancamentos/ImportStatementModal";
+import { ExportTransactionsButton } from "@/components/lancamentos/ExportTransactionsButton";
 
 type TabValue = "todos" | "realizado" | "projetado";
 
@@ -190,6 +191,16 @@ export default function Lancamentos() {
               </Button>
             ) : null;
           })()}
+          <ExportTransactionsButton
+            filters={filters}
+            categories={categories}
+            allCategories={allCategories}
+            creditCards={creditCards}
+            bankAccounts={bankAccounts}
+            wallets={wallets}
+            suppliers={suppliers}
+            clients={clients}
+          />
           <Button
             variant="outline"
             onClick={() => setImportOpen(true)}
