@@ -1,11 +1,12 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { HubProvider } from "@/contexts/HubContext";
+import { HubProvider, useHub } from "@/contexts/HubContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { HubSidebar } from "./HubSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Loader2 } from "lucide-react";
 
 export default function HubLayout() {
   const { user, loading } = useAuth();
@@ -33,6 +34,9 @@ export default function HubLayout() {
 }
 
 function HubLayoutInner() {
+  const navigate = useNavigate();
+  const { isHubMember } = useHub();
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -41,6 +45,17 @@ function HubLayoutInner() {
           <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 bg-background/80 backdrop-blur-sm sticky top-0 z-40">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
+              {!isHubMember && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 h-8"
+                  onClick={() => navigate(-1)}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  <span className="hidden sm:inline">Voltar</span>
+                </Button>
+              )}
               <Badge variant="outline" className="text-[10px] font-semibold tracking-wide uppercase border-primary/30 text-primary">
                 Hub
               </Badge>
