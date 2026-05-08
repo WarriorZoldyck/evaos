@@ -1,74 +1,42 @@
 import { useNavigate } from "react-router-dom";
-import { Check } from "lucide-react";
+import { Check, Sparkles } from "lucide-react";
 
 const plans = [
   {
-    name: "Starter",
-    price: "R$ 0",
-    period: "",
-    description: "Para começar a organizar suas finanças",
+    name: "Individual",
+    priceCents: 9990,
+    description: "Para autônomos e profissionais individuais",
     features: [
-      "1 conta bancária",
-      "Dashboard básico",
+      "1 usuário",
       "Lançamentos ilimitados",
-      "10 interações com EVA IA",
-      "Suporte por email",
-    ],
-    cta: "Começar grátis",
-    highlighted: false,
-  },
-  {
-    name: "Pro",
-    price: "R$ 0",
-    period: "/mês",
-    description: "Para profissionais que querem controle total",
-    features: [
-      "Contas e carteiras ilimitadas",
-      "Maquininhas com controle MDR",
-      "Precificação FHC completa",
+      "Dashboard completo",
+      "EVA via WhatsApp",
+      "Precificação FHC",
       "DRE automático",
       "Plano de caixa",
-      "50 interações com EVA IA",
-      "Cartões de crédito",
+      "Suporte por email",
+    ],
+    cta: "Começar 7 dias grátis",
+    highlighted: false,
+  },
+  {
+    name: "Família",
+    priceCents: 13990,
+    description: "Para famílias e equipes pequenas",
+    features: [
+      "Tudo do Individual",
+      "Até 3 usuários",
+      "Hub de gestão de membros",
+      "Relatórios consolidados",
+      "Múltiplas empresas",
       "Suporte prioritário",
     ],
-    cta: "Assinar Pro",
+    cta: "Começar 7 dias grátis",
     highlighted: true,
   },
-  {
-    name: "Clínica",
-    price: "R$ 0",
-    period: "/mês",
-    description: "Para clínicas e consultórios com múltiplos profissionais",
-    features: [
-      "Tudo do plano Pro",
-      "Precificação V2 avançada",
-      "200 interações com EVA IA",
-      "EVA via WhatsApp",
-      "Importação de extratos",
-      "Relatórios gerenciais",
-      "Suporte dedicado",
-    ],
-    cta: "Assinar Clínica",
-    highlighted: false,
-  },
-  {
-    name: "Empresarial",
-    price: "R$ 0",
-    period: "/mês",
-    description: "Para empresas com múltiplas unidades e equipes",
-    features: [
-      "Tudo do plano Clínica",
-      "Múltiplas empresas consolidadas",
-      "Hub de gestão com membros",
-      "Interações EVA ilimitadas",
-      "Relatórios consolidados",
-      "Suporte VIP dedicado",
-    ],
-    cta: "Assinar Empresarial",
-    highlighted: false,
-  },
 ];
+
+const formatBRL = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export function LandingPricing() {
   const navigate = useNavigate();
@@ -79,19 +47,25 @@ export function LandingPricing() {
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[hsl(215,25%,16%)] to-transparent" />
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center mb-12">
           <p className="text-sm font-medium text-[hsl(195,100%,50%)] mb-3 tracking-wider uppercase">Planos</p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold mb-4">
             Escolha o plano ideal para você
           </h2>
-          <p className="text-[hsl(215,18%,55%)] max-w-xl mx-auto">
-            Comece grátis, evolua quando quiser. Sem surpresas, sem taxa de adesão.
+          <p className="text-[hsl(215,18%,55%)] max-w-xl mx-auto mb-6">
+            7 dias grátis em qualquer plano. Cancele quando quiser, sem multa.
           </p>
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(195,100%,50%/0.1)] border border-[hsl(195,100%,50%/0.3)] text-[hsl(195,100%,50%)] text-sm font-semibold">
+            <Sparkles className="h-4 w-4" />
+            Beta — 50% off vitalício para os 20 primeiros assinantes
+          </div>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 items-start">
-          {plans.map((plan, i) => (
+        <div className="grid md:grid-cols-2 gap-5 items-start max-w-3xl mx-auto">
+          {plans.map((plan, i) => {
+            const beta = Math.round(plan.priceCents * 0.5);
+            return (
             <div
               key={i}
               className={`relative p-8 rounded-2xl border transition-all duration-300 ${
@@ -111,8 +85,10 @@ export function LandingPricing() {
               <p className="text-sm text-[hsl(215,18%,55%)] mb-5">{plan.description}</p>
 
               <div className="mb-6">
-                <span className="font-display text-4xl font-bold">{plan.price}</span>
-                {plan.period && <span className="text-[hsl(215,18%,55%)] text-sm">{plan.period}</span>}
+                <div className="text-xs text-[hsl(215,18%,55%)] line-through">{formatBRL(plan.priceCents)}/mês</div>
+                <span className="font-display text-4xl font-bold">{formatBRL(beta)}</span>
+                <span className="text-[hsl(215,18%,55%)] text-sm">/mês</span>
+                <div className="text-xs text-[hsl(195,100%,50%)] font-semibold mt-1">Preço beta vitalício</div>
               </div>
 
               <ul className="space-y-3 mb-8">
@@ -135,7 +111,8 @@ export function LandingPricing() {
                 {plan.cta}
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

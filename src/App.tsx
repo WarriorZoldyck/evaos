@@ -31,6 +31,8 @@ import CentrosDeCustos from "@/pages/CentrosDeCustos";
 import HubContas from "@/pages/hub/HubContas";
 import HubWorkspaces from "@/pages/hub/HubWorkspaces";
 import HubMembros from "@/pages/hub/HubMembros";
+import Planos from "@/pages/Planos";
+import MinhaAssinatura from "@/pages/MinhaAssinatura";
 import { GraduationCap } from "lucide-react";
 
 import { toast } from "sonner";
@@ -60,6 +62,8 @@ const App = () => {
               <Route path="/" element={<LandingPage />} />
               <Route path="/auth" element={<Auth />} />
               <Route element={<AppLayout />}>
+                <Route path="/planos" element={<Planos />} />
+                <Route path="/configuracoes/assinatura" element={<MinhaAssinatura />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/lancamentos" element={<Lancamentos />} />
                 <Route path="/analises-eva" element={<AnalisesEva />} />

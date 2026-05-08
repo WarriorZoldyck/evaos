@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GlobalTransactionModal } from "./GlobalTransactionModal";
+import { SubscriptionBanner } from "@/components/subscription/SubscriptionGuard";
 import { OnboardingGuide } from "@/components/onboarding/OnboardingGuide";
 import { EvaChatButton } from "@/components/chat/EvaChatButton";
 import { Loader2, Plus } from "lucide-react";
@@ -79,6 +80,7 @@ function AppLayoutInner() {
                 <ThemeToggle />
               </div>
             </header>
+            <SubscriptionBanner />
             <div className="flex-1 overflow-auto p-4 md:p-6">
               <Outlet />
             </div>
