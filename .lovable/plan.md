@@ -1,89 +1,70 @@
-# Integração Asaas — Cobrança Recorrente
+## Conciliação Bancária com Asaas
 
-## Planos definidos
+Nova página **Conciliação Bancária** que conecta a conta Asaas do usuário (via API Key dele), importa extrato + cobranças, e cruza automaticamente com os lançamentos já existentes no EVA.
 
-| Plano | Preço normal | Preço beta (50% off) | Inclui |
-|---|---|---|---|
-| **Individual** | R$ 99,90/mês | R$ 49,95/mês | 1 usuário |
-| **Família** | R$ 139,90/mês | R$ 69,95/mês | 3 usuários |
-| **Usuário extra** | R$ 29,90/mês | R$ 14,95/mês | adicional ao Família |
+### 1. Conexão da conta Asaas (por usuário)
 
-- **Trial**: 7 dias grátis (sem cartão obrigatório? — ver decisão técnica abaixo)
-- **Métodos**: Cartão de crédito recorrente, PIX e Boleto
-- **Bloqueio**: 3 dias de graça após vencimento → hard block (redirect para `/planos`)
-- **Beta**: primeiros 20 assinantes recebem 50% off (cupom automático/perpétuo)
+Em **Integrações**, transformar o card "Asaas" (hoje "Em breve") em um card ativo "Conectar":
+- Modal pede a **API Key de produção do Asaas** do usuário (link com instruções).
+- Usuário escolhe:
+  - **Criar nova conta bancária "Asaas"** → busca saldo atual via API e grava como `initial_balance`.
+  - **Vincular a uma conta existente** → seleciona da lista de `bank_accounts`.
+- Edge function `asaas-connect-account` valida a key (chama `/v3/finance/balance`) e salva.
 
-## O que será criado
+### 2. Banco de dados (nova tabela)
 
-### 1. Banco de dados (migration)
+- `asaas_integrations`: `user_id`, `company_id`, `bank_account_id`, `api_key_encrypted`, `last_sync_at`, `sync_status`, `initial_balance_synced`.
+- `asaas_sync_items` (staging do que veio do Asaas): `integration_id`, `asaas_id`, `type` (payment/transfer), `amount`, `date`, `description`, `status`, `matched_transaction_id`, `match_status` (`pending`, `matched`, `ignored`, `imported`), `payload jsonb`.
+- RLS: dono do `user_id` enxerga só os seus.
+- A API Key é guardada **criptografada** (via secret de criptografia no edge function — nunca exposta ao frontend).
 
-- `subscription_plans` — catálogo de planos (slug, nome, preço cents, max_users, features)
-- `subscriptions` — assinatura ativa do usuário (plan_id, status, asaas_subscription_id, trial_ends_at, current_period_end, grace_until, beta_discount)
-- `asaas_customers` — vincula `user_id` ↔ `asaas_customer_id`
-- `asaas_webhook_events` — log idempotente de eventos
-- View `v_user_subscription_status` para gating rápido
-- Função `has_active_subscription(uid)` SECURITY DEFINER
-- RLS: usuário lê só sua própria assinatura; webhooks usam service role
+### 3. Sincronização (edge function `asaas-sync`)
 
-### 2. Edge Functions
+Disparada manualmente pelo botão "Sincronizar agora" e via cron diário:
+- Puxa **extrato** (`/v3/financialTransactions`) e **cobranças recebidas/pagas** (`/v3/payments?status=RECEIVED|CONFIRMED`).
+- Insere/atualiza em `asaas_sync_items` (idempotente por `asaas_id`).
+- Roda o **matcher**: para cada item pendente, busca em `transactions` da conta vinculada por valor exato + data ±3 dias. Match único → marca `matched`. Múltiplos candidatos → fica `pending` com sugestões.
 
-- `asaas-create-customer` — cria cliente no Asaas (CPF/CNPJ obrigatório) na 1ª contratação
-- `asaas-create-subscription` — cria assinatura recorrente (trial = `nextDueDate` em D+7), retorna URL de checkout para o método escolhido
-- `asaas-webhook` — recebe eventos `PAYMENT_*` e `SUBSCRIPTION_*`, atualiza status/grace_until, idempotente via token + event id
-- `asaas-cancel-subscription` — cancela ao final do período
-- `asaas-billing-portal` — gera link/dados para gerenciar pagamento (trocar cartão)
+### 4. Página `/conciliacao-bancaria`
 
-### 3. Frontend
+Layout estilo Conta Azul, com filtros por conta e período:
 
-- **`src/pages/Planos.tsx`** — nova página de seleção e checkout (4 cards, badge "Beta 50% off" se elegível, contador "X/20 vagas")
-- **`src/pages/MinhaAssinatura.tsx`** — em Configurações: status, próximo vencimento, trocar plano, cancelar, link Asaas
-- **Modal de checkout**: pede CPF/CNPJ + escolha método (Cartão/PIX/Boleto) → chama edge function → redirect Asaas
-- **`src/hooks/useSubscription.ts`** — busca status atual + helpers `isActive`, `isInTrial`, `isInGrace`, `isBlocked`, `canUseFeature(featureKey)`
-- **`src/components/SubscriptionGuard.tsx`** — wrapper de rota: bloqueado vê tela "Assinatura expirada" com CTA pra `/planos`. Em grace mostra banner amarelo no topo
-- **Atualizar `LandingPricing.tsx`** — refletir Individual/Família com preços reais e badge beta
-- **Sidebar**: item "Minha Assinatura"
-
-### 4. Secrets necessários
-
-- `ASAAS_API_KEY` — token de produção do Asaas (Configurações → Integrações → API)
-- `ASAAS_WEBHOOK_TOKEN` — string que você define e cola no painel Asaas como autenticação de webhook
-
-## Decisões técnicas a confirmar
-
-1. **Trial sem cartão?** Recomendo **exigir cartão/método já no signup do trial** (Asaas só agenda a 1ª cobrança em D+7). Isso reduz drasticamente quem some no fim do trial. Se preferir trial 100% sem método, eu monto sem chamar o Asaas durante o trial e crio a subscription só no D+7.
-2. **Beta 50%**: vou implementar contando assinantes ativos com `is_beta=true`. Quando atingir 20, novos não recebem mais. Desconto é **perpétuo** (vitalício enquanto o assinante mantiver o plano).
-3. **Família — usuários extras**: vou criar a estrutura, mas a cobrança do "extra" será adicionada via add-on numa próxima iteração (Asaas trata como outra assinatura ou ajuste de valor da existente). Nesta entrega, apenas o limite de 3 usuários é respeitado.
-
-## Fluxo do usuário
-
-```
-Landing → /auth → /dashboard (sem assinatura)
-                        ↓
-                  Banner "Inicie seu trial"
-                        ↓
-                  /planos → escolhe plano
-                        ↓
-              Modal: CPF/CNPJ + método
-                        ↓
-       Edge: cria customer + subscription Asaas
-                        ↓
-        Trial ativo 7 dias → cobrança automática
-                        ↓
-            Webhook atualiza status → continua usando
-                        ↓
-        Falha pagamento → grace 3 dias → hard block
+```text
+┌─ Conta: [Asaas ▼]  Período: [últimos 30d]  [Sincronizar]
+├─ Saldo Asaas: R$ X   |   Saldo Sistema: R$ Y   |   Diferença: R$ Z
+├──────────────────────────────────────────────────────────────────
+│ Banco (Asaas)                  ⇄  Sistema (EVA)
+│ 12/05  PIX João  R$ 100  →  ✓ Match: "Recebimento João" [confirmar]
+│ 11/05  Boleto    R$ 250  →  ⚠ 2 sugestões [escolher ▼]
+│ 10/05  Tarifa    R$ 5    →  ✗ Sem match  [criar lançamento] [ignorar]
+└──────────────────────────────────────────────────────────────────
 ```
 
-## Ordem de execução
+Ações por linha:
+- **Confirmar match** → grava `matched_transaction_id` e marca `transactions.is_reconciled = true`.
+- **Escolher outro** → lista lançamentos próximos da conta.
+- **Criar lançamento** → abre modal de novo lançamento já preenchido com dados do Asaas.
+- **Ignorar** → marca como `ignored`.
 
-1. Migration (tabelas + RLS + função + seed dos planos)
-2. Adicionar secret `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN`
-3. Edge functions
-4. Hook `useSubscription` + `SubscriptionGuard`
-5. Página `/planos` + modal checkout
-6. Página `/configuracoes/assinatura`
-7. Atualizar `LandingPricing` com preços reais
-8. Aplicar `SubscriptionGuard` nas rotas do dashboard
-9. Configurar webhook no painel Asaas (te passo a URL no final)
+Aba secundária "Conciliados" mostra histórico do que já foi batido.
 
-Confirma esses 3 pontos da seção "Decisões técnicas" e eu executo na sequência.
+### 5. Navegação e acesso
+
+- Novo item no `AppSidebar`: **Conciliação Bancária** (ícone `ArrowLeftRight`), abaixo de "Contas".
+- Rota `/conciliacao-bancaria` em `App.tsx`, dentro de `AppLayout` (protegida por `SubscriptionGuard`).
+- Card "Asaas" em `Integracoes.tsx` muda para ativo quando há `asaas_integrations` para o usuário, com botão "Sincronizar" e "Desconectar".
+
+### 6. Detalhes técnicos
+
+- **Edge functions novas**: `asaas-connect-account`, `asaas-sync`, `asaas-disconnect-account`. Todas validam JWT via `getClaims`.
+- **Criptografia da API Key**: AES-GCM usando novo secret `ASAAS_KEY_ENCRYPTION_SECRET` (32 bytes) — vou pedir quando começarmos a implementar.
+- **Cron**: agendar `asaas-sync` 1×/dia via `pg_cron` para todas as integrações ativas.
+- **Matching algorítmico**: prioriza match exato de valor + janela de data; empate é resolvido com proximidade de descrição (Levenshtein simples) — se ainda houver empate, fica pendente.
+- **Saldo do sistema**: reusa `get_account_balance(bank_account_id)`. Saldo Asaas vem fresco da API a cada sync.
+- **Contexto Pessoal/Empresa**: a `bank_account` vinculada já carrega `company_id`, então a página respeita o seletor global automaticamente.
+
+### O que NÃO entra agora
+
+- Conciliação de outros bancos (Bradesco/Itaú/etc.) — segue "Em breve".
+- Geração de cobrança via Asaas a partir do app (separado das cobranças da assinatura, que já existe).
+- OFX/CSV manual — pode vir num passo futuro.
