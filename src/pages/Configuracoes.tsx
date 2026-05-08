@@ -287,6 +287,22 @@ export default function Configuracoes() {
         </CardContent>
       </Card>
 
+      {/* Assinatura */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            Assinatura
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">Gerencie seu plano, vencimentos, faturas e cancelamento.</p>
+          <Button variant="outline" onClick={() => (window.location.href = "/configuracoes/assinatura")}>
+            Abrir minha assinatura
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* WhatsApp */}
       <WhatsAppCard />
 
