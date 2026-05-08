@@ -164,6 +164,110 @@ export type Database = {
         }
         Relationships: []
       }
+      asaas_integrations: {
+        Row: {
+          api_key_encrypted: string
+          api_key_iv: string
+          bank_account_id: string
+          company_id: string | null
+          created_at: string
+          id: string
+          initial_balance_synced: number | null
+          last_error: string | null
+          last_sync_at: string | null
+          sync_status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          api_key_encrypted: string
+          api_key_iv: string
+          bank_account_id: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          initial_balance_synced?: number | null
+          last_error?: string | null
+          last_sync_at?: string | null
+          sync_status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          api_key_encrypted?: string
+          api_key_iv?: string
+          bank_account_id?: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          initial_balance_synced?: number | null
+          last_error?: string | null
+          last_sync_at?: string | null
+          sync_status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      asaas_sync_items: {
+        Row: {
+          amount: number
+          asaas_id: string
+          asaas_status: string | null
+          created_at: string
+          date: string
+          description: string | null
+          id: string
+          integration_id: string
+          match_status: string
+          matched_transaction_id: string | null
+          payload: Json
+          source_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          asaas_id: string
+          asaas_status?: string | null
+          created_at?: string
+          date: string
+          description?: string | null
+          id?: string
+          integration_id: string
+          match_status?: string
+          matched_transaction_id?: string | null
+          payload?: Json
+          source_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          asaas_id?: string
+          asaas_status?: string | null
+          created_at?: string
+          date?: string
+          description?: string | null
+          id?: string
+          integration_id?: string
+          match_status?: string
+          matched_transaction_id?: string | null
+          payload?: Json
+          source_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_sync_items_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "asaas_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asaas_webhook_events: {
         Row: {
           asaas_payment_id: string | null
