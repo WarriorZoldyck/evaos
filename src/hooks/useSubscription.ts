@@ -18,6 +18,7 @@ export interface SubscriptionRow {
   canceled_at: string | null;
   next_due_date: string | null;
   invoice_url: string | null;
+  last_payment_at: string | null;
   asaas_subscription_id: string | null;
   plan?: {
     id: string;
