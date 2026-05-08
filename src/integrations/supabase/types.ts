@@ -131,6 +131,69 @@ export type Database = {
         }
         Relationships: []
       }
+      asaas_customers: {
+        Row: {
+          asaas_customer_id: string
+          cpf_cnpj: string
+          created_at: string
+          email: string | null
+          name: string | null
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asaas_customer_id: string
+          cpf_cnpj: string
+          created_at?: string
+          email?: string | null
+          name?: string | null
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asaas_customer_id?: string
+          cpf_cnpj?: string
+          created_at?: string
+          email?: string | null
+          name?: string | null
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      asaas_webhook_events: {
+        Row: {
+          asaas_payment_id: string | null
+          asaas_subscription_id: string | null
+          event_id: string | null
+          event_type: string
+          id: string
+          payload: Json
+          processed_at: string
+        }
+        Insert: {
+          asaas_payment_id?: string | null
+          asaas_subscription_id?: string | null
+          event_id?: string | null
+          event_type: string
+          id?: string
+          payload: Json
+          processed_at?: string
+        }
+        Update: {
+          asaas_payment_id?: string | null
+          asaas_subscription_id?: string | null
+          event_id?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          processed_at?: string
+        }
+        Relationships: []
+      }
       bank_accounts: {
         Row: {
           account_number: string | null
@@ -955,6 +1018,113 @@ export type Database = {
           },
         ]
       }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          description: string | null
+          features: Json
+          id: string
+          is_active: boolean
+          max_users: number
+          name: string
+          price_cents: number
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          features?: Json
+          id?: string
+          is_active?: boolean
+          max_users?: number
+          name: string
+          price_cents: number
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          features?: Json
+          id?: string
+          is_active?: boolean
+          max_users?: number
+          name?: string
+          price_cents?: number
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          asaas_subscription_id: string | null
+          billing_type: string
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          discount_percent: number
+          grace_until: string | null
+          id: string
+          invoice_url: string | null
+          is_beta: boolean
+          last_payment_at: string | null
+          next_due_date: string | null
+          plan_id: string
+          status: string
+          trial_ends_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asaas_subscription_id?: string | null
+          billing_type: string
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          discount_percent?: number
+          grace_until?: string | null
+          id?: string
+          invoice_url?: string | null
+          is_beta?: boolean
+          last_payment_at?: string | null
+          next_due_date?: string | null
+          plan_id: string
+          status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asaas_subscription_id?: string | null
+          billing_type?: string
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          discount_percent?: number
+          grace_until?: string | null
+          id?: string
+          invoice_url?: string | null
+          is_beta?: boolean
+          last_payment_at?: string | null
+          next_due_date?: string | null
+          plan_id?: string
+          status?: string
+          trial_ends_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           cnpj: string | null
@@ -1368,6 +1538,7 @@ export type Database = {
           table_name: string
         }[]
       }
+      has_active_subscription: { Args: { _uid: string }; Returns: boolean }
       is_hub_member: {
         Args: { _member_uid: string; _owner_uid: string }
         Returns: boolean
