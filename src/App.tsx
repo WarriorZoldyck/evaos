@@ -72,6 +72,7 @@ const App = () => {
                 <Route path="/dre" element={<DRE />} />
                 <Route path="/precificacao" element={<Precificacao />} />
                 <Route path="/contas" element={<Contas />} />
+                <Route path="/conciliacao-bancaria" element={<ConciliacaoBancaria />} />
                 <Route path="/categorias" element={<Categorias />} />
                 <Route path="/centros-de-custos" element={<CentrosDeCustos />} />
                 <Route path="/contatos" element={<Contatos />} />
