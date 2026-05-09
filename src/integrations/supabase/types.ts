@@ -1122,6 +1122,83 @@ export type Database = {
           },
         ]
       }
+      subscription_coupon_redemptions: {
+        Row: {
+          coupon_id: string
+          id: string
+          redeemed_at: string
+          subscription_id: string | null
+          user_id: string
+        }
+        Insert: {
+          coupon_id: string
+          id?: string
+          redeemed_at?: string
+          subscription_id?: string | null
+          user_id: string
+        }
+        Update: {
+          coupon_id?: string
+          id?: string
+          redeemed_at?: string
+          subscription_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_coupon_redemptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_coupons: {
+        Row: {
+          applies_to_cycle: string | null
+          applies_to_plan_slug: string | null
+          code: string
+          created_at: string
+          description: string | null
+          discount_type: string
+          discount_value: number
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          max_uses: number | null
+          used_count: number
+        }
+        Insert: {
+          applies_to_cycle?: string | null
+          applies_to_plan_slug?: string | null
+          code: string
+          created_at?: string
+          description?: string | null
+          discount_type: string
+          discount_value: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          used_count?: number
+        }
+        Update: {
+          applies_to_cycle?: string | null
+          applies_to_plan_slug?: string | null
+          code?: string
+          created_at?: string
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_uses?: number | null
+          used_count?: number
+        }
+        Relationships: []
+      }
       subscription_plans: {
         Row: {
           created_at: string
@@ -1167,8 +1244,10 @@ export type Database = {
           billing_cycle: string
           billing_type: string
           canceled_at: string | null
+          coupon_code: string | null
           created_at: string
           current_period_end: string | null
+          discount_amount_cents: number
           discount_percent: number
           grace_until: string | null
           id: string
@@ -1187,8 +1266,10 @@ export type Database = {
           billing_cycle?: string
           billing_type: string
           canceled_at?: string | null
+          coupon_code?: string | null
           created_at?: string
           current_period_end?: string | null
+          discount_amount_cents?: number
           discount_percent?: number
           grace_until?: string | null
           id?: string
@@ -1207,8 +1288,10 @@ export type Database = {
           billing_cycle?: string
           billing_type?: string
           canceled_at?: string | null
+          coupon_code?: string | null
           created_at?: string
           current_period_end?: string | null
+          discount_amount_cents?: number
           discount_percent?: number
           grace_until?: string | null
           id?: string
