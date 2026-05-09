@@ -26,6 +26,14 @@ export default function HubMembros() {
     createMember, updateMemberRole, suspendMember, activateMember, assignMemberToWorkspace,
   } = useWorkspaceMembers();
   const [showInvite, setShowInvite] = useState(false);
+  const { canCreateHubMember, limits, usage, refetch: refetchLimits } = usePlanLimits();
+  const [upgradeReason, setUpgradeReason] = useState<string | null>(null);
+
+  const handleInviteClick = () => {
+    const check = canCreateHubMember();
+    if (!check.ok) { setUpgradeReason(check.reason || "Limite atingido."); return; }
+    setShowInvite(true);
+  };
 
   if (loading) {
     return (
