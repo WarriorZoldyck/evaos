@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
         .insert({
           user_id: userId,
           name,
-          type: "Conta Digital",
+          type: "Conta Corrente",
           initial_balance: initialBalance,
           company_id: finalCompanyId,
         })
