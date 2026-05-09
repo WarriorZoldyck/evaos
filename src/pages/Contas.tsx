@@ -31,6 +31,8 @@ import { TerminalFormModal } from "@/components/contas/TerminalFormModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
 import { AccountStatementModal } from "@/components/contas/AccountStatementModal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { UpgradeGateModal } from "@/components/subscription/UpgradeGate";
 
 type AccountTab = "bank" | "card" | "wallet" | "terminal";
 
