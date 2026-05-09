@@ -8,7 +8,8 @@ const plans = [
     priceCents: 9990,
     description: "Para autônomos e profissionais individuais",
     features: [
-      "1 usuário",
+      "Até 3 contas/cartões/carteiras/maquininhas",
+      "100 mensagens da EVA por mês",
       "Lançamentos ilimitados",
       "Dashboard completo",
       "EVA via WhatsApp",
