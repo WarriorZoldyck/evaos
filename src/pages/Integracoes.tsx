@@ -1,53 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plug, MessageCircle, RefreshCw } from "lucide-react";
+import { Loader2, Plug, MessageCircle, RefreshCw, Link2, Unlink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffect } from "react";
+import { useAsaasIntegration } from "@/hooks/useAsaasIntegration";
+import { useAccounts } from "@/hooks/useAccounts";
+import { AsaasConnectModal } from "@/components/integracoes/AsaasConnectModal";
 import logoAsaas from "@/assets/logo-asaas.png";
 import logoBradesco from "@/assets/logo-bradesco.png";
 import logoItau from "@/assets/logo-itau.png";
 import logoSantander from "@/assets/logo-santander.png";
 import logoC6Bank from "@/assets/logo-c6bank.png";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Link } from "react-router-dom";
 
-const staticIntegrations = [
-  {
-    name: "Asaas",
-    description: "Integração bancária com o Asaas para conciliação automática de cobranças, recebimentos e pagamentos.",
-    status: "Em breve" as const,
-    logo: logoAsaas,
-    bgClass: "bg-[#2532c4]",
-  },
-  {
-    name: "Bradesco",
-    description: "Conexão com o Bradesco para importação automática de extratos e conciliação bancária.",
-    status: "Em breve" as const,
-    logo: logoBradesco,
-    bgClass: "bg-white",
-  },
-  {
-    name: "Itaú",
-    description: "Conexão com o Itaú Unibanco para importação automática de extratos e conciliação bancária.",
-    status: "Em breve" as const,
-    logo: logoItau,
-    bgClass: "bg-white",
-  },
-  {
-    name: "Santander",
-    description: "Conexão com o Santander para importação automática de extratos e conciliação bancária.",
-    status: "Em breve" as const,
-    logo: logoSantander,
-    bgClass: "bg-white",
-  },
-  {
-    name: "C6 Bank",
-    description: "Conexão com o C6 Bank para importação automática de extratos e conciliação bancária.",
-    status: "Em breve" as const,
-    logo: logoC6Bank,
-    bgClass: "bg-white",
-  },
+const otherBanks = [
+  { name: "Bradesco", description: "Conexão com o Bradesco para importação automática de extratos.", logo: logoBradesco, bgClass: "bg-white" },
+  { name: "Itaú", description: "Conexão com o Itaú Unibanco para importação automática de extratos.", logo: logoItau, bgClass: "bg-white" },
+  { name: "Santander", description: "Conexão com o Santander para importação automática de extratos.", logo: logoSantander, bgClass: "bg-white" },
+  { name: "C6 Bank", description: "Conexão com o C6 Bank para importação automática de extratos.", logo: logoC6Bank, bgClass: "bg-white" },
 ];
 
 export default function Integracoes() {
@@ -55,40 +31,28 @@ export default function Integracoes() {
   const { toast } = useToast();
   const [whatsappActive, setWhatsappActive] = useState(false);
   const [isSyncingWhatsapp, setIsSyncingWhatsapp] = useState(false);
+  const [asaasModalOpen, setAsaasModalOpen] = useState(false);
+
+  const { list: integrationsQ, sync, disconnect } = useAsaasIntegration();
+  const { bankAccounts } = useAccounts();
+  const integrations = integrationsQ.data || [];
+  const hasAsaas = integrations.length > 0;
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("profiles")
-      .select("whatsapp_number")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        setWhatsappActive(!!data?.whatsapp_number);
-      });
+    supabase.from("profiles").select("whatsapp_number").eq("id", user.id).single()
+      .then(({ data }) => setWhatsappActive(!!data?.whatsapp_number));
   }, [user]);
 
   const handleSyncWhatsappWebhook = async () => {
     setIsSyncingWhatsapp(true);
     try {
-      const { data, error } = await supabase.functions.invoke("evolution-webhook-config", {
-        method: "POST",
-      });
-
+      const { data, error } = await supabase.functions.invoke("evolution-webhook-config", { method: "POST" });
       if (error) throw error;
-      if (!data?.ok) throw new Error(data?.data?.message || "A Evolution não confirmou a configuração.");
-
-      toast({
-        title: "Webhook reconfigurado",
-        description: "Envie uma mensagem de teste para a EVA no WhatsApp.",
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Não foi possível reconfigurar o WhatsApp.";
-      toast({
-        title: "Falha ao reconfigurar",
-        description: message,
-        variant: "destructive",
-      });
+      if (!data?.ok) throw new Error(data?.data?.message || "A Evolution não confirmou.");
+      toast({ title: "Webhook reconfigurado" });
+    } catch (e) {
+      toast({ title: "Falha", description: (e as Error).message, variant: "destructive" });
     } finally {
       setIsSyncingWhatsapp(false);
     }
@@ -99,12 +63,12 @@ export default function Integracoes() {
       <div>
         <h1 className="text-2xl font-bold font-display text-foreground">Integrações</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Conecte suas contas bancárias e serviços financeiros para automatizar sua gestão.
+          Conecte suas contas bancárias e serviços para automatizar sua gestão.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* WhatsApp Integration */}
+        {/* WhatsApp */}
         <Card className={`relative overflow-hidden ${whatsappActive ? "" : "opacity-80"}`}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -114,72 +78,102 @@ export default function Integracoes() {
                 </div>
                 <CardTitle className="text-base">WhatsApp</CardTitle>
               </div>
-              <Badge
-                variant={whatsappActive ? "default" : "secondary"}
-                className={
-                  whatsappActive
-                    ? "bg-green-500/15 text-green-500 border-0 text-xs"
-                    : "bg-primary/10 text-primary border-0 text-xs"
-                }
-              >
+              <Badge className={whatsappActive ? "bg-green-500/15 text-green-500 border-0 text-xs" : "bg-primary/10 text-primary border-0 text-xs"}>
                 {whatsappActive ? "Ativo" : "Inativo"}
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Envie lançamentos e consulte seus dados financeiros pelo WhatsApp com a EVA.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-4 w-full"
-              onClick={handleSyncWhatsappWebhook}
-              disabled={isSyncingWhatsapp || !user}
-            >
-              {isSyncingWhatsapp ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
+            <p className="text-sm text-muted-foreground">Envie lançamentos pelo WhatsApp com a EVA.</p>
+            <Button variant="outline" size="sm" className="mt-4 w-full" onClick={handleSyncWhatsappWebhook} disabled={isSyncingWhatsapp || !user}>
+              {isSyncingWhatsapp ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               Reconfigurar webhook
             </Button>
-            {!whatsappActive && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Cadastre seu número em <strong>Configurações</strong> para ativar.
-              </p>
+          </CardContent>
+        </Card>
+
+        {/* Asaas — ATIVO */}
+        <Card className="relative overflow-hidden">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-[#2532c4] flex items-center justify-center overflow-hidden">
+                  <img src={logoAsaas} alt="Asaas" className="h-8 w-8 object-contain" />
+                </div>
+                <CardTitle className="text-base">Asaas</CardTitle>
+              </div>
+              <Badge className={hasAsaas ? "bg-green-500/15 text-green-500 border-0 text-xs" : "bg-primary/10 text-primary border-0 text-xs"}>
+                {hasAsaas ? "Conectado" : "Disponível"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Conecte sua conta Asaas para importar extrato e cobranças, e fazer conciliação bancária automática.
+            </p>
+            {hasAsaas ? (
+              <div className="mt-4 space-y-2">
+                {integrations.map((i) => {
+                  const acc = bankAccounts.find((b) => b.id === i.bank_account_id);
+                  return (
+                    <div key={i.id} className="text-xs p-2 rounded-md border bg-muted/30">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{acc?.name || "Conta"}</span>
+                        <span className="text-muted-foreground">
+                          {i.last_sync_at ? format(new Date(i.last_sync_at), "dd/MM HH:mm", { locale: ptBR }) : "nunca sync"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button asChild size="sm" variant="default" className="flex-1">
+                    <Link to="/conciliacao-bancaria">Conciliar</Link>
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => sync.mutate(undefined)} disabled={sync.isPending}>
+                    {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setAsaasModalOpen(true)}>
+                    <Link2 className="h-4 w-4" /> Outra
+                  </Button>
+                  {integrations.length === 1 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => disconnect.mutate(integrations[0].id)}
+                      disabled={disconnect.isPending}
+                    >
+                      <Unlink className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <Button size="sm" className="mt-4 w-full" onClick={() => setAsaasModalOpen(true)}>
+                <Plug className="h-4 w-4" /> Conectar Asaas
+              </Button>
             )}
           </CardContent>
         </Card>
 
-        {/* Bank / service integrations */}
-        {staticIntegrations.map((integration) => (
-          <Card key={integration.name} className="relative overflow-hidden opacity-80">
+        {otherBanks.map((b) => (
+          <Card key={b.name} className="relative overflow-hidden opacity-80">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`h-10 w-10 rounded-lg ${integration.bgClass} flex items-center justify-center overflow-hidden`}>
-                    <img
-                      src={integration.logo}
-                      alt={integration.name}
-                      className="h-8 w-8 object-contain"
-                    />
+                  <div className={`h-10 w-10 rounded-lg ${b.bgClass} flex items-center justify-center overflow-hidden`}>
+                    <img src={b.logo} alt={b.name} className="h-8 w-8 object-contain" />
                   </div>
-                  <CardTitle className="text-base">{integration.name}</CardTitle>
+                  <CardTitle className="text-base">{b.name}</CardTitle>
                 </div>
-                <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">
-                  {integration.status}
-                </Badge>
+                <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-xs">Em breve</Badge>
               </div>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{integration.description}</p>
-            </CardContent>
+            <CardContent><p className="text-sm text-muted-foreground">{b.description}</p></CardContent>
           </Card>
         ))}
 
-        {/* Placeholder */}
         <Card className="border-dashed opacity-50 flex items-center justify-center min-h-[140px]">
           <CardContent className="flex flex-col items-center gap-2 py-6 text-center">
             <Plug className="h-8 w-8 text-muted-foreground" />
@@ -187,6 +181,8 @@ export default function Integracoes() {
           </CardContent>
         </Card>
       </div>
+
+      <AsaasConnectModal open={asaasModalOpen} onClose={() => setAsaasModalOpen(false)} />
     </div>
   );
 }

@@ -64,6 +64,7 @@ const financeMenuItems = [
 
 const registrationMenuItems = [
   { title: "Contas & Cartões", url: "/contas", icon: CreditCard },
+  { title: "Conciliação Bancária", url: "/conciliacao-bancaria", icon: ArrowLeftRight },
   { title: "Categorias", url: "/categorias", icon: FolderTree },
   { title: "Centros de Custos", url: "/centros-de-custos", icon: Layers },
   { title: "Fornecedores e Clientes", url: "/contatos", icon: Users },
