@@ -1164,6 +1164,7 @@ export type Database = {
       subscriptions: {
         Row: {
           asaas_subscription_id: string | null
+          billing_cycle: string
           billing_type: string
           canceled_at: string | null
           created_at: string
@@ -1183,6 +1184,7 @@ export type Database = {
         }
         Insert: {
           asaas_subscription_id?: string | null
+          billing_cycle?: string
           billing_type: string
           canceled_at?: string | null
           created_at?: string
@@ -1202,6 +1204,7 @@ export type Database = {
         }
         Update: {
           asaas_subscription_id?: string | null
+          billing_cycle?: string
           billing_type?: string
           canceled_at?: string | null
           created_at?: string

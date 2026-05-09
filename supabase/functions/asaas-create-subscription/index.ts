@@ -6,7 +6,6 @@ const corsHeaders = {
 };
 
 const ASAAS_BASE = "https://api.asaas.com/v3";
-const BETA_LIMIT = 20;
 
 function onlyDigits(s: string) { return (s || "").replace(/\D/g, ""); }
 
@@ -51,7 +50,7 @@ Deno.serve(async (req) => {
     const userEmail = claims.claims.email as string | undefined;
 
     const body = await req.json();
-    const { plan_slug, billing_type, cpf_cnpj, name, phone } = body;
+    const { plan_slug, billing_type, cpf_cnpj, name, phone, billing_cycle } = body;
 
     if (!plan_slug || !billing_type || !cpf_cnpj || !name) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios faltando" }), { status: 400, headers: corsHeaders });
@@ -59,6 +58,7 @@ Deno.serve(async (req) => {
     if (!["CREDIT_CARD", "PIX", "BOLETO", "UNDEFINED"].includes(billing_type)) {
       return new Response(JSON.stringify({ error: "Método inválido" }), { status: 400, headers: corsHeaders });
     }
+    const cycleChoice: "monthly" | "yearly" = billing_cycle === "yearly" ? "yearly" : "monthly";
     const cpfDigits = onlyDigits(cpf_cnpj);
     if (cpfDigits.length !== 11 && cpfDigits.length !== 14) {
       return new Response(JSON.stringify({ error: "CPF/CNPJ inválido" }), { status: 400, headers: corsHeaders });
@@ -91,16 +91,11 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Você já possui uma assinatura ativa" }), { status: 409, headers: corsHeaders });
     }
 
-    // 3. Beta eligibility (count ativos com is_beta)
-    const { count: betaCount } = await admin
-      .from("subscriptions")
-      .select("id", { count: "exact", head: true })
-      .eq("is_beta", true)
-      .in("status", ["trialing", "active", "past_due"]);
-    const isBeta = (betaCount ?? 0) < BETA_LIMIT;
-    const discountPercent = isBeta ? 50 : 0;
-    const finalValueCents = Math.round(plan.price_cents * (1 - discountPercent / 100));
+    // 3. Preço final (sem desconto — cupons via Asaas no futuro)
+    const cycleMultiplier = cycleChoice === "yearly" ? 12 : 1;
+    const finalValueCents = plan.price_cents * cycleMultiplier;
     const finalValue = finalValueCents / 100;
+    const asaasCycle = cycleChoice === "yearly" ? "YEARLY" : "MONTHLY";
 
     // 4. Asaas customer (criar ou reusar)
     let { data: cust } = await admin
@@ -143,8 +138,8 @@ Deno.serve(async (req) => {
         billingType: billing_type,
         value: finalValue,
         nextDueDate: nextDueDateStr,
-        cycle: "MONTHLY",
-        description: `EVA OS — Plano ${plan.name}${isBeta ? " (Beta 50% off)" : ""}`,
+        cycle: asaasCycle,
+        description: `EVA OS — Plano ${plan.name} (${cycleChoice === "yearly" ? "Anual" : "Mensal"})`,
         externalReference: userId,
       }),
     });
@@ -170,8 +165,9 @@ Deno.serve(async (req) => {
         asaas_subscription_id: sub.id,
         status: "trialing",
         billing_type,
-        is_beta: isBeta,
-        discount_percent: discountPercent,
+        billing_cycle: cycleChoice,
+        is_beta: false,
+        discount_percent: 0,
         trial_ends_at: trialEnds.toISOString(),
         next_due_date: nextDueDateStr,
         invoice_url: invoiceUrl,
@@ -188,7 +184,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         subscription,
         invoice_url: invoiceUrl,
-        is_beta: isBeta,
+        billing_cycle: cycleChoice,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
