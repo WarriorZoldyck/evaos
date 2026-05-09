@@ -1791,6 +1791,11 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
+    // Increment AI usage counter (best-effort)
+    supabase.rpc("increment_ai_usage", { _uid: userId }).then(({ error }: any) => {
+      if (error) console.error("increment_ai_usage failed:", error);
+    });
+
     // Parse AI response — robust fallback for truncated/malformed JSON
     let aiParsed: any;
     const parseJsonRobust = (text: string): any => {
