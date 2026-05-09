@@ -7,6 +7,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { UpgradeGateScreen } from "@/components/subscription/UpgradeGate";
 
 export default function HubLayout() {
   const { user, loading } = useAuth();
