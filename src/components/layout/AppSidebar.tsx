@@ -239,8 +239,9 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {/* EVA Hub - always visible for authenticated users */}
-        <SidebarGroup>
+        {/* EVA Hub - only for plans that include it (or hub members/owners with existing members) */}
+        {showHub && (
+          <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -258,6 +259,7 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Novidades</SidebarGroupLabel>
