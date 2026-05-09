@@ -67,8 +67,15 @@ export default function Contas() {
     id: string; type: "bank" | "wallet" | "card"; name: string; initialBalance?: number;
   } | null>(null);
   const walletFlips = useWalletFlips();
+  const { canCreateAccount, refetch: refetchLimits } = usePlanLimits();
+  const [upgradeReason, setUpgradeReason] = useState<string | null>(null);
 
   const openCreate = () => {
+    const check = canCreateAccount();
+    if (!check.ok) {
+      setUpgradeReason(check.reason || "Limite atingido.");
+      return;
+    }
     if (activeTab === "terminal") {
       setTerminalEditData(null);
       setTerminalFormOpen(true);
