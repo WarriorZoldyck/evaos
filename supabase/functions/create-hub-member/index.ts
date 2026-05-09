@@ -71,6 +71,34 @@ Deno.serve(async (req) => {
     // Use service role to create user
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
+    // === Plan limit enforcement: max_hub_members ===
+    const { data: subRow } = await adminClient
+      .from("subscriptions")
+      .select("status, trial_ends_at, plan:subscription_plans(max_hub_members)")
+      .eq("user_id", ownerId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const inTrial = subRow?.status === "trialing" && subRow.trial_ends_at && new Date(subRow.trial_ends_at).getTime() > Date.now();
+    const maxHubMembers: number = inTrial ? 3 : ((subRow?.plan as any)?.max_hub_members ?? 0);
+    if (maxHubMembers <= 0) {
+      return new Response(
+        JSON.stringify({ error: "O EVA Hub é exclusivo do plano Família. Faça upgrade para adicionar membros." }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { count: currentMembers } = await adminClient
+      .from("workspace_members")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", ownerId)
+      .eq("status", "active");
+    if ((currentMembers ?? 0) >= maxHubMembers) {
+      return new Response(
+        JSON.stringify({ error: `Limite de ${maxHubMembers} membros atingido no seu plano. Compre usuários extras para adicionar mais.` }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Create auth user with hub_member metadata
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email,
