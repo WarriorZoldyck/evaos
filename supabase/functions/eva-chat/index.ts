@@ -77,6 +77,39 @@ serve(async (req) => {
     const userId = user.id;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // === Plan limit enforcement: AI monthly quota ===
+    try {
+      const { data: subRow } = await supabase
+        .from("subscriptions")
+        .select("status, trial_ends_at, plan:subscription_plans(monthly_ai_messages)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const inTrial = subRow?.status === "trialing" && subRow.trial_ends_at && new Date(subRow.trial_ends_at).getTime() > Date.now();
+      const monthlyLimit: number | null = inTrial ? 500 : (subRow?.plan as any)?.monthly_ai_messages ?? 100;
+
+      if (monthlyLimit != null) {
+        const period = new Date().toISOString().slice(0, 7);
+        const { data: usageRow } = await supabase
+          .from("ai_usage_counters")
+          .select("messages_used")
+          .eq("user_id", userId)
+          .eq("period_year_month", period)
+          .maybeSingle();
+        const used = (usageRow as any)?.messages_used ?? 0;
+        if (used >= monthlyLimit) {
+          return new Response(
+            JSON.stringify({ error: `Cota mensal de ${monthlyLimit} mensagens da EVA atingida. Faça upgrade do plano para continuar.` }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    } catch (quotaErr) {
+      console.error("Quota check failed (allowing request):", quotaErr);
+    }
+
     // Fetch user context (same as whatsapp-webhook)
     const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split("T")[0];
