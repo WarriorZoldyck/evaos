@@ -25,6 +25,7 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { selectedCompanyId } = useCompany();
+  const { canUseAI, refetch: refetchLimits } = usePlanLimits();
 
   useEffect(() => {
     if (open && inputRef.current) {
