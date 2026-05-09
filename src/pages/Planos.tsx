@@ -25,7 +25,7 @@ export default function Planos() {
   const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", cpf_cnpj: "", phone: "", billing_type: "CREDIT_CARD" });
+  const [form, setForm] = useState({ name: "", cpf_cnpj: "", phone: "", billing_type: "CREDIT_CARD", coupon_code: "" });
 
   useEffect(() => {
     (async () => {
@@ -63,6 +63,7 @@ export default function Planos() {
           cpf_cnpj: form.cpf_cnpj,
           name: form.name,
           phone: form.phone,
+          coupon_code: form.coupon_code.trim() || undefined,
         },
       });
       if (error) throw error;
