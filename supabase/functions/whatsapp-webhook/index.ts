@@ -682,8 +682,10 @@ serve(async (req) => {
           .maybeSingle();
         const used = (usageRow as any)?.messages_used ?? 0;
         if (used >= monthlyLimit) {
-          await sendWhatsAppMessage(phone, `🔒 Você atingiu sua cota mensal de ${monthlyLimit} mensagens da EVA. Faça upgrade do plano em https://eva.tec.br/planos para continuar.`);
-          return jsonResponse({ ok: true, blocked: "ai_quota" }, 200);
+          return buildResponse(
+            { ok: true, blocked: "ai_quota", message: `🔒 Você atingiu sua cota mensal de ${monthlyLimit} mensagens da EVA. Faça upgrade do plano em https://eva.tec.br/planos para continuar.` },
+            200, phone
+          );
         }
       }
     } catch (quotaErr) {
