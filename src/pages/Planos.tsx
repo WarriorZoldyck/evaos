@@ -25,7 +25,7 @@ export default function Planos() {
   const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", cpf_cnpj: "", phone: "", billing_type: "CREDIT_CARD" });
+  const [form, setForm] = useState({ name: "", cpf_cnpj: "", phone: "", billing_type: "CREDIT_CARD", coupon_code: "" });
 
   useEffect(() => {
     (async () => {
@@ -63,6 +63,7 @@ export default function Planos() {
           cpf_cnpj: form.cpf_cnpj,
           name: form.name,
           phone: form.phone,
+          coupon_code: form.coupon_code.trim() || undefined,
         },
       });
       if (error) throw error;
@@ -168,6 +169,14 @@ export default function Planos() {
                 <div className="flex items-center space-x-2"><RadioGroupItem value="PIX" id="r2" /><Label htmlFor="r2" className="font-normal">PIX</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="BOLETO" id="r3" /><Label htmlFor="r3" className="font-normal">Boleto</Label></div>
               </RadioGroup>
+            </div>
+            <div>
+              <Label>Cupom de desconto (opcional)</Label>
+              <Input
+                value={form.coupon_code}
+                onChange={(e) => setForm({ ...form, coupon_code: e.target.value.toUpperCase() })}
+                placeholder="Ex: AMIGO30"
+              />
             </div>
             <p className="text-xs text-muted-foreground">A primeira cobrança ocorre em 7 dias. Cancele antes para não ser cobrado.</p>
           </div>
