@@ -116,6 +116,12 @@ export default function HubMembros() {
       )}
 
       <InviteMemberModal open={showInvite} onClose={() => setShowInvite(false)} onCreate={createMember} />
+      <UpgradeGateModal
+        open={!!upgradeReason}
+        onClose={() => { setUpgradeReason(null); refetchLimits(); }}
+        title="Limite de membros atingido"
+        reason={upgradeReason || undefined}
+      />
     </div>
   );
 }
