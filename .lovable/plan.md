@@ -1,42 +1,85 @@
-Retomando a implementação da **Conciliação Bancária com Asaas** (plano já aprovado, migration e secret `ASAAS_KEY_ENCRYPTION_SECRET` já configurados).
+# Restrição de funcionalidades por plano
 
-## Próximos passos (execução direta)
+## Diagnóstico atual
 
-1. **Edge function `asaas-connect-account`**
-   - Recebe `api_key`, `mode` (`new_account` | `link_existing`), `bank_account_id?`, `account_name?`, `company_id?`.
-   - Valida a key chamando `GET /v3/finance/balance` no Asaas.
-   - Criptografa a key com AES-GCM usando `ASAAS_KEY_ENCRYPTION_SECRET`.
-   - Se `new_account`: cria `bank_accounts` com `initial_balance` = saldo Asaas.
-   - Insere `asaas_integrations`.
+Hoje **não há nenhuma restrição real**. `useSubscription` só controla acesso geral (trial/ativo/bloqueado). O campo `features` em `subscription_plans` é apenas texto decorativo nos cards de preço, e `max_users` não é checado em lugar nenhum (o `create-hub-member` cria membros sem limite).
 
-2. **Edge function `asaas-sync`**
-   - Lê integração do usuário, descriptografa a key.
-   - Busca `/v3/financialTransactions` (últimos 90 dias) e `/v3/payments?status=RECEIVED,CONFIRMED`.
-   - Upsert em `asaas_sync_items` (idempotente por `asaas_id` + `source_type`).
-   - Roda matcher: para cada item `pending`, busca em `transactions` da `bank_account_id` por `amount` exato + janela ±3 dias. Match único → marca `matched`. Vários → fica `pending` com sugestões no payload.
-   - Atualiza `last_sync_at`.
+## Limites desta primeira versão
 
-3. **Edge function `asaas-disconnect-account`**
-   - Apaga `asaas_integrations` (cascata limpa `asaas_sync_items`). Mantém a `bank_accounts` intacta.
+Aplicar como regra de plano (configurável via banco para facilitar mudanças futuras):
 
-4. **Hook `useAsaasIntegration`** — lista integrações, expõe `connect`, `sync`, `disconnect`.
+| Recurso | Individual | Família |
+|---|---|---|
+| Contas bancárias + cartões + carteiras + maquininhas (somados) | até **3** | ilimitado |
+| Membros no EVA Hub | **0** (sem Hub) | até **3** inclusos, +R$ 29,90/usuário extra |
+| Mensagens IA / mês (EVA WhatsApp + Chat in-app + Análises EVA) | cota mensal (definir valor — sugerido: 100) | cota maior (sugerido: 500) |
+| Demais módulos (DRE, Precificação, Metas, etc.) | liberados em ambos | liberados em ambos |
 
-5. **Página `/conciliacao-bancaria`**
-   - Header: seletor de conta (apenas contas com integração), período, botão "Sincronizar".
-   - Cards de saldo: Asaas vs Sistema vs Diferença.
-   - Tabs: "Pendentes" / "Conciliados" / "Ignorados".
-   - Tabela lado a lado: item Asaas → ação (confirmar match sugerido / escolher outro / criar lançamento / ignorar).
-   - Modal "Escolher lançamento" com busca por valor e data próximos.
-   - Ao confirmar match: `update transactions set is_reconciled = true` e `update asaas_sync_items set match_status = 'matched'`.
+Trial de 7 dias = libera tudo como Família (decisão do usuário).
 
-6. **Card Asaas em `/integracoes`**
-   - Quando não conectado: badge "Conectar" + abre modal pedindo API Key + escolha (criar nova conta / vincular existente).
-   - Quando conectado: badge "Ativo", última sync, botões "Sincronizar" e "Desconectar".
+## Arquitetura
 
-7. **Sidebar e rota**
-   - Item "Conciliação Bancária" no `AppSidebar` (ícone `ArrowLeftRight`), abaixo de "Contas".
-   - Rota `/conciliacao-bancaria` em `App.tsx`.
+### 1. Banco — fonte única de verdade dos limites
 
-8. **Cron diário** — `pg_cron` chamando `asaas-sync` 1×/dia (executa para todas as integrações ativas).
+Migração para adicionar colunas estruturadas em `subscription_plans`:
+- `max_accounts` (int, null = ilimitado)
+- `max_hub_members` (int, default 0)
+- `monthly_ai_messages` (int, null = ilimitado)
+- `extra_user_price_cents` (int, default 0)
 
-Vou implementar tudo na sequência sem mais perguntas.
+Atualizar os 2 planos existentes com esses valores. O array `features` (texto) continua só para exibição.
+
+Nova tabela `ai_usage_counters`:
+- `user_id`, `period_year_month` (ex: `2026-05`), `messages_used` (int)
+- PK composta (user_id, period_year_month), RLS própria do user
+- Incrementada via função `public.increment_ai_usage(_uid uuid)` (security definer) chamada pelas edge functions de IA.
+
+### 2. Hook central de permissões
+
+Criar `src/hooks/usePlanLimits.ts`:
+- Lê `useSubscription` + conta atual de contas/membros/uso de IA
+- Retorna helpers:
+  - `canCreateAccount()` → boolean + motivo
+  - `canCreateHubMember()` → boolean + motivo
+  - `canUseAI()` → boolean + cota restante
+  - `isTrialFullAccess` (true durante trial)
+  - `effectivePlanSlug` ("familia" durante trial, senão o real)
+
+### 3. Componente de bloqueio reutilizável
+
+`src/components/subscription/UpgradeGate.tsx`:
+- Modal/Card com título, motivo, botão "Fazer upgrade" → `/planos`
+- Variante inline (substitui o conteúdo) e variante modal (intercepta ação)
+
+### 4. Pontos de aplicação no frontend
+
+- **Contas/Cartões/Carteiras/Maquininhas** (`Contas.tsx` e modais de criação): antes de abrir o modal de criação, checar `canCreateAccount()`. Se falhar, abrir `UpgradeGate` modal.
+- **EVA Hub** (`AppSidebar.tsx`, rotas `/eva-hub/*`): se Individual e não impersonando, esconder item do menu e proteger rotas em `HubLayout` com `UpgradeGate` em tela cheia.
+- **Cadastro de membro do Hub** (`HubMembros.tsx`): bloquear botão "Adicionar membro" quando atingir `max_hub_members`, com CTA "Comprar usuário extra" (placeholder por enquanto — fluxo de cobrança extra fica para depois).
+- **Chat EVA / Análises EVA**: desabilitar input com mensagem "Cota de IA do mês esgotada — faça upgrade" quando `canUseAI()` for false.
+
+### 5. Pontos de aplicação no backend (defesa em profundidade)
+
+Frontend pode ser contornado, então também validar nas edge functions:
+
+- `create-hub-member`: ler plano efetivo do owner, contar `workspace_members` ativos, recusar se exceder `max_hub_members`.
+- `eva-chat`, `whatsapp-webhook`, função de análise EVA: ler `ai_usage_counters` do mês, recusar com 402-equivalente se cota esgotada, e chamar `increment_ai_usage` em cada interação bem-sucedida.
+- (Opcional v2) trigger SQL em `bank_accounts` validando `max_accounts` — pode ficar para depois para evitar surpresas durante migração.
+
+### 6. UI dos planos
+
+Em `Planos.tsx` e `LandingPricing.tsx`, gerar a lista de bullets dinamicamente a partir das colunas estruturadas (ex: "Até 3 contas/cartões", "100 mensagens IA/mês"), mantendo `features` textual como complemento.
+
+## Fora deste escopo (próximas iterações)
+
+- Cobrança real de usuários extras (R$ 29,90) — apenas botão "Comprar usuário extra" stub.
+- Sistema de recargas de créditos de IA — preparado pela tabela `ai_usage_counters`, mas a venda de pacotes fica para depois.
+- Novos planos além de Individual/Família.
+
+## Resumo das mudanças
+
+- 1 migração: novas colunas em `subscription_plans` + `ai_usage_counters` + função `increment_ai_usage`.
+- 1 update de dados nos 2 planos existentes.
+- Novo hook `usePlanLimits` e componente `UpgradeGate`.
+- Edits em: `Contas.tsx`, `AppSidebar.tsx`, `HubLayout.tsx`, `HubMembros.tsx`, `EvaChatPanel.tsx`, `AnalisesEva.tsx`, `Planos.tsx`, `LandingPricing.tsx`.
+- Edits nas edge functions: `create-hub-member`, `eva-chat`, `whatsapp-webhook`, e a função de análise EVA.
