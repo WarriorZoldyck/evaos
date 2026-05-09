@@ -6,7 +6,6 @@ const corsHeaders = {
 };
 
 const ASAAS_BASE = "https://api.asaas.com/v3";
-const BETA_LIMIT = 20;
 
 function onlyDigits(s: string) { return (s || "").replace(/\D/g, ""); }
 
@@ -51,7 +50,7 @@ Deno.serve(async (req) => {
     const userEmail = claims.claims.email as string | undefined;
 
     const body = await req.json();
-    const { plan_slug, billing_type, cpf_cnpj, name, phone } = body;
+    const { plan_slug, billing_type, cpf_cnpj, name, phone, billing_cycle } = body;
 
     if (!plan_slug || !billing_type || !cpf_cnpj || !name) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios faltando" }), { status: 400, headers: corsHeaders });
@@ -59,6 +58,7 @@ Deno.serve(async (req) => {
     if (!["CREDIT_CARD", "PIX", "BOLETO", "UNDEFINED"].includes(billing_type)) {
       return new Response(JSON.stringify({ error: "Método inválido" }), { status: 400, headers: corsHeaders });
     }
+    const cycleChoice: "monthly" | "yearly" = billing_cycle === "yearly" ? "yearly" : "monthly";
     const cpfDigits = onlyDigits(cpf_cnpj);
     if (cpfDigits.length !== 11 && cpfDigits.length !== 14) {
       return new Response(JSON.stringify({ error: "CPF/CNPJ inválido" }), { status: 400, headers: corsHeaders });

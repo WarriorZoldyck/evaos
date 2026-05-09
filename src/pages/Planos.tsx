@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { Check, Loader2, Sparkles } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,24 +21,17 @@ export default function Planos() {
   const { user } = useAuth();
   const { subscription, hasAccess, refetch } = useSubscription();
   const [plans, setPlans] = useState<Plan[]>([]);
-  const [betaCount, setBetaCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
   const [selected, setSelected] = useState<Plan | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", cpf_cnpj: "", phone: "", billing_type: "CREDIT_CARD" });
 
-  const BETA_LIMIT = 20;
-  const isBetaAvailable = betaCount < BETA_LIMIT;
-
   useEffect(() => {
     (async () => {
-      const [{ data: ps }, { count }] = await Promise.all([
-        supabase.from("subscription_plans").select("*").eq("is_active", true).order("sort_order"),
-        supabase.from("subscriptions").select("id", { count: "exact", head: true })
-          .eq("is_beta", true).in("status", ["trialing", "active", "past_due"]),
-      ]);
+      const { data: ps } = await supabase
+        .from("subscription_plans").select("*").eq("is_active", true).order("sort_order");
       setPlans((ps || []) as Plan[]);
-      setBetaCount(count || 0);
       setLoading(false);
     })();
   }, []);
@@ -63,7 +56,14 @@ export default function Planos() {
     setSubmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke("asaas-create-subscription", {
-        body: { plan_slug: selected.slug, billing_type: form.billing_type, cpf_cnpj: form.cpf_cnpj, name: form.name, phone: form.phone },
+        body: {
+          plan_slug: selected.slug,
+          billing_type: form.billing_type,
+          billing_cycle: cycle,
+          cpf_cnpj: form.cpf_cnpj,
+          name: form.name,
+          phone: form.phone,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -85,31 +85,48 @@ export default function Planos() {
     <div className="max-w-5xl mx-auto py-8 px-4">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2">Escolha seu plano</h1>
-        <p className="text-muted-foreground">7 dias grátis para testar. Cancele quando quiser.</p>
-        {isBetaAvailable && (
-          <div className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-full bg-primary/10 border border-primary/30 text-primary text-sm font-semibold">
-            <Sparkles className="h-4 w-4" />
-            Beta — 50% off vitalício para os {BETA_LIMIT - betaCount} próximos assinantes
-          </div>
-        )}
+        <p className="text-muted-foreground mb-6">7 dias grátis para testar. Cancele quando quiser.</p>
+
+        <div className="inline-flex items-center gap-1 p-1 rounded-full border border-border bg-card">
+          <button
+            onClick={() => setCycle("monthly")}
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              cycle === "monthly" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Mensal
+          </button>
+          <button
+            onClick={() => setCycle("yearly")}
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+              cycle === "yearly" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Anual
+          </button>
+        </div>
       </div>
 
       <div className="grid md:grid-cols-2 gap-5">
         {plans.map((plan) => {
-          const finalCents = isBetaAvailable ? Math.round(plan.price_cents * 0.5) : plan.price_cents;
+          const monthly = plan.price_cents;
+          const yearlyTotal = monthly * 12;
+          const displayCents = cycle === "monthly" ? monthly : yearlyTotal;
+          const suffix = cycle === "monthly" ? "/mês" : "/ano";
           return (
             <div key={plan.id} className="p-6 rounded-2xl border border-border bg-card flex flex-col">
               <h3 className="font-bold text-xl">{plan.name}</h3>
               <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
               <div className="mb-4">
-                {isBetaAvailable && (
-                  <div className="text-xs text-muted-foreground line-through">{formatPrice(plan.price_cents)}/mês</div>
-                )}
                 <div>
-                  <span className="text-4xl font-bold">{formatPrice(finalCents)}</span>
-                  <span className="text-muted-foreground text-sm">/mês</span>
+                  <span className="text-4xl font-bold">{formatPrice(displayCents)}</span>
+                  <span className="text-muted-foreground text-sm">{suffix}</span>
                 </div>
-                {isBetaAvailable && <div className="text-xs text-primary font-semibold mt-1">Preço beta vitalício</div>}
+                {cycle === "yearly" && (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    equivale a {formatPrice(monthly)}/mês
+                  </div>
+                )}
               </div>
               <ul className="space-y-2 mb-6 flex-1">
                 {plan.features.map((f, i) => (
@@ -126,7 +143,11 @@ export default function Planos() {
 
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Assinar {selected?.name}</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>
+              Assinar {selected?.name} — {cycle === "monthly" ? "Mensal" : "Anual"}
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Nome completo / Razão social</Label>

@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { Check, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { Check } from "lucide-react";
 
 const plans = [
   {
@@ -40,6 +41,7 @@ const formatBRL = (c: number) => (c / 100).toLocaleString("pt-BR", { style: "cur
 
 export function LandingPricing() {
   const navigate = useNavigate();
+  const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
 
   return (
     <section id="pricing" className="py-24 relative">
@@ -48,7 +50,7 @@ export function LandingPricing() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
+        <div className="text-center mb-10">
           <p className="text-sm font-medium text-[hsl(195,100%,50%)] mb-3 tracking-wider uppercase">Planos</p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold mb-4">
             Escolha o plano ideal para você
@@ -56,15 +58,37 @@ export function LandingPricing() {
           <p className="text-[hsl(215,18%,55%)] max-w-xl mx-auto mb-6">
             7 dias grátis em qualquer plano. Cancele quando quiser, sem multa.
           </p>
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[hsl(195,100%,50%/0.1)] border border-[hsl(195,100%,50%/0.3)] text-[hsl(195,100%,50%)] text-sm font-semibold">
-            <Sparkles className="h-4 w-4" />
-            Beta — 50% off vitalício para os 20 primeiros assinantes
+
+          <div className="inline-flex items-center gap-1 p-1 rounded-full border border-[hsl(215,25%,16%)] bg-[hsl(220,30%,7%)]">
+            <button
+              onClick={() => setCycle("monthly")}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                cycle === "monthly"
+                  ? "bg-[hsl(195,100%,50%)] text-[hsl(220,40%,6%)]"
+                  : "text-[hsl(215,18%,65%)] hover:text-[hsl(210,30%,92%)]"
+              }`}
+            >
+              Mensal
+            </button>
+            <button
+              onClick={() => setCycle("yearly")}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                cycle === "yearly"
+                  ? "bg-[hsl(195,100%,50%)] text-[hsl(220,40%,6%)]"
+                  : "text-[hsl(215,18%,65%)] hover:text-[hsl(210,30%,92%)]"
+              }`}
+            >
+              Anual
+            </button>
           </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-5 items-start max-w-3xl mx-auto">
           {plans.map((plan, i) => {
-            const beta = Math.round(plan.priceCents * 0.5);
+            const monthly = plan.priceCents;
+            const yearlyTotal = monthly * 12;
+            const displayCents = cycle === "monthly" ? monthly : yearlyTotal;
+            const suffix = cycle === "monthly" ? "/mês" : "/ano";
             return (
             <div
               key={i}
@@ -85,10 +109,13 @@ export function LandingPricing() {
               <p className="text-sm text-[hsl(215,18%,55%)] mb-5">{plan.description}</p>
 
               <div className="mb-6">
-                <div className="text-xs text-[hsl(215,18%,55%)] line-through">{formatBRL(plan.priceCents)}/mês</div>
-                <span className="font-display text-4xl font-bold">{formatBRL(beta)}</span>
-                <span className="text-[hsl(215,18%,55%)] text-sm">/mês</span>
-                <div className="text-xs text-[hsl(195,100%,50%)] font-semibold mt-1">Preço beta vitalício</div>
+                <span className="font-display text-4xl font-bold">{formatBRL(displayCents)}</span>
+                <span className="text-[hsl(215,18%,55%)] text-sm">{suffix}</span>
+                {cycle === "yearly" && (
+                  <div className="text-xs text-[hsl(215,18%,55%)] mt-1">
+                    equivale a {formatBRL(monthly)}/mês
+                  </div>
+                )}
               </div>
 
               <ul className="space-y-3 mb-8">
