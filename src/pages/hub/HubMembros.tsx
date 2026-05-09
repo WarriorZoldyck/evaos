@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { UpgradeGateModal } from "@/components/subscription/UpgradeGate";
 import { useWorkspaceMembers, type WorkspaceMember, type Workspace } from "@/hooks/useWorkspaceMembers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
