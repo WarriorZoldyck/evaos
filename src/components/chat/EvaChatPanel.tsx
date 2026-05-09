@@ -42,6 +42,15 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
   const sendMessage = async (text: string, imageBase64?: string) => {
     if (!text.trim() && !imageBase64) return;
 
+    const aiCheck = canUseAI();
+    if (!aiCheck.ok) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `🔒 ${aiCheck.reason} [Ver planos](/planos)` },
+      ]);
+      return;
+    }
+
     const userContent: any = imageBase64
       ? [
           { type: "image_url", image_url: { url: imageBase64 } },
