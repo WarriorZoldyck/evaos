@@ -211,6 +211,8 @@ Deno.serve(async (req) => {
         billing_cycle: cycleChoice,
         is_beta: false,
         discount_percent: 0,
+        coupon_code: appliedCoupon?.code ?? null,
+        discount_amount_cents: discountCents,
         trial_ends_at: trialEnds.toISOString(),
         next_due_date: nextDueDateStr,
         invoice_url: invoiceUrl,
@@ -221,6 +223,17 @@ Deno.serve(async (req) => {
     if (subErr) {
       console.error("Erro ao salvar subscription", subErr);
       return new Response(JSON.stringify({ error: subErr.message }), { status: 500, headers: corsHeaders });
+    }
+
+    if (appliedCoupon) {
+      await admin.from("subscription_coupon_redemptions").insert({
+        coupon_id: appliedCoupon.id,
+        user_id: userId,
+        subscription_id: subscription.id,
+      });
+      await admin.from("subscription_coupons")
+        .update({ used_count: (appliedCoupon.used_count ?? 0) + 1 })
+        .eq("id", appliedCoupon.id);
     }
 
     return new Response(
