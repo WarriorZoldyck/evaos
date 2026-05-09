@@ -93,7 +93,7 @@ export default function HubMembros() {
             <UserPlus className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
             <p className="text-muted-foreground font-medium">Nenhum membro adicionado</p>
             <p className="text-sm text-muted-foreground/70 mt-1">Convide alguém para começar a gerenciar sua equipe.</p>
-            <Button onClick={() => setShowInvite(true)} className="mt-4 gap-1.5">
+            <Button onClick={handleInviteClick} className="mt-4 gap-1.5">
               <UserPlus className="h-4 w-4" />
               Convidar primeiro membro
             </Button>
