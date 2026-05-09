@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         subscription,
         invoice_url: invoiceUrl,
-        is_beta: isBeta,
+        billing_cycle: cycleChoice,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
