@@ -31,6 +31,8 @@ import { TerminalFormModal } from "@/components/contas/TerminalFormModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
 import { AccountStatementModal } from "@/components/contas/AccountStatementModal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { UpgradeGateModal } from "@/components/subscription/UpgradeGate";
 
 type AccountTab = "bank" | "card" | "wallet" | "terminal";
 
@@ -65,8 +67,15 @@ export default function Contas() {
     id: string; type: "bank" | "wallet" | "card"; name: string; initialBalance?: number;
   } | null>(null);
   const walletFlips = useWalletFlips();
+  const { canCreateAccount, refetch: refetchLimits } = usePlanLimits();
+  const [upgradeReason, setUpgradeReason] = useState<string | null>(null);
 
   const openCreate = () => {
+    const check = canCreateAccount();
+    if (!check.ok) {
+      setUpgradeReason(check.reason || "Limite atingido.");
+      return;
+    }
     if (activeTab === "terminal") {
       setTerminalEditData(null);
       setTerminalFormOpen(true);
@@ -462,6 +471,13 @@ export default function Contas() {
           initialBalance={statementTarget.initialBalance}
         />
       )}
+
+      <UpgradeGateModal
+        open={!!upgradeReason}
+        onClose={() => { setUpgradeReason(null); refetchLimits(); }}
+        title="Limite do plano atingido"
+        reason={upgradeReason || undefined}
+      />
     </div>
   );
 }

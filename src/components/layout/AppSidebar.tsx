@@ -27,6 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions } from "@/hooks/useAIPendingTransactions";
 import { useHub } from "@/contexts/HubContext";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 import {
   Sidebar,
   SidebarContent,
@@ -83,6 +84,8 @@ export function AppSidebar() {
   const { pendingCount } = useAIPendingTransactions();
   const { state } = useSidebar();
   const { isHubMember, isOwnerWithMembers } = useHub();
+  const { hubAllowed } = usePlanLimits();
+  const showHub = hubAllowed || isHubMember || isOwnerWithMembers;
   const collapsed = state === "collapsed";
 
   // Unified label + icon
@@ -236,8 +239,9 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        {/* EVA Hub - always visible for authenticated users */}
-        <SidebarGroup>
+        {/* EVA Hub - only for plans that include it (or hub members/owners with existing members) */}
+        {showHub && (
+          <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
@@ -255,6 +259,7 @@ export function AppSidebar() {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Novidades</SidebarGroupLabel>

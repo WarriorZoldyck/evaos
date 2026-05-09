@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 import ReactMarkdown from "react-markdown";
 
 interface Message {
@@ -24,6 +25,7 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { selectedCompanyId } = useCompany();
+  const { canUseAI, refetch: refetchLimits } = usePlanLimits();
 
   useEffect(() => {
     if (open && inputRef.current) {
@@ -39,6 +41,15 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
 
   const sendMessage = async (text: string, imageBase64?: string) => {
     if (!text.trim() && !imageBase64) return;
+
+    const aiCheck = canUseAI();
+    if (!aiCheck.ok) {
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `🔒 ${aiCheck.reason} [Ver planos](/planos)` },
+      ]);
+      return;
+    }
 
     const userContent: any = imageBase64
       ? [
@@ -94,6 +105,7 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
       ]);
     } finally {
       setIsLoading(false);
+      refetchLimits();
     }
   };
 

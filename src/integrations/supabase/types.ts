@@ -131,6 +131,27 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_usage_counters: {
+        Row: {
+          messages_used: number
+          period_year_month: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          messages_used?: number
+          period_year_month: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          messages_used?: number
+          period_year_month?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       asaas_customers: {
         Row: {
           asaas_customer_id: string
@@ -1203,10 +1224,14 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          extra_user_price_cents: number
           features: Json
           id: string
           is_active: boolean
+          max_accounts: number | null
+          max_hub_members: number
           max_users: number
+          monthly_ai_messages: number | null
           name: string
           price_cents: number
           slug: string
@@ -1215,10 +1240,14 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          extra_user_price_cents?: number
           features?: Json
           id?: string
           is_active?: boolean
+          max_accounts?: number | null
+          max_hub_members?: number
           max_users?: number
+          monthly_ai_messages?: number | null
           name: string
           price_cents: number
           slug: string
@@ -1227,10 +1256,14 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          extra_user_price_cents?: number
           features?: Json
           id?: string
           is_active?: boolean
+          max_accounts?: number | null
+          max_hub_members?: number
           max_users?: number
+          monthly_ai_messages?: number | null
           name?: string
           price_cents?: number
           slug?: string
@@ -1729,6 +1762,7 @@ export type Database = {
         }[]
       }
       has_active_subscription: { Args: { _uid: string }; Returns: boolean }
+      increment_ai_usage: { Args: { _uid: string }; Returns: number }
       is_hub_member: {
         Args: { _member_uid: string; _owner_uid: string }
         Returns: boolean

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { UpgradeGateModal } from "@/components/subscription/UpgradeGate";
 import { useWorkspaceMembers, type WorkspaceMember, type Workspace } from "@/hooks/useWorkspaceMembers";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,14 @@ export default function HubMembros() {
     createMember, updateMemberRole, suspendMember, activateMember, assignMemberToWorkspace,
   } = useWorkspaceMembers();
   const [showInvite, setShowInvite] = useState(false);
+  const { canCreateHubMember, limits, usage, refetch: refetchLimits } = usePlanLimits();
+  const [upgradeReason, setUpgradeReason] = useState<string | null>(null);
+
+  const handleInviteClick = () => {
+    const check = canCreateHubMember();
+    if (!check.ok) { setUpgradeReason(check.reason || "Limite atingido."); return; }
+    setShowInvite(true);
+  };
 
   if (loading) {
     return (
@@ -45,9 +55,10 @@ export default function HubMembros() {
             Gerencie quem tem acesso à sua conta
           </p>
         </div>
-        <Button onClick={() => setShowInvite(true)} className="gap-1.5">
+        <Button onClick={handleInviteClick} className="gap-1.5">
           <UserPlus className="h-4 w-4" />
           <span className="hidden sm:inline">Convidar</span>
+          <span className="text-[10px] opacity-70 ml-1">({usage.hubMembers}/{limits.max_hub_members})</span>
         </Button>
       </div>
 
@@ -82,7 +93,7 @@ export default function HubMembros() {
             <UserPlus className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
             <p className="text-muted-foreground font-medium">Nenhum membro adicionado</p>
             <p className="text-sm text-muted-foreground/70 mt-1">Convide alguém para começar a gerenciar sua equipe.</p>
-            <Button onClick={() => setShowInvite(true)} className="mt-4 gap-1.5">
+            <Button onClick={handleInviteClick} className="mt-4 gap-1.5">
               <UserPlus className="h-4 w-4" />
               Convidar primeiro membro
             </Button>
@@ -105,6 +116,12 @@ export default function HubMembros() {
       )}
 
       <InviteMemberModal open={showInvite} onClose={() => setShowInvite(false)} onCreate={createMember} />
+      <UpgradeGateModal
+        open={!!upgradeReason}
+        onClose={() => { setUpgradeReason(null); refetchLimits(); }}
+        title="Limite de membros atingido"
+        reason={upgradeReason || undefined}
+      />
     </div>
   );
 }

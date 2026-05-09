@@ -7,6 +7,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { UpgradeGateScreen } from "@/components/subscription/UpgradeGate";
 
 export default function HubLayout() {
   const { user, loading } = useAuth();
@@ -35,7 +37,25 @@ export default function HubLayout() {
 
 function HubLayoutInner() {
   const navigate = useNavigate();
-  const { isHubMember } = useHub();
+  const { isHubMember, isOwnerWithMembers } = useHub();
+  const { hubAllowed, isLoading } = usePlanLimits();
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!hubAllowed && !isHubMember && !isOwnerWithMembers) {
+    return (
+      <UpgradeGateScreen
+        title="EVA Hub é exclusivo do plano Família"
+        reason="Gerencie múltiplos usuários, workspaces e permissões. Disponível a partir do plano Família."
+      />
+    );
+  }
 
   return (
     <SidebarProvider>
