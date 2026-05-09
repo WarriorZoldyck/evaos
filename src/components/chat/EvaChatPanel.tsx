@@ -105,6 +105,7 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
       ]);
     } finally {
       setIsLoading(false);
+      refetchLimits();
     }
   };
 
