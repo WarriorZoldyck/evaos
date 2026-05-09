@@ -84,6 +84,8 @@ export function AppSidebar() {
   const { pendingCount } = useAIPendingTransactions();
   const { state } = useSidebar();
   const { isHubMember, isOwnerWithMembers } = useHub();
+  const { hubAllowed } = usePlanLimits();
+  const showHub = hubAllowed || isHubMember || isOwnerWithMembers;
   const collapsed = state === "collapsed";
 
   // Unified label + icon
