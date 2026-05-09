@@ -471,6 +471,13 @@ export default function Contas() {
           initialBalance={statementTarget.initialBalance}
         />
       )}
+
+      <UpgradeGateModal
+        open={!!upgradeReason}
+        onClose={() => { setUpgradeReason(null); refetchLimits(); }}
+        title="Limite do plano atingido"
+        reason={upgradeReason || undefined}
+      />
     </div>
   );
 }
