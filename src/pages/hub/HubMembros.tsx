@@ -55,9 +55,10 @@ export default function HubMembros() {
             Gerencie quem tem acesso à sua conta
           </p>
         </div>
-        <Button onClick={() => setShowInvite(true)} className="gap-1.5">
+        <Button onClick={handleInviteClick} className="gap-1.5">
           <UserPlus className="h-4 w-4" />
           <span className="hidden sm:inline">Convidar</span>
+          <span className="text-[10px] opacity-70 ml-1">({usage.hubMembers}/{limits.max_hub_members})</span>
         </Button>
       </div>
 
