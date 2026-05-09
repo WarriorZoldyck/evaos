@@ -241,6 +241,8 @@ Deno.serve(async (req) => {
         subscription,
         invoice_url: invoiceUrl,
         billing_cycle: cycleChoice,
+        applied_discount_cents: discountCents,
+        coupon_code: appliedCoupon?.code ?? null,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
