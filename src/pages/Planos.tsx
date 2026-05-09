@@ -170,6 +170,14 @@ export default function Planos() {
                 <div className="flex items-center space-x-2"><RadioGroupItem value="BOLETO" id="r3" /><Label htmlFor="r3" className="font-normal">Boleto</Label></div>
               </RadioGroup>
             </div>
+            <div>
+              <Label>Cupom de desconto (opcional)</Label>
+              <Input
+                value={form.coupon_code}
+                onChange={(e) => setForm({ ...form, coupon_code: e.target.value.toUpperCase() })}
+                placeholder="Ex: AMIGO30"
+              />
+            </div>
             <p className="text-xs text-muted-foreground">A primeira cobrança ocorre em 7 dias. Cancele antes para não ser cobrado.</p>
           </div>
           <DialogFooter>
