@@ -661,6 +661,36 @@ serve(async (req) => {
 
     const userId = profile.id;
 
+    // === Plan limit enforcement: AI monthly quota (best-effort) ===
+    try {
+      const { data: subRow } = await supabase
+        .from("subscriptions")
+        .select("status, trial_ends_at, plan:subscription_plans(monthly_ai_messages)")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const inTrial = subRow?.status === "trialing" && subRow.trial_ends_at && new Date(subRow.trial_ends_at).getTime() > Date.now();
+      const monthlyLimit: number | null = inTrial ? 500 : (subRow?.plan as any)?.monthly_ai_messages ?? 100;
+      if (monthlyLimit != null) {
+        const period = new Date().toISOString().slice(0, 7);
+        const { data: usageRow } = await supabase
+          .from("ai_usage_counters")
+          .select("messages_used")
+          .eq("user_id", userId)
+          .eq("period_year_month", period)
+          .maybeSingle();
+        const used = (usageRow as any)?.messages_used ?? 0;
+        if (used >= monthlyLimit) {
+          await sendWhatsAppMessage(phone, `🔒 Você atingiu sua cota mensal de ${monthlyLimit} mensagens da EVA. Faça upgrade do plano em https://eva.tec.br/planos para continuar.`);
+          return jsonResponse({ ok: true, blocked: "ai_quota" }, 200);
+        }
+      }
+    } catch (quotaErr) {
+      console.error("WA quota check failed (allowing):", quotaErr);
+    }
+
+
     if (attachmentBody) {
       const filePath = `${userId}/${Date.now()}.${attachmentExt}`;
       const { error: uploadErr } = await supabase.storage
