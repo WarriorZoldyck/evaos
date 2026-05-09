@@ -343,6 +343,11 @@ ${historicalPatternsBlock}`;
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
+    // Increment AI usage counter (best-effort, never fails the request)
+    supabase.rpc("increment_ai_usage", { _uid: userId }).then(({ error }) => {
+      if (error) console.error("increment_ai_usage failed:", error);
+    });
+
     // Parse AI JSON response
     const parseJsonRobust = (text: string): any => {
       try { return JSON.parse(text.trim()); } catch {}
