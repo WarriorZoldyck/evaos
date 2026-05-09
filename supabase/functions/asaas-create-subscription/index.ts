@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const userEmail = claims.claims.email as string | undefined;
 
     const body = await req.json();
-    const { plan_slug, billing_type, cpf_cnpj, name, phone, billing_cycle } = body;
+    const { plan_slug, billing_type, cpf_cnpj, name, phone, billing_cycle, coupon_code } = body;
 
     if (!plan_slug || !billing_type || !cpf_cnpj || !name) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios faltando" }), { status: 400, headers: corsHeaders });
@@ -91,11 +91,54 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Você já possui uma assinatura ativa" }), { status: 409, headers: corsHeaders });
     }
 
-    // 3. Preço final (sem desconto — cupons via Asaas no futuro)
+    // 3. Preço base
     const cycleMultiplier = cycleChoice === "yearly" ? 12 : 1;
-    const finalValueCents = plan.price_cents * cycleMultiplier;
-    const finalValue = finalValueCents / 100;
+    const baseCents = plan.price_cents * cycleMultiplier;
     const asaasCycle = cycleChoice === "yearly" ? "YEARLY" : "MONTHLY";
+
+    // 3.1 Cupom (opcional)
+    let appliedCoupon: any = null;
+    let discountCents = 0;
+    if (coupon_code && typeof coupon_code === "string" && coupon_code.trim()) {
+      const codeNorm = coupon_code.trim().toUpperCase();
+      const { data: coupon } = await admin
+        .from("subscription_coupons")
+        .select("*")
+        .eq("code", codeNorm)
+        .eq("is_active", true)
+        .maybeSingle();
+      if (!coupon) {
+        return new Response(JSON.stringify({ error: "Cupom inválido" }), { status: 400, headers: corsHeaders });
+      }
+      if (coupon.expires_at && new Date(coupon.expires_at).getTime() < Date.now()) {
+        return new Response(JSON.stringify({ error: "Cupom expirado" }), { status: 400, headers: corsHeaders });
+      }
+      if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
+        return new Response(JSON.stringify({ error: "Cupom esgotado" }), { status: 400, headers: corsHeaders });
+      }
+      if (coupon.applies_to_plan_slug && coupon.applies_to_plan_slug !== plan_slug) {
+        return new Response(JSON.stringify({ error: "Cupom não vale para este plano" }), { status: 400, headers: corsHeaders });
+      }
+      if (coupon.applies_to_cycle && coupon.applies_to_cycle !== "both" && coupon.applies_to_cycle !== cycleChoice) {
+        return new Response(JSON.stringify({ error: `Cupom só vale para o ciclo ${coupon.applies_to_cycle === "yearly" ? "anual" : "mensal"}` }), { status: 400, headers: corsHeaders });
+      }
+      const { data: prevRedeem } = await admin
+        .from("subscription_coupon_redemptions")
+        .select("id").eq("coupon_id", coupon.id).eq("user_id", userId).maybeSingle();
+      if (prevRedeem) {
+        return new Response(JSON.stringify({ error: "Você já usou este cupom" }), { status: 400, headers: corsHeaders });
+      }
+      if (coupon.discount_type === "percent") {
+        discountCents = Math.round(baseCents * (Number(coupon.discount_value) / 100));
+      } else {
+        discountCents = Math.round(Number(coupon.discount_value) * 100);
+      }
+      if (discountCents > baseCents) discountCents = baseCents;
+      appliedCoupon = coupon;
+    }
+
+    const finalValueCents = baseCents - discountCents;
+    const finalValue = finalValueCents / 100;
 
     // 4. Asaas customer (criar ou reusar)
     let { data: cust } = await admin
