@@ -27,6 +27,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions } from "@/hooks/useAIPendingTransactions";
 import { useHub } from "@/contexts/HubContext";
+import { usePlanLimits } from "@/hooks/usePlanLimits";
 import {
   Sidebar,
   SidebarContent,
