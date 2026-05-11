@@ -118,7 +118,7 @@ export function LandingPricing() {
                 <span className="text-[hsl(215,18%,55%)] text-sm">{suffix}</span>
                 {cycle === "yearly" && (
                   <div className="text-xs text-[hsl(215,18%,55%)] mt-1">
-                    equivale a {formatBRL(monthly)}/mês
+                    equivale a {formatBRL(yearlyMonthlyEquiv)}/mês
                   </div>
                 )}
               </div>
