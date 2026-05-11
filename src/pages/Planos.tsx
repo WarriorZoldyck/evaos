@@ -176,7 +176,7 @@ export default function Planos() {
               <Input
                 value={form.coupon_code}
                 onChange={(e) => setForm({ ...form, coupon_code: e.target.value.toUpperCase() })}
-                placeholder="Ex: AMIGO30"
+                placeholder="Insira o código do cupom"
               />
             </div>
             <p className="text-xs text-muted-foreground">A primeira cobrança ocorre em 7 dias. Cancele antes para não ser cobrado.</p>
