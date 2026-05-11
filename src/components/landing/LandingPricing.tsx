@@ -90,9 +90,10 @@ export function LandingPricing() {
         <div className="grid md:grid-cols-2 gap-5 items-start max-w-3xl mx-auto">
           {plans.map((plan, i) => {
             const monthly = plan.priceCents;
-            const yearlyTotal = monthly * 12;
+            const yearlyTotal = plan.yearlyPriceCents;
             const displayCents = cycle === "monthly" ? monthly : yearlyTotal;
             const suffix = cycle === "monthly" ? "/mês" : "/ano";
+            const yearlyMonthlyEquiv = Math.round(yearlyTotal / 12);
             return (
             <div
               key={i}
