@@ -6,6 +6,7 @@ const plans = [
   {
     name: "Individual",
     priceCents: 9990,
+    yearlyPriceCents: 99900,
     description: "Para autônomos e profissionais individuais",
     features: [
       "Até 3 contas/cartões/carteiras/maquininhas",
