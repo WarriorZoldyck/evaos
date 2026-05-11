@@ -6,6 +6,7 @@ const plans = [
   {
     name: "Individual",
     priceCents: 9990,
+    yearlyPriceCents: 99900,
     description: "Para autônomos e profissionais individuais",
     features: [
       "Até 3 contas/cartões/carteiras/maquininhas",
@@ -24,6 +25,7 @@ const plans = [
   {
     name: "Família",
     priceCents: 13990,
+    yearlyPriceCents: 139900,
     description: "Para famílias e equipes pequenas",
     features: [
       "Tudo do Individual",
@@ -88,9 +90,10 @@ export function LandingPricing() {
         <div className="grid md:grid-cols-2 gap-5 items-start max-w-3xl mx-auto">
           {plans.map((plan, i) => {
             const monthly = plan.priceCents;
-            const yearlyTotal = monthly * 12;
+            const yearlyTotal = plan.yearlyPriceCents;
             const displayCents = cycle === "monthly" ? monthly : yearlyTotal;
             const suffix = cycle === "monthly" ? "/mês" : "/ano";
+            const yearlyMonthlyEquiv = Math.round(yearlyTotal / 12);
             return (
             <div
               key={i}
@@ -115,7 +118,7 @@ export function LandingPricing() {
                 <span className="text-[hsl(215,18%,55%)] text-sm">{suffix}</span>
                 {cycle === "yearly" && (
                   <div className="text-xs text-[hsl(215,18%,55%)] mt-1">
-                    equivale a {formatBRL(monthly)}/mês
+                    equivale a {formatBRL(yearlyMonthlyEquiv)}/mês
                   </div>
                 )}
               </div>
