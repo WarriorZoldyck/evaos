@@ -1236,6 +1236,7 @@ export type Database = {
           price_cents: number
           slug: string
           sort_order: number
+          yearly_price_cents: number | null
         }
         Insert: {
           created_at?: string
@@ -1252,6 +1253,7 @@ export type Database = {
           price_cents: number
           slug: string
           sort_order?: number
+          yearly_price_cents?: number | null
         }
         Update: {
           created_at?: string
@@ -1268,6 +1270,7 @@ export type Database = {
           price_cents?: number
           slug?: string
           sort_order?: number
+          yearly_price_cents?: number | null
         }
         Relationships: []
       }
