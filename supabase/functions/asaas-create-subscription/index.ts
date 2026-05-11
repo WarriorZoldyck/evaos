@@ -92,8 +92,10 @@ Deno.serve(async (req) => {
     }
 
     // 3. Preço base
-    const cycleMultiplier = cycleChoice === "yearly" ? 12 : 1;
-    const baseCents = plan.price_cents * cycleMultiplier;
+    // 3. Preço base
+    const baseCents = cycleChoice === "yearly"
+      ? (plan.yearly_price_cents ?? plan.price_cents * 12)
+      : plan.price_cents;
     const asaasCycle = cycleChoice === "yearly" ? "YEARLY" : "MONTHLY";
 
     // 3.1 Cupom (opcional)
