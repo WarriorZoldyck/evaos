@@ -111,9 +111,10 @@ export default function Planos() {
       <div className="grid md:grid-cols-2 gap-5">
         {plans.map((plan) => {
           const monthly = plan.price_cents;
-          const yearlyTotal = monthly * 12;
+          const yearlyTotal = plan.yearly_price_cents ?? monthly * 12;
           const displayCents = cycle === "monthly" ? monthly : yearlyTotal;
           const suffix = cycle === "monthly" ? "/mês" : "/ano";
+          const yearlyMonthlyEquiv = Math.round(yearlyTotal / 12);
           return (
             <div key={plan.id} className="p-6 rounded-2xl border border-border bg-card flex flex-col">
               <h3 className="font-bold text-xl">{plan.name}</h3>
@@ -125,7 +126,7 @@ export default function Planos() {
                 </div>
                 {cycle === "yearly" && (
                   <div className="text-xs text-muted-foreground mt-1">
-                    equivale a {formatPrice(monthly)}/mês
+                    equivale a {formatPrice(yearlyMonthlyEquiv)}/mês
                   </div>
                 )}
               </div>
