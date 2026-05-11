@@ -1,0 +1,1 @@
+UPDATE public.subscription_coupons SET max_uses = NULL, used_count = 0 WHERE code = 'AMIGO30';
