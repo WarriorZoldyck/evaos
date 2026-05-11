@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 interface Plan {
   id: string; slug: string; name: string; description: string;
-  price_cents: number; max_users: number; features: string[]; sort_order: number;
+  price_cents: number; yearly_price_cents: number | null; max_users: number; features: string[]; sort_order: number;
 }
 
 export default function Planos() {
