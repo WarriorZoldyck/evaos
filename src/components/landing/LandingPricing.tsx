@@ -25,6 +25,7 @@ const plans = [
   {
     name: "Família",
     priceCents: 13990,
+    yearlyPriceCents: 139900,
     description: "Para famílias e equipes pequenas",
     features: [
       "Tudo do Individual",
