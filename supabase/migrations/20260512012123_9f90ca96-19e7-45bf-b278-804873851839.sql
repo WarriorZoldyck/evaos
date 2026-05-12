@@ -1,0 +1,2 @@
+INSERT INTO public.subscriptions (user_id, plan_id, status, billing_type, billing_cycle, is_beta, discount_percent, current_period_end, trial_ends_at)
+VALUES ('0b1eb160-7199-4965-928e-e5f929b31c55', '9ff71c27-476d-4884-86bb-9303c821e14f', 'active', 'CREDIT_CARD', 'yearly', true, 100, now() + interval '100 years', NULL);
