@@ -29,14 +29,14 @@ export async function logHubAction(params: {
 }) {
   if (!params.ownerId || !params.actorUserId || params.actorUserId === params.ownerId) return;
   try {
-    await supabase.from("hub_audit_log").insert({
+    await supabase.from("hub_audit_log").insert([{
       actor_user_id: params.actorUserId,
       owner_id: params.ownerId,
       action: params.action,
-      resource_type: params.resourceType ?? null,
-      resource_id: params.resourceId ?? null,
-      payload: params.payload ?? {},
-    });
+      resource_type: params.resourceType ?? undefined,
+      resource_id: params.resourceId ?? undefined,
+      payload: (params.payload ?? {}) as any,
+    }]);
   } catch (e) {
     console.warn("hub audit log failed", e);
   }
