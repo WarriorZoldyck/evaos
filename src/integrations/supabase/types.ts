@@ -1865,6 +1865,7 @@ export type Database = {
           table_name: string
         }[]
       }
+      purge_old_hub_audit_log: { Args: never; Returns: number }
     }
     Enums: {
       account_type: "Conta Corrente" | "Poupança"
