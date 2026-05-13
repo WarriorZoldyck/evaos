@@ -1,76 +1,97 @@
-## Resumo dos problemas
+# Revisão do EVA Hub — o que falta para 100%
 
-A área do **membro convidado** no Hub está confusa. Vamos arrumar item a item, mantendo intacta a visão do dono.
+## Diagnóstico atual
 
-| # | Problema | Onde |
-|---|---|---|
-| 1 | Em **Contas**, o membro vê o e-mail dele em vez da conta do cliente que o convidou | `HubContas.tsx` |
-| 2 | Membros enxergam a aba **Membros** (com total/ativos/suspensos) — não devem | `HubSidebar.tsx`, `App.tsx` |
-| 3 | Em **Áreas de Trabalho**, o membro consegue criar áreas (devia só ver as do dono) e não há botão claro de "voltar/sair" | `HubWorkspaces.tsx` |
-| 4 | Membro clica em uma área e não acessa nada — falta de fluxo | `HubWorkspaces.tsx` |
-| 5 | **Auditoria** está visível para qualquer membro; deve ficar restrita a admins (e ao dono) | `HubSidebar.tsx`, `HubAuditoria.tsx` |
+A tela que você mostrou (**Contas / Áreas de Trabalho / Membros**) cobre o fluxo *básico*, mas hoje o Hub funciona como uma **delegação total**: o membro entra na conta do dono e vê **tudo**, independentemente do papel (`viewer/editor/admin`) e do departamento atribuído.
 
-## Mudanças propostas
+| Funcionalidade visível | Status real |
+|---|---|
+| Listar/criar/suspender membro | OK |
+| Definir papel (Admin/Editor/Visualizador) | Salvo no banco, **não é aplicado** em lugar nenhum |
+| Atribuir membro a uma Área (Contabilidade etc.) | Salvo no banco, **não filtra dados** |
+| Convite por e-mail real | Não existe — dono digita senha e repassa manualmente |
+| Persistir impersonação ao recarregar | Não — some ao dar F5 |
+| `workspace_member_permissions` (já existe a tabela!) | Vazia, sem UI, sem uso |
 
-### 1. Contas (membro)
-Em `HubContas.tsx`, a visão do membro vai exibir um **card por cliente (owner)**, não mais o próprio perfil:
-- Nome do dono + nome da empresa principal (se houver) + CNPJ
-- Badge do papel concedido (admin/editor/viewer)
-- Botão **Entrar** → executa `setImpersonation(...)` e leva ao `/dashboard` daquele cliente
-- Mantém o botão "Sair desta conta" (já existente)
-- Cabeçalho passa a ser "Meus Clientes — N contas"
-- Estado vazio: "Aguarde um convite de um proprietário"
+## Cenário do cliente (contador / familiar)
 
-Para puxar a empresa de cada owner, usamos `companies` (RLS já permite leitura para hub member) e fazemos um `select` agrupado por `owner_id` no `useWorkspaceMembers` (estender `availableWorkspaces` com `companyName/cnpj`).
+Para o caso "contratei um escritório de contabilidade e quero que ele veja **só** a empresa X" ou "convidei minha esposa para gerenciar **só** o cartão pessoal", o fluxo atual **não atende** — o convidado entra e vê tudo.
 
-### 2. Sidebar do Hub: itens condicionais ao papel
-Em `HubSidebar.tsx`, o menu vai depender de `isHubMember` + papel mais alto entre os clientes:
+---
 
-- **Dono** (não-membro): Contas, Áreas de Trabalho, Membros, Auditoria
-- **Membro convidado**: Contas, Áreas de Trabalho
-- **Membro com papel `admin` em pelo menos um cliente**: Contas, Áreas de Trabalho, **Auditoria** (apenas das próprias ações)
+## Plano de entrega (5 frentes)
 
-A aba **Membros** **nunca** aparece para membros. As rotas correspondentes (`/eva-hub/membros`, `/eva-hub/auditoria`) ganham guarda em `App.tsx`/no próprio componente: se `isHubMember` e papel insuficiente → `Navigate to="/eva-hub/contas"`.
+### 1. Convite por e-mail real (substituir o "criar com senha")
+- Trocar `create-hub-member` por `invite-hub-member`: usa `admin.inviteUserByEmail` do Supabase com `redirectTo=/aceitar-convite?token=…`.
+- Criar tabela `hub_invitations` (owner_id, email, role, workspace_id, scoped_resources jsonb, token, expires_at, status).
+- Página `/aceitar-convite`: convidado define a própria senha, vira `hub_member=true` em `app_metadata`, cria a row em `workspace_members`.
+- Estados no card: **Pendente / Ativo / Suspenso** + botão "Reenviar convite".
 
-### 3. Áreas de Trabalho (membro)
-Em `HubWorkspaces.tsx`, criar uma branch para `isHubMember`:
-- Esconder botão "Criar", presets e modal de criação
-- Listar somente as áreas do dono atualmente impersonado
-  - Se nenhum cliente estiver selecionado, mostrar primeiro o **seletor de cliente** ("Selecione uma conta para ver as áreas") com atalhos para os owners disponíveis
-- Cada card mostra apenas nome/descrição (sem contagem de membros, sem lixeira)
-- Adicionar botão **"Voltar para Contas"** no topo
+### 2. Aplicar o papel (role enforcement)
+- Função SQL `public.hub_member_role(_user uuid, _owner uuid)` (SECURITY DEFINER).
+- Atualizar policies que hoje fazem `OR is_hub_member(...)`:
+  - **SELECT**: qualquer role ativo.
+  - **INSERT/UPDATE/DELETE**: só `editor` ou `admin`.
+  - **DELETE de configurações sensíveis** (contas, empresas, cartões, usuários): só `admin`.
+- Hook `useHubRole()` no front para esconder botões de ação quando `viewer`.
 
-### 4. Fluxo ao clicar em uma área (membro)
-Hoje o card de área não tem ação. Para o membro, ao clicar:
-1. Garantir `setImpersonation` do dono daquela área (caso ainda não esteja)
-2. Navegar para `/dashboard` já com filtro contextual aplicado (passar `?workspace_id=...` na URL ou armazenar no `HubContext` como `activeWorkspaceId`)
+### 3. Permissões por departamento (o ponto-chave do cenário do contador)
+A tabela `workspace_member_permissions(workspace_member_id, resource_type, resource_id)` já existe — falta usar:
+- UI no `MemberCard`: quando o membro tem uma Área atribuída, abrir um painel "**Acesso a:**" com checkboxes de:
+  - Empresas (`companies`)
+  - Contas bancárias (`bank_accounts`)
+  - Cartões (`credit_cards`)
+  - Maquininhas (`card_terminals`)
+  - Carteiras (`wallets`)
+- Função `public.hub_member_can_see(_user uuid, _resource_type text, _resource_id uuid)`:
+  - Se membro **não tem nenhuma** permissão registrada → vê tudo do dono (compatibilidade).
+  - Se tem → só vê os IDs listados (e os `transactions` ligados a esses IDs).
+- Estender as RLS policies de `transactions`, `companies`, `bank_accounts`, `credit_cards`, `card_terminals`, `wallets`, `goals`, `categories` para chamar `hub_member_can_see` quando for hub member.
+- Preset por Área (Departamento Contabilidade → liberar todas as `companies` PJ; Departamento Pessoal → liberar carteiras/contas Pessoal).
 
-Não criamos novas tabelas — só usamos `workspace_members.workspace_id` já existente para filtrar.
+### 4. Robustez de impersonação
+- Persistir `impersonatingOwnerId/Name` em `localStorage` (chave `eva.hub.impersonation`).
+- Limpar no logout e ao mudar de usuário.
+- Banner topo já existe — adicionar role ativo e nome do departamento ao lado do nome do dono.
+- Log mínimo: tabela `hub_audit_log(actor_user_id, owner_id, action, payload, created_at)` registrando ações de escrita feitas em modo impersonação.
 
-### 5. Auditoria
-Em `HubAuditoria.tsx`:
-- Adicionar guarda no topo: `if (isHubMember && !isAdminInAnyClient) return <Navigate to="/eva-hub/contas" />`
-- Para o membro admin: filtrar `hub_audit_log` por `actor_user_id = me` (RLS já permite isso) e ocultar o filtro de "outros usuários"
-- O dono continua vendo tudo (já é o comportamento atual)
+### 5. Polimentos finais para entrega
+- **Ao suspender membro**: revogar sessões via `admin.signOut(memberUserId, "global")`.
+- **Excluir membro definitivamente** (hoje só suspende).
+- **Membro sair sozinho** de uma Conta (botão na tela `HubContas`).
+- **Reset de senha** do membro pelo dono (`admin.generateLink type=recovery`).
+- **Validação de e-mail duplicado** no convite (mostra "já é membro").
+- **N+1 fix** em `fetchAvailableWorkspaces` (1 query com join em `profiles`).
+- **Limites de plano**: bloquear convite quando `usage.hubMembers >= max_hub_members` já está OK; adicionar mesma checagem em "reativar suspenso".
+- **Onboarding do membro recém-aceito**: ao entrar a 1ª vez, ir direto para `/eva-hub` (HubContas) com hint "Selecione uma conta para começar".
 
-Sidebar esconde o item "Auditoria" se o membro não for admin em nenhum cliente.
+---
 
-### 6. Pequenos ajustes UX
-- Header do `HubLayout` já tem botão "Voltar" para dono; espelhar para membro também (ele volta para `/eva-hub/contas`).
-- Renomear título da página para `EVA Hub — Cliente: {ownerName}` quando estiver impersonando, para deixar claro o contexto.
+## Resposta direta às suas perguntas
 
-## Arquivos afetados (tudo frontend, sem migração)
+> **As funções da imagem (Contas / Áreas de Trabalho / Membros) estão funcionais?**
+Sim, **a CRUD funciona**. Mas papel e área **não restringem nada hoje** — são só rótulos.
 
-- `src/pages/hub/HubContas.tsx` — refatorar visão do membro
-- `src/pages/hub/HubWorkspaces.tsx` — visão read-only para membros + ação ao clicar
-- `src/pages/hub/HubAuditoria.tsx` — guarda por papel, escopo do membro
-- `src/components/layout/HubSidebar.tsx` — menu condicional
-- `src/components/layout/HubLayout.tsx` — botão voltar também para membros
-- `src/contexts/HubContext.tsx` — expor `isAdminInAnyClient` e `activeWorkspaceId`
-- `src/hooks/useWorkspaceMembers.ts` — enriquecer `availableWorkspaces` com empresa/CNPJ
-- (opcional) `src/App.tsx` — guardas de rota
+> **São as únicas necessárias?**
+Faltam: **Convites pendentes**, **Reset de senha**, **Sair da conta** (lado membro), **Excluir membro** (lado dono) e **Permissões por recurso**.
 
-## Fora de escopo
-- Convites por email (já marcado como provisório)
-- Filtros financeiros por workspace dentro do `/dashboard` (pode ser próximo passo, hoje só passamos o `workspace_id` na URL)
-- Mudanças em RLS — não são necessárias; tudo se resolve no front + filtros no Supabase client
+> **É possível adicionar membro a um departamento com as permissões corretas?**
+Adicionar a um departamento: ✅. Com **permissões corretas restringindo dados**: ❌ — é justamente o item 3 do plano.
+
+---
+
+## Detalhes técnicos
+
+- Tabelas novas: `hub_invitations`, `hub_audit_log`.
+- Tabela existente a ativar: `workspace_member_permissions`.
+- Funções SQL novas: `hub_member_role`, `hub_member_can_see`.
+- Edge functions novas: `invite-hub-member`, `accept-hub-invitation`, `revoke-hub-member`, `reset-hub-member-password`.
+- Páginas novas: `/aceitar-convite`.
+- Hooks novos: `useHubRole`, `useHubPermissions`.
+- Migration adicional nas RLS de ~10 tabelas para chamar `hub_member_can_see`.
+
+## Sugestão de execução em fases (cada uma já entregável)
+1. **Fase A — Convite real + persistência de impersonação** (desbloqueia o caso "convidei o contador").
+2. **Fase B — Role enforcement** (viewer realmente só lê).
+3. **Fase C — Permissões por departamento/recurso** (contador vê só a empresa contratante).
+4. **Fase D — Polimentos** (auditoria, reset de senha, sair da conta, excluir membro).
