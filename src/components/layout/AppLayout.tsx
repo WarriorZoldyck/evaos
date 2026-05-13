@@ -44,12 +44,14 @@ function AppLayoutInner() {
   const location = useLocation();
   const isOnLancamentos = location.pathname === "/lancamentos";
   const [globalFormOpen, setGlobalFormOpen] = useState(false);
-  const { isHubMember, impersonatingOwnerId, impersonatingOwnerName, exitImpersonation } = useHub();
+  const { isHubMember, impersonatingOwnerId, impersonatingOwnerName, impersonatingRole, exitImpersonation } = useHub();
 
   // Hub members without active impersonation go to /eva-hub
   if (isHubMember && !impersonatingOwnerId && !location.pathname.startsWith("/eva-hub")) {
     return <Navigate to="/eva-hub/contas" replace />;
   }
+
+  const roleLabel: Record<string, string> = { admin: "Admin", editor: "Editor", viewer: "Leitura" };
 
   return (
     <CompanyProvider>
@@ -61,8 +63,12 @@ function AppLayoutInner() {
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
                 {impersonatingOwnerName && (
-                  <Badge variant="outline" className="gap-1 text-xs cursor-pointer hover:bg-destructive/10" onClick={exitImpersonation}>
-                    👤 {impersonatingOwnerName} ✕
+                  <Badge variant="outline" className="gap-1 text-xs cursor-pointer hover:bg-destructive/10 border-primary/40 bg-primary/5" onClick={exitImpersonation} title="Sair da conta">
+                    👤 {impersonatingOwnerName}
+                    {impersonatingRole && (
+                      <span className="text-[10px] opacity-70 ml-0.5">• {roleLabel[impersonatingRole] || impersonatingRole}</span>
+                    )}
+                    <span className="ml-1">✕</span>
                   </Badge>
                 )}
               </div>
