@@ -111,7 +111,7 @@ export default function Configuracoes() {
         const { error } = await supabase.from("companies").insert({
           name: companyName.trim(),
           cnpj: companyCnpj.trim(),
-          user_id: user.id,
+          user_id: effectiveUserId,
         });
         if (error) throw error;
         toast.success("Empresa cadastrada com sucesso!");
