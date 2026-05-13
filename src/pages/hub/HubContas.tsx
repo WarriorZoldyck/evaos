@@ -1,10 +1,17 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHub } from "@/contexts/HubContext";
 import { useWorkspaceMembers } from "@/hooks/useWorkspaceMembers";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, LogIn, Loader2, User, Shield, Edit3, Eye, ChevronRight } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Building2, LogIn, Loader2, User, Shield, Edit3, Eye, LogOut } from "lucide-react";
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
   admin: { label: "Administrador", icon: Shield, color: "text-amber-500" },
@@ -50,24 +57,32 @@ export default function HubContas() {
               return (
                 <Card
                   key={ws.owner_id}
-                  className="hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group"
-                  onClick={() => {
-                    setImpersonation(ws.owner_id, ws.owner_name);
-                    navigate("/dashboard");
-                  }}
+                  className="hover:border-primary/40 hover:shadow-md transition-all group"
                 >
                   <CardContent className="flex items-center gap-4 py-4">
-                    <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <div
+                      className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 cursor-pointer"
+                      onClick={() => {
+                        setImpersonation(ws.owner_id, ws.owner_name, ws.role);
+                        navigate("/dashboard");
+                      }}
+                    >
                       <Building2 className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => {
+                        setImpersonation(ws.owner_id, ws.owner_name, ws.role);
+                        navigate("/dashboard");
+                      }}
+                    >
                       <p className="font-semibold text-foreground truncate">{ws.owner_name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <RoleIcon className={`h-3 w-3 ${role.color}`} />
                         <span className="text-xs text-muted-foreground">{role.label}</span>
                       </div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                    <LeaveAccountButton memberId={ws.member_id} ownerName={ws.owner_name} />
                   </CardContent>
                 </Card>
               );
@@ -117,5 +132,48 @@ export default function HubContas() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function LeaveAccountButton({ memberId, ownerName }: { memberId: string; ownerName: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleLeave = async () => {
+    setLoading(true);
+    const { error } = await supabase.from("workspace_members").delete().eq("id", memberId);
+    setLoading(false);
+    if (error) toast.error("Erro ao sair da conta");
+    else { toast.success("Você saiu da conta"); window.location.reload(); }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+          onClick={(e) => e.stopPropagation()}
+          title="Sair desta conta"
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Sair de {ownerName}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Você perderá o acesso a esta conta. O dono poderá reconvidar você a qualquer momento.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleLeave} disabled={loading} className="bg-destructive hover:bg-destructive/90">
+            Sair
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

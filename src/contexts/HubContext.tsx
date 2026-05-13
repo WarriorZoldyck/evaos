@@ -6,7 +6,8 @@ interface HubContextType {
   isHubMember: boolean;
   impersonatingOwnerId: string | null;
   impersonatingOwnerName: string | null;
-  setImpersonation: (ownerId: string, ownerName: string) => void;
+  impersonatingRole: string | null;
+  setImpersonation: (ownerId: string, ownerName: string, role?: string) => void;
   exitImpersonation: () => void;
   isOwnerWithMembers: boolean;
   loading: boolean;
@@ -14,11 +15,26 @@ interface HubContextType {
 
 const HubContext = createContext<HubContextType | undefined>(undefined);
 
+const STORAGE_KEY = "eva.hub.impersonation";
+
+type Persisted = { ownerId: string; ownerName: string; role: string | null; userId: string };
+
+function loadPersisted(userId: string): Persisted | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Persisted;
+    if (parsed.userId !== userId) return null;
+    return parsed;
+  } catch { return null; }
+}
+
 export function HubProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [isHubMember, setIsHubMember] = useState(false);
   const [impersonatingOwnerId, setImpersonatingOwnerId] = useState<string | null>(null);
   const [impersonatingOwnerName, setImpersonatingOwnerName] = useState<string | null>(null);
+  const [impersonatingRole, setImpersonatingRole] = useState<string | null>(null);
   const [isOwnerWithMembers, setIsOwnerWithMembers] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -28,6 +44,8 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
       setIsOwnerWithMembers(false);
       setImpersonatingOwnerId(null);
       setImpersonatingOwnerName(null);
+      setImpersonatingRole(null);
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
       setLoading(false);
       return;
     }
@@ -37,7 +55,16 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
     const hubMember = appMeta?.hub_member === true || meta?.hub_member === true;
     setIsHubMember(hubMember);
 
-    // Check if this user is an owner with members
+    // Restore persisted impersonation (only for hub members)
+    if (hubMember) {
+      const persisted = loadPersisted(user.id);
+      if (persisted) {
+        setImpersonatingOwnerId(persisted.ownerId);
+        setImpersonatingOwnerName(persisted.ownerName);
+        setImpersonatingRole(persisted.role);
+      }
+    }
+
     const checkOwner = async () => {
       if (!hubMember) {
         const { count } = await supabase
@@ -54,14 +81,24 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
     checkOwner();
   }, [user]);
 
-  const setImpersonation = (ownerId: string, ownerName: string) => {
+  const setImpersonation = (ownerId: string, ownerName: string, role: string = "viewer") => {
     setImpersonatingOwnerId(ownerId);
     setImpersonatingOwnerName(ownerName);
+    setImpersonatingRole(role);
+    if (user) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          ownerId, ownerName, role, userId: user.id,
+        } satisfies Persisted));
+      } catch {}
+    }
   };
 
   const exitImpersonation = () => {
     setImpersonatingOwnerId(null);
     setImpersonatingOwnerName(null);
+    setImpersonatingRole(null);
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
   };
 
   return (
@@ -70,6 +107,7 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
         isHubMember,
         impersonatingOwnerId,
         impersonatingOwnerName,
+        impersonatingRole,
         setImpersonation,
         exitImpersonation,
         isOwnerWithMembers,

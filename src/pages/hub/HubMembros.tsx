@@ -2,16 +2,23 @@ import { useState } from "react";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { UpgradeGateModal } from "@/components/subscription/UpgradeGate";
 import { useWorkspaceMembers, type WorkspaceMember, type Workspace } from "@/hooks/useWorkspaceMembers";
+import { MemberPermissionsModal } from "@/components/hub/MemberPermissionsModal";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserPlus, User, Shield, Eye, Edit3,
-  Pause, Play, Loader2, UserCheck, UserX, Folder,
+  Pause, Play, Loader2, UserCheck, UserX, Folder, Trash2, KeyRound,
 } from "lucide-react";
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
@@ -24,6 +31,7 @@ export default function HubMembros() {
   const {
     members, workspaces, loading,
     createMember, updateMemberRole, suspendMember, activateMember, assignMemberToWorkspace,
+    deleteMember, resetMemberPassword,
   } = useWorkspaceMembers();
   const [showInvite, setShowInvite] = useState(false);
   const { canCreateHubMember, limits, usage, refetch: refetchLimits } = usePlanLimits();
@@ -110,6 +118,8 @@ export default function HubMembros() {
               onSuspend={suspendMember}
               onActivate={activateMember}
               onAssignWorkspace={assignMemberToWorkspace}
+              onDelete={deleteMember}
+              onResetPassword={resetMemberPassword}
             />
           ))}
         </div>
@@ -127,7 +137,7 @@ export default function HubMembros() {
 }
 
 function MemberCard({
-  member, workspaces, onUpdateRole, onSuspend, onActivate, onAssignWorkspace,
+  member, workspaces, onUpdateRole, onSuspend, onActivate, onAssignWorkspace, onDelete, onResetPassword,
 }: {
   member: WorkspaceMember;
   workspaces: Workspace[];
@@ -135,10 +145,13 @@ function MemberCard({
   onSuspend: (id: string) => void;
   onActivate: (id: string) => void;
   onAssignWorkspace: (id: string, wsId: string | null) => void;
+  onDelete: (id: string) => void;
+  onResetPassword: (id: string) => void;
 }) {
   const role = roleConfig[member.role] || roleConfig.viewer;
   const RoleIcon = role.icon;
-  const workspace = workspaces.find((w) => w.id === member.workspace_id);
+  const [permsOpen, setPermsOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <Card className={`transition-all ${member.status === "suspended" ? "opacity-50" : "hover:border-primary/20 hover:shadow-sm"}`}>
@@ -190,18 +203,55 @@ function MemberCard({
               <SelectItem value="admin">Administrador</SelectItem>
             </SelectContent>
           </Select>
-          <div className="ml-auto">
+        </div>
+
+        <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border/40">
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-primary" onClick={() => setPermsOpen(true)}>
+            <Shield className="h-3 w-3" /> Acesso
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => onResetPassword(member.id)} title="Gerar nova senha">
+            <KeyRound className="h-3 w-3" /> Senha
+          </Button>
+          <div className="ml-auto flex items-center gap-1">
             {member.status === "active" ? (
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => onSuspend(member.id)} title="Suspender">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onSuspend(member.id)} title="Suspender">
                 <Pause className="h-3.5 w-3.5" />
               </Button>
             ) : (
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-emerald-500" onClick={() => onActivate(member.id)} title="Reativar">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-emerald-500" onClick={() => onActivate(member.id)} title="Reativar">
                 <Play className="h-3.5 w-3.5" />
               </Button>
             )}
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)} title="Excluir membro">
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
         </div>
+
+        <MemberPermissionsModal
+          open={permsOpen}
+          onClose={() => setPermsOpen(false)}
+          memberId={member.id}
+          memberName={member.member_name}
+        />
+
+        <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir {member.member_name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação remove definitivamente o acesso desse membro à sua conta.
+                Os dados criados por ele permanecem na sua conta.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => { onDelete(member.id); setConfirmDelete(false); }} className="bg-destructive hover:bg-destructive/90">
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );

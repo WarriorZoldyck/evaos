@@ -157,23 +157,20 @@ export function useWorkspaceMembers() {
     else { toast.success("Role atualizado!"); await fetchMembers(); }
   };
 
-  const suspendMember = async (memberId: string) => {
-    const { error } = await supabase
-      .from("workspace_members")
-      .update({ status: "suspended" })
-      .eq("id", memberId);
-    if (error) toast.error("Erro ao suspender membro");
-    else { toast.success("Membro suspenso!"); await fetchMembers(); }
+  const setStatus = async (memberId: string, status: "active" | "suspended") => {
+    try {
+      const res = await supabase.functions.invoke("set-hub-member-status", { body: { memberId, status } });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      toast.success(status === "suspended" ? "Membro suspenso!" : "Membro ativado!");
+      await fetchMembers();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao atualizar membro");
+    }
   };
 
-  const activateMember = async (memberId: string) => {
-    const { error } = await supabase
-      .from("workspace_members")
-      .update({ status: "active" })
-      .eq("id", memberId);
-    if (error) toast.error("Erro ao ativar membro");
-    else { toast.success("Membro ativado!"); await fetchMembers(); }
-  };
+  const suspendMember = (memberId: string) => setStatus(memberId, "suspended");
+  const activateMember = (memberId: string) => setStatus(memberId, "active");
 
   const createWorkspace = async (name: string, description?: string) => {
     if (!user) return;
@@ -202,6 +199,29 @@ export function useWorkspaceMembers() {
     else { toast.success("Membro atualizado!"); await fetchMembers(); }
   };
 
+  const deleteMember = async (memberId: string) => {
+    try {
+      const res = await supabase.functions.invoke("delete-hub-member", { body: { memberId } });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      toast.success("Membro removido!");
+      await fetchMembers();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao remover membro");
+    }
+  };
+
+  const resetMemberPassword = async (memberId: string) => {
+    try {
+      const res = await supabase.functions.invoke("reset-hub-member-password", { body: { memberId } });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      toast.success(`Nova senha temporária: ${res.data?.tempPassword || "enviada"}`, { duration: 15000 });
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao redefinir senha");
+    }
+  };
+
   return {
     members,
     workspaces,
@@ -215,6 +235,8 @@ export function useWorkspaceMembers() {
     createWorkspace,
     deleteWorkspace,
     assignMemberToWorkspace,
+    deleteMember,
+    resetMemberPassword,
     refetch: fetchMembers,
   };
 }
