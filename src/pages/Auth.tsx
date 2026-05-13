@@ -26,41 +26,27 @@ export default function Auth() {
   }
 
   return (
-    <div className="relative flex min-h-screen overflow-hidden bg-[#0B1120]">
-      {/* Ambient background — aurora orbs + grid */}
-      <div className="pointer-events-none absolute inset-0 z-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,hsl(var(--primary)/0.18),transparent_55%),radial-gradient(ellipse_at_bottom_right,hsl(var(--primary)/0.12),transparent_60%)]" />
-        <div className="absolute top-[-10%] left-[10%] h-[480px] w-[480px] rounded-full bg-primary/15 blur-[120px] animate-pulse" style={{ animationDuration: "6s" }} />
-        <div className="absolute bottom-[-15%] right-[5%] h-[520px] w-[520px] rounded-full bg-primary/10 blur-[140px] animate-pulse" style={{ animationDuration: "8s" }} />
-        <div
-          className="absolute inset-0 opacity-[0.04]"
-          style={{
-            backgroundImage:
-              "linear-gradient(hsl(var(--primary)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary)) 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-            maskImage: "radial-gradient(ellipse at center, black 40%, transparent 75%)",
-          }}
-        />
-      </div>
-
+    <div className="flex min-h-screen">
       {/* Left side - Premium Branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center items-center p-12 relative z-10">
-        <div className="relative max-w-md text-center space-y-10 animate-fade-in">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center items-center p-12 relative overflow-hidden">
+        {/* Background gradient layers */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-background to-primary/3" />
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-primary/8 rounded-full blur-3xl" />
+        
+        <div className="relative z-10 max-w-md text-center space-y-10">
           {/* Logo */}
           <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-2xl bg-gradient-primary opacity-40 blur-2xl" />
-              <div className="relative h-20 w-20 rounded-2xl overflow-hidden ring-1 ring-primary/30 glow-primary shadow-premium">
-                <img src={evaLogo} alt="EVA OS" className="h-full w-full object-cover" />
-              </div>
+            <div className="h-20 w-20 rounded-2xl overflow-hidden glow-primary shadow-premium">
+              <img src={evaLogo} alt="EVA OS" className="h-full w-full object-cover" />
             </div>
             <div>
-              <h1 className="text-5xl font-bold font-display tracking-tight text-gradient-primary">EVA OS</h1>
-              <p className="text-xs uppercase tracking-[0.3em] text-primary/70 mt-2">Gestão Financeira Inteligente</p>
+              <h1 className="text-4xl font-bold font-display tracking-tight text-gradient-primary">EVA OS</h1>
+              <p className="text-sm text-muted-foreground mt-1 tracking-wide">Gestão Financeira Inteligente</p>
             </div>
           </div>
 
-          <p className="text-lg text-foreground/80 leading-relaxed">
+          <p className="text-lg text-muted-foreground leading-relaxed">
             Controle total das suas finanças pessoais e empresariais em um único lugar.
           </p>
 
@@ -74,24 +60,22 @@ export default function Auth() {
       </div>
 
       {/* Right side - Auth Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 relative z-10">
-        <div className="w-full max-w-md relative animate-fade-in">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 relative">
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-primary/3 lg:hidden" />
+        <div className="w-full max-w-md relative z-10">
           {/* Mobile logo */}
           <div className="lg:hidden flex flex-col items-center gap-3 mb-8">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-xl bg-gradient-primary opacity-40 blur-xl" />
-              <div className="relative h-16 w-16 rounded-xl overflow-hidden ring-1 ring-primary/30 glow-primary shadow-premium">
-                <img src={evaLogo} alt="EVA OS" className="h-full w-full object-cover" />
-              </div>
+            <div className="h-16 w-16 rounded-xl overflow-hidden glow-primary shadow-premium">
+              <img src={evaLogo} alt="EVA OS" className="h-full w-full object-cover" />
             </div>
-            <h1 className="text-3xl font-bold font-display text-gradient-primary">EVA OS</h1>
+            <h1 className="text-2xl font-bold font-display text-gradient-primary">EVA OS</h1>
           </div>
 
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6 bg-card/40 backdrop-blur-xl border border-border/40 p-1 h-11">
-              <TabsTrigger value="login" className="data-[state=active]:bg-gradient-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-[0_0_12px_hsl(var(--primary)/0.3)] data-[state=active]:border data-[state=active]:border-primary/30">Entrar</TabsTrigger>
-              <TabsTrigger value="signup" className="data-[state=active]:bg-gradient-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-[0_0_12px_hsl(var(--primary)/0.3)] data-[state=active]:border data-[state=active]:border-primary/30">Cadastrar</TabsTrigger>
-              <TabsTrigger value="hub" className="data-[state=active]:bg-gradient-primary-soft data-[state=active]:text-primary data-[state=active]:shadow-[0_0_12px_hsl(var(--primary)/0.3)] data-[state=active]:border data-[state=active]:border-primary/30">EVA Hub</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="login">Entrar</TabsTrigger>
+              <TabsTrigger value="signup">Cadastrar</TabsTrigger>
+              <TabsTrigger value="hub">EVA Hub</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
@@ -106,10 +90,6 @@ export default function Auth() {
               <HubLoginForm />
             </TabsContent>
           </Tabs>
-
-          <p className="text-center text-[11px] text-muted-foreground/70 mt-6 tracking-wide">
-            Protegido por criptografia de ponta a ponta · EVA OS © {new Date().getFullYear()}
-          </p>
         </div>
       </div>
     </div>
@@ -118,8 +98,8 @@ export default function Auth() {
 
 function FeatureCard({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
   return (
-    <div className="rounded-xl border border-border/40 bg-card/40 backdrop-blur-xl p-4 text-left card-hover group hover:border-primary/30 hover:shadow-[0_8px_24px_-12px_hsl(var(--primary)/0.4)] transition-all duration-300">
-      <div className="h-9 w-9 rounded-lg bg-gradient-primary-soft border border-primary/20 flex items-center justify-center mb-2.5 group-hover:glow-primary-sm transition-all duration-300">
+    <div className="rounded-xl glass p-4 text-left card-hover group">
+      <div className="h-8 w-8 rounded-lg bg-gradient-primary-soft flex items-center justify-center mb-2.5 group-hover:glow-primary-sm transition-all duration-300">
         <Icon className="h-4 w-4 text-primary" />
       </div>
       <h3 className="font-semibold text-sm text-foreground">{title}</h3>
@@ -156,7 +136,7 @@ function LoginForm() {
   };
 
   return (
-    <Card className="shadow-premium border border-border/40 bg-card/60 backdrop-blur-xl">
+    <Card className="shadow-premium border-border/50">
       <CardHeader>
         <CardTitle className="text-xl font-display">Bem-vindo de volta</CardTitle>
         <CardDescription>Entre com suas credenciais para acessar o EVA OS</CardDescription>
@@ -236,7 +216,7 @@ function SignupForm() {
   };
 
   return (
-    <Card className="shadow-premium border border-border/40 bg-card/60 backdrop-blur-xl">
+    <Card className="shadow-premium border-border/50">
       <CardHeader>
         <CardTitle className="text-xl font-display">Criar conta</CardTitle>
         <CardDescription>Preencha seus dados para começar a usar o EVA OS</CardDescription>
@@ -316,7 +296,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <Card className="shadow-premium border border-border/40 bg-card/60 backdrop-blur-xl">
+    <Card className="shadow-premium border-border/50">
       <CardHeader>
         <CardTitle className="text-xl font-display">Esqueci minha senha</CardTitle>
         <CardDescription>Informe seu email para receber o link de redefinição</CardDescription>
@@ -380,7 +360,7 @@ function HubLoginForm() {
   };
 
   return (
-    <Card className="shadow-premium border border-primary/30 bg-gradient-to-br from-card/70 to-primary/10 backdrop-blur-xl">
+    <Card className="shadow-premium border-primary/20 bg-gradient-to-br from-background to-primary/5">
       <CardHeader>
         <div className="flex items-center gap-2 mb-1">
           <Users className="h-5 w-5 text-primary" />
