@@ -120,8 +120,10 @@ async function downloadPDF(rows: AuditEntry[]) {
 
 export default function HubAuditoria() {
   const { user } = useAuth();
+  const { isHubMember } = useHub();
   const [page, setPage] = useState(0);
   const { entries, totalCount, pageSize, loading, refetch } = useHubAuditLog({ page });
+  if (isHubMember) return <Navigate to="/eva-hub/contas" replace />;
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
