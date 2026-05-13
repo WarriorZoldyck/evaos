@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { format, subDays, addDays } from "date-fns";
 
 interface ManualMatchModalProps {
@@ -18,6 +19,7 @@ const fmt = (n: number) => n.toLocaleString("pt-BR", { style: "currency", curren
 
 export function ManualMatchModal({ item, bankAccountId, onClose, onConfirm }: ManualMatchModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const [search, setSearch] = useState("");
   const [windowDays, setWindowDays] = useState(7);
   const [exactValue, setExactValue] = useState(true);
@@ -35,7 +37,7 @@ export function ManualMatchModal({ item, bankAccountId, onClose, onConfirm }: Ma
       let q = supabase
         .from("transactions")
         .select("id, description, amount, payment_date, type, contact_name, is_reconciled")
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .eq("bank_account_id", bankAccountId)
         .gte("payment_date", dFrom)
         .lte("payment_date", dTo)

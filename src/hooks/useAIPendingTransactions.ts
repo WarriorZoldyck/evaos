@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 
@@ -83,6 +84,7 @@ async function approveSingle(pending: AIPendingTransaction) {
 
 export function useAIPendingTransactions() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const queryClient = useQueryClient();
 
@@ -93,7 +95,7 @@ export function useAIPendingTransactions() {
       let query = supabase
         .from("ai_pending_transactions")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .order("created_at", { ascending: false });
 
       if (isPersonal) {
@@ -116,7 +118,7 @@ export function useAIPendingTransactions() {
       const { count, error } = await supabase
         .from("ai_pending_transactions")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .eq("status", "pending");
       if (error) return 0;
       return count || 0;
@@ -212,7 +214,7 @@ export function useAIPendingTransactions() {
       const { data, error } = await supabase
         .from("ai_pending_transactions")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .eq("status", "duplicate_suspect")
         .order("created_at", { ascending: false });
       if (error) throw error;
