@@ -692,6 +692,78 @@ export type Database = {
           },
         ]
       }
+      hub_audit_log: {
+        Row: {
+          action: string
+          actor_user_id: string
+          created_at: string
+          id: string
+          owner_id: string
+          payload: Json | null
+          resource_id: string | null
+          resource_type: string | null
+        }
+        Insert: {
+          action: string
+          actor_user_id: string
+          created_at?: string
+          id?: string
+          owner_id: string
+          payload?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string
+          created_at?: string
+          id?: string
+          owner_id?: string
+          payload?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+        }
+        Relationships: []
+      }
+      hub_invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          owner_id: string
+          role: string
+          status: string
+          token: string
+          workspace_id: string | null
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          owner_id: string
+          role?: string
+          status?: string
+          token?: string
+          workspace_id?: string | null
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          owner_id?: string
+          role?: string
+          status?: string
+          token?: string
+          workspace_id?: string | null
+        }
+        Relationships: []
+      }
       pricing_configurations: {
         Row: {
           hours_per_month: number | null
@@ -1765,8 +1837,25 @@ export type Database = {
         }[]
       }
       has_active_subscription: { Args: { _uid: string }; Returns: boolean }
+      hub_member_can_see: {
+        Args: {
+          _member_uid: string
+          _owner_uid: string
+          _resource_id: string
+          _resource_type: string
+        }
+        Returns: boolean
+      }
+      hub_member_role: {
+        Args: { _member_uid: string; _owner_uid: string }
+        Returns: string
+      }
       increment_ai_usage: { Args: { _uid: string }; Returns: number }
       is_hub_member: {
+        Args: { _member_uid: string; _owner_uid: string }
+        Returns: boolean
+      }
+      is_hub_member_writer: {
         Args: { _member_uid: string; _owner_uid: string }
         Returns: boolean
       }
