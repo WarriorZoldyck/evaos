@@ -118,6 +118,8 @@ export default function HubMembros() {
               onSuspend={suspendMember}
               onActivate={activateMember}
               onAssignWorkspace={assignMemberToWorkspace}
+              onDelete={deleteMember}
+              onResetPassword={resetMemberPassword}
             />
           ))}
         </div>
