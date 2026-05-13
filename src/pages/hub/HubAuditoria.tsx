@@ -6,6 +6,8 @@ import {
   type AuditEntry,
 } from "@/hooks/useHubAuditLog";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHub } from "@/contexts/HubContext";
+import { Navigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,8 +120,10 @@ async function downloadPDF(rows: AuditEntry[]) {
 
 export default function HubAuditoria() {
   const { user } = useAuth();
+  const { isHubMember } = useHub();
   const [page, setPage] = useState(0);
   const { entries, totalCount, pageSize, loading, refetch } = useHubAuditLog({ page });
+  if (isHubMember) return <Navigate to="/eva-hub/contas" replace />;
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
   const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
