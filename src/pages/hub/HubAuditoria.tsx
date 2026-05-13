@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { useHubAuditLog, type AuditEntry } from "@/hooks/useHubAuditLog";
+import {
+  useHubAuditLog,
+  fetchAuditForExport,
+  AUDIT_EXPORT_MAX,
+  type AuditEntry,
+} from "@/hooks/useHubAuditLog";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Loader2, Download, FileText, RefreshCw, ScrollText, Search } from "lucide-react";
+import { Loader2, Download, FileText, RefreshCw, ScrollText, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 function fmtDate(iso: string) {
   try { return format(new Date(iso), "dd/MM/yyyy HH:mm:ss", { locale: ptBR }); }
@@ -23,9 +30,20 @@ function actionLabel(a: string) {
     transaction_create: "Criou lançamento",
     transaction_update: "Editou lançamento",
     transaction_delete: "Excluiu lançamento",
+    transaction_bulk_create: "Criou lançamentos em lote",
+    transaction_bulk_delete: "Excluiu lançamentos em lote",
     account_create: "Criou conta",
     account_update: "Editou conta",
     account_delete: "Excluiu conta",
+    category_create: "Criou categoria",
+    category_update: "Editou categoria",
+    category_delete: "Excluiu categoria",
+    contact_create: "Criou contato",
+    contact_update: "Editou contato",
+    contact_delete: "Excluiu contato",
+    goal_create: "Criou meta",
+    goal_update: "Editou meta",
+    goal_delete: "Excluiu meta",
   };
   return map[a] ?? a;
 }
@@ -99,9 +117,14 @@ async function downloadPDF(rows: AuditEntry[]) {
 }
 
 export default function HubAuditoria() {
-  const { entries, loading, refetch } = useHubAuditLog({ limit: 1000 });
+  const { user } = useAuth();
+  const [page, setPage] = useState(0);
+  const { entries, totalCount, pageSize, loading, refetch } = useHubAuditLog({ page });
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState<string>("all");
+  const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const actions = useMemo(
     () => Array.from(new Set(entries.map((e) => e.action))),
@@ -117,6 +140,30 @@ export default function HubAuditoria() {
         .some((v) => (v ?? "").toString().toLowerCase().includes(q));
     });
   }, [entries, search, actionFilter]);
+
+  const handleExport = async (kind: "csv" | "pdf") => {
+    if (!user) return;
+    setExporting(kind);
+    try {
+      const { rows, truncated } = await fetchAuditForExport(user.id);
+      if (!rows.length) {
+        toast.info("Nenhum evento para exportar.");
+        return;
+      }
+      if (truncated) {
+        toast.warning(
+          `Exportando os ${AUDIT_EXPORT_MAX.toLocaleString("pt-BR")} eventos mais recentes (limite de exportação).`,
+        );
+      }
+      if (kind === "csv") downloadCSV(rows);
+      else await downloadPDF(rows);
+      toast.success(`Exportado ${rows.length.toLocaleString("pt-BR")} eventos em ${kind.toUpperCase()}.`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Falha ao exportar auditoria.");
+    } finally {
+      setExporting(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -135,12 +182,24 @@ export default function HubAuditoria() {
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             <span className="ml-2 hidden sm:inline">Atualizar</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => downloadCSV(filtered)} disabled={!filtered.length}>
-            <Download className="h-4 w-4" />
+          <Button
+            variant="outline" size="sm"
+            onClick={() => handleExport("csv")}
+            disabled={!totalCount || !!exporting}
+          >
+            {exporting === "csv"
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <Download className="h-4 w-4" />}
             <span className="ml-2 hidden sm:inline">CSV</span>
           </Button>
-          <Button size="sm" onClick={() => downloadPDF(filtered)} disabled={!filtered.length}>
-            <FileText className="h-4 w-4" />
+          <Button
+            size="sm"
+            onClick={() => handleExport("pdf")}
+            disabled={!totalCount || !!exporting}
+          >
+            {exporting === "pdf"
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <FileText className="h-4 w-4" />}
             <span className="ml-2 hidden sm:inline">PDF</span>
           </Button>
         </div>
@@ -148,7 +207,7 @@ export default function HubAuditoria() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Filtros</CardTitle>
+          <CardTitle className="text-sm">Filtros (página atual)</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[200px]">
@@ -181,7 +240,9 @@ export default function HubAuditoria() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground text-sm">
-              Nenhum evento de auditoria encontrado.
+              {totalCount === 0
+                ? "Nenhum evento de auditoria registrado ainda."
+                : "Nenhum evento encontrado nesta página com os filtros atuais."}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -230,8 +291,30 @@ export default function HubAuditoria() {
         </CardContent>
       </Card>
 
-      <p className="text-xs text-muted-foreground text-center">
-        Exibindo até 1000 eventos mais recentes • {filtered.length} de {entries.length} após filtros
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          Página {page + 1} de {totalPages} • {totalCount.toLocaleString("pt-BR")} eventos no total
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline" size="sm"
+            disabled={page === 0 || loading}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            <ChevronLeft className="h-4 w-4" /> Anterior
+          </Button>
+          <Button
+            variant="outline" size="sm"
+            disabled={page + 1 >= totalPages || loading}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Próxima <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground text-center">
+        Eventos são automaticamente removidos após 180 dias. Exportações limitam-se aos {AUDIT_EXPORT_MAX.toLocaleString("pt-BR")} mais recentes.
       </p>
     </div>
   );
