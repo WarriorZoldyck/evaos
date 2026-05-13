@@ -6,6 +6,8 @@ import {
   type AuditEntry,
 } from "@/hooks/useHubAuditLog";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHub } from "@/contexts/HubContext";
+import { Navigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
