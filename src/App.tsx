@@ -31,6 +31,7 @@ import CentrosDeCustos from "@/pages/CentrosDeCustos";
 import HubContas from "@/pages/hub/HubContas";
 import HubWorkspaces from "@/pages/hub/HubWorkspaces";
 import HubMembros from "@/pages/hub/HubMembros";
+import HubAuditoria from "@/pages/hub/HubAuditoria";
 import Planos from "@/pages/Planos";
 import MinhaAssinatura from "@/pages/MinhaAssinatura";
 import ConciliacaoBancaria from "@/pages/ConciliacaoBancaria";
@@ -89,6 +90,7 @@ const App = () => {
                 <Route path="/eva-hub/contas" element={<HubContas />} />
                 <Route path="/eva-hub/workspaces" element={<HubWorkspaces />} />
                 <Route path="/eva-hub/membros" element={<HubMembros />} />
+                <Route path="/eva-hub/auditoria" element={<HubAuditoria />} />
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>

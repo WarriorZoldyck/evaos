@@ -1,4 +1,4 @@
-import { Building2, Folder, Users, LogOut, LayoutDashboard } from "lucide-react";
+import { Building2, Folder, Users, LogOut, LayoutDashboard, ScrollText } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHub } from "@/contexts/HubContext";
@@ -23,6 +23,7 @@ const hubMenuItems = [
   { title: "Contas", url: "/eva-hub/contas", icon: Building2 },
   { title: "Áreas de Trabalho", url: "/eva-hub/workspaces", icon: Folder },
   { title: "Membros", url: "/eva-hub/membros", icon: Users },
+  { title: "Auditoria", url: "/eva-hub/auditoria", icon: ScrollText },
 ];
 
 export function HubSidebar() {
