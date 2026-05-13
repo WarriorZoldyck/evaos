@@ -134,3 +134,46 @@ export default function HubContas() {
     </div>
   );
 }
+
+function LeaveAccountButton({ memberId, ownerName }: { memberId: string; ownerName: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const handleLeave = async () => {
+    setLoading(true);
+    const { error } = await supabase.from("workspace_members").delete().eq("id", memberId);
+    setLoading(false);
+    if (error) toast.error("Erro ao sair da conta");
+    else { toast.success("Você saiu da conta"); window.location.reload(); }
+  };
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+          onClick={(e) => e.stopPropagation()}
+          title="Sair desta conta"
+        >
+          <LogOut className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Sair de {ownerName}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Você perderá o acesso a esta conta. O dono poderá reconvidar você a qualquer momento.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleLeave} disabled={loading} className="bg-destructive hover:bg-destructive/90">
+            Sair
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
