@@ -2,16 +2,23 @@ import { useState } from "react";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { UpgradeGateModal } from "@/components/subscription/UpgradeGate";
 import { useWorkspaceMembers, type WorkspaceMember, type Workspace } from "@/hooks/useWorkspaceMembers";
+import { MemberPermissionsModal } from "@/components/hub/MemberPermissionsModal";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserPlus, User, Shield, Eye, Edit3,
-  Pause, Play, Loader2, UserCheck, UserX, Folder,
+  Pause, Play, Loader2, UserCheck, UserX, Folder, Trash2, KeyRound,
 } from "lucide-react";
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
