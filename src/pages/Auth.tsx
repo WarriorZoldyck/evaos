@@ -156,7 +156,7 @@ function LoginForm() {
   };
 
   return (
-    <Card className="shadow-premium border-border/50">
+    <Card className="shadow-premium border border-border/40 bg-card/60 backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-xl font-display">Bem-vindo de volta</CardTitle>
         <CardDescription>Entre com suas credenciais para acessar o EVA OS</CardDescription>
@@ -236,7 +236,7 @@ function SignupForm() {
   };
 
   return (
-    <Card className="shadow-premium border-border/50">
+    <Card className="shadow-premium border border-border/40 bg-card/60 backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-xl font-display">Criar conta</CardTitle>
         <CardDescription>Preencha seus dados para começar a usar o EVA OS</CardDescription>
@@ -316,7 +316,7 @@ function ForgotPasswordForm({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <Card className="shadow-premium border-border/50">
+    <Card className="shadow-premium border border-border/40 bg-card/60 backdrop-blur-xl">
       <CardHeader>
         <CardTitle className="text-xl font-display">Esqueci minha senha</CardTitle>
         <CardDescription>Informe seu email para receber o link de redefinição</CardDescription>
@@ -380,7 +380,7 @@ function HubLoginForm() {
   };
 
   return (
-    <Card className="shadow-premium border-primary/20 bg-gradient-to-br from-background to-primary/5">
+    <Card className="shadow-premium border border-primary/30 bg-gradient-to-br from-card/70 to-primary/10 backdrop-blur-xl">
       <CardHeader>
         <div className="flex items-center gap-2 mb-1">
           <Users className="h-5 w-5 text-primary" />
