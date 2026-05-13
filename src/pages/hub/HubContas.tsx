@@ -11,7 +11,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Building2, LogIn, Loader2, User, Shield, Edit3, Eye, ChevronRight, LogOut } from "lucide-react";
+import { Building2, LogIn, Loader2, User, Shield, Edit3, Eye, LogOut } from "lucide-react";
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
   admin: { label: "Administrador", icon: Shield, color: "text-amber-500" },
