@@ -23,6 +23,7 @@ const hubMenuItems = [
   { title: "Contas", url: "/eva-hub/contas", icon: Building2 },
   { title: "Áreas de Trabalho", url: "/eva-hub/workspaces", icon: Folder },
   { title: "Membros", url: "/eva-hub/membros", icon: Users },
+  { title: "Auditoria", url: "/eva-hub/auditoria", icon: ScrollText },
 ];
 
 export function HubSidebar() {
