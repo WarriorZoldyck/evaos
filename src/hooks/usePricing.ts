@@ -233,7 +233,7 @@ export function usePricing() {
 
     const { data: proc, error } = await supabase
       .from("pricing_procedures")
-      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: user.id })
+      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: effectiveUserId })
       .select()
       .single();
 
