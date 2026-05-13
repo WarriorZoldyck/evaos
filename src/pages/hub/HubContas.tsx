@@ -52,7 +52,7 @@ export default function HubContas() {
                   key={ws.owner_id}
                   className="hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group"
                   onClick={() => {
-                    setImpersonation(ws.owner_id, ws.owner_name);
+                    setImpersonation(ws.owner_id, ws.owner_name, ws.role);
                     navigate("/dashboard");
                   }}
                 >
