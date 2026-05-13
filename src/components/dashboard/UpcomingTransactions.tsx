@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import type { CreditCardInfo } from "@/hooks/useDashboardData";
@@ -92,6 +93,7 @@ function extractRecurringId(syntheticId: string): string {
 export function UpcomingTransactions({ transactions, creditCards, loading, onLiquidated }: UpcomingTransactionsProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [selectedBill, setSelectedBill] = useState<CreditCardBill | null>(null);

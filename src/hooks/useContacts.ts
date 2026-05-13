@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useToast } from "@/hooks/use-toast";
 
 export interface Supplier {
@@ -24,6 +25,7 @@ export type ContactType = "supplier" | "client";
 
 export function useContacts() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { toast } = useToast();
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);

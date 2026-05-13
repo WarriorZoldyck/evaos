@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ptBR } from "date-fns/locale";
 import { cn, addBusinessDays } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany, type Company } from "@/contexts/CompanyContext";
 import {
   Dialog,
@@ -314,6 +315,7 @@ export function TransactionFormModal({
   fieldSettings,
 }: TransactionFormModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const [activeTab, setActiveTab] = useState<"receita" | "despesa" | "transferencia">("despesa");
   const [saving, setSaving] = useState(false);

@@ -3,6 +3,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   Dialog,
@@ -98,6 +99,7 @@ export function CreditCardBillPaymentModal({
   onSuccess,
 }: CreditCardBillPaymentModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 

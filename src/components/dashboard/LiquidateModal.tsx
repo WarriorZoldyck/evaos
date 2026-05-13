@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { format, addMonths } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   Dialog,
@@ -72,6 +73,7 @@ const formatCurrency = (v: number) =>
 
 export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuccess }: LiquidateModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 

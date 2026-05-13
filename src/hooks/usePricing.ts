@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useToast } from "@/hooks/use-toast";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -58,6 +59,7 @@ function parseMatrixValues(json: Json | null): MatrixValues {
 
 export function usePricing() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { toast } = useToast();
 
   const [config, setConfig] = useState<PricingConfig | null>(null);

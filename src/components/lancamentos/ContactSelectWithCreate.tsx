@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -47,6 +48,7 @@ export function ContactSelectWithCreate({
   disabled = false,
 }: ContactSelectWithCreateProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");

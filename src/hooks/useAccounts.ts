@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
@@ -13,6 +14,7 @@ export type CardTerminal = Tables<"card_terminals">;
 
 export function useAccounts() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
