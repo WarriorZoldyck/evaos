@@ -31,6 +31,7 @@ export default function HubMembros() {
   const {
     members, workspaces, loading,
     createMember, updateMemberRole, suspendMember, activateMember, assignMemberToWorkspace,
+    deleteMember, resetMemberPassword,
   } = useWorkspaceMembers();
   const [showInvite, setShowInvite] = useState(false);
   const { canCreateHubMember, limits, usage, refetch: refetchLimits } = usePlanLimits();
