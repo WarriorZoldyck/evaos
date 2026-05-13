@@ -92,10 +92,23 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
           ownerId, ownerName, role, userId: user.id,
         } satisfies Persisted));
       } catch {}
+      logHubAction({
+        actorUserId: user.id, ownerId,
+        action: "impersonation_start",
+        payload: { role, ownerName },
+      });
     }
   };
 
   const exitImpersonation = () => {
+    if (user && impersonatingOwnerId) {
+      logHubAction({
+        actorUserId: user.id,
+        ownerId: impersonatingOwnerId,
+        action: "impersonation_exit",
+        payload: { role: impersonatingRole },
+      });
+    }
     setImpersonatingOwnerId(null);
     setImpersonatingOwnerName(null);
     setImpersonatingRole(null);
