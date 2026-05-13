@@ -57,24 +57,32 @@ export default function HubContas() {
               return (
                 <Card
                   key={ws.owner_id}
-                  className="hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group"
-                  onClick={() => {
-                    setImpersonation(ws.owner_id, ws.owner_name, ws.role);
-                    navigate("/dashboard");
-                  }}
+                  className="hover:border-primary/40 hover:shadow-md transition-all group"
                 >
                   <CardContent className="flex items-center gap-4 py-4">
-                    <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <div
+                      className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 cursor-pointer"
+                      onClick={() => {
+                        setImpersonation(ws.owner_id, ws.owner_name, ws.role);
+                        navigate("/dashboard");
+                      }}
+                    >
                       <Building2 className="h-5 w-5 text-primary" />
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer"
+                      onClick={() => {
+                        setImpersonation(ws.owner_id, ws.owner_name, ws.role);
+                        navigate("/dashboard");
+                      }}
+                    >
                       <p className="font-semibold text-foreground truncate">{ws.owner_name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <RoleIcon className={`h-3 w-3 ${role.color}`} />
                         <span className="text-xs text-muted-foreground">{role.label}</span>
                       </div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+                    <LeaveAccountButton memberId={ws.member_id} ownerName={ws.owner_name} />
                   </CardContent>
                 </Card>
               );
