@@ -1,9 +1,7 @@
-import { Building2, Folder, Users, LogOut, LayoutDashboard, ScrollText } from "lucide-react";
+import { Building2, Folder, Users, LogOut, ScrollText } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHub } from "@/contexts/HubContext";
-import { useWorkspaceMembers } from "@/hooks/useWorkspaceMembers";
-import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
