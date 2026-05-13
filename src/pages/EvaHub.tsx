@@ -315,14 +315,18 @@ function MemberCard({
   onAssignWorkspace: (id: string, wsId: string | null) => void;
 }) {
   return (
-    <Card className={member.status === "suspended" ? "opacity-60" : ""}>
+    <Card
+      className={`group border-border/60 bg-card/60 backdrop-blur-sm hover:border-primary/30 hover:shadow-[0_4px_20px_-8px_hsl(var(--primary)/0.25)] transition-all duration-300 ${
+        member.status === "suspended" ? "opacity-60" : ""
+      }`}
+    >
       <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+          <div className="h-10 w-10 rounded-xl bg-gradient-primary-soft border border-primary/20 flex items-center justify-center shrink-0">
             <User className="h-4 w-4 text-primary" />
           </div>
           <div className="min-w-0">
-            <p className="font-medium text-sm text-foreground truncate">{member.member_name}</p>
+            <p className="font-semibold text-sm text-foreground truncate">{member.member_name}</p>
             <p className="text-xs text-muted-foreground truncate">{member.email}</p>
           </div>
         </div>
