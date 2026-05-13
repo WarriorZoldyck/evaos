@@ -147,44 +147,68 @@ function OwnerDashboard() {
   const mainCompany = ownerProfile?.companies?.[0];
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-5xl mx-auto space-y-8 animate-fade-in">
       {/* ── Header / Profile ── */}
-      <Card>
-        <CardContent className="flex items-center gap-4 py-6">
-          <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-            <User className="h-7 w-7 text-primary" />
+      <Card className="relative overflow-hidden border-border/60 bg-gradient-to-br from-card via-card to-primary/5 backdrop-blur-sm">
+        <div className="absolute -top-20 -right-20 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-primary/5 blur-3xl" />
+        <CardContent className="relative flex items-center gap-5 py-7">
+          <div className="relative shrink-0">
+            <div className="absolute inset-0 rounded-2xl bg-gradient-primary opacity-30 blur-lg" />
+            <div className="relative h-16 w-16 rounded-2xl bg-gradient-primary-soft border border-primary/30 flex items-center justify-center glow-primary-sm">
+              <User className="h-8 w-8 text-primary" />
+            </div>
           </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold font-display text-foreground truncate">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-primary/30 text-primary bg-primary/5">
+                Proprietário
+              </Badge>
+            </div>
+            <h1 className="text-2xl font-bold font-display text-foreground truncate mt-1.5 tracking-tight">
               {ownerProfile?.full_name || "Minha Conta"}
             </h1>
             {mainCompany ? (
-              <p className="text-sm text-muted-foreground truncate">
+              <p className="text-sm text-muted-foreground truncate mt-0.5">
                 {mainCompany.name} • CNPJ: {mainCompany.cnpj}
               </p>
             ) : (
-              <p className="text-sm text-muted-foreground">EVA Hub — Gestão de equipe</p>
+              <p className="text-sm text-muted-foreground mt-0.5">EVA Hub — Gestão de equipe</p>
             )}
+          </div>
+          <div className="hidden sm:flex flex-col items-end gap-1 text-right">
+            <span className="text-2xl font-bold font-display text-gradient-primary">{members.length}</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              {members.length === 1 ? "membro" : "membros"}
+            </span>
           </div>
         </CardContent>
       </Card>
 
       {/* ── Workspaces Section ── */}
-      <section className="space-y-3">
+      <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold font-display text-foreground flex items-center gap-2">
-            <Folder className="h-5 w-5 text-primary" />
-            Áreas de Trabalho
-          </h2>
-          <Button variant="outline" size="sm" onClick={() => setShowCreateWs(true)} className="gap-1.5">
+          <div>
+            <h2 className="text-lg font-semibold font-display text-foreground flex items-center gap-2">
+              <Folder className="h-5 w-5 text-primary" />
+              Áreas de Trabalho
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Departamentos e times da sua organização</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowCreateWs(true)}
+            className="gap-1.5 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50"
+          >
             <FolderPlus className="h-4 w-4" />
             Criar
           </Button>
         </div>
 
         {workspaces.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground text-sm">
+          <Card className="border-dashed border-border/60 bg-card/40">
+            <CardContent className="py-10 text-center text-muted-foreground text-sm">
               Nenhuma área criada. Crie departamentos para organizar sua equipe.
             </CardContent>
           </Card>
@@ -193,23 +217,35 @@ function OwnerDashboard() {
             {workspaces.map((ws) => {
               const count = members.filter((m) => m.workspace_id === ws.id).length;
               return (
-                <Card key={ws.id} className="group">
-                  <CardContent className="py-4 space-y-1.5 relative">
-                    <p className="font-medium text-foreground">{ws.name}</p>
+                <Card
+                  key={ws.id}
+                  className="group relative overflow-hidden border-border/60 bg-card/60 backdrop-blur-sm hover:border-primary/40 hover:shadow-[0_8px_24px_-12px_hsl(var(--primary)/0.3)] transition-all duration-300"
+                >
+                  <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <CardContent className="py-4 space-y-2 relative">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="h-9 w-9 rounded-lg bg-gradient-primary-soft border border-primary/20 flex items-center justify-center shrink-0">
+                        <Folder className="h-4 w-4 text-primary" />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => deleteWorkspace(ws.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <p className="font-semibold text-foreground">{ws.name}</p>
                     {ws.description && (
                       <p className="text-xs text-muted-foreground line-clamp-2">{ws.description}</p>
                     )}
-                    <p className="text-xs text-muted-foreground">
-                      {count} {count === 1 ? "membro" : "membros"}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                      onClick={() => deleteWorkspace(ws.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <Users className="h-3 w-3 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">
+                        {count} {count === 1 ? "membro" : "membros"}
+                      </p>
+                    </div>
                   </CardContent>
                 </Card>
               );
@@ -219,21 +255,28 @@ function OwnerDashboard() {
       </section>
 
       {/* ── Members Section ── */}
-      <section className="space-y-3">
+      <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold font-display text-foreground flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            Membros
-          </h2>
-          <Button onClick={() => setShowInvite(true)} size="sm" className="gap-1.5">
+          <div>
+            <h2 className="text-lg font-semibold font-display text-foreground flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Membros
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Pessoas com acesso ao seu workspace</p>
+          </div>
+          <Button
+            onClick={() => setShowInvite(true)}
+            size="sm"
+            className="gap-1.5 bg-gradient-primary hover:opacity-90 shadow-lg shadow-primary/20"
+          >
             <UserPlus className="h-4 w-4" />
             Convidar
           </Button>
         </div>
 
         {members.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground text-sm">
+          <Card className="border-dashed border-border/60 bg-card/40">
+            <CardContent className="py-10 text-center text-muted-foreground text-sm">
               Nenhum membro adicionado. Convide alguém para começar.
             </CardContent>
           </Card>
