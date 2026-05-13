@@ -17,17 +17,20 @@ import {
 } from "@/components/ui/sidebar";
 import evaLogo from "@/assets/eva-os-logo.jpeg";
 
-const hubMenuItems = [
+const baseMenuItems = [
   { title: "Contas", url: "/eva-hub/contas", icon: Building2 },
   { title: "Áreas de Trabalho", url: "/eva-hub/workspaces", icon: Folder },
   { title: "Membros", url: "/eva-hub/membros", icon: Users },
-  { title: "Auditoria", url: "/eva-hub/auditoria", icon: ScrollText },
 ];
+
+const auditoriaItem = { title: "Auditoria", url: "/eva-hub/auditoria", icon: ScrollText };
 
 export function HubSidebar() {
   const { signOut, user } = useAuth();
   const { state } = useSidebar();
+  const { isHubMember } = useHub();
   const collapsed = state === "collapsed";
+  const hubMenuItems = isHubMember ? baseMenuItems : [...baseMenuItems, auditoriaItem];
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
