@@ -3,6 +3,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   Dialog,
@@ -98,6 +99,7 @@ export function CreditCardBillPaymentModal({
   onSuccess,
 }: CreditCardBillPaymentModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
@@ -256,7 +258,7 @@ export function CreditCardBillPaymentModal({
           // Create a pending transaction on the next billing cycle
           const nextDueDate = addMonths(dueDate!, 1);
           await supabase.from("transactions").insert({
-            user_id: user.id,
+            user_id: effectiveUserId,
             company_id: isPersonal ? null : selectedCompanyId,
             type: "despesa" as const,
             description: `Saldo anterior fatura ${creditCard.name}`,
@@ -275,7 +277,7 @@ export function CreditCardBillPaymentModal({
           const nextDueDate = addMonths(dueDate!, 1);
 
           await supabase.from("transactions").insert({
-            user_id: user.id,
+            user_id: effectiveUserId,
             company_id: isPersonal ? null : selectedCompanyId,
             type: "despesa" as const,
             description: `Saldo anterior + juros fatura ${creditCard.name}`,
@@ -291,7 +293,7 @@ export function CreditCardBillPaymentModal({
         } else if (partialAction === "create_standalone") {
           // Create standalone pending transaction
           await supabase.from("transactions").insert({
-            user_id: user.id,
+            user_id: effectiveUserId,
             company_id: isPersonal ? null : selectedCompanyId,
             type: "despesa" as const,
             description: `Saldo não pago fatura ${creditCard.name}`,
@@ -311,7 +313,7 @@ export function CreditCardBillPaymentModal({
           // Create a credit (receita) on the next billing cycle
           const nextDueDate = addMonths(dueDate!, 1);
           await supabase.from("transactions").insert({
-            user_id: user.id,
+            user_id: effectiveUserId,
             company_id: isPersonal ? null : selectedCompanyId,
             type: "receita" as const,
             description: `Crédito excedente fatura ${creditCard.name}`,

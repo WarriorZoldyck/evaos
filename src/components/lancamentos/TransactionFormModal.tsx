@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ptBR } from "date-fns/locale";
 import { cn, addBusinessDays } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany, type Company } from "@/contexts/CompanyContext";
 import {
   Dialog,
@@ -314,6 +315,7 @@ export function TransactionFormModal({
   fieldSettings,
 }: TransactionFormModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const [activeTab, setActiveTab] = useState<"receita" | "despesa" | "transferencia">("despesa");
   const [saving, setSaving] = useState(false);
@@ -569,7 +571,7 @@ export function TransactionFormModal({
     }
 
     const baseData: TransactionInsert = {
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: formCompanyId,
       type: activeTab as "receita" | "despesa",
       description: data.description.trim(),
@@ -862,7 +864,7 @@ export function TransactionFormModal({
 
     const transfers: TransactionInsert[] = [
       {
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: sourceCompanyId,
         type: "despesa",
         description: data.description.trim(),
@@ -876,7 +878,7 @@ export function TransactionFormModal({
         is_internal_transfer: isInternal,
       } as any,
       {
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: destCompanyId,
         type: "receita",
         description: data.description.trim(),

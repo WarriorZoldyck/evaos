@@ -5,6 +5,7 @@ import { Settings, Trash2, Building2, Plus, X, Pencil } from "lucide-react";
 import { TransactionFieldsCard } from "@/components/configuracoes/TransactionFieldsCard";
 import { WhatsAppCard } from "@/components/configuracoes/WhatsAppCard";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ import { Label } from "@/components/ui/label";
 
 export default function Configuracoes() {
   const { user, signOut } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { companies, refetchCompanies } = useCompany();
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -111,7 +113,7 @@ export default function Configuracoes() {
         const { error } = await supabase.from("companies").insert({
           name: companyName.trim(),
           cnpj: companyCnpj.trim(),
-          user_id: user.id,
+          user_id: effectiveUserId,
         });
         if (error) throw error;
         toast.success("Empresa cadastrada com sucesso!");

@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -68,6 +69,7 @@ function monthlyValue(item: CostItem): number {
 
 export function usePricingV2() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
@@ -101,7 +103,7 @@ export function usePricingV2() {
     let query = supabase
       .from("pricing_v2_configurations")
       .select("*")
-      .eq("user_id", user.id);
+      .eq("user_id", effectiveUserId);
 
     if (isPersonal) {
       query = query.is("company_id", null);
@@ -153,7 +155,7 @@ export function usePricingV2() {
       }
     } else {
       const { error } = await supabase.from("pricing_v2_configurations").insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: selectedCompanyId || null,
         hours_per_month: hours,
         num_rooms: Math.round(rooms * 1000) / 1000,
@@ -177,7 +179,7 @@ export function usePricingV2() {
     let query = supabase
       .from("pricing_v2_cost_items")
       .select("*")
-      .eq("user_id", user.id);
+      .eq("user_id", effectiveUserId);
 
     if (isPersonal) {
       query = query.is("company_id", null);
@@ -213,7 +215,7 @@ export function usePricingV2() {
       if (!config) {
         const { data: newConfig, error: cfgErr } = await supabase
           .from("pricing_v2_configurations")
-          .insert({ user_id: user!.id, company_id: selectedCompanyId || null })
+          .insert({ user_id: effectiveUserId, company_id: selectedCompanyId || null })
           .select()
           .single();
         if (cfgErr || !newConfig) {
@@ -232,7 +234,7 @@ export function usePricingV2() {
         });
         const { error } = await supabase.from("pricing_v2_cost_items").insert({
           config_id: newConfig.id,
-          user_id: user!.id,
+          user_id: effectiveUserId,
           company_id: selectedCompanyId || null,
           ...item,
         });
@@ -244,7 +246,7 @@ export function usePricingV2() {
     } else {
       const { error } = await supabase.from("pricing_v2_cost_items").insert({
         config_id: config.id,
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: selectedCompanyId || null,
         ...item,
       });
@@ -285,7 +287,7 @@ export function usePricingV2() {
     let query = supabase
       .from("pricing_v2_procedures")
       .select("*")
-      .eq("user_id", user.id);
+      .eq("user_id", effectiveUserId);
 
     if (isPersonal) {
       query = query.is("company_id", null);
@@ -331,7 +333,7 @@ export function usePricingV2() {
     if (!user) return false;
     const { data: proc, error } = await supabase
       .from("pricing_v2_procedures")
-      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: user.id, company_id: selectedCompanyId || null })
+      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: effectiveUserId, company_id: selectedCompanyId || null })
       .select()
       .single();
 
@@ -387,7 +389,7 @@ export function usePricingV2() {
     if (!proc || !user) return false;
     const { data: newProc, error } = await supabase
       .from("pricing_v2_procedures")
-      .insert({ name: `${proc.name} (cópia)`, execution_time: proc.execution_time, desired_price: proc.desired_price, user_id: user.id, company_id: selectedCompanyId || null })
+      .insert({ name: `${proc.name} (cópia)`, execution_time: proc.execution_time, desired_price: proc.desired_price, user_id: effectiveUserId, company_id: selectedCompanyId || null })
       .select()
       .single();
     if (error || !newProc) return false;

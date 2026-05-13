@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,6 +21,7 @@ export interface Category {
 
 export function useCategories() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
@@ -62,7 +64,7 @@ export function useCategories() {
       parent_id: data.parent_id || null,
       type: data.type || "ambos",
       dre_section: data.dre_section || null,
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
       sort_order: maxSort,
     });

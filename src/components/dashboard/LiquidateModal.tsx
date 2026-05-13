@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { format, addMonths } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import {
   Dialog,
@@ -72,6 +73,7 @@ const formatCurrency = (v: number) =>
 
 export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuccess }: LiquidateModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
@@ -244,7 +246,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
         for (let i = 0; i < parcelas; i++) {
           const payDate = addMonths(new Date(paymentDate), i + 1);
           installments.push({
-            user_id: user.id,
+            user_id: effectiveUserId,
             company_id: isPersonal ? null : selectedCompanyId,
             type: transaction.type,
             description: `${transaction.description} (Parcela Fatura ${i + 1}/${parcelas})`,
@@ -294,7 +296,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
 
       case "create_pending": {
         const { error } = await supabase.from("transactions").insert({
-          user_id: user.id,
+          user_id: effectiveUserId,
           company_id: isPersonal ? null : selectedCompanyId,
           type: t.type,
           description: `${t.description} (Saldo restante)`,
@@ -313,7 +315,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
 
       case "apply_interest": {
         const { error } = await supabase.from("transactions").insert({
-          user_id: user.id,
+          user_id: effectiveUserId,
           company_id: isPersonal ? null : selectedCompanyId,
           type: t.type,
           description: `${t.description} (Saldo + juros ${interestRate}%)`,
@@ -365,7 +367,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
 
     if (excessAction === "create_separate") {
       const { error } = await supabase.from("transactions").insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: isPersonal ? null : selectedCompanyId,
         type: t.type,
         description: excessDescription || `${t.description} (Excedente)`,

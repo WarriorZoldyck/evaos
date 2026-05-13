@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
@@ -13,6 +14,7 @@ export type CardTerminal = Tables<"card_terminals">;
 
 export function useAccounts() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
@@ -60,7 +62,7 @@ export function useAccounts() {
       ...data,
       account_number: data.account_number || null,
       agency_number: data.agency_number || null,
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
     });
     if (error) {
@@ -101,7 +103,7 @@ export function useAccounts() {
       ...data,
       last_four_digits: data.last_four_digits || null,
       parent_card_id: data.parent_card_id || null,
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
     });
     if (error) {
@@ -140,7 +142,7 @@ export function useAccounts() {
     if (!user) return false;
     const { error } = await supabase.from("wallets").insert({
       ...data,
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
     });
     if (error) {
@@ -193,7 +195,7 @@ export function useAccounts() {
       settlement_days_credit: data.settlement_days_credit ?? null,
       rates_info: data.rates_info || null,
       auto_anticipation: data.auto_anticipation ?? false,
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
     });
     if (error) {

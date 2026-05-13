@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -34,6 +35,7 @@ export interface GoalMovement {
 
 export function useGoals() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
@@ -64,7 +66,7 @@ export function useGoals() {
       name: data.name,
       target_amount: data.target_amount,
       deadline: data.deadline || null,
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
     } as any);
     if (error) {
@@ -102,7 +104,7 @@ export function useGoals() {
     if (!user) return false;
     const { error: moveErr } = await supabase.from("goal_movements").insert({
       goal_id: goalId,
-      user_id: user.id,
+      user_id: effectiveUserId,
       type: "reserve",
       amount,
       description: description || "Reserva manual",
@@ -124,7 +126,7 @@ export function useGoals() {
     if (!user) return false;
     const { error: moveErr } = await supabase.from("goal_movements").insert({
       goal_id: goalId,
-      user_id: user.id,
+      user_id: effectiveUserId,
       type: "withdraw",
       amount,
       description: description || "Retirada manual",

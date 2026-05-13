@@ -2,6 +2,7 @@ import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useToast } from "@/hooks/use-toast";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -58,6 +59,7 @@ function parseMatrixValues(json: Json | null): MatrixValues {
 
 export function usePricing() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { toast } = useToast();
 
   const [config, setConfig] = useState<PricingConfig | null>(null);
@@ -75,7 +77,7 @@ export function usePricing() {
     const { data, error } = await supabase
       .from("pricing_configurations")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .maybeSingle();
 
     if (error) {
@@ -118,7 +120,7 @@ export function usePricing() {
       }
     } else {
       const { error } = await supabase.from("pricing_configurations").insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         hours_per_month: hours,
         profit_margin: margin,
         matrix_values: matrixToSave as unknown as Json,
@@ -191,7 +193,7 @@ export function usePricing() {
     const { data: procs, error } = await supabase
       .from("pricing_procedures")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .order("name");
 
     if (error) {
@@ -233,7 +235,7 @@ export function usePricing() {
 
     const { data: proc, error } = await supabase
       .from("pricing_procedures")
-      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: user.id })
+      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: effectiveUserId })
       .select()
       .single();
 
@@ -301,7 +303,7 @@ export function usePricing() {
         name: `${proc.name} (cópia)`,
         execution_time: proc.execution_time,
         desired_price: proc.desired_price,
-        user_id: user.id,
+        user_id: effectiveUserId,
       })
       .select()
       .single();

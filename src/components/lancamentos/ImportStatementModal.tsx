@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from "react";
 import { Upload, FileText, Loader2, Check, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -119,6 +120,7 @@ export function ImportStatementModal({
   categories,
 }: ImportStatementModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId } = useCompany();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -407,7 +409,7 @@ export function ImportStatementModal({
         competence_date: competenceDate,
         status: "Pago" as const,
         category: catName,
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
         wallet_id: accType === "wallet" ? accId : null,

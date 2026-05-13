@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -34,6 +35,7 @@ export function ImportCategoriesModal({
   open, onOpenChange, group, groupLabel, existingDescriptions, onImport,
 }: ImportCategoriesModalProps) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [categories, setCategories] = useState<CategoryAverage[]>([]);
@@ -58,11 +60,11 @@ export function ImportCategoriesModal({
       supabase
         .from("categories")
         .select("id, name, parent_id, type")
-        .eq("user_id", user.id),
+        .eq("user_id", effectiveUserId),
       supabase
         .from("transactions")
         .select("amount, category")
-        .eq("user_id", user.id)
+        .eq("user_id", effectiveUserId)
         .eq("type", "despesa")
         .eq("status", "Pago")
         .gte("payment_date", twelveMonthsAgo.toISOString().split("T")[0]),
