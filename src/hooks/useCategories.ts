@@ -62,7 +62,7 @@ export function useCategories() {
       parent_id: data.parent_id || null,
       type: data.type || "ambos",
       dre_section: data.dre_section || null,
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
       sort_order: maxSort,
     });

@@ -75,7 +75,7 @@ export function usePricing() {
     const { data, error } = await supabase
       .from("pricing_configurations")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .maybeSingle();
 
     if (error) {
@@ -118,7 +118,7 @@ export function usePricing() {
       }
     } else {
       const { error } = await supabase.from("pricing_configurations").insert({
-        user_id: user.id,
+        user_id: effectiveUserId,
         hours_per_month: hours,
         profit_margin: margin,
         matrix_values: matrixToSave as unknown as Json,
@@ -191,7 +191,7 @@ export function usePricing() {
     const { data: procs, error } = await supabase
       .from("pricing_procedures")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", effectiveUserId)
       .order("name");
 
     if (error) {
@@ -301,7 +301,7 @@ export function usePricing() {
         name: `${proc.name} (cópia)`,
         execution_time: proc.execution_time,
         desired_price: proc.desired_price,
-        user_id: user.id,
+        user_id: effectiveUserId,
       })
       .select()
       .single();

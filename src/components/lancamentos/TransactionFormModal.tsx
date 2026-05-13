@@ -569,7 +569,7 @@ export function TransactionFormModal({
     }
 
     const baseData: TransactionInsert = {
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: formCompanyId,
       type: activeTab as "receita" | "despesa",
       description: data.description.trim(),
@@ -862,7 +862,7 @@ export function TransactionFormModal({
 
     const transfers: TransactionInsert[] = [
       {
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: sourceCompanyId,
         type: "despesa",
         description: data.description.trim(),
@@ -876,7 +876,7 @@ export function TransactionFormModal({
         is_internal_transfer: isInternal,
       } as any,
       {
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: destCompanyId,
         type: "receita",
         description: data.description.trim(),

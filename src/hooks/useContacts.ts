@@ -54,7 +54,7 @@ export function useContacts() {
     const { error } = await supabase.from("suppliers").insert({
       name: data.name,
       cnpj: data.cnpj || null,
-      user_id: user.id,
+      user_id: effectiveUserId,
     });
     if (error) {
       toast({ title: "Erro ao criar fornecedor", description: mapDatabaseError(error), variant: "destructive" });
@@ -95,7 +95,7 @@ export function useContacts() {
     const { error } = await supabase.from("clients").insert({
       name: data.name,
       cnpj_cpf: data.cnpj_cpf || null,
-      user_id: user.id,
+      user_id: effectiveUserId,
     });
     if (error) {
       toast({ title: "Erro ao criar cliente", description: mapDatabaseError(error), variant: "destructive" });

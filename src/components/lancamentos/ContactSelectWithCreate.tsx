@@ -78,7 +78,7 @@ export function ContactSelectWithCreate({
       .from(table)
       .insert({
         name: newName.trim(),
-        user_id: user.id,
+        user_id: effectiveUserId,
       })
       .select("id")
       .single();

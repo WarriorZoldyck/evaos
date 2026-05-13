@@ -193,7 +193,7 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
         contact_name: t.contact_name,
         series_id: t.series_id,
         payment_method: t.payment_method || null,
-        user_id: user.id,
+        user_id: effectiveUserId,
       })
       .select("id")
       .single();

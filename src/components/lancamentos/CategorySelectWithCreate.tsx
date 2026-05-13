@@ -83,7 +83,7 @@ export function CategorySelectWithCreate({
         name: newName.trim(),
         parent_id: parentId || null,
         type: type || "ambos",
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: formCompanyId || null,
       })
       .select("id")

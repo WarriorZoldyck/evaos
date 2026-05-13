@@ -407,7 +407,7 @@ export function ImportStatementModal({
         competence_date: competenceDate,
         status: "Pago" as const,
         category: catName,
-        user_id: user.id,
+        user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
         wallet_id: accType === "wallet" ? accId : null,

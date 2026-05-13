@@ -64,7 +64,7 @@ export function useGoals() {
       name: data.name,
       target_amount: data.target_amount,
       deadline: data.deadline || null,
-      user_id: user.id,
+      user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
     } as any);
     if (error) {
@@ -102,7 +102,7 @@ export function useGoals() {
     if (!user) return false;
     const { error: moveErr } = await supabase.from("goal_movements").insert({
       goal_id: goalId,
-      user_id: user.id,
+      user_id: effectiveUserId,
       type: "reserve",
       amount,
       description: description || "Reserva manual",
@@ -124,7 +124,7 @@ export function useGoals() {
     if (!user) return false;
     const { error: moveErr } = await supabase.from("goal_movements").insert({
       goal_id: goalId,
-      user_id: user.id,
+      user_id: effectiveUserId,
       type: "withdraw",
       amount,
       description: description || "Retirada manual",
