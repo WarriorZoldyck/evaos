@@ -202,6 +202,29 @@ export function useWorkspaceMembers() {
     else { toast.success("Membro atualizado!"); await fetchMembers(); }
   };
 
+  const deleteMember = async (memberId: string) => {
+    try {
+      const res = await supabase.functions.invoke("delete-hub-member", { body: { memberId } });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      toast.success("Membro removido!");
+      await fetchMembers();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao remover membro");
+    }
+  };
+
+  const resetMemberPassword = async (memberId: string) => {
+    try {
+      const res = await supabase.functions.invoke("reset-hub-member-password", { body: { memberId } });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      toast.success(`Nova senha temporária: ${res.data?.tempPassword || "enviada"}`, { duration: 15000 });
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao redefinir senha");
+    }
+  };
+
   return {
     members,
     workspaces,
@@ -215,6 +238,8 @@ export function useWorkspaceMembers() {
     createWorkspace,
     deleteWorkspace,
     assignMemberToWorkspace,
+    deleteMember,
+    resetMemberPassword,
     refetch: fetchMembers,
   };
 }
