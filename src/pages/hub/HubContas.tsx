@@ -1,10 +1,17 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHub } from "@/contexts/HubContext";
 import { useWorkspaceMembers } from "@/hooks/useWorkspaceMembers";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, LogIn, Loader2, User, Shield, Edit3, Eye, ChevronRight } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Building2, LogIn, Loader2, User, Shield, Edit3, Eye, ChevronRight, LogOut } from "lucide-react";
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
   admin: { label: "Administrador", icon: Shield, color: "text-amber-500" },
