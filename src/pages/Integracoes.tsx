@@ -33,11 +33,16 @@ export default function Integracoes() {
   const [whatsappActive, setWhatsappActive] = useState(false);
   const [isSyncingWhatsapp, setIsSyncingWhatsapp] = useState(false);
   const [asaasModalOpen, setAsaasModalOpen] = useState(false);
+  const [pluggyModalOpen, setPluggyModalOpen] = useState(false);
 
   const { list: integrationsQ, sync, disconnect } = useAsaasIntegration();
+  const { list: pluggyListQ, sync: pluggySync, disconnect: pluggyDisconnect } = usePluggyIntegration();
   const { bankAccounts } = useAccounts();
   const integrations = integrationsQ.data || [];
+  const pluggyIntegrations = pluggyListQ.data || [];
   const hasAsaas = integrations.length > 0;
+  const itauIntegrations = pluggyIntegrations.filter((i) => (i.institution_name || "").toLowerCase().includes("ita"));
+  const hasItau = itauIntegrations.length > 0;
 
   useEffect(() => {
     if (!user) return;
