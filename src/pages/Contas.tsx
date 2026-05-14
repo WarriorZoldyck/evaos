@@ -97,10 +97,15 @@ export default function Contas() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    if (deleteTarget.tab === "bank") await deleteBankAccount(deleteTarget.id);
-    else if (deleteTarget.tab === "card") await deleteCreditCard(deleteTarget.id);
-    else if (deleteTarget.tab === "terminal") await deleteCardTerminal(deleteTarget.id);
-    else await deleteWallet(deleteTarget.id);
+    let deleted = false;
+    if (deleteTarget.tab === "bank") deleted = await deleteBankAccount(deleteTarget.id);
+    else if (deleteTarget.tab === "card") deleted = await deleteCreditCard(deleteTarget.id);
+    else if (deleteTarget.tab === "terminal") deleted = await deleteCardTerminal(deleteTarget.id);
+    else deleted = await deleteWallet(deleteTarget.id);
+    if (deleted) {
+      await Promise.resolve(refetchLimits());
+      setUpgradeReason(null);
+    }
     setDeleteTarget(null);
   };
 
