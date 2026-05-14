@@ -8,8 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { useAsaasIntegration } from "@/hooks/useAsaasIntegration";
+import { usePluggyIntegration } from "@/hooks/usePluggyIntegration";
 import { useAccounts } from "@/hooks/useAccounts";
 import { AsaasConnectModal } from "@/components/integracoes/AsaasConnectModal";
+import { PluggyConnectModal } from "@/components/integracoes/PluggyConnectModal";
 import logoAsaas from "@/assets/logo-asaas.png";
 import logoBradesco from "@/assets/logo-bradesco.png";
 import logoItau from "@/assets/logo-itau.png";
@@ -21,7 +23,6 @@ import { Link } from "react-router-dom";
 
 const otherBanks = [
   { name: "Bradesco", description: "Conexão com o Bradesco para importação automática de extratos.", logo: logoBradesco, bgClass: "bg-white" },
-  { name: "Itaú", description: "Conexão com o Itaú Unibanco para importação automática de extratos.", logo: logoItau, bgClass: "bg-white" },
   { name: "Santander", description: "Conexão com o Santander para importação automática de extratos.", logo: logoSantander, bgClass: "bg-white" },
   { name: "C6 Bank", description: "Conexão com o C6 Bank para importação automática de extratos.", logo: logoC6Bank, bgClass: "bg-white" },
 ];
