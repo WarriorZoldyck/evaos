@@ -24,7 +24,7 @@ interface PlanLimitsState {
   canCreateHubMember: () => { ok: boolean; reason?: string };
   canUseAI: () => { ok: boolean; reason?: string; remaining: number | null };
   hubAllowed: boolean;
-  refetch: () => void;
+  refetch: () => void | Promise<unknown>;
 }
 
 interface SubscriptionPlanLimits extends PlanLimits {
