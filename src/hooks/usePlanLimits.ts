@@ -69,10 +69,12 @@ export function usePlanLimits(): PlanLimitsState {
   const planSlug: string = data?.plan?.slug ?? "individual";
   const effectivePlanSlug = isTrialFullAccess ? "familia" : planSlug;
 
+  const hasPlan = !!data?.plan;
+
   const limits: PlanLimits = isTrialFullAccess
     ? FAMILIA_LIMITS
     : {
-        max_accounts: data?.plan?.max_accounts ?? 3,
+        max_accounts: hasPlan ? data.plan.max_accounts : 3,
         max_hub_members: data?.plan?.max_hub_members ?? 0,
         monthly_ai_messages: data?.plan?.monthly_ai_messages ?? 100,
         extra_user_price_cents: data?.plan?.extra_user_price_cents ?? 0,
