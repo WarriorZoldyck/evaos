@@ -27,6 +27,14 @@ interface PlanLimitsState {
   refetch: () => void;
 }
 
+interface SubscriptionPlanLimits extends PlanLimits {
+  slug: string;
+}
+
+interface UsageCounterRow {
+  messages_used: number | null;
+}
+
 const FAMILIA_LIMITS: PlanLimits = {
   max_accounts: null,
   max_hub_members: 3,
@@ -55,12 +63,12 @@ export function usePlanLimits(): PlanLimitsState {
         supabase.from("ai_usage_counters").select("messages_used").eq("user_id", user!.id).eq("period_year_month", period).maybeSingle(),
       ]);
 
-      const plan: any = planRes?.data;
+      const plan = planRes?.data as SubscriptionPlanLimits | null | undefined;
       return {
         plan,
         accounts: (accountsRes.count ?? 0) + (cardsRes.count ?? 0) + (walletsRes.count ?? 0) + (terminalsRes.count ?? 0),
         hubMembers: membersRes.count ?? 0,
-        aiMessagesThisMonth: (usageRes.data as any)?.messages_used ?? 0,
+        aiMessagesThisMonth: (usageRes.data as UsageCounterRow | null)?.messages_used ?? 0,
       };
     },
   });
