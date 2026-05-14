@@ -243,6 +243,7 @@ export type Database = {
           match_status: string
           matched_transaction_id: string | null
           payload: Json
+          provider: string
           source_type: string
           updated_at: string
           user_id: string
@@ -259,6 +260,7 @@ export type Database = {
           match_status?: string
           matched_transaction_id?: string | null
           payload?: Json
+          provider?: string
           source_type: string
           updated_at?: string
           user_id: string
@@ -275,6 +277,7 @@ export type Database = {
           match_status?: string
           matched_transaction_id?: string | null
           payload?: Json
+          provider?: string
           source_type?: string
           updated_at?: string
           user_id?: string
@@ -761,6 +764,63 @@ export type Database = {
           status?: string
           token?: string
           workspace_id?: string | null
+        }
+        Relationships: []
+      }
+      pluggy_integrations: {
+        Row: {
+          bank_account_id: string
+          company_id: string | null
+          connector_id: number | null
+          created_at: string
+          encrypted_meta: Json
+          id: string
+          initial_balance_synced: number | null
+          institution_name: string | null
+          item_status: string | null
+          last_error: string | null
+          last_sync_at: string | null
+          pluggy_account_id: string
+          pluggy_item_id: string
+          sync_status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bank_account_id: string
+          company_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          encrypted_meta?: Json
+          id?: string
+          initial_balance_synced?: number | null
+          institution_name?: string | null
+          item_status?: string | null
+          last_error?: string | null
+          last_sync_at?: string | null
+          pluggy_account_id: string
+          pluggy_item_id: string
+          sync_status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bank_account_id?: string
+          company_id?: string | null
+          connector_id?: number | null
+          created_at?: string
+          encrypted_meta?: Json
+          id?: string
+          initial_balance_synced?: number | null
+          institution_name?: string | null
+          item_status?: string | null
+          last_error?: string | null
+          last_sync_at?: string | null
+          pluggy_account_id?: string
+          pluggy_item_id?: string
+          sync_status?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

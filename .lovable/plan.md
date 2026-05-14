@@ -1,97 +1,104 @@
-# Revisão do EVA Hub — o que falta para 100%
 
-## Diagnóstico atual
+# Integração Itaú via Open Finance (multi-tenant)
 
-A tela que você mostrou (**Contas / Áreas de Trabalho / Membros**) cobre o fluxo *básico*, mas hoje o Hub funciona como uma **delegação total**: o membro entra na conta do dono e vê **tudo**, independentemente do papel (`viewer/editor/admin`) e do departamento atribuído.
+Como você ainda não escolheu o agregador, o plano usa **Pluggy** como padrão (melhor cobertura Itaú no Brasil, doc em PT, widget pronto). Toda a arquitetura fica isolada atrás de uma camada chamada `bank-aggregator` — se depois você preferir Belvo/Klavi, troca-se só o adapter, sem mexer na UI nem no banco de dados.
 
-| Funcionalidade visível | Status real |
-|---|---|
-| Listar/criar/suspender membro | OK |
-| Definir papel (Admin/Editor/Visualizador) | Salvo no banco, **não é aplicado** em lugar nenhum |
-| Atribuir membro a uma Área (Contabilidade etc.) | Salvo no banco, **não filtra dados** |
-| Convite por e-mail real | Não existe — dono digita senha e repassa manualmente |
-| Persistir impersonação ao recarregar | Não — some ao dar F5 |
-| `workspace_member_permissions` (já existe a tabela!) | Vazia, sem UI, sem uso |
+## Escopo desta entrega
 
-## Cenário do cliente (contador / familiar)
+- Card "Itaú" no `/integracoes` deixa de ser "Em breve" e vira **Conectar**.
+- Cliente abre o widget Pluggy → faz login no Itaú (PF ou PJ) → escolhe a conta.
+- EVA cria/vincula uma `bank_account` no contexto atual (Pessoal ou Empresa).
+- Sincronização de **extrato** (últimos 90 dias na 1ª carga, depois incremental) e **saldo** atual.
+- Lançamentos importados caem como pendentes na **Conciliação Bancária** (mesmo fluxo do Asaas).
+- Sync manual (botão) + cron diário automático.
+- Reaproveita o card visual do Asaas: status, último sync, "Conciliar", "Outra conta", desconectar.
 
-Para o caso "contratei um escritório de contabilidade e quero que ele veja **só** a empresa X" ou "convidei minha esposa para gerenciar **só** o cartão pessoal", o fluxo atual **não atende** — o convidado entra e vê tudo.
+Fora de escopo: emissão de boletos, pagamentos, PIX out, cartão de crédito Itaú (fica para fase 2).
 
----
+## O que você precisa providenciar
 
-## Plano de entrega (5 frentes)
+1. Criar conta em **pluggy.ai** (tem sandbox gratuito).
+2. Em *Applications*, gerar **Client ID** e **Client Secret**.
+3. Me passar quando eu pedir — vou abrir o formulário seguro de secrets (`PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`).
+4. Em produção, contratar o conector Itaú (Open Finance regulado tem custo por conexão ativa/mês — confirma na cotação deles).
 
-### 1. Convite por e-mail real (substituir o "criar com senha")
-- Trocar `create-hub-member` por `invite-hub-member`: usa `admin.inviteUserByEmail` do Supabase com `redirectTo=/aceitar-convite?token=…`.
-- Criar tabela `hub_invitations` (owner_id, email, role, workspace_id, scoped_resources jsonb, token, expires_at, status).
-- Página `/aceitar-convite`: convidado define a própria senha, vira `hub_member=true` em `app_metadata`, cria a row em `workspace_members`.
-- Estados no card: **Pendente / Ativo / Suspenso** + botão "Reenviar convite".
+Enquanto você não passa as keys, a integração já fica pronta no código mas o botão "Conectar" mostra um aviso amigável de "ainda não configurado".
 
-### 2. Aplicar o papel (role enforcement)
-- Função SQL `public.hub_member_role(_user uuid, _owner uuid)` (SECURITY DEFINER).
-- Atualizar policies que hoje fazem `OR is_hub_member(...)`:
-  - **SELECT**: qualquer role ativo.
-  - **INSERT/UPDATE/DELETE**: só `editor` ou `admin`.
-  - **DELETE de configurações sensíveis** (contas, empresas, cartões, usuários): só `admin`.
-- Hook `useHubRole()` no front para esconder botões de ação quando `viewer`.
+## Arquitetura
 
-### 3. Permissões por departamento (o ponto-chave do cenário do contador)
-A tabela `workspace_member_permissions(workspace_member_id, resource_type, resource_id)` já existe — falta usar:
-- UI no `MemberCard`: quando o membro tem uma Área atribuída, abrir um painel "**Acesso a:**" com checkboxes de:
-  - Empresas (`companies`)
-  - Contas bancárias (`bank_accounts`)
-  - Cartões (`credit_cards`)
-  - Maquininhas (`card_terminals`)
-  - Carteiras (`wallets`)
-- Função `public.hub_member_can_see(_user uuid, _resource_type text, _resource_id uuid)`:
-  - Se membro **não tem nenhuma** permissão registrada → vê tudo do dono (compatibilidade).
-  - Se tem → só vê os IDs listados (e os `transactions` ligados a esses IDs).
-- Estender as RLS policies de `transactions`, `companies`, `bank_accounts`, `credit_cards`, `card_terminals`, `wallets`, `goals`, `categories` para chamar `hub_member_can_see` quando for hub member.
-- Preset por Área (Departamento Contabilidade → liberar todas as `companies` PJ; Departamento Pessoal → liberar carteiras/contas Pessoal).
+```text
+ Frontend (Integrações)
+   └─ ItauConnectModal
+        └─ Pluggy Connect Widget (SDK oficial @pluggyai/connect)
+              └─ retorna itemId
+                   ↓
+ Edge Function: pluggy-connect-account
+   • troca itemId por accounts da Pluggy
+   • cria bank_account no contexto correto
+   • salva pluggy_integrations(item_id, account_id, ...)
+                   ↓
+ Edge Function: pluggy-sync (manual + cron 6h)
+   • lista transactions desde last_sync_at
+   • insere em asaas_sync_items (renomeio p/ bank_sync_items) c/ provider='pluggy'
+   • atualiza saldo, last_sync_at
+                   ↓
+ Conciliação Bancária (já existe) → match com transactions reais
+```
 
-### 4. Robustez de impersonação
-- Persistir `impersonatingOwnerId/Name` em `localStorage` (chave `eva.hub.impersonation`).
-- Limpar no logout e ao mudar de usuário.
-- Banner topo já existe — adicionar role ativo e nome do departamento ao lado do nome do dono.
-- Log mínimo: tabela `hub_audit_log(actor_user_id, owner_id, action, payload, created_at)` registrando ações de escrita feitas em modo impersonação.
+## Mudanças no banco
 
-### 5. Polimentos finais para entrega
-- **Ao suspender membro**: revogar sessões via `admin.signOut(memberUserId, "global")`.
-- **Excluir membro definitivamente** (hoje só suspende).
-- **Membro sair sozinho** de uma Conta (botão na tela `HubContas`).
-- **Reset de senha** do membro pelo dono (`admin.generateLink type=recovery`).
-- **Validação de e-mail duplicado** no convite (mostra "já é membro").
-- **N+1 fix** em `fetchAvailableWorkspaces` (1 query com join em `profiles`).
-- **Limites de plano**: bloquear convite quando `usage.hubMembers >= max_hub_members` já está OK; adicionar mesma checagem em "reativar suspenso".
-- **Onboarding do membro recém-aceito**: ao entrar a 1ª vez, ir direto para `/eva-hub` (HubContas) com hint "Selecione uma conta para começar".
+Migration nova:
 
----
+- Tabela `pluggy_integrations` (espelho de `asaas_integrations`):
+  `id, user_id, company_id, bank_account_id, pluggy_item_id, pluggy_account_id, institution_name, last_sync_at, sync_status, last_error, encrypted_meta`. RLS por `user_id`.
+- Generaliza `asaas_sync_items` → adiciona coluna `provider text default 'asaas'` (não quebra Asaas) e passa a aceitar `pluggy`. Conciliação lê os dois.
+- View `bank_integrations_v` unificando Asaas + Pluggy para a tela de Integrações listar tudo junto no futuro.
 
-## Resposta direta às suas perguntas
+## Edge Functions novas
 
-> **As funções da imagem (Contas / Áreas de Trabalho / Membros) estão funcionais?**
-Sim, **a CRUD funciona**. Mas papel e área **não restringem nada hoje** — são só rótulos.
+| Função | JWT | O que faz |
+|---|---|---|
+| `pluggy-connect-token` | sim | Gera `connect_token` curto (15min) p/ o widget abrir. Server-side, segredos nunca vão ao browser. |
+| `pluggy-connect-account` | sim | Recebe `itemId` + `bank_account_id` (existente) ou cria nova; persiste integração. |
+| `pluggy-sync` | sim | Busca transações novas + saldo. Aceita `integration_id` opcional. |
+| `pluggy-disconnect-account` | sim | Remove item na Pluggy + deleta integração. |
+| `pluggy-webhook` | não | Recebe eventos `item/updated`, `item/error`, dispara sync. |
+| Cron diário | — | Chama `pluggy-sync` para todos os itens ativos a cada 6h. |
 
-> **São as únicas necessárias?**
-Faltam: **Convites pendentes**, **Reset de senha**, **Sair da conta** (lado membro), **Excluir membro** (lado dono) e **Permissões por recurso**.
+Tudo segue o mesmo padrão dos arquivos `asaas-*` que já existem (CORS, validação JWT em código, Zod nos bodies).
 
-> **É possível adicionar membro a um departamento com as permissões corretas?**
-Adicionar a um departamento: ✅. Com **permissões corretas restringindo dados**: ❌ — é justamente o item 3 do plano.
+## Mudanças no frontend
 
----
+- `src/hooks/usePluggyIntegration.ts` — espelho do `useAsaasIntegration`.
+- `src/components/integracoes/PluggyConnectModal.tsx` — embute `<PluggyConnect />` do SDK.
+- `src/pages/Integracoes.tsx` — converte o card "Itaú" em ativo:
+  - Se PLUGGY não configurado: tooltip "Configuração em andamento, fale com o suporte".
+  - Se configurado: botão "Conectar Itaú" → abre widget filtrado para conector Itaú (`connectorIds=[201]`).
+  - Após conectar: mesmo bloco visual do Asaas (último sync, Conciliar, Sync, Outra, Desconectar).
+- Logo Itaú já existe (`logoItau`).
 
-## Detalhes técnicos
+## Segurança
 
-- Tabelas novas: `hub_invitations`, `hub_audit_log`.
-- Tabela existente a ativar: `workspace_member_permissions`.
-- Funções SQL novas: `hub_member_role`, `hub_member_can_see`.
-- Edge functions novas: `invite-hub-member`, `accept-hub-invitation`, `revoke-hub-member`, `reset-hub-member-password`.
-- Páginas novas: `/aceitar-convite`.
-- Hooks novos: `useHubRole`, `useHubPermissions`.
-- Migration adicional nas RLS de ~10 tabelas para chamar `hub_member_can_see`.
+- Client ID/Secret só em edge functions (`Deno.env`).
+- `connect_token` gerado server-side e expira em 15min.
+- Webhook valida assinatura `x-pluggy-signature` (HMAC) — guardar `PLUGGY_WEBHOOK_SECRET`.
+- RLS estrita em `pluggy_integrations` (só dono lê/escreve).
+- Hub members herdam acesso via mesmas políticas já existentes (`is_hub_member_writer`).
 
-## Sugestão de execução em fases (cada uma já entregável)
-1. **Fase A — Convite real + persistência de impersonação** (desbloqueia o caso "convidei o contador").
-2. **Fase B — Role enforcement** (viewer realmente só lê).
-3. **Fase C — Permissões por departamento/recurso** (contador vê só a empresa contratante).
-4. **Fase D — Polimentos** (auditoria, reset de senha, sair da conta, excluir membro).
+## Riscos e o que NÃO quebra
+
+- **Asaas continua funcionando idêntico** — nenhuma função Asaas é tocada; só adicionamos coluna `provider` com default seguro.
+- **Conciliação Bancária** já é provider-agnóstica na UI; só precisa filtrar `provider in (asaas, pluggy)`.
+- Limite Pluggy sandbox: 100 conexões grátis — suficiente para validar com você + alguns clientes piloto.
+- Open Finance Itaú PJ pede que cada empresa autorize separadamente (até 12 meses, depois renova). Tratamos `item.status='LOGIN_MX_ERROR'` mostrando botão "Reconectar Itaú" no card.
+
+## Ordem de implementação
+
+1. Migration (`pluggy_integrations` + coluna `provider`) — você aprova.
+2. Pedir as 3 secrets: `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_WEBHOOK_SECRET`.
+3. Edge functions `pluggy-connect-token` + `pluggy-connect-account` + `pluggy-sync` + `pluggy-disconnect-account` + `pluggy-webhook`.
+4. Hook `usePluggyIntegration` + modal + atualização do card no `/integracoes`.
+5. Cron diário (`pg_cron` chamando `pluggy-sync`).
+6. Teste com sandbox Itaú da Pluggy (eles fornecem credenciais fake).
+
+Quer que eu comece pela migration? Se sim, no próximo passo eu já abro o formulário das secrets também.
