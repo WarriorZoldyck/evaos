@@ -111,22 +111,30 @@ export default function Contas() {
 
   const handleSaveBankAccount = async (data: any) => {
     if (editData) return updateBankAccount(editData.id, data);
-    return createBankAccount(data);
+    const created = await createBankAccount(data);
+    if (created) await Promise.resolve(refetchLimits());
+    return created;
   };
 
   const handleSaveCreditCard = async (data: any) => {
     if (editData) return updateCreditCard(editData.id, data);
-    return createCreditCard(data);
+    const created = await createCreditCard(data);
+    if (created) await Promise.resolve(refetchLimits());
+    return created;
   };
 
   const handleSaveWallet = async (data: any) => {
     if (editData) return updateWallet(editData.id, data);
-    return createWallet(data);
+    const created = await createWallet(data);
+    if (created) await Promise.resolve(refetchLimits());
+    return created;
   };
 
   const handleSaveTerminal = async (data: any) => {
     if (terminalEditData) return updateCardTerminal(terminalEditData.id, data);
-    return createCardTerminal(data);
+    const created = await createCardTerminal(data);
+    if (created) await Promise.resolve(refetchLimits());
+    return created;
   };
 
   const btnLabel: Record<AccountTab, string> = {
