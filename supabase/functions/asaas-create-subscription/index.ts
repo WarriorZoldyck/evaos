@@ -80,16 +80,25 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Plano não encontrado" }), { status: 404, headers: corsHeaders });
     }
 
-    // 2. Bloquear se já tem assinatura ativa
-    const { data: existing } = await admin
+    // 2. Bloquear se já tem assinatura ativa; reaproveitar se cancelada/expirada
+    const { data: existingActive } = await admin
       .from("subscriptions")
       .select("id, status")
       .eq("user_id", userId)
       .in("status", ["trialing", "active", "past_due"])
       .maybeSingle();
-    if (existing) {
+    if (existingActive) {
       return new Response(JSON.stringify({ error: "Você já possui uma assinatura ativa" }), { status: 409, headers: corsHeaders });
     }
+
+    const { data: reactivatable } = await admin
+      .from("subscriptions")
+      .select("*")
+      .eq("user_id", userId)
+      .in("status", ["canceled", "expired"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     // 3. Preço base
     // 3. Preço base
