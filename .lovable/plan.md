@@ -1,104 +1,62 @@
+## Objetivo
+1. Cadastrar cupons MARISTELA50 e DENISE50 (50% off, uso único, qualquer plano/ciclo).
+2. Permitir troca de plano estilo Netflix: upgrade/downgrade para assinaturas ativas e reativação para canceladas/expiradas.
 
-# Integração Itaú via Open Finance (multi-tenant)
+## 1) Cupons (migration)
+Inserir em `subscription_coupons`:
+- `MARISTELA50` — percent 50, max_uses 1, applies_to_cycle=both, applies_to_plan_slug=NULL, is_active=true.
+- `DENISE50` — idem.
 
-Como você ainda não escolheu o agregador, o plano usa **Pluggy** como padrão (melhor cobertura Itaú no Brasil, doc em PT, widget pronto). Toda a arquitetura fica isolada atrás de uma camada chamada `bank-aggregator` — se depois você preferir Belvo/Klavi, troca-se só o adapter, sem mexer na UI nem no banco de dados.
+Backend `asaas-create-subscription` já valida cupom (expiração, uso, plano, ciclo, usuário) — sem mudanças.
 
-## Escopo desta entrega
+## 2) Troca de plano (Netflix-style)
 
-- Card "Itaú" no `/integracoes` deixa de ser "Em breve" e vira **Conectar**.
-- Cliente abre o widget Pluggy → faz login no Itaú (PF ou PJ) → escolhe a conta.
-- EVA cria/vincula uma `bank_account` no contexto atual (Pessoal ou Empresa).
-- Sincronização de **extrato** (últimos 90 dias na 1ª carga, depois incremental) e **saldo** atual.
-- Lançamentos importados caem como pendentes na **Conciliação Bancária** (mesmo fluxo do Asaas).
-- Sync manual (botão) + cron diário automático.
-- Reaproveita o card visual do Asaas: status, último sync, "Conciliar", "Outra conta", desconectar.
+### Comportamento
+- **Sem assinatura / cancelada / expirada** → botão "Assinar" abre checkout normal (cria nova assinatura, reaproveitando customer Asaas).
+- **Trial ou ativa, mesmo plano** → botão desabilitado "Plano atual".
+- **Trial ou ativa, outro plano** → botão "Fazer upgrade" ou "Fazer downgrade" (compara `price_cents`). Confirmação em modal: ajuste só vale a partir do próximo vencimento, sem cobrança proporcional imediata.
+- **Past_due** → mantém comportamento atual (banner para regularizar).
 
-Fora de escopo: emissão de boletos, pagamentos, PIX out, cartão de crédito Itaú (fica para fase 2).
+### Reativação de canceladas
+Conforme decisão do usuário: **reaproveitar a assinatura Asaas existente** (não cria nova) e **NÃO concede novo trial** (`trial_ends_at = null`, `status = 'active'`, `next_due_date = hoje + ciclo`). Evita abuso de trial.
 
-## O que você precisa providenciar
+### Mudanças
 
-1. Criar conta em **pluggy.ai** (tem sandbox gratuito).
-2. Em *Applications*, gerar **Client ID** e **Client Secret**.
-3. Me passar quando eu pedir — vou abrir o formulário seguro de secrets (`PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`).
-4. Em produção, contratar o conector Itaú (Open Finance regulado tem custo por conexão ativa/mês — confirma na cotação deles).
+**Frontend `src/pages/Planos.tsx`:**
+- Remover bloqueio `toast.info("Você já possui...")`.
+- Computar estado por plano: `current` | `upgrade` | `downgrade` | `subscribe` | `reactivate`.
+- Renderizar botão correspondente. Para upgrade/downgrade abrir confirm dialog simples (sem form de CPF/cartão).
+- Para `subscribe` (sem sub) e `reactivate` (canceled/expired) abrir o modal de checkout existente; backend decide se cria nova ou reativa.
 
-Enquanto você não passa as keys, a integração já fica pronta no código mas o botão "Conectar" mostra um aviso amigável de "ainda não configurado".
+**Frontend `src/pages/MinhaAssinatura.tsx` + `SubscriptionGuard.tsx`:**
+- Para status `canceled`/`expired` mostrar CTA "Reativar assinatura" → `/planos`.
 
-## Arquitetura
+**Backend — nova edge function `supabase/functions/asaas-change-plan/index.ts`:**
+- Valida JWT.
+- Busca assinatura ativa (`trialing` ou `active`) do usuário.
+- Recebe `plan_slug` e opcional `billing_cycle`.
+- Calcula novo `value` (aplica desconto vigente se houver).
+- `POST /subscriptions/{asaas_id}` no Asaas atualizando `value` (e `cycle` se mudou). Mantém `nextDueDate`.
+- Atualiza `subscriptions.plan_id` e `billing_cycle` no DB. Não mexe em `trial_ends_at`.
+- Retorna sucesso; cobrança ajustada vale do próximo vencimento.
 
-```text
- Frontend (Integrações)
-   └─ ItauConnectModal
-        └─ Pluggy Connect Widget (SDK oficial @pluggyai/connect)
-              └─ retorna itemId
-                   ↓
- Edge Function: pluggy-connect-account
-   • troca itemId por accounts da Pluggy
-   • cria bank_account no contexto correto
-   • salva pluggy_integrations(item_id, account_id, ...)
-                   ↓
- Edge Function: pluggy-sync (manual + cron 6h)
-   • lista transactions desde last_sync_at
-   • insere em asaas_sync_items (renomeio p/ bank_sync_items) c/ provider='pluggy'
-   • atualiza saldo, last_sync_at
-                   ↓
- Conciliação Bancária (já existe) → match com transactions reais
-```
+**Backend — ajustar `asaas-create-subscription`:**
+- Se existir assinatura `canceled`/`expired` do usuário com `asaas_subscription_id`:
+  - Reativar via `POST /subscriptions/{id}` no Asaas (`status: ACTIVE`, novo `nextDueDate`, novo `value`/`cycle`/`billingType` se mudou).
+  - UPDATE da row existente: `status='active'`, `trial_ends_at=null`, `canceled_at=null`, `next_due_date`, `plan_id`, `billing_cycle`, `billing_type`, `coupon_code`, etc.
+  - Se Asaas retornar erro de assinatura inexistente, criar nova como fallback.
+- Bloqueio existente de "já tem assinatura ativa" permanece para `trialing/active/past_due`.
 
-## Mudanças no banco
+**`supabase/config.toml`:** registrar `asaas-change-plan` com `verify_jwt = false` (validação manual).
 
-Migration nova:
+## Migrations necessárias
+1. INSERT dos 2 cupons em `subscription_coupons`.
 
-- Tabela `pluggy_integrations` (espelho de `asaas_integrations`):
-  `id, user_id, company_id, bank_account_id, pluggy_item_id, pluggy_account_id, institution_name, last_sync_at, sync_status, last_error, encrypted_meta`. RLS por `user_id`.
-- Generaliza `asaas_sync_items` → adiciona coluna `provider text default 'asaas'` (não quebra Asaas) e passa a aceitar `pluggy`. Conciliação lê os dois.
-- View `bank_integrations_v` unificando Asaas + Pluggy para a tela de Integrações listar tudo junto no futuro.
-
-## Edge Functions novas
-
-| Função | JWT | O que faz |
-|---|---|---|
-| `pluggy-connect-token` | sim | Gera `connect_token` curto (15min) p/ o widget abrir. Server-side, segredos nunca vão ao browser. |
-| `pluggy-connect-account` | sim | Recebe `itemId` + `bank_account_id` (existente) ou cria nova; persiste integração. |
-| `pluggy-sync` | sim | Busca transações novas + saldo. Aceita `integration_id` opcional. |
-| `pluggy-disconnect-account` | sim | Remove item na Pluggy + deleta integração. |
-| `pluggy-webhook` | não | Recebe eventos `item/updated`, `item/error`, dispara sync. |
-| Cron diário | — | Chama `pluggy-sync` para todos os itens ativos a cada 6h. |
-
-Tudo segue o mesmo padrão dos arquivos `asaas-*` que já existem (CORS, validação JWT em código, Zod nos bodies).
-
-## Mudanças no frontend
-
-- `src/hooks/usePluggyIntegration.ts` — espelho do `useAsaasIntegration`.
-- `src/components/integracoes/PluggyConnectModal.tsx` — embute `<PluggyConnect />` do SDK.
-- `src/pages/Integracoes.tsx` — converte o card "Itaú" em ativo:
-  - Se PLUGGY não configurado: tooltip "Configuração em andamento, fale com o suporte".
-  - Se configurado: botão "Conectar Itaú" → abre widget filtrado para conector Itaú (`connectorIds=[201]`).
-  - Após conectar: mesmo bloco visual do Asaas (último sync, Conciliar, Sync, Outra, Desconectar).
-- Logo Itaú já existe (`logoItau`).
-
-## Segurança
-
-- Client ID/Secret só em edge functions (`Deno.env`).
-- `connect_token` gerado server-side e expira em 15min.
-- Webhook valida assinatura `x-pluggy-signature` (HMAC) — guardar `PLUGGY_WEBHOOK_SECRET`.
-- RLS estrita em `pluggy_integrations` (só dono lê/escreve).
-- Hub members herdam acesso via mesmas políticas já existentes (`is_hub_member_writer`).
-
-## Riscos e o que NÃO quebra
-
-- **Asaas continua funcionando idêntico** — nenhuma função Asaas é tocada; só adicionamos coluna `provider` com default seguro.
-- **Conciliação Bancária** já é provider-agnóstica na UI; só precisa filtrar `provider in (asaas, pluggy)`.
-- Limite Pluggy sandbox: 100 conexões grátis — suficiente para validar com você + alguns clientes piloto.
-- Open Finance Itaú PJ pede que cada empresa autorize separadamente (até 12 meses, depois renova). Tratamos `item.status='LOGIN_MX_ERROR'` mostrando botão "Reconectar Itaú" no card.
-
-## Ordem de implementação
-
-1. Migration (`pluggy_integrations` + coluna `provider`) — você aprova.
-2. Pedir as 3 secrets: `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `PLUGGY_WEBHOOK_SECRET`.
-3. Edge functions `pluggy-connect-token` + `pluggy-connect-account` + `pluggy-sync` + `pluggy-disconnect-account` + `pluggy-webhook`.
-4. Hook `usePluggyIntegration` + modal + atualização do card no `/integracoes`.
-5. Cron diário (`pg_cron` chamando `pluggy-sync`).
-6. Teste com sandbox Itaú da Pluggy (eles fornecem credenciais fake).
-
-Quer que eu comece pela migration? Se sim, no próximo passo eu já abro o formulário das secrets também.
+## Arquivos
+- novo: `supabase/functions/asaas-change-plan/index.ts`
+- editar: `supabase/functions/asaas-create-subscription/index.ts` (lógica de reativação)
+- editar: `supabase/config.toml`
+- editar: `src/pages/Planos.tsx` (estados e botões por plano)
+- editar: `src/pages/MinhaAssinatura.tsx` (CTA reativar)
+- editar: `src/components/subscription/SubscriptionGuard.tsx` (banner para canceled/expired)
+- migration: inserir cupons
