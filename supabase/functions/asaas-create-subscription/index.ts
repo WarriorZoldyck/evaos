@@ -180,60 +180,123 @@ Deno.serve(async (req) => {
       cust = ins.data;
     }
 
-    // 5. Subscription Asaas — trial: nextDueDate = hoje + 7
-    const nextDue = new Date();
-    nextDue.setDate(nextDue.getDate() + 7);
-    const nextDueDateStr = nextDue.toISOString().slice(0, 10);
+    // 5. Reativar (canceled/expired) ou criar nova
+    let subscription: any;
+    let invoiceUrl: string | null = null;
+    let asaasSubId: string | null = null;
+    let nextDueDateStr: string;
 
-    const sub = await asaasFetch("/subscriptions", {
-      method: "POST",
-      body: JSON.stringify({
-        customer: cust!.asaas_customer_id,
-        billingType: billing_type,
-        value: finalValue,
-        nextDueDate: nextDueDateStr,
-        cycle: asaasCycle,
-        description: `EVA OS — Plano ${plan.name} (${cycleChoice === "yearly" ? "Anual" : "Mensal"})`,
-        externalReference: userId,
-      }),
-    });
+    const tryReactivate = async (): Promise<boolean> => {
+      if (!reactivatable?.asaas_subscription_id) return false;
+      try {
+        // Sem trial — primeiro vencimento amanhã
+        const nd = new Date();
+        nd.setDate(nd.getDate() + 1);
+        nextDueDateStr = nd.toISOString().slice(0, 10);
+        await asaasFetch(`/subscriptions/${reactivatable.asaas_subscription_id}`, {
+          method: "POST",
+          body: JSON.stringify({
+            status: "ACTIVE",
+            billingType: billing_type,
+            value: finalValue,
+            cycle: asaasCycle,
+            nextDueDate: nextDueDateStr,
+            description: `EVA OS — Plano ${plan.name} (${cycleChoice === "yearly" ? "Anual" : "Mensal"})`,
+          }),
+        });
+        asaasSubId = reactivatable.asaas_subscription_id;
+        return true;
+      } catch (e) {
+        console.warn("Reativação falhou, criando nova assinatura", e);
+        return false;
+      }
+    };
+
+    const reactivated = await tryReactivate();
+
+    if (!reactivated) {
+      // Nova: trial de 7 dias
+      const nd = new Date();
+      nd.setDate(nd.getDate() + 7);
+      nextDueDateStr = nd.toISOString().slice(0, 10);
+      const sub = await asaasFetch("/subscriptions", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: cust!.asaas_customer_id,
+          billingType: billing_type,
+          value: finalValue,
+          nextDueDate: nextDueDateStr,
+          cycle: asaasCycle,
+          description: `EVA OS — Plano ${plan.name} (${cycleChoice === "yearly" ? "Anual" : "Mensal"})`,
+          externalReference: userId,
+        }),
+      });
+      asaasSubId = sub.id;
+    }
 
     // 6. Buscar primeira cobrança pra pegar URL de pagamento
-    let invoiceUrl: string | null = null;
     try {
-      const payments = await asaasFetch(`/subscriptions/${sub.id}/payments`);
+      const payments = await asaasFetch(`/subscriptions/${asaasSubId}/payments`);
       invoiceUrl = payments?.data?.[0]?.invoiceUrl || null;
     } catch (e) {
       console.warn("Não foi possível obter invoice URL", e);
     }
 
-    // 7. Persistir
-    const trialEnds = new Date();
-    trialEnds.setDate(trialEnds.getDate() + 7);
-
-    const { data: subscription, error: subErr } = await admin
-      .from("subscriptions")
-      .insert({
-        user_id: userId,
-        plan_id: plan.id,
-        asaas_subscription_id: sub.id,
-        status: "trialing",
-        billing_type,
-        billing_cycle: cycleChoice,
-        is_beta: false,
-        discount_percent: 0,
-        coupon_code: appliedCoupon?.code ?? null,
-        discount_amount_cents: discountCents,
-        trial_ends_at: trialEnds.toISOString(),
-        next_due_date: nextDueDateStr,
-        invoice_url: invoiceUrl,
-      })
-      .select()
-      .single();
-
-    if (subErr) {
-      console.error("Erro ao salvar subscription", subErr);
-      return new Response(JSON.stringify({ error: subErr.message }), { status: 500, headers: corsHeaders });
+    // 7. Persistir (UPDATE se reativando, INSERT caso contrário)
+    if (reactivated && reactivatable) {
+      const { data, error: upErr } = await admin
+        .from("subscriptions")
+        .update({
+          plan_id: plan.id,
+          asaas_subscription_id: asaasSubId,
+          status: "active",
+          billing_type,
+          billing_cycle: cycleChoice,
+          discount_percent: 0,
+          coupon_code: appliedCoupon?.code ?? null,
+          discount_amount_cents: discountCents,
+          trial_ends_at: null,
+          canceled_at: null,
+          grace_until: null,
+          next_due_date: nextDueDateStr!,
+          invoice_url: invoiceUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", reactivatable.id)
+        .select()
+        .single();
+      if (upErr) {
+        console.error("Erro ao reativar subscription", upErr);
+        return new Response(JSON.stringify({ error: upErr.message }), { status: 500, headers: corsHeaders });
+      }
+      subscription = data;
+    } else {
+      const trialEnds = new Date();
+      trialEnds.setDate(trialEnds.getDate() + 7);
+      const { data, error: subErr } = await admin
+        .from("subscriptions")
+        .insert({
+          user_id: userId,
+          plan_id: plan.id,
+          asaas_subscription_id: asaasSubId,
+          status: "trialing",
+          billing_type,
+          billing_cycle: cycleChoice,
+          is_beta: false,
+          discount_percent: 0,
+          coupon_code: appliedCoupon?.code ?? null,
+          discount_amount_cents: discountCents,
+          trial_ends_at: trialEnds.toISOString(),
+          next_due_date: nextDueDateStr!,
+          invoice_url: invoiceUrl,
+        })
+        .select()
+        .single();
+      if (subErr) {
+        console.error("Erro ao salvar subscription", subErr);
+        return new Response(JSON.stringify({ error: subErr.message }), { status: 500, headers: corsHeaders });
+      }
+      subscription = data;
     }
 
     if (appliedCoupon) {
