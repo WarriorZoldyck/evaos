@@ -4,8 +4,17 @@ import { AlertTriangle, Clock } from "lucide-react";
 import { differenceInDays } from "date-fns";
 
 export function SubscriptionBanner() {
-  const { subscription, isInTrial, isInGrace, noSubscription, isLoading } = useSubscription();
+  const { subscription, isInTrial, isInGrace, isBlocked, noSubscription, isLoading } = useSubscription();
   if (isLoading) return null;
+
+  if (isBlocked) {
+    return (
+      <div className="px-4 py-2 bg-destructive/10 border-b border-destructive/40 text-sm flex items-center justify-between">
+        <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-destructive" /> Sua assinatura foi {subscription?.status === "canceled" ? "cancelada" : "encerrada"}. Reative para continuar usando a EVA.</span>
+        <Link to="/planos" className="text-destructive font-semibold hover:underline">Reativar →</Link>
+      </div>
+    );
+  }
 
   if (noSubscription) {
     return (
