@@ -19,7 +19,7 @@ export function SubscriptionBanner() {
   if (noSubscription) {
     return (
       <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 text-sm flex items-center justify-between">
-        <span className="flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /> Você ainda não tem uma assinatura. Comece seu teste gratuito de 7 dias.</span>
+        <span className="flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /> Você ainda não tem uma assinatura. Assine agora para usar a EVA.</span>
         <Link to="/planos" className="text-primary font-semibold hover:underline">Ver planos →</Link>
       </div>
     );

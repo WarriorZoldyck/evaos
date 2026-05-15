@@ -19,7 +19,7 @@ const plans = [
       "Plano de caixa",
       "Suporte por email",
     ],
-    cta: "Começar 7 dias grátis",
+    cta: "Assinar agora",
     highlighted: false,
   },
   {
@@ -36,7 +36,7 @@ const plans = [
       "Relatórios consolidados multi-empresa",
       "Suporte prioritário",
     ],
-    cta: "Começar 7 dias grátis",
+    cta: "Assinar agora",
     highlighted: true,
   },
 ];
@@ -60,7 +60,7 @@ export function LandingPricing() {
             Escolha o plano ideal para você
           </h2>
           <p className="text-[hsl(215,18%,55%)] max-w-xl mx-auto mb-6">
-            7 dias grátis em qualquer plano. Cancele quando quiser, sem multa.
+            Assine agora e comece a usar a EVA OS. Cancele quando quiser, sem multa.
           </p>
 
           <div className="inline-flex items-center gap-1 p-1 rounded-full border border-[hsl(215,25%,16%)] bg-[hsl(220,30%,7%)]">

@@ -20,7 +20,7 @@ export default function MinhaAssinatura() {
     return (
       <div className="max-w-2xl mx-auto py-8 px-4 text-center space-y-4">
         <h1 className="text-2xl font-bold">Você ainda não tem uma assinatura</h1>
-        <p className="text-muted-foreground">Comece com 7 dias grátis em qualquer plano.</p>
+        <p className="text-muted-foreground">Assine agora e comece a usar a EVA OS.</p>
         <Button onClick={() => navigate("/planos")}>Ver planos</Button>
       </div>
     );

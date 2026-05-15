@@ -118,7 +118,7 @@ export default function Planos() {
     <div className="max-w-5xl mx-auto py-8 px-4">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2">Escolha seu plano</h1>
-        <p className="text-muted-foreground mb-6">7 dias grátis para testar. Cancele quando quiser.</p>
+        <p className="text-muted-foreground mb-6">Assine agora e comece a usar o EVA OS.</p>
 
         <div className="inline-flex items-center gap-1 p-1 rounded-full border border-border bg-card">
           <button
@@ -154,7 +154,7 @@ export default function Planos() {
             state === "upgrade" ? "Fazer upgrade" :
             state === "downgrade" ? "Fazer downgrade" :
             state === "reactivate" ? "Reativar com este plano" :
-            "Começar 7 dias grátis";
+            "Assinar agora";
           return (
             <div key={plan.id} className={`p-6 rounded-2xl border bg-card flex flex-col ${isCurrent ? "border-primary ring-2 ring-primary/40" : "border-border"}`}>
               <div className="flex items-center justify-between gap-2">
@@ -254,8 +254,10 @@ export default function Planos() {
                 placeholder="Insira o código do cupom"
               />
             </div>
-            {!(subscription && !hasAccess) && (
-              <p className="text-xs text-muted-foreground">A primeira cobrança ocorre em 7 dias. Cancele antes para não ser cobrado.</p>
+            {subscription && !hasAccess ? (
+              <p className="text-xs text-muted-foreground">Sua assinatura anterior será reativada. A primeira cobrança ocorre no próximo dia.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">A primeira cobrança ocorre amanhã.</p>
             )}
           </div>
           <DialogFooter>
