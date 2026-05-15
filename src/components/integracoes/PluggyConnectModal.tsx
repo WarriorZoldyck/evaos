@@ -17,9 +17,9 @@ interface PluggyConnectModalProps {
 }
 
 // Pluggy widget script (CDN)
-const PLUGGY_SCRIPT = "https://cdn.pluggy.ai/pluggy-connect/v2.9.0/pluggy-connect.js";
-// Itaú connectors (PF + PJ Open Finance)
-const ITAU_CONNECTOR_IDS = [201, 218];
+const PLUGGY_SCRIPT = "https://cdn.pluggy.ai/pluggy-connect/latest/pluggy-connect.js";
+// Itaú connectors (PF + PJ Open Finance) + Pluggy Bank Sandbox (0)
+const ITAU_CONNECTOR_IDS = [201, 218, 0];
 
 declare global {
   interface Window {
@@ -90,7 +90,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
       const PluggyConnect = (window as any).PluggyConnect;
       const instance = new PluggyConnect({
         connectToken: accessToken,
-        includeSandbox: false,
+        includeSandbox: true,
         connectorIds: ITAU_CONNECTOR_IDS,
         onSuccess: async (itemData: { item: { id: string } }) => {
           try {
