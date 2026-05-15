@@ -215,9 +215,9 @@ Deno.serve(async (req) => {
     const reactivated = await tryReactivate();
 
     if (!reactivated) {
-      // Nova: trial de 7 dias
+      // Nova: sem trial — primeira cobrança amanhã
       const nd = new Date();
-      nd.setDate(nd.getDate() + 7);
+      nd.setDate(nd.getDate() + 1);
       nextDueDateStr = nd.toISOString().slice(0, 10);
       const sub = await asaasFetch("/subscriptions", {
         method: "POST",
@@ -271,22 +271,20 @@ Deno.serve(async (req) => {
       }
       subscription = data;
     } else {
-      const trialEnds = new Date();
-      trialEnds.setDate(trialEnds.getDate() + 7);
       const { data, error: subErr } = await admin
         .from("subscriptions")
         .insert({
           user_id: userId,
           plan_id: plan.id,
           asaas_subscription_id: asaasSubId,
-          status: "trialing",
+          status: "active",
           billing_type,
           billing_cycle: cycleChoice,
           is_beta: false,
           discount_percent: 0,
           coupon_code: appliedCoupon?.code ?? null,
           discount_amount_cents: discountCents,
-          trial_ends_at: trialEnds.toISOString(),
+          trial_ends_at: null,
           next_due_date: nextDueDateStr!,
           invoice_url: invoiceUrl,
         })
