@@ -90,7 +90,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
       const PluggyConnect = (window as any).PluggyConnect;
       const instance = new PluggyConnect({
         connectToken: accessToken,
-        includeSandbox: false,
+        includeSandbox: true,
         connectorIds: ITAU_CONNECTOR_IDS,
         onSuccess: async (itemData: { item: { id: string } }) => {
           try {
