@@ -85,6 +85,12 @@ export default function MinhaAssinatura() {
               <Button variant="outline" className="gap-2"><ExternalLink className="h-4 w-4" /> Pagar / ver fatura</Button>
             </a>
           )}
+          {(isInTrial || isActive) && (
+            <Button variant="outline" onClick={() => navigate("/planos")}>Trocar de plano</Button>
+          )}
+          {isBlocked && (
+            <Button onClick={() => navigate("/planos")}>Reativar assinatura</Button>
+          )}
           {(isInTrial || isActive || isInGrace) && (
             <AlertDialog>
               <AlertDialogTrigger asChild>

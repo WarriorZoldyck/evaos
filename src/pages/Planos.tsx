@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Check, Loader2 } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,8 @@ interface Plan {
   price_cents: number; yearly_price_cents: number | null; max_users: number; features: string[]; sort_order: number;
 }
 
+type PlanState = "current" | "upgrade" | "downgrade" | "subscribe" | "reactivate";
+
 export default function Planos() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -26,6 +28,8 @@ export default function Planos() {
   const [selected, setSelected] = useState<Plan | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", cpf_cnpj: "", phone: "", billing_type: "CREDIT_CARD", coupon_code: "" });
+  const [switchTarget, setSwitchTarget] = useState<{ plan: Plan; mode: "upgrade" | "downgrade" } | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -38,10 +42,19 @@ export default function Planos() {
 
   const formatPrice = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  const openCheckout = (plan: Plan) => {
+  const getPlanState = (plan: Plan): PlanState => {
+    if (!subscription) return "subscribe";
+    if (!hasAccess) return "reactivate";
+    if (subscription.plan_id === plan.id && subscription.billing_cycle === cycle) return "current";
+    return plan.price_cents > (subscription.plan?.price_cents ?? 0) ? "upgrade" : "downgrade";
+  };
+
+  const handleClick = (plan: Plan) => {
     if (!user) { navigate("/auth"); return; }
-    if (subscription && hasAccess) {
-      toast.info("Você já possui uma assinatura ativa. Cancele a atual antes de trocar.");
+    const state = getPlanState(plan);
+    if (state === "current") return;
+    if (state === "upgrade" || state === "downgrade") {
+      setSwitchTarget({ plan, mode: state });
       return;
     }
     setSelected(plan);
@@ -80,6 +93,25 @@ export default function Planos() {
     }
   };
 
+  const confirmSwitch = async () => {
+    if (!switchTarget) return;
+    setSwitching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("asaas-change-plan", {
+        body: { plan_slug: switchTarget.plan.slug, billing_cycle: cycle },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(data?.message || "Plano alterado com sucesso");
+      await refetch();
+      setSwitchTarget(null);
+    } catch (e) {
+      toast.error((e as Error).message || "Falha ao alterar plano");
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
   return (
@@ -115,9 +147,20 @@ export default function Planos() {
           const displayCents = cycle === "monthly" ? monthly : yearlyTotal;
           const suffix = cycle === "monthly" ? "/mês" : "/ano";
           const yearlyMonthlyEquiv = Math.round(yearlyTotal / 12);
+          const state = getPlanState(plan);
+          const isCurrent = state === "current";
+          const buttonLabel =
+            state === "current" ? "Plano atual" :
+            state === "upgrade" ? "Fazer upgrade" :
+            state === "downgrade" ? "Fazer downgrade" :
+            state === "reactivate" ? "Reativar com este plano" :
+            "Começar 7 dias grátis";
           return (
-            <div key={plan.id} className="p-6 rounded-2xl border border-border bg-card flex flex-col">
-              <h3 className="font-bold text-xl">{plan.name}</h3>
+            <div key={plan.id} className={`p-6 rounded-2xl border bg-card flex flex-col ${isCurrent ? "border-primary ring-2 ring-primary/40" : "border-border"}`}>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-bold text-xl">{plan.name}</h3>
+                {isCurrent && <span className="text-xs px-2 py-1 rounded-full bg-primary/15 text-primary font-semibold">Atual</span>}
+              </div>
               <p className="text-sm text-muted-foreground mb-4">{plan.description}</p>
               <div className="mb-4">
                 <div>
@@ -137,18 +180,50 @@ export default function Planos() {
                   </li>
                 ))}
               </ul>
-              <Button onClick={() => openCheckout(plan)} className="w-full">Começar 7 dias grátis</Button>
+              <Button
+                onClick={() => handleClick(plan)}
+                disabled={isCurrent}
+                variant={isCurrent ? "outline" : "default"}
+                className="w-full"
+              >
+                {buttonLabel}
+              </Button>
             </div>
           );
         })}
       </div>
 
+      {/* Modal upgrade/downgrade */}
+      <Dialog open={!!switchTarget} onOpenChange={(o) => !o && setSwitchTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {switchTarget?.mode === "upgrade" ? "Fazer upgrade" : "Fazer downgrade"} para {switchTarget?.plan.name}
+            </DialogTitle>
+            <DialogDescription>
+              A mudança vale a partir do próximo vencimento. Você não será cobrado agora — o novo valor ({cycle === "yearly" ? "anual" : "mensal"}) entra em vigor na próxima cobrança recorrente.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSwitchTarget(null)} disabled={switching}>Voltar</Button>
+            <Button onClick={confirmSwitch} disabled={switching}>
+              {switching && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Confirmar mudança
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Assinar {selected?.name} — {cycle === "monthly" ? "Mensal" : "Anual"}
+              {subscription && !hasAccess ? "Reativar assinatura" : "Assinar"} {selected?.name} — {cycle === "monthly" ? "Mensal" : "Anual"}
             </DialogTitle>
+            {subscription && !hasAccess && (
+              <DialogDescription>
+                Sua assinatura anterior será reativada. Não há novo período de teste — a primeira cobrança ocorre no próximo dia.
+              </DialogDescription>
+            )}
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -179,11 +254,13 @@ export default function Planos() {
                 placeholder="Insira o código do cupom"
               />
             </div>
-            <p className="text-xs text-muted-foreground">A primeira cobrança ocorre em 7 dias. Cancele antes para não ser cobrado.</p>
+            {!(subscription && !hasAccess) && (
+              <p className="text-xs text-muted-foreground">A primeira cobrança ocorre em 7 dias. Cancele antes para não ser cobrado.</p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelected(null)} disabled={submitting}>Cancelar</Button>
-            <Button onClick={submit} disabled={submitting}>{submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Confirmar assinatura</Button>
+            <Button onClick={submit} disabled={submitting}>{submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Confirmar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

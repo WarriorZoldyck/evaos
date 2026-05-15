@@ -10,6 +10,7 @@ export interface SubscriptionRow {
   plan_id: string;
   status: SubscriptionStatus;
   billing_type: string;
+  billing_cycle: string;
   is_beta: boolean;
   discount_percent: number;
   trial_ends_at: string | null;
