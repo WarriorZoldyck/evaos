@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Authenticated can read active coupons" ON public.subscription_coupons;
