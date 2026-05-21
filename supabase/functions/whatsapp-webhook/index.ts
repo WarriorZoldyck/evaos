@@ -933,31 +933,54 @@ serve(async (req) => {
 
         if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
           const seriesId = crypto.randomUUID();
-          const transactions = installmentDetails.map((detail: any, idx: number) => ({
-            user_id: userId,
-            description: `${txPayload.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
-            amount: Math.abs(detail.amount || 0),
-            type: txType,
-            category: txPayload.category_id,
-            subcategory: txPayload.subcategory_id || null,
-            competence_date: competenceDate,
-            payment_date: detail.due_date || paymentDate,
-            status: (detail.due_date && detail.due_date <= todayStr) ? "Pago" as const : "Pendente" as const,
-            bank_account_id: matchedBankId,
-            wallet_id: matchedWalletId,
-            credit_card_id: matchedCardId,
-            company_id: companyId,
-            payment_method: txPayload.payment_method || null,
-            supplier_id: txPayload.supplier_id || null,
-            client_id: txPayload.client_id || null,
-            contact_name: txPayload.contact_name || null,
-            notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
-            attachment_url: txPayload.attachment_url || null,
-            barcode: detail.barcode || null,
-            series_id: seriesId,
-            installment_number: idx + 1,
-            installments_total: installmentCount,
-          }));
+          const computedPaymentDates: string[] = [];
+          const transactions = installmentDetails.map((detail: any, idx: number) => {
+            let installmentPaymentDate = detail.due_date || paymentDate;
+            if (matchedCardId) {
+              const card = allCcs.find((c: any) => c.id === matchedCardId);
+              if (card) {
+                const baseDate = new Date(competenceDate + "T12:00:00");
+                baseDate.setMonth(baseDate.getMonth() + idx);
+                const compDay = baseDate.getDate();
+                const compMonth = baseDate.getMonth();
+                const compYear = baseDate.getFullYear();
+                let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
+                let billYear = compYear;
+                let dueMonth = billMonth;
+                let dueYear = billYear;
+                if (card.due_day < card.closing_day) dueMonth = billMonth + 1;
+                if (dueMonth > 11) { dueMonth -= 12; dueYear++; }
+                const dueDate = new Date(dueYear, dueMonth, card.due_day);
+                installmentPaymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+              }
+            }
+            computedPaymentDates.push(installmentPaymentDate);
+            return {
+              user_id: userId,
+              description: `${txPayload.description || "Lançamento via WhatsApp"} (${idx + 1}/${installmentCount})`,
+              amount: Math.abs(detail.amount || 0),
+              type: txType,
+              category: txPayload.category_id,
+              subcategory: txPayload.subcategory_id || null,
+              competence_date: competenceDate,
+              payment_date: installmentPaymentDate,
+              status: matchedCardId ? "Pendente" as const : (installmentPaymentDate <= todayStr ? "Pago" as const : "Pendente" as const),
+              bank_account_id: matchedBankId,
+              wallet_id: matchedWalletId,
+              credit_card_id: matchedCardId,
+              company_id: companyId,
+              payment_method: txPayload.payment_method || null,
+              supplier_id: txPayload.supplier_id || null,
+              client_id: txPayload.client_id || null,
+              contact_name: txPayload.contact_name || null,
+              notes: [txPayload.original_user_text, txPayload.notes].filter(Boolean).join("\n") || null,
+              attachment_url: txPayload.attachment_url || null,
+              barcode: detail.barcode || null,
+              series_id: seriesId,
+              installment_number: idx + 1,
+              installments_total: installmentCount,
+            };
+          });
 
          // Check series-level duplicate
           const totalSeriesAmount = installmentDetails.reduce((s: number, d: any) => s + Math.abs(d.amount || 0), 0);
@@ -997,7 +1020,7 @@ serve(async (req) => {
             : matchedBankId ? allAccs.find((a: any) => a.id === matchedBankId)?.name
             : allWlts.find((w: any) => w.id === matchedWalletId)?.name;
           const parcelsDisplay = installmentDetails.map((d: any, i: number) =>
-            `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}`
+            `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(computedPaymentDates[i])}`
           ).join("\n");
 
           return respond({
@@ -2926,6 +2949,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         const seriesFp = await generateSeriesFingerprint(aiParsed.description || "", totalSeriesAmt, competenceDate);
         const seriesDupStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp, true);
 
+        const computedPaymentDates: string[] = [];
         const pendingTxs = installmentDetails.map((detail: any, idx: number) => {
           // Calculate per-installment payment_date for credit cards
           let installmentPaymentDate = fixYear(detail.due_date || paymentDate);
@@ -2954,6 +2978,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             }
           }
 
+          computedPaymentDates.push(installmentPaymentDate);
           const installmentStatus = creditCardId ? "Pendente" : (installmentPaymentDate > today ? "Pendente" : "Pago");
 
           return {
@@ -3004,7 +3029,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         const totalAmount = installmentDetails.reduce((sum: number, d: any) => sum + Math.abs(d.amount || 0), 0);
         const parcelsDisplay = installmentDetails.map((d: any, i: number) => {
           const barcodeInfo = d.barcode ? ` 📄` : "";
-          return `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}${barcodeInfo}`;
+          return `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(computedPaymentDates[i])}${barcodeInfo}`;
         }).join("\n");
         const barcodeCount = installmentDetails.filter((d: any) => d.barcode).length;
         const barcodeNote = barcodeCount > 0 ? `\n\n📄 ${barcodeCount} boleto(s) com código de barras registrado(s)` : "";
