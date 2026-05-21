@@ -1925,6 +1925,17 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // Validate that intent is one of expected values to prevent AI manipulation
     const VALID_INTENTS = ["lancamento", "editar_lancamento", "consulta", "gerenciar_categoria", "conversa"];
+    const VALID_QUERY_TYPES = [
+      "saldo", "resumo_mes", "gastos_mes", "receitas_mes", "pendentes",
+      "gastos_categoria", "agrupar_por_categoria", "listar_lancamentos",
+      "listar_cartoes", "listar_contas",
+    ];
+    // Self-heal: AI sometimes puts query_type in the intent field (e.g. intent="agrupar_por_categoria")
+    if (aiParsed.intent && VALID_QUERY_TYPES.includes(aiParsed.intent)) {
+      console.warn("AI returned query_type as intent, coercing to consulta:", aiParsed.intent);
+      aiParsed.query_type = aiParsed.query_type || aiParsed.intent;
+      aiParsed.intent = "consulta";
+    }
     if (aiParsed.intent && !VALID_INTENTS.includes(aiParsed.intent)) {
       console.warn("Invalid AI intent detected, defaulting to conversa:", aiParsed.intent);
       aiParsed.intent = "conversa";
