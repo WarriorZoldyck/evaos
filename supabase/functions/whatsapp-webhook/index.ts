@@ -1625,7 +1625,7 @@ REGRAS DE GERENCIAMENTO DE CATEGORIAS:
 - NÃO invente ações além das listadas acima.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
 
 TIPOS DE CONSULTA:
 - "saldo" = saldo das contas
@@ -1633,14 +1633,17 @@ TIPOS DE CONSULTA:
 - "gastos_mes" = total de despesas do mês
 - "receitas_mes" = total de receitas do mês
 - "pendentes" = contas a pagar/receber
-- "gastos_categoria" = gastos por categoria específica (LISTA os lançamentos individuais + total)
+- "gastos_categoria" = gastos de UMA categoria específica (LISTA os lançamentos individuais + total). EXIGE category_filter preenchido com o nome da categoria.
+- "agrupar_por_categoria" = TODOS os lançamentos agrupados por categoria, com total e % por categoria. Use quando o usuário pedir para "separar/agrupar/dividir por categoria", "gastos por categoria" (sem nomear uma), "quanto gastei em cada categoria", etc. Defina tipo_filter="despesa" (padrão) ou "receita". NÃO use category_filter aqui.
 - "listar_lancamentos" = listar lançamentos filtrados por fornecedor, cliente, descrição, ou qualquer critério específico
 - "listar_cartoes" = listar cartões de crédito cadastrados
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
 - Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
 - Se o usuário pedir lançamentos de um fornecedor específico (ex: "lançamentos do Moscato", "quanto paguei no Dentais"), use "listar_lancamentos" com contact_filter.
-- Se o usuário pedir lançamentos de uma categoria específica (ex: "gastos com Alimentação"), use "gastos_categoria" com category_filter.
+- Se o usuário pedir lançamentos de UMA categoria nomeada (ex: "gastos com Alimentação"), use "gastos_categoria" com category_filter.
+- Se o usuário pedir para AGRUPAR/SEPARAR/DIVIDIR por categoria sem nomear uma específica (ex: "separe meus gastos por categoria", "quanto gastei em cada categoria"), use "agrupar_por_categoria". NUNCA use "gastos_categoria" com category_filter vazio nem "listar_lancamentos" nesse caso.
 - SEMPRE que o usuário pedir dados específicos, filtre e retorne SOMENTE o que ele pediu. NÃO retorne dados genéricos.
+
 
 REGRAS DE PERÍODO:
 - Se o usuário não especificar período, use "mes_atual"
