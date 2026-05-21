@@ -167,8 +167,9 @@ function MemberCard({
                 variant={member.status === "active" ? "default" : "secondary"}
                 className="text-[9px] px-1.5 py-0 h-4 shrink-0"
               >
-                {member.status === "active" ? "Ativo" : "Suspenso"}
+                {member.status === "active" ? "Ativo" : member.status === "pending" ? "Aguardando aceitação" : "Suspenso"}
               </Badge>
+
             </div>
             <p className="text-xs text-muted-foreground truncate">{member.email}</p>
           </div>
@@ -260,7 +261,7 @@ function MemberCard({
 function InviteMemberModal({ open, onClose, onCreate }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string, email: string, password: string, role: string) => Promise<any>;
+  onCreate: (name: string, email: string, password: string | undefined, role: string) => Promise<any>;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -269,10 +270,10 @@ function InviteMemberModal({ open, onClose, onCreate }: {
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async () => {
-    if (!name || !email || !password) return;
+    if (!name || !email) return;
     setSaving(true);
     try {
-      await onCreate(name, email, password, role);
+      await onCreate(name, email, password || undefined, role);
       setName(""); setEmail(""); setPassword(""); setRole("viewer");
       onClose();
     } catch {} finally { setSaving(false); }
@@ -292,8 +293,11 @@ function InviteMemberModal({ open, onClose, onCreate }: {
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
           </div>
           <div className="space-y-2">
-            <Label>Senha</Label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha de acesso" />
+            <Label>Senha <span className="text-xs text-muted-foreground">(opcional)</span></Label>
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Apenas se o usuário ainda não tiver conta EVA" />
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Se o e-mail já tiver conta na EVA, ele receberá um convite para aceitar — a senha não é necessária. Caso contrário, defina uma senha para criar a conta dele.
+            </p>
           </div>
           <div className="space-y-2">
             <Label>Permissão</Label>
@@ -309,12 +313,13 @@ function InviteMemberModal({ open, onClose, onCreate }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={saving || !name || !email || !password}>
+          <Button onClick={handleSubmit} disabled={saving || !name || !email}>
             {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-            Criar Membro
+            Enviar Convite
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+

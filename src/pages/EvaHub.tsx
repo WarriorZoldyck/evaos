@@ -41,13 +41,50 @@ const roleIcons: Record<string, React.ReactNode> = {
 
 export default function EvaHub() {
   const { isHubMember } = useHub();
+  const { pendingInvitations, acceptInvitation, rejectInvitation } = useWorkspaceMembers();
 
-  if (isHubMember) {
-    return <MemberWorkspaceSelector />;
-  }
-
-  return <OwnerDashboard />;
+  return (
+    <>
+      {pendingInvitations.length > 0 && (
+        <div className="max-w-5xl mx-auto mb-6 space-y-3 animate-fade-in">
+          <h2 className="text-lg font-semibold font-display text-foreground flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-primary" />
+            Convites recebidos
+          </h2>
+          <div className="grid gap-3">
+            {pendingInvitations.map((inv) => (
+              <Card key={inv.member_id} className="border-primary/30 bg-card/60 backdrop-blur-sm">
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-primary-soft border border-primary/20 flex items-center justify-center shrink-0">
+                      <Building2 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-foreground truncate">{inv.owner_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        Convidou você como <strong>{roleLabels[inv.role] || inv.role}</strong>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => rejectInvitation(inv.member_id)}>
+                      Recusar
+                    </Button>
+                    <Button size="sm" onClick={() => acceptInvitation(inv.member_id)} className="bg-gradient-primary hover:opacity-90">
+                      Aceitar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+      {isHubMember ? <MemberWorkspaceSelector /> : <OwnerDashboard />}
+    </>
+  );
 }
+
 
 // ──── MEMBER VIEW ────
 function MemberWorkspaceSelector() {
