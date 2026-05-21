@@ -125,6 +125,34 @@ export function useWorkspaceMembers() {
     setLoading(false);
   }, [user]);
 
+  const fetchPendingInvitations = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("workspace_members")
+      .select("id, owner_id, email, role")
+      .eq("member_user_id", user.id)
+      .eq("status", "pending");
+    if (!data || data.length === 0) {
+      setPendingInvitations([]);
+      return;
+    }
+    const ownerIds = [...new Set(data.map((d: any) => d.owner_id))];
+    const profilesById = new Map<string, string>();
+    for (const oid of ownerIds) {
+      const { data: p } = await supabase.from("profiles").select("full_name").eq("id", oid).single();
+      if (p?.full_name) profilesById.set(oid, p.full_name);
+    }
+    setPendingInvitations(
+      data.map((d: any) => ({
+        member_id: d.id,
+        owner_id: d.owner_id,
+        owner_name: profilesById.get(d.owner_id) || d.email || "Conta",
+        owner_email: d.email,
+        role: d.role,
+      }))
+    );
+  }, [user]);
+
   useEffect(() => {
     if (!user) return;
     const meta = user.user_metadata as Record<string, unknown> | undefined;
@@ -132,22 +160,22 @@ export function useWorkspaceMembers() {
     if (appMeta?.hub_member === true || meta?.hub_member === true) {
       fetchAvailableWorkspaces();
     } else {
-      Promise.all([fetchMembers(), fetchWorkspaces(), fetchOwnerProfile()]);
+      Promise.all([fetchMembers(), fetchWorkspaces(), fetchOwnerProfile(), fetchAvailableWorkspaces()]);
     }
-  }, [user, fetchMembers, fetchAvailableWorkspaces, fetchWorkspaces, fetchOwnerProfile]);
+    fetchPendingInvitations();
+  }, [user, fetchMembers, fetchAvailableWorkspaces, fetchWorkspaces, fetchOwnerProfile, fetchPendingInvitations]);
 
-  const createMember = async (name: string, email: string, password: string, role: string) => {
+  const createMember = async (name: string, email: string, password: string | undefined, role: string) => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error("Not authenticated");
 
-      const res = await supabase.functions.invoke("create-hub-member", {
-        body: { name, email, password, role },
-      });
+      const body: Record<string, unknown> = { name, email, role };
+      if (password) body.password = password;
+      const res = await supabase.functions.invoke("create-hub-member", { body });
 
       if (res.error) {
-        // Try to extract body message from FunctionsHttpError
         let msg = res.error.message;
         try {
           const ctx: any = (res.error as any).context;
@@ -163,7 +191,7 @@ export function useWorkspaceMembers() {
       }
       if (res.data?.error) throw new Error(res.data.error);
 
-      toast.success("Membro criado com sucesso!");
+      toast.success(res.data?.pending ? "Convite enviado! Aguardando aceitação do usuário." : "Membro criado com sucesso!");
       await fetchMembers();
       return res.data;
     } catch (err: any) {
@@ -171,6 +199,31 @@ export function useWorkspaceMembers() {
       throw err;
     }
   };
+
+  const acceptInvitation = async (memberId: string) => {
+    try {
+      const res = await supabase.functions.invoke("respond-hub-invitation", { body: { memberId, action: "accept" } });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      toast.success("Convite aceito!");
+      await Promise.all([fetchPendingInvitations(), fetchAvailableWorkspaces()]);
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao aceitar convite");
+    }
+  };
+
+  const rejectInvitation = async (memberId: string) => {
+    try {
+      const res = await supabase.functions.invoke("respond-hub-invitation", { body: { memberId, action: "reject" } });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      toast.success("Convite recusado");
+      await fetchPendingInvitations();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao recusar convite");
+    }
+  };
+
 
   const updateMemberRole = async (memberId: string, role: string) => {
     const { error } = await supabase
