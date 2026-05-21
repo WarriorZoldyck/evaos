@@ -40,13 +40,16 @@ const roleIcons: Record<string, React.ReactNode> = {
 };
 
 export default function EvaHub() {
-  const { isHubMember } = useHub();
-  const { pendingInvitations, acceptInvitation, rejectInvitation } = useWorkspaceMembers();
+  const { pendingInvitations, acceptInvitation, rejectInvitation, availableWorkspaces } = useWorkspaceMembers();
+  const { hubAllowed } = usePlanLimits();
+
+  const showInvitedSection = availableWorkspaces.length > 0;
+  const showOwnerSection = hubAllowed;
 
   return (
-    <>
+    <div className="space-y-8">
       {pendingInvitations.length > 0 && (
-        <div className="max-w-5xl mx-auto mb-6 space-y-3 animate-fade-in">
+        <div className="max-w-5xl mx-auto space-y-3 animate-fade-in">
           <h2 className="text-lg font-semibold font-display text-foreground flex items-center gap-2">
             <UserPlus className="h-5 w-5 text-primary" />
             Convites recebidos
@@ -80,8 +83,79 @@ export default function EvaHub() {
           </div>
         </div>
       )}
-      {isHubMember ? <MemberWorkspaceSelector /> : <OwnerDashboard />}
-    </>
+
+      {showInvitedSection && <InvitedWorkspacesSection />}
+
+      {showOwnerSection ? (
+        <OwnerDashboard />
+      ) : (
+        !showInvitedSection && pendingInvitations.length === 0 && (
+          <Card className="max-w-2xl mx-auto border-dashed border-border/60 bg-card/40 backdrop-blur-sm">
+            <CardContent className="py-14 text-center text-sm text-muted-foreground">
+              Você ainda não faz parte de nenhum hub. Aguarde um convite ou faça upgrade do seu plano para criar o seu.
+            </CardContent>
+          </Card>
+        )
+      )}
+    </div>
+  );
+}
+
+
+// ──── INVITED HUBS SECTION ────
+function InvitedWorkspacesSection() {
+  const { availableWorkspaces } = useWorkspaceMembers();
+  const { setImpersonation } = useHub();
+  const navigate = useNavigate();
+
+  const handleEnter = (ownerId: string, ownerName: string, role: string) => {
+    setImpersonation(ownerId, ownerName, role);
+    navigate("/dashboard");
+  };
+
+  return (
+    <section className="max-w-5xl mx-auto space-y-4 animate-fade-in">
+      <div>
+        <h2 className="text-lg font-semibold font-display text-foreground flex items-center gap-2">
+          <Users className="h-5 w-5 text-primary" />
+          Hubs em que sou membro
+        </h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Áreas de trabalho de outros usuários às quais você foi convidado
+        </p>
+      </div>
+      <div className="grid gap-3">
+        {availableWorkspaces.map((ws) => (
+          <Card
+            key={ws.owner_id}
+            className="group relative overflow-hidden border-border/60 bg-card/60 backdrop-blur-sm hover:border-primary/40 hover:shadow-[0_8px_32px_-12px_hsl(var(--primary)/0.35)] transition-all duration-300"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <CardContent className="relative flex items-center justify-between py-5">
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-xl bg-gradient-primary-soft border border-primary/20 flex items-center justify-center">
+                  <Building2 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold text-foreground">{ws.owner_name}</p>
+                  <Badge variant="outline" className="text-[10px] gap-1 mt-1 border-primary/30 text-primary bg-primary/5">
+                    {roleIcons[ws.role]}
+                    {roleLabels[ws.role]}
+                  </Badge>
+                </div>
+              </div>
+              <Button
+                onClick={() => handleEnter(ws.owner_id, ws.owner_name, ws.role)}
+                className="gap-1.5 bg-gradient-primary hover:opacity-90 shadow-lg shadow-primary/20"
+              >
+                <LogIn className="h-4 w-4" />
+                Entrar
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
   );
 }
 
