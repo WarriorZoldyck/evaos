@@ -3794,9 +3794,16 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           }
 
           default:
-            responseMessage = aiParsed.friendly_message || "Não entendi o tipo de consulta. Tente perguntar de outra forma.";
+            console.warn("Unknown query_type, falling back:", aiParsed.query_type);
+            responseMessage = "Não entendi exatamente o tipo de consulta. Tente reformular, por exemplo: \"resumo do mês\", \"separar gastos por categoria\" ou \"meu saldo\".";
         }
 
+        // Guard: never deliver a "vou buscar" placeholder as the final answer
+        const placeholderRegex = /vou buscar|j[áa] vou (te |lhe )?(trazer|buscar|verificar)|aguarde um momento|um momento, por favor/i;
+        if (!responseMessage || placeholderRegex.test(responseMessage.trim())) {
+          console.warn("Empty/placeholder responseMessage detected, replacing with safe fallback");
+          responseMessage = "Não consegui montar a resposta dessa consulta agora. Pode reformular a pergunta?";
+        }
       } catch (queryError) {
         console.error("Query error:", queryError);
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
