@@ -155,14 +155,13 @@ export function useWorkspaceMembers() {
 
   useEffect(() => {
     if (!user) return;
-    const meta = user.user_metadata as Record<string, unknown> | undefined;
-    const appMeta = (user as any).app_metadata as Record<string, unknown> | undefined;
-    if (appMeta?.hub_member === true || meta?.hub_member === true) {
-      fetchAvailableWorkspaces();
-    } else {
-      Promise.all([fetchMembers(), fetchWorkspaces(), fetchOwnerProfile(), fetchAvailableWorkspaces()]);
-    }
-    fetchPendingInvitations();
+    Promise.all([
+      fetchMembers(),
+      fetchWorkspaces(),
+      fetchOwnerProfile(),
+      fetchAvailableWorkspaces(),
+      fetchPendingInvitations(),
+    ]);
   }, [user, fetchMembers, fetchAvailableWorkspaces, fetchWorkspaces, fetchOwnerProfile, fetchPendingInvitations]);
 
   const createMember = async (name: string, email: string, password: string | undefined, role: string) => {
