@@ -136,7 +136,21 @@ export function useWorkspaceMembers() {
         body: { name, email, password, role },
       });
 
-      if (res.error) throw new Error(res.error.message);
+      if (res.error) {
+        // Try to extract body message from FunctionsHttpError
+        let msg = res.error.message;
+        try {
+          const ctx: any = (res.error as any).context;
+          if (ctx?.json) {
+            const body = await ctx.json();
+            if (body?.error) msg = body.error;
+          } else if (ctx?.text) {
+            const txt = await ctx.text();
+            try { msg = JSON.parse(txt)?.error || txt || msg; } catch { msg = txt || msg; }
+          }
+        } catch { /* ignore */ }
+        throw new Error(msg);
+      }
       if (res.data?.error) throw new Error(res.data.error);
 
       toast.success("Membro criado com sucesso!");

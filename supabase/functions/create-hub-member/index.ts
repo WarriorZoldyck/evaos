@@ -115,9 +115,15 @@ Deno.serve(async (req) => {
 
     if (createError) {
       console.error("Error creating user:", createError);
+      const isEmailExists =
+        (createError as any)?.code === "email_exists" ||
+        /already.*registered|already.*exists/i.test(createError.message || "");
+      const friendly = isEmailExists
+        ? "Este e-mail já está cadastrado na plataforma. Use outro e-mail para criar o membro do hub."
+        : createError.message;
       return new Response(
-        JSON.stringify({ error: createError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: friendly }),
+        { status: isEmailExists ? 409 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
