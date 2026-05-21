@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHub } from "@/contexts/HubContext";
 import { toast } from "sonner";
 
 export interface WorkspaceMember {
