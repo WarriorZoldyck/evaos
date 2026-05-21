@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { logHubAction } from "@/hooks/useHubAuditLog";
@@ -12,6 +12,7 @@ interface HubContextType {
   exitImpersonation: () => void;
   isOwnerWithMembers: boolean;
   loading: boolean;
+  refreshHubStatus: () => Promise<void>;
 }
 
 const HubContext = createContext<HubContextType | undefined>(undefined);
@@ -39,6 +40,33 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
   const [isOwnerWithMembers, setIsOwnerWithMembers] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const refreshHubStatus = useCallback(async () => {
+    if (!user) return;
+    const [memberRes, ownerRes] = await Promise.all([
+      supabase
+        .from("workspace_members")
+        .select("id", { count: "exact", head: true })
+        .eq("member_user_id", user.id)
+        .eq("status", "active"),
+      supabase
+        .from("workspace_members")
+        .select("id", { count: "exact", head: true })
+        .eq("owner_id", user.id),
+    ]);
+    const hubMember = (memberRes.count ?? 0) > 0;
+    setIsHubMember(hubMember);
+    setIsOwnerWithMembers((ownerRes.count ?? 0) > 0);
+
+    if (hubMember) {
+      const persisted = loadPersisted(user.id);
+      if (persisted) {
+        setImpersonatingOwnerId(persisted.ownerId);
+        setImpersonatingOwnerName(persisted.ownerName);
+        setImpersonatingRole(persisted.role);
+      }
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!user) {
       setIsHubMember(false);
@@ -51,36 +79,9 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const meta = user.user_metadata as Record<string, unknown> | undefined;
-    const appMeta = (user as any).app_metadata as Record<string, unknown> | undefined;
-    const hubMember = appMeta?.hub_member === true || meta?.hub_member === true;
-    setIsHubMember(hubMember);
-
-    // Restore persisted impersonation (only for hub members)
-    if (hubMember) {
-      const persisted = loadPersisted(user.id);
-      if (persisted) {
-        setImpersonatingOwnerId(persisted.ownerId);
-        setImpersonatingOwnerName(persisted.ownerName);
-        setImpersonatingRole(persisted.role);
-      }
-    }
-
-    const checkOwner = async () => {
-      if (!hubMember) {
-        const { count } = await supabase
-          .from("workspace_members")
-          .select("id", { count: "exact", head: true })
-          .eq("owner_id", user.id);
-        setIsOwnerWithMembers((count ?? 0) > 0);
-      } else {
-        setIsOwnerWithMembers(false);
-      }
-      setLoading(false);
-    };
-
-    checkOwner();
-  }, [user]);
+    setLoading(true);
+    refreshHubStatus().finally(() => setLoading(false));
+  }, [user, refreshHubStatus]);
 
   const setImpersonation = (ownerId: string, ownerName: string, role: string = "viewer") => {
     setImpersonatingOwnerId(ownerId);
@@ -126,6 +127,7 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
         exitImpersonation,
         isOwnerWithMembers,
         loading,
+        refreshHubStatus,
       }}
     >
       {children}
