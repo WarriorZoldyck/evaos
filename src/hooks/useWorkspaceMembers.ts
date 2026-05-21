@@ -207,7 +207,7 @@ export function useWorkspaceMembers() {
       if (res.error) throw new Error(res.error.message);
       if (res.data?.error) throw new Error(res.data.error);
       toast.success("Convite aceito!");
-      await Promise.all([fetchPendingInvitations(), fetchAvailableWorkspaces()]);
+      await Promise.all([fetchPendingInvitations(), fetchAvailableWorkspaces(), refreshHubStatus()]);
     } catch (err: any) {
       toast.error(err.message || "Erro ao aceitar convite");
     }
@@ -219,7 +219,7 @@ export function useWorkspaceMembers() {
       if (res.error) throw new Error(res.error.message);
       if (res.data?.error) throw new Error(res.data.error);
       toast.success("Convite recusado");
-      await fetchPendingInvitations();
+      await Promise.all([fetchPendingInvitations(), refreshHubStatus()]);
     } catch (err: any) {
       toast.error(err.message || "Erro ao recusar convite");
     }
