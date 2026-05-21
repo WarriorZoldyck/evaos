@@ -167,8 +167,9 @@ function MemberCard({
                 variant={member.status === "active" ? "default" : "secondary"}
                 className="text-[9px] px-1.5 py-0 h-4 shrink-0"
               >
-                {member.status === "active" ? "Ativo" : "Suspenso"}
+                {member.status === "active" ? "Ativo" : member.status === "pending" ? "Aguardando aceitação" : "Suspenso"}
               </Badge>
+
             </div>
             <p className="text-xs text-muted-foreground truncate">{member.email}</p>
           </div>
