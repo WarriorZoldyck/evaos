@@ -1625,7 +1625,7 @@ REGRAS DE GERENCIAMENTO DE CATEGORIAS:
 - NÃO invente ações além das listadas acima.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome da Empresa","friendly_message":"Vou buscar essa informação para você."}
 
 TIPOS DE CONSULTA:
 - "saldo" = saldo das contas
@@ -1633,14 +1633,17 @@ TIPOS DE CONSULTA:
 - "gastos_mes" = total de despesas do mês
 - "receitas_mes" = total de receitas do mês
 - "pendentes" = contas a pagar/receber
-- "gastos_categoria" = gastos por categoria específica (LISTA os lançamentos individuais + total)
+- "gastos_categoria" = gastos de UMA categoria específica (LISTA os lançamentos individuais + total). EXIGE category_filter preenchido com o nome da categoria.
+- "agrupar_por_categoria" = TODOS os lançamentos agrupados por categoria, com total e % por categoria. Use quando o usuário pedir para "separar/agrupar/dividir por categoria", "gastos por categoria" (sem nomear uma), "quanto gastei em cada categoria", etc. Defina tipo_filter="despesa" (padrão) ou "receita". NÃO use category_filter aqui.
 - "listar_lancamentos" = listar lançamentos filtrados por fornecedor, cliente, descrição, ou qualquer critério específico
 - "listar_cartoes" = listar cartões de crédito cadastrados
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
 - Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
 - Se o usuário pedir lançamentos de um fornecedor específico (ex: "lançamentos do Moscato", "quanto paguei no Dentais"), use "listar_lancamentos" com contact_filter.
-- Se o usuário pedir lançamentos de uma categoria específica (ex: "gastos com Alimentação"), use "gastos_categoria" com category_filter.
+- Se o usuário pedir lançamentos de UMA categoria nomeada (ex: "gastos com Alimentação"), use "gastos_categoria" com category_filter.
+- Se o usuário pedir para AGRUPAR/SEPARAR/DIVIDIR por categoria sem nomear uma específica (ex: "separe meus gastos por categoria", "quanto gastei em cada categoria"), use "agrupar_por_categoria". NUNCA use "gastos_categoria" com category_filter vazio nem "listar_lancamentos" nesse caso.
 - SEMPRE que o usuário pedir dados específicos, filtre e retorne SOMENTE o que ele pediu. NÃO retorne dados genéricos.
+
 
 REGRAS DE PERÍODO:
 - Se o usuário não especificar período, use "mes_atual"
@@ -3705,9 +3708,81 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             break;
           }
 
+          case "agrupar_por_categoria": {
+            const tipoFiltro = (aiParsed.tipo_filter || aiParsed.type_filter || "despesa").toString().toLowerCase();
+            const tipo = tipoFiltro === "receita" ? "receita" : "despesa";
+
+            let q = supabase
+              .from("transactions")
+              .select("amount, category, status")
+              .eq("user_id", userId)
+              .eq("type", tipo)
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd);
+            q = addContextFilter(q);
+            const { data: grpTxns } = await q;
+
+            const resolveCatName3 = (catIdOrName: string): string => {
+              if (!catIdOrName) return "Sem categoria";
+              const found = categories.find((c: any) => c.id === catIdOrName);
+              if (!found) return catIdOrName;
+              // If subcategory, prefix with parent name
+              const parent = found.parent_id ? categories.find((c: any) => c.id === found.parent_id) : null;
+              return parent ? `${parent.name} / ${found.name}` : found.name;
+            };
+
+            const rootName = (catIdOrName: string): string => {
+              if (!catIdOrName) return "Sem categoria";
+              const found = categories.find((c: any) => c.id === catIdOrName);
+              if (!found) return catIdOrName;
+              if (found.parent_id) {
+                const p = categories.find((c: any) => c.id === found.parent_id);
+                return p ? p.name : found.name;
+              }
+              return found.name;
+            };
+
+            // Group by ROOT category (consolidate subcategories under parent)
+            const totals: Record<string, { total: number; count: number; subs: Record<string, number> }> = {};
+            let grandTotal = 0;
+            (grpTxns || []).forEach((t: any) => {
+              const root = rootName(t.category);
+              const sub = resolveCatName3(t.category);
+              if (!totals[root]) totals[root] = { total: 0, count: 0, subs: {} };
+              totals[root].total += Number(t.amount) || 0;
+              totals[root].count += 1;
+              totals[root].subs[sub] = (totals[root].subs[sub] || 0) + (Number(t.amount) || 0);
+              grandTotal += Number(t.amount) || 0;
+            });
+
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+            if (Object.keys(totals).length === 0) {
+              responseMessage = `📊 Nenhum lançamento de ${tipo} ${periodLabel}${ctxLabel}.`;
+            } else {
+              const lines = Object.entries(totals)
+                .sort((a, b) => b[1].total - a[1].total)
+                .map(([cat, info]) => {
+                  const pct = grandTotal > 0 ? ((info.total / grandTotal) * 100).toFixed(0) : "0";
+                  const subEntries = Object.entries(info.subs).filter(([s]) => s !== cat);
+                  const subLines = subEntries.length > 0
+                    ? "\n" + subEntries
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([s, v]) => `      ◦ ${s.includes(" / ") ? s.split(" / ").slice(1).join(" / ") : s}: ${fmt(v)}`)
+                        .join("\n")
+                    : "";
+                  return `  • ${cat}: ${fmt(info.total)} (${pct}% · ${info.count} lanç.)${subLines}`;
+                })
+                .join("\n");
+              const tipoLabel = tipo === "receita" ? "Receitas" : "Despesas";
+              responseMessage = `📊 ${tipoLabel} por categoria ${periodLabel}${ctxLabel}:\n\n${lines}\n\n💰 Total: ${fmt(grandTotal)}`;
+            }
+            break;
+          }
+
           default:
             responseMessage = aiParsed.friendly_message || "Não entendi o tipo de consulta. Tente perguntar de outra forma.";
         }
+
       } catch (queryError) {
         console.error("Query error:", queryError);
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
