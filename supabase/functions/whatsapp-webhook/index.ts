@@ -2926,6 +2926,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         const seriesFp = await generateSeriesFingerprint(aiParsed.description || "", totalSeriesAmt, competenceDate);
         const seriesDupStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp, true);
 
+        const computedPaymentDates: string[] = [];
         const pendingTxs = installmentDetails.map((detail: any, idx: number) => {
           // Calculate per-installment payment_date for credit cards
           let installmentPaymentDate = fixYear(detail.due_date || paymentDate);
@@ -2954,6 +2955,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             }
           }
 
+          computedPaymentDates.push(installmentPaymentDate);
           const installmentStatus = creditCardId ? "Pendente" : (installmentPaymentDate > today ? "Pendente" : "Pago");
 
           return {
