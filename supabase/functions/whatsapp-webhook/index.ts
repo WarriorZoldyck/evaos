@@ -1020,7 +1020,7 @@ serve(async (req) => {
             : matchedBankId ? allAccs.find((a: any) => a.id === matchedBankId)?.name
             : allWlts.find((w: any) => w.id === matchedWalletId)?.name;
           const parcelsDisplay = installmentDetails.map((d: any, i: number) =>
-            `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(d.due_date)}`
+            `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(computedPaymentDates[i])}`
           ).join("\n");
 
           return respond({
