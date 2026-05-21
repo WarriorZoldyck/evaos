@@ -3705,9 +3705,81 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             break;
           }
 
+          case "agrupar_por_categoria": {
+            const tipoFiltro = (aiParsed.tipo_filter || aiParsed.type_filter || "despesa").toString().toLowerCase();
+            const tipo = tipoFiltro === "receita" ? "receita" : "despesa";
+
+            let q = supabase
+              .from("transactions")
+              .select("amount, category, status")
+              .eq("user_id", userId)
+              .eq("type", tipo)
+              .gte("payment_date", periodStart)
+              .lte("payment_date", periodEnd);
+            q = addContextFilter(q);
+            const { data: grpTxns } = await q;
+
+            const resolveCatName3 = (catIdOrName: string): string => {
+              if (!catIdOrName) return "Sem categoria";
+              const found = categories.find((c: any) => c.id === catIdOrName);
+              if (!found) return catIdOrName;
+              // If subcategory, prefix with parent name
+              const parent = found.parent_id ? categories.find((c: any) => c.id === found.parent_id) : null;
+              return parent ? `${parent.name} / ${found.name}` : found.name;
+            };
+
+            const rootName = (catIdOrName: string): string => {
+              if (!catIdOrName) return "Sem categoria";
+              const found = categories.find((c: any) => c.id === catIdOrName);
+              if (!found) return catIdOrName;
+              if (found.parent_id) {
+                const p = categories.find((c: any) => c.id === found.parent_id);
+                return p ? p.name : found.name;
+              }
+              return found.name;
+            };
+
+            // Group by ROOT category (consolidate subcategories under parent)
+            const totals: Record<string, { total: number; count: number; subs: Record<string, number> }> = {};
+            let grandTotal = 0;
+            (grpTxns || []).forEach((t: any) => {
+              const root = rootName(t.category);
+              const sub = resolveCatName3(t.category);
+              if (!totals[root]) totals[root] = { total: 0, count: 0, subs: {} };
+              totals[root].total += Number(t.amount) || 0;
+              totals[root].count += 1;
+              totals[root].subs[sub] = (totals[root].subs[sub] || 0) + (Number(t.amount) || 0);
+              grandTotal += Number(t.amount) || 0;
+            });
+
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+            if (Object.keys(totals).length === 0) {
+              responseMessage = `📊 Nenhum lançamento de ${tipo} ${periodLabel}${ctxLabel}.`;
+            } else {
+              const lines = Object.entries(totals)
+                .sort((a, b) => b[1].total - a[1].total)
+                .map(([cat, info]) => {
+                  const pct = grandTotal > 0 ? ((info.total / grandTotal) * 100).toFixed(0) : "0";
+                  const subEntries = Object.entries(info.subs).filter(([s]) => s !== cat);
+                  const subLines = subEntries.length > 0
+                    ? "\n" + subEntries
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([s, v]) => `      ◦ ${s.includes(" / ") ? s.split(" / ").slice(1).join(" / ") : s}: ${fmt(v)}`)
+                        .join("\n")
+                    : "";
+                  return `  • ${cat}: ${fmt(info.total)} (${pct}% · ${info.count} lanç.)${subLines}`;
+                })
+                .join("\n");
+              const tipoLabel = tipo === "receita" ? "Receitas" : "Despesas";
+              responseMessage = `📊 ${tipoLabel} por categoria ${periodLabel}${ctxLabel}:\n\n${lines}\n\n💰 Total: ${fmt(grandTotal)}`;
+            }
+            break;
+          }
+
           default:
             responseMessage = aiParsed.friendly_message || "Não entendi o tipo de consulta. Tente perguntar de outra forma.";
         }
+
       } catch (queryError) {
         console.error("Query error:", queryError);
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
