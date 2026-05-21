@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHub } from "@/contexts/HubContext";
 import { toast } from "sonner";
 
 export interface WorkspaceMember {
@@ -46,6 +47,7 @@ export interface PendingInvitation {
 
 export function useWorkspaceMembers() {
   const { user } = useAuth();
+  const { refreshHubStatus } = useHub();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [availableWorkspaces, setAvailableWorkspaces] = useState<AvailableWorkspace[]>([]);
@@ -155,14 +157,13 @@ export function useWorkspaceMembers() {
 
   useEffect(() => {
     if (!user) return;
-    const meta = user.user_metadata as Record<string, unknown> | undefined;
-    const appMeta = (user as any).app_metadata as Record<string, unknown> | undefined;
-    if (appMeta?.hub_member === true || meta?.hub_member === true) {
-      fetchAvailableWorkspaces();
-    } else {
-      Promise.all([fetchMembers(), fetchWorkspaces(), fetchOwnerProfile(), fetchAvailableWorkspaces()]);
-    }
-    fetchPendingInvitations();
+    Promise.all([
+      fetchMembers(),
+      fetchWorkspaces(),
+      fetchOwnerProfile(),
+      fetchAvailableWorkspaces(),
+      fetchPendingInvitations(),
+    ]);
   }, [user, fetchMembers, fetchAvailableWorkspaces, fetchWorkspaces, fetchOwnerProfile, fetchPendingInvitations]);
 
   const createMember = async (name: string, email: string, password: string | undefined, role: string) => {
@@ -206,7 +207,7 @@ export function useWorkspaceMembers() {
       if (res.error) throw new Error(res.error.message);
       if (res.data?.error) throw new Error(res.data.error);
       toast.success("Convite aceito!");
-      await Promise.all([fetchPendingInvitations(), fetchAvailableWorkspaces()]);
+      await Promise.all([fetchPendingInvitations(), fetchAvailableWorkspaces(), refreshHubStatus()]);
     } catch (err: any) {
       toast.error(err.message || "Erro ao aceitar convite");
     }
@@ -218,7 +219,7 @@ export function useWorkspaceMembers() {
       if (res.error) throw new Error(res.error.message);
       if (res.data?.error) throw new Error(res.data.error);
       toast.success("Convite recusado");
-      await fetchPendingInvitations();
+      await Promise.all([fetchPendingInvitations(), refreshHubStatus()]);
     } catch (err: any) {
       toast.error(err.message || "Erro ao recusar convite");
     }
