@@ -36,13 +36,23 @@ export interface OwnerProfile {
   companies: { id: string; name: string; cnpj: string }[];
 }
 
+export interface PendingInvitation {
+  member_id: string;
+  owner_id: string;
+  owner_name: string;
+  owner_email: string;
+  role: string;
+}
+
 export function useWorkspaceMembers() {
   const { user } = useAuth();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [availableWorkspaces, setAvailableWorkspaces] = useState<AvailableWorkspace[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [ownerProfile, setOwnerProfile] = useState<OwnerProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
 
   const fetchOwnerProfile = useCallback(async () => {
     if (!user) return;
