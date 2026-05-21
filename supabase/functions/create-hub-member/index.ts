@@ -54,9 +54,9 @@ Deno.serve(async (req) => {
 
     const { name, email, password, role } = await req.json();
 
-    if (!name || !email || !password || !role) {
+    if (!name || !email || !role) {
       return new Response(
-        JSON.stringify({ error: "name, email, password and role are required" }),
+        JSON.stringify({ error: "name, email e role são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       .from("workspace_members")
       .select("id", { count: "exact", head: true })
       .eq("owner_id", ownerId)
-      .eq("status", "active");
+      .in("status", ["active", "pending"]);
     if ((currentMembers ?? 0) >= maxHubMembers) {
       return new Response(
         JSON.stringify({ error: `Limite de ${maxHubMembers} membros atingido no seu plano. Compre usuários extras para adicionar mais.` }),
@@ -99,9 +99,92 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Create auth user with hub_member metadata
+    // === Try to find existing EVA user by email ===
+    const normalizedEmail = String(email).trim().toLowerCase();
+    let existingUserId: string | null = null;
+    try {
+      // Scan paginated list (workaround: no direct getUserByEmail)
+      let page = 1;
+      const perPage = 1000;
+      while (page <= 20) {
+        const { data: list, error: listErr } = await adminClient.auth.admin.listUsers({ page, perPage });
+        if (listErr) break;
+        const match = list.users.find(
+          (u: any) => String(u.email || "").toLowerCase() === normalizedEmail
+        );
+        if (match) { existingUserId = match.id; break; }
+        if (!list.users || list.users.length < perPage) break;
+        page += 1;
+      }
+    } catch (e) {
+      console.error("listUsers failed:", e);
+    }
+
+    // === Path A: existing user → pending invitation ===
+    if (existingUserId) {
+      if (existingUserId === ownerId) {
+        return new Response(
+          JSON.stringify({ error: "Você não pode convidar a si mesmo." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Check duplicate membership
+      const { data: existingMembership } = await adminClient
+        .from("workspace_members")
+        .select("id, status")
+        .eq("owner_id", ownerId)
+        .eq("member_user_id", existingUserId)
+        .maybeSingle();
+      if (existingMembership) {
+        const msg = existingMembership.status === "pending"
+          ? "Este usuário já tem um convite pendente."
+          : "Este usuário já é membro do seu hub.";
+        return new Response(
+          JSON.stringify({ error: msg }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { error: memberError } = await adminClient
+        .from("workspace_members")
+        .insert({
+          owner_id: ownerId,
+          member_user_id: existingUserId,
+          member_name: name,
+          email: normalizedEmail,
+          role,
+          status: "pending",
+        });
+
+      if (memberError) {
+        console.error("Error inserting pending member:", memberError);
+        return new Response(
+          JSON.stringify({ error: memberError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          pending: true,
+          member: { id: existingUserId, email: normalizedEmail, name, role },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // === Path B: new user → create auth user with password (legacy flow) ===
+    if (!password) {
+      return new Response(
+        JSON.stringify({ error: "Defina uma senha para criar um novo usuário (este e-mail ainda não tem conta na EVA)." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-      email,
+      email: normalizedEmail,
       password,
       email_confirm: true,
       app_metadata: {
@@ -119,7 +202,7 @@ Deno.serve(async (req) => {
         (createError as any)?.code === "email_exists" ||
         /already.*registered|already.*exists/i.test(createError.message || "");
       const friendly = isEmailExists
-        ? "Este e-mail já está cadastrado na plataforma. Use outro e-mail para criar o membro do hub."
+        ? "Este e-mail já está cadastrado na plataforma. Tente novamente — agora ele será convidado como membro existente."
         : createError.message;
       return new Response(
         JSON.stringify({ error: friendly }),
@@ -127,27 +210,26 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Insert workspace_members record
     const { error: memberError } = await adminClient
       .from("workspace_members")
       .insert({
         owner_id: ownerId,
         member_user_id: newUser.user.id,
         member_name: name,
-        email,
+        email: normalizedEmail,
         role,
         status: "active",
       });
 
     if (memberError) {
       console.error("Error inserting workspace member:", memberError);
-      // Try to clean up the created user
       await adminClient.auth.admin.deleteUser(newUser.user.id);
       return new Response(
         JSON.stringify({ error: memberError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
 
     return new Response(
       JSON.stringify({
