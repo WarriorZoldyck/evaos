@@ -1,0 +1,1 @@
+DROP POLICY IF EXISTS "Hub writers can update owner profile" ON public.profiles;
