@@ -303,6 +303,7 @@ export function useWorkspaceMembers() {
     members,
     workspaces,
     availableWorkspaces,
+    pendingInvitations,
     ownerProfile,
     loading,
     createMember,
@@ -314,6 +315,10 @@ export function useWorkspaceMembers() {
     assignMemberToWorkspace,
     deleteMember,
     resetMemberPassword,
+    acceptInvitation,
+    rejectInvitation,
     refetch: fetchMembers,
+    refetchInvitations: fetchPendingInvitations,
   };
 }
+
