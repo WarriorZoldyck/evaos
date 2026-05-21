@@ -47,6 +47,7 @@ export interface PendingInvitation {
 
 export function useWorkspaceMembers() {
   const { user } = useAuth();
+  const { refreshHubStatus } = useHub();
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [availableWorkspaces, setAvailableWorkspaces] = useState<AvailableWorkspace[]>([]);
