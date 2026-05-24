@@ -18,8 +18,6 @@ interface PluggyConnectModalProps {
 
 // Pluggy widget script (CDN)
 const PLUGGY_SCRIPT = "https://cdn.pluggy.ai/pluggy-connect/latest/pluggy-connect.js";
-// Itaú connectors (PF + PJ Open Finance) + Pluggy Bank Sandbox (0)
-const ITAU_CONNECTOR_IDS = [201, 218, 0];
 
 declare global {
   interface Window {
