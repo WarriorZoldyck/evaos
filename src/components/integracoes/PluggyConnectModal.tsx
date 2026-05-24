@@ -119,15 +119,16 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Conectar conta Itaú (Open Finance)</DialogTitle>
+          <DialogTitle>Conectar conta via Pluggy</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/30 p-3 text-xs flex gap-2">
             <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <span>
-              A conexão é feita via <strong>Pluggy</strong> usando Open Finance.
-              Você fará login direto no Itaú — a EVA não vê sua senha.
+              Conexão Open Finance via <strong>Pluggy</strong> — múltiplos bancos suportados
+              (Itaú, Bradesco, Santander, Nubank, C6, etc.). Você fará login direto no banco;
+              a EVA não vê sua senha.
             </span>
           </div>
 
