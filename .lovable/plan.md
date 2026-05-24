@@ -1,49 +1,66 @@
-# Hubs que fui convidado — suportar usuário owner+membro
 
-## Causa raiz
+## Objetivo
 
-Guilherme já tinha conta própria (é owner do próprio hub). O `HubContext` define `isHubMember` apenas a partir de `app_metadata.hub_member`, flag que só é gravada quando o `create-hub-member` cria um auth user novo. Para quem já existia, mesmo aceitando o convite, `isHubMember` continua `false`, então a tela `/eva-hub` mostra só o painel de owner e nunca lista os workspaces dos quais ele virou membro. O dado existe em `workspace_members` (status `active`) — só não é exibido.
+1. **Separar o Pluggy** dos cards de banco. Hoje o Pluggy aparece "fantasiado" de Itaú no card do Itaú. Vamos ter um card próprio chamado **"Pluggy (Open Finance)"** — multibanco, independente.
+2. **Criar integração nativa do Itaú via API** (modelo Asaas: chave/credencial direta, sem widget de terceiro).
 
-A consequência também aparece no `useWorkspaceMembers`: `fetchAvailableWorkspaces` até roda para owners, mas o `EvaHub.tsx` só renderiza `MemberWorkspaceSelector` quando `isHubMember` é true, então a lista nunca aparece.
+---
 
-## O que ajustar
+## 1) Card "Pluggy (Open Finance)" — independente
 
-### 1. `HubContext` — detectar membership pelo banco
-- Substituir a checagem de `app_metadata.hub_member` por uma query real:
-  `select count from workspace_members where member_user_id = auth.uid() and status = 'active'`.
-- Manter `isOwnerWithMembers` como hoje. Os dois passam a poder ser `true` simultaneamente.
-- Expor um novo flag `hasInvitedWorkspaces` (boolean) e manter `isHubMember` como "sou membro de algum hub" (independente de ser owner).
-- Restaurar impersonation persistida sempre que `hasInvitedWorkspaces` for true (não só quando o usuário é "puro membro").
+**UI (`src/pages/Integracoes.tsx`)**
+- Remover a lógica que filtra `pluggyIntegrations` como sendo "Itaú" e renomear o card:
+  - Título: **Pluggy**
+  - Subtítulo: "Open Finance multibanco (Itaú, Bradesco, Santander, C6, Nubank, etc.)"
+  - Badge "Conectado" se houver qualquer `pluggyIntegrations.length > 0`.
+  - Listar todas as integrações Pluggy (mostrar `institution_name`).
+  - Botão "Conectar via Pluggy" abre o `PluggyConnectModal`.
+- Tirar o card "Itaú" atual (que era na verdade Pluggy) e voltar o Itaú para a lista de bancos suportados nativamente (próximo passo).
 
-### 2. `EvaHub.tsx` — layout combinado
-Reorganizar a página em três blocos empilhados, exibidos conforme aplicável (não mais um `if/else` exclusivo):
+**`PluggyConnectModal`**
+- Remover restrição `connectorIds = [201, 218, 0]` → deixar widget abrir todos os conectores (ou aceitar lista vazia para "todos").
+- Default do nome da conta passa de "Itaú" para "Conta bancária".
+- Título do modal: "Conectar conta via Pluggy".
 
-1. **Convites recebidos** (já existe) — sem mudança visual.
-2. **Hubs em que sou membro** — novo card/seção, sempre que `availableWorkspaces.length > 0`. Reaproveita o conteúdo atual de `MemberWorkspaceSelector` (lista de owners + botão "Entrar"). Título: "Hubs em que sou membro".
-3. **Meu Hub** — `OwnerDashboard` atual, exibido quando o usuário tem plano que permite criar hub (mesma regra atual). Para quem é só membro convidado, esconde.
+**Backend (`pluggy-connect-account`)** já salva `institution_name` vindo do `connector.name` — nada a mudar.
 
-Assim, Guilherme verá:
-- Convite pendente (se houver),
-- "Hubs em que sou membro" com o hub do Renato,
-- "Meu Hub" com seus próprios membros/workspaces.
+---
 
-### 3. `useWorkspaceMembers` — buscar tudo sempre
-- Remover o `if (hub_member metadata)` do `useEffect` (linhas 156-166) e sempre rodar `fetchMembers`, `fetchWorkspaces`, `fetchOwnerProfile`, `fetchAvailableWorkspaces`, `fetchPendingInvitations` em paralelo. Esses fetches já são seguros (cada um filtra por owner_id ou member_user_id próprio).
-- Após `acceptInvitation`, também disparar um refresh do `HubContext` (ex.: expor `refreshHubStatus()` no contexto e chamá-lo aqui) para que a nova seção apareça sem reload.
+## 2) Integração Itaú via API (modelo Asaas)
 
-### 4. Sidebar / navegação
-- O item "EVA Hub" já existe. Sem mudança de rota — tudo continua em `/eva-hub`.
-- Pequeno badge no menu quando `pendingInvitations.length > 0` (opcional, baixo custo).
+**Novo card "Itaú"** no `Integracoes.tsx`, separado, com botão "Conectar Itaú" abrindo um `ItauConnectModal` (espelho do `AsaasConnectModal`).
 
-### 5. Sem mudanças de banco
-RLS e tabelas já suportam o caso. Nada de migration.
+**Banco de dados** — nova tabela `itau_integrations`:
+- `user_id`, `company_id`, `bank_account_id`
+- `client_id` (texto), `client_secret_encrypted` + `client_secret_iv` (AES-GCM via `_shared/asaas-crypto.ts` — reutilizando o segredo `ASAAS_KEY_ENCRYPTION_SECRET`)
+- `certificate_encrypted` + `certificate_iv` (PEM mTLS, se necessário)
+- `agency`, `account_number`, `account_digit`
+- `environment` ('sandbox' | 'production')
+- `last_sync_at`, `sync_status`, `last_error`, `initial_balance_synced`
+- RLS por `user_id`.
 
-## Detalhes técnicos
+**Hook** `useItauIntegration.ts` (espelho do `useAsaasIntegration`): `list`, `connect`, `sync`, `disconnect`.
 
-- Arquivos a editar:
-  - `src/contexts/HubContext.tsx` (query + expor refresh + permitir coexistência).
-  - `src/hooks/useWorkspaceMembers.ts` (sempre buscar tudo, chamar refresh após accept/reject).
-  - `src/pages/EvaHub.tsx` (render combinado, extrair seções).
-  - (opcional) `src/components/AppSidebar.tsx` para o badge de convites.
-- Sem novas edge functions; `respond-hub-invitation` continua igual.
-- Sem alterações em `subscriptions` — Guilherme já está com cortesia Família ativa.
+**Edge functions** novas:
+- `itau-connect-account` — recebe credenciais, valida com chamada de teste, cria/vincula `bank_account`, persiste registro.
+- `itau-sync` — busca extrato e cria itens em `asaas_sync_items` com `provider='itau'` para reaproveitar o fluxo de conciliação bancária existente.
+- `itau-disconnect-account`.
+
+**`asaas_sync_items.provider`** — já é colunizado para 'pluggy'; adicionar valor 'itau' (sem mudança de schema, é texto).
+
+---
+
+## Itens que preciso confirmar antes de implementar
+
+A API do Itaú para conta-corrente é **Open Finance Itaú** (PJ ou PF), que exige:
+- `client_id` + `client_secret`
+- Certificado **mTLS** (par chave/cert PEM) emitido pelo Itaú Developer
+- Cadastro prévio do app no portal `developer.itau.com.br`
+
+Não há um equivalente direto da "API Key" simples do Asaas. Antes de eu criar a tabela e as edge functions, confirme:
+
+1. **Qual API do Itaú?** Open Finance (extrato/saldo PJ), Cash Management (PIX/boletos PJ), ou iti (PF)?
+2. **Você já tem credenciais** (`client_id`/`client_secret` + certificado .pem mTLS) no Itaú Developer? Sem isso a conexão não autentica.
+3. Topo deixar Pluggy como fallback para Itaú também (caso o usuário não tenha credenciais Itaú)?
+
+Vou esperar essas respostas para finalizar o esquema da tabela e o fluxo do modal Itaú — o passo 1 (separar Pluggy) eu já consigo executar independentemente.

@@ -18,8 +18,6 @@ interface PluggyConnectModalProps {
 
 // Pluggy widget script (CDN)
 const PLUGGY_SCRIPT = "https://cdn.pluggy.ai/pluggy-connect/latest/pluggy-connect.js";
-// Itaú connectors (PF + PJ Open Finance) + Pluggy Bank Sandbox (0)
-const ITAU_CONNECTOR_IDS = [201, 218, 0];
 
 declare global {
   interface Window {
@@ -54,7 +52,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
   const { toast } = useToast();
 
   const [mode, setMode] = useState<"new_account" | "link_existing">("new_account");
-  const [accountName, setAccountName] = useState("Itaú");
+  const [accountName, setAccountName] = useState("Conta bancária");
   const [bankAccountId, setBankAccountId] = useState<string>("");
   const [companyId, setCompanyId] = useState<string>(isPersonal ? "__personal__" : (selectedCompanyId || "__personal__"));
   const [opening, setOpening] = useState(false);
@@ -62,7 +60,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
   const widgetRef = useRef<unknown>(null);
 
   const reset = () => {
-    setMode("new_account"); setAccountName("Itaú"); setBankAccountId("");
+    setMode("new_account"); setAccountName("Conta bancária"); setBankAccountId("");
   };
 
   useEffect(() => {
@@ -91,7 +89,6 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
       const instance = new PluggyConnect({
         connectToken: accessToken,
         includeSandbox: true,
-        connectorIds: ITAU_CONNECTOR_IDS,
         onSuccess: async (itemData: { item: { id: string } }) => {
           try {
             await finalizeConnect.mutateAsync({
@@ -122,15 +119,16 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Conectar conta Itaú (Open Finance)</DialogTitle>
+          <DialogTitle>Conectar conta via Pluggy</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="rounded-md border bg-muted/30 p-3 text-xs flex gap-2">
             <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <span>
-              A conexão é feita via <strong>Pluggy</strong> usando Open Finance.
-              Você fará login direto no Itaú — a EVA não vê sua senha.
+              Conexão Open Finance via <strong>Pluggy</strong> — múltiplos bancos suportados
+              (Itaú, Bradesco, Santander, Nubank, C6, etc.). Você fará login direto no banco;
+              a EVA não vê sua senha.
             </span>
           </div>
 
@@ -152,7 +150,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
             <RadioGroup value={mode} onValueChange={(v) => setMode(v as "new_account" | "link_existing")}>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="new_account" id="pgnew" />
-                <Label htmlFor="pgnew" className="font-normal cursor-pointer">Criar nova conta com saldo do Itaú</Label>
+                <Label htmlFor="pgnew" className="font-normal cursor-pointer">Criar nova conta com saldo do banco</Label>
               </div>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="link_existing" id="pglink" />
@@ -195,7 +193,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
             }
           >
             {(opening || finalizeConnect.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Abrir conexão Itaú
+            Abrir conexão Pluggy
           </Button>
         </DialogFooter>
       </DialogContent>
