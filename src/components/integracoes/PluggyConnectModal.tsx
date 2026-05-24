@@ -150,7 +150,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
             <RadioGroup value={mode} onValueChange={(v) => setMode(v as "new_account" | "link_existing")}>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="new_account" id="pgnew" />
-                <Label htmlFor="pgnew" className="font-normal cursor-pointer">Criar nova conta com saldo do Itaú</Label>
+                <Label htmlFor="pgnew" className="font-normal cursor-pointer">Criar nova conta com saldo do banco</Label>
               </div>
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="link_existing" id="pglink" />
