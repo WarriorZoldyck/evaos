@@ -89,7 +89,6 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
       const instance = new PluggyConnect({
         connectToken: accessToken,
         includeSandbox: true,
-        connectorIds: ITAU_CONNECTOR_IDS,
         onSuccess: async (itemData: { item: { id: string } }) => {
           try {
             await finalizeConnect.mutateAsync({
