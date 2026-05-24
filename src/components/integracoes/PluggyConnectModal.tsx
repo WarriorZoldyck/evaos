@@ -52,7 +52,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
   const { toast } = useToast();
 
   const [mode, setMode] = useState<"new_account" | "link_existing">("new_account");
-  const [accountName, setAccountName] = useState("Itaú");
+  const [accountName, setAccountName] = useState("Conta bancária");
   const [bankAccountId, setBankAccountId] = useState<string>("");
   const [companyId, setCompanyId] = useState<string>(isPersonal ? "__personal__" : (selectedCompanyId || "__personal__"));
   const [opening, setOpening] = useState(false);
@@ -60,7 +60,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
   const widgetRef = useRef<unknown>(null);
 
   const reset = () => {
-    setMode("new_account"); setAccountName("Itaú"); setBankAccountId("");
+    setMode("new_account"); setAccountName("Conta bancária"); setBankAccountId("");
   };
 
   useEffect(() => {
