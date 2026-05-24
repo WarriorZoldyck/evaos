@@ -193,7 +193,7 @@ export function PluggyConnectModal({ open, onClose }: PluggyConnectModalProps) {
             }
           >
             {(opening || finalizeConnect.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Abrir conexão Itaú
+            Abrir conexão Pluggy
           </Button>
         </DialogFooter>
       </DialogContent>
