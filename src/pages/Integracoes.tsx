@@ -22,6 +22,7 @@ import { ptBR } from "date-fns/locale";
 import { Link } from "react-router-dom";
 
 const otherBanks = [
+  { name: "Itaú", description: "Integração nativa via API do Itaú (Open Finance). Em breve.", logo: logoItau, bgClass: "bg-white" },
   { name: "Bradesco", description: "Conexão com o Bradesco para importação automática de extratos.", logo: logoBradesco, bgClass: "bg-white" },
   { name: "Santander", description: "Conexão com o Santander para importação automática de extratos.", logo: logoSantander, bgClass: "bg-white" },
   { name: "C6 Bank", description: "Conexão com o C6 Bank para importação automática de extratos.", logo: logoC6Bank, bgClass: "bg-white" },
@@ -41,8 +42,7 @@ export default function Integracoes() {
   const integrations = integrationsQ.data || [];
   const pluggyIntegrations = pluggyListQ.data || [];
   const hasAsaas = integrations.length > 0;
-  const itauIntegrations = pluggyIntegrations.filter((i) => (i.institution_name || "").toLowerCase().includes("ita"));
-  const hasItau = itauIntegrations.length > 0;
+  const hasPluggy = pluggyIntegrations.length > 0;
 
   useEffect(() => {
     if (!user) return;
