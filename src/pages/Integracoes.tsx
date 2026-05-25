@@ -9,9 +9,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { useAsaasIntegration } from "@/hooks/useAsaasIntegration";
 import { usePluggyIntegration } from "@/hooks/usePluggyIntegration";
+import { useItauIntegration } from "@/hooks/useItauIntegration";
 import { useAccounts } from "@/hooks/useAccounts";
 import { AsaasConnectModal } from "@/components/integracoes/AsaasConnectModal";
 import { PluggyConnectModal } from "@/components/integracoes/PluggyConnectModal";
+import { ItauConnectModal } from "@/components/integracoes/ItauConnectModal";
 import logoAsaas from "@/assets/logo-asaas.png";
 import logoBradesco from "@/assets/logo-bradesco.png";
 import logoItau from "@/assets/logo-itau.png";
@@ -22,7 +24,6 @@ import { ptBR } from "date-fns/locale";
 import { Link } from "react-router-dom";
 
 const otherBanks = [
-  { name: "Itaú", description: "Integração nativa via API do Itaú (Open Finance). Em breve.", logo: logoItau, bgClass: "bg-white" },
   { name: "Bradesco", description: "Conexão com o Bradesco para importação automática de extratos.", logo: logoBradesco, bgClass: "bg-white" },
   { name: "Santander", description: "Conexão com o Santander para importação automática de extratos.", logo: logoSantander, bgClass: "bg-white" },
   { name: "C6 Bank", description: "Conexão com o C6 Bank para importação automática de extratos.", logo: logoC6Bank, bgClass: "bg-white" },
@@ -35,14 +36,18 @@ export default function Integracoes() {
   const [isSyncingWhatsapp, setIsSyncingWhatsapp] = useState(false);
   const [asaasModalOpen, setAsaasModalOpen] = useState(false);
   const [pluggyModalOpen, setPluggyModalOpen] = useState(false);
+  const [itauModalOpen, setItauModalOpen] = useState(false);
 
   const { list: integrationsQ, sync, disconnect } = useAsaasIntegration();
   const { list: pluggyListQ, sync: pluggySync, disconnect: pluggyDisconnect } = usePluggyIntegration();
+  const { list: itauListQ, sync: itauSync, disconnect: itauDisconnect } = useItauIntegration();
   const { bankAccounts } = useAccounts();
   const integrations = integrationsQ.data || [];
   const pluggyIntegrations = pluggyListQ.data || [];
+  const itauIntegrations = itauListQ.data || [];
   const hasAsaas = integrations.length > 0;
   const hasPluggy = pluggyIntegrations.length > 0;
+  const hasItau = itauIntegrations.length > 0;
 
   useEffect(() => {
     if (!user) return;
