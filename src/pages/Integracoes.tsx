@@ -9,9 +9,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import { useAsaasIntegration } from "@/hooks/useAsaasIntegration";
 import { usePluggyIntegration } from "@/hooks/usePluggyIntegration";
+import { useItauIntegration } from "@/hooks/useItauIntegration";
 import { useAccounts } from "@/hooks/useAccounts";
 import { AsaasConnectModal } from "@/components/integracoes/AsaasConnectModal";
 import { PluggyConnectModal } from "@/components/integracoes/PluggyConnectModal";
+import { ItauConnectModal } from "@/components/integracoes/ItauConnectModal";
 import logoAsaas from "@/assets/logo-asaas.png";
 import logoBradesco from "@/assets/logo-bradesco.png";
 import logoItau from "@/assets/logo-itau.png";
@@ -22,7 +24,6 @@ import { ptBR } from "date-fns/locale";
 import { Link } from "react-router-dom";
 
 const otherBanks = [
-  { name: "Itaú", description: "Integração nativa via API do Itaú (Open Finance). Em breve.", logo: logoItau, bgClass: "bg-white" },
   { name: "Bradesco", description: "Conexão com o Bradesco para importação automática de extratos.", logo: logoBradesco, bgClass: "bg-white" },
   { name: "Santander", description: "Conexão com o Santander para importação automática de extratos.", logo: logoSantander, bgClass: "bg-white" },
   { name: "C6 Bank", description: "Conexão com o C6 Bank para importação automática de extratos.", logo: logoC6Bank, bgClass: "bg-white" },
@@ -35,14 +36,18 @@ export default function Integracoes() {
   const [isSyncingWhatsapp, setIsSyncingWhatsapp] = useState(false);
   const [asaasModalOpen, setAsaasModalOpen] = useState(false);
   const [pluggyModalOpen, setPluggyModalOpen] = useState(false);
+  const [itauModalOpen, setItauModalOpen] = useState(false);
 
   const { list: integrationsQ, sync, disconnect } = useAsaasIntegration();
   const { list: pluggyListQ, sync: pluggySync, disconnect: pluggyDisconnect } = usePluggyIntegration();
+  const { list: itauListQ, sync: itauSync, disconnect: itauDisconnect } = useItauIntegration();
   const { bankAccounts } = useAccounts();
   const integrations = integrationsQ.data || [];
   const pluggyIntegrations = pluggyListQ.data || [];
+  const itauIntegrations = itauListQ.data || [];
   const hasAsaas = integrations.length > 0;
   const hasPluggy = pluggyIntegrations.length > 0;
+  const hasItau = itauIntegrations.length > 0;
 
   useEffect(() => {
     if (!user) return;
@@ -233,6 +238,77 @@ export default function Integracoes() {
           </CardContent>
         </Card>
 
+        {/* Itaú — API nativa */}
+        <Card className="relative overflow-hidden">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center overflow-hidden">
+                  <img src={logoItau} alt="Itaú" className="h-8 w-8 object-contain" />
+                </div>
+                <CardTitle className="text-base">Itaú</CardTitle>
+              </div>
+              <Badge className={hasItau ? "bg-green-500/15 text-green-500 border-0 text-xs" : "bg-primary/10 text-primary border-0 text-xs"}>
+                {hasItau ? "Conectado" : "Disponível"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Integração nativa via API do Itaú (Open Finance). Requer client_id, client_secret e certificado mTLS para produção.
+            </p>
+            {hasItau ? (
+              <div className="mt-4 space-y-2">
+                {itauIntegrations.map((i) => {
+                  const acc = bankAccounts.find((b) => b.id === i.bank_account_id);
+                  return (
+                    <div key={i.id} className="text-xs p-2 rounded-md border bg-muted/30">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">
+                          {acc?.name || "Conta"} <span className="text-muted-foreground">• {i.environment}</span>
+                        </span>
+                        <span className="text-muted-foreground">
+                          {i.last_sync_at ? format(new Date(i.last_sync_at), "dd/MM HH:mm", { locale: ptBR }) : "nunca sync"}
+                        </span>
+                      </div>
+                      {i.last_error && (
+                        <div className="text-destructive mt-1 truncate" title={i.last_error}>{i.last_error}</div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button asChild size="sm" variant="default" className="flex-1">
+                    <Link to="/conciliacao-bancaria">Conciliar</Link>
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => itauSync.mutate(undefined)} disabled={itauSync.isPending}>
+                    {itauSync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setItauModalOpen(true)}>
+                    <Link2 className="h-4 w-4" /> Outra
+                  </Button>
+                  {itauIntegrations.length === 1 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive"
+                      onClick={() => itauDisconnect.mutate(itauIntegrations[0].id)}
+                      disabled={itauDisconnect.isPending}
+                    >
+                      <Unlink className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <Button size="sm" className="mt-4 w-full" onClick={() => setItauModalOpen(true)}>
+                <Plug className="h-4 w-4" /> Conectar Itaú
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+
         {otherBanks.map((b) => (
           <Card key={b.name} className="relative overflow-hidden opacity-80">
             <CardHeader className="pb-3">
@@ -260,6 +336,7 @@ export default function Integracoes() {
 
       <AsaasConnectModal open={asaasModalOpen} onClose={() => setAsaasModalOpen(false)} />
       <PluggyConnectModal open={pluggyModalOpen} onClose={() => setPluggyModalOpen(false)} />
+      <ItauConnectModal open={itauModalOpen} onClose={() => setItauModalOpen(false)} />
     </div>
   );
 }
