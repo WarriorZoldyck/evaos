@@ -767,6 +767,72 @@ export type Database = {
         }
         Relationships: []
       }
+      itau_integrations: {
+        Row: {
+          account_digit: string | null
+          account_number: string | null
+          agency: string | null
+          bank_account_id: string | null
+          certificate_encrypted: string | null
+          certificate_iv: string | null
+          client_id: string
+          client_secret_encrypted: string
+          client_secret_iv: string
+          company_id: string | null
+          created_at: string
+          environment: string
+          id: string
+          initial_balance_synced: number | null
+          last_error: string | null
+          last_sync_at: string | null
+          sync_status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_digit?: string | null
+          account_number?: string | null
+          agency?: string | null
+          bank_account_id?: string | null
+          certificate_encrypted?: string | null
+          certificate_iv?: string | null
+          client_id: string
+          client_secret_encrypted: string
+          client_secret_iv: string
+          company_id?: string | null
+          created_at?: string
+          environment?: string
+          id?: string
+          initial_balance_synced?: number | null
+          last_error?: string | null
+          last_sync_at?: string | null
+          sync_status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_digit?: string | null
+          account_number?: string | null
+          agency?: string | null
+          bank_account_id?: string | null
+          certificate_encrypted?: string | null
+          certificate_iv?: string | null
+          client_id?: string
+          client_secret_encrypted?: string
+          client_secret_iv?: string
+          company_id?: string | null
+          created_at?: string
+          environment?: string
+          id?: string
+          initial_balance_synced?: number | null
+          last_error?: string | null
+          last_sync_at?: string | null
+          sync_status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       pluggy_integrations: {
         Row: {
           bank_account_id: string
