@@ -389,12 +389,12 @@ serve(async (req) => {
   //   - header "x-webhook-secret" matching the secret, OR
   //   - query param ?secret=... matching the secret (for providers that can't set headers).
   const expectedSecret = Deno.env.get("WHATSAPP_WEBHOOK_SECRET");
-  if (req.method === "POST" && expectedSecret) {
+  if (req.method === "POST") {
     const headerSecret = req.headers.get("x-webhook-secret");
     let querySecret: string | null = null;
     try { querySecret = new URL(req.url).searchParams.get("secret"); } catch (_) {}
-    if (headerSecret !== expectedSecret && querySecret !== expectedSecret) {
-      console.warn("Rejected webhook call: invalid or missing x-webhook-secret");
+    if (!expectedSecret || (headerSecret !== expectedSecret && querySecret !== expectedSecret)) {
+      console.warn("Rejected webhook call: invalid/missing secret or WHATSAPP_WEBHOOK_SECRET not configured");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
