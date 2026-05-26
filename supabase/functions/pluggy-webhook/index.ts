@@ -13,6 +13,17 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true, ignored: "non-POST" }), { status: 200, headers: corsHeaders });
   }
 
+  // Shared-secret auth (fail-closed). Configure Pluggy to send header `x-pluggy-webhook-secret`
+  // or query param `?secret=...`. Falls back to ASAAS_WEBHOOK_TOKEN for backwards compatibility.
+  const expectedSecret = Deno.env.get("PLUGGY_WEBHOOK_SECRET") || Deno.env.get("ASAAS_WEBHOOK_TOKEN");
+  const headerSecret = req.headers.get("x-pluggy-webhook-secret") || req.headers.get("x-webhook-secret");
+  let querySecret: string | null = null;
+  try { querySecret = new URL(req.url).searchParams.get("secret"); } catch (_) {}
+  if (!expectedSecret || (headerSecret !== expectedSecret && querySecret !== expectedSecret)) {
+    console.warn("pluggy-webhook: rejected unauthenticated request");
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
+  }
+
   try {
     const event = await req.json().catch(() => ({}));
     const eventType: string = event?.event || "unknown";
