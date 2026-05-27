@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useAsaasIntegration } from "@/hooks/useAsaasIntegration";
+import { useItauIntegration } from "@/hooks/useItauIntegration";
+import { usePluggyIntegration } from "@/hooks/usePluggyIntegration";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +19,17 @@ import { ManualMatchModal } from "@/components/conciliacao/ManualMatchModal";
 import { Link } from "react-router-dom";
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+type Provider = "asaas" | "itau" | "pluggy";
+
+interface UnifiedIntegration {
+  id: string;
+  provider: Provider;
+  bank_account_id: string;
+  last_sync_at: string | null;
+  initial_balance_synced: number | null;
+  label: string;
+}
 
 interface SyncItem {
   id: string;
@@ -32,20 +45,70 @@ interface SyncItem {
   payload: any;
 }
 
+const providerBadge: Record<Provider, string> = {
+  asaas: "Asaas",
+  itau: "Itaú",
+  pluggy: "Pluggy",
+};
+
 export default function ConciliacaoBancaria() {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { bankAccounts } = useAccounts();
-  const { list: integrationsQ, sync } = useAsaasIntegration();
+  const asaasH = useAsaasIntegration();
+  const itauH = useItauIntegration();
+  const pluggyH = usePluggyIntegration();
 
-  const integrations = integrationsQ.data || [];
+  const loadingIntegrations =
+    asaasH.list.isLoading || itauH.list.isLoading || pluggyH.list.isLoading;
+
+  const integrations: UnifiedIntegration[] = useMemo(() => {
+    const out: UnifiedIntegration[] = [];
+    for (const i of asaasH.list.data || []) {
+      const acc = bankAccounts.find((b) => b.id === i.bank_account_id);
+      out.push({
+        id: i.id,
+        provider: "asaas",
+        bank_account_id: i.bank_account_id,
+        last_sync_at: i.last_sync_at,
+        initial_balance_synced: i.initial_balance_synced ?? null,
+        label: `Asaas · ${acc?.name || "Conta"}`,
+      });
+    }
+    for (const i of itauH.list.data || []) {
+      if (!i.bank_account_id) continue;
+      const acc = bankAccounts.find((b) => b.id === i.bank_account_id);
+      out.push({
+        id: i.id,
+        provider: "itau",
+        bank_account_id: i.bank_account_id,
+        last_sync_at: i.last_sync_at,
+        initial_balance_synced: i.initial_balance_synced ?? null,
+        label: `Itaú · ${acc?.name || "Conta"}`,
+      });
+    }
+    for (const i of pluggyH.list.data || []) {
+      const acc = bankAccounts.find((b) => b.id === i.bank_account_id);
+      out.push({
+        id: i.id,
+        provider: "pluggy",
+        bank_account_id: i.bank_account_id,
+        last_sync_at: i.last_sync_at,
+        initial_balance_synced: i.initial_balance_synced ?? null,
+        label: `${i.institution_name || "Pluggy"} · ${acc?.name || "Conta"}`,
+      });
+    }
+    return out;
+  }, [asaasH.list.data, itauH.list.data, pluggyH.list.data, bankAccounts]);
+
   const [selectedIntegrationId, setSelectedIntegrationId] = useState<string>("");
   const [period, setPeriod] = useState("30");
   const [tab, setTab] = useState<"pending" | "matched" | "ignored">("pending");
   const [manualItem, setManualItem] = useState<SyncItem | null>(null);
 
-  const activeIntegration = integrations.find((i) => i.id === (selectedIntegrationId || integrations[0]?.id));
+  const activeIntegration =
+    integrations.find((i) => i.id === selectedIntegrationId) || integrations[0];
   const activeBankAccount = bankAccounts.find((b) => b.id === activeIntegration?.bank_account_id);
 
   const fromDate = useMemo(() => subDays(new Date(), Number(period)), [period]);
@@ -81,6 +144,16 @@ export default function ConciliacaoBancaria() {
   const sysBalance = balanceQ.data ?? 0;
   const diff = Number(asaasBalance) - Number(sysBalance);
 
+  const triggerSync = () => {
+    if (!activeIntegration) return;
+    if (activeIntegration.provider === "asaas") asaasH.sync.mutate(activeIntegration.id);
+    else if (activeIntegration.provider === "itau") itauH.sync.mutate(activeIntegration.id);
+    else pluggyH.sync.mutate(activeIntegration.id);
+  };
+
+  const syncPending =
+    asaasH.sync.isPending || itauH.sync.isPending || pluggyH.sync.isPending;
+
   const handleConfirmMatch = async (item: SyncItem, transactionId: string) => {
     const { error: e1 } = await supabase
       .from("asaas_sync_items")
@@ -113,10 +186,9 @@ export default function ConciliacaoBancaria() {
     qc.invalidateQueries({ queryKey: ["asaas_sync_items"] });
   };
 
-  // Suggestion match (single suggestion case): check candidates inline
   const suggestionsQ = useQuery({
     queryKey: ["match_suggestions", activeIntegration?.id, tab, itemsQ.data?.length],
-    enabled: tab === "pending" && !!itemsQ.data && itemsQ.data.length > 0,
+    enabled: tab === "pending" && !!itemsQ.data && itemsQ.data.length > 0 && !!activeIntegration?.bank_account_id,
     queryFn: async () => {
       const map: Record<string, any[]> = {};
       const items = itemsQ.data!;
@@ -139,7 +211,7 @@ export default function ConciliacaoBancaria() {
     },
   });
 
-  if (integrationsQ.isLoading) {
+  if (loadingIntegrations) {
     return <div className="p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   }
 
@@ -156,10 +228,10 @@ export default function ConciliacaoBancaria() {
           <ArrowLeftRight className="h-12 w-12 text-muted-foreground mx-auto" />
           <h3 className="text-lg font-semibold">Nenhuma integração bancária conectada</h3>
           <p className="text-muted-foreground text-sm">
-            Conecte sua conta Asaas para começar a conciliar suas movimentações automaticamente.
+            Conecte Asaas, Itaú ou Pluggy para começar a conciliar suas movimentações automaticamente.
           </p>
           <Button asChild>
-            <Link to="/integracoes">Conectar Asaas</Link>
+            <Link to="/integracoes">Conectar integração</Link>
           </Button>
         </Card>
       </div>
@@ -180,14 +252,13 @@ export default function ConciliacaoBancaria() {
               : "nunca"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Select value={selectedIntegrationId || activeIntegration?.id || ""} onValueChange={setSelectedIntegrationId}>
-            <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-64"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {integrations.map((i) => {
-                const acc = bankAccounts.find((b) => b.id === i.bank_account_id);
-                return <SelectItem key={i.id} value={i.id}>{acc?.name || "Conta Asaas"}</SelectItem>;
-              })}
+              {integrations.map((i) => (
+                <SelectItem key={i.id} value={i.id}>{i.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={period} onValueChange={setPeriod}>
@@ -199,11 +270,8 @@ export default function ConciliacaoBancaria() {
               <SelectItem value="90">90 dias</SelectItem>
             </SelectContent>
           </Select>
-          <Button
-            onClick={() => sync.mutate(activeIntegration?.id)}
-            disabled={sync.isPending}
-          >
-            {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          <Button onClick={triggerSync} disabled={syncPending}>
+            {syncPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Sincronizar
           </Button>
         </div>
@@ -211,7 +279,9 @@ export default function ConciliacaoBancaria() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">Saldo Asaas (última sync)</p>
+          <p className="text-xs text-muted-foreground">
+            Saldo {activeIntegration ? providerBadge[activeIntegration.provider] : ""} (última sync)
+          </p>
           <p className="text-2xl font-bold mt-1">{fmt(Number(asaasBalance))}</p>
         </CardContent></Card>
         <Card><CardContent className="p-4">
@@ -238,7 +308,9 @@ export default function ConciliacaoBancaria() {
             <div className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></div>
           ) : (itemsQ.data || []).length === 0 ? (
             <Card className="p-8 text-center text-muted-foreground text-sm">
-              Nenhum item nesta categoria.
+              {activeIntegration?.provider === "itau"
+                ? "A integração Itaú ainda não retornou movimentações. Clique em Sincronizar."
+                : "Nenhum item nesta categoria."}
             </Card>
           ) : (
             <div className="space-y-2">
@@ -301,7 +373,7 @@ export default function ConciliacaoBancaria() {
                             rel="noopener noreferrer"
                             className="text-xs text-primary inline-flex items-center gap-1 px-2"
                           >
-                            <ExternalLink className="h-3 w-3" /> Asaas
+                            <ExternalLink className="h-3 w-3" /> Abrir
                           </a>
                         )}
                       </div>
