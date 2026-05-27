@@ -6,10 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TOKEN_URL = {
-  sandbox: "https://sts.itau.com.br/api/oauth/token",
-  production: "https://sts.itau.com.br/api/oauth/token",
-};
 
 // Validation is deferred to itau-sync. The Itaú STS endpoint differs between Developer Portal
 // sandbox (often token-based, no mTLS) and Open Finance production (requires mTLS), and a
