@@ -49,10 +49,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Modo inválido" }), { status: 400, headers: corsHeaders });
     }
 
-    const v = await validateCredentials(client_id, client_secret, env);
-    if (!v.ok) {
-      return new Response(JSON.stringify({ error: v.error || "Credenciais Itaú inválidas" }), { status: 400, headers: corsHeaders });
-    }
+
+
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
