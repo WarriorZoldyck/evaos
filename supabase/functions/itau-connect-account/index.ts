@@ -6,35 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TOKEN_URL = {
-  sandbox: "https://sts.itau.com.br/api/oauth/token",
-  production: "https://sts.itau.com.br/api/oauth/token",
-};
 
-async function validateCredentials(clientId: string, clientSecret: string, env: "sandbox" | "production") {
-  // Itaú OAuth client_credentials. Production requires mTLS — Deno fetch cannot present a client
-  // cert without explicit client config; we only smoke-test sandbox here. Production validation is
-  // deferred to itau-sync, which will surface mTLS errors clearly.
-  if (env === "production") return { ok: true, skipped: true };
-  try {
-    const res = await fetch(TOKEN_URL.sandbox, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: clientId,
-        client_secret: clientSecret,
-      }),
-    });
-    if (!res.ok) {
-      const t = await res.text();
-      return { ok: false, error: `Itaú STS retornou ${res.status}: ${t.slice(0, 200)}` };
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-}
+// Validation is deferred to itau-sync. The Itaú STS endpoint differs between Developer Portal
+// sandbox (often token-based, no mTLS) and Open Finance production (requires mTLS), and a
+// pre-flight call would block legitimate sandbox credentials. We persist credentials and let
+// the first sync surface any auth errors with a clear message.
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -73,10 +49,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Modo inválido" }), { status: 400, headers: corsHeaders });
     }
 
-    const v = await validateCredentials(client_id, client_secret, env);
-    if (!v.ok) {
-      return new Response(JSON.stringify({ error: v.error || "Credenciais Itaú inválidas" }), { status: 400, headers: corsHeaders });
-    }
+
+
 
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
