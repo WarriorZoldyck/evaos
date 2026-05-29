@@ -519,9 +519,10 @@ export function CreditCardBillPaymentModal({
         {step === "payment" && (
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Total da Fatura</span>
-              <span className="font-mono font-semibold">{formatCurrency(billTotal)}</span>
+              <span className="text-sm text-muted-foreground">Saldo Pendente</span>
+              <span className="font-mono font-semibold">{formatCurrency(pendingTotal)}</span>
             </div>
+
 
             <div className="space-y-2">
               <Label>Valor do Pagamento (R$)</Label>
