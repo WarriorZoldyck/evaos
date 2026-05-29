@@ -126,8 +126,16 @@ export function CreditCardBillPaymentModal({
     [billTransactions]
   );
 
+  const pendingTotal = useMemo(
+    () =>
+      billTransactions
+        .filter((t) => t.status === "Pendente")
+        .reduce((sum, t) => sum + (t.type === "receita" ? -t.amount : t.amount), 0),
+    [billTransactions]
+  );
+
   const paymentValue = Number(paymentAmount) || 0;
-  const difference = paymentValue - billTotal;
+  const difference = paymentValue - pendingTotal;
   const paymentType: PaymentType =
     Math.abs(difference) < 0.01 ? "full" : difference < 0 ? "partial" : "extra";
 
@@ -140,6 +148,36 @@ export function CreditCardBillPaymentModal({
     if (!creditCard) return null;
     return getDueDate(creditCard.closing_day, creditCard.due_day, referenceDate);
   }, [creditCard, referenceDate]);
+
+  // When opening, jump to the cycle of the earliest pending transaction for this card
+  useEffect(() => {
+    if (!open || !creditCard || !user) return;
+
+    const pickInitialMonth = async () => {
+      const { data } = await supabase
+        .from("transactions")
+        .select("competence_date")
+        .eq("credit_card_id", creditCard.id)
+        .eq("status", "Pendente")
+        .order("competence_date", { ascending: true })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        const earliest = new Date(data[0].competence_date + "T12:00:00");
+        // Reference month = month whose cycle contains the earliest pending purchase.
+        // If the purchase date is AFTER the closing day, it belongs to next month's cycle.
+        const ref = new Date(earliest);
+        if (earliest.getDate() > creditCard.closing_day) {
+          ref.setMonth(ref.getMonth() + 1);
+        }
+        setReferenceDate(ref);
+      } else {
+        setReferenceDate(new Date());
+      }
+    };
+
+    pickInitialMonth();
+  }, [open, creditCard, user]);
 
   // Fetch bill transactions when card/month changes
   useEffect(() => {
@@ -193,7 +231,6 @@ export function CreditCardBillPaymentModal({
   useEffect(() => {
     if (open && creditCard) {
       setStep("review");
-      setReferenceDate(new Date());
       setPaymentAmount("");
       setPaymentDate(format(new Date(), "yyyy-MM-dd"));
       setAccountId(creditCard.bank_account_id || "");
@@ -204,12 +241,15 @@ export function CreditCardBillPaymentModal({
     }
   }, [open, creditCard]);
 
-  // When bill total updates, set payment amount to full
+  // Sync default payment amount to the pending total whenever the bill changes
   useEffect(() => {
-    if (billTotal > 0 && !paymentAmount) {
-      setPaymentAmount(String(Math.round(billTotal * 100) / 100));
+    if (pendingTotal > 0) {
+      setPaymentAmount(String(Math.round(pendingTotal * 100) / 100));
+    } else {
+      setPaymentAmount("");
     }
-  }, [billTotal]);
+  }, [pendingTotal]);
+
 
   const navigateMonth = (delta: number) => {
     setReferenceDate((prev) => addMonths(prev, delta));
