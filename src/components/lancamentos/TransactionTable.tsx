@@ -22,6 +22,27 @@ interface CreditCardWithHierarchy {
   name: string;
   parent_card_id?: string | null;
   last_four_digits?: string | null;
+  closing_day?: number | null;
+  due_day?: number | null;
+}
+
+// Compute billing-cycle key (YYYY-MM of cycle end) and a representative reference date
+// for a transaction on a credit card. Mirrors logic used by CreditCardBillPaymentModal.
+function getCycleInfo(competenceDate: string, closingDay: number | null | undefined, dueDay?: number | null) {
+  const d = new Date(competenceDate + "T12:00:00");
+  const cd = closingDay && closingDay > 0 ? closingDay : 28;
+  const ref = new Date(d);
+  if (d.getDate() > cd) {
+    ref.setMonth(ref.getMonth() + 1);
+  }
+  // Cycle end = day=cd of ref month
+  const cycleEnd = new Date(ref.getFullYear(), ref.getMonth(), cd);
+  const cycleKey = `${cycleEnd.getFullYear()}-${String(cycleEnd.getMonth() + 1).padStart(2, "0")}`;
+  // Due date month (for label): if dueDay < closingDay, due is next month
+  const dd = dueDay && dueDay > 0 ? dueDay : cd;
+  const dueMonthOffset = dd < cd ? 1 : 0;
+  const dueDate = new Date(cycleEnd.getFullYear(), cycleEnd.getMonth() + dueMonthOffset, dd);
+  return { cycleKey, referenceDate: ref, dueDate };
 }
 
 interface TransactionTableProps {
@@ -293,6 +314,9 @@ interface CardGroupItem {
   totalAmount: number;
   pendingCount: number;
   firstDate: string;
+  cycleKey?: string;
+  cycleLabel?: string;
+  referenceDate?: Date;
 }
 
 interface CardHierarchyItem {
@@ -458,6 +482,53 @@ export function TransactionTable({
   const calcNetAmount = (txns: Transaction[]) =>
     txns.reduce((s, tx) => s + (tx.type === "receita" ? -tx.amount : tx.amount), 0);
 
+  // Helper: split a card's transactions into one CardGroupItem per billing cycle.
+  // If the card has no closing_day configured, returns a single group (legacy behavior).
+  const splitByCycle = (
+    cardId: string,
+    cardName: string,
+    txns: Transaction[],
+    card: CreditCardWithHierarchy | undefined,
+  ): CardGroupItem[] => {
+    const closingDay = card?.closing_day ?? null;
+    const dueDay = card?.due_day ?? null;
+    if (!closingDay || txns.length === 0) {
+      return [{
+        cardId,
+        cardName,
+        transactions: txns,
+        totalAmount: calcNetAmount(txns),
+        pendingCount: txns.filter((tx) => tx.status === "Pendente").length,
+        firstDate: txns[0]?.payment_date || "",
+      }];
+    }
+    const buckets = new Map<string, { txns: Transaction[]; refDate: Date; dueDate: Date }>();
+    for (const tx of txns) {
+      const info = getCycleInfo(tx.competence_date, closingDay, dueDay);
+      const b = buckets.get(info.cycleKey);
+      if (b) b.txns.push(tx);
+      else buckets.set(info.cycleKey, { txns: [tx], refDate: info.referenceDate, dueDate: info.dueDate });
+    }
+    const groups = Array.from(buckets.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([cycleKey, { txns: ctxns, refDate, dueDate }]) => {
+        const label = format(dueDate, "MMM/yyyy", { locale: ptBR });
+        return {
+          cardId: `${cardId}::${cycleKey}`,
+          cardName: buckets.size > 1 ? `${cardName} • Fatura ${label}` : cardName,
+          transactions: ctxns,
+          totalAmount: calcNetAmount(ctxns),
+          pendingCount: ctxns.filter((tx) => tx.status === "Pendente").length,
+          firstDate: ctxns[0].payment_date,
+          cycleKey,
+          cycleLabel: label,
+          referenceDate: refDate,
+        };
+      });
+    return groups;
+  };
+
+
   // Build ordered render list with hierarchy support
   const renderItems = useMemo(() => {
     const items: RenderItem[] = [];
@@ -502,31 +573,19 @@ export function TransactionTable({
           const parentTxns = cardTxnMap.get(groupKey) || [];
           const childGroups: CardGroupItem[] = [];
 
-          // Parent's own transactions as a sub-group
+          // Parent's own transactions split by cycle
           if (parentTxns.length > 0) {
             const parentCard = creditCards.find((c) => c.id === groupKey);
-            childGroups.push({
-              cardId: groupKey,
-              cardName: parentCard?.name || "Principal",
-              transactions: parentTxns,
-              totalAmount: calcNetAmount(parentTxns),
-              pendingCount: parentTxns.filter((tx) => tx.status === "Pendente").length,
-              firstDate: parentTxns[0]?.payment_date || "",
-            });
+            const parentSubs = splitByCycle(groupKey, parentCard?.name || "Principal", parentTxns, parentCard);
+            childGroups.push(...parentSubs);
           }
 
-          // Children sub-groups
+          // Children sub-groups, each further split by cycle
           for (const child of childCards) {
             const childTxns = cardTxnMap.get(child.id) || [];
             if (childTxns.length > 0) {
-              childGroups.push({
-                cardId: child.id,
-                cardName: child.name,
-                transactions: childTxns,
-                totalAmount: calcNetAmount(childTxns),
-                pendingCount: childTxns.filter((tx) => tx.status === "Pendente").length,
-                firstDate: childTxns[0]?.payment_date || "",
-              });
+              const childSubs = splitByCycle(child.id, child.name, childTxns, child);
+              childGroups.push(...childSubs);
             }
           }
 
@@ -535,25 +594,17 @@ export function TransactionTable({
 
           if (allTxns.length === 0) continue;
 
-          // If the only sub-group is the parent's own transactions (no children have txns),
-          // render as a flat cardGroup to avoid redundant nesting
-          const childGroupsWithTxns = childGroups.filter(g => g.cardId !== groupKey);
-          if (childGroupsWithTxns.length === 0) {
-            // Only parent's own transactions — no need for hierarchy
-            if (allTxns.length === 1) {
-              items.push({ type: "transaction", data: allTxns[0] });
+          // If no real child card produced subgroups and the parent itself has only one
+          // cycle group, render that group flat to avoid redundant nesting.
+          const hasRealChildSubs = childGroups.some(
+            (g) => !g.cardId.startsWith(`${groupKey}::`) && g.cardId !== groupKey,
+          );
+          if (!hasRealChildSubs && childGroups.length === 1) {
+            const only = childGroups[0];
+            if (only.transactions.length === 1) {
+              items.push({ type: "transaction", data: only.transactions[0] });
             } else {
-              items.push({
-                type: "cardGroup",
-                data: {
-                  cardId: groupKey,
-                  cardName: parentCard?.name || "Cartão",
-                  transactions: allTxns,
-                  totalAmount: calcNetAmount(allTxns),
-                  pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
-                  firstDate: allTxns[0].payment_date,
-                },
-              });
+              items.push({ type: "cardGroup", data: only });
             }
           } else {
             items.push({
@@ -569,19 +620,18 @@ export function TransactionTable({
             });
           }
         } else {
-          // Standalone card (not a parent, not a child — or child whose parent isn't registered)
+          // Standalone card — split into one group per billing cycle
           const cardTxns = cardTxnMap.get(groupKey) || [];
-          const cardName = creditCards.find((c) => c.id === groupKey)?.name || "Cartão";
-          const totalAmount = calcNetAmount(cardTxns);
-          const pendingCount = cardTxns.filter((tx) => tx.status === "Pendente").length;
+          const card = creditCards.find((c) => c.id === groupKey);
+          const cardName = card?.name || "Cartão";
+          const cycleGroups = splitByCycle(groupKey, cardName, cardTxns, card);
 
-          if (cardTxns.length === 1) {
-            items.push({ type: "transaction", data: cardTxns[0] });
-          } else {
-            items.push({
-              type: "cardGroup",
-              data: { cardId: groupKey, cardName, transactions: cardTxns, totalAmount, pendingCount, firstDate: cardTxns[0].payment_date },
-            });
+          for (const cg of cycleGroups) {
+            if (cg.transactions.length === 1) {
+              items.push({ type: "transaction", data: cg.transactions[0] });
+            } else {
+              items.push({ type: "cardGroup", data: cg });
+            }
           }
         }
       } else if (!groupKey) {

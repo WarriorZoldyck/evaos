@@ -60,6 +60,8 @@ interface CreditCardBillPaymentModalProps {
   creditCard: CreditCardInfo | null;
   onClose: () => void;
   onSuccess: () => void;
+  /** When set, opens the modal already positioned on that bill cycle instead of auto-picking the earliest pending. */
+  initialReferenceDate?: Date | null;
 }
 
 type PaymentType = "full" | "partial" | "extra";
@@ -97,6 +99,7 @@ export function CreditCardBillPaymentModal({
   creditCard,
   onClose,
   onSuccess,
+  initialReferenceDate,
 }: CreditCardBillPaymentModalProps) {
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
@@ -149,9 +152,16 @@ export function CreditCardBillPaymentModal({
     return getDueDate(creditCard.closing_day, creditCard.due_day, referenceDate);
   }, [creditCard, referenceDate]);
 
-  // When opening, jump to the cycle of the earliest pending transaction for this card
+  // When opening: if caller provided an explicit reference date (e.g. user clicked Pagar
+  // Fatura on a specific cycle in Lançamentos), honor it. Otherwise jump to the cycle of
+  // the earliest pending transaction for this card.
   useEffect(() => {
     if (!open || !creditCard || !user) return;
+
+    if (initialReferenceDate) {
+      setReferenceDate(initialReferenceDate);
+      return;
+    }
 
     const pickInitialMonth = async () => {
       const { data } = await supabase
@@ -164,8 +174,6 @@ export function CreditCardBillPaymentModal({
 
       if (data && data.length > 0) {
         const earliest = new Date(data[0].competence_date + "T12:00:00");
-        // Reference month = month whose cycle contains the earliest pending purchase.
-        // If the purchase date is AFTER the closing day, it belongs to next month's cycle.
         const ref = new Date(earliest);
         if (earliest.getDate() > creditCard.closing_day) {
           ref.setMonth(ref.getMonth() + 1);
@@ -177,7 +185,7 @@ export function CreditCardBillPaymentModal({
     };
 
     pickInitialMonth();
-  }, [open, creditCard, user]);
+  }, [open, creditCard, user, initialReferenceDate]);
 
   // Fetch bill transactions when card/month changes
   useEffect(() => {

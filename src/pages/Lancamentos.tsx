@@ -53,7 +53,7 @@ export default function Lancamentos() {
   const [liquidateTarget, setLiquidateTarget] = useState<Transaction | null>(null);
   const [detailTarget, setDetailTarget] = useState<Transaction | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
-  const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
+  const [billPaymentCard, setBillPaymentCard] = useState<{ card: any; referenceDate?: Date } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
 
@@ -183,7 +183,7 @@ export default function Lancamentos() {
             return card ? (
               <Button
                 variant="outline"
-                onClick={() => setBillPaymentCard(card)}
+                onClick={() => setBillPaymentCard({ card })}
                 className="gap-2"
               >
                 <CreditCard className="h-4 w-4" />
@@ -265,11 +265,17 @@ export default function Lancamentos() {
             onDelete={handleDelete}
             onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
             onLiquidate={(t) => {
-              // If it's a credit card transaction, open bill payment flow
+              // If it's a credit card transaction, open bill payment flow positioned
+              // on the cycle that contains this transaction.
               if (t.credit_card_id) {
                 const card = creditCards.find((c) => c.id === t.credit_card_id);
                 if (card) {
-                  setBillPaymentCard(card);
+                  const d = new Date(t.competence_date + "T12:00:00");
+                  const ref = new Date(d);
+                  if (card.closing_day && d.getDate() > card.closing_day) {
+                    ref.setMonth(ref.getMonth() + 1);
+                  }
+                  setBillPaymentCard({ card, referenceDate: ref });
                   return;
                 }
               }
@@ -323,7 +329,15 @@ export default function Lancamentos() {
           setDetailTarget(null);
           if (t.credit_card_id) {
             const card = creditCards.find((c) => c.id === t.credit_card_id);
-            if (card) { setBillPaymentCard(card); return; }
+            if (card) {
+              const d = new Date(t.competence_date + "T12:00:00");
+              const ref = new Date(d);
+              if (card.closing_day && d.getDate() > card.closing_day) {
+                ref.setMonth(ref.getMonth() + 1);
+              }
+              setBillPaymentCard({ card, referenceDate: ref });
+              return;
+            }
           }
           setLiquidateTarget(t);
         }}
@@ -427,7 +441,8 @@ export default function Lancamentos() {
       {/* Credit Card Bill Payment */}
       <CreditCardBillPaymentModal
         open={!!billPaymentCard}
-        creditCard={billPaymentCard}
+        creditCard={billPaymentCard?.card ?? null}
+        initialReferenceDate={billPaymentCard?.referenceDate}
         onClose={() => setBillPaymentCard(null)}
         onSuccess={() => {
           setBillPaymentCard(null);
