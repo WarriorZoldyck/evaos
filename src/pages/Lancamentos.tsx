@@ -53,7 +53,7 @@ export default function Lancamentos() {
   const [liquidateTarget, setLiquidateTarget] = useState<Transaction | null>(null);
   const [detailTarget, setDetailTarget] = useState<Transaction | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
-  const [billPaymentCard, setBillPaymentCard] = useState<any>(null);
+  const [billPaymentCard, setBillPaymentCard] = useState<{ card: any; referenceDate?: Date } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
 
