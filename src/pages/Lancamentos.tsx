@@ -329,7 +329,15 @@ export default function Lancamentos() {
           setDetailTarget(null);
           if (t.credit_card_id) {
             const card = creditCards.find((c) => c.id === t.credit_card_id);
-            if (card) { setBillPaymentCard(card); return; }
+            if (card) {
+              const d = new Date(t.competence_date + "T12:00:00");
+              const ref = new Date(d);
+              if (card.closing_day && d.getDate() > card.closing_day) {
+                ref.setMonth(ref.getMonth() + 1);
+              }
+              setBillPaymentCard({ card, referenceDate: ref });
+              return;
+            }
           }
           setLiquidateTarget(t);
         }}
