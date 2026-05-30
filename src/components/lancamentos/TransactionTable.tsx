@@ -22,6 +22,27 @@ interface CreditCardWithHierarchy {
   name: string;
   parent_card_id?: string | null;
   last_four_digits?: string | null;
+  closing_day?: number | null;
+  due_day?: number | null;
+}
+
+// Compute billing-cycle key (YYYY-MM of cycle end) and a representative reference date
+// for a transaction on a credit card. Mirrors logic used by CreditCardBillPaymentModal.
+function getCycleInfo(competenceDate: string, closingDay: number | null | undefined, dueDay?: number | null) {
+  const d = new Date(competenceDate + "T12:00:00");
+  const cd = closingDay && closingDay > 0 ? closingDay : 28;
+  const ref = new Date(d);
+  if (d.getDate() > cd) {
+    ref.setMonth(ref.getMonth() + 1);
+  }
+  // Cycle end = day=cd of ref month
+  const cycleEnd = new Date(ref.getFullYear(), ref.getMonth(), cd);
+  const cycleKey = `${cycleEnd.getFullYear()}-${String(cycleEnd.getMonth() + 1).padStart(2, "0")}`;
+  // Due date month (for label): if dueDay < closingDay, due is next month
+  const dd = dueDay && dueDay > 0 ? dueDay : cd;
+  const dueMonthOffset = dd < cd ? 1 : 0;
+  const dueDate = new Date(cycleEnd.getFullYear(), cycleEnd.getMonth() + dueMonthOffset, dd);
+  return { cycleKey, referenceDate: ref, dueDate };
 }
 
 interface TransactionTableProps {
