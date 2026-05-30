@@ -542,7 +542,9 @@ export function useTransactions() {
     return creditCards.some((card) => card.parent_card_id === selectedCardId);
   })();
 
-  const exhaustiveActive = groupedParentCardFilterActive || filters.status === "Pendente";
+  const hasDateRangeActive = Boolean(filters.dateFrom && filters.dateTo);
+  const exhaustiveActive =
+    groupedParentCardFilterActive || filters.status === "Pendente" || hasDateRangeActive;
 
   const totalPages = exhaustiveActive
     ? totalCount > 0
