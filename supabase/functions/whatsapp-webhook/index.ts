@@ -2807,7 +2807,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
       }
 
-      }
+
 
       // --- NO CATEGORY MATCH → ask user ---
       if (!matchedCategory) {
