@@ -72,26 +72,22 @@ type Step = "review" | "payment" | "difference";
 const formatCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-function getBillingCycleDates(closingDay: number, referenceDate: Date) {
+// A fatura é identificada pelo MÊS DE VENCIMENTO (payment_date), não pela
+// data de competência. Assim, cada parcela aparece somente na sua própria
+// fatura — alinhado com o agrupamento da tela de Lançamentos.
+function getBillingCycleDates(referenceDate: Date) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
-
-  // Billing cycle: from previous closing+1 to current closing
-  const cycleEnd = new Date(year, month, closingDay);
-  const cycleStart = new Date(year, month - 1, closingDay + 1);
-
+  const cycleStart = new Date(year, month, 1);
+  const cycleEnd = new Date(year, month + 1, 0); // last day of month
   return { cycleStart, cycleEnd };
 }
 
 function getDueDate(closingDay: number, dueDay: number, referenceDate: Date) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
-
-  // If due day < closing day, the due date is in the next month
-  if (dueDay < closingDay) {
-    return new Date(year, month + 1, dueDay);
-  }
-  return new Date(year, month, dueDay);
+  const dd = dueDay && dueDay > 0 ? dueDay : (closingDay || 28);
+  return new Date(year, month, dd);
 }
 
 export function CreditCardBillPaymentModal({
