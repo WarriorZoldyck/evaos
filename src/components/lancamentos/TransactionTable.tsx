@@ -53,6 +53,9 @@ interface TransactionTableProps {
   totalPages: number;
   totalCount: number;
   onPageChange: (page: number) => void;
+  /** When true, ignore server pagination and paginate renderItems client-side
+   *  so card bill groups stay intact across pages. */
+  clientPaginate?: boolean;
   onEdit: (transaction: Transaction) => void;
   onDuplicate: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
