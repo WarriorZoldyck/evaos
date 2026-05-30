@@ -279,7 +279,10 @@ export function useTransactions() {
       .order("payment_date", { ascending })
       .order("created_at", { ascending });
 
-    const isExhaustiveSearch = isGroupedParentCardFilter || filters.status === "Pendente";
+    // Quando há intervalo de datas (Hoje/Semana/Mês/Ano/mês específico), buscamos
+    // tudo e deixamos a paginação para a UI (paginar por grupos/faturas inteiras).
+    const hasDateRange = Boolean(filters.dateFrom && filters.dateTo);
+    const isExhaustiveSearch = isGroupedParentCardFilter || filters.status === "Pendente" || hasDateRange;
 
     if (isExhaustiveSearch) {
       const allData: Transaction[] = [];
@@ -539,14 +542,19 @@ export function useTransactions() {
     return creditCards.some((card) => card.parent_card_id === selectedCardId);
   })();
 
-  const exhaustiveActive = groupedParentCardFilterActive || filters.status === "Pendente";
+  const hasDateRangeActive = Boolean(filters.dateFrom && filters.dateTo);
+  const exhaustiveActive =
+    groupedParentCardFilterActive || filters.status === "Pendente" || hasDateRangeActive;
 
+  // In exhaustive mode the server returns all rows; pagination happens in the UI
+  // over grouped renderItems, so we expose totalPages=1 here and let the table
+  // manage its own page state via setPage/page (kept as-is, not zeroed).
   const totalPages = exhaustiveActive
     ? totalCount > 0
       ? 1
       : 0
     : Math.ceil(totalCount / PAGE_SIZE);
-  const effectivePage = exhaustiveActive ? 0 : page;
+  const effectivePage = page;
 
   return {
     transactions,
@@ -555,6 +563,7 @@ export function useTransactions() {
     page: effectivePage,
     setPage,
     totalPages,
+    exhaustiveActive,
     filters,
     setFilters,
     fetchTransactions,

@@ -35,7 +35,7 @@ export default function Lancamentos() {
   const { settings: fieldSettings } = useFormFieldSettings();
 
   const {
-    transactions, loading, totalCount, page, setPage, totalPages,
+    transactions, loading, totalCount, page, setPage, totalPages, exhaustiveActive,
     filters, setFilters,
     createTransaction, createMultipleTransactions, updateTransaction,
     deleteTransaction, deleteMultipleTransactions, deleteSeriesTransactions, duplicateTransaction,
@@ -260,6 +260,7 @@ export default function Lancamentos() {
             totalPages={totalPages}
             totalCount={totalCount}
             onPageChange={setPage}
+            clientPaginate={exhaustiveActive}
             onEdit={handleEdit}
             onDuplicate={duplicateTransaction}
             onDelete={handleDelete}

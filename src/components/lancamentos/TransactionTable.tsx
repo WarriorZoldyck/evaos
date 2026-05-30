@@ -53,6 +53,9 @@ interface TransactionTableProps {
   totalPages: number;
   totalCount: number;
   onPageChange: (page: number) => void;
+  /** When true, ignore server pagination and paginate renderItems client-side
+   *  so card bill groups stay intact across pages. */
+  clientPaginate?: boolean;
   onEdit: (transaction: Transaction) => void;
   onDuplicate: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
@@ -415,6 +418,7 @@ export function TransactionTable({
   totalPages,
   totalCount,
   onPageChange,
+  clientPaginate = false,
   onEdit,
   onDuplicate,
   onDelete,
@@ -636,6 +640,22 @@ export function TransactionTable({
 
   const rowProps = { categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, selectionMode, onToggleSelect: toggleSelect };
 
+  // Client-side pagination over grouped renderItems so a fatura never gets
+  // split across pages. Each fatura group counts as a single item.
+  const CLIENT_PAGE_SIZE = 20;
+  const effectiveTotalPages = clientPaginate
+    ? Math.max(1, Math.ceil(renderItems.length / CLIENT_PAGE_SIZE))
+    : totalPages;
+  const effectivePage = clientPaginate
+    ? Math.min(page, Math.max(0, effectiveTotalPages - 1))
+    : page;
+  const visibleItems = clientPaginate
+    ? renderItems.slice(effectivePage * CLIENT_PAGE_SIZE, (effectivePage + 1) * CLIENT_PAGE_SIZE)
+    : renderItems;
+  const footerTotalLabel = clientPaginate
+    ? `${totalCount} lançamento${totalCount !== 1 ? "s" : ""} • ${renderItems.length} item${renderItems.length !== 1 ? "s" : ""} agrupado${renderItems.length !== 1 ? "s" : ""}`
+    : `${totalCount} lançamento${totalCount !== 1 ? "s" : ""}`;
+
   return (
     <div className="space-y-0 divide-y divide-border">
       {/* Bulk action bar */}
@@ -681,7 +701,7 @@ export function TransactionTable({
         </div>
       )}
 
-      {renderItems.map((item) => {
+      {visibleItems.map((item) => {
         if (item.type === "transaction") {
           return (
             <TransactionRow
@@ -831,26 +851,25 @@ export function TransactionTable({
       })}
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {effectiveTotalPages > 1 && (
         <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
           <p className="text-xs text-muted-foreground">
-            {totalCount} lançamento{totalCount !== 1 ? "s" : ""} • Página{" "}
-            {page + 1} de {totalPages}
+            {footerTotalLabel} • Página {effectivePage + 1} de {effectiveTotalPages}
           </p>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onPageChange(page - 1)}
-              disabled={page === 0}
+              onClick={() => onPageChange(effectivePage - 1)}
+              disabled={effectivePage === 0}
             >
               Anterior
             </Button>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onPageChange(page + 1)}
-              disabled={page >= totalPages - 1}
+              onClick={() => onPageChange(effectivePage + 1)}
+              disabled={effectivePage >= effectiveTotalPages - 1}
             >
               Próxima
             </Button>
