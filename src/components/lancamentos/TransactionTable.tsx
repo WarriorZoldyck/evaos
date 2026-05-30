@@ -26,22 +26,16 @@ interface CreditCardWithHierarchy {
   due_day?: number | null;
 }
 
-// Compute billing-cycle key (YYYY-MM of cycle end) and a representative reference date
-// for a transaction on a credit card. Mirrors logic used by CreditCardBillPaymentModal.
-function getCycleInfo(competenceDate: string, closingDay: number | null | undefined, dueDay?: number | null) {
-  const d = new Date(competenceDate + "T12:00:00");
-  const cd = closingDay && closingDay > 0 ? closingDay : 28;
-  const ref = new Date(d);
-  if (d.getDate() > cd) {
-    ref.setMonth(ref.getMonth() + 1);
-  }
-  // Cycle end = day=cd of ref month
-  const cycleEnd = new Date(ref.getFullYear(), ref.getMonth(), cd);
-  const cycleKey = `${cycleEnd.getFullYear()}-${String(cycleEnd.getMonth() + 1).padStart(2, "0")}`;
-  // Due date month (for label): if dueDay < closingDay, due is next month
-  const dd = dueDay && dueDay > 0 ? dueDay : cd;
-  const dueMonthOffset = dd < cd ? 1 : 0;
-  const dueDate = new Date(cycleEnd.getFullYear(), cycleEnd.getMonth() + dueMonthOffset, dd);
+// Compute billing-cycle key (YYYY-MM of the bill's due/payment month) and a
+// representative reference date for a credit card transaction. The fatura is
+// identified by the transaction's payment_date (vencimento) — not by the
+// competence/purchase date — so installments only appear on their own bill.
+function getCycleInfo(paymentDate: string, closingDay: number | null | undefined, dueDay?: number | null) {
+  const d = new Date(paymentDate + "T12:00:00");
+  const ref = new Date(d.getFullYear(), d.getMonth(), 1);
+  const cycleKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const dd = dueDay && dueDay > 0 ? dueDay : (closingDay && closingDay > 0 ? closingDay : d.getDate());
+  const dueDate = new Date(d.getFullYear(), d.getMonth(), dd);
   return { cycleKey, referenceDate: ref, dueDate };
 }
 
