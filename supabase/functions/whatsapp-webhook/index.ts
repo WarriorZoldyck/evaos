@@ -1986,6 +1986,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       let matchedCategory: any = null;
       let subcategoryValue: string | null = null;
       let subcategoryLabel: string | null = null;
+      let subcategory2Value: string | null = null;
+      let subcategory2Label: string | null = null;
 
       if (aiParsed.category_id) {
         matchedCategory = contextCategories.find(
