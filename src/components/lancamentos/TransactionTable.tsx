@@ -26,22 +26,16 @@ interface CreditCardWithHierarchy {
   due_day?: number | null;
 }
 
-// Compute billing-cycle key (YYYY-MM of cycle end) and a representative reference date
-// for a transaction on a credit card. Mirrors logic used by CreditCardBillPaymentModal.
-function getCycleInfo(competenceDate: string, closingDay: number | null | undefined, dueDay?: number | null) {
-  const d = new Date(competenceDate + "T12:00:00");
-  const cd = closingDay && closingDay > 0 ? closingDay : 28;
-  const ref = new Date(d);
-  if (d.getDate() > cd) {
-    ref.setMonth(ref.getMonth() + 1);
-  }
-  // Cycle end = day=cd of ref month
-  const cycleEnd = new Date(ref.getFullYear(), ref.getMonth(), cd);
-  const cycleKey = `${cycleEnd.getFullYear()}-${String(cycleEnd.getMonth() + 1).padStart(2, "0")}`;
-  // Due date month (for label): if dueDay < closingDay, due is next month
-  const dd = dueDay && dueDay > 0 ? dueDay : cd;
-  const dueMonthOffset = dd < cd ? 1 : 0;
-  const dueDate = new Date(cycleEnd.getFullYear(), cycleEnd.getMonth() + dueMonthOffset, dd);
+// Compute billing-cycle key (YYYY-MM of the bill's due/payment month) and a
+// representative reference date for a credit card transaction. The fatura is
+// identified by the transaction's payment_date (vencimento) — not by the
+// competence/purchase date — so installments only appear on their own bill.
+function getCycleInfo(paymentDate: string, closingDay: number | null | undefined, dueDay?: number | null) {
+  const d = new Date(paymentDate + "T12:00:00");
+  const ref = new Date(d.getFullYear(), d.getMonth(), 1);
+  const cycleKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const dd = dueDay && dueDay > 0 ? dueDay : (closingDay && closingDay > 0 ? closingDay : d.getDate());
+  const dueDate = new Date(d.getFullYear(), d.getMonth(), dd);
   return { cycleKey, referenceDate: ref, dueDate };
 }
 
@@ -482,8 +476,9 @@ export function TransactionTable({
   const calcNetAmount = (txns: Transaction[]) =>
     txns.reduce((s, tx) => s + (tx.type === "receita" ? -tx.amount : tx.amount), 0);
 
-  // Helper: split a card's transactions into one CardGroupItem per billing cycle.
-  // If the card has no closing_day configured, returns a single group (legacy behavior).
+  // Helper: split a card's transactions into one CardGroupItem per billing cycle,
+  // using the transaction's payment_date (vencimento) as the cycle key. This keeps
+  // each installment isolated to its own bill — matching what the modal shows.
   const splitByCycle = (
     cardId: string,
     cardName: string,
@@ -492,19 +487,12 @@ export function TransactionTable({
   ): CardGroupItem[] => {
     const closingDay = card?.closing_day ?? null;
     const dueDay = card?.due_day ?? null;
-    if (!closingDay || txns.length === 0) {
-      return [{
-        cardId,
-        cardName,
-        transactions: txns,
-        totalAmount: calcNetAmount(txns),
-        pendingCount: txns.filter((tx) => tx.status === "Pendente").length,
-        firstDate: txns[0]?.payment_date || "",
-      }];
+    if (txns.length === 0) {
+      return [];
     }
     const buckets = new Map<string, { txns: Transaction[]; refDate: Date; dueDate: Date }>();
     for (const tx of txns) {
-      const info = getCycleInfo(tx.competence_date, closingDay, dueDay);
+      const info = getCycleInfo(tx.payment_date, closingDay, dueDay);
       const b = buckets.get(info.cycleKey);
       if (b) b.txns.push(tx);
       else buckets.set(info.cycleKey, { txns: [tx], refDate: info.referenceDate, dueDate: info.dueDate });
@@ -515,7 +503,7 @@ export function TransactionTable({
         const label = format(dueDate, "MMM/yyyy", { locale: ptBR });
         return {
           cardId: `${cardId}::${cycleKey}`,
-          cardName: buckets.size > 1 ? `${cardName} • Fatura ${label}` : cardName,
+          cardName: `${cardName} • Fatura ${label}`,
           transactions: ctxns,
           totalAmount: calcNetAmount(ctxns),
           pendingCount: ctxns.filter((tx) => tx.status === "Pendente").length,
@@ -594,44 +582,31 @@ export function TransactionTable({
 
           if (allTxns.length === 0) continue;
 
-          // If no real child card produced subgroups and the parent itself has only one
-          // cycle group, render that group flat to avoid redundant nesting.
-          const hasRealChildSubs = childGroups.some(
-            (g) => !g.cardId.startsWith(`${groupKey}::`) && g.cardId !== groupKey,
-          );
-          if (!hasRealChildSubs && childGroups.length === 1) {
-            const only = childGroups[0];
-            if (only.transactions.length === 1) {
-              items.push({ type: "transaction", data: only.transactions[0] });
-            } else {
-              items.push({ type: "cardGroup", data: only });
-            }
-          } else {
-            items.push({
-              type: "cardHierarchy",
-              data: {
-                parentCardId: groupKey,
-                parentCardName: parentCard?.name || "Cartão Principal",
-                childGroups,
-                allTransactions: allTxns,
-                totalAmount: calcNetAmount(allTxns),
-                pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
-              },
-            });
-          }
+          // Always render as a hierarchy so each fatura (cycle) shows as its own
+          // row with its own total — never collapse a single-cycle group back into
+          // a loose transaction line.
+          items.push({
+            type: "cardHierarchy",
+            data: {
+              parentCardId: groupKey,
+              parentCardName: parentCard?.name || "Cartão Principal",
+              childGroups,
+              allTransactions: allTxns,
+              totalAmount: calcNetAmount(allTxns),
+              pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
+            },
+          });
         } else {
-          // Standalone card — split into one group per billing cycle
+          // Standalone card — one row per fatura cycle, even when the cycle has
+          // a single transaction. Keeps the card view consistent and prevents
+          // installments from appearing as loose lines.
           const cardTxns = cardTxnMap.get(groupKey) || [];
           const card = creditCards.find((c) => c.id === groupKey);
           const cardName = card?.name || "Cartão";
           const cycleGroups = splitByCycle(groupKey, cardName, cardTxns, card);
 
           for (const cg of cycleGroups) {
-            if (cg.transactions.length === 1) {
-              items.push({ type: "transaction", data: cg.transactions[0] });
-            } else {
-              items.push({ type: "cardGroup", data: cg });
-            }
+            items.push({ type: "cardGroup", data: cg });
           }
         }
       } else if (!groupKey) {

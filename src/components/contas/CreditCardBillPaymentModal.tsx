@@ -72,26 +72,22 @@ type Step = "review" | "payment" | "difference";
 const formatCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-function getBillingCycleDates(closingDay: number, referenceDate: Date) {
+// A fatura é identificada pelo MÊS DE VENCIMENTO (payment_date), não pela
+// data de competência. Assim, cada parcela aparece somente na sua própria
+// fatura — alinhado com o agrupamento da tela de Lançamentos.
+function getBillingCycleDates(referenceDate: Date) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
-
-  // Billing cycle: from previous closing+1 to current closing
-  const cycleEnd = new Date(year, month, closingDay);
-  const cycleStart = new Date(year, month - 1, closingDay + 1);
-
+  const cycleStart = new Date(year, month, 1);
+  const cycleEnd = new Date(year, month + 1, 0); // last day of month
   return { cycleStart, cycleEnd };
 }
 
 function getDueDate(closingDay: number, dueDay: number, referenceDate: Date) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
-
-  // If due day < closing day, the due date is in the next month
-  if (dueDay < closingDay) {
-    return new Date(year, month + 1, dueDay);
-  }
-  return new Date(year, month, dueDay);
+  const dd = dueDay && dueDay > 0 ? dueDay : (closingDay || 28);
+  return new Date(year, month, dd);
 }
 
 export function CreditCardBillPaymentModal({
@@ -144,7 +140,7 @@ export function CreditCardBillPaymentModal({
 
   const billingCycle = useMemo(() => {
     if (!creditCard) return null;
-    return getBillingCycleDates(creditCard.closing_day, referenceDate);
+    return getBillingCycleDates(referenceDate);
   }, [creditCard, referenceDate]);
 
   const dueDate = useMemo(() => {
@@ -152,9 +148,9 @@ export function CreditCardBillPaymentModal({
     return getDueDate(creditCard.closing_day, creditCard.due_day, referenceDate);
   }, [creditCard, referenceDate]);
 
-  // When opening: if caller provided an explicit reference date (e.g. user clicked Pagar
-  // Fatura on a specific cycle in Lançamentos), honor it. Otherwise jump to the cycle of
-  // the earliest pending transaction for this card.
+  // When opening: if caller provided an explicit reference date (e.g. user clicked
+  // Pagar Fatura on a specific cycle in Lançamentos), honor it. Otherwise jump to
+  // the month of the earliest pending payment for this card.
   useEffect(() => {
     if (!open || !creditCard || !user) return;
 
@@ -166,19 +162,15 @@ export function CreditCardBillPaymentModal({
     const pickInitialMonth = async () => {
       const { data } = await supabase
         .from("transactions")
-        .select("competence_date")
+        .select("payment_date")
         .eq("credit_card_id", creditCard.id)
         .eq("status", "Pendente")
-        .order("competence_date", { ascending: true })
+        .order("payment_date", { ascending: true })
         .limit(1);
 
       if (data && data.length > 0) {
-        const earliest = new Date(data[0].competence_date + "T12:00:00");
-        const ref = new Date(earliest);
-        if (earliest.getDate() > creditCard.closing_day) {
-          ref.setMonth(ref.getMonth() + 1);
-        }
-        setReferenceDate(ref);
+        const earliest = new Date(data[0].payment_date + "T12:00:00");
+        setReferenceDate(new Date(earliest.getFullYear(), earliest.getMonth(), 1));
       } else {
         setReferenceDate(new Date());
       }
@@ -187,7 +179,9 @@ export function CreditCardBillPaymentModal({
     pickInitialMonth();
   }, [open, creditCard, user, initialReferenceDate]);
 
-  // Fetch bill transactions when card/month changes
+  // Fetch bill transactions for the selected month. We filter by payment_date so
+  // each fatura contains only the installments due in that month — matching the
+  // grouping shown on the Lançamentos page.
   useEffect(() => {
     if (!open || !creditCard || !user || !billingCycle) return;
 
@@ -201,9 +195,9 @@ export function CreditCardBillPaymentModal({
         .from("transactions")
         .select("*")
         .eq("credit_card_id", creditCard.id)
-        .gte("competence_date", startDate)
-        .lte("competence_date", endDate)
-        .order("competence_date", { ascending: true });
+        .gte("payment_date", startDate)
+        .lte("payment_date", endDate)
+        .order("payment_date", { ascending: true });
 
       if (error) {
         toast({

@@ -266,15 +266,13 @@ export default function Lancamentos() {
             onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
             onLiquidate={(t) => {
               // If it's a credit card transaction, open bill payment flow positioned
-              // on the cycle that contains this transaction.
+              // on the cycle that contains this transaction. We use payment_date
+              // (vencimento) because each fatura is defined by the payment month.
               if (t.credit_card_id) {
                 const card = creditCards.find((c) => c.id === t.credit_card_id);
                 if (card) {
-                  const d = new Date(t.competence_date + "T12:00:00");
-                  const ref = new Date(d);
-                  if (card.closing_day && d.getDate() > card.closing_day) {
-                    ref.setMonth(ref.getMonth() + 1);
-                  }
+                  const d = new Date(t.payment_date + "T12:00:00");
+                  const ref = new Date(d.getFullYear(), d.getMonth(), 1);
                   setBillPaymentCard({ card, referenceDate: ref });
                   return;
                 }
@@ -330,11 +328,8 @@ export default function Lancamentos() {
           if (t.credit_card_id) {
             const card = creditCards.find((c) => c.id === t.credit_card_id);
             if (card) {
-              const d = new Date(t.competence_date + "T12:00:00");
-              const ref = new Date(d);
-              if (card.closing_day && d.getDate() > card.closing_day) {
-                ref.setMonth(ref.getMonth() + 1);
-              }
+              const d = new Date(t.payment_date + "T12:00:00");
+              const ref = new Date(d.getFullYear(), d.getMonth(), 1);
               setBillPaymentCard({ card, referenceDate: ref });
               return;
             }
