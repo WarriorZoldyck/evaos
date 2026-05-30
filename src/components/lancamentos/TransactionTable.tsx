@@ -582,44 +582,31 @@ export function TransactionTable({
 
           if (allTxns.length === 0) continue;
 
-          // If no real child card produced subgroups and the parent itself has only one
-          // cycle group, render that group flat to avoid redundant nesting.
-          const hasRealChildSubs = childGroups.some(
-            (g) => !g.cardId.startsWith(`${groupKey}::`) && g.cardId !== groupKey,
-          );
-          if (!hasRealChildSubs && childGroups.length === 1) {
-            const only = childGroups[0];
-            if (only.transactions.length === 1) {
-              items.push({ type: "transaction", data: only.transactions[0] });
-            } else {
-              items.push({ type: "cardGroup", data: only });
-            }
-          } else {
-            items.push({
-              type: "cardHierarchy",
-              data: {
-                parentCardId: groupKey,
-                parentCardName: parentCard?.name || "Cartão Principal",
-                childGroups,
-                allTransactions: allTxns,
-                totalAmount: calcNetAmount(allTxns),
-                pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
-              },
-            });
-          }
+          // Always render as a hierarchy so each fatura (cycle) shows as its own
+          // row with its own total — never collapse a single-cycle group back into
+          // a loose transaction line.
+          items.push({
+            type: "cardHierarchy",
+            data: {
+              parentCardId: groupKey,
+              parentCardName: parentCard?.name || "Cartão Principal",
+              childGroups,
+              allTransactions: allTxns,
+              totalAmount: calcNetAmount(allTxns),
+              pendingCount: allTxns.filter((tx) => tx.status === "Pendente").length,
+            },
+          });
         } else {
-          // Standalone card — split into one group per billing cycle
+          // Standalone card — one row per fatura cycle, even when the cycle has
+          // a single transaction. Keeps the card view consistent and prevents
+          // installments from appearing as loose lines.
           const cardTxns = cardTxnMap.get(groupKey) || [];
           const card = creditCards.find((c) => c.id === groupKey);
           const cardName = card?.name || "Cartão";
           const cycleGroups = splitByCycle(groupKey, cardName, cardTxns, card);
 
           for (const cg of cycleGroups) {
-            if (cg.transactions.length === 1) {
-              items.push({ type: "transaction", data: cg.transactions[0] });
-            } else {
-              items.push({ type: "cardGroup", data: cg });
-            }
+            items.push({ type: "cardGroup", data: cg });
           }
         }
       } else if (!groupKey) {
