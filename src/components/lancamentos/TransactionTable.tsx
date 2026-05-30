@@ -701,7 +701,7 @@ export function TransactionTable({
         </div>
       )}
 
-      {renderItems.map((item) => {
+      {visibleItems.map((item) => {
         if (item.type === "transaction") {
           return (
             <TransactionRow
