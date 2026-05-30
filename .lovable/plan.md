@@ -1,24 +1,32 @@
-Plano para corrigir o fluxo de faturas em Lançamentos:
+## Diagnóstico
 
-1. Unificar a lógica de ciclo de fatura
-- Criar/usar uma única regra para cartão: a fatura deve ser identificada pelo mês de vencimento/pagamento da parcela, não pela data de competência original da compra.
-- Para compras parceladas, cada parcela deve entrar somente na fatura do seu próprio `payment_date`/vencimento.
-- Evitar que o modal some todas as parcelas de uma mesma compra/série quando o usuário abriu apenas uma fatura.
+Em `src/hooks/useTransactions.ts` (linha 325 e 542-549), a paginação server-side de 20 lançamentos por página só é desativada (modo *exhaustive*) em dois casos:
 
-2. Corrigir o modal “Pagar Fatura”
-- Alterar a busca do modal para filtrar por `credit_card_id`, status/ciclo e principalmente pelo intervalo correto de `payment_date` da fatura selecionada.
-- Manter o modal abrindo no mês/ciclo que veio da linha clicada em Lançamentos.
-- No exemplo do Mastercard Black, o modal deve trazer somente os lançamentos da fatura selecionada e bater com os R$ 8.722,12, não R$ 24.092,59.
+- Filtro de status = "Pendente"
+- Cartão pai (com filhos) selecionado
 
-3. Corrigir o agrupamento da tabela de Lançamentos
-- Ajustar o agrupamento dos cartões para usar a mesma base do modal.
-- Remover o comportamento que transforma grupo com apenas 1 lançamento em “lançamento solto”; mesmo com 1 item, se for cartão/fatura, deve continuar como linha de fatura quando isso for necessário para consistência visual.
-- Garantir que o botão “Pagar Fatura” da linha agrupada envie explicitamente a referência do ciclo, sem depender de escolher a primeira transação do grupo.
+Em todos os outros casos — inclusive na aba "Todos" com mês selecionado — o Supabase devolve 20 linhas brutas. Como o agrupamento "Fatura mar/2026" é feito **depois**, em `TransactionTable.splitByCycle`, ele só enxerga as parcelas que caíram na página atual. Resultado: a fatura aparece com "18 lançamentos" na página 1, mais um pedaço na página 2, etc. O total exibido na linha agregada também fica errado.
 
-4. Corrigir o filtro mensal de datas
-- Revisar `useTransactions` para que o filtro “Abril 2026” não traga faturas fora do período selecionado por causa de busca exaustiva de pendentes ou agrupamento posterior.
-- O filtro mensal deve respeitar o campo que representa o vencimento/projeção exibido na tela (`payment_date`) e não reaproveitar lançamentos de março/maio no resultado de abril.
+## Solução
 
-5. Validar o fluxo crítico
-- Conferir nos arquivos `TransactionTable.tsx`, `CreditCardBillPaymentModal.tsx`, `Lancamentos.tsx` e `useTransactions.ts` se a mesma regra está sendo aplicada de ponta a ponta.
-- Validar especialmente compras parceladas, cartões pai/filho, faturas com apenas 1 lançamento e filtro mensal em Projetado.
+Fazer com que, sempre que houver um intervalo de datas finito ativo (Hoje/Semana/Mês/Ano/mês específico), os dados sejam buscados de forma exaustiva e a paginação seja aplicada **na UI**, sobre os itens já agrupados. Assim cada fatura é sempre uma linha única e completa.
+
+### Mudanças
+
+1. **`src/hooks/useTransactions.ts`**
+   - Considerar o intervalo de datas como um sinal de "bounded query". Estender a condição `exhaustiveActive` para incluir qualquer filtro com `dateRange` definido (Hoje, Semana, Mês, Ano, mês específico). Os limites de segurança já existentes (2 anos / 5000 registros) continuam protegendo a query.
+   - Garantir que `totalCount` reflete a contagem real do intervalo, não o lote paginado.
+
+2. **`src/pages/Lancamentos.tsx` + `src/components/lancamentos/TransactionTable.tsx`**
+   - Quando estamos em modo exaustivo, mover a paginação para o `TransactionTable`: gerar a lista de `renderItems` (grupos de fatura + transações soltas) e paginar essa lista (ex.: 20 itens por página de render), em vez de paginar transações brutas.
+   - Atualizar o rodapé de paginação (`147 lançamentos • Página 1 de 8`) para refletir a contagem de itens renderizados quando em modo exaustivo, mantendo o total bruto ("147 lançamentos") como informação contextual.
+   - A linha agregada da fatura passa a contar `1` na paginação, eliminando a quebra entre páginas.
+
+3. **Comportamento preservado**
+   - Sem filtro de data (Tudo): paginação server-side continua como hoje (caso raro e potencialmente grande).
+   - Aba "Pendente" e cartão pai: continuam exaustivos como já são.
+   - Performance: respeitamos os limites globais (2 anos / 5000 registros) já implementados em `useTransactions`.
+
+### Resultado esperado
+
+Na aba "Todos" com "Mar 2026" selecionado, a linha "MASTERCARD BLACK • Fatura mar/2026" mostra os 42 lançamentos do ciclo inteiros, com o valor total correto, e a navegação por páginas opera sobre os blocos de fatura e os lançamentos soltos — nunca quebrando uma fatura ao meio.
