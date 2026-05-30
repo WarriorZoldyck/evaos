@@ -851,26 +851,25 @@ export function TransactionTable({
       })}
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {effectiveTotalPages > 1 && (
         <div className="flex items-center justify-between border-t border-border pt-4 mt-4">
           <p className="text-xs text-muted-foreground">
-            {totalCount} lançamento{totalCount !== 1 ? "s" : ""} • Página{" "}
-            {page + 1} de {totalPages}
+            {footerTotalLabel} • Página {effectivePage + 1} de {effectiveTotalPages}
           </p>
           <div className="flex gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onPageChange(page - 1)}
-              disabled={page === 0}
+              onClick={() => onPageChange(effectivePage - 1)}
+              disabled={effectivePage === 0}
             >
               Anterior
             </Button>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onPageChange(page + 1)}
-              disabled={page >= totalPages - 1}
+              onClick={() => onPageChange(effectivePage + 1)}
+              disabled={effectivePage >= effectiveTotalPages - 1}
             >
               Próxima
             </Button>
