@@ -476,8 +476,9 @@ export function TransactionTable({
   const calcNetAmount = (txns: Transaction[]) =>
     txns.reduce((s, tx) => s + (tx.type === "receita" ? -tx.amount : tx.amount), 0);
 
-  // Helper: split a card's transactions into one CardGroupItem per billing cycle.
-  // If the card has no closing_day configured, returns a single group (legacy behavior).
+  // Helper: split a card's transactions into one CardGroupItem per billing cycle,
+  // using the transaction's payment_date (vencimento) as the cycle key. This keeps
+  // each installment isolated to its own bill — matching what the modal shows.
   const splitByCycle = (
     cardId: string,
     cardName: string,
@@ -486,19 +487,12 @@ export function TransactionTable({
   ): CardGroupItem[] => {
     const closingDay = card?.closing_day ?? null;
     const dueDay = card?.due_day ?? null;
-    if (!closingDay || txns.length === 0) {
-      return [{
-        cardId,
-        cardName,
-        transactions: txns,
-        totalAmount: calcNetAmount(txns),
-        pendingCount: txns.filter((tx) => tx.status === "Pendente").length,
-        firstDate: txns[0]?.payment_date || "",
-      }];
+    if (txns.length === 0) {
+      return [];
     }
     const buckets = new Map<string, { txns: Transaction[]; refDate: Date; dueDate: Date }>();
     for (const tx of txns) {
-      const info = getCycleInfo(tx.competence_date, closingDay, dueDay);
+      const info = getCycleInfo(tx.payment_date, closingDay, dueDay);
       const b = buckets.get(info.cycleKey);
       if (b) b.txns.push(tx);
       else buckets.set(info.cycleKey, { txns: [tx], refDate: info.referenceDate, dueDate: info.dueDate });
@@ -509,7 +503,7 @@ export function TransactionTable({
         const label = format(dueDate, "MMM/yyyy", { locale: ptBR });
         return {
           cardId: `${cardId}::${cycleKey}`,
-          cardName: buckets.size > 1 ? `${cardName} • Fatura ${label}` : cardName,
+          cardName: `${cardName} • Fatura ${label}`,
           transactions: ctxns,
           totalAmount: calcNetAmount(ctxns),
           pendingCount: ctxns.filter((tx) => tx.status === "Pendente").length,
