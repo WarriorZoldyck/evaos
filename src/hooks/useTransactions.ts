@@ -279,7 +279,10 @@ export function useTransactions() {
       .order("payment_date", { ascending })
       .order("created_at", { ascending });
 
-    const isExhaustiveSearch = isGroupedParentCardFilter || filters.status === "Pendente";
+    // Quando há intervalo de datas (Hoje/Semana/Mês/Ano/mês específico), buscamos
+    // tudo e deixamos a paginação para a UI (paginar por grupos/faturas inteiras).
+    const hasDateRange = Boolean(filters.dateFrom && filters.dateTo);
+    const isExhaustiveSearch = isGroupedParentCardFilter || filters.status === "Pendente" || hasDateRange;
 
     if (isExhaustiveSearch) {
       const allData: Transaction[] = [];
