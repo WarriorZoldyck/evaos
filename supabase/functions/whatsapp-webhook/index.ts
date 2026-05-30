@@ -2773,8 +2773,40 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 break;
               }
             }
+        }
+      }
+
+      // --- NORMALIZE CATEGORY HIERARCHY (3 levels: root → sub → sub-sub) ---
+      // The matching above may have set matchedCategory to a subcategory (level 2),
+      // and subcategoryValue to a sub-subcategory (level 3). Walk up to the real root
+      // so that category/subcategory/subcategory2 are stored at the correct levels.
+      if (matchedCategory && matchedCategory.parent_id) {
+        const parent = categories.find((c: any) => c.id === matchedCategory.parent_id);
+        if (parent) {
+          // Shift down: previous subcategoryValue (if any) becomes subcategory2
+          if (subcategoryValue) {
+            subcategory2Value = subcategoryValue;
+            subcategory2Label = subcategoryLabel;
+          }
+          subcategoryValue = matchedCategory.id;
+          subcategoryLabel = matchedCategory.name;
+          matchedCategory = parent;
+
+          // If the new root is itself a subcategory (4+ level — unlikely), walk up once more
+          if (matchedCategory.parent_id) {
+            const grandParent = categories.find((c: any) => c.id === matchedCategory.parent_id);
+            if (grandParent) {
+              // Drop the deepest level to fit 3 slots
+              subcategory2Value = subcategoryValue;
+              subcategory2Label = subcategoryLabel;
+              subcategoryValue = matchedCategory.id;
+              subcategoryLabel = matchedCategory.name;
+              matchedCategory = grandParent;
+            }
           }
         }
+      }
+
       }
 
       // --- NO CATEGORY MATCH → ask user ---
