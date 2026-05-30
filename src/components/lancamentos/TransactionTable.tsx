@@ -482,6 +482,53 @@ export function TransactionTable({
   const calcNetAmount = (txns: Transaction[]) =>
     txns.reduce((s, tx) => s + (tx.type === "receita" ? -tx.amount : tx.amount), 0);
 
+  // Helper: split a card's transactions into one CardGroupItem per billing cycle.
+  // If the card has no closing_day configured, returns a single group (legacy behavior).
+  const splitByCycle = (
+    cardId: string,
+    cardName: string,
+    txns: Transaction[],
+    card: CreditCardWithHierarchy | undefined,
+  ): CardGroupItem[] => {
+    const closingDay = card?.closing_day ?? null;
+    const dueDay = card?.due_day ?? null;
+    if (!closingDay || txns.length === 0) {
+      return [{
+        cardId,
+        cardName,
+        transactions: txns,
+        totalAmount: calcNetAmount(txns),
+        pendingCount: txns.filter((tx) => tx.status === "Pendente").length,
+        firstDate: txns[0]?.payment_date || "",
+      }];
+    }
+    const buckets = new Map<string, { txns: Transaction[]; refDate: Date; dueDate: Date }>();
+    for (const tx of txns) {
+      const info = getCycleInfo(tx.competence_date, closingDay, dueDay);
+      const b = buckets.get(info.cycleKey);
+      if (b) b.txns.push(tx);
+      else buckets.set(info.cycleKey, { txns: [tx], refDate: info.referenceDate, dueDate: info.dueDate });
+    }
+    const groups = Array.from(buckets.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([cycleKey, { txns: ctxns, refDate, dueDate }]) => {
+        const label = format(dueDate, "MMM/yyyy", { locale: ptBR });
+        return {
+          cardId: `${cardId}::${cycleKey}`,
+          cardName: buckets.size > 1 ? `${cardName} • Fatura ${label}` : cardName,
+          transactions: ctxns,
+          totalAmount: calcNetAmount(ctxns),
+          pendingCount: ctxns.filter((tx) => tx.status === "Pendente").length,
+          firstDate: ctxns[0].payment_date,
+          cycleKey,
+          cycleLabel: label,
+          referenceDate: refDate,
+        };
+      });
+    return groups;
+  };
+
+
   // Build ordered render list with hierarchy support
   const renderItems = useMemo(() => {
     const items: RenderItem[] = [];
