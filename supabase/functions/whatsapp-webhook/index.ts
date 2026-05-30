@@ -2773,8 +2773,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 break;
               }
             }
+          }
         }
       }
+
 
       // --- NORMALIZE CATEGORY HIERARCHY (3 levels: root → sub → sub-sub) ---
       // The matching above may have set matchedCategory to a subcategory (level 2),
