@@ -183,7 +183,7 @@ export default function Lancamentos() {
             return card ? (
               <Button
                 variant="outline"
-                onClick={() => setBillPaymentCard(card)}
+                onClick={() => setBillPaymentCard({ card })}
                 className="gap-2"
               >
                 <CreditCard className="h-4 w-4" />
