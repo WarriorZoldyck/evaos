@@ -441,7 +441,8 @@ export default function Lancamentos() {
       {/* Credit Card Bill Payment */}
       <CreditCardBillPaymentModal
         open={!!billPaymentCard}
-        creditCard={billPaymentCard}
+        creditCard={billPaymentCard?.card ?? null}
+        initialReferenceDate={billPaymentCard?.referenceDate}
         onClose={() => setBillPaymentCard(null)}
         onSuccess={() => {
           setBillPaymentCard(null);
