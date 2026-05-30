@@ -560,6 +560,7 @@ export function useTransactions() {
     page: effectivePage,
     setPage,
     totalPages,
+    exhaustiveActive,
     filters,
     setFilters,
     fetchTransactions,
