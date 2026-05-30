@@ -314,6 +314,9 @@ interface CardGroupItem {
   totalAmount: number;
   pendingCount: number;
   firstDate: string;
+  cycleKey?: string;
+  cycleLabel?: string;
+  referenceDate?: Date;
 }
 
 interface CardHierarchyItem {
