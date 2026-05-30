@@ -2269,6 +2269,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               category_id: matchedCategory?.id || null,
               category_label: matchedCategory?.name || null,
               subcategory_id: subcategoryValue,
+              subcategory2_id: subcategory2Value,
               payment_method: "Cartão de Crédito",
               date: aiParsed.date || today,
               competence_date: aiParsed.competence_date || aiParsed.date || today,
