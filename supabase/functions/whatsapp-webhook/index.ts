@@ -3125,6 +3125,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         type: txType,
         category: categoryValue,
         subcategory: subcategoryValue,
+        subcategory2: subcategory2Value,
         competence_date: competenceDate,
         payment_date: paymentDate,
         transaction_status: status,
