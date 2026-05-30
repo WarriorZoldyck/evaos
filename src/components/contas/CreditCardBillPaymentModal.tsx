@@ -60,6 +60,8 @@ interface CreditCardBillPaymentModalProps {
   creditCard: CreditCardInfo | null;
   onClose: () => void;
   onSuccess: () => void;
+  /** When set, opens the modal already positioned on that bill cycle instead of auto-picking the earliest pending. */
+  initialReferenceDate?: Date | null;
 }
 
 type PaymentType = "full" | "partial" | "extra";
