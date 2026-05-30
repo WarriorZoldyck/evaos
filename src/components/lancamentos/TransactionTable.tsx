@@ -418,6 +418,7 @@ export function TransactionTable({
   totalPages,
   totalCount,
   onPageChange,
+  clientPaginate = false,
   onEdit,
   onDuplicate,
   onDelete,
