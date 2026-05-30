@@ -260,6 +260,7 @@ export default function Lancamentos() {
             totalPages={totalPages}
             totalCount={totalCount}
             onPageChange={setPage}
+            clientPaginate={exhaustiveActive}
             onEdit={handleEdit}
             onDuplicate={duplicateTransaction}
             onDelete={handleDelete}
