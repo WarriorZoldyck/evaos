@@ -1043,6 +1043,7 @@ serve(async (req) => {
           type: txType,
           category: txPayload.category_id,
           subcategory: txPayload.subcategory_id || null,
+          subcategory2: txPayload.subcategory2_id || null,
           competence_date: competenceDate,
           payment_date: paymentDate,
           transaction_status: status,
