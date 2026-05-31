@@ -1,0 +1,1 @@
+UPDATE transactions SET credit_card_id = NULL WHERE payment_method = 'Cartão de Débito' AND credit_card_id IS NOT NULL;
