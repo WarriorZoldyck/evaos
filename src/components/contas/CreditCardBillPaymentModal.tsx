@@ -747,8 +747,10 @@ export function CreditCardBillPaymentModal({
             )}
           </div>
         )}
+        </div>
 
-        <DialogFooter className="flex-col sm:flex-row gap-2">
+        <DialogFooter className="flex-col sm:flex-row gap-2 border-t border-border p-4">
+
           {step === "review" && (
             <>
               <Button variant="outline" onClick={onClose}>
