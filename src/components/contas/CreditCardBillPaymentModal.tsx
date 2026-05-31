@@ -195,6 +195,10 @@ export function CreditCardBillPaymentModal({
         .from("transactions")
         .select("*")
         .eq("credit_card_id", creditCard.id)
+        // Blindagem: a fatura só contém compras feitas no crédito.
+        // Lançamentos com método "Cartão de Débito" (legado/erro de cadastro)
+        // não devem entrar no total da fatura.
+        .or("payment_method.is.null,payment_method.neq.Cartão de Débito")
         .gte("payment_date", startDate)
         .lte("payment_date", endDate)
         .order("payment_date", { ascending: true });
