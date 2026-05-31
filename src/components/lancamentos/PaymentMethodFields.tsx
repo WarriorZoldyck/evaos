@@ -103,8 +103,11 @@ export function PaymentMethodFields({
     if (!showTerminal) {
       form.setValue("card_terminal_id", "");
     }
-    if (!showCreditCardSelect) {
-      // don't clear credit_card_id if we're in receita mode with terminal
+    if (!showCreditCardSelect && !showTerminal) {
+      // Em despesa, credit_card_id só pertence ao método "Cartão de Crédito".
+      // Em receita, o vínculo de cartão vem do terminal — limpamos quando não houver terminal.
+      // Isso evita que lançamentos de Débito (ou outros métodos) caiam na fatura do crédito.
+      form.setValue("credit_card_id", "");
     }
     if (!showBankAccount && !showTerminal) {
       // Don't clear bank_account_id if terminal is setting it
