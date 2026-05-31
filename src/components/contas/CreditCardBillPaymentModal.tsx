@@ -450,36 +450,6 @@ export function CreditCardBillPaymentModal({
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
 
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-primary" />
-            Pagar Fatura
-          </DialogTitle>
-          <DialogDescription>
-            {creditCard.name}
-            {creditCard.last_four_digits && ` •••• ${creditCard.last_four_digits}`}
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Month Navigator */}
-        <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2">
-          <Button variant="ghost" size="icon" onClick={() => navigateMonth(-1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="text-center">
-            <p className="text-sm font-semibold capitalize">
-              {format(referenceDate, "MMMM yyyy", { locale: ptBR })}
-            </p>
-            {dueDate && (
-              <p className="text-xs text-muted-foreground">
-                Vencimento: {format(dueDate, "dd/MM/yyyy")}
-              </p>
-            )}
-          </div>
-          <Button variant="ghost" size="icon" onClick={() => navigateMonth(1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
 
         {/* Step: Review */}
         {step === "review" && (
