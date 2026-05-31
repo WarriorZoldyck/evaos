@@ -14,6 +14,7 @@ export interface WorkspaceMember {
   status: string;
   created_at: string;
   workspace_id: string | null;
+  created_by_hub: boolean;
 }
 
 export interface AvailableWorkspace {
