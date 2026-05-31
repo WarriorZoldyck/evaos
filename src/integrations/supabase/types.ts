@@ -1882,6 +1882,7 @@ export type Database = {
       workspace_members: {
         Row: {
           created_at: string
+          created_by_hub: boolean
           email: string
           id: string
           member_name: string
@@ -1893,6 +1894,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by_hub?: boolean
           email: string
           id?: string
           member_name?: string
@@ -1904,6 +1906,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by_hub?: boolean
           email?: string
           id?: string
           member_name?: string

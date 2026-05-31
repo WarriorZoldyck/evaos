@@ -210,9 +210,11 @@ function MemberCard({
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-primary" onClick={() => setPermsOpen(true)}>
             <Shield className="h-3 w-3" /> Acesso
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => onResetPassword(member.id)} title="Gerar nova senha">
-            <KeyRound className="h-3 w-3" /> Senha
-          </Button>
+          {member.created_by_hub && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => onResetPassword(member.id)} title="Gerar nova senha temporária (apenas para contas criadas por você)">
+              <KeyRound className="h-3 w-3" /> Senha
+            </Button>
+          )}
           <div className="ml-auto flex items-center gap-1">
             {member.status === "active" ? (
               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onSuspend(member.id)} title="Suspender">

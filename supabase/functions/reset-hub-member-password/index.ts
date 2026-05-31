@@ -28,10 +28,18 @@ Deno.serve(async (req) => {
 
     const { data: member } = await admin
       .from("workspace_members")
-      .select("id, owner_id, member_user_id, email")
+      .select("id, owner_id, member_user_id, email, created_by_hub")
       .eq("id", memberId)
       .maybeSingle();
     if (!member || member.owner_id !== ownerId) return json({ error: "Membro não encontrado" }, 404);
+
+    // SECURITY: only allow password reset for members whose account was CREATED by this hub.
+    // Pre-existing EVA users (invited by email) keep full control of their own credentials.
+    if (!member.created_by_hub) {
+      return json({
+        error: "Este usuário já tinha conta na EVA antes do convite. Por segurança, apenas ele pode alterar a própria senha. Você pode remover o acesso ao seu hub, mas não pode redefinir a senha dele.",
+      }, 403);
+    }
 
     // Generate a new temp password
     const tempPassword = generateTempPassword();
@@ -40,6 +48,18 @@ Deno.serve(async (req) => {
 
     // Force re-login on all devices
     try { await admin.auth.admin.signOut(member.member_user_id, "global"); } catch (_) {}
+
+    // Audit log
+    try {
+      await admin.from("hub_audit_log").insert({
+        actor_user_id: ownerId,
+        owner_id: ownerId,
+        action: "member_password_reset",
+        resource_type: "workspace_member",
+        resource_id: memberId,
+        payload: { member_email: member.email },
+      });
+    } catch (_) {}
 
     return json({ ok: true, tempPassword });
   } catch (err) {
