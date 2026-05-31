@@ -219,6 +219,7 @@ Deno.serve(async (req) => {
         email: normalizedEmail,
         role,
         status: "active",
+        created_by_hub: true,
       });
 
     if (memberError) {
