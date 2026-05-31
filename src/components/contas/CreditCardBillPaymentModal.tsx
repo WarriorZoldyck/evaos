@@ -414,7 +414,42 @@ export function CreditCardBillPaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col gap-0 p-0">
+        <div className="flex flex-col gap-3 p-6 pb-3 border-b border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-primary" />
+              Pagar Fatura
+            </DialogTitle>
+            <DialogDescription>
+              {creditCard.name}
+              {creditCard.last_four_digits && ` •••• ${creditCard.last_four_digits}`}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Month Navigator (fixo no topo) */}
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2">
+            <Button variant="ghost" size="icon" onClick={() => navigateMonth(-1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="text-center">
+              <p className="text-sm font-semibold capitalize">
+                {format(referenceDate, "MMMM yyyy", { locale: ptBR })}
+              </p>
+              {dueDate && (
+                <p className="text-xs text-muted-foreground">
+                  Vencimento: {format(dueDate, "dd/MM/yyyy")}
+                </p>
+              )}
+            </div>
+            <Button variant="ghost" size="icon" onClick={() => navigateMonth(1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-primary" />
