@@ -19,6 +19,8 @@ import logoBradesco from "@/assets/logo-bradesco.png";
 import logoItau from "@/assets/logo-itau.png";
 import logoSantander from "@/assets/logo-santander.png";
 import logoC6Bank from "@/assets/logo-c6bank.png";
+import logoApplePay from "@/assets/logo-applepay.png";
+import logoSamsungPay from "@/assets/logo-samsungpay.png";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link } from "react-router-dom";
