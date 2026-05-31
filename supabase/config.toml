@@ -1,31 +1,25 @@
 project_id = "rrrnnrjefyffllnrwhkz"
 
-[functions.delete-account]
-verify_jwt = false
-
-[functions.fix-terminal-transactions]
-verify_jwt = false
-
-[functions.parse-bank-statement]
-verify_jwt = false
-
-[functions.whatsapp-webhook]
-verify_jwt = false
-
-[functions.purge-deleted-accounts]
-verify_jwt = false
-
-[functions.evolution-webhook-config]
-verify_jwt = false
-
-[functions.eva-chat]
-verify_jwt = false
-
-[functions.purge-hub-audit-log]
-verify_jwt = false
-
-[functions.pluggy-webhook]
-verify_jwt = false
-
-[functions.asaas-change-plan]
-verify_jwt = false
+[functions]
+  [functions.asaas-change-plan]
+    verify_jwt = false
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.delete-account]
+    verify_jwt = false
+  [functions.eva-chat]
+    verify_jwt = false
+  [functions.evolution-webhook-config]
+    verify_jwt = false
+  [functions.fix-terminal-transactions]
+    verify_jwt = false
+  [functions.parse-bank-statement]
+    verify_jwt = false
+  [functions.pluggy-webhook]
+    verify_jwt = false
+  [functions.purge-deleted-accounts]
+    verify_jwt = false
+  [functions.purge-hub-audit-log]
+    verify_jwt = false
+  [functions.whatsapp-webhook]
+    verify_jwt = false
