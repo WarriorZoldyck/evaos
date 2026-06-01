@@ -29,8 +29,8 @@ const otherBanks = [
   { name: "Bradesco", description: "Conexão com o Bradesco para importação automática de extratos.", logo: logoBradesco, bgClass: "bg-white" },
   { name: "Santander", description: "Conexão com o Santander para importação automática de extratos.", logo: logoSantander, bgClass: "bg-white" },
   { name: "C6 Bank", description: "Conexão com o C6 Bank para importação automática de extratos.", logo: logoC6Bank, bgClass: "bg-white" },
-  { name: "Apple Pay", description: "Aceite pagamentos e importe transações via Apple Pay diretamente no EVA.", logo: logoApplePay, bgClass: "bg-white" },
-  { name: "Samsung Pay", description: "Aceite pagamentos e importe transações via Samsung Pay diretamente no EVA.", logo: logoSamsungPay, bgClass: "bg-white" },
+  { name: "Apple Pay", description: "Compras via Apple Pay aparecem na fatura do cartão real. Conecte seu cartão via Open Finance (Pluggy) para captura automática.", logo: logoApplePay, bgClass: "bg-white" },
+  { name: "Samsung Pay", description: "Compras via Samsung Pay aparecem na fatura do cartão real. Conecte seu cartão via Open Finance (Pluggy) para captura automática.", logo: logoSamsungPay, bgClass: "bg-white" },
 ];
 
 export default function Integracoes() {
