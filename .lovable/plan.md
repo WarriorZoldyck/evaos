@@ -1,70 +1,70 @@
-## Problema
+## Objetivo
 
-A fatura de março/2026 do MASTERCARD BLACK do usuário `espclin@hotmail.com` está com **48 lançamentos / R$ 12.193,12**, mas o correto são **43 lançamentos / R$ 9.521,13**.
+Blindar o cálculo de `payment_date` para Cartão de Crédito (especialmente para séries de parcelas) em todos os pontos do código, evitando que se repita o bug que jogou a parcela 4 de 5 séries para 21/03.
 
-A diferença (5 lançamentos extras, ~R$ 2.672) vem todinha da **parcela 4** de 5 séries de cartão que está caindo em **21/03/2026** em vez de **21/06/2026**:
+## Mudanças
 
-| série | parcela 4 (errada) | valor |
-|---|---|---|
-| Bisturi elétrico (4x) | 21/03 | R$ 799,00 |
-| Espaço Clínico (9x) | 21/03 | R$ 1.412,60 |
-| Aramis (4x) | 21/03 | R$ 167,14 |
-| Eva - Pagamento Otávio (5x) | 21/03 | R$ 190,36 |
-| papelbrink (8x) | 21/03 | R$ 102,90 |
+### 1) Util compartilhado (frontend)
 
-Padrão em todas: p1=21/03, p2=21/04, p3=21/05, **p4=21/03** (errado), p5=21/07 (pula 21/06).
+Criar `src/lib/creditCardDueDate.ts` com duas funções puras (sem dependência de date-fns, datas locais sem timezone):
 
-## Causa raiz
+- `getCreditCardDueDate(competenceISO: string, closingDay: number, dueDay: number): string` — retorna `YYYY-MM-DD` da fatura em que a competência cai.
+- `getInstallmentDueDate(competenceISO: string, closingDay: number, dueDay: number, installmentNumber: number): string` — soma `(installmentNumber - 1)` meses na competência antes de calcular o vencimento.
 
-A migration anterior de reversão (`20260601224831…`) selecionou TODAS as transações com `payment_date = 2026-03-21` do cartão e recalculou `payment_date` a partir do `competence_date` + ciclo do cartão, **sem somar `(installment_number - 1)` meses**. Como todas as parcelas da mesma série compartilham `competence_date` (data da compra), a parcela 4 (que estava corretamente em 21/06) foi reconvertida em 21/03.
-
-## Plano
-
-### 1) Migration corretiva (apenas dados)
-
-Para cada `transactions` com `credit_card_id` não-nulo, `installment_number > 1`, `installments_total > 1` e `series_id` não-nulo:
+Regra aplicada:
 
 ```text
-payment_date_correto = primeiraParcelaPaymentDate + (installment_number - 1) meses
+billMonth = compDay >= closing_day ? compMonth + 1 : compMonth
+dueMonth  = due_day < closing_day  ? billMonth + 1 : billMonth
+payment   = (billYear ajustado, dueMonth, due_day)
 ```
 
-onde `primeiraParcelaPaymentDate` é o `payment_date` da parcela 1 da mesma `series_id`. Aplicar somente quando o valor calculado for ≠ do atual. Escopo restrito ao usuário `b049592f-…` e cartão `3533ea3a-…` para minimizar risco; depois de validado, posso ampliar se necessário.
+### 2) Util compartilhado (edge functions)
 
-Validação pós-migration: verificar nas 5 séries acima que p4 ficou em 21/06 e que a fatura de março volta a ter 43 lançamentos e R$ 9.521,13.
+Criar `supabase/functions/_shared/creditCardDueDate.ts` espelhando o util acima (Deno). Os dois arquivos têm o mesmo comportamento e são pequenos (~30 linhas).
 
-### 2) Blindagem do código (causa raiz da repetição)
+### 3) Aplicar nos pontos críticos
 
-Em qualquer caminho que **edite** `payment_date` em massa para cartão de crédito (whatsapp-webhook, eva-chat, modal de lançamento, futuras migrations de correção), adicionar a regra:
+- `supabase/functions/whatsapp-webhook/index.ts` (~2 lugares: bloco de "choose_account" linhas 908-928 e o bloco de installments linhas 934-984) → trocar o cálculo inline pelo util.
+- `supabase/functions/eva-chat/index.ts` linhas 531-551 e o `map` de installments 581-609 → usar `getInstallmentDueDate` para sobrescrever `detail.due_date` quando há cartão (a IA pode mandar a mesma data para todas as parcelas).
+- `src/components/lancamentos/PaymentMethodFields.tsx` linha 67-98 → trocar o cálculo inline pelo util do frontend.
+- `src/components/lancamentos/TransactionFormModal.tsx` linhas 696-697 (geração de payment_date das parcelas) → quando o método é Cartão de Crédito, usar `getInstallmentDueDate(competence, closing, due, idx+1)` em vez de `addMonths(data.payment_date, idx)`. Mantém comportamento para outras formas de pagamento.
 
-- Se `installments_total > 1` e `series_id` definido → `payment_date = baseDueDate + (installment_number - 1) meses`, onde `baseDueDate` vem do `competence_date` + `closing_day`/`due_day` (parcela 1).
-- Nunca aplicar o cálculo de ciclo isoladamente a uma parcela > 1.
+### 4) Guard rail defensivo
 
-Centralizar isso em um util `getInstallmentPaymentDate(competenceDate, closingDay, dueDay, installmentNumber)` e reusar no webhook e no modal.
+No `whatsapp-webhook` e `eva-chat`, antes de inserir em `ai_pending_transactions`:
 
-### 3) Não mexer no que já está certo
+- Se `credit_card_id` ∧ `installments_total > 1` ∧ `installment_number > 1` → recalcular `payment_date` via util (ignorar valor que a IA mandou).
 
-- Não tocar nas faturas 21/01 e 21/02 (pagas e corretas).
-- Não tocar nas parcelas que não estão em 21/03 incorretamente.
-- Não alterar `competence_date` — só `payment_date`.
+Isso elimina qualquer chance de parcela > 1 ficar no mesmo ciclo da parcela 1.
+
+### 5) Sem migration nesta etapa
+
+Os dados já foram corrigidos. Esta etapa é só código.
 
 ## Detalhes técnicos
 
-```sql
--- pseudo-SQL da migration
-WITH first_inst AS (
-  SELECT series_id, payment_date AS base_pd
-  FROM transactions
-  WHERE credit_card_id = '3533ea3a-…'
-    AND installment_number = 1
-    AND series_id IS NOT NULL
-)
-UPDATE transactions t
-SET payment_date = (fi.base_pd + ((t.installment_number - 1) || ' months')::interval)::date
-FROM first_inst fi
-WHERE t.series_id = fi.series_id
-  AND t.installment_number > 1
-  AND t.credit_card_id = '3533ea3a-…'
-  AND t.payment_date <> (fi.base_pd + ((t.installment_number - 1) || ' months')::interval)::date;
+Assinatura proposta:
+
+```ts
+export function getCreditCardDueDate(
+  competenceISO: string,   // "YYYY-MM-DD"
+  closingDay: number,
+  dueDay: number
+): string;
+
+export function getInstallmentDueDate(
+  competenceISO: string,
+  closingDay: number,
+  dueDay: number,
+  installmentNumber: number   // 1-based
+): string;
 ```
 
-Confirmo a execução com o resumo antes/depois assim que você aprovar.
+Implementação avança `competenceISO` em `installmentNumber - 1` meses (preservando o dia, ou clamp para fim de mês) e delega para `getCreditCardDueDate`.
+
+## Fora do escopo
+
+- Não tocar em lançamentos já criados.
+- Não alterar a UI do modal "Pagar Fatura" (item adiado).
+- Não alterar a regra de ciclo (mantém comportamento atual).

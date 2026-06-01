@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -908,18 +909,7 @@ serve(async (req) => {
         if (matchedCardId) {
           const card = allCcs.find((c: any) => c.id === matchedCardId);
           if (card) {
-            const compDate = new Date(competenceDate + "T12:00:00");
-            const compDay = compDate.getDate();
-            const compMonth = compDate.getMonth();
-            const compYear = compDate.getFullYear();
-            let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
-            let billYear = compYear;
-            let dueMonth = billMonth;
-            let dueYear = billYear;
-            if (card.due_day < card.closing_day) dueMonth = billMonth + 1;
-            if (dueMonth > 11) { dueMonth -= 12; dueYear++; }
-            const dueDate = new Date(dueYear, dueMonth, card.due_day);
-            paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+            paymentDate = getCreditCardDueDate(competenceDate, card.closing_day, card.due_day);
           }
           status = "Pendente";
           matchedBankId = matchedCardBankId;
@@ -939,19 +929,14 @@ serve(async (req) => {
             if (matchedCardId) {
               const card = allCcs.find((c: any) => c.id === matchedCardId);
               if (card) {
-                const baseDate = new Date(competenceDate + "T12:00:00");
-                baseDate.setMonth(baseDate.getMonth() + idx);
-                const compDay = baseDate.getDate();
-                const compMonth = baseDate.getMonth();
-                const compYear = baseDate.getFullYear();
-                let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
-                let billYear = compYear;
-                let dueMonth = billMonth;
-                let dueYear = billYear;
-                if (card.due_day < card.closing_day) dueMonth = billMonth + 1;
-                if (dueMonth > 11) { dueMonth -= 12; dueYear++; }
-                const dueDate = new Date(dueYear, dueMonth, card.due_day);
-                installmentPaymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+                // Always recalculate from competence + (idx) months → never trust
+                // AI-provided due_date for installment > 1.
+                installmentPaymentDate = getInstallmentDueDate(
+                  competenceDate,
+                  card.closing_day,
+                  card.due_day,
+                  idx + 1,
+                );
               }
             }
             computedPaymentDates.push(installmentPaymentDate);
@@ -1181,23 +1166,7 @@ serve(async (req) => {
           );
           const card = ctxCards.find((c: any) => c.id === creditCardId);
           if (card) {
-            const compDate = new Date(competenceDate + "T12:00:00");
-            const compDay = compDate.getDate();
-            const compMonth = compDate.getMonth();
-            const compYear = compDate.getFullYear();
-            let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
-            let billYear = compYear;
-            let dueMonth = billMonth;
-            let dueYear = billYear;
-            if (card.due_day < card.closing_day) {
-              dueMonth = billMonth + 1;
-            }
-            if (dueMonth > 11) {
-              dueMonth -= 12;
-              dueYear++;
-            }
-            const dueDate = new Date(dueYear, dueMonth, card.due_day);
-            paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+            paymentDate = getCreditCardDueDate(competenceDate, card.closing_day, card.due_day);
           }
           status = "Pendente";
         }
@@ -2953,26 +2922,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       if (creditCardId) {
         const card = contextCards.find((c) => c.id === creditCardId);
         if (card) {
-          const compDate = new Date(competenceDate + "T12:00:00");
-          const compDay = compDate.getDate();
-          const compMonth = compDate.getMonth();
-          const compYear = compDate.getFullYear();
-
-          let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
-          let billYear = compYear;
-          let dueMonth = billMonth;
-          let dueYear = billYear;
-          if (card.due_day < card.closing_day) {
-            dueMonth = billMonth + 1;
-          }
-          if (dueMonth > 11) {
-            dueMonth -= 12;
-            dueYear++;
-          }
-
-          const dueDate = new Date(dueYear, dueMonth, card.due_day);
-          const pad = (n: number) => String(n).padStart(2, "0");
-          paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+          paymentDate = getCreditCardDueDate(competenceDate, card.closing_day, card.due_day);
         }
       }
 
@@ -3013,25 +2963,14 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           if (creditCardId) {
             const card = contextCards.find((c) => c.id === creditCardId);
             if (card) {
-              const baseDate = new Date(competenceDate + "T12:00:00");
-              baseDate.setMonth(baseDate.getMonth() + idx);
-              const compDay = baseDate.getDate();
-              const compMonth = baseDate.getMonth();
-              const compYear = baseDate.getFullYear();
-              let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
-              let billYear = compYear;
-              let dueMonth = billMonth;
-              let dueYear = billYear;
-              if (card.due_day < card.closing_day) {
-                dueMonth = billMonth + 1;
-              }
-              if (dueMonth > 11) {
-                dueMonth -= 12;
-                dueYear++;
-              }
-              const dueDate = new Date(dueYear, dueMonth, card.due_day);
-              const pad2 = (n: number) => String(n).padStart(2, "0");
-              installmentPaymentDate = `${dueDate.getFullYear()}-${pad2(dueDate.getMonth() + 1)}-${pad2(dueDate.getDate())}`;
+              // Always recalculate — never trust AI-provided due_date for
+              // installment > 1 (would collapse all parcelas into same cycle).
+              installmentPaymentDate = getInstallmentDueDate(
+                competenceDate,
+                card.closing_day,
+                card.due_day,
+                idx + 1,
+              );
             }
           }
 

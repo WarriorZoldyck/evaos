@@ -8,6 +8,7 @@ import { CalendarIcon, Loader2, User, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ptBR } from "date-fns/locale";
 import { cn, addBusinessDays } from "@/lib/utils";
+import { getInstallmentDueDate } from "@/lib/creditCardDueDate";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany, type Company } from "@/contexts/CompanyContext";
@@ -691,11 +692,29 @@ export function TransactionFormModal({
       const instCustomDays = data.installment_custom_days || 30;
       const installments: TransactionInsert[] = [];
 
+      // If paying with credit card, payment_date for each installment must
+      // follow the card billing cycle (competence + (n-1) months → due date).
+      const installmentCard = data.payment_method === "Cartão de Crédito" && data.credit_card_id
+        ? filteredCreditCards.find((c: any) => c.id === data.credit_card_id) as CreditCard | undefined
+        : undefined;
+
       for (let idx = 0; idx < count; idx++) {
-        const defaultPayDate = instIntervalType === "custom_days"
-          ? addDays(data.payment_date, idx * instCustomDays)
-          : addMonths(data.payment_date, idx);
-        const payDate = customInstallmentDates[idx + 1] ?? defaultPayDate;
+        let payDate: Date;
+        if (installmentCard && installmentCard.closing_day && installmentCard.due_day) {
+          const compISO = format(data.competence_date, "yyyy-MM-dd");
+          const dueISO = getInstallmentDueDate(
+            compISO,
+            installmentCard.closing_day,
+            installmentCard.due_day,
+            idx + 1,
+          );
+          payDate = new Date(dueISO + "T12:00:00");
+        } else {
+          const defaultPayDate = instIntervalType === "custom_days"
+            ? addDays(data.payment_date, idx * instCustomDays)
+            : addMonths(data.payment_date, idx);
+          payDate = customInstallmentDates[idx + 1] ?? defaultPayDate;
+        }
         const compDate = data.competence_date;
         const instNum = idx + 1;
 
