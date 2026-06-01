@@ -929,19 +929,14 @@ serve(async (req) => {
             if (matchedCardId) {
               const card = allCcs.find((c: any) => c.id === matchedCardId);
               if (card) {
-                const baseDate = new Date(competenceDate + "T12:00:00");
-                baseDate.setMonth(baseDate.getMonth() + idx);
-                const compDay = baseDate.getDate();
-                const compMonth = baseDate.getMonth();
-                const compYear = baseDate.getFullYear();
-                let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
-                let billYear = compYear;
-                let dueMonth = billMonth;
-                let dueYear = billYear;
-                if (card.due_day < card.closing_day) dueMonth = billMonth + 1;
-                if (dueMonth > 11) { dueMonth -= 12; dueYear++; }
-                const dueDate = new Date(dueYear, dueMonth, card.due_day);
-                installmentPaymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+                // Always recalculate from competence + (idx) months → never trust
+                // AI-provided due_date for installment > 1.
+                installmentPaymentDate = getInstallmentDueDate(
+                  competenceDate,
+                  card.closing_day,
+                  card.due_day,
+                  idx + 1,
+                );
               }
             }
             computedPaymentDates.push(installmentPaymentDate);
