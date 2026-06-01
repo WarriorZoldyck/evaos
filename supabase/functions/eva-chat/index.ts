@@ -532,17 +532,7 @@ ${historicalPatternsBlock}`;
       if (creditCardId) {
         const card = contextCards.find((c: any) => c.id === creditCardId);
         if (card) {
-          const compDate = new Date(competenceDate + "T12:00:00");
-          const compDay = compDate.getDate();
-          const compMonth = compDate.getMonth();
-          const compYear = compDate.getFullYear();
-          let billMonth = compDay >= card.closing_day ? compMonth + 1 : compMonth;
-          let dueMonth = billMonth;
-          let dueYear = compYear;
-          if (card.due_day < card.closing_day) dueMonth = billMonth + 1;
-          if (dueMonth > 11) { dueMonth -= 12; dueYear++; }
-          const dueDate = new Date(dueYear, dueMonth, card.due_day);
-          paymentDate = `${dueDate.getFullYear()}-${pad(dueDate.getMonth() + 1)}-${pad(dueDate.getDate())}`;
+          paymentDate = getCreditCardDueDate(competenceDate, card.closing_day, card.due_day);
         }
         status = "Pendente";
       } else if (paymentDate > today) {
