@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { MdrInfoCard } from "./MdrInfoCard";
 import type { CardTerminalInfo, CreditCard } from "@/hooks/useTransactions";
+import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 
 interface PaymentMethodFieldsProps {
   form: UseFormReturn<any>;
