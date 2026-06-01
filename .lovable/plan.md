@@ -1,80 +1,70 @@
-# Diagnóstico do problema
+## Problema
 
-Usuário: `espclin@hotmail.com` (id `b049592f-…`)
-Cartão afetado: **MASTERCARD BLACK** (closing_day 14, due_day 21) — id `3533ea3a-…`
+A fatura de março/2026 do MASTERCARD BLACK do usuário `espclin@hotmail.com` está com **48 lançamentos / R$ 12.193,12**, mas o correto são **43 lançamentos / R$ 9.521,13**.
 
-## O que aconteceu
+A diferença (5 lançamentos extras, ~R$ 2.672) vem todinha da **parcela 4** de 5 séries de cartão que está caindo em **21/03/2026** em vez de **21/06/2026**:
 
-A fatura desse cartão deveria ter 3 vencimentos abertos: **21/jan**, **23/fev** e **21/mar**. Hoje (01/jun/2026) o banco do app está assim:
-
-| payment_date | nº lançamentos | total |
+| série | parcela 4 (errada) | valor |
 |---|---|---|
-| 2026-01-21 | 32 | R$ 12.382,35 |
-| 2026-02-23 | 28 | R$ 8.147,51 |
-| 2026-03-21 | 52 | R$ 9.509,45 |
+| Bisturi elétrico (4x) | 21/03 | R$ 799,00 |
+| Espaço Clínico (9x) | 21/03 | R$ 1.412,60 |
+| Aramis (4x) | 21/03 | R$ 167,14 |
+| Eva - Pagamento Otávio (5x) | 21/03 | R$ 190,36 |
+| papelbrink (8x) | 21/03 | R$ 102,90 |
 
-O bug: várias compras com `competence_date` em **maio/junho de 2026** (Netflix, Drogasil, Empório MM, Ramon, Aromas Grill, Bisturi Elétrico parcelado, etc.) foram criadas — pelo WhatsApp e pelo formulário — com `payment_date = 2026-03-21`. Isso é o **vencimento passado** do mesmo mês de fechamento; o cálculo do ciclo está pegando o `due_day` do mês corrente em vez de avançar para o próximo ciclo quando o mês já fechou. Resultado: compras novas caíram na "fatura de março" que já estava aberta.
+Padrão em todas: p1=21/03, p2=21/04, p3=21/05, **p4=21/03** (errado), p5=21/07 (pula 21/06).
 
-Quando o usuário abriu **Pagar Fatura → Março/2026**, o modal listou todos os 52 lançamentos com `payment_date` em março (≈ R$ 9.509,45, mas somando com receitas/parcelas o valor exibido bateu próximo dos R$ 19 mil que ele descreveu), marcou **todos como Pago**, gravou `bank_account_id` = conta escolhida e `payment_date` = data informada por ele. Por isso "jogou pra março" e com valor errado: o saldo já vinha contaminado.
+## Causa raiz
 
-Nenhum lançamento extra de "Saldo anterior" ou "Crédito excedente" foi criado (já verificado).
+A migration anterior de reversão (`20260601224831…`) selecionou TODAS as transações com `payment_date = 2026-03-21` do cartão e recalculou `payment_date` a partir do `competence_date` + ciclo do cartão, **sem somar `(installment_number - 1)` meses**. Como todas as parcelas da mesma série compartilham `competence_date` (data da compra), a parcela 4 (que estava corretamente em 21/06) foi reconvertida em 21/03.
 
-# Plano de ação
+## Plano
 
-## 1) Reverter o pagamento da fatura (para o usuário poder testar de novo)
+### 1) Migration corretiva (apenas dados)
 
-Operação de dados (via script com service role, não migration), em duas partes:
+Para cada `transactions` com `credit_card_id` não-nulo, `installment_number > 1`, `installments_total > 1` e `series_id` não-nulo:
 
-**a. Reverter status dos lançamentos do cartão MASTERCARD BLACK que foram marcados como Pago pelo bill-payment:**
-- Filtrar `transactions` onde `user_id = b049592f…` e `credit_card_id = 3533ea3a…` e `status = 'Pago'`.
-- Para cada um: setar `status = 'Pendente'`, `bank_account_id = NULL`, `liquidation_notes = NULL`.
-- Recalcular `payment_date` correto com base em `competence_date` + ciclo do cartão (closing 14 / due 21). Regra: se `competence_date.day <= 14` → vence dia 21 do **mesmo mês**; senão vence dia 21 do **mês seguinte** (avançando ano quando dezembro).
-- Aplicar a mesma recálculo aos lançamentos atualmente `Pendente` que tenham `payment_date` errado (todos os com `payment_date = 2026-03-21` mas `competence_date >= 2026-03-15`, e os com payment_date de meses futuros que também estão errados, como as parcelas do Bisturi Elétrico).
+```text
+payment_date_correto = primeiraParcelaPaymentDate + (installment_number - 1) meses
+```
 
-**b. Validar resultado** mostrando antes/depois por ciclo de vencimento e total de lançamentos movidos.
+onde `primeiraParcelaPaymentDate` é o `payment_date` da parcela 1 da mesma `series_id`. Aplicar somente quando o valor calculado for ≠ do atual. Escopo restrito ao usuário `b049592f-…` e cartão `3533ea3a-…` para minimizar risco; depois de validado, posso ampliar se necessário.
 
-Vou listar no chat o resumo do que será alterado **antes** de executar, para confirmação.
+Validação pós-migration: verificar nas 5 séries acima que p4 ficou em 21/06 e que a fatura de março volta a ter 43 lançamentos e R$ 9.521,13.
 
-## 2) Corrigir o bug de cálculo do `payment_date` (causa raiz)
+### 2) Blindagem do código (causa raiz da repetição)
 
-Origem dos lançamentos errados:
-- `supabase/functions/whatsapp-webhook/index.ts` — fluxo de criação de lançamento via WhatsApp, ao resolver `credit_card_id` calcula o vencimento da fatura. Está usando o `due_day` do mês atual sem checar se o ciclo já fechou (referência da memória `credit-card-cycle`).
-- Possivelmente o mesmo cálculo em `src/components/lancamentos/TransactionFormModal.tsx` / `PaymentMethodFields.tsx` ou util compartilhado.
+Em qualquer caminho que **edite** `payment_date` em massa para cartão de crédito (whatsapp-webhook, eva-chat, modal de lançamento, futuras migrations de correção), adicionar a regra:
 
-Ação:
-- Centralizar (ou auditar) uma função única `getCreditCardDueDate(competenceDate, closingDay, dueDay)` com a regra:
-  - se `competenceDate <= dia de fechamento do mês de competência` → vence no `dueDay` do **mesmo mês** (se `dueDay > closingDay`) ou do **mês seguinte** (se `dueDay <= closingDay`).
-  - se `competenceDate > dia de fechamento` → vence no `dueDay` do **próximo ciclo** (mês seguinte ao fechamento, com rollover de ano).
-- Aplicar essa função no webhook do WhatsApp, no modal de lançamento e em qualquer outro local que monte `payment_date` para Cartão de Crédito.
-- Adicionar guarda defensiva: nunca aceitar `payment_date < competence_date` para método "Cartão de Crédito" — força recálculo.
+- Se `installments_total > 1` e `series_id` definido → `payment_date = baseDueDate + (installment_number - 1) meses`, onde `baseDueDate` vem do `competence_date` + `closing_day`/`due_day` (parcela 1).
+- Nunca aplicar o cálculo de ciclo isoladamente a uma parcela > 1.
 
-## 3) Reforço no modal "Pagar Fatura"
+Centralizar isso em um util `getInstallmentPaymentDate(competenceDate, closingDay, dueDay, installmentNumber)` e reusar no webhook e no modal.
 
-Para impedir que esse tipo de contaminação repita o estrago:
-- Mostrar no topo do review um alerta se houver lançamentos cuja `competence_date` é **posterior** ao `closing_day` do mês da fatura sendo visualizada ("Atenção: X lançamentos parecem fora deste ciclo. Revise antes de pagar.").
-- Opcional: bloquear seleção desses lançamentos no pagamento da fatura selecionada.
+### 3) Não mexer no que já está certo
 
-## 4) Validação
-
-- Após a correção, repetir o teste com o usuário: criar uma compra nova via WhatsApp e via formulário, conferir que `payment_date` cai no ciclo certo (ex.: compra 01/jun com closing 14 / due 21 → vence 21/jun).
-- Abrir a tela "Pagar Fatura" e confirmar que cada ciclo lista apenas os lançamentos esperados.
+- Não tocar nas faturas 21/01 e 21/02 (pagas e corretas).
+- Não tocar nas parcelas que não estão em 21/03 incorretamente.
+- Não alterar `competence_date` — só `payment_date`.
 
 ## Detalhes técnicos
 
-```text
-Regra de payment_date para Cartão de Crédito
-─────────────────────────────────────────────
-inputs : competence_date, closing_day, due_day
-passo 1: closingDate = mesmo mês de competence_date, dia = closing_day
-passo 2: if competence_date.day <= closing_day
-            cycleClosing = closingDate                  (fatura desse mês)
-         else
-            cycleClosing = closingDate + 1 mês          (fatura próxima)
-passo 3: dueMonth = (due_day > closing_day)
-            ? mesmo mês de cycleClosing
-            : mês seguinte a cycleClosing
-passo 4: payment_date = data(dueMonth.ano, dueMonth.mês, due_day)
+```sql
+-- pseudo-SQL da migration
+WITH first_inst AS (
+  SELECT series_id, payment_date AS base_pd
+  FROM transactions
+  WHERE credit_card_id = '3533ea3a-…'
+    AND installment_number = 1
+    AND series_id IS NOT NULL
+)
+UPDATE transactions t
+SET payment_date = (fi.base_pd + ((t.installment_number - 1) || ' months')::interval)::date
+FROM first_inst fi
+WHERE t.series_id = fi.series_id
+  AND t.installment_number > 1
+  AND t.credit_card_id = '3533ea3a-…'
+  AND t.payment_date <> (fi.base_pd + ((t.installment_number - 1) || ' months')::interval)::date;
 ```
 
-## Dependências externas
-Nenhuma — toda a correção é interna (dados + código).
+Confirmo a execução com o resumo antes/depois assim que você aprovar.
