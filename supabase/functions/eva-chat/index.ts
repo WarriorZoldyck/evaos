@@ -569,35 +569,53 @@ ${historicalPatternsBlock}`;
 
       if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
         const seriesId = crypto.randomUUID();
-        const pendingInstallments = installmentDetails.map((detail: any, idx: number) => ({
-          user_id: userId,
-          description: `${aiParsed.description || "Lançamento via EVA"} (${idx + 1}/${installmentCount})`,
-          amount: Math.abs(detail.amount || 0),
-          type: txType,
-          category: matchedCategory.id,
-          subcategory: subcategoryValue,
-          competence_date: competenceDate,
-          payment_date: detail.due_date || paymentDate,
-          transaction_status: (detail.due_date && detail.due_date <= today) ? "Pago" : "Pendente",
-          bank_account_id: bankAccountId,
-          wallet_id: walletId,
-          credit_card_id: creditCardId,
-          company_id: companyId,
-          payment_method: paymentMethod,
-          supplier_id: supplierId,
-          client_id: clientId,
-          contact_name: contactName,
-          notes: aiParsed.notes || null,
-          barcode: detail.barcode || null,
-          series_id: seriesId,
-          installment_number: idx + 1,
-          installments_total: installmentCount,
-          source: "in_app",
-          status: "pending",
-          fingerprint: generateFingerprint(aiParsed.description || "", detail.amount || 0, detail.due_date || paymentDate),
-          original_message: originalMessage,
-          ai_response_message: aiParsed.friendly_message || null,
-        }));
+        const installmentCard = creditCardId
+          ? contextCards.find((c: any) => c.id === creditCardId)
+          : null;
+        const pendingInstallments = installmentDetails.map((detail: any, idx: number) => {
+          // If paying with credit card, ALWAYS recalculate per-installment
+          // payment_date from competence + (idx) months — ignore AI's due_date,
+          // which often collapses all parcelas into the same cycle.
+          const installmentPaymentDate = installmentCard
+            ? getInstallmentDueDate(
+                competenceDate,
+                installmentCard.closing_day,
+                installmentCard.due_day,
+                idx + 1,
+              )
+            : (detail.due_date || paymentDate);
+          return {
+            user_id: userId,
+            description: `${aiParsed.description || "Lançamento via EVA"} (${idx + 1}/${installmentCount})`,
+            amount: Math.abs(detail.amount || 0),
+            type: txType,
+            category: matchedCategory.id,
+            subcategory: subcategoryValue,
+            competence_date: competenceDate,
+            payment_date: installmentPaymentDate,
+            transaction_status: installmentCard
+              ? "Pendente"
+              : ((detail.due_date && detail.due_date <= today) ? "Pago" : "Pendente"),
+            bank_account_id: bankAccountId,
+            wallet_id: walletId,
+            credit_card_id: creditCardId,
+            company_id: companyId,
+            payment_method: paymentMethod,
+            supplier_id: supplierId,
+            client_id: clientId,
+            contact_name: contactName,
+            notes: aiParsed.notes || null,
+            barcode: detail.barcode || null,
+            series_id: seriesId,
+            installment_number: idx + 1,
+            installments_total: installmentCount,
+            source: "in_app",
+            status: "pending",
+            fingerprint: generateFingerprint(aiParsed.description || "", detail.amount || 0, installmentPaymentDate),
+            original_message: originalMessage,
+            ai_response_message: aiParsed.friendly_message || null,
+          };
+        });
 
         const { error: insertErr } = await supabase.from("ai_pending_transactions").insert(pendingInstallments);
         if (insertErr) {
