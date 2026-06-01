@@ -242,7 +242,7 @@ export default function Integracoes() {
           </CardContent>
         </Card>
 
-        {/* Itaú — API nativa */}
+        {/* Itaú — API nativa (Beta) */}
         <Card className="relative overflow-hidden">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -250,17 +250,18 @@ export default function Integracoes() {
                 <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center overflow-hidden">
                   <img src={logoItau} alt="Itaú" className="h-8 w-8 object-contain" />
                 </div>
-                <CardTitle className="text-base">Itaú</CardTitle>
+                <CardTitle className="text-base">Itaú <span className="text-[10px] font-normal text-amber-500 ml-1">Beta</span></CardTitle>
               </div>
-              <Badge className={hasItau ? "bg-green-500/15 text-green-500 border-0 text-xs" : "bg-primary/10 text-primary border-0 text-xs"}>
-                {hasItau ? "Conectado" : "Disponível"}
+              <Badge className={hasItau ? "bg-green-500/15 text-green-500 border-0 text-xs" : "bg-amber-500/15 text-amber-500 border-0 text-xs"}>
+                {hasItau ? "Conectado" : "Aguardando certificado"}
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Integração nativa via API do Itaú (Open Finance). Requer client_id, client_secret e certificado mTLS para produção.
+              Integração direta via Open Finance do Itaú exige certificado mTLS válido emitido no Developer Portal. Enquanto isso, recomendamos conectar o Itaú via <b>Pluggy</b> (acima) — funciona em produção hoje.
             </p>
+
             {hasItau ? (
               <div className="mt-4 space-y-2">
                 {itauIntegrations.map((i) => {
