@@ -68,11 +68,13 @@ export function ItauConnectModal({ open, onClose }: Props) {
         <div className="space-y-4">
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-            <div>
-              Para <b>produção</b> o Itaú exige certificado mTLS (.pem) emitido no Developer Portal.
-              Sem certificado, só funciona em <b>sandbox</b>.
+            <div className="space-y-1">
+              <div><b>Integração em beta.</b> O Itaú exige certificado <b>mTLS</b> (.pem/.pfx) emitido no Developer Portal para produção. Nosso servidor está sendo preparado para esse handshake.</div>
+              <div>Hoje: <b>sandbox</b> funciona para validar credenciais, mas a sincronização de extrato real só conclui quando o mTLS estiver ativo.</div>
+              <div>Para já capturar movimentações do Itaú em produção, use <b>Pluggy</b> (Open Finance multibanco) na tela de Integrações.</div>
             </div>
           </div>
+
 
           <div className="space-y-2">
             <Label>Ambiente</Label>

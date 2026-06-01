@@ -1,41 +1,50 @@
-
 ## Objetivo
+Fazer a primeira integração bancária funcionar de ponta a ponta, priorizando Itaú, com fallback claro via Pluggy se o certificado Itaú continuar bloqueando o fluxo.
 
-Manter os cards de **Apple Pay** e **Samsung Pay** na tela de Integrações, mas com texto honesto que explica a limitação técnica e orienta o usuário a usar **Open Finance (Pluggy/Itaú)** para capturar compras feitas via Apple Pay / Samsung Pay automaticamente.
+## Próximos passos recomendados
 
-## Contexto técnico (por que o texto precisa mudar)
+1. **Diagnóstico do certificado Itaú**
+   - Revisar o fluxo atual de conexão Itaú, edge functions e tabela `itau_integrations`.
+   - Identificar exatamente onde a sincronização para: upload/salvamento do certificado, autenticação no Itaú, token, consulta de extrato ou gravação dos lançamentos.
+   - Validar se falta secret/configuração do Itaú ou se o certificado precisa estar em formato específico, como `.pfx/.p12`, senha e mTLS.
 
-Apple e Samsung **não expõem APIs públicas** para ler histórico de transações da carteira. Toda compra feita via Apple Pay / Samsung Pay passa pelo **cartão de crédito/débito real** cadastrado na carteira. Para capturar essas compras automaticamente no EVA, o usuário deve conectar o **cartão real** via Open Finance (Pluggy ou Itaú — ambos já integrados no projeto).
+2. **Fechar o caminho técnico do Itaú**
+   - Ajustar o backend para usar o certificado corretamente na chamada à API Itaú.
+   - Melhorar mensagens de erro para dizer se o problema é certificado inválido, senha errada, credencial ausente, permissão da API ou ausência de contas retornadas.
+   - Garantir que a integração grave status, última sincronização e erro legível para aparecer na tela.
 
-Prometer "sincronização do Apple Pay" induziria o usuário ao erro.
+3. **Sincronização de conta até lançamentos**
+   - Confirmar que a conta Itaú conectada cria/vincula uma `bank_account`.
+   - Buscar movimentações do Itaú por período seguro.
+   - Criar lançamentos em `transactions` sem duplicar dados, preservando o contexto Pessoal/Empresa.
+   - Atualizar saldo/última sincronização ao fim do processo.
 
-## Mudanças
+4. **Fallback pragmático: Pluggy primeiro, Itaú direto depois**
+   - Como o projeto já tem Pluggy configurado com `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET`, podemos usar Pluggy como caminho mais rápido para Open Finance multibanco.
+   - O Itaú direto fica como integração premium/específica quando o certificado estiver 100% válido.
+   - Na tela de Integrações, deixar claro qual caminho está pronto para produção e qual depende do certificado.
 
-### 1. `src/pages/Integracoes.tsx`
+5. **Teste de ponta a ponta**
+   - Testar com uma conta real de baixo risco.
+   - Confirmar no app: conectar, sincronizar, ver integração ativa, ver lançamentos criados e abrir conciliação bancária.
+   - Registrar erros técnicos em logs, mas mostrar mensagens simples ao usuário.
 
-Atualizar as duas entradas adicionadas em `otherBanks`:
+## O que eu implementaria agora
 
-- **Apple Pay**
-  - `description`: "Compras feitas via Apple Pay aparecem na fatura do cartão real. Conecte seu cartão via Open Finance (Pluggy) para captura automática."
-  - Manter como card "Em breve" (sem ação funcional de conectar diretamente)
+- Auditar as edge functions Itaú existentes.
+- Corrigir o tratamento do certificado e erros.
+- Melhorar o fluxo visual do modal Itaú para orientar sobre certificado/senha.
+- Garantir que `itau-sync` finalize criando lançamentos reais.
+- Se o bloqueio for externo ao Itaú/certificado, reforçar Pluggy como fluxo principal temporário.
 
-- **Samsung Pay**
-  - `description`: "Compras feitas via Samsung Pay aparecem na fatura do cartão real. Conecte seu cartão via Open Finance (Pluggy) para captura automática."
-  - Manter como card "Em breve"
+## Dependência externa
 
-### 2. Sem mudanças de backend
+Para finalizar Itaú direto, precisamos obrigatoriamente de:
 
-- Nenhuma migration
-- Nenhuma edge function nova
-- Nenhuma tabela nova
-- Nenhum secret novo
+- certificado válido exigido pelo Itaú/Open Finance;
+- senha do certificado, se aplicável;
+- credenciais/client ID do app Itaú;
+- confirmação de que a API habilitada no portal Itaú permite consulta de contas/extratos;
+- ambiente correto: sandbox ou produção.
 
-## O que NÃO faremos (e por quê)
-
-- ❌ **Não** vamos implementar "sincronização do Apple Pay" — Apple não oferece API para isso
-- ❌ **Não** vamos remover os cards — o usuário quer manter visibilidade da marca
-- ❌ **Não** vamos criar um fluxo de OAuth/Wallet — não existe esse fluxo do lado da Apple/Samsung para terceiros
-
-## Próximos passos sugeridos (fora deste plano)
-
-Se o objetivo é **realmente capturar compras automaticamente**, o caminho é reforçar a UX do **Pluggy** (Open Finance) — que já está implementado em `src/components/integracoes/PluggyConnectModal.tsx` e cobre exatamente esse caso quando o cartão real está conectado.
+Sem isso, conseguimos melhorar código, UX e logs, mas não dá para garantir sincronização real até o fim.
