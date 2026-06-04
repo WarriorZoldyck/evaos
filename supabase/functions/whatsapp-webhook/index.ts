@@ -2081,6 +2081,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // 7. Execute action based on intent
     if (aiParsed.intent === "lancamento") {
+      const viewerBlock = denyIfViewer(); if (viewerBlock) return viewerBlock;
       // SAFEGUARD: If media was sent and amount is 0, ask the user for the value
       if (hasMedia && (!aiParsed.amount || aiParsed.amount <= 0)) {
         console.warn("AMOUNT ZERO WITH MEDIA — asking user for value", { description: aiParsed.description, hasImage, hasDocument });
