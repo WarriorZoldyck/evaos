@@ -1486,10 +1486,10 @@ serve(async (req) => {
     ]);
 
     const categories = categoriesRes.data || [];
-    const accounts = accountsRes.data || [];
-    const wallets = walletsRes.data || [];
-    const companies = companiesRes.data || [];
-    const creditCards = creditCardsRes.data || [];
+    const accounts = scopeFilter(accountsRes.data, "bank_account");
+    const wallets = scopeFilter(walletsRes.data, "wallet");
+    const companies = scopeFilter(companiesRes.data, "company");
+    const creditCards = scopeFilter(creditCardsRes.data, "credit_card");
     const suppliersList = suppliersRes.data || [];
     const clientsList = clientsRes.data || [];
     const recentPending = recentPendingRes.data || [];
