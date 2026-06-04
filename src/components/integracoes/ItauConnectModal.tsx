@@ -62,16 +62,17 @@ export function ItauConnectModal({ open, onClose }: Props) {
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Conectar conta Itaú (API Open Finance)</DialogTitle>
+          <DialogTitle>Conectar conta Itaú (API B2B — apenas PJ)</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs flex gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <div><b>Integração em beta.</b> O Itaú exige certificado <b>mTLS</b> (.pem/.pfx) emitido no Developer Portal para produção. Nosso servidor está sendo preparado para esse handshake.</div>
-              <div>Hoje: <b>sandbox</b> funciona para validar credenciais, mas a sincronização de extrato real só conclui quando o mTLS estiver ativo.</div>
-              <div>Para já capturar movimentações do Itaú em produção, use <b>Pluggy</b> (Open Finance multibanco) na tela de Integrações.</div>
+            <div className="space-y-2">
+              <div><b>Esta integração é exclusiva para contas PJ</b> que contrataram o pacote de API no Itaú (Cash Management / Open Finance B2B).</div>
+              <div>Pré-requisitos: conta PJ Itaú ativa, pacote API contratado no gerente, e certificado mTLS (<code>.crt</code> + <code>.key</code>) gerado no <a href="https://developer.itau.com.br/" target="_blank" rel="noopener noreferrer" className="underline">Developer Portal do Itaú</a> com <code>client_id</code> e <code>client_secret</code>.</div>
+              <div><b>Pessoa Física?</b> O Itaú não libera API direta para PF. Use <b>Lançamentos → Importar extrato</b> (OFX/PDF baixado do app Itaú) — é grátis e funciona hoje.</div>
+              <div className="text-amber-600 dark:text-amber-400"><b>Status do handshake mTLS:</b> em desenvolvimento. Credenciais ficam salvas e a sincronização será ativada assim que o proxy mTLS estiver no ar.</div>
             </div>
           </div>
 
