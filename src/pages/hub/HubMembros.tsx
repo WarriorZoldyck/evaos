@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { UpgradeGateModal } from "@/components/subscription/UpgradeGate";
 import { useWorkspaceMembers, type WorkspaceMember, type Workspace } from "@/hooks/useWorkspaceMembers";
 import { MemberPermissionsModal } from "@/components/hub/MemberPermissionsModal";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -19,7 +21,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Users, UserPlus, User, Shield, Eye, Edit3,
   Pause, Play, Loader2, UserCheck, UserX, Folder, Trash2, KeyRound,
+  Building2, Wallet, CreditCard, Landmark, Smartphone,
 } from "lucide-react";
+
+type ResourceType = "company" | "bank_account" | "credit_card" | "card_terminal" | "wallet";
+interface ResourceOption { id: string; name: string; type: ResourceType }
+
+const RES_META: Record<ResourceType, { label: string; icon: typeof Shield }> = {
+  company: { label: "Empresas", icon: Building2 },
+  bank_account: { label: "Contas Bancárias", icon: Landmark },
+  credit_card: { label: "Cartões de Crédito", icon: CreditCard },
+  card_terminal: { label: "Maquininhas", icon: Smartphone },
+  wallet: { label: "Carteiras", icon: Wallet },
+};
+const RES_ORDER: ResourceType[] = ["company", "bank_account", "credit_card", "card_terminal", "wallet"];
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
   admin: { label: "Administrador", icon: Shield, color: "text-amber-500 bg-amber-500/10" },
@@ -260,32 +275,101 @@ function MemberCard({
   );
 }
 
-function InviteMemberModal({ open, onClose, onCreate }: {
+function InviteMemberModal({ open, onClose, onCreate, onCreated }: {
   open: boolean;
   onClose: () => void;
   onCreate: (name: string, email: string, password: string | undefined, role: string) => Promise<any>;
+  onCreated?: () => void;
 }) {
+  const { user } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("viewer");
   const [saving, setSaving] = useState(false);
+  const [resources, setResources] = useState<ResourceOption[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loadingRes, setLoadingRes] = useState(false);
+
+  useEffect(() => {
+    if (!open || !user) return;
+    setLoadingRes(true);
+    (async () => {
+      const [c, b, cc, ct, w] = await Promise.all([
+        supabase.from("companies").select("id, name").eq("user_id", user.id),
+        supabase.from("bank_accounts").select("id, name").eq("user_id", user.id),
+        supabase.from("credit_cards").select("id, name").eq("user_id", user.id),
+        supabase.from("card_terminals").select("id, name").eq("user_id", user.id),
+        supabase.from("wallets").select("id, name").eq("user_id", user.id),
+      ]);
+      const all: ResourceOption[] = [
+        ...((c.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "company" as const })),
+        ...((b.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "bank_account" as const })),
+        ...((cc.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "credit_card" as const })),
+        ...((ct.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "card_terminal" as const })),
+        ...((w.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "wallet" as const })),
+      ];
+      setResources(all);
+      setLoadingRes(false);
+    })();
+  }, [open, user]);
+
+  const toggle = (type: ResourceType, id: string) => {
+    const key = `${type}:${id}`;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  const reset = () => {
+    setName(""); setEmail(""); setPassword(""); setRole("viewer"); setSelected(new Set());
+  };
 
   const handleSubmit = async () => {
-    if (!name || !email) return;
+    if (!name || !email || !user) return;
     setSaving(true);
     try {
-      await onCreate(name, email, password || undefined, role);
-      setName(""); setEmail(""); setPassword(""); setRole("viewer");
+      const res = await onCreate(name, email, password || undefined, role);
+      const newUserId: string | undefined = res?.member?.id;
+
+      if (newUserId && selected.size > 0) {
+        // Find workspace_members.id for this newly created/invited member
+        const { data: wm } = await supabase
+          .from("workspace_members")
+          .select("id")
+          .eq("owner_id", user.id)
+          .eq("member_user_id", newUserId)
+          .maybeSingle();
+        if (wm?.id) {
+          const rows = Array.from(selected).map((k) => {
+            const [resource_type, resource_id] = k.split(":");
+            return { workspace_member_id: wm.id, resource_type, resource_id };
+          });
+          const { error: permErr } = await supabase
+            .from("workspace_member_permissions")
+            .insert(rows);
+          if (permErr) toast.error("Membro criado, mas falhou ao salvar acesso: " + permErr.message);
+          else toast.success(`Acesso configurado para ${rows.length} recurso(s).`);
+        }
+      }
+
+      reset();
+      onCreated?.();
       onClose();
-    } catch {} finally { setSaving(false); }
+    } catch {
+      // toast already handled in onCreate
+    } finally { setSaving(false); }
   };
+
+  const hasAnySelection = selected.size > 0;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[85vh] overflow-hidden flex flex-col">
         <DialogHeader><DialogTitle>Convidar Membro</DialogTitle></DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 pr-1">
           <div className="space-y-2">
             <Label>Nome</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" />
@@ -311,6 +395,62 @@ function InviteMemberModal({ open, onClose, onCreate }: {
                 <SelectItem value="admin">Administrador — Acesso total</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-border/40">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-1.5">
+                <Shield className="h-3.5 w-3.5 text-primary" />
+                Acesso a recursos <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+              </Label>
+              {hasAnySelection && (
+                <Button type="button" variant="ghost" size="sm" className="h-6 text-[11px]" onClick={() => setSelected(new Set())}>
+                  Limpar
+                </Button>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {hasAnySelection
+                ? "O membro verá APENAS os recursos marcados."
+                : "Sem nada marcado, o membro verá TUDO da sua conta. Você pode ajustar depois."}
+            </p>
+            {loadingRes ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
+            ) : resources.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">Nenhum recurso cadastrado ainda.</p>
+            ) : (
+              <div className="space-y-3 max-h-[220px] overflow-y-auto rounded-md border border-border/40 p-2">
+                {RES_ORDER.map((type) => {
+                  const items = resources.filter((r) => r.type === type);
+                  if (items.length === 0) return null;
+                  const meta = RES_META[type];
+                  const Icon = meta.icon;
+                  return (
+                    <div key={type} className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Icon className="h-3.5 w-3.5 text-primary" />
+                        <p className="text-xs font-semibold text-foreground">{meta.label}</p>
+                        <Badge variant="outline" className="text-[9px] h-3.5 px-1">{items.length}</Badge>
+                      </div>
+                      <div className="space-y-0.5 pl-5">
+                        {items.map((r) => {
+                          const key = `${type}:${r.id}`;
+                          return (
+                            <label key={r.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1">
+                              <Checkbox
+                                checked={selected.has(key)}
+                                onCheckedChange={() => toggle(type, r.id)}
+                              />
+                              <span className="flex-1 truncate">{r.name}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter>
