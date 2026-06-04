@@ -4027,6 +4027,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // === GERENCIAR CATEGORIA ===
     if (aiParsed.intent === "gerenciar_categoria") {
+      const viewerBlock = denyIfViewer(); if (viewerBlock) return viewerBlock;
       const companyId = resolveContext(aiParsed.context);
       const action = aiParsed.action;
 
