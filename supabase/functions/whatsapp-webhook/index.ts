@@ -2567,6 +2567,68 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const userFullName = profile?.full_name || null;
       const docMerchant = resolveDocMerchant(documentPartyExtraction, txType, userFullName);
       const merchantSearchName = normalizeText(docMerchant || aiParsed.contact_name || contactName || "");
+
+      // --- AUTO-RESOLVE / AUTO-CREATE supplier or client by name ---
+      // If the AI didn't return a valid supplier_id/client_id, try fuzzy-match the
+      // contact name (or document merchant) against existing records. If still no
+      // match and we have a meaningful name, auto-create the entity so the
+      // transaction gets a proper supplier_id/client_id (not just contact_name).
+      try {
+        const canonicalName = (docMerchant || aiParsed.contact_name || contactName || "").trim();
+        if (canonicalName && canonicalName.length >= 2) {
+          const norm = normalizeText(canonicalName);
+          if (txType === "despesa" && !supplierId) {
+            const fuzzy = suppliersList.find((s: any) => {
+              const sn = normalizeText(s.name);
+              return sn === norm || sn.includes(norm) || norm.includes(sn);
+            });
+            if (fuzzy) {
+              supplierId = fuzzy.id;
+              contactName = contactName || fuzzy.name;
+            } else {
+              const { data: created, error: cErr } = await supabase
+                .from("suppliers")
+                .insert({ user_id: userId, name: canonicalName })
+                .select("id, name")
+                .single();
+              if (!cErr && created) {
+                supplierId = created.id;
+                contactName = contactName || created.name;
+                suppliersList.push(created);
+                console.log(`AUTO-CREATED supplier "${canonicalName}" -> ${created.id}`);
+              } else if (cErr) {
+                console.error("Auto-create supplier failed:", cErr.message);
+              }
+            }
+          } else if (txType === "receita" && !clientId) {
+            const fuzzy = clientsList.find((c: any) => {
+              const cn = normalizeText(c.name);
+              return cn === norm || cn.includes(norm) || norm.includes(cn);
+            });
+            if (fuzzy) {
+              clientId = fuzzy.id;
+              contactName = contactName || fuzzy.name;
+            } else {
+              const { data: created, error: cErr } = await supabase
+                .from("clients")
+                .insert({ user_id: userId, name: canonicalName })
+                .select("id, name")
+                .single();
+              if (!cErr && created) {
+                clientId = created.id;
+                contactName = contactName || created.name;
+                clientsList.push(created);
+                console.log(`AUTO-CREATED client "${canonicalName}" -> ${created.id}`);
+              } else if (cErr) {
+                console.error("Auto-create client failed:", cErr.message);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Auto-resolve supplier/client error:", e);
+      }
+
       let mergedHistoricalTransactions = [...historicalTransactions];
       
       if (merchantSearchName && merchantSearchName.length >= 4) {

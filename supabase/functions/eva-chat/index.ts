@@ -524,6 +524,57 @@ ${historicalPatternsBlock}`;
         if (c) { clientId = c.id; contactName = contactName || c.name; }
       }
 
+      // Auto-resolve / auto-create supplier or client by name
+      try {
+        const canonicalName = (aiParsed.contact_name || contactName || "").trim();
+        if (canonicalName && canonicalName.length >= 2) {
+          const norm = normalizeText(canonicalName);
+          if (txType === "despesa" && !supplierId) {
+            const fuzzy = suppliersList.find((s: any) => {
+              const sn = normalizeText(s.name);
+              return sn === norm || sn.includes(norm) || norm.includes(sn);
+            });
+            if (fuzzy) {
+              supplierId = fuzzy.id;
+              contactName = contactName || fuzzy.name;
+            } else {
+              const { data: created } = await supabase
+                .from("suppliers")
+                .insert({ user_id: userId, name: canonicalName })
+                .select("id, name")
+                .single();
+              if (created) {
+                supplierId = created.id;
+                contactName = contactName || created.name;
+                suppliersList.push(created);
+              }
+            }
+          } else if (txType === "receita" && !clientId) {
+            const fuzzy = clientsList.find((c: any) => {
+              const cn = normalizeText(c.name);
+              return cn === norm || cn.includes(norm) || norm.includes(cn);
+            });
+            if (fuzzy) {
+              clientId = fuzzy.id;
+              contactName = contactName || fuzzy.name;
+            } else {
+              const { data: created } = await supabase
+                .from("clients")
+                .insert({ user_id: userId, name: canonicalName })
+                .select("id, name")
+                .single();
+              if (created) {
+                clientId = created.id;
+                contactName = contactName || created.name;
+                clientsList.push(created);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Auto-resolve supplier/client error:", e);
+      }
+
       // Dates and status
       const competenceDate = aiParsed.competence_date || aiParsed.date || today;
       let paymentDate = aiParsed.payment_date || aiParsed.date || today;
