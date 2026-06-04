@@ -3351,6 +3351,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // === EDITAR LANÇAMENTO ===
     if (aiParsed.intent === "editar_lancamento") {
+      const viewerBlock = denyIfViewer(); if (viewerBlock) return viewerBlock;
       console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed));
       let transactionId = aiParsed.transaction_id;
       const field = aiParsed.field;
