@@ -1586,6 +1586,7 @@ export type Database = {
           competence_date: string
           contact_name: string | null
           created_at: string | null
+          created_by_user_id: string | null
           credit_card_id: string | null
           description: string
           external_id: string | null
@@ -1624,6 +1625,7 @@ export type Database = {
           competence_date: string
           contact_name?: string | null
           created_at?: string | null
+          created_by_user_id?: string | null
           credit_card_id?: string | null
           description: string
           external_id?: string | null
@@ -1662,6 +1664,7 @@ export type Database = {
           competence_date?: string
           contact_name?: string | null
           created_at?: string | null
+          created_by_user_id?: string | null
           credit_card_id?: string | null
           description?: string
           external_id?: string | null
@@ -1781,6 +1784,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_active_owner: {
+        Row: {
+          active_owner_id: string
+          member_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          active_owner_id: string
+          member_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          active_owner_id?: string
+          member_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       whatsapp_messages: {
         Row: {
