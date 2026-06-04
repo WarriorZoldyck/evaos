@@ -660,7 +660,170 @@ serve(async (req) => {
 
     console.log("Matched profile:", profile.id.slice(0, 8), "| Stored number:", profile.whatsapp_number);
 
-    const userId = profile.id;
+    let userId = profile.id;
+    const callerUserId = profile.id;
+
+    // ============================================================
+    // HUB CONTEXT RESOLUTION
+    // If the caller is a member of one or more hubs, decide which
+    // owner workspace is active and switch userId accordingly so all
+    // downstream queries/inserts hit the owner's data (respecting role
+    // and resource scope).
+    // ============================================================
+    let effectiveRole: "viewer" | "editor" | "admin" | "owner" = "owner";
+    let allowedScope: Record<string, Set<string>> | null = null;
+    try {
+      const { data: memberships } = await supabase
+        .from("workspace_members")
+        .select("id, owner_id, role, status")
+        .eq("member_user_id", callerUserId)
+        .eq("status", "active");
+
+      if (memberships && memberships.length > 0) {
+        // Load owner display names
+        const ownerIds = memberships.map((m: any) => m.owner_id);
+        const { data: ownerProfiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", ownerIds);
+        const ownerName = (uid: string) => {
+          if (uid === callerUserId) return "Minha conta pessoal";
+          return (ownerProfiles || []).find((p: any) => p.id === uid)?.full_name || "Workspace";
+        };
+
+        // Available choices: all hub owners + the member's own personal account
+        const choices: { owner_id: string; label: string; role: string }[] = [
+          ...memberships.map((m: any) => ({
+            owner_id: m.owner_id,
+            label: ownerName(m.owner_id),
+            role: m.role,
+          })),
+          { owner_id: callerUserId, label: "Minha conta pessoal", role: "owner" },
+        ];
+
+        // Parse possible workspace command
+        const cmdRaw = (message || "").trim().toLowerCase();
+        const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const cmd = norm(cmdRaw);
+
+        const buildList = () =>
+          choices
+            .map((c, i) => `${i + 1}) ${c.label}${c.role !== "owner" ? ` (${c.role})` : ""}`)
+            .join("\n");
+
+        // Read current active
+        const { data: activeRow } = await supabase
+          .from("whatsapp_active_owner")
+          .select("active_owner_id")
+          .eq("member_user_id", callerUserId)
+          .maybeSingle();
+        let activeOwnerId: string | null = activeRow?.active_owner_id || null;
+        // Sanity: must still be in choices
+        if (activeOwnerId && !choices.some((c) => c.owner_id === activeOwnerId)) {
+          activeOwnerId = null;
+        }
+
+        const setActive = async (ownerId: string) => {
+          await supabase
+            .from("whatsapp_active_owner")
+            .upsert({ member_user_id: callerUserId, active_owner_id: ownerId }, { onConflict: "member_user_id" });
+        };
+
+        // --- Commands ---
+        if (cmd === "meus workspaces" || cmd === "listar workspaces" || cmd === "workspaces") {
+          return buildResponse(
+            { success: true, message: `📂 Seus workspaces:\n${buildList()}\n\nResponda com *usar <número>* ou *usar <nome>* para alternar.` },
+            200, phone
+          );
+        }
+        if (cmd === "workspace atual" || cmd === "qual workspace") {
+          const cur = activeOwnerId ? choices.find((c) => c.owner_id === activeOwnerId) : null;
+          return buildResponse(
+            { success: true, message: cur ? `📍 Workspace atual: *${cur.label}*${cur.role !== "owner" ? ` (${cur.role})` : ""}` : "Você ainda não escolheu um workspace. Envie *meus workspaces*." },
+            200, phone
+          );
+        }
+        if (cmd === "sair do workspace" || cmd === "voltar para minha conta") {
+          await setActive(callerUserId);
+          return buildResponse(
+            { success: true, message: "✅ Voltei para *Minha conta pessoal*." },
+            200, phone
+          );
+        }
+        const usarMatch = cmd.match(/^(?:usar|trocar(?:\s+(?:para|workspace))?|workspace)\s+(.+)$/);
+        if (usarMatch) {
+          const arg = usarMatch[1].trim();
+          let chosen: typeof choices[number] | undefined;
+          const asNum = parseInt(arg, 10);
+          if (!Number.isNaN(asNum) && asNum >= 1 && asNum <= choices.length) {
+            chosen = choices[asNum - 1];
+          } else {
+            const argN = norm(arg);
+            chosen = choices.find((c) => norm(c.label).includes(argN));
+          }
+          if (!chosen) {
+            return buildResponse(
+              { success: true, message: `❓ Não encontrei esse workspace. Suas opções:\n${buildList()}` },
+              200, phone
+            );
+          }
+          await setActive(chosen.owner_id);
+          return buildResponse(
+            { success: true, message: `✅ Workspace ativo: *${chosen.label}*${chosen.role !== "owner" ? ` (${chosen.role})` : ""}\n\nA partir de agora seus lançamentos vão para esta conta. Envie *sair do workspace* para voltar à sua conta pessoal.` },
+            200, phone
+          );
+        }
+
+        // No active picked yet → force picker
+        if (!activeOwnerId) {
+          return buildResponse(
+            { success: true, message: `👋 Você tem acesso a mais de um workspace. Escolha onde a EVA deve trabalhar:\n\n${buildList()}\n\nResponda com *usar <número>*.` },
+            200, phone
+          );
+        }
+
+        // Apply chosen workspace
+        userId = activeOwnerId;
+        const chosenMembership = memberships.find((m: any) => m.owner_id === activeOwnerId);
+        effectiveRole = (chosenMembership?.role as any) || "owner";
+
+        // Load resource scope (if any rows exist for this membership, scope is enforced)
+        if (chosenMembership) {
+          const { data: perms } = await supabase
+            .from("workspace_member_permissions")
+            .select("resource_type, resource_id")
+            .eq("workspace_member_id", chosenMembership.id);
+          if (perms && perms.length > 0) {
+            allowedScope = {};
+            for (const p of perms as any[]) {
+              if (!allowedScope[p.resource_type]) allowedScope[p.resource_type] = new Set();
+              allowedScope[p.resource_type].add(p.resource_id);
+            }
+          }
+        }
+        console.log("Hub context resolved:", { callerUserId: callerUserId.slice(0, 8), effectiveOwner: userId.slice(0, 8), role: effectiveRole, scoped: !!allowedScope });
+      }
+    } catch (hubErr) {
+      console.error("Hub context resolution failed (defaulting to caller):", hubErr);
+    }
+
+    // Helper used later to enforce viewer role on write intents
+    const denyIfViewer = () => {
+      if (effectiveRole === "viewer") {
+        return buildResponse(
+          { success: true, message: "🔒 Você tem permissão apenas de *leitura* neste workspace. Não posso criar, editar ou excluir lançamentos por aqui." },
+          200, phone
+        );
+      }
+      return null;
+    };
+    // Helper to scope master lists by resource permissions when applicable
+    const scopeFilter = (rows: any[] | null | undefined, resourceType: string) => {
+      if (!allowedScope) return rows || [];
+      const set = allowedScope[resourceType];
+      if (!set) return [];
+      return (rows || []).filter((r: any) => set.has(r.id));
+    };
 
     // === Plan limit enforcement: AI monthly quota (best-effort) ===
     try {
@@ -1323,10 +1486,10 @@ serve(async (req) => {
     ]);
 
     const categories = categoriesRes.data || [];
-    const accounts = accountsRes.data || [];
-    const wallets = walletsRes.data || [];
-    const companies = companiesRes.data || [];
-    const creditCards = creditCardsRes.data || [];
+    const accounts = scopeFilter(accountsRes.data, "bank_account");
+    const wallets = scopeFilter(walletsRes.data, "wallet");
+    const companies = scopeFilter(companiesRes.data, "company");
+    const creditCards = scopeFilter(creditCardsRes.data, "credit_card");
     const suppliersList = suppliersRes.data || [];
     const clientsList = clientsRes.data || [];
     const recentPending = recentPendingRes.data || [];
@@ -1918,6 +2081,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // 7. Execute action based on intent
     if (aiParsed.intent === "lancamento") {
+      const viewerBlock = denyIfViewer(); if (viewerBlock) return viewerBlock;
       // SAFEGUARD: If media was sent and amount is 0, ask the user for the value
       if (hasMedia && (!aiParsed.amount || aiParsed.amount <= 0)) {
         console.warn("AMOUNT ZERO WITH MEDIA — asking user for value", { description: aiParsed.description, hasImage, hasDocument });
@@ -3187,6 +3351,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // === EDITAR LANÇAMENTO ===
     if (aiParsed.intent === "editar_lancamento") {
+      const viewerBlock = denyIfViewer(); if (viewerBlock) return viewerBlock;
       console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed));
       let transactionId = aiParsed.transaction_id;
       const field = aiParsed.field;
@@ -3862,6 +4027,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // === GERENCIAR CATEGORIA ===
     if (aiParsed.intent === "gerenciar_categoria") {
+      const viewerBlock = denyIfViewer(); if (viewerBlock) return viewerBlock;
       const companyId = resolveContext(aiParsed.context);
       const action = aiParsed.action;
 
