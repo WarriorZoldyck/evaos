@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { UpgradeGateModal } from "@/components/subscription/UpgradeGate";
 import { useWorkspaceMembers, type WorkspaceMember, type Workspace } from "@/hooks/useWorkspaceMembers";
 import { MemberPermissionsModal } from "@/components/hub/MemberPermissionsModal";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -19,7 +21,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Users, UserPlus, User, Shield, Eye, Edit3,
   Pause, Play, Loader2, UserCheck, UserX, Folder, Trash2, KeyRound,
+  Building2, Wallet, CreditCard, Landmark, Smartphone,
 } from "lucide-react";
+
+type ResourceType = "company" | "bank_account" | "credit_card" | "card_terminal" | "wallet";
+interface ResourceOption { id: string; name: string; type: ResourceType }
+
+const RES_META: Record<ResourceType, { label: string; icon: typeof Shield }> = {
+  company: { label: "Empresas", icon: Building2 },
+  bank_account: { label: "Contas Bancárias", icon: Landmark },
+  credit_card: { label: "Cartões de Crédito", icon: CreditCard },
+  card_terminal: { label: "Maquininhas", icon: Smartphone },
+  wallet: { label: "Carteiras", icon: Wallet },
+};
+const RES_ORDER: ResourceType[] = ["company", "bank_account", "credit_card", "card_terminal", "wallet"];
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
   admin: { label: "Administrador", icon: Shield, color: "text-amber-500 bg-amber-500/10" },
