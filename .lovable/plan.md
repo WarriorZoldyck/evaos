@@ -1,102 +1,121 @@
-## Objetivo
+# Plano: Belvo (nova) + Itaú (passo-a-passo) + manter Pluggy
 
-Permitir que um membro convidado no Eva Hub use a EVA pelo WhatsApp:
-1. cadastre o telefone dele dentro da área do Hub,
-2. escolha qual "dono" (workspace) está ativo via comando no WhatsApp,
-3. e que TODA ação respeite o papel (viewer/editor/admin) e os recursos liberados (empresas, contas, cartões, maquininhas, carteiras).
+## Visão geral
 
----
+Três integrações bancárias na tela `/integracoes`:
 
-## 1. Cadastro do telefone (UI)
+| Integração | Status | Quem usa |
+|---|---|---|
+| **Asaas** | já funciona | quem tem conta Asaas |
+| **Pluggy** | mantém como está, inativo (sem subscription) | futuro |
+| **Itaú API direta** | mantém botão, MAS abre um **guia mastigado** de como o usuário gera `.crt`+`.key` e cola `client_id`/`client_secret`. Sem prometer sync até ele subir os arquivos. | PJ Itaú com pacote API contratado |
+| **Belvo (novo)** | **foco deste plano** — Open Finance regulado, funciona pra PF e PJ, autenticação simples por `secret_id:secret_password` (Basic Auth) | qualquer banco BR suportado pela Belvo |
 
-Adicionar uma nova seção **"Meu WhatsApp"** na visão do Hub para o membro logado, em `src/pages/hub/` (provavelmente uma nova rota `HubMeuWhatsApp.tsx` acessível só por quem é `isHubMember`).
+## Por que Belvo resolve o problema
 
-- Campo de telefone com máscara BR, salvo no `profiles.whatsapp_number` do próprio membro (mesmo campo já existente).
-- Aviso explicativo: "Este é o número que a EVA vai reconhecer. Você terá acesso aos workspaces onde foi convidado e poderá alternar entre eles por comando."
-- Lista dos donos/workspaces aos quais o membro pertence (via `workspace_members`), mostrando qual está marcado como **ativo no WhatsApp**.
-- Botão "Definir como ativo" em cada workspace (atalho para não depender só do comando no WA).
+- API REST pura, autenticação `Basic base64(secret_id:secret_password)` — igual ao padrão do Asaas, sem mTLS, sem certificado.
+- **Connect Widget hospedado pela Belvo** faz o login do usuário no banco dele (Itaú, Bradesco, BB, Nubank, Santander, Caixa, Inter…). A gente só gera um `access_token` no backend e abre o widget no frontend.
+- Cobre PF e PJ.
+- Sandbox grátis pra desenvolver/testar.
+- Produção exige certificação (reunião + checklist), mas o código fica pronto.
 
-Donos continuam usando `/configuracoes` normalmente — sem mudança para eles.
+## Fluxo Belvo (alto nível)
 
-## 2. Estado "workspace ativo no WhatsApp"
-
-Nova tabela `whatsapp_active_owner` para persistir, por membro, qual dono está ativo no momento (única fonte de verdade que o webhook consulta).
-
+```text
+1. Admin do EVA cadastra BELVO_SECRET_ID + BELVO_SECRET_PASSWORD (1 vez, secrets globais)
+2. Usuário clica "Conectar via Belvo" na tela Integrações
+   └─> edge function `belvo-connect-token` gera widget access_token
+   └─> abre Connect Widget (script da Belvo) no modal
+   └─> usuário escolhe banco, faz login, autoriza
+   └─> widget retorna { link: "<link_id>", institution: "itau_br_retail" }
+3. Frontend manda link_id pra `belvo-connect-account`
+   └─> salva em `belvo_integrations` (user_id, link_id, institution, bank_account_id, company_id)
+   └─> dispara primeira sync
+4. `belvo-sync` busca:
+   - GET /api/accounts/?link={id}        → saldo atual
+   - GET /api/transactions/?link={id}&page_size=500 → últimos 90 dias
+   └─> grava em `asaas_sync_items` (tabela já existe, reaproveitamos com provider='belvo')
+   └─> tela de Conciliação Bancária já lista (provider novo: "belvo")
+5. Webhook opcional (POST /belvo-webhook) recebe `historical_update` da Belvo e re-sincroniza
 ```
-whatsapp_active_owner
-- member_user_id (uuid, PK, FK → auth.users)
-- active_owner_id (uuid, FK → auth.users)  -- pode ser o próprio member_user_id (conta pessoal dele)
-- updated_at
-```
 
-RLS: membro só lê/escreve a própria linha. Edge function escreve via service role.
+## Mudanças no app
 
-## 3. Resolução no webhook (`whatsapp-webhook`)
+### Backend (Supabase)
 
-Após resolver o `profile` pelo telefone (passo 3 atual do arquivo), inserir nova etapa:
+**Migration nova** — tabela `belvo_integrations`:
+- `id`, `user_id`, `company_id`, `bank_account_id`
+- `link_id` (uuid retornado pela Belvo)
+- `institution` (ex.: `itau_br_retail`, `bb_br_retail`)
+- `institution_display_name`, `environment` (`sandbox`|`production`)
+- `last_sync_at`, `sync_status`, `last_error`, `initial_balance_synced`
+- RLS: usuário só vê os próprios + GRANTs padrão (anon não, authenticated sim, service_role all)
+- Estender `asaas_sync_items.payload` já é jsonb — só passamos a usar `integration_id` apontando pra belvo_integrations via convenção (sem FK rígida, igual hoje pra asaas/itau/pluggy).
 
-1. Buscar `workspace_members` onde `member_user_id = profile.id` e `status = 'active'` → lista de donos disponíveis.
-2. Decidir `effectiveOwnerId`:
-   - Se NÃO é membro de nenhum hub → `effectiveOwnerId = profile.id` (comportamento atual, sem mudanças).
-   - Se é membro de 1+ hubs → ler `whatsapp_active_owner.active_owner_id`. Se não houver registro, primeira interação responde com lista numerada ("Você tem acesso a: 1) Clínica X, 2) Empresa Y, 3) Minha conta pessoal. Responda com o número para escolher") e grava a escolha.
-3. **Comandos de troca**: detectar mensagens como `usar Clínica X`, `trocar workspace`, `meus workspaces`, `workspace atual` antes de cair na IA. Atualiza `whatsapp_active_owner`.
-4. Daqui em diante, **todas** as queries e inserts da função usam `effectiveOwnerId` no lugar de `profile.id`:
-   - leitura de contas, cartões, categorias, contatos, lançamentos;
-   - escrita: `transactions.user_id = effectiveOwnerId` (e nunca o id do membro);
-   - quotas de IA (`ai_usage_counters`) continuam contadas no dono (consistente com cobrança do plano).
-5. Para auditoria, gravar `created_by_user_id = profile.id` em `transactions` (ver passo 5).
+**Secrets novos** (3):
+- `BELVO_SECRET_ID`
+- `BELVO_SECRET_PASSWORD`
+- `BELVO_ENV` (`sandbox` ou `production`)
 
-## 4. Permissões (papel + escopo)
+**Edge Functions novas** (`verify_jwt = false`, validação JWT em código):
+- `belvo-connect-token` — POST → gera widget access_token via `POST /api/token/`
+- `belvo-connect-account` — POST `{ link_id, institution, bank_account_id?, account_name?, company_id? }` → cria registro + cria/liga `bank_account`
+- `belvo-sync` — POST `{ integration_id? }` → lista accounts + transactions, popula `asaas_sync_items`
+- `belvo-disconnect-account` — DELETE link na Belvo + apaga registro
+- `belvo-webhook` (público, `verify_jwt=false`) — recebe `historical_update` / `new_accounts` e dispara sync
 
-Antes de qualquer ação de escrita, validar contra `workspace_members` + `workspace_member_permissions`:
+**Helper compartilhado** `supabase/functions/_shared/belvo.ts` com `belvoFetch(path, init)` aplicando Basic Auth e base URL conforme env.
 
-- **Viewer**: só `listar_lancamentos` / consultas. Qualquer pedido de criar/editar/excluir responde "Você tem permissão apenas de leitura neste workspace."
-- **Editor / Admin**: pode criar/editar/excluir.
-- **Escopo de recursos**: ao montar a lista de contas/cartões/maquininhas/carteiras que o prompt da IA recebe, filtrar pelas linhas presentes em `workspace_member_permissions` (quando existirem). Reutilizar a função existente `hub_member_can_see`.
-- Se a IA propuser usar uma conta/cartão fora do escopo, recusar e pedir para escolher dentro da lista permitida.
+### Frontend
 
-Aplicar o mesmo filtro nas leituras (consultas históricas, busca de fornecedores, etc.).
+- **Novo hook** `src/hooks/useBelvoIntegration.ts` (espelho do `useItauIntegration` — list/connect/sync/disconnect).
+- **Novo modal** `src/components/integracoes/BelvoConnectModal.tsx`:
+  - botão "Conectar conta bancária via Belvo"
+  - carrega o script `https://cdn.belvo.io/belvo-widget-1-stable.js`
+  - chama `belvo-connect-token` → instancia widget → callback `onSuccess(link, institution)` → chama `belvo-connect-account`
+  - seleção de "Nova conta" ou "Vincular a conta existente" + escolha de Pessoal/Empresa (CompanyContext)
+- **Card novo** em `src/pages/Integracoes.tsx` (Belvo — Open Finance regulado, PF e PJ, sem certificado).
+- **ConciliacaoBancaria.tsx**: adicionar `belvoH = useBelvoIntegration()` no `integrations` unificado, com label `"Belvo · {bank} · {conta}"` e badge `Belvo`.
+- **ItauConnectModal.tsx**: reformular para virar um **guia mastigado** com tabs:
+  - **Passo 1 — Portal Itaú Developers**: cadastrar app, contratar pacote Cash Management/Open Finance B2B (PJ).
+  - **Passo 2 — Gerar par de chaves** (bloco de código copiável):
+    ```bash
+    openssl genrsa -out itau.key 2048
+    openssl req -new -key itau.key -out itau.csr \
+      -subj "/C=BR/ST=SP/L=SaoPaulo/O=SUA_EMPRESA/OU=TI/CN=api.itau"
+    ```
+    Subir o `.csr` no portal Itaú → baixar o `.crt` assinado.
+  - **Passo 3 — Anexar**: campos pra colar `client_id`, `client_secret`, `.crt`, `.key`, agência/conta/dígito.
+  - **Aviso destacado**: "Disponível só pra PJ com pacote API ativo. PF: use Belvo (botão acima) ou importação OFX/PDF."
 
-## 5. Auditoria
+### Pluggy
+- **Sem mudanças.** Card e código permanecem como estão hoje.
 
-Adicionar coluna `created_by_user_id uuid` em `transactions` (nullable, default null para retrocompat). Webhook sempre preenche com `profile.id` (o membro real que mandou a mensagem) quando `profile.id != effectiveOwnerId`. UI do dono pode futuramente mostrar "criado por Fulano via WhatsApp".
+## Detalhes técnicos importantes
 
-## 6. Eva Chat in-app
+- **Auth Belvo**: header `Authorization: Basic ${btoa(secretId+":"+secretPassword)}` em todas as chamadas.
+- **Base URL**: `https://sandbox.belvo.com` ou `https://api.belvo.com` conforme `BELVO_ENV`.
+- **Widget access_token**: gerado server-side via `POST /api/token/` com body `{ id, password, scopes: "read_institutions,write_links,read_consents,write_consents,write_consent_callback" }`. Token vai pro frontend, é de uso único pro widget.
+- **Paginação** em `/api/transactions/`: usar `page_size=500` + seguir `next` até esgotar (limitar a 90 dias na 1ª sync).
+- **Idempotência**: usar `transaction.id` da Belvo como `asaas_id` em `asaas_sync_items` com `source_type='belvo_transaction'`, UNIQUE garante dedupe.
+- **Webhook**: configurar URL `https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/belvo-webhook` no portal Belvo. Valida `Webhook-Signature` (HMAC-SHA256 com secret próprio).
 
-A `eva-chat` já roda dentro do contexto de impersonação do Hub (já usa o `HubContext`), então **não precisa de mudança** — o dono ativo lá é definido pela impersonação visual. Só validar que o `userId` usado na função é o do dono impersonado, não o do membro (deve já estar correto, mas confirmo no momento da implementação).
+## Ordem de execução
 
----
+1. Migration `belvo_integrations` + GRANTs + RLS.
+2. Pedir os 3 secrets Belvo via tool `add_secret`.
+3. Helper `_shared/belvo.ts` + 5 edge functions (`belvo-*`).
+4. Hook `useBelvoIntegration` + modal Belvo + card na página Integrações.
+5. Conciliação Bancária — somar Belvo no provider unificado.
+6. Reescrita do `ItauConnectModal` como guia passo-a-passo.
+7. Documentar no `Docs.tsx` (opcional) o fluxo Belvo.
 
-## Detalhes técnicos
+## O que **não** vou mexer
 
-**Arquivos a criar/editar**
-- Migração:
-  - `CREATE TABLE public.whatsapp_active_owner` + GRANTs + RLS + policies + trigger updated_at.
-  - `ALTER TABLE public.transactions ADD COLUMN created_by_user_id uuid NULL`.
-- `src/pages/hub/HubMeuWhatsApp.tsx` (nova página).
-- `src/components/layout/HubLayout.tsx` (link no menu do Hub para membros).
-- `src/App.tsx` (rota nova).
-- `supabase/functions/whatsapp-webhook/index.ts`:
-  - bloco de resolução de `effectiveOwnerId` logo após linha ~663;
-  - parser de comandos de workspace (`usar`, `trocar workspace`, `meus workspaces`, `workspace atual`);
-  - substituir `userId` por `effectiveOwnerId` em TODAS as queries de dados;
-  - validação de role/escopo antes de qualquer write;
-  - gravar `created_by_user_id` no insert de `transactions`.
-- `supabase/functions/_shared/` (opcional): util `resolveHubContext.ts` para o webhook.
+- Pluggy (código, modal, tabela, edge functions).
+- Asaas.
+- Itaú edge functions (`itau-connect-account`, `itau-sync`, `itau-disconnect-account`) — ficam como estão pra quando o usuário subir o certificado.
 
-**Comandos do WhatsApp reconhecidos**
-- `meus workspaces` → lista numerada.
-- `usar <nome>` ou número da lista → grava em `whatsapp_active_owner`.
-- `workspace atual` → mostra o ativo.
-- `sair do workspace` → volta para a conta pessoal (`active_owner_id = profile.id`).
+## Pergunta única antes de implementar
 
-**Fallback de primeira mensagem**: se for membro de algum hub e ainda não escolheu, EVA responde com a lista antes de processar qualquer comando financeiro.
-
-**Comportamento para quem NÃO é membro de hub**: zero mudança. Continua usando `profile.id` direto.
-
----
-
-## Fora de escopo
-- Cadastro do telefone do membro pelo dono no modal de convite (descartado em favor da seção no Hub).
-- WhatsApp do chat in-app (já resolvido pela impersonação).
-- Notificações push para o membro quando o dono mudar permissões.
+Você já tem conta criada na **Belvo** (mesmo que sandbox)? Se sim, preciso que você gere o `secretId` e `secretPassword` no dashboard deles (Settings → API Keys) — vou te pedir via o formulário seguro de secrets assim que aprovar o plano. Se ainda não tem conta, te mando o link de cadastro e a gente segue o resto enquanto isso.
