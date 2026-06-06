@@ -366,6 +366,57 @@ export type Database = {
           },
         ]
       }
+      belvo_integrations: {
+        Row: {
+          bank_account_id: string | null
+          company_id: string | null
+          created_at: string
+          environment: string
+          id: string
+          initial_balance_synced: number | null
+          institution: string | null
+          institution_display_name: string | null
+          last_error: string | null
+          last_sync_at: string | null
+          link_id: string
+          sync_status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bank_account_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          environment?: string
+          id?: string
+          initial_balance_synced?: number | null
+          institution?: string | null
+          institution_display_name?: string | null
+          last_error?: string | null
+          last_sync_at?: string | null
+          link_id: string
+          sync_status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bank_account_id?: string | null
+          company_id?: string | null
+          created_at?: string
+          environment?: string
+          id?: string
+          initial_balance_synced?: number | null
+          institution?: string | null
+          institution_display_name?: string | null
+          last_error?: string | null
+          last_sync_at?: string | null
+          link_id?: string
+          sync_status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       card_terminals: {
         Row: {
           acquirer: string | null
