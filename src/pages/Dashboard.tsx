@@ -12,6 +12,7 @@ import { BalanceProjectionChart } from "@/components/dashboard/BalanceProjection
 import { CategorySummaryCharts } from "@/components/dashboard/CategorySummaryCharts";
 import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransactions";
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
+import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
 import { useAccounts } from "@/hooks/useAccounts";
 import { getPreviousPeriodRange, sumInRange } from "@/lib/dashboardInsights";
 import {
@@ -171,6 +172,14 @@ export default function Dashboard() {
         prevEnd={prevRange.end}
         loading={loading}
       />
+
+      {/* NEW: Cartões de Crédito (estilo carteira) */}
+      <DashboardCreditCardsRow
+        allTransactions={allTransactions as any}
+        loading={loading}
+      />
+
+
 
 
       {/* Insights + Upcoming + Performance */}
