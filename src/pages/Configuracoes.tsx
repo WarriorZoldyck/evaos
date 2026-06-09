@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Settings, Trash2, Building2, Plus, X, Pencil } from "lucide-react";
+import { Settings, Trash2, Building2, Plus, X, Pencil, KeyRound } from "lucide-react";
 import { TransactionFieldsCard } from "@/components/configuracoes/TransactionFieldsCard";
 import { WhatsAppCard } from "@/components/configuracoes/WhatsAppCard";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,6 +41,34 @@ export default function Configuracoes() {
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
+
+  // Password change
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      toast.error("A senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("As senhas não conferem.");
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast.success("Senha alterada com sucesso!");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao alterar senha");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -218,6 +246,43 @@ export default function Configuracoes() {
           </div>
           <Button size="sm" onClick={handleSaveProfile} disabled={savingProfile || !profileLoaded}>
             {savingProfile ? "Salvando..." : "Salvar perfil"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Trocar senha */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-primary" />
+            Alterar senha
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Nova senha</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Confirmar nova senha</Label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repita a senha"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <Button size="sm" onClick={handleChangePassword} disabled={changingPassword || !newPassword}>
+            {changingPassword ? "Alterando..." : "Alterar senha"}
           </Button>
         </CardContent>
       </Card>
