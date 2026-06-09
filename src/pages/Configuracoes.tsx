@@ -250,6 +250,43 @@ export default function Configuracoes() {
         </CardContent>
       </Card>
 
+      {/* Trocar senha */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <KeyRound className="h-5 w-5 text-primary" />
+            Alterar senha
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Nova senha</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Confirmar nova senha</Label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repita a senha"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <Button size="sm" onClick={handleChangePassword} disabled={changingPassword || !newPassword}>
+            {changingPassword ? "Alterando..." : "Alterar senha"}
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Empresas */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
