@@ -153,35 +153,25 @@ export default function Dashboard() {
         loading={loading}
       />
 
-      {/* Distribuição + Categorias detalhadas */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1">
-          <CategorySummaryCharts
-            revenueCategories={categoryBreakdown.revenueCategories}
-            expenseCategories={[]}
-            loading={loading}
-          />
-        </div>
-        <div className="lg:col-span-2">
-          <CategoryDetailGrid
-            categories={categoryBreakdown.expenseCategories}
-            total={summary.saidas}
-            allTransactions={allTransactions as any}
-            currentStart={dateRange.start}
-            currentEnd={dateRange.end}
-            prevStart={prevRange.start}
-            prevEnd={prevRange.end}
-            loading={loading}
-          />
-        </div>
-      </div>
-
-      {/* Despesas por categoria (donut original) */}
+      {/* Doughnuts originais (Receitas e Despesas) */}
       <CategorySummaryCharts
-        revenueCategories={[]}
+        revenueCategories={categoryBreakdown.revenueCategories}
         expenseCategories={categoryBreakdown.expenseCategories}
         loading={loading}
       />
+
+      {/* NEW: Categorias detalhadas (estilo da referência) */}
+      <CategoryDetailGrid
+        categories={categoryBreakdown.expenseCategories}
+        total={summary.saidas}
+        allTransactions={allTransactions as any}
+        currentStart={dateRange.start}
+        currentEnd={dateRange.end}
+        prevStart={prevRange.start}
+        prevEnd={prevRange.end}
+        loading={loading}
+      />
+
 
       {/* Insights + Upcoming + Performance */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
