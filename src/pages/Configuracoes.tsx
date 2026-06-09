@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Settings, Trash2, Building2, Plus, X, Pencil } from "lucide-react";
+import { Settings, Trash2, Building2, Plus, X, Pencil, KeyRound } from "lucide-react";
 import { TransactionFieldsCard } from "@/components/configuracoes/TransactionFieldsCard";
 import { WhatsAppCard } from "@/components/configuracoes/WhatsAppCard";
 import { useAuth } from "@/contexts/AuthContext";
