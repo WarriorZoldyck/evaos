@@ -4,11 +4,16 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useDashboardData, DashboardFilters, getDateRangeExported } from "@/hooks/useDashboardData";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
+import { HeroSummaryCards } from "@/components/dashboard/HeroSummaryCards";
+import { FinancialHealthBar } from "@/components/dashboard/FinancialHealthBar";
+import { CategoryDetailGrid } from "@/components/dashboard/CategoryDetailGrid";
+import { EvaInsights } from "@/components/dashboard/EvaInsights";
 import { BalanceProjectionChart } from "@/components/dashboard/BalanceProjectionChart";
 import { CategorySummaryCharts } from "@/components/dashboard/CategorySummaryCharts";
 import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransactions";
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { useAccounts } from "@/hooks/useAccounts";
+import { getPreviousPeriodRange, sumInRange } from "@/lib/dashboardInsights";
 import {
   Select,
   SelectContent,
@@ -26,6 +31,8 @@ export default function Dashboard() {
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
   const {
+    transactions,
+    allTransactions,
     summary,
     saldoAtual,
     upcomingTransactions,
@@ -37,10 +44,35 @@ export default function Dashboard() {
     refetch,
   } = useDashboardData(filters);
 
-  // FIX #1: refetch triggers all queries inside the hook
   const handleLiquidated = useCallback(() => {
     refetch();
   }, [refetch]);
+
+  const prevRange = useMemo(
+    () => getPreviousPeriodRange(dateRange.start, dateRange.end),
+    [dateRange],
+  );
+
+  const prevEntradas = useMemo(
+    () =>
+      sumInRange(
+        allTransactions as any,
+        prevRange.start,
+        prevRange.end,
+        (t: any) => t.type === "receita",
+      ),
+    [allTransactions, prevRange],
+  );
+  const prevSaidas = useMemo(
+    () =>
+      sumInRange(
+        allTransactions as any,
+        prevRange.start,
+        prevRange.end,
+        (t: any) => t.type === "despesa",
+      ),
+    [allTransactions, prevRange],
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -75,7 +107,29 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* NEW: Hero 4-card row with sparklines + comparison */}
+      <HeroSummaryCards
+        allTransactions={allTransactions as any}
+        start={dateRange.start}
+        end={dateRange.end}
+        entradas={summary.entradas}
+        saidas={summary.saidas}
+        saldo={summary.saldo}
+        loading={loading}
+      />
+
+      {/* NEW: Financial Health bar */}
+      <FinancialHealthBar
+        entradas={summary.entradas}
+        saidas={summary.saidas}
+        saldo={summary.saldo}
+        prevEntradas={prevEntradas}
+        prevSaidas={prevSaidas}
+        transactions={transactions as any}
+        loading={loading}
+      />
+
+      {/* Existing summary cards (Saldo Atual, Faturamento, Previstas) — preserved */}
       <SummaryCards
         faturamento={summary.faturamento}
         entradas={summary.entradas}
@@ -93,21 +147,52 @@ export default function Dashboard() {
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
       />
 
-      {/* Charts Row */}
+      {/* Projection chart */}
       <BalanceProjectionChart
         getProjectionData={getProjectionData}
         loading={loading}
       />
 
-      {/* Category Doughnut Charts */}
+      {/* Distribuição + Categorias detalhadas */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-1">
+          <CategorySummaryCharts
+            revenueCategories={categoryBreakdown.revenueCategories}
+            expenseCategories={[]}
+            loading={loading}
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <CategoryDetailGrid
+            categories={categoryBreakdown.expenseCategories}
+            total={summary.saidas}
+            allTransactions={allTransactions as any}
+            currentStart={dateRange.start}
+            currentEnd={dateRange.end}
+            prevStart={prevRange.start}
+            prevEnd={prevRange.end}
+            loading={loading}
+          />
+        </div>
+      </div>
+
+      {/* Despesas por categoria (donut original) */}
       <CategorySummaryCharts
-        revenueCategories={categoryBreakdown.revenueCategories}
+        revenueCategories={[]}
         expenseCategories={categoryBreakdown.expenseCategories}
         loading={loading}
       />
 
-      {/* Bottom Row: Upcoming + Performance */}
+      {/* Insights + Upcoming + Performance */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <EvaInsights
+          transactions={transactions as any}
+          allTransactions={allTransactions as any}
+          entradas={summary.entradas}
+          saidas={summary.saidas}
+          prevEntradas={prevEntradas}
+          prevSaidas={prevSaidas}
+        />
         <div className="lg:col-span-2">
           <UpcomingTransactions
             transactions={upcomingTransactions}
@@ -116,13 +201,14 @@ export default function Dashboard() {
             onLiquidated={handleLiquidated}
           />
         </div>
-        <PerformanceCard
-          avgDailySpending={performance.avgDailySpending}
-          totalExpenses={performance.totalExpenses}
-          daysInPeriod={performance.daysInPeriod}
-          loading={loading}
-        />
       </div>
+
+      <PerformanceCard
+        avgDailySpending={performance.avgDailySpending}
+        totalExpenses={performance.totalExpenses}
+        daysInPeriod={performance.daysInPeriod}
+        loading={loading}
+      />
     </div>
   );
 }
