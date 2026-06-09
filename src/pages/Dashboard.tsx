@@ -173,6 +173,14 @@ export default function Dashboard() {
         loading={loading}
       />
 
+      {/* NEW: Cartões de Crédito (estilo carteira) */}
+      <DashboardCreditCardsRow
+        allTransactions={allTransactions as any}
+        loading={loading}
+      />
+
+
+
 
       {/* Insights + Upcoming + Performance */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
