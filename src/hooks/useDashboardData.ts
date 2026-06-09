@@ -551,6 +551,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
   return {
     transactions,
+    allTransactions,
     summary,
     saldoAtual,
     upcomingTransactions,
@@ -558,6 +559,7 @@ export function useDashboardData(filters: DashboardFilters) {
     getProjectionData,
     performance,
     creditCards,
+    dateRange: { start, end },
     loading: loading || recurringLoading,
     refetch,
   };
