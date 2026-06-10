@@ -147,16 +147,12 @@ export default function Dashboard() {
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
       />
 
-      {/* Projection chart */}
-      <BalanceProjectionChart
-        getProjectionData={getProjectionData}
-        loading={loading}
-      />
-
-      {/* Doughnuts originais (Receitas e Despesas) */}
-      <CategorySummaryCharts
+      {/* Categorias — Receitas e Despesas (card unificado) */}
+      <CategoryBreakdownCard
         revenueCategories={categoryBreakdown.revenueCategories}
         expenseCategories={categoryBreakdown.expenseCategories}
+        totalReceitas={summary.entradas}
+        totalDespesas={summary.saidas}
         loading={loading}
       />
 
