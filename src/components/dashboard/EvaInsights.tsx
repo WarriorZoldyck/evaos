@@ -42,16 +42,23 @@ export function EvaInsights({
   const insights = useMemo<Insight[]>(() => {
     const list: Insight[] = [];
 
+    // Regex para detectar UUIDs (categoria não resolvida)
+    const isUuid = (v: string) =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || "");
+
     // Per-category comparison: this period vs previous period (only on transactions current)
     const expenseByCat = new Map<string, number>();
     transactions
       .filter((t) => t.type === "despesa" && t.status === "Pago")
       .forEach((t) => {
-        expenseByCat.set(t.category, (expenseByCat.get(t.category) || 0) + Number(t.amount));
+        const name = !t.category || isUuid(t.category) ? "Sem categoria" : t.category;
+        expenseByCat.set(name, (expenseByCat.get(name) || 0) + Number(t.amount));
       });
 
-    // Biggest category warning
-    const sortedCats = [...expenseByCat.entries()].sort((a, b) => b[1] - a[1]);
+    // Biggest category warning (ignora "Sem categoria")
+    const sortedCats = [...expenseByCat.entries()]
+      .filter(([n]) => n !== "Sem categoria")
+      .sort((a, b) => b[1] - a[1]);
     if (sortedCats.length > 0 && saidas > 0) {
       const [topName, topVal] = sortedCats[0];
       const pct = (topVal / saidas) * 100;
