@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Info } from "lucide-react";
+import { FileText, Info, AlertTriangle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DREPeriodFilter } from "@/components/relatorios/DREPeriodFilter";
 import { DRETable } from "@/components/relatorios/DRETable";
@@ -8,6 +9,7 @@ import { DRETableContabil } from "@/components/relatorios/DRETableContabil";
 import { DREIndicatorCards } from "@/components/relatorios/DREIndicatorCards";
 import { useDREData, type DREFilters } from "@/hooks/useDREData";
 import { useAccounts } from "@/hooks/useAccounts";
+
 
 export default function DRE() {
   const [filters, setFilters] = useState<DREFilters>({
@@ -39,9 +41,10 @@ export default function DRE() {
             <CollapsibleContent className="mt-2 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed max-w-lg">
               {isContabil ? (
                 <>
-                  O <strong>DRE Contábil</strong> segue a estrutura padrão da Demonstração do Resultado do Exercício: Receita Operacional → Deduções → Receita Líquida → CMV/CSP → Lucro Bruto → Despesas → Resultado Líquido. As categorias são classificadas automaticamente por palavras-chave. Use a <strong>Análise Vertical (AV %)</strong> para ver o percentual de cada linha em relação à Receita Operacional.
+                  O <strong>DRE Contábil</strong> segue a estrutura padrão da Demonstração do Resultado do Exercício e usa os <strong>Centros de Custo</strong> como fonte de classificação. Cada categoria precisa estar vinculada a um centro (Receita Operacional, CMV, Despesas Operacionais, etc.) na página <Link to="/centros-de-custos" className="text-primary hover:underline">Centros de Custos</Link>. Categorias sem vínculo aparecem em "Não Classificadas".
                 </>
               ) : (
+
                 <>
                   O <strong>DRE Gerencial</strong> utiliza o <strong>regime de competência</strong>: considera <strong>todas as transações</strong> do período (pagas ou pendentes), agrupadas pela <strong>data de competência</strong>. Isso mostra o resultado econômico real, independente de quando o pagamento foi efetivamente realizado.
                 </>
@@ -57,6 +60,25 @@ export default function DRE() {
           onToggleVerticalAnalysis={setShowVerticalAnalysis}
         />
       </div>
+
+      {/* Unmapped categories warning (contábil) */}
+      {isContabil && !data.loading && data.unmappedCategoryCount > 0 && (
+        <div className="flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium text-amber-700 dark:text-amber-300">
+              {data.unmappedCategoryCount} categoria{data.unmappedCategoryCount === 1 ? "" : "s"} sem centro de custo
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Lançamentos dessas categorias estão sendo agrupados em "Não Classificadas". Vincule-as em{" "}
+              <Link to="/centros-de-custos" className="text-primary hover:underline font-medium">
+                Centros de Custos
+              </Link>{" "}
+              para refletirem corretamente no DRE.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Indicator cards (contábil mode) */}
       {isContabil && !data.loading && (

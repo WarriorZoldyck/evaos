@@ -36,7 +36,7 @@ interface CategoryRecord {
   dre_section: string | null;
 }
 
-// ── Keyword-based classification ──────────────────────────────
+// ── DRE section keys ──────────────────────────────
 
 type DreSectionKey =
   | "receita_operacional"
@@ -46,79 +46,21 @@ type DreSectionKey =
   | "despesas_operacionais"
   | "despesas_financeiras"
   | "receita_financeira"
-  | "despesas_gerais";
+  | "despesas_gerais"
+  | "receitas_nao_classificadas"
+  | "despesas_nao_classificadas";
 
-const SECTION_KEYWORDS: Record<DreSectionKey, string[]> = {
-  impostos_venda: [
-    "imposto", "tributo", "iss", "icms", "pis", "cofins", "simples nacional",
-    "simples", "das", "darf", "irpj", "csll", "inss empresa", "contribuição social",
-  ],
-  cmv_csp: [
-    "cmv", "cpv", "csp", "custo de mercadoria", "custo de produto", "custo de serviço",
-    "matéria-prima", "materia-prima", "insumo", "custo direto",
-  ],
-  despesas_vendas: [
-    "comissão", "comissao", "frete de venda", "propaganda", "marketing",
-    "publicidade", "anúncio", "anuncio", "representante",
-  ],
-  despesas_financeiras: [
-    "juros", "tarifa bancária", "tarifa bancaria", "iof", "taxa bancária",
-    "taxa bancaria", "multa bancária", "multa bancaria", "taxa de cartão",
-    "taxa cartão", "taxa cartao", "anuidade",
-  ],
-  receita_financeira: [
-    "rendimento", "aplicação financeira", "aplicacao financeira",
-    "juros recebidos", "receita financeira", "resgate",
-  ],
-  despesas_operacionais: [
-    "aluguel", "energia", "água", "agua", "salário", "salario", "folha",
-    "pro-labore", "pró-labore", "prolabore", "contabilidade", "contador",
-    "software", "internet", "telefone", "iptu", "ipva", "combustível",
-    "combustivel", "seguro", "depreciação", "depreciacao", "limpeza",
-    "material de escritório", "material de escritorio", "manutenção", "manutencao",
-  ],
-  receita_operacional: [],
-  despesas_gerais: [],
-};
+const VALID_SECTION_KEYS: DreSectionKey[] = [
+  "receita_operacional",
+  "impostos_venda",
+  "cmv_csp",
+  "despesas_vendas",
+  "despesas_operacionais",
+  "despesas_financeiras",
+  "receita_financeira",
+  "despesas_gerais",
+];
 
-function classifyCategory(
-  catName: string,
-  txType: "receita" | "despesa",
-  fullChainNames: string[],
-  explicitSection?: string | null
-): DreSectionKey {
-  // Priority: explicit dre_section from database
-  if (explicitSection && explicitSection in SECTION_KEYWORDS) {
-    return explicitSection as DreSectionKey;
-  }
-
-  const lower = fullChainNames.map((n) => n.toLowerCase()).join(" ") + " " + catName.toLowerCase();
-
-  // For receita, check receita_financeira first
-  if (txType === "receita") {
-    if (SECTION_KEYWORDS.receita_financeira.some((kw) => lower.includes(kw))) {
-      return "receita_financeira";
-    }
-    return "receita_operacional";
-  }
-
-  // For despesa, check in priority order
-  const orderedSections: DreSectionKey[] = [
-    "impostos_venda",
-    "cmv_csp",
-    "despesas_vendas",
-    "despesas_financeiras",
-    "despesas_operacionais",
-  ];
-
-  for (const section of orderedSections) {
-    if (SECTION_KEYWORDS[section].some((kw) => lower.includes(kw))) {
-      return section;
-    }
-  }
-
-  return "despesas_gerais";
-}
 
 // ── Period helpers ──────────────────────────────
 
@@ -326,7 +268,26 @@ export function useDREData(filters: DREFilters) {
       despesas_financeiras: new Map(),
       receita_financeira: new Map(),
       despesas_gerais: new Map(),
+      receitas_nao_classificadas: new Map(),
+      despesas_nao_classificadas: new Map(),
     };
+
+    // Resolve dre_section by walking up the parent chain of the transaction's category
+    const resolveDreSection = (categoryRef: string | null | undefined): DreSectionKey | null => {
+      if (!categoryRef) return null;
+      let cat = categories.find((c) => c.id === categoryRef);
+      if (!cat) cat = categories.find((c) => c.name.toLowerCase() === categoryRef.toLowerCase());
+      while (cat) {
+        if (cat.dre_section && VALID_SECTION_KEYS.includes(cat.dre_section as DreSectionKey)) {
+          return cat.dre_section as DreSectionKey;
+        }
+        if (!cat.parent_id) break;
+        cat = categories.find((c) => c.id === cat!.parent_id);
+      }
+      return null;
+    };
+
+    const unmappedCategoryIds = new Set<string>();
 
     transactions.forEach((t) => {
       const amount = Number(t.amount);
@@ -334,11 +295,19 @@ export function useDREData(filters: DREFilters) {
       if (!periods.includes(pKey)) return;
 
       const chain = buildChain(t.category, t.subcategory, t.subcategory2);
-      const chainNames = chain.map((c) => c.name);
-      // Look up the root category's explicit dre_section
-      const rootCat = categories.find((c) => c.id === chain[0]?.id);
-      const explicitSection = rootCat?.dre_section || null;
-      const sectionKey = classifyCategory(chain[0]?.name || t.category, t.type, chainNames, explicitSection);
+
+      // Try most specific category first (sub2 → sub → category), walking parents at each level
+      let sectionKey: DreSectionKey | null = null;
+      const refsInOrder = [t.subcategory2, t.subcategory, t.category];
+      for (const ref of refsInOrder) {
+        sectionKey = resolveDreSection(ref);
+        if (sectionKey) break;
+      }
+
+      if (!sectionKey) {
+        sectionKey = t.type === "receita" ? "receitas_nao_classificadas" : "despesas_nao_classificadas";
+        if (chain[0]) unmappedCategoryIds.add(chain[0].id);
+      }
 
       const tree = sectionTrees[sectionKey];
       let currentLevel = tree;
@@ -361,7 +330,6 @@ export function useDREData(filters: DREFilters) {
 
     const sumTree = (m: Map<string, TreeNode>): Record<string, number> => {
       const sums = emptyTotals();
-      // Sum only root-level nodes (they already contain accumulated totals)
       m.forEach((node) => periods.forEach((p) => (sums[p] += node.totals[p] || 0)));
       return sums;
     };
@@ -374,16 +342,23 @@ export function useDREData(filters: DREFilters) {
     const despFin = sumTree(sectionTrees.despesas_financeiras);
     const recFin = sumTree(sectionTrees.receita_financeira);
     const despGerais = sumTree(sectionTrees.despesas_gerais);
+    const recNc = sumTree(sectionTrees.receitas_nao_classificadas);
+    const despNc = sumTree(sectionTrees.despesas_nao_classificadas);
 
-    // Calculated rows
+    // Calculated rows — include unclassified amounts so the bottom line stays correct
     const recLiquida = emptyTotals();
     const lucroBruto = emptyTotals();
     const lucroLiquido = emptyTotals();
     periods.forEach((p) => {
       recLiquida[p] = recOp[p] - impVenda[p];
       lucroBruto[p] = recLiquida[p] - cmv[p];
-      lucroLiquido[p] = lucroBruto[p] - despVendas[p] - despOp[p] - despFin[p] + recFin[p] - despGerais[p];
+      lucroLiquido[p] =
+        lucroBruto[p] - despVendas[p] - despOp[p] - despFin[p] + recFin[p] - despGerais[p]
+        + recNc[p] - despNc[p];
     });
+
+    const hasRecNc = Object.values(recNc).some((v) => v !== 0);
+    const hasDespNc = Object.values(despNc).some((v) => v !== 0);
 
     const sections: DRESection[] = [
       { key: "receita_operacional", label: "(+) Receita Operacional Bruta", sign: "+", monthlyTotals: recOp, categoryRows: toRows(sectionTrees.receita_operacional), isCalculated: false },
@@ -396,11 +371,13 @@ export function useDREData(filters: DREFilters) {
       { key: "despesas_financeiras", label: "(-) Despesas Financeiras", sign: "-", monthlyTotals: despFin, categoryRows: toRows(sectionTrees.despesas_financeiras), isCalculated: false },
       { key: "receita_financeira", label: "(+) Receita Financeira", sign: "+", monthlyTotals: recFin, categoryRows: toRows(sectionTrees.receita_financeira), isCalculated: false },
       { key: "despesas_gerais", label: "(-) Despesas Gerais e Adm.", sign: "-", monthlyTotals: despGerais, categoryRows: toRows(sectionTrees.despesas_gerais), isCalculated: false },
+      ...(hasRecNc ? [{ key: "receitas_nao_classificadas", label: "(+) Receitas Não Classificadas", sign: "+" as const, monthlyTotals: recNc, categoryRows: toRows(sectionTrees.receitas_nao_classificadas), isCalculated: false }] : []),
+      ...(hasDespNc ? [{ key: "despesas_nao_classificadas", label: "(-) Despesas Não Classificadas", sign: "-" as const, monthlyTotals: despNc, categoryRows: toRows(sectionTrees.despesas_nao_classificadas), isCalculated: false }] : []),
       { key: "lucro_liquido", label: "(=) Resultado Líquido do Exercício", sign: "=", monthlyTotals: lucroLiquido, categoryRows: [], isCalculated: true },
     ];
 
-    return { sections, recOp, lucroBruto, lucroLiquido };
-  }, [transactions, buildChain, periods, granularity]);
+    return { sections, recOp, lucroBruto, lucroLiquido, unmappedCategoryCount: unmappedCategoryIds.size };
+  }, [transactions, buildChain, periods, granularity, categories]);
 
   return {
     periods,
@@ -413,6 +390,7 @@ export function useDREData(filters: DREFilters) {
     monthlyResults: gerencialData.monthlyResults,
     // Contábil
     sections: contabilData.sections,
+    unmappedCategoryCount: contabilData.unmappedCategoryCount,
     indicators: {
       receitaOperacional: contabilData.recOp,
       lucroBruto: contabilData.lucroBruto,
