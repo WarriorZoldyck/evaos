@@ -8,8 +8,7 @@ import { HeroSummaryCards } from "@/components/dashboard/HeroSummaryCards";
 import { FinancialHealthBar } from "@/components/dashboard/FinancialHealthBar";
 import { CategoryDetailGrid } from "@/components/dashboard/CategoryDetailGrid";
 import { EvaInsights } from "@/components/dashboard/EvaInsights";
-import { BalanceProjectionChart } from "@/components/dashboard/BalanceProjectionChart";
-import { CategorySummaryCharts } from "@/components/dashboard/CategorySummaryCharts";
+import { CategoryBreakdownCard } from "@/components/dashboard/CategoryBreakdownCard";
 import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransactions";
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
@@ -148,16 +147,12 @@ export default function Dashboard() {
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
       />
 
-      {/* Projection chart */}
-      <BalanceProjectionChart
-        getProjectionData={getProjectionData}
-        loading={loading}
-      />
-
-      {/* Doughnuts originais (Receitas e Despesas) */}
-      <CategorySummaryCharts
+      {/* Categorias — Receitas e Despesas (card unificado) */}
+      <CategoryBreakdownCard
         revenueCategories={categoryBreakdown.revenueCategories}
         expenseCategories={categoryBreakdown.expenseCategories}
+        totalReceitas={summary.entradas}
+        totalDespesas={summary.saidas}
         loading={loading}
       />
 
