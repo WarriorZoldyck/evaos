@@ -1,7 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, CreditCard, Landmark } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, Landmark, Percent } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ResponsiveContainer, AreaChart, Area } from "recharts";
+
+interface SeriesPoint { date: string; v: number }
 
 interface SummaryCardsProps {
   faturamento: number;
@@ -18,6 +21,19 @@ interface SummaryCardsProps {
   loading: boolean;
   dateFrom: string;
   dateTo: string;
+  // Comparativos vs período anterior + sparkline
+  prevFaturamento?: number;
+  prevEntradas?: number;
+  prevSaidas?: number;
+  prevSaldo?: number;
+  prevEntradaPrevista?: number;
+  prevSaidaPrevista?: number;
+  prevSaldoPrevisto?: number;
+  faturamentoSeries?: SeriesPoint[];
+  entradasSeries?: SeriesPoint[];
+  saidasSeries?: SeriesPoint[];
+  saldoSeries?: SeriesPoint[];
+  marginSeries?: SeriesPoint[];
 }
 
 function formatCurrency(value: number): string {
@@ -27,45 +43,115 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
+function pctChange(curr: number, prev: number): number | null {
+  if (!isFinite(prev) || prev === 0) return curr === 0 ? 0 : null;
+  return ((curr - prev) / Math.abs(prev)) * 100;
+}
+
 interface CardItemProps {
   title: string;
-  value: number;
+  value: number | string;
   icon: React.ElementType;
   trend: "up" | "down" | "neutral";
   gradient: string;
   loading: boolean;
   onClick?: () => void;
+  delta?: number | null;
+  series?: SeriesPoint[];
+  accent?: string;
+  invertDeltaColor?: boolean; // for "saídas" where up = bad
 }
 
-function SummaryCard({ title, value, icon: Icon, trend, gradient, loading, onClick }: CardItemProps) {
+function SummaryCard({
+  title,
+  value,
+  icon: Icon,
+  trend,
+  gradient,
+  loading,
+  onClick,
+  delta,
+  series,
+  accent = "hsl(195, 100%, 50%)",
+  invertDeltaColor = false,
+}: CardItemProps) {
   const trendColor =
     trend === "up"
       ? "text-success"
       : trend === "down"
         ? "text-destructive"
-        : "text-primary";
+        : "text-foreground";
+
+  const isUp = (delta ?? 0) >= 0;
+  const deltaGood = invertDeltaColor ? !isUp : isUp;
+  const deltaColor =
+    delta === null || delta === undefined
+      ? "text-muted-foreground"
+      : deltaGood
+        ? "text-success"
+        : "text-destructive";
+  const gradId = `spark-${title.replace(/\W/g, "")}`;
 
   return (
     <Card
       className="card-hover shadow-premium overflow-hidden relative group cursor-pointer"
       onClick={onClick}
     >
-      <CardContent className="p-5 relative z-10">
+      <CardContent className="p-4 relative z-10 space-y-2">
         <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground font-medium">{title}</p>
+          <div className="space-y-1 min-w-0">
+            <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">{title}</p>
             {loading ? (
               <Skeleton className="h-7 w-28" />
             ) : (
               <p className={`text-xl font-bold font-display ${trendColor}`}>
-                {formatCurrency(value)}
+                {typeof value === "number" ? formatCurrency(value) : value}
               </p>
             )}
           </div>
-          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${gradient} text-white shadow-lg transition-transform duration-300 group-hover:scale-110`}>
-            <Icon className="h-4.5 w-4.5" />
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${gradient} text-white shadow-lg transition-transform duration-300 group-hover:scale-110 shrink-0`}>
+            <Icon className="h-4 w-4" />
           </div>
         </div>
+
+        {(delta !== undefined || series) && (
+          <div className="flex items-end justify-between gap-2 pt-1">
+            <div className="text-[11px] flex items-center gap-1 min-w-0">
+              {delta !== undefined && delta !== null ? (
+                <>
+                  <span className={deltaColor}>
+                    {isUp ? "↗" : "↘"} {Math.abs(delta).toFixed(1)}%
+                  </span>
+                  <span className="text-muted-foreground truncate">vs período anterior</span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              )}
+            </div>
+            {series && series.length > 0 && (
+              <div className="h-8 w-20 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={series}>
+                    <defs>
+                      <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={accent} stopOpacity={0.5} />
+                        <stop offset="100%" stopColor={accent} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="v"
+                      stroke={accent}
+                      strokeWidth={1.5}
+                      fill={`url(#${gradId})`}
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -80,14 +166,25 @@ interface ForecastCardProps {
   loading: boolean;
   onClick?: () => void;
   subtitle?: string;
+  delta?: number | null;
+  invertDeltaColor?: boolean;
 }
 
-function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName, loading, onClick, subtitle }: ForecastCardProps) {
+function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName, loading, onClick, subtitle, delta, invertDeltaColor }: ForecastCardProps) {
+  const isUp = (delta ?? 0) >= 0;
+  const deltaGood = invertDeltaColor ? !isUp : isUp;
+  const deltaColor =
+    delta === null || delta === undefined
+      ? "text-muted-foreground"
+      : deltaGood
+        ? "text-success"
+        : "text-destructive";
+
   return (
     <Card className="cursor-pointer hover:border-primary/20 transition-colors" onClick={onClick}>
-      <CardContent className="p-5 flex items-center gap-3">
+      <CardContent className="p-4 flex items-center gap-3">
         <Icon className={`h-8 w-8 shrink-0 ${iconClassName}`} />
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-xs text-muted-foreground">{title}</p>
           {loading ? (
             <Skeleton className="h-6 w-24 mt-0.5" />
@@ -97,13 +194,25 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
             </p>
           )}
           {subtitle && <p className="text-[10px] text-muted-foreground">{subtitle}</p>}
+          {delta !== undefined && delta !== null && (
+            <p className={`text-[10px] ${deltaColor} mt-0.5`}>
+              {isUp ? "↗" : "↘"} {Math.abs(delta).toFixed(1)}% vs período anterior
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual, entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent, loading, dateFrom, dateTo }: SummaryCardsProps) {
+export function SummaryCards({
+  faturamento, entradas, saidas, saldo, saldoAtual,
+  entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent,
+  loading, dateFrom, dateTo,
+  prevFaturamento, prevEntradas, prevSaidas, prevSaldo,
+  prevEntradaPrevista, prevSaidaPrevista, prevSaldoPrevisto,
+  faturamentoSeries, entradasSeries, saidasSeries, saldoSeries, marginSeries,
+}: SummaryCardsProps) {
   const navigate = useNavigate();
 
   const go = (params: Record<string, string>) => {
@@ -115,11 +224,17 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
   };
 
   const saldoPrevisto = entradaPrevista - saidaPrevista;
+  const margin = entradas > 0 ? ((entradas - saidas) / entradas) * 100 : 0;
+  const prevMargin =
+    prevEntradas !== undefined && prevSaidas !== undefined && prevEntradas > 0
+      ? ((prevEntradas - prevSaidas) / prevEntradas) * 100
+      : null;
+  const marginDelta = prevMargin === null ? null : margin - prevMargin;
 
   return (
     <div className="space-y-4">
       {/* Main cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <SummaryCard
           title="Saldo Atual"
           value={saldoAtual}
@@ -127,6 +242,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
           trend={saldoAtual >= 0 ? "up" : "down"}
           gradient={saldoAtual >= 0 ? "bg-gradient-primary" : "bg-gradient-destructive"}
           loading={loading}
+          accent="hsl(195, 100%, 50%)"
         />
         <SummaryCard
           title="Faturamento"
@@ -136,6 +252,9 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
           gradient="bg-gradient-primary"
           loading={loading}
           onClick={() => go({ type: "receita" })}
+          delta={prevFaturamento !== undefined ? pctChange(faturamento, prevFaturamento) : undefined}
+          series={faturamentoSeries}
+          accent="hsl(195, 100%, 50%)"
         />
         <SummaryCard
           title="Entradas"
@@ -145,6 +264,9 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
           gradient="bg-gradient-success"
           loading={loading}
           onClick={() => go({ type: "receita", status: "Pago" })}
+          delta={prevEntradas !== undefined ? pctChange(entradas, prevEntradas) : undefined}
+          series={entradasSeries}
+          accent="hsl(142, 71%, 45%)"
         />
         <SummaryCard
           title="Saídas"
@@ -154,6 +276,10 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
           gradient="bg-gradient-destructive"
           loading={loading}
           onClick={() => go({ type: "despesa", status: "Pago" })}
+          delta={prevSaidas !== undefined ? pctChange(saidas, prevSaidas) : undefined}
+          series={saidasSeries}
+          accent="hsl(0, 72%, 55%)"
+          invertDeltaColor
         />
         <SummaryCard
           title="Saldo do Período"
@@ -163,11 +289,25 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
           gradient={saldo >= 0 ? "bg-gradient-success" : "bg-gradient-destructive"}
           loading={loading}
           onClick={() => go({})}
+          delta={prevSaldo !== undefined ? pctChange(saldo, prevSaldo) : undefined}
+          series={saldoSeries}
+          accent={saldo >= 0 ? "hsl(142, 71%, 45%)" : "hsl(0, 72%, 55%)"}
+        />
+        <SummaryCard
+          title="Margem"
+          value={`${margin.toFixed(1)}%`}
+          icon={Percent}
+          trend={margin >= 0 ? "up" : "down"}
+          gradient="bg-gradient-primary"
+          loading={loading}
+          delta={marginDelta}
+          series={marginSeries}
+          accent="hsl(265, 80%, 60%)"
         />
       </div>
 
-      {/* Forecast cards + MDR */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Forecast cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <ForecastCard
           title="Entradas previstas"
           value={entradaPrevista}
@@ -175,6 +315,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
           iconClassName="text-success"
           loading={loading}
           onClick={() => go({ type: "receita", status: "Pendente" })}
+          delta={prevEntradaPrevista !== undefined ? pctChange(entradaPrevista, prevEntradaPrevista) : undefined}
         />
         <ForecastCard
           title="Saídas previstas"
@@ -183,6 +324,8 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
           iconClassName="text-destructive"
           loading={loading}
           onClick={() => go({ type: "despesa", status: "Pendente" })}
+          delta={prevSaidaPrevista !== undefined ? pctChange(saidaPrevista, prevSaidaPrevista) : undefined}
+          invertDeltaColor
         />
         <ForecastCard
           title="Saldo previsto"
@@ -196,6 +339,7 @@ export function SummaryCards({ faturamento, entradas, saidas, saldo, saldoAtual,
           valueClassName={saldoPrevisto >= 0 ? "text-success" : "text-destructive"}
           loading={loading}
           onClick={() => go({ status: "Pendente" })}
+          delta={prevSaldoPrevisto !== undefined ? pctChange(saldoPrevisto, prevSaldoPrevisto) : undefined}
         />
       </div>
     </div>
