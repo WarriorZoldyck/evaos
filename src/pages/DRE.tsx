@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Info } from "lucide-react";
+import { FileText, Info, AlertTriangle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DREPeriodFilter } from "@/components/relatorios/DREPeriodFilter";
 import { DRETable } from "@/components/relatorios/DRETable";
@@ -8,6 +9,7 @@ import { DRETableContabil } from "@/components/relatorios/DRETableContabil";
 import { DREIndicatorCards } from "@/components/relatorios/DREIndicatorCards";
 import { useDREData, type DREFilters } from "@/hooks/useDREData";
 import { useAccounts } from "@/hooks/useAccounts";
+
 
 export default function DRE() {
   const [filters, setFilters] = useState<DREFilters>({
