@@ -4,7 +4,6 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useDashboardData, DashboardFilters, getDateRangeExported } from "@/hooks/useDashboardData";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
-import { HeroSummaryCards } from "@/components/dashboard/HeroSummaryCards";
 import { FinancialHealthBar } from "@/components/dashboard/FinancialHealthBar";
 import { CategoryDetailGrid } from "@/components/dashboard/CategoryDetailGrid";
 import { EvaInsights } from "@/components/dashboard/EvaInsights";
@@ -13,7 +12,7 @@ import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransaction
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
 import { useAccounts } from "@/hooks/useAccounts";
-import { getPreviousPeriodRange, sumInRange } from "@/lib/dashboardInsights";
+import { getPreviousPeriodRange, sumInRange, dailySeries } from "@/lib/dashboardInsights";
 import {
   Select,
   SelectContent,
@@ -73,6 +72,39 @@ export default function Dashboard() {
       ),
     [allTransactions, prevRange],
   );
+  const prevFaturamento = useMemo(
+    () =>
+      sumInRange(
+        allTransactions as any,
+        prevRange.start,
+        prevRange.end,
+        (t: any) => t.type === "receita",
+      ),
+    [allTransactions, prevRange],
+  );
+  const prevSaldo = prevEntradas - prevSaidas;
+
+  // Sparkline series for current period
+  const faturamentoSeries = useMemo(
+    () => dailySeries(allTransactions as any, dateRange.start, dateRange.end, (t: any) => t.type === "receita" ? Number(t.amount) : 0),
+    [allTransactions, dateRange],
+  );
+  const entradasSeries = faturamentoSeries;
+  const saidasSeries = useMemo(
+    () => dailySeries(allTransactions as any, dateRange.start, dateRange.end, (t: any) => t.type === "despesa" ? Number(t.amount) : 0),
+    [allTransactions, dateRange],
+  );
+  const saldoSeries = useMemo(
+    () => dailySeries(allTransactions as any, dateRange.start, dateRange.end, (t: any) => t.type === "receita" ? Number(t.amount) : -Number(t.amount)),
+    [allTransactions, dateRange],
+  );
+  const marginSeries = useMemo(
+    () => entradasSeries.map((e, i) => {
+      const sv = saidasSeries[i]?.v || 0;
+      return { date: e.date, v: e.v > 0 ? ((e.v - sv) / e.v) * 100 : 0 };
+    }),
+    [entradasSeries, saidasSeries],
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -107,18 +139,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* NEW: Hero 4-card row with sparklines + comparison */}
-      <HeroSummaryCards
-        allTransactions={allTransactions as any}
-        start={dateRange.start}
-        end={dateRange.end}
-        entradas={summary.entradas}
-        saidas={summary.saidas}
-        saldo={summary.saldo}
-        loading={loading}
-      />
-
-      {/* NEW: Financial Health bar */}
+      {/* Saúde Financeira (cabeçalho) */}
       <FinancialHealthBar
         entradas={summary.entradas}
         saidas={summary.saidas}
@@ -129,7 +150,7 @@ export default function Dashboard() {
         loading={loading}
       />
 
-      {/* Existing summary cards (Saldo Atual, Faturamento, Previstas) — preserved */}
+      {/* Cards principais (com comparativo + sparkline + margem) */}
       <SummaryCards
         faturamento={summary.faturamento}
         entradas={summary.entradas}
@@ -145,7 +166,17 @@ export default function Dashboard() {
         loading={loading}
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        prevFaturamento={prevFaturamento}
+        prevEntradas={prevEntradas}
+        prevSaidas={prevSaidas}
+        prevSaldo={prevSaldo}
+        faturamentoSeries={faturamentoSeries}
+        entradasSeries={entradasSeries}
+        saidasSeries={saidasSeries}
+        saldoSeries={saldoSeries}
+        marginSeries={marginSeries}
       />
+
 
       {/* Categorias — Receitas e Despesas (card unificado) */}
       <CategoryBreakdownCard
