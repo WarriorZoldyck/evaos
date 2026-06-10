@@ -398,23 +398,3 @@ export function useDREData(filters: DREFilters) {
     },
   };
 }
-
-
-  return {
-    periods,
-    loading,
-    // Gerencial
-    revenueRows: gerencialData.revenueRows,
-    expenseRows: gerencialData.expenseRows,
-    monthlyRevenueTotals: gerencialData.monthlyRevenueTotals,
-    monthlyExpenseTotals: gerencialData.monthlyExpenseTotals,
-    monthlyResults: gerencialData.monthlyResults,
-    // Contábil
-    sections: contabilData.sections,
-    indicators: {
-      receitaOperacional: contabilData.recOp,
-      lucroBruto: contabilData.lucroBruto,
-      lucroLiquido: contabilData.lucroLiquido,
-    },
-  };
-}
