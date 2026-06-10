@@ -41,9 +41,10 @@ export default function DRE() {
             <CollapsibleContent className="mt-2 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed max-w-lg">
               {isContabil ? (
                 <>
-                  O <strong>DRE Contábil</strong> segue a estrutura padrão da Demonstração do Resultado do Exercício: Receita Operacional → Deduções → Receita Líquida → CMV/CSP → Lucro Bruto → Despesas → Resultado Líquido. As categorias são classificadas automaticamente por palavras-chave. Use a <strong>Análise Vertical (AV %)</strong> para ver o percentual de cada linha em relação à Receita Operacional.
+                  O <strong>DRE Contábil</strong> segue a estrutura padrão da Demonstração do Resultado do Exercício e usa os <strong>Centros de Custo</strong> como fonte de classificação. Cada categoria precisa estar vinculada a um centro (Receita Operacional, CMV, Despesas Operacionais, etc.) na página <Link to="/centros-de-custos" className="text-primary hover:underline">Centros de Custos</Link>. Categorias sem vínculo aparecem em "Não Classificadas".
                 </>
               ) : (
+
                 <>
                   O <strong>DRE Gerencial</strong> utiliza o <strong>regime de competência</strong>: considera <strong>todas as transações</strong> do período (pagas ou pendentes), agrupadas pela <strong>data de competência</strong>. Isso mostra o resultado econômico real, independente de quando o pagamento foi efetivamente realizado.
                 </>
