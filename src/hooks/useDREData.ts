@@ -36,7 +36,7 @@ interface CategoryRecord {
   dre_section: string | null;
 }
 
-// ── Keyword-based classification ──────────────────────────────
+// ── DRE section keys ──────────────────────────────
 
 type DreSectionKey =
   | "receita_operacional"
@@ -46,79 +46,21 @@ type DreSectionKey =
   | "despesas_operacionais"
   | "despesas_financeiras"
   | "receita_financeira"
-  | "despesas_gerais";
+  | "despesas_gerais"
+  | "receitas_nao_classificadas"
+  | "despesas_nao_classificadas";
 
-const SECTION_KEYWORDS: Record<DreSectionKey, string[]> = {
-  impostos_venda: [
-    "imposto", "tributo", "iss", "icms", "pis", "cofins", "simples nacional",
-    "simples", "das", "darf", "irpj", "csll", "inss empresa", "contribuição social",
-  ],
-  cmv_csp: [
-    "cmv", "cpv", "csp", "custo de mercadoria", "custo de produto", "custo de serviço",
-    "matéria-prima", "materia-prima", "insumo", "custo direto",
-  ],
-  despesas_vendas: [
-    "comissão", "comissao", "frete de venda", "propaganda", "marketing",
-    "publicidade", "anúncio", "anuncio", "representante",
-  ],
-  despesas_financeiras: [
-    "juros", "tarifa bancária", "tarifa bancaria", "iof", "taxa bancária",
-    "taxa bancaria", "multa bancária", "multa bancaria", "taxa de cartão",
-    "taxa cartão", "taxa cartao", "anuidade",
-  ],
-  receita_financeira: [
-    "rendimento", "aplicação financeira", "aplicacao financeira",
-    "juros recebidos", "receita financeira", "resgate",
-  ],
-  despesas_operacionais: [
-    "aluguel", "energia", "água", "agua", "salário", "salario", "folha",
-    "pro-labore", "pró-labore", "prolabore", "contabilidade", "contador",
-    "software", "internet", "telefone", "iptu", "ipva", "combustível",
-    "combustivel", "seguro", "depreciação", "depreciacao", "limpeza",
-    "material de escritório", "material de escritorio", "manutenção", "manutencao",
-  ],
-  receita_operacional: [],
-  despesas_gerais: [],
-};
+const VALID_SECTION_KEYS: DreSectionKey[] = [
+  "receita_operacional",
+  "impostos_venda",
+  "cmv_csp",
+  "despesas_vendas",
+  "despesas_operacionais",
+  "despesas_financeiras",
+  "receita_financeira",
+  "despesas_gerais",
+];
 
-function classifyCategory(
-  catName: string,
-  txType: "receita" | "despesa",
-  fullChainNames: string[],
-  explicitSection?: string | null
-): DreSectionKey {
-  // Priority: explicit dre_section from database
-  if (explicitSection && explicitSection in SECTION_KEYWORDS) {
-    return explicitSection as DreSectionKey;
-  }
-
-  const lower = fullChainNames.map((n) => n.toLowerCase()).join(" ") + " " + catName.toLowerCase();
-
-  // For receita, check receita_financeira first
-  if (txType === "receita") {
-    if (SECTION_KEYWORDS.receita_financeira.some((kw) => lower.includes(kw))) {
-      return "receita_financeira";
-    }
-    return "receita_operacional";
-  }
-
-  // For despesa, check in priority order
-  const orderedSections: DreSectionKey[] = [
-    "impostos_venda",
-    "cmv_csp",
-    "despesas_vendas",
-    "despesas_financeiras",
-    "despesas_operacionais",
-  ];
-
-  for (const section of orderedSections) {
-    if (SECTION_KEYWORDS[section].some((kw) => lower.includes(kw))) {
-      return section;
-    }
-  }
-
-  return "despesas_gerais";
-}
 
 // ── Period helpers ──────────────────────────────
 
