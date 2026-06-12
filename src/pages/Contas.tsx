@@ -71,7 +71,8 @@ export default function Contas() {
   const [upgradeReason, setUpgradeReason] = useState<string | null>(null);
 
   const openCreate = () => {
-    const check = canCreateAccount();
+    const kind = activeTab === "terminal" ? "terminal" : activeTab === "card" ? "card" : activeTab === "wallet" ? "wallet" : "bank";
+    const check = canCreateAccount(kind);
     if (!check.ok) {
       setUpgradeReason(check.reason || "Limite atingido.");
       return;
