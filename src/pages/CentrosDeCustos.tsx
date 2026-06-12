@@ -71,6 +71,7 @@ export default function CentrosDeCustos() {
     despesas_operacionais: true,
   });
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const mdrEnabled = (settings as any).mdr_cost_center_enabled ?? false;
 
