@@ -316,6 +316,7 @@ export default function CentrosDeCustos() {
         </div>
       )}
     </div>
+    </AssignContext.Provider>
   );
 }
 
