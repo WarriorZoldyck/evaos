@@ -1,58 +1,60 @@
-## Diagnóstico: por que o DRE parece "fantasioso"
+## Diagnóstico dos vídeos
 
-Investiguei o código (`src/hooks/useDREData.ts`) e os dados no banco. O problema é real e tem causa clara:
+Transcrevi os três áudios. Os **vídeos 19 e 23** são sobre o Dashboard (ajustes visuais, filtros de categoria, comportamento dos cards) e a tela de Cartões — não são DRE. Vou tratá-los em conversas separadas.
 
-**Como o DRE funciona hoje:**
-1. Cada categoria tem um campo `dre_section` (o "centro de custo do DRE") que é definido manualmente na página **Centros de Custos** (arrastando categorias para Receita Operacional, CMV, Despesas Operacionais, etc.).
-2. No `useDREData`, ao montar a DRE Contábil, para cada transação:
-   - **Primeiro**, tenta usar o `dre_section` explícito da categoria-raiz.
-   - **Se não houver**, cai num classificador por **palavras-chave** (`SECTION_KEYWORDS`) que tenta adivinhar pelo nome ("aluguel" → operacional, "iss" → imposto, etc.).
-   - **Se nada casar**, joga em **"Despesas Gerais"** (despesa) ou **"Receita Operacional"** (receita).
+O **vídeo 18** é o do DRE. Resumindo a fala do usuário:
 
-**O que o banco mostra hoje:**
-| dre_section            | nº de categorias |
-|------------------------|------------------|
-| *(NULL — não mapeado)* | **933**          |
-| despesas_operacionais  | 20               |
-| receita_financeira     | 19               |
-| cmv_csp                | 9                |
-| despesas_financeiras   | 4                |
-| receita_operacional    | 1                |
+> "FGTS está na pasta *Despesa Operacional e Administrativa > Tributos* no Centros de Custos, mas no DRE ele aparece como *Deduções e Impostos sobre Vendas*. Ele não está puxando o que eu mapeei."
 
-Ou seja: **~95% das categorias não estão vinculadas a nenhum centro de custo**. O DRE está sendo montado quase 100% por adivinhação de keywords — por isso parece fantasioso. Toda receita sem keyword vira "Receita Operacional" e toda despesa sem keyword vira "Despesas Gerais", mesmo que conceitualmente sejam outra coisa.
+## Causa real (não é só falta de mapeamento)
 
-**Resposta direta à pergunta:** sim, os centros de custos *deveriam* ser a fonte do DRE — e o código até tenta usá-los, mas como quase nenhuma categoria está mapeada, ele cai no fallback de keywords. Não é bug de cálculo; é falta de mapeamento + um fallback agressivo demais que mascara o problema.
+Verifiquei o banco. O `dre_section` está cravado em **categorias filhas/netas**, e não na raiz. Exemplos reais:
 
----
+```
+ADMINISTRATIVOS              → dre_section = null   ← raiz (única editável na UI)
+ADMINISTRATIVOS > Aluguel    → dre_section = despesas_operacionais
+ADMINISTRATIVOS > Aluguel maquininha cartão → dre_section = cmv_csp
+ADMINISTRATIVOS > Taxas > BOMBEIROS  → dre_section = despesas_operacionais
+ADMINISTRATIVOS > Taxas > Tx cartão  → dre_section = cmv_csp
+ADMINISTRATIVOS > Tributos > FGTS    → dre_section = despesas_operacionais (alguns)
+Despesas clinicas > Salário > FGTS   → herda despesas_financeiras (errado!)
+```
+
+Dois problemas se somam:
+
+1. **A página Centros de Custos só lista categorias-raiz.** Mapeamentos antigos (provavelmente vindos do classificador por keywords que removemos) ficaram gravados em níveis intermediários e o usuário **não consegue vê-los nem corrigi-los pela UI**.
+2. **O resolvedor `resolveDreSection` no `useDREData` sobe a árvore do nível mais específico para o pai.** Como o filho tem `dre_section` cravado, ele "ganha" do que a raiz diz — exatamente o oposto da expectativa do usuário, que arrasta a raiz no Centros de Custos achando que todos os filhos seguem.
+
+Por isso o FGTS (e outros) cai em seções que o usuário nunca configurou conscientemente.
 
 ## Plano de correção
 
-### 1. Tornar o centro de custo a fonte ÚNICA de verdade no DRE
-Em `src/hooks/useDREData.ts` (modo Contábil):
-- Remover a classificação por keywords.
-- Para cada transação, resolver o `dre_section` subindo a árvore de categorias (categoria → pai → avô) até achar um valor definido.
-- Se nenhuma categoria da cadeia tiver `dre_section`, classificar em uma **nova seção "Não Classificado"** (separada para receitas e despesas), em vez de empurrar para Operacional/Gerais silenciosamente.
+### 1. Centros de Custos passa a mostrar a árvore inteira
+- Em vez de listar só raízes, expandir cada raiz mostrando filhas/netas com seus `dre_section` atuais.
+- Cada nó pode ser arrastado para um centro, ou marcado como "herdar do pai" (limpa o `dre_section`).
+- Mostra um badge "⚠ herda diferente do pai" quando filho diverge da raiz, para o usuário identificar mapeamentos órfãos como esses.
 
-### 2. Tornar visível o que está fora do DRE
-- Na DRE Contábil, exibir as seções "(+) Receitas Não Classificadas" e "(-) Despesas Não Classificadas" sempre que houver valores ali, com um aviso no topo: *"X categorias sem centro de custo. Classifique em Centros de Custos para refletir corretamente no DRE."* com link para `/centros-de-custos`.
+### 2. Resolvedor inverte a prioridade: raiz primeiro, filhos só sobrescrevem se explícito
+Hoje a ordem é: subcategoria2 → subcategoria → categoria, subindo até achar `dre_section`. Vamos mudar para:
+- **Resolver a partir da raiz, descendo** até a categoria da transação.
+- O `dre_section` do nó mais profundo só vence se for **diferente do herdado da raiz** (override explícito).
+- Resultado: mover a raiz no Centros de Custos passa a refletir em todos os filhos imediatamente, exceto onde o usuário explicitamente sobrescreveu.
 
-### 3. Herança pai→filho na página Centros de Custos
-Hoje só categorias-raiz aparecem na tela. Garantir que ao mapear uma raiz, **todas as filhas herdem** o `dre_section` automaticamente na hora de classificar transações (já contemplado no item 1 ao subir a árvore — não precisa migração de dados).
+### 3. Botão "Limpar mapeamentos de filhos" por raiz
+Na página Centros de Custos, ao lado de cada categoria-raiz, um botão que zera o `dre_section` de **todos os descendentes**, forçando herança pura. Resolve casos como o FGTS herdando `despesas_financeiras` por estar dentro de "Despesas clinicas > Salário".
 
-### 4. (Opcional, recomendado) Mapeamento assistido em lote
-Botão "Sugerir mapeamento" na página Centros de Custos que roda o classificador-por-keywords atual **uma única vez**, mostra as sugestões e deixa o usuário aprovar/ajustar antes de gravar `dre_section` em massa. Isso preserva o conhecimento dos keywords sem deixá-los rodando "por baixo" toda vez que o DRE é montado.
+### 4. Aviso global no DRE de divergências
+O banner amarelo atual conta categorias não classificadas. Adicionar uma segunda linha: "X categorias filhas estão sobrescrevendo o centro de custo da raiz" com link para Centros de Custos filtrado por essas divergências.
 
-### Escopo desta entrega
-- Itens 1, 2 e 3 entram juntos (correção de comportamento e visibilidade).
-- Item 4 fica como pergunta: implemento agora ou em passo seguinte?
+## Arquivos a alterar
+- `src/pages/CentrosDeCustos.tsx` — renderizar árvore inteira, badge de divergência, botão "limpar filhos".
+- `src/hooks/useDREData.ts` — inverter `resolveDreSection` (raiz→folha) e expor contagem de divergências.
+- `src/pages/DRE.tsx` — segunda linha no banner de aviso.
 
-### Arquivos a alterar
-- `src/hooks/useDREData.ts` — reescrever classificação contábil (remover keywords, usar herança pai→filho, criar seções "Não Classificado").
-- `src/components/relatorios/DRETableContabil.tsx` — renderizar as novas seções.
-- `src/pages/DRE.tsx` — banner de alerta com contagem de categorias não mapeadas + link para Centros de Custos.
+## O que **não** muda
+- Nenhuma migration de dados (mapeamentos atuais permanecem; o usuário decide o que limpar via UI).
+- Nenhuma mudança no DRE Gerencial.
+- Nenhuma mudança em transações ou valores.
 
-### O que **não** muda
-- Estrutura do banco (nenhuma migration).
-- Valores das transações.
-- DRE Gerencial (continua agrupando por categoria pura, como hoje).
-- Página Centros de Custos em si (a UI continua igual; só passa a ser de fato a fonte do DRE).
+## Pergunta antes de implementar
+Os vídeos 19 (Dashboard) e 23 (Cartões) ficam para depois, ou quer que eu já abra plano separado para eles também?
