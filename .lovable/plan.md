@@ -1,60 +1,79 @@
-## Diagnóstico dos vídeos
+## Objetivo
 
-Transcrevi os três áudios. Os **vídeos 19 e 23** são sobre o Dashboard (ajustes visuais, filtros de categoria, comportamento dos cards) e a tela de Cartões — não são DRE. Vou tratá-los em conversas separadas.
+Finalizar a integração Belvo Open Finance no app, no modelo **credenciais EVA gerenciadas** (cliente não cola token), ambiente **sandbox** primeiro, importando **contas + saldo, transações, cartões de crédito e itens recorrentes/agendados**. A tabela `belvo_integrations` já existe — falta toda a camada de edge functions e UI.
 
-O **vídeo 18** é o do DRE. Resumindo a fala do usuário:
+## Como o usuário vai usar
 
-> "FGTS está na pasta *Despesa Operacional e Administrativa > Tributos* no Centros de Custos, mas no DRE ele aparece como *Deduções e Impostos sobre Vendas*. Ele não está puxando o que eu mapeei."
+1. Em **Integrações → Open Finance (Belvo)**, clica em "Conectar banco".
+2. Abre o **Belvo Connect Widget** (script oficial) já autenticado com um `access_token` curto gerado no nosso backend usando nossas credenciais.
+3. Escolhe o banco e faz login no fluxo Open Finance da Belvo.
+4. No sucesso, recebemos `link_id` via callback, vinculamos a uma conta bancária (existente ou nova) e disparamos sync inicial.
+5. Transações importadas vão para **Análises EVA** (ai_pending_transactions) para revisão, igual Pluggy/Itaú. Cartões viram `credit_cards` + lançamentos. Recorrentes viram sugestões em `recurring_transactions`.
+6. Botão **Sincronizar agora** + sync automático diário via cron.
 
-## Causa real (não é só falta de mapeamento)
+## Arquitetura
 
-Verifiquei o banco. O `dre_section` está cravado em **categorias filhas/netas**, e não na raiz. Exemplos reais:
-
+```text
+[UI Integrações] ──► belvo-connect-token ──► Belvo /api/token (widget_access)
+       │                                          │
+       │  abre widget ◄──────────────────────────┘
+       │
+       ├──► belvo-register-link (link_id, institution)
+       │         └─► insere belvo_integrations + cria/vincula bank_account
+       │
+       ├──► belvo-sync (manual ou cron)
+       │         ├─ /accounts        → saldo + metadata
+       │         ├─ /transactions    → ai_pending_transactions
+       │         ├─ /owners + /institutions → enriquecimento
+       │         └─ /recurring-expenses + /incomes → recurring_transactions (sugestão)
+       │
+       ├──► belvo-disconnect-account ──► DELETE /links/{id} + soft delete
+       │
+       └──► belvo-webhook (opcional fase 2: historical_update, new_transactions)
 ```
-ADMINISTRATIVOS              → dre_section = null   ← raiz (única editável na UI)
-ADMINISTRATIVOS > Aluguel    → dre_section = despesas_operacionais
-ADMINISTRATIVOS > Aluguel maquininha cartão → dre_section = cmv_csp
-ADMINISTRATIVOS > Taxas > BOMBEIROS  → dre_section = despesas_operacionais
-ADMINISTRATIVOS > Taxas > Tx cartão  → dre_section = cmv_csp
-ADMINISTRATIVOS > Tributos > FGTS    → dre_section = despesas_operacionais (alguns)
-Despesas clinicas > Salário > FGTS   → herda despesas_financeiras (errado!)
-```
 
-Dois problemas se somam:
+## Mudanças no banco
 
-1. **A página Centros de Custos só lista categorias-raiz.** Mapeamentos antigos (provavelmente vindos do classificador por keywords que removemos) ficaram gravados em níveis intermediários e o usuário **não consegue vê-los nem corrigi-los pela UI**.
-2. **O resolvedor `resolveDreSection` no `useDREData` sobe a árvore do nível mais específico para o pai.** Como o filho tem `dre_section` cravado, ele "ganha" do que a raiz diz — exatamente o oposto da expectativa do usuário, que arrasta a raiz no Centros de Custos achando que todos os filhos seguem.
+Migration única adicionando ao que falta em `belvo_integrations` e tabelas auxiliares:
 
-Por isso o FGTS (e outros) cai em seções que o usuário nunca configurou conscientemente.
+- `belvo_integrations`: adicionar `credit_card_id uuid` (vínculo p/ cartão), `last_link_status text`, `auto_sync_enabled boolean default true`, `external_account_id text` (id da conta dentro da Belvo).
+- Nova tabela `belvo_sync_items` (log de execução: account, started_at, finished_at, status, counts, error) — mesmo padrão do `asaas_sync_items`. Com GRANTs + RLS owner/hub.
+- Constraint: `bank_account_id` **ou** `credit_card_id` deve estar preenchido (não os dois).
+- Função/cron `pg_cron` chamando edge `belvo-sync-all` 1x/dia (madrugada), respeitando `auto_sync_enabled`.
 
-## Plano de correção
+## Edge functions (Deno)
 
-### 1. Centros de Custos passa a mostrar a árvore inteira
-- Em vez de listar só raízes, expandir cada raiz mostrando filhas/netas com seus `dre_section` atuais.
-- Cada nó pode ser arrastado para um centro, ou marcado como "herdar do pai" (limpa o `dre_section`).
-- Mostra um badge "⚠ herda diferente do pai" quando filho diverge da raiz, para o usuário identificar mapeamentos órfãos como esses.
+Todas com CORS, validação Zod do body, JWT validado em código (já é padrão do projeto), `service_role` para escrita, secrets `BELVO_SECRET_ID` / `BELVO_SECRET_PASSWORD` / `BELVO_ENV=sandbox`.
 
-### 2. Resolvedor inverte a prioridade: raiz primeiro, filhos só sobrescrevem se explícito
-Hoje a ordem é: subcategoria2 → subcategoria → categoria, subindo até achar `dre_section`. Vamos mudar para:
-- **Resolver a partir da raiz, descendo** até a categoria da transação.
-- O `dre_section` do nó mais profundo só vence se for **diferente do herdado da raiz** (override explícito).
-- Resultado: mover a raiz no Centros de Custos passa a refletir em todos os filhos imediatamente, exceto onde o usuário explicitamente sobrescreveu.
+1. **belvo-connect-token** — gera `access_token` widget (`scopes: read_institutions,write_links,read_consents`), retorna `{ access_token, env }`.
+2. **belvo-register-link** — recebe `{ link_id, institution, bank_account_id?, credit_card_id?, create_new_account? }`. Faz `POST /accounts` (refresh inicial), grava `belvo_integrations`, cria `bank_account`/`credit_card` quando solicitado, retorna integration.
+3. **belvo-sync** — recebe `{ integration_id }`. Busca `/accounts`, `/transactions?date_from=last_sync-2d`, faz dedupe por `external_id` (hash idempotente), insere em `ai_pending_transactions` (mesmo fingerprint SHA-256 já usado pelo Pluggy). Para cartão: agrupa por fatura. Para recorrência: chama `/recurring-expenses` + `/incomes` e popula sugestões.
+4. **belvo-sync-all** — cron, itera integrações ativas, invoca `belvo-sync` por id, escreve `belvo_sync_items`.
+5. **belvo-disconnect-account** — chama `DELETE /links/{id}`, marca `sync_status='disconnected'`, mantém histórico.
+6. **belvo-webhook** (stub para fase 2; rota pública com assinatura HMAC).
 
-### 3. Botão "Limpar mapeamentos de filhos" por raiz
-Na página Centros de Custos, ao lado de cada categoria-raiz, um botão que zera o `dre_section` de **todos os descendentes**, forçando herança pura. Resolve casos como o FGTS herdando `despesas_financeiras` por estar dentro de "Despesas clinicas > Salário".
+## UI
 
-### 4. Aviso global no DRE de divergências
-O banner amarelo atual conta categorias não classificadas. Adicionar uma segunda linha: "X categorias filhas estão sobrescrevendo o centro de custo da raiz" com link para Centros de Custos filtrado por essas divergências.
+Tudo em `src/pages/Integracoes.tsx` (já existe a seção Pluggy/Itaú — adicionar **card Belvo Open Finance** com mesmo padrão visual glassmorphism cyan).
 
-## Arquivos a alterar
-- `src/pages/CentrosDeCustos.tsx` — renderizar árvore inteira, badge de divergência, botão "limpar filhos".
-- `src/hooks/useDREData.ts` — inverter `resolveDreSection` (raiz→folha) e expor contagem de divergências.
-- `src/pages/DRE.tsx` — segunda linha no banner de aviso.
+- `BelvoConnectModal.tsx` — carrega script `https://cdn.belvo.io/belvo-widget-1-stable.js`, recebe token da edge, lida com callbacks `onSuccess(link, institution)`, `onExit(data)`, `onEvent(data)`.
+- `BelvoIntegrationsList.tsx` — lista vínculos ativos com institution, conta vinculada, último sync, badge de status, botões **Sincronizar / Desconectar / Auto-sync toggle**.
+- Após sucesso do widget, modal de mapeamento: "Vincular a uma conta existente" (select de `bank_accounts`/`credit_cards`) ou "Criar nova conta automaticamente".
+- Toasts e estados de erro padronizados; loading com skeleton.
 
-## O que **não** muda
-- Nenhuma migration de dados (mapeamentos atuais permanecem; o usuário decide o que limpar via UI).
-- Nenhuma mudança no DRE Gerencial.
-- Nenhuma mudança em transações ou valores.
+## Secrets necessários (sandbox)
 
-## Pergunta antes de implementar
-Os vídeos 19 (Dashboard) e 23 (Cartões) ficam para depois, ou quer que eu já abra plano separado para eles também?
+`BELVO_SECRET_ID`, `BELVO_SECRET_PASSWORD`, `BELVO_ENV` (default `sandbox`). Vou pedir via tool de secrets ao entrar em build mode — você cria na Belvo em dashboard → "Generate secret key".
+
+## Segurança
+
+- RLS já existente em `belvo_integrations` (owner + hub writer) será replicada em `belvo_sync_items`.
+- Trigger de validação: `bank_account_id` xor `credit_card_id` preenchido.
+- `link_id` é o único token persistido (não armazenamos credenciais bancárias do usuário — Belvo gerencia).
+- Dedupe de transações via SHA-256 (account_id + external_id + amount + date) reaproveitando lógica de `ai_pending_transactions`.
+
+## Fora de escopo agora (anotado p/ fase 2)
+
+- Ambiente production (toggle só será adicionado quando você liberar a conta paga Belvo).
+- Webhooks (criamos o stub, mas processamento completo de `historical_update` fica para fase 2).
+- Pagamentos via Open Finance (Payment Initiation) — Belvo cobra à parte.
