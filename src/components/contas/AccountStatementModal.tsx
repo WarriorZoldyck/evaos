@@ -69,7 +69,11 @@ export function AccountStatementModal({
 
       if (accountType === "bank") query = query.eq("bank_account_id", accountId);
       else if (accountType === "wallet") query = query.eq("wallet_id", accountId);
-      else query = query.eq("credit_card_id", accountId);
+      else {
+        query = query.eq("credit_card_id", accountId);
+        // Extrato de fatura: transferências entre contas nunca devem aparecer.
+        query = query.is("transfer_id", null);
+      }
 
       const { data, error } = await query;
 
