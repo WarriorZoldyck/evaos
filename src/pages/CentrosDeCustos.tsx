@@ -14,7 +14,18 @@ import {
   Layers,
   Eraser,
   CornerDownRight,
+  ArrowRightLeft,
+  Check,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useCategories, type Category } from "@/hooks/useCategories";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
