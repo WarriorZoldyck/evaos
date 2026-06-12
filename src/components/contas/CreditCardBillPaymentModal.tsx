@@ -199,6 +199,10 @@ export function CreditCardBillPaymentModal({
         // Lançamentos com método "Cartão de Débito" (legado/erro de cadastro)
         // não devem entrar no total da fatura.
         .or("payment_method.is.null,payment_method.neq.Cartão de Débito")
+        // Blindagem: transferências entre contas (transfer_id preenchido) nunca
+        // devem aparecer em fatura de cartão, mesmo que por engano tenham
+        // ficado vinculadas a um credit_card_id.
+        .is("transfer_id", null)
         .gte("payment_date", startDate)
         .lte("payment_date", endDate)
         .order("payment_date", { ascending: true });
