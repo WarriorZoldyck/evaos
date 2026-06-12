@@ -223,7 +223,7 @@ export default function CentrosDeCustos() {
         <div>
           <h1 className="text-2xl font-bold font-display text-foreground">Centros de Custos</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Arraste categorias (raízes ou subcategorias) para os centros de custo do DRE —{" "}
+            {isMobile ? "Toque no ícone ↔ para mover a categoria para um centro de custo do DRE — " : "Arraste categorias (raízes ou subcategorias) para os centros de custo do DRE — "}
             {isPersonal ? "Pessoal" : "Empresa"}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
