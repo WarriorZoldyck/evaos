@@ -216,8 +216,10 @@ export default function CentrosDeCustos() {
   );
 
   return (
+    <AssignContext.Provider value={{ sections: sectionsToShow as any, onAssign: updateCategorySection, isMobile }}>
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-start justify-between">
+
         <div>
           <h1 className="text-2xl font-bold font-display text-foreground">Centros de Custos</h1>
           <p className="text-muted-foreground text-sm mt-1">
