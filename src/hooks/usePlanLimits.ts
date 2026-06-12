@@ -17,15 +17,21 @@ interface PlanLimitsState {
   limits: PlanLimits;
   usage: {
     accounts: number;
+    bankAccounts: number;
+    creditCards: number;
+    wallets: number;
+    terminals: number;
     hubMembers: number;
     aiMessagesThisMonth: number;
   };
-  canCreateAccount: () => { ok: boolean; reason?: string };
+  canCreateAccount: (kind?: AccountKind) => { ok: boolean; reason?: string };
   canCreateHubMember: () => { ok: boolean; reason?: string };
   canUseAI: () => { ok: boolean; reason?: string; remaining: number | null };
   hubAllowed: boolean;
   refetch: () => void | Promise<unknown>;
 }
+
+export type AccountKind = "bank" | "card" | "wallet" | "terminal";
 
 interface SubscriptionPlanLimits extends PlanLimits {
   slug: string;
@@ -66,6 +72,10 @@ export function usePlanLimits(): PlanLimitsState {
       const plan = planRes?.data as SubscriptionPlanLimits | null | undefined;
       return {
         plan,
+        bankAccounts: accountsRes.count ?? 0,
+        creditCards: cardsRes.count ?? 0,
+        wallets: walletsRes.count ?? 0,
+        terminals: terminalsRes.count ?? 0,
         accounts: (accountsRes.count ?? 0) + (cardsRes.count ?? 0) + (walletsRes.count ?? 0) + (terminalsRes.count ?? 0),
         hubMembers: membersRes.count ?? 0,
         aiMessagesThisMonth: (usageRes.data as UsageCounterRow | null)?.messages_used ?? 0,
@@ -90,9 +100,26 @@ export function usePlanLimits(): PlanLimitsState {
 
   const usage = {
     accounts: data?.accounts ?? 0,
+    bankAccounts: data?.bankAccounts ?? 0,
+    creditCards: data?.creditCards ?? 0,
+    wallets: data?.wallets ?? 0,
+    terminals: data?.terminals ?? 0,
     hubMembers: data?.hubMembers ?? 0,
     aiMessagesThisMonth: data?.aiMessagesThisMonth ?? 0,
   };
+
+  const kindLabels: Record<AccountKind, string> = {
+    bank: "contas bancárias",
+    card: "cartões de crédito",
+    wallet: "carteiras",
+    terminal: "maquininhas",
+  };
+
+  const kindUsage = (kind: AccountKind) =>
+    kind === "bank" ? usage.bankAccounts
+    : kind === "card" ? usage.creditCards
+    : kind === "wallet" ? usage.wallets
+    : usage.terminals;
 
   return {
     isLoading: isLoading || subLoading,
@@ -101,16 +128,32 @@ export function usePlanLimits(): PlanLimitsState {
     limits,
     usage,
     hubAllowed: limits.max_hub_members > 0,
-    canCreateAccount: () => {
+    canCreateAccount: (kind?: AccountKind) => {
       if (limits.max_accounts == null) return { ok: true };
-      if (usage.accounts >= limits.max_accounts) {
+      // Per-kind limit: each category (bank, card, wallet, terminal) has its own cap = max_accounts.
+      if (kind) {
+        const current = kindUsage(kind);
+        if (current >= limits.max_accounts) {
+          return {
+            ok: false,
+            reason: `Seu plano permite até ${limits.max_accounts} ${kindLabels[kind]}. Faça upgrade para o Família para cadastros ilimitados.`,
+          };
+        }
+        return { ok: true };
+      }
+      // Fallback (no kind): check if ANY category still has room.
+      const anyRoom = (["bank", "card", "wallet", "terminal"] as AccountKind[]).some(
+        (k) => kindUsage(k) < limits.max_accounts!,
+      );
+      if (!anyRoom) {
         return {
           ok: false,
-          reason: `Seu plano permite até ${limits.max_accounts} contas/cartões/carteiras/maquininhas. Faça upgrade para o Família para cadastros ilimitados.`,
+          reason: `Seu plano permite até ${limits.max_accounts} de cada tipo (contas, cartões, carteiras, maquininhas). Faça upgrade para o Família.`,
         };
       }
       return { ok: true };
     },
+
     canCreateHubMember: () => {
       if (limits.max_hub_members <= 0) {
         return { ok: false, reason: "O EVA Hub é exclusivo do plano Família. Faça upgrade para gerenciar usuários adicionais." };
