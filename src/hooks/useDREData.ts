@@ -272,17 +272,30 @@ export function useDREData(filters: DREFilters) {
       despesas_nao_classificadas: new Map(),
     };
 
-    // Resolve dre_section by walking up the parent chain of the transaction's category
+    // Resolve dre_section using ROOT-FIRST priority:
+    // The root category's mapping wins over child mappings. Children only matter
+    // when the root has no dre_section (then we walk down looking for one).
+    // This matches the user's mental model in Centros de Custos: drag the root,
+    // everything under it follows.
     const resolveDreSection = (categoryRef: string | null | undefined): DreSectionKey | null => {
       if (!categoryRef) return null;
       let cat = categories.find((c) => c.id === categoryRef);
       if (!cat) cat = categories.find((c) => c.name.toLowerCase() === categoryRef.toLowerCase());
-      while (cat) {
-        if (cat.dre_section && VALID_SECTION_KEYS.includes(cat.dre_section as DreSectionKey)) {
-          return cat.dre_section as DreSectionKey;
+      if (!cat) return null;
+
+      // Build chain leaf → root
+      const ancestry: CategoryRecord[] = [];
+      let current: CategoryRecord | undefined = cat;
+      while (current) {
+        ancestry.push(current);
+        current = current.parent_id ? categories.find((c) => c.id === current!.parent_id) : undefined;
+      }
+      // Reverse to root → leaf and return the FIRST (root-most) explicit dre_section
+      for (let i = ancestry.length - 1; i >= 0; i--) {
+        const v = ancestry[i].dre_section;
+        if (v && VALID_SECTION_KEYS.includes(v as DreSectionKey)) {
+          return v as DreSectionKey;
         }
-        if (!cat.parent_id) break;
-        cat = categories.find((c) => c.id === cat!.parent_id);
       }
       return null;
     };
@@ -296,7 +309,7 @@ export function useDREData(filters: DREFilters) {
 
       const chain = buildChain(t.category, t.subcategory, t.subcategory2);
 
-      // Try most specific category first (sub2 → sub → category), walking parents at each level
+      // Resolve from the most specific reference; resolver already prefers root over leaf
       let sectionKey: DreSectionKey | null = null;
       const refsInOrder = [t.subcategory2, t.subcategory, t.category];
       for (const ref of refsInOrder) {
