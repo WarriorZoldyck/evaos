@@ -624,13 +624,17 @@ function DraggableCategoryItem({ category, draggedId, badge }: DraggableCategory
     window.dispatchEvent(new CustomEvent("category-drag-end"));
   }, []);
 
+  const assign = useAssign();
+  const canDrag = !assign?.isMobile;
+
   return (
     <div
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
+      draggable={canDrag}
+      onDragStart={canDrag ? handleDragStart : undefined}
+      onDragEnd={canDrag ? handleDragEnd : undefined}
       className={cn(
-        "flex items-center gap-2 py-1.5 px-2 rounded-md cursor-grab active:cursor-grabbing hover:bg-accent/50 transition-colors",
+        "flex items-center gap-2 py-1.5 px-2 rounded-md hover:bg-accent/50 transition-colors",
+        canDrag && "cursor-grab active:cursor-grabbing",
         isDragged && "opacity-30"
       )}
     >
@@ -641,6 +645,52 @@ function DraggableCategoryItem({ category, draggedId, badge }: DraggableCategory
         <Badge variant="outline" className="text-[10px] shrink-0">
           {typeLabels[category.type] || category.type}
         </Badge>
+      )}
+      {assign && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 shrink-0"
+              title="Mover para centro de custo"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 z-50 bg-popover">
+            <DropdownMenuLabel className="text-xs">Mover para…</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {assign.sections.map((s) => {
+              const active = category.dre_section === s.key;
+              return (
+                <DropdownMenuItem
+                  key={s.key}
+                  onSelect={() => assign.onAssign(category.id, s.key)}
+                  className="text-xs"
+                >
+                  <span className={cn("mr-2 w-3", s.sign === "+" ? "text-emerald-500" : "text-red-500")}>{s.sign}</span>
+                  <span className="flex-1">{s.label}</span>
+                  {active && <Check className="h-3.5 w-3.5 text-primary" />}
+                </DropdownMenuItem>
+              );
+            })}
+            {category.dre_section && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => assign.onAssign(category.id, null)}
+                  className="text-xs text-muted-foreground"
+                >
+                  <Eraser className="h-3.5 w-3.5 mr-2" />
+                  Sem centro de custo
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
