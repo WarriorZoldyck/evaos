@@ -17,15 +17,21 @@ interface PlanLimitsState {
   limits: PlanLimits;
   usage: {
     accounts: number;
+    bankAccounts: number;
+    creditCards: number;
+    wallets: number;
+    terminals: number;
     hubMembers: number;
     aiMessagesThisMonth: number;
   };
-  canCreateAccount: () => { ok: boolean; reason?: string };
+  canCreateAccount: (kind?: AccountKind) => { ok: boolean; reason?: string };
   canCreateHubMember: () => { ok: boolean; reason?: string };
   canUseAI: () => { ok: boolean; reason?: string; remaining: number | null };
   hubAllowed: boolean;
   refetch: () => void | Promise<unknown>;
 }
+
+export type AccountKind = "bank" | "card" | "wallet" | "terminal";
 
 interface SubscriptionPlanLimits extends PlanLimits {
   slug: string;
