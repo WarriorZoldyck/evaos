@@ -50,6 +50,15 @@ const SECTION_LABEL: Record<string, string> = Object.fromEntries(
   DRE_SECTIONS.map((s) => [s.key, s.label])
 );
 
+interface AssignCtx {
+  sections: { key: string; label: string; sign: string }[];
+  onAssign: (categoryId: string, section: string | null) => void;
+  isMobile: boolean;
+}
+const AssignContext = createContext<AssignCtx | null>(null);
+const useAssign = () => useContext(AssignContext);
+
+
 export default function CentrosDeCustos() {
   const { isPersonal } = useCompany();
   const { user } = useAuth();
