@@ -25,7 +25,10 @@ import {
 } from "lucide-react";
 
 type ResourceType = "company" | "bank_account" | "credit_card" | "card_terminal" | "wallet";
-interface ResourceOption { id: string; name: string; type: ResourceType }
+interface ResourceOption { id: string; name: string; type: ResourceType; company_id: string | null }
+interface CompanyOption { id: string; name: string }
+
+const PESSOAL = "__pessoal__";
 
 const RES_META: Record<ResourceType, { label: string; icon: typeof Shield }> = {
   company: { label: "Empresas", icon: Building2 },
