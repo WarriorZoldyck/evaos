@@ -368,9 +368,11 @@ export function useDREData(filters: DREFilters) {
     const lair = emptyTotals();
     const lucroLiquido = emptyTotals();
     periods.forEach((p) => {
-      recLiquida[p] = recOp[p] + recNc[p] - impVenda[p];
+      // Não Classificadas DO NOT affect the bottom line — they are shown
+      // informationally after Lucro Líquido so the user can map them.
+      recLiquida[p] = recOp[p] - impVenda[p];
       lucroBruto[p] = recLiquida[p] - cmv[p];
-      ebitda[p] = lucroBruto[p] - despVendas[p] - despOp[p] - despGerais[p] - despNc[p];
+      ebitda[p] = lucroBruto[p] - despVendas[p] - despOp[p] - despGerais[p];
       ebit[p] = ebitda[p] - depAmort[p];
       resultadoFinanceiro[p] = recFin[p] - despFin[p];
       lair[p] = ebit[p] + resultadoFinanceiro[p];
@@ -384,7 +386,6 @@ export function useDREData(filters: DREFilters) {
 
     const sections: DRESection[] = [
       { key: "receita_operacional", label: "(+) Receita Operacional Bruta", sign: "+", monthlyTotals: recOp, categoryRows: toRows(sectionTrees.receita_operacional), isCalculated: false },
-      ...(hasRecNc ? [{ key: "receitas_nao_classificadas", label: "(+) Receitas Não Classificadas", sign: "+" as const, monthlyTotals: recNc, categoryRows: toRows(sectionTrees.receitas_nao_classificadas), isCalculated: false }] : []),
       { key: "impostos_venda", label: "(-) Deduções e Impostos s/ Venda", sign: "-", monthlyTotals: impVenda, categoryRows: toRows(sectionTrees.impostos_venda), isCalculated: false },
       { key: "receita_liquida", label: "(=) Receita Líquida", sign: "=", monthlyTotals: recLiquida, categoryRows: [], isCalculated: true },
       { key: "cmv_csp", label: "(-) Custo das Mercadorias/Serviços", sign: "-", monthlyTotals: cmv, categoryRows: toRows(sectionTrees.cmv_csp), isCalculated: false },
@@ -392,7 +393,6 @@ export function useDREData(filters: DREFilters) {
       { key: "despesas_vendas", label: "(-) Despesas com Vendas", sign: "-", monthlyTotals: despVendas, categoryRows: toRows(sectionTrees.despesas_vendas), isCalculated: false },
       { key: "despesas_operacionais", label: "(-) Despesas Operacionais e Adm.", sign: "-", monthlyTotals: despOp, categoryRows: toRows(sectionTrees.despesas_operacionais), isCalculated: false },
       { key: "despesas_gerais", label: "(-) Despesas Gerais e Adm.", sign: "-", monthlyTotals: despGerais, categoryRows: toRows(sectionTrees.despesas_gerais), isCalculated: false },
-      ...(hasDespNc ? [{ key: "despesas_nao_classificadas", label: "(-) Despesas Não Classificadas", sign: "-" as const, monthlyTotals: despNc, categoryRows: toRows(sectionTrees.despesas_nao_classificadas), isCalculated: false }] : []),
       { key: "ebitda", label: "(=) EBITDA", sign: "=", monthlyTotals: ebitda, categoryRows: [], isCalculated: true },
       ...(hasDepAmort ? [{ key: "depreciacao_amortizacao", label: "(-) Depreciação e Amortização", sign: "-" as const, monthlyTotals: depAmort, categoryRows: toRows(sectionTrees.depreciacao_amortizacao), isCalculated: false }] : []),
       { key: "ebit", label: "(=) EBIT (Resultado Operacional)", sign: "=", monthlyTotals: ebit, categoryRows: [], isCalculated: true },
@@ -402,6 +402,10 @@ export function useDREData(filters: DREFilters) {
       { key: "lair", label: "(=) LAIR (Lucro Antes de IR/CSLL)", sign: "=", monthlyTotals: lair, categoryRows: [], isCalculated: true },
       ...(hasTributos ? [{ key: "tributos_sobre_lucro", label: "(-) IRPJ / CSLL", sign: "-" as const, monthlyTotals: tributosLucro, categoryRows: toRows(sectionTrees.tributos_sobre_lucro), isCalculated: false }] : []),
       { key: "lucro_liquido", label: "(=) Lucro Líquido do Exercício", sign: "=", monthlyTotals: lucroLiquido, categoryRows: [], isCalculated: true },
+      // Informational sections — DO NOT enter into Lucro Líquido. They sit
+      // below the bottom line so the user can identify what's missing mapping.
+      ...(hasRecNc ? [{ key: "receitas_nao_classificadas", label: "(i) Receitas Não Classificadas (fora do DRE)", sign: "+" as const, monthlyTotals: recNc, categoryRows: toRows(sectionTrees.receitas_nao_classificadas), isCalculated: false }] : []),
+      ...(hasDespNc ? [{ key: "despesas_nao_classificadas", label: "(i) Despesas Não Classificadas (fora do DRE)", sign: "-" as const, monthlyTotals: despNc, categoryRows: toRows(sectionTrees.despesas_nao_classificadas), isCalculated: false }] : []),
     ];
 
     return { sections, recOp, recLiquida, lucroBruto, ebitda, ebit, resultadoFinanceiro, lair, lucroLiquido, unmappedCategoryCount: unmappedCategoryIds.size };
