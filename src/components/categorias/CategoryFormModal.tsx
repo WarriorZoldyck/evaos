@@ -39,6 +39,7 @@ export function CategoryFormModal({ open, onClose, parentName, editData, default
   const [type, setType] = useState("ambos");
   const [dreSection, setDreSection] = useState("__none__");
   const [saving, setSaving] = useState(false);
+  const { categories } = useCategories();
 
   useEffect(() => {
     if (open) {
@@ -47,6 +48,19 @@ export function CategoryFormModal({ open, onClose, parentName, editData, default
       setDreSection(editData?.dre_section || "__none__");
     }
   }, [open, editData, defaultType]);
+
+  // Detect duplicate-name (same level: root vs. sibling under same parent)
+  const duplicateMatch = (() => {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) return null;
+    const sameName = categories.find(
+      (c) =>
+        c.name.trim().toLowerCase() === trimmed &&
+        c.id !== editData?.id &&
+        !c.parent_id === !parentName // both roots OR both children
+    );
+    return sameName || null;
+  })();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
