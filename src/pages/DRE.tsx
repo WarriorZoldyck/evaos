@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Info, AlertTriangle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -9,9 +9,12 @@ import { DRETableContabil } from "@/components/relatorios/DRETableContabil";
 import { DREIndicatorCards } from "@/components/relatorios/DREIndicatorCards";
 import { useDREData, type DREFilters } from "@/hooks/useDREData";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useCompany } from "@/contexts/CompanyContext";
 
 
 export default function DRE() {
+  const { viewAll, personalSelected, selectedCompanyIds } = useCompany();
+  const onlyPersonal = !viewAll && personalSelected && selectedCompanyIds.length === 0;
   const [filters, setFilters] = useState<DREFilters>({
     year: new Date().getFullYear(),
     granularity: "monthly",
@@ -21,6 +24,8 @@ export default function DRE() {
   const [showHorizontalAnalysis, setShowHorizontalAnalysis] = useState(false);
   const { bankAccounts } = useAccounts();
   const data = useDREData(filters);
+
+  if (onlyPersonal) return <Navigate to="/dashboard" replace />;
 
   const isContabil = filters.viewMode === "contabil";
 

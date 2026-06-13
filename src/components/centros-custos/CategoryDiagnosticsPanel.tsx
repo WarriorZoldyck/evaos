@@ -2,10 +2,18 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle2, Copy, ChevronDown, ChevronRight } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, ChevronDown, ChevronRight, ArrowRightLeft } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { SECTION_LABEL } from "@/lib/dreSections";
+import { DRE_SECTIONS, SECTION_LABEL } from "@/lib/dreSections";
 import type { Category } from "@/hooks/useCategories";
 
 interface Props {
@@ -36,7 +44,7 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
-  const { duplicates, unmappedRootCount } = useMemo(() => {
+  const { duplicates, unmappedRoots } = useMemo(() => {
     const byId = new Map(categories.map((c) => [c.id, c]));
     const roots = categories.filter((c) => !c.parent_id);
 
@@ -49,12 +57,11 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
     });
 
     const dups: DuplicateGroup[] = [];
-    groups.forEach((group, key) => {
+    groups.forEach((group) => {
       if (group.length < 2) return;
       const withSection = group.filter((c) => !!resolveSection(c, byId));
       const without = group.filter((c) => !resolveSection(c, byId));
       if (withSection.length === 0 || without.length === 0) return;
-      // Use most common section among mapped ones
       const counts = new Map<string, number>();
       withSection.forEach((c) => {
         const s = resolveSection(c, byId)!;
@@ -69,13 +76,15 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
       });
     });
 
-    const unmappedRoots = roots.filter((r) => !resolveSection(r, byId));
+    const unmapped = roots
+      .filter((r) => !resolveSection(r, byId))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-    return { duplicates: dups, unmappedRootCount: unmappedRoots.length };
+    return { duplicates: dups, unmappedRoots: unmapped };
   }, [categories]);
 
   const applyMapping = async (group: DuplicateGroup) => {
-    setBusy(group.name);
+    setBusy(`dup:${group.name}`);
     try {
       const ids = group.unmapped.map((c) => c.id);
       const { error } = await supabase
@@ -95,7 +104,30 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
     }
   };
 
-  const hasIssues = duplicates.length > 0 || unmappedRootCount > 0;
+  const assignRoot = async (root: Category, section: string) => {
+    setBusy(`root:${root.id}`);
+    try {
+      // Apply to ALL homonyms (same lowercased name) that are still unmapped —
+      // covers the common case of duplicates accumulated by legacy imports.
+      const sameName = categories.filter(
+        (c) => !c.parent_id && c.name.trim().toLowerCase() === root.name.trim().toLowerCase() && !c.dre_section
+      );
+      const ids = sameName.length > 0 ? sameName.map((c) => c.id) : [root.id];
+      const { error } = await supabase.from("categories").update({ dre_section: section }).in("id", ids);
+      if (error) throw error;
+      toast({
+        title: "Categoria mapeada",
+        description: `"${root.name}"${ids.length > 1 ? ` (${ids.length} duplicatas)` : ""} → ${SECTION_LABEL[section] || section}.`,
+      });
+      onChanged();
+    } catch (e: any) {
+      toast({ title: "Erro ao mapear", description: e.message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const hasIssues = duplicates.length > 0 || unmappedRoots.length > 0;
 
   if (!hasIssues) {
     return (
@@ -121,7 +153,7 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
             <AlertTriangle className="h-4 w-4 text-amber-500" />
             Diagnóstico de mapeamento DRE
             <Badge variant="outline" className="ml-2">
-              {duplicates.length} duplicata(s) · {unmappedRootCount} raiz(es) sem seção
+              {duplicates.length} duplicata(s) · {unmappedRoots.length} raiz(es) sem seção
             </Badge>
           </CardTitle>
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -158,7 +190,7 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={busy === g.name}
+                      disabled={busy === `dup:${g.name}`}
                       onClick={() => applyMapping(g)}
                     >
                       <Copy className="h-3 w-3 mr-1" />
@@ -169,11 +201,63 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
               </ul>
             </div>
           )}
-          {unmappedRootCount > 0 && (
-            <div className="text-xs text-muted-foreground">
-              Há <span className="text-foreground font-medium">{unmappedRootCount}</span> categoria(s)
-              raiz sem nenhum mapeamento no DRE. Role até a área "Não classificadas" abaixo e arraste
-              cada uma para o centro de custo correto.
+          {unmappedRoots.length > 0 && (
+            <div>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
+                Categorias raiz sem centro de custo
+              </h4>
+              <p className="text-xs text-muted-foreground mb-2">
+                Mapeie direto daqui — todas as transações dessas categorias caem em "Não
+                Classificadas" no DRE.
+              </p>
+              <ul className="space-y-1.5 max-h-72 overflow-auto pr-1">
+                {unmappedRoots.map((cat) => (
+                  <li
+                    key={cat.id}
+                    className="flex items-center gap-3 p-2 rounded-md bg-background/60 border border-border"
+                  >
+                    <span className="text-sm flex-1 truncate">{cat.name}</span>
+                    {cat.type && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {cat.type}
+                      </Badge>
+                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 gap-1 text-[11px]"
+                          disabled={busy === `root:${cat.id}`}
+                        >
+                          <ArrowRightLeft className="h-3 w-3" />
+                          Mapear
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 z-50 bg-popover">
+                        <DropdownMenuLabel className="text-xs">Centro de custo…</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {DRE_SECTIONS.map((s) => (
+                          <DropdownMenuItem
+                            key={s.key}
+                            className="text-xs"
+                            onSelect={() => assignRoot(cat, s.key)}
+                          >
+                            <span
+                              className={
+                                "mr-2 w-3 " + (s.sign === "+" ? "text-emerald-500" : "text-red-500")
+                              }
+                            >
+                              {s.sign}
+                            </span>
+                            <span className="flex-1">{s.label}</span>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </CardContent>
@@ -181,3 +265,4 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
     </Card>
   );
 }
+
