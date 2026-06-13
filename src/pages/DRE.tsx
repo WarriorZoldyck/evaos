@@ -86,8 +86,9 @@ export default function DRE() {
       {/* Indicator cards (contábil mode) */}
       {isContabil && !data.loading && (
         <DREIndicatorCards
-          receitaOperacional={data.indicators.receitaOperacional}
+          receitaLiquida={data.indicators.receitaLiquida}
           lucroBruto={data.indicators.lucroBruto}
+          ebitda={data.indicators.ebitda}
           lucroLiquido={data.indicators.lucroLiquido}
         />
       )}
@@ -106,6 +107,7 @@ export default function DRE() {
               sections={data.sections}
               loading={data.loading}
               showVerticalAnalysis={showVerticalAnalysis}
+              showHorizontalAnalysis={showHorizontalAnalysis}
             />
           ) : (
             <DRETable
