@@ -494,7 +494,21 @@ function RootCategoryRow({ category, isAuto, draggedId, childrenOf, onClearDesce
           <span className="w-6" />
         )}
         <div className="flex-1">
-          <DraggableCategoryItem category={category} draggedId={draggedId} />
+          <DraggableCategoryItem
+            category={category}
+            draggedId={draggedId}
+            badge={
+              isAuto ? (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] shrink-0 border-primary/40 text-primary"
+                  title="Mapeamento automático pelo tipo (Receita/Despesa). Arraste para sobrescrever."
+                >
+                  Auto
+                </Badge>
+              ) : null
+            }
+          />
         </div>
         {hasOverrides && (
           <Button
