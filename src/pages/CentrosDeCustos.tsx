@@ -35,7 +35,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { CategoryDiagnosticsPanel } from "@/components/centros-custos/CategoryDiagnosticsPanel";
 
-import { DRE_SECTIONS as SHARED_DRE_SECTIONS, SECTION_LABEL as SHARED_SECTION_LABEL } from "@/lib/dreSections";
+import { DRE_SECTIONS as SHARED_DRE_SECTIONS, SECTION_LABEL as SHARED_SECTION_LABEL, defaultSectionForType } from "@/lib/dreSections";
 
 const DRE_SECTIONS = [
   ...SHARED_DRE_SECTIONS.map((s) => ({ key: s.key as string, label: s.label, sign: s.sign })),
