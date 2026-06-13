@@ -13,6 +13,8 @@ import { useCompany } from "@/contexts/CompanyContext";
 
 
 export default function DRE() {
+  const { viewAll, personalSelected, selectedCompanyIds } = useCompany();
+  const onlyPersonal = !viewAll && personalSelected && selectedCompanyIds.length === 0;
   const [filters, setFilters] = useState<DREFilters>({
     year: new Date().getFullYear(),
     granularity: "monthly",
@@ -22,6 +24,8 @@ export default function DRE() {
   const [showHorizontalAnalysis, setShowHorizontalAnalysis] = useState(false);
   const { bankAccounts } = useAccounts();
   const data = useDREData(filters);
+
+  if (onlyPersonal) return <Navigate to="/dashboard" replace />;
 
   const isContabil = filters.viewMode === "contabil";
 
