@@ -38,32 +38,14 @@ interface CategoryRecord {
 
 // ── DRE section keys ──────────────────────────────
 
+import { VALID_SECTION_KEYS as SHARED_VALID_KEYS, normalizeLegacySection, type DreSectionKey as SharedDreKey } from "@/lib/dreSections";
+
 type DreSectionKey =
-  | "receita_operacional"
-  | "impostos_venda"
-  | "cmv_csp"
-  | "despesas_vendas"
-  | "despesas_operacionais"
-  | "despesas_financeiras"
-  | "receita_financeira"
-  | "despesas_gerais"
-  | "depreciacao_amortizacao"
-  | "tributos_sobre_lucro"
+  | SharedDreKey
   | "receitas_nao_classificadas"
   | "despesas_nao_classificadas";
 
-const VALID_SECTION_KEYS: DreSectionKey[] = [
-  "receita_operacional",
-  "impostos_venda",
-  "cmv_csp",
-  "despesas_vendas",
-  "despesas_operacionais",
-  "despesas_financeiras",
-  "receita_financeira",
-  "despesas_gerais",
-  "depreciacao_amortizacao",
-  "tributos_sobre_lucro",
-];
+const VALID_SECTION_KEYS: DreSectionKey[] = SHARED_VALID_KEYS as DreSectionKey[];
 
 
 // ── Period helpers ──────────────────────────────
