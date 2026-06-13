@@ -135,7 +135,7 @@ async function findMatchingPendingBoleto(
       (!!params.supplierId && params.supplierId === c.supplier_id) ||
       jaccardSimilarity(params.supplierName, candSupplierName) >= 0.5 ||
       (!!params.supplierName && !!candSupplierName &&
-        normalizeText(candSupplierName).includes(normalizeText(params.supplierName)));
+        normalizeBoletoText(candSupplierName).includes(normalizeBoletoText(params.supplierName)));
     const amountMatch = amountMatches(Number(c.amount), params.amount);
     const descMatch =
       jaccardSimilarity(params.description, c.description) >= 0.4 ||
