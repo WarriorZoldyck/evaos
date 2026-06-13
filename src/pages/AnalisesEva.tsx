@@ -175,6 +175,12 @@ function PendingCard({
                   Pendente
                 </Badge>
               )}
+              {suggestion && (
+                <Badge variant="default" className="gap-1 text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20">
+                  <Link2 className="h-3 w-3" />
+                  Possível baixa de pendente
+                </Badge>
+              )}
             </div>
 
             <div className="flex items-start justify-between gap-2">
