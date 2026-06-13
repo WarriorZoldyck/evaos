@@ -476,6 +476,44 @@ export default function AnalisesEva() {
   const { settings: fieldSettings } = useFormFieldSettings();
 
   const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
+  const [reconcilingId, setReconcilingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const handleReconcile = async (pending: AIPendingTransaction, suggestion: BoletoSuggestion) => {
+    setReconcilingId(pending.id);
+    try {
+      const updates: Record<string, unknown> = {
+        status: "Pago",
+        payment_date: pending.payment_date || new Date().toISOString().slice(0, 10),
+      };
+      if (pending.bank_account_id) updates.bank_account_id = pending.bank_account_id;
+      if (pending.wallet_id) updates.wallet_id = pending.wallet_id;
+      if (pending.payment_method) updates.payment_method = pending.payment_method;
+      if (pending.attachment_url) updates.attachment_url = pending.attachment_url;
+
+      const { error: updErr } = await supabase
+        .from("transactions")
+        .update(updates)
+        .eq("id", suggestion.transactionId);
+      if (updErr) throw updErr;
+
+      const { error: rejErr } = await supabase
+        .from("ai_pending_transactions")
+        .update({ status: "approved", reviewed_at: new Date().toISOString() })
+        .eq("id", pending.id);
+      if (rejErr) throw rejErr;
+
+      toast.success("Baixa realizada no lançamento pendente!");
+      queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    } catch (e: any) {
+      toast.error("Erro ao dar baixa: " + (e?.message || String(e)));
+    } finally {
+      setReconcilingId(null);
+    }
+  };
+
 
   // Convert categories to the format TransactionFormModal expects
   const txCategories: TxCategory[] = useMemo(() =>
