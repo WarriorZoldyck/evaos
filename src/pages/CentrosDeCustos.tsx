@@ -263,7 +263,10 @@ export default function CentrosDeCustos() {
         <div className="space-y-3">
           <CategoryDiagnosticsPanel categories={categories} onChanged={refetch} />
           {sectionsToShow.map((section) => {
-            const sectionCats = rootCategories.filter((c) => c.dre_section === section.key);
+            const sectionCats = rootCategories.filter((c) => effectiveSection(c) === section.key);
+            const autoIds = new Set(
+              sectionCats.filter((c) => !c.dre_section).map((c) => c.id)
+            );
             const isExpanded = expandedSections[section.key] ?? sectionCats.length > 0;
 
             return (
@@ -273,6 +276,7 @@ export default function CentrosDeCustos() {
                 label={section.label}
                 sign={section.sign}
                 categories={sectionCats}
+                autoIds={autoIds}
                 expanded={isExpanded}
                 onToggle={() => toggleSection(section.key)}
                 draggedId={draggedId}
