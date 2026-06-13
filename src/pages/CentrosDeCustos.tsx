@@ -346,6 +346,7 @@ interface CostCenterFolderProps {
   label: string;
   sign: string;
   categories: Category[];
+  autoIds?: Set<string>;
   expanded: boolean;
   onToggle: () => void;
   draggedId: string | null;
