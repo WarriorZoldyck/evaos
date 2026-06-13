@@ -44,19 +44,6 @@ Deno.serve(async (req) => {
     await admin.from("workspace_member_permissions").delete().eq("workspace_member_id", memberId);
     await admin.from("workspace_members").delete().eq("id", memberId);
 
-    // Força logout para invalidar a sessão que estava impersonando este hub
-    try {
-      await admin.auth.admin.signOut(member.member_user_id, "global");
-    } catch (_) { /* ignore */ }
-
-    // SEGURANÇA: só apaga a conta Auth se ela foi CRIADA por este hub.
-    // Usuários EVA pré-existentes (convidados por e-mail) mantêm a própria conta intacta.
-    if (member.created_by_hub) {
-      try {
-        await admin.auth.admin.deleteUser(member.member_user_id);
-      } catch (_) { /* membership row already gone */ }
-    }
-
     return json({ ok: true });
   } catch (err) {
     return json({ error: (err as Error).message }, 500);

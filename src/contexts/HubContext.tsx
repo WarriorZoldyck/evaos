@@ -45,7 +45,7 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
     const [memberRes, ownerRes] = await Promise.all([
       supabase
         .from("workspace_members")
-        .select("id", { count: "exact", head: true })
+        .select("owner_id, role")
         .eq("member_user_id", user.id)
         .eq("status", "active"),
       supabase
@@ -53,17 +53,25 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
         .select("id", { count: "exact", head: true })
         .eq("owner_id", user.id),
     ]);
-    const hubMember = (memberRes.count ?? 0) > 0;
+    const activeMemberships = (memberRes.data || []) as Array<{ owner_id: string; role: string | null }>;
+    const hubMember = activeMemberships.length > 0;
     setIsHubMember(hubMember);
     setIsOwnerWithMembers((ownerRes.count ?? 0) > 0);
 
-    if (hubMember) {
-      const persisted = loadPersisted(user.id);
-      if (persisted) {
-        setImpersonatingOwnerId(persisted.ownerId);
-        setImpersonatingOwnerName(persisted.ownerName);
-        setImpersonatingRole(persisted.role);
-      }
+    const persisted = loadPersisted(user.id);
+    const persistedStillAllowed = persisted
+      ? activeMemberships.some((m) => m.owner_id === persisted.ownerId)
+      : false;
+
+    if (persisted && persistedStillAllowed) {
+      setImpersonatingOwnerId(persisted.ownerId);
+      setImpersonatingOwnerName(persisted.ownerName);
+      setImpersonatingRole(persisted.role);
+    } else {
+      setImpersonatingOwnerId(null);
+      setImpersonatingOwnerName(null);
+      setImpersonatingRole(null);
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
     }
   }, [user]);
 
