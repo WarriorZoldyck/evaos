@@ -827,10 +827,7 @@ export default function AnalisesEva() {
                               size="sm"
                               variant="outline"
                               className="gap-1 text-xs"
-                              onClick={() => keepOne({
-                                keepId: item.id,
-                                rejectIds: cluster.filter((c) => c.id !== item.id).map((c) => c.id),
-                              })}
+                              onClick={() => keepOne({ keepId: item.id })}
                             >
                               <Check className="h-3 w-3" />
                               Manter

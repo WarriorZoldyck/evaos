@@ -258,7 +258,7 @@ export function useAIPendingTransactions() {
   }
 
   const keepOneMutation = useMutation({
-    mutationFn: async ({ keepId }: { keepId: string; rejectIds?: string[] }) => {
+    mutationFn: async ({ keepId }: { keepId: string }) => {
       // Only move the clicked item to pending. The others remain as duplicate_suspect
       // so the user can decide each one individually (or use "Rejeitar Todos").
       const { error: keepError } = await supabase
