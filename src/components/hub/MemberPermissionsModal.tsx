@@ -3,7 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Shield, Building2, Wallet, CreditCard, Landmark, Smartphone } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Loader2, Shield, Building2, Wallet, CreditCard, Landmark, Smartphone, User } from "lucide-react";
 import { useMemberPermissions, type ResourceType } from "@/hooks/useMemberPermissions";
 
 const TYPE_META: Record<ResourceType, { label: string; icon: typeof Shield }> = {
@@ -16,6 +18,8 @@ const TYPE_META: Record<ResourceType, { label: string; icon: typeof Shield }> = 
 
 const ORDER: ResourceType[] = ["company", "bank_account", "credit_card", "card_terminal", "wallet"];
 
+const PESSOAL = "__pessoal__";
+
 export function MemberPermissionsModal({
   open, onClose, memberId, memberName,
 }: {
@@ -24,7 +28,17 @@ export function MemberPermissionsModal({
   memberId: string | null;
   memberName: string;
 }) {
-  const { resources, isGranted, togglePermission, clearAll, hasAnyScope, loading } = useMemberPermissions(open ? memberId : null);
+  const { resources, companies, isGranted, togglePermission, clearAll, hasAnyScope, loading } =
+    useMemberPermissions(open ? memberId : null);
+  const [context, setContext] = useState<string>(PESSOAL);
+
+  const filtered = resources.filter((r) => {
+    if (context === PESSOAL) {
+      // Pessoal: recursos sem empresa. "company" não aparece em Pessoal.
+      return r.type !== "company" && r.company_id === null;
+    }
+    return r.company_id === context;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -35,17 +49,39 @@ export function MemberPermissionsModal({
           </DialogTitle>
           <DialogDescription>
             {hasAnyScope
-              ? "Membro vê APENAS os recursos marcados abaixo."
+              ? "Membro vê APENAS os recursos marcados."
               : "Sem nada marcado, o membro vê TUDO da sua conta."}
           </DialogDescription>
         </DialogHeader>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs">Contexto</Label>
+          <Select value={context} onValueChange={setContext}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={PESSOAL}>
+                <span className="flex items-center gap-2"><User className="h-3.5 w-3.5" /> Pessoal</span>
+              </SelectItem>
+              {companies.map((co) => (
+                <SelectItem key={co.id} value={co.id}>
+                  <span className="flex items-center gap-2"><Building2 className="h-3.5 w-3.5" /> {co.name}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[11px] text-muted-foreground">
+            Selecione o contexto para ver apenas os recursos correspondentes.
+          </p>
+        </div>
 
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : (
           <div className="overflow-y-auto flex-1 space-y-5 pr-2">
             {ORDER.map((type) => {
-              const items = resources.filter((r) => r.type === type);
+              const items = filtered.filter((r) => r.type === type);
               if (items.length === 0) return null;
               const meta = TYPE_META[type];
               const Icon = meta.icon;
@@ -73,9 +109,9 @@ export function MemberPermissionsModal({
                 </div>
               );
             })}
-            {resources.length === 0 && (
+            {filtered.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-6">
-                Nenhum recurso cadastrado ainda na sua conta.
+                Nenhum recurso cadastrado neste contexto.
               </p>
             )}
           </div>
