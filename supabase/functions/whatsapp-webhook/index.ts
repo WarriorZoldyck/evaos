@@ -48,6 +48,115 @@ async function generateSeriesFingerprint(description: string, totalAmount: numbe
   return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// --- Boleto reconciliation helpers ---
+function normalizeText(s: string | null | undefined): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenSet(s: string | null | undefined): Set<string> {
+  return new Set(normalizeText(s).split(" ").filter((t) => t.length >= 3));
+}
+
+function jaccardSimilarity(a: string | null | undefined, b: string | null | undefined): number {
+  const A = tokenSet(a), B = tokenSet(b);
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+  const union = A.size + B.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+function amountMatches(a: number, b: number): boolean {
+  return Math.abs(a - b) <= Math.max(0.02, b * 0.005);
+}
+
+/**
+ * Looks for an existing Pendente expense that the user is now paying.
+ * Returns the best candidate when at least 2/3 criteria match
+ * (supplier, amount, description).
+ */
+async function findMatchingPendingBoleto(
+  supabase: any,
+  params: {
+    userId: string;
+    companyId: string | null;
+    supplierId: string | null;
+    supplierName: string | null;
+    amount: number;
+    description: string;
+  }
+): Promise<{ tx: any; supplierName: string | null; score: number } | null> {
+  if (!params.amount || params.amount <= 0) return null;
+
+  const today = new Date();
+  const from = new Date(today); from.setDate(from.getDate() - 180);
+  const to = new Date(today); to.setDate(to.getDate() + 30);
+  const fromStr = from.toISOString().slice(0, 10);
+  const toStr = to.toISOString().slice(0, 10);
+
+  let q = supabase
+    .from("transactions")
+    .select("id, description, amount, payment_date, supplier_id, contact_name, company_id, notes")
+    .eq("user_id", params.userId)
+    .eq("type", "despesa")
+    .eq("status", "Pendente")
+    .gte("payment_date", fromStr)
+    .lte("payment_date", toStr)
+    .limit(50);
+
+  if (params.companyId) q = q.eq("company_id", params.companyId);
+  else q = q.is("company_id", null);
+
+  const { data: candidates, error } = await q;
+  if (error) {
+    console.error("findMatchingPendingBoleto error:", error);
+    return null;
+  }
+  if (!candidates || candidates.length === 0) return null;
+
+  const supplierIds = Array.from(new Set(candidates.map((c: any) => c.supplier_id).filter(Boolean))) as string[];
+  const supplierMap: Record<string, string> = {};
+  if (supplierIds.length > 0) {
+    const { data: sups } = await supabase.from("suppliers").select("id, name").in("id", supplierIds);
+    (sups || []).forEach((s: any) => { supplierMap[s.id] = s.name; });
+  }
+
+  let best: { tx: any; supplierName: string | null; score: number } | null = null;
+
+  for (const c of candidates) {
+    const candSupplierName: string | null = c.supplier_id ? (supplierMap[c.supplier_id] || null) : (c.contact_name || null);
+    const supplierMatch =
+      (!!params.supplierId && params.supplierId === c.supplier_id) ||
+      jaccardSimilarity(params.supplierName, candSupplierName) >= 0.5 ||
+      (!!params.supplierName && !!candSupplierName &&
+        normalizeText(candSupplierName).includes(normalizeText(params.supplierName)));
+    const amountMatch = amountMatches(Number(c.amount), params.amount);
+    const descMatch =
+      jaccardSimilarity(params.description, c.description) >= 0.4 ||
+      jaccardSimilarity(params.description, c.notes) >= 0.4;
+
+    const score = (supplierMatch ? 1 : 0) + (amountMatch ? 1 : 0) + (descMatch ? 1 : 0);
+
+    // Never propose very different amounts as the same boleto.
+    if (Math.abs(Number(c.amount) - params.amount) > Math.max(2, params.amount * 0.1)) continue;
+    if (score < 2) continue;
+
+    if (!best || score > best.score) {
+      best = { tx: c, supplierName: candSupplierName, score };
+    }
+  }
+
+  return best;
+}
+
+
+
 // --- Evolution API helper: send reply back to WhatsApp ---
 async function sendEvolutionReply(phone: string, text: string) {
   const evoUrl = Deno.env.get("EVOLUTION_API_URL");
@@ -1403,7 +1512,78 @@ serve(async (req) => {
         }, 200);
       }
 
+      // === HANDLE "confirm_boleto_match" pending action ===
+      if (pendingAction.action_type === "confirm_boleto_match") {
+        const payload = pendingAction.payload as any;
+
+        if (CONFIRM_PATTERNS.test(trimmedMsg)) {
+          console.log("=== PENDING ACTION: BOLETO MATCH CONFIRMED — giving baixa ===");
+          const updateFields: any = {
+            status: "Pago",
+            payment_date: payload.new_payment_date || new Date().toISOString().slice(0, 10),
+          };
+          if (payload.new_bank_account_id) updateFields.bank_account_id = payload.new_bank_account_id;
+          if (payload.new_wallet_id) updateFields.wallet_id = payload.new_wallet_id;
+          if (payload.new_payment_method) updateFields.payment_method = payload.new_payment_method;
+          if (payload.new_attachment_url) updateFields.attachment_url = payload.new_attachment_url;
+
+          const { error: updErr } = await supabase
+            .from("transactions")
+            .update(updateFields)
+            .eq("id", payload.matched_transaction_id)
+            .eq("user_id", userId);
+
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (updErr) {
+            console.error("Boleto baixa update error:", updErr);
+            return respond({
+              success: false, intent: "lancamento",
+              message: "❌ Não consegui dar baixa no lançamento. Tente novamente pelo app.",
+              transaction: null,
+            }, 200);
+          }
+
+          return respond({
+            success: true, intent: "lancamento",
+            message: `✅ Baixa realizada!\n\n📝 ${payload.matched_description}\n💰 ${fmt(payload.matched_amount)}\n📅 Pago em ${formatDate(updateFields.payment_date)}\n\nO lançamento foi marcado como *Pago* — sem duplicar em "Análises EVA". 🎉`,
+            transaction: { id: payload.matched_transaction_id },
+          }, 200);
+        }
+
+        if (CANCEL_PATTERNS.test(trimmedMsg)) {
+          console.log("=== PENDING ACTION: BOLETO MATCH REJECTED — creating as new ===");
+          const fb = payload.fallback_tx;
+          const mainFp = await generateFingerprint(fb.amount, fb.description, fb.competence_date);
+          const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
+          const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
+            user_id: userId,
+            source: "whatsapp",
+            status: mainStatus,
+            fingerprint: mainFp,
+            ...fb,
+          });
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (insertError) {
+            console.error("Fallback insert error:", insertError);
+            return respond({
+              success: false, intent: "lancamento",
+              message: "❌ Não consegui registrar o lançamento. Tente novamente.",
+              transaction: null,
+            }, 200);
+          }
+
+          return respond({
+            success: true, intent: "lancamento",
+            message: `📋 Ok! Registrei como um novo lançamento.\n\n📝 ${fb.description}\n💰 ${fmt(fb.amount)}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+            transaction: null,
+          }, 200);
+        }
+      }
+
       // === HANDLE "delete_category" pending action ===
+
       if (pendingAction.action_type === "delete_category") {
         if (CONFIRM_PATTERNS.test(trimmedMsg)) {
           console.log("=== PENDING ACTION: DELETE CATEGORY CONFIRMED ===");
@@ -3278,6 +3458,82 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
       // Single transaction (no installments)
+      // --- Boleto reconciliation: if user is paying NOW (status=Pago) for a
+      // despesa without credit card, check whether a Pendente transaction
+      // already exists in the system and ask for confirmation.
+      if (txType === "despesa" && status === "Pago" && !creditCardId) {
+        try {
+          const supplierName = supplierId
+            ? (suppliersList.find((s: any) => s.id === supplierId)?.name || null)
+            : (aiParsed.contact_name || contactName || null);
+          const match = await findMatchingPendingBoleto(supabase, {
+            userId,
+            companyId,
+            supplierId,
+            supplierName,
+            amount: Math.abs(aiParsed.amount || 0),
+            description: aiParsed.description || "",
+          });
+          if (match) {
+            console.log("=== BOLETO MATCH FOUND ===", { txId: match.tx.id, score: match.score });
+            const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+            await supabase.from("whatsapp_pending_actions").insert({
+              user_id: userId,
+              action_type: "confirm_boleto_match",
+              context_company_id: companyId,
+              expires_at: expiresAt,
+              payload: {
+                matched_transaction_id: match.tx.id,
+                matched_description: match.tx.description,
+                matched_amount: Number(match.tx.amount),
+                matched_payment_date: match.tx.payment_date,
+                matched_supplier_name: match.supplierName,
+                new_payment_date: paymentDate,
+                new_bank_account_id: bankAccountId,
+                new_wallet_id: walletId,
+                new_payment_method: paymentMethod,
+                new_attachment_url: attachmentUrl,
+                // Fallback insert payload — used if user says "Não"
+                fallback_tx: {
+                  description: aiParsed.description || "Lançamento via WhatsApp",
+                  amount: Math.abs(aiParsed.amount || 0),
+                  type: txType,
+                  category: categoryValue,
+                  subcategory: subcategoryValue,
+                  subcategory2: subcategory2Value,
+                  competence_date: competenceDate,
+                  payment_date: paymentDate,
+                  transaction_status: status,
+                  bank_account_id: bankAccountId,
+                  wallet_id: walletId,
+                  credit_card_id: creditCardId,
+                  company_id: companyId,
+                  payment_method: paymentMethod,
+                  supplier_id: supplierId,
+                  client_id: clientId,
+                  contact_name: contactName,
+                  notes: buildNotes(aiParsed.notes),
+                  attachment_url: attachmentUrl,
+                  original_message: originalUserText || null,
+                  ai_response_message: aiParsed.friendly_message || null,
+                },
+              },
+            });
+
+            const supplierLine = match.supplierName ? `\n👤 ${match.supplierName}` : "";
+            return respond({
+              success: true,
+              intent: "lancamento",
+              message: `📄 Encontrei um lançamento *pendente* parecido no sistema:\n\n📝 ${match.tx.description}\n💰 ${fmt(match.tx.amount)}\n📅 Vencimento: ${formatDate(match.tx.payment_date)}${supplierLine}\n\nÉ o *mesmo* pagamento? Responda *Sim* para dar baixa nesse lançamento ou *Não* para registrar como novo.`,
+              transaction: null,
+            }, 200);
+          }
+        } catch (e) {
+          console.error("Boleto reconciliation skipped due to error:", e);
+        }
+      }
+
+
       const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
       const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
       const { error: insertError } = await supabase.from("ai_pending_transactions").insert({

@@ -1,79 +1,80 @@
+# Reconciliação inteligente de boletos ao dar baixa
+
 ## Objetivo
+Quando o usuário enviar um comprovante de pagamento de boleto pelo WhatsApp, a EVA deve verificar se aquele boleto **já existe como Pendente** no sistema. Se houver match forte, ela confirma com o usuário e dá baixa direta (status → Pago), sem criar duplicata em "Análises EVA".
 
-Finalizar a integração Belvo Open Finance no app, no modelo **credenciais EVA gerenciadas** (cliente não cola token), ambiente **sandbox** primeiro, importando **contas + saldo, transações, cartões de crédito e itens recorrentes/agendados**. A tabela `belvo_integrations` já existe — falta toda a camada de edge functions e UI.
-
-## Como o usuário vai usar
-
-1. Em **Integrações → Open Finance (Belvo)**, clica em "Conectar banco".
-2. Abre o **Belvo Connect Widget** (script oficial) já autenticado com um `access_token` curto gerado no nosso backend usando nossas credenciais.
-3. Escolhe o banco e faz login no fluxo Open Finance da Belvo.
-4. No sucesso, recebemos `link_id` via callback, vinculamos a uma conta bancária (existente ou nova) e disparamos sync inicial.
-5. Transações importadas vão para **Análises EVA** (ai_pending_transactions) para revisão, igual Pluggy/Itaú. Cartões viram `credit_cards` + lançamentos. Recorrentes viram sugestões em `recurring_transactions`.
-6. Botão **Sincronizar agora** + sync automático diário via cron.
-
-## Arquitetura
+## Fluxo proposto
 
 ```text
-[UI Integrações] ──► belvo-connect-token ──► Belvo /api/token (widget_access)
-       │                                          │
-       │  abre widget ◄──────────────────────────┘
-       │
-       ├──► belvo-register-link (link_id, institution)
-       │         └─► insere belvo_integrations + cria/vincula bank_account
-       │
-       ├──► belvo-sync (manual ou cron)
-       │         ├─ /accounts        → saldo + metadata
-       │         ├─ /transactions    → ai_pending_transactions
-       │         ├─ /owners + /institutions → enriquecimento
-       │         └─ /recurring-expenses + /incomes → recurring_transactions (sugestão)
-       │
-       ├──► belvo-disconnect-account ──► DELETE /links/{id} + soft delete
-       │
-       └──► belvo-webhook (opcional fase 2: historical_update, new_transactions)
+Usuário envia comprovante de pagamento
+        │
+        ▼
+EVA extrai: fornecedor, valor, nome no boleto, data, código de barras
+        │
+        ▼
+Busca em transactions (status=Pendente, mesmo owner/contexto, últimos 180 dias)
+        │
+        ├─ Match por código de barras → match definitivo (3/3)
+        ├─ Senão, scoring por 3 critérios:
+        │     1. Fornecedor (supplier_id igual OU nome ~ fuzzy ≥ 0.75)
+        │     2. Valor (diferença ≤ R$ 0,02 OU ≤ 0,5%)
+        │     3. Descrição/"nome registrado" (fuzzy ≥ 0.6 no description/notes)
+        │
+        ▼
+Score ≥ 2/3?
+        │
+   ┌────┴─────┐
+  Sim         Não
+   │           │
+   ▼           ▼
+Pergunta:    Segue fluxo atual
+"Encontrei   (cria em ai_pending_transactions
+o boleto     como hoje)
+X de R$ Y
+lançado dia
+Z para
+[fornecedor].
+É o mesmo?
+[Sim] [Não]"
+   │
+   ├─ Sim → UPDATE transactions SET status='Pago',
+   │         payment_date=<data comprovante>,
+   │         bank_account_id/wallet_id=<conta usada>
+   │         + anexa comprovante; SEM criar pending
+   │
+   └─ Não → segue fluxo normal (vai para Análises EVA)
 ```
 
-## Mudanças no banco
+## Mudanças
 
-Migration única adicionando ao que falta em `belvo_integrations` e tabelas auxiliares:
+### 1. `supabase/functions/whatsapp-webhook/index.ts`
+- Nova função `findMatchingPendingBoleto({ ownerId, contextCompanyId, supplierId, supplierName, amount, description, barcode, paymentMethod })`:
+  - Busca em `transactions` com `status='Pendente'`, `type='despesa'`, mesmo owner/contexto, `payment_date` entre hoje−180d e hoje+30d.
+  - Match imediato se `barcode` igual.
+  - Caso contrário, calcula score 0–3 (fornecedor, valor, descrição). Retorna o melhor candidato com score ≥ 2 e diferença pequena de valor.
+- Chamar essa função no ponto onde hoje insere em `ai_pending_transactions` para comprovantes de pagamento de boleto (intent=lancamento, type=despesa, payment_method=boleto/PIX/transferência com `status='Pago'`).
+- Se houver candidato, ao invés de inserir pending:
+  - Registrar uma `whatsapp_pending_actions` do tipo `confirm_boleto_match` com `{ transaction_id, comprovante_data }`.
+  - Enviar mensagem: `"📄 Encontrei um boleto já lançado:\n\n• {description}\n• {supplier}\n• {fmt(amount)}\n• Vencimento {due_date}\n\nÉ o mesmo pagamento? Responda *Sim* para dar baixa ou *Não* para registrar como novo."`.
 
-- `belvo_integrations`: adicionar `credit_card_id uuid` (vínculo p/ cartão), `last_link_status text`, `auto_sync_enabled boolean default true`, `external_account_id text` (id da conta dentro da Belvo).
-- Nova tabela `belvo_sync_items` (log de execução: account, started_at, finished_at, status, counts, error) — mesmo padrão do `asaas_sync_items`. Com GRANTs + RLS owner/hub.
-- Constraint: `bank_account_id` **ou** `credit_card_id` deve estar preenchido (não os dois).
-- Função/cron `pg_cron` chamando edge `belvo-sync-all` 1x/dia (madrugada), respeitando `auto_sync_enabled`.
+### 2. Handler da resposta
+- Estender o handler de respostas a pending actions (já existe para outras confirmações) para o tipo `confirm_boleto_match`:
+  - **Sim**: `UPDATE transactions SET status='Pago', payment_date=<data>, bank_account_id/wallet_id/credit_card_id=<resolvido>, notes = notes || '\n[Baixa via WhatsApp]'` na transação existente. Confirma ao usuário.
+  - **Não**: prossegue inserindo a transação nova em `ai_pending_transactions` (fluxo atual).
+  - Expiração de 10 min mantém o padrão atual.
 
-## Edge functions (Deno)
+### 3. Logs e memória
+- Atualizar o registro `mem://whatsapp/intelligent-import` (ou criar `mem://whatsapp/boleto-reconciliation`) com as regras de scoring para futuras sessões.
 
-Todas com CORS, validação Zod do body, JWT validado em código (já é padrão do projeto), `service_role` para escrita, secrets `BELVO_SECRET_ID` / `BELVO_SECRET_PASSWORD` / `BELVO_ENV=sandbox`.
+## Detalhes técnicos
 
-1. **belvo-connect-token** — gera `access_token` widget (`scopes: read_institutions,write_links,read_consents`), retorna `{ access_token, env }`.
-2. **belvo-register-link** — recebe `{ link_id, institution, bank_account_id?, credit_card_id?, create_new_account? }`. Faz `POST /accounts` (refresh inicial), grava `belvo_integrations`, cria `bank_account`/`credit_card` quando solicitado, retorna integration.
-3. **belvo-sync** — recebe `{ integration_id }`. Busca `/accounts`, `/transactions?date_from=last_sync-2d`, faz dedupe por `external_id` (hash idempotente), insere em `ai_pending_transactions` (mesmo fingerprint SHA-256 já usado pelo Pluggy). Para cartão: agrupa por fatura. Para recorrência: chama `/recurring-expenses` + `/incomes` e popula sugestões.
-4. **belvo-sync-all** — cron, itera integrações ativas, invoca `belvo-sync` por id, escreve `belvo_sync_items`.
-5. **belvo-disconnect-account** — chama `DELETE /links/{id}`, marca `sync_status='disconnected'`, mantém histórico.
-6. **belvo-webhook** (stub para fase 2; rota pública com assinatura HMAC).
+- **Fuzzy match**: similaridade simples por tokens normalizados (lowercase, sem acento, sem pontuação) — Jaccard sobre conjuntos de palavras ≥ 3 chars. Evita dependência externa.
+- **Tolerância de valor**: `abs(a-b) <= max(0.02, b*0.005)`.
+- **Escopo**: respeita `context` (Pessoal vs Empresa) e `owner_id` ativo do WhatsApp (já resolvido no início do webhook).
+- **Não aplica** quando: parcelamento detectado, cartão de crédito (fatura já tem fluxo próprio), ou comprovante sem valor extraído.
+- **Sem mudanças de schema** — usa apenas `transactions` e `whatsapp_pending_actions` existentes.
 
-## UI
-
-Tudo em `src/pages/Integracoes.tsx` (já existe a seção Pluggy/Itaú — adicionar **card Belvo Open Finance** com mesmo padrão visual glassmorphism cyan).
-
-- `BelvoConnectModal.tsx` — carrega script `https://cdn.belvo.io/belvo-widget-1-stable.js`, recebe token da edge, lida com callbacks `onSuccess(link, institution)`, `onExit(data)`, `onEvent(data)`.
-- `BelvoIntegrationsList.tsx` — lista vínculos ativos com institution, conta vinculada, último sync, badge de status, botões **Sincronizar / Desconectar / Auto-sync toggle**.
-- Após sucesso do widget, modal de mapeamento: "Vincular a uma conta existente" (select de `bank_accounts`/`credit_cards`) ou "Criar nova conta automaticamente".
-- Toasts e estados de erro padronizados; loading com skeleton.
-
-## Secrets necessários (sandbox)
-
-`BELVO_SECRET_ID`, `BELVO_SECRET_PASSWORD`, `BELVO_ENV` (default `sandbox`). Vou pedir via tool de secrets ao entrar em build mode — você cria na Belvo em dashboard → "Generate secret key".
-
-## Segurança
-
-- RLS já existente em `belvo_integrations` (owner + hub writer) será replicada em `belvo_sync_items`.
-- Trigger de validação: `bank_account_id` xor `credit_card_id` preenchido.
-- `link_id` é o único token persistido (não armazenamos credenciais bancárias do usuário — Belvo gerencia).
-- Dedupe de transações via SHA-256 (account_id + external_id + amount + date) reaproveitando lógica de `ai_pending_transactions`.
-
-## Fora de escopo agora (anotado p/ fase 2)
-
-- Ambiente production (toggle só será adicionado quando você liberar a conta paga Belvo).
-- Webhooks (criamos o stub, mas processamento completo de `historical_update` fica para fase 2).
-- Pagamentos via Open Finance (Payment Initiation) — Belvo cobra à parte.
+## Itens não inclusos (confirmar se deseja depois)
+- Reconciliação no app web (fora do WhatsApp).
+- Match contra `recurring_transactions` projetadas.
+- Auto-baixa sem confirmação quando score = 3/3 + barcode igual.
