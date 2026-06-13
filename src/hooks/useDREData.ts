@@ -272,6 +272,8 @@ export function useDREData(filters: DREFilters) {
       despesas_financeiras: new Map(),
       receita_financeira: new Map(),
       despesas_gerais: new Map(),
+      depreciacao_amortizacao: new Map(),
+      tributos_sobre_lucro: new Map(),
       receitas_nao_classificadas: new Map(),
       despesas_nao_classificadas: new Map(),
     };
