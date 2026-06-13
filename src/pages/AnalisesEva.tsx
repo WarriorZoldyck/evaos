@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
 import { useCategories } from "@/hooks/useCategories";
@@ -19,6 +20,7 @@ import {
   Sparkles, Check, X, ExternalLink, MessageSquare, Mail, Upload,
   ArrowUpRight, ArrowDownLeft, Calendar, Tag, CreditCard, User,
   FileText, Clock, ChevronDown, ChevronUp, Layers, Pencil, AlertTriangle, Copy,
+  Link2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,6 +31,38 @@ const fmt = (v: number) =>
 
 const fmtDate = (d: string | null) =>
   d ? format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }) : "—";
+
+// Parse [SUGESTAO_BAIXA] block written by the WhatsApp webhook into the notes
+// field when EVA finds a matching pending transaction.
+export type BoletoSuggestion = {
+  transactionId: string;
+  descricao: string;
+  valor: number;
+  vencimento: string | null;
+  fornecedor: string | null;
+  score: number;
+};
+function parseBoletoSuggestion(notes: string | null | undefined): BoletoSuggestion | null {
+  if (!notes) return null;
+  const idx = notes.indexOf("[SUGESTAO_BAIXA]");
+  if (idx < 0) return null;
+  const block = notes.slice(idx);
+  const get = (k: string) => {
+    const m = block.match(new RegExp(`${k}:\\s*(.+)`));
+    return m ? m[1].trim() : "";
+  };
+  const transactionId = get("transaction_id");
+  if (!transactionId) return null;
+  return {
+    transactionId,
+    descricao: get("descricao"),
+    valor: Number(get("valor")) || 0,
+    vencimento: get("vencimento") || null,
+    fornecedor: get("fornecedor") || null,
+    score: Number(get("score")) || 0,
+  };
+}
+
 // Helper: convert AIPendingTransaction to Transaction-like object for TransactionFormModal
 function pendingToTransaction(item: AIPendingTransaction): Transaction {
   return {
