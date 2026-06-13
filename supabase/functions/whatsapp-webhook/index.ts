@@ -1512,7 +1512,78 @@ serve(async (req) => {
         }, 200);
       }
 
+      // === HANDLE "confirm_boleto_match" pending action ===
+      if (pendingAction.action_type === "confirm_boleto_match") {
+        const payload = pendingAction.payload as any;
+
+        if (CONFIRM_PATTERNS.test(trimmedMsg)) {
+          console.log("=== PENDING ACTION: BOLETO MATCH CONFIRMED — giving baixa ===");
+          const updateFields: any = {
+            status: "Pago",
+            payment_date: payload.new_payment_date || new Date().toISOString().slice(0, 10),
+          };
+          if (payload.new_bank_account_id) updateFields.bank_account_id = payload.new_bank_account_id;
+          if (payload.new_wallet_id) updateFields.wallet_id = payload.new_wallet_id;
+          if (payload.new_payment_method) updateFields.payment_method = payload.new_payment_method;
+          if (payload.new_attachment_url) updateFields.attachment_url = payload.new_attachment_url;
+
+          const { error: updErr } = await supabase
+            .from("transactions")
+            .update(updateFields)
+            .eq("id", payload.matched_transaction_id)
+            .eq("user_id", userId);
+
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (updErr) {
+            console.error("Boleto baixa update error:", updErr);
+            return respond({
+              success: false, intent: "lancamento",
+              message: "❌ Não consegui dar baixa no lançamento. Tente novamente pelo app.",
+              transaction: null,
+            }, 200);
+          }
+
+          return respond({
+            success: true, intent: "lancamento",
+            message: `✅ Baixa realizada!\n\n📝 ${payload.matched_description}\n💰 ${fmt(payload.matched_amount)}\n📅 Pago em ${formatDate(updateFields.payment_date)}\n\nO lançamento foi marcado como *Pago* — sem duplicar em "Análises EVA". 🎉`,
+            transaction: { id: payload.matched_transaction_id },
+          }, 200);
+        }
+
+        if (CANCEL_PATTERNS.test(trimmedMsg)) {
+          console.log("=== PENDING ACTION: BOLETO MATCH REJECTED — creating as new ===");
+          const fb = payload.fallback_tx;
+          const mainFp = await generateFingerprint(fb.amount, fb.description, fb.competence_date);
+          const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
+          const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
+            user_id: userId,
+            source: "whatsapp",
+            status: mainStatus,
+            fingerprint: mainFp,
+            ...fb,
+          });
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+
+          if (insertError) {
+            console.error("Fallback insert error:", insertError);
+            return respond({
+              success: false, intent: "lancamento",
+              message: "❌ Não consegui registrar o lançamento. Tente novamente.",
+              transaction: null,
+            }, 200);
+          }
+
+          return respond({
+            success: true, intent: "lancamento",
+            message: `📋 Ok! Registrei como um novo lançamento.\n\n📝 ${fb.description}\n💰 ${fmt(fb.amount)}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+            transaction: null,
+          }, 200);
+        }
+      }
+
       // === HANDLE "delete_category" pending action ===
+
       if (pendingAction.action_type === "delete_category") {
         if (CONFIRM_PATTERNS.test(trimmedMsg)) {
           console.log("=== PENDING ACTION: DELETE CATEGORY CONFIRMED ===");
