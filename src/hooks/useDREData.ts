@@ -98,7 +98,7 @@ export function useDREData(filters: DREFilters) {
   useEffect(() => {
     if (!user) return;
     const fetchCats = async () => {
-      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section");
+      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section, type");
       if (data) setCategories(data as CategoryRecord[]);
     };
     const fetchCards = async () => {
