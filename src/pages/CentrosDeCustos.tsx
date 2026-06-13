@@ -34,21 +34,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
+import { DRE_SECTIONS as SHARED_DRE_SECTIONS, SECTION_LABEL as SHARED_SECTION_LABEL } from "@/lib/dreSections";
+
 const DRE_SECTIONS = [
-  { key: "receita_operacional", label: "Receita Operacional", sign: "+" },
-  { key: "impostos_venda", label: "Impostos sobre Venda", sign: "-" },
-  { key: "cmv_csp", label: "CMV / CSP", sign: "-" },
-  { key: "despesas_operacionais", label: "Despesas Operacionais", sign: "-" },
-  { key: "despesas_financeiras", label: "Despesas Financeiras", sign: "-" },
-  { key: "receita_financeira", label: "Receita Financeira", sign: "+" },
-  { key: "despesas_vendas", label: "Despesas com Vendas", sign: "-" },
-  { key: "despesas_gerais", label: "Despesas Gerais", sign: "-" },
-  { key: "mdr", label: "Taxas MDR", sign: "-" },
+  ...SHARED_DRE_SECTIONS.map((s) => ({ key: s.key as string, label: s.label, sign: s.sign })),
+  // Legacy bucket — categories assigned to "mdr" are routed to despesas_vendas
+  // by the DRE engine (see src/lib/dreSections.ts → normalizeLegacySection).
+  { key: "mdr", label: "Taxas MDR", sign: "-" as const },
 ] as const;
 
-const SECTION_LABEL: Record<string, string> = Object.fromEntries(
-  DRE_SECTIONS.map((s) => [s.key, s.label])
-);
+const SECTION_LABEL: Record<string, string> = {
+  ...SHARED_SECTION_LABEL,
+  mdr: "Taxas MDR",
+};
 
 interface AssignCtx {
   sections: { key: string; label: string; sign: string }[];
