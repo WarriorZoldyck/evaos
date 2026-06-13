@@ -280,7 +280,8 @@ export function useDREData(filters: DREFilters) {
       }
       // Reverse to root → leaf and return the FIRST (root-most) explicit dre_section
       for (let i = ancestry.length - 1; i >= 0; i--) {
-        const v = ancestry[i].dre_section;
+        const raw = ancestry[i].dre_section;
+        const v = normalizeLegacySection(raw);
         if (v && VALID_SECTION_KEYS.includes(v as DreSectionKey)) {
           return v as DreSectionKey;
         }
