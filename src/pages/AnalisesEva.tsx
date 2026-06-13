@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
 import { useCategories } from "@/hooks/useCategories";
@@ -19,6 +20,7 @@ import {
   Sparkles, Check, X, ExternalLink, MessageSquare, Mail, Upload,
   ArrowUpRight, ArrowDownLeft, Calendar, Tag, CreditCard, User,
   FileText, Clock, ChevronDown, ChevronUp, Layers, Pencil, AlertTriangle, Copy,
+  Link2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,6 +31,38 @@ const fmt = (v: number) =>
 
 const fmtDate = (d: string | null) =>
   d ? format(parseISO(d), "dd/MM/yyyy", { locale: ptBR }) : "—";
+
+// Parse [SUGESTAO_BAIXA] block written by the WhatsApp webhook into the notes
+// field when EVA finds a matching pending transaction.
+export type BoletoSuggestion = {
+  transactionId: string;
+  descricao: string;
+  valor: number;
+  vencimento: string | null;
+  fornecedor: string | null;
+  score: number;
+};
+function parseBoletoSuggestion(notes: string | null | undefined): BoletoSuggestion | null {
+  if (!notes) return null;
+  const idx = notes.indexOf("[SUGESTAO_BAIXA]");
+  if (idx < 0) return null;
+  const block = notes.slice(idx);
+  const get = (k: string) => {
+    const m = block.match(new RegExp(`${k}:\\s*(.+)`));
+    return m ? m[1].trim() : "";
+  };
+  const transactionId = get("transaction_id");
+  if (!transactionId) return null;
+  return {
+    transactionId,
+    descricao: get("descricao"),
+    valor: Number(get("valor")) || 0,
+    vencimento: get("vencimento") || null,
+    fornecedor: get("fornecedor") || null,
+    score: Number(get("score")) || 0,
+  };
+}
+
 // Helper: convert AIPendingTransaction to Transaction-like object for TransactionFormModal
 function pendingToTransaction(item: AIPendingTransaction): Transaction {
   return {
@@ -74,21 +108,25 @@ function pendingToTransaction(item: AIPendingTransaction): Transaction {
 }
 // ── Single item card ──
 function PendingCard({
-  item, onApprove, onReject, onEdit,
-  isApproving, isRejecting, categoryName, accountName, compact = false,
+  item, onApprove, onReject, onEdit, onReconcile,
+  isApproving, isRejecting, isReconciling = false,
+  categoryName, accountName, compact = false,
 }: {
   item: AIPendingTransaction;
   onApprove: () => void;
   onReject: () => void;
   onEdit?: () => void;
+  onReconcile?: (suggestion: BoletoSuggestion) => void;
   isApproving: boolean;
   isRejecting: boolean;
+  isReconciling?: boolean;
   categoryName: string;
   accountName: string;
   compact?: boolean;
 }) {
   const isReceita = item.type === "receita";
   const signedAttachmentUrl = useSignedAttachmentUrl(item.attachment_url);
+  const suggestion = useMemo(() => parseBoletoSuggestion(item.notes), [item.notes]);
 
   if (compact) {
     return (
@@ -135,6 +173,12 @@ function PendingCard({
                 <Badge variant="secondary" className="gap-1 text-xs">
                   <Clock className="h-3 w-3" />
                   Pendente
+                </Badge>
+              )}
+              {suggestion && (
+                <Badge variant="default" className="gap-1 text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20">
+                  <Link2 className="h-3 w-3" />
+                  Possível baixa de pendente
                 </Badge>
               )}
             </div>
@@ -192,6 +236,33 @@ function PendingCard({
             )}
           </div>
         </div>
+
+        {suggestion && onReconcile && (
+          <div className="mt-3 p-3 rounded-md border border-amber-500/30 bg-amber-500/5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <Link2 className="h-3.5 w-3.5" />
+              EVA encontrou um lançamento pendente parecido
+            </div>
+            <div className="text-sm">
+              <p className="font-medium">{suggestion.descricao || "—"}</p>
+              <p className="text-xs text-muted-foreground">
+                {fmt(suggestion.valor)}
+                {suggestion.vencimento ? ` • venc. ${fmtDate(suggestion.vencimento)}` : ""}
+                {suggestion.fornecedor ? ` • ${suggestion.fornecedor}` : ""}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="default"
+              disabled={isReconciling || isApproving || isRejecting}
+              onClick={() => onReconcile(suggestion)}
+              className="gap-1.5"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Dar baixa no pendente (não criar novo)
+            </Button>
+          </div>
+        )}
 
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
           <Button size="sm" onClick={onApprove} disabled={isApproving || isRejecting} className="gap-1.5">
@@ -405,6 +476,44 @@ export default function AnalisesEva() {
   const { settings: fieldSettings } = useFormFieldSettings();
 
   const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
+  const [reconcilingId, setReconcilingId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const handleReconcile = async (pending: AIPendingTransaction, suggestion: BoletoSuggestion) => {
+    setReconcilingId(pending.id);
+    try {
+      const updates: Record<string, unknown> = {
+        status: "Pago",
+        payment_date: pending.payment_date || new Date().toISOString().slice(0, 10),
+      };
+      if (pending.bank_account_id) updates.bank_account_id = pending.bank_account_id;
+      if (pending.wallet_id) updates.wallet_id = pending.wallet_id;
+      if (pending.payment_method) updates.payment_method = pending.payment_method;
+      if (pending.attachment_url) updates.attachment_url = pending.attachment_url;
+
+      const { error: updErr } = await supabase
+        .from("transactions")
+        .update(updates)
+        .eq("id", suggestion.transactionId);
+      if (updErr) throw updErr;
+
+      const { error: rejErr } = await supabase
+        .from("ai_pending_transactions")
+        .update({ status: "approved", reviewed_at: new Date().toISOString() })
+        .eq("id", pending.id);
+      if (rejErr) throw rejErr;
+
+      toast.success("Baixa realizada no lançamento pendente!");
+      queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    } catch (e: any) {
+      toast.error("Erro ao dar baixa: " + (e?.message || String(e)));
+    } finally {
+      setReconcilingId(null);
+    }
+  };
+
 
   // Convert categories to the format TransactionFormModal expects
   const txCategories: TxCategory[] = useMemo(() =>
@@ -519,8 +628,10 @@ export default function AnalisesEva() {
           onApprove={() => approve(g.item)}
           onReject={() => reject(g.item.id)}
           onEdit={() => setEditingItem(g.item)}
+          onReconcile={(suggestion) => handleReconcile(g.item, suggestion)}
           isApproving={isApproving}
           isRejecting={isRejecting}
+          isReconciling={reconcilingId === g.item.id}
           categoryName={getCategoryName(g.item.category)}
           accountName={getAccountName(g.item)}
         />
