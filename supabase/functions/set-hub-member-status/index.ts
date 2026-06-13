@@ -35,10 +35,6 @@ Deno.serve(async (req) => {
     const { error } = await admin.from("workspace_members").update({ status }).eq("id", memberId);
     if (error) return json({ error: error.message }, 500);
 
-    if (status === "suspended") {
-      try { await admin.auth.admin.signOut(member.member_user_id, "global"); } catch (_) {}
-    }
-
     return json({ ok: true });
   } catch (err) {
     return json({ error: (err as Error).message }, 500);

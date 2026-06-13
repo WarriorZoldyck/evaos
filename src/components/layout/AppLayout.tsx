@@ -46,11 +46,6 @@ function AppLayoutInner() {
   const [globalFormOpen, setGlobalFormOpen] = useState(false);
   const { isHubMember, impersonatingOwnerId, impersonatingOwnerName, impersonatingRole, exitImpersonation } = useHub();
 
-  // Hub members without active impersonation go to /eva-hub
-  if (isHubMember && !impersonatingOwnerId && !location.pathname.startsWith("/eva-hub")) {
-    return <Navigate to="/eva-hub/contas" replace />;
-  }
-
   const roleLabel: Record<string, string> = { admin: "Admin", editor: "Editor", viewer: "Leitura" };
 
   return (

@@ -17,20 +17,6 @@ interface HubContextType {
 
 const HubContext = createContext<HubContextType | undefined>(undefined);
 
-const STORAGE_KEY = "eva.hub.impersonation";
-
-type Persisted = { ownerId: string; ownerName: string; role: string | null; userId: string };
-
-function loadPersisted(userId: string): Persisted | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Persisted;
-    if (parsed.userId !== userId) return null;
-    return parsed;
-  } catch { return null; }
-}
-
 export function HubProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [isHubMember, setIsHubMember] = useState(false);
@@ -45,7 +31,7 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
     const [memberRes, ownerRes] = await Promise.all([
       supabase
         .from("workspace_members")
-        .select("id", { count: "exact", head: true })
+        .select("owner_id, role")
         .eq("member_user_id", user.id)
         .eq("status", "active"),
       supabase
@@ -53,19 +39,17 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
         .select("id", { count: "exact", head: true })
         .eq("owner_id", user.id),
     ]);
-    const hubMember = (memberRes.count ?? 0) > 0;
+    const activeMemberships = (memberRes.data || []) as Array<{ owner_id: string; role: string | null }>;
+    const hubMember = activeMemberships.length > 0;
     setIsHubMember(hubMember);
     setIsOwnerWithMembers((ownerRes.count ?? 0) > 0);
 
-    if (hubMember) {
-      const persisted = loadPersisted(user.id);
-      if (persisted) {
-        setImpersonatingOwnerId(persisted.ownerId);
-        setImpersonatingOwnerName(persisted.ownerName);
-        setImpersonatingRole(persisted.role);
-      }
+    if (impersonatingOwnerId && !activeMemberships.some((m) => m.owner_id === impersonatingOwnerId)) {
+      setImpersonatingOwnerId(null);
+      setImpersonatingOwnerName(null);
+      setImpersonatingRole(null);
     }
-  }, [user]);
+  }, [user, impersonatingOwnerId]);
 
   useEffect(() => {
     if (!user) {
@@ -74,7 +58,6 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
       setImpersonatingOwnerId(null);
       setImpersonatingOwnerName(null);
       setImpersonatingRole(null);
-      try { localStorage.removeItem(STORAGE_KEY); } catch {}
       setLoading(false);
       return;
     }
@@ -88,11 +71,6 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
     setImpersonatingOwnerName(ownerName);
     setImpersonatingRole(role);
     if (user) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          ownerId, ownerName, role, userId: user.id,
-        } satisfies Persisted));
-      } catch {}
       logHubAction({
         actorUserId: user.id, ownerId,
         action: "impersonation_start",
@@ -113,7 +91,6 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
     setImpersonatingOwnerId(null);
     setImpersonatingOwnerName(null);
     setImpersonatingRole(null);
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
   };
 
   return (

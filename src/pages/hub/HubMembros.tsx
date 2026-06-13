@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, UserPlus, User, Shield, Eye, Edit3,
-  Pause, Play, Loader2, UserCheck, UserX, Folder, Trash2, KeyRound,
+  Pause, Play, Loader2, UserCheck, UserX, Folder, Trash2,
   Building2, Wallet, CreditCard, Landmark, Smartphone,
 } from "lucide-react";
 
@@ -49,7 +49,7 @@ export default function HubMembros() {
   const {
     members, workspaces, loading,
     createMember, updateMemberRole, suspendMember, activateMember, assignMemberToWorkspace,
-    deleteMember, resetMemberPassword,
+    deleteMember,
   } = useWorkspaceMembers();
   const [showInvite, setShowInvite] = useState(false);
   const { canCreateHubMember, limits, usage, refetch: refetchLimits } = usePlanLimits();
@@ -137,7 +137,6 @@ export default function HubMembros() {
               onActivate={activateMember}
               onAssignWorkspace={assignMemberToWorkspace}
               onDelete={deleteMember}
-              onResetPassword={resetMemberPassword}
             />
           ))}
         </div>
@@ -155,7 +154,7 @@ export default function HubMembros() {
 }
 
 function MemberCard({
-  member, workspaces, onUpdateRole, onSuspend, onActivate, onAssignWorkspace, onDelete, onResetPassword,
+  member, workspaces, onUpdateRole, onSuspend, onActivate, onAssignWorkspace, onDelete,
 }: {
   member: WorkspaceMember;
   workspaces: Workspace[];
@@ -164,7 +163,6 @@ function MemberCard({
   onActivate: (id: string) => void;
   onAssignWorkspace: (id: string, wsId: string | null) => void;
   onDelete: (id: string) => void;
-  onResetPassword: (id: string) => void;
 }) {
   const role = roleConfig[member.role] || roleConfig.viewer;
   const RoleIcon = role.icon;
@@ -228,11 +226,6 @@ function MemberCard({
           <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-primary" onClick={() => setPermsOpen(true)}>
             <Shield className="h-3 w-3" /> Acesso
           </Button>
-          {member.created_by_hub && (
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground" onClick={() => onResetPassword(member.id)} title="Gerar nova senha temporária (apenas para contas criadas por você)">
-              <KeyRound className="h-3 w-3" /> Senha
-            </Button>
-          )}
           <div className="ml-auto flex items-center gap-1">
             {member.status === "active" ? (
               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => onSuspend(member.id)} title="Suspender">
