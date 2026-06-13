@@ -25,9 +25,11 @@ const DRE_SECTIONS = [
   { value: "cmv_csp", label: "CMV / CSP (Custos)", sign: "-" },
   { value: "despesas_vendas", label: "Despesas com Vendas", sign: "-" },
   { value: "despesas_operacionais", label: "Despesas Operacionais e Adm.", sign: "-" },
-  { value: "despesas_financeiras", label: "Despesas Financeiras", sign: "-" },
-  { value: "receita_financeira", label: "Receita Financeira", sign: "+" },
   { value: "despesas_gerais", label: "Despesas Gerais e Adm.", sign: "-" },
+  { value: "depreciacao_amortizacao", label: "Depreciação e Amortização", sign: "-" },
+  { value: "receita_financeira", label: "Receita Financeira", sign: "+" },
+  { value: "despesas_financeiras", label: "Despesas Financeiras", sign: "-" },
+  { value: "tributos_sobre_lucro", label: "IRPJ / CSLL (Tributos sobre o Lucro)", sign: "-" },
 ];
 
 interface CategoryFormModalProps {
