@@ -16,16 +16,20 @@ export interface ResourceOption {
   id: string;
   name: string;
   type: ResourceType;
+  /** null = Pessoal; otherwise vinculado à empresa de id == company_id */
+  company_id: string | null;
 }
+
+export interface CompanyOption { id: string; name: string }
 
 /**
  * Manage per-resource access for a single workspace member.
- * Used by the owner in HubMembros to scope what a member sees.
  */
 export function useMemberPermissions(workspaceMemberId: string | null) {
   const { user } = useAuth();
   const [permissions, setPermissions] = useState<MemberPermission[]>([]);
   const [resources, setResources] = useState<ResourceOption[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchPermissions = useCallback(async () => {
@@ -42,17 +46,19 @@ export function useMemberPermissions(workspaceMemberId: string | null) {
     setLoading(true);
     const [c, b, cc, ct, w] = await Promise.all([
       supabase.from("companies").select("id, name").eq("user_id", user.id),
-      supabase.from("bank_accounts").select("id, name").eq("user_id", user.id),
-      supabase.from("credit_cards").select("id, name").eq("user_id", user.id),
-      supabase.from("card_terminals").select("id, name").eq("user_id", user.id),
-      supabase.from("wallets").select("id, name").eq("user_id", user.id),
+      supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", user.id),
+      supabase.from("credit_cards").select("id, name, company_id").eq("user_id", user.id),
+      supabase.from("card_terminals").select("id, name, company_id").eq("user_id", user.id),
+      supabase.from("wallets").select("id, name, company_id").eq("user_id", user.id),
     ]);
+    const companyList: CompanyOption[] = ((c.data as any[]) || []).map((r) => ({ id: r.id, name: r.name }));
+    setCompanies(companyList);
     const all: ResourceOption[] = [
-      ...((c.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "company" as const })),
-      ...((b.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "bank_account" as const })),
-      ...((cc.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "credit_card" as const })),
-      ...((ct.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "card_terminal" as const })),
-      ...((w.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "wallet" as const })),
+      ...companyList.map((r) => ({ id: r.id, name: r.name, type: "company" as const, company_id: r.id })),
+      ...((b.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "bank_account" as const, company_id: r.company_id ?? null })),
+      ...((cc.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "credit_card" as const, company_id: r.company_id ?? null })),
+      ...((ct.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "card_terminal" as const, company_id: r.company_id ?? null })),
+      ...((w.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "wallet" as const, company_id: r.company_id ?? null })),
     ];
     setResources(all);
     setLoading(false);
@@ -96,5 +102,5 @@ export function useMemberPermissions(workspaceMemberId: string | null) {
   const isGranted = (type: ResourceType, id: string) =>
     permissions.some((p) => p.resource_type === type && p.resource_id === id);
 
-  return { permissions, resources, loading, togglePermission, clearAll, isGranted, hasAnyScope: permissions.length > 0 };
+  return { permissions, resources, companies, loading, togglePermission, clearAll, isGranted, hasAnyScope: permissions.length > 0 };
 }

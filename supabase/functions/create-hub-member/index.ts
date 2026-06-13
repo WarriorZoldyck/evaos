@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { name, email, password, role } = await req.json();
+    const { name, email, role } = await req.json();
 
     if (!name || !email || !role) {
       return new Response(
@@ -175,74 +175,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // === Path B: new user → create auth user with password (legacy flow) ===
-    if (!password) {
-      return new Response(
-        JSON.stringify({ error: "Defina uma senha para criar um novo usuário (este e-mail ainda não tem conta na EVA)." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-      email: normalizedEmail,
-      password,
-      email_confirm: true,
-      app_metadata: {
-        hub_member: true,
-        owner_id: ownerId,
-      },
-      user_metadata: {
-        full_name: name,
-      },
-    });
-
-    if (createError) {
-      console.error("Error creating user:", createError);
-      const isEmailExists =
-        (createError as any)?.code === "email_exists" ||
-        /already.*registered|already.*exists/i.test(createError.message || "");
-      const friendly = isEmailExists
-        ? "Este e-mail já está cadastrado na plataforma. Tente novamente — agora ele será convidado como membro existente."
-        : createError.message;
-      return new Response(
-        JSON.stringify({ error: friendly }),
-        { status: isEmailExists ? 409 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const { error: memberError } = await adminClient
-      .from("workspace_members")
-      .insert({
-        owner_id: ownerId,
-        member_user_id: newUser.user.id,
-        member_name: name,
-        email: normalizedEmail,
-        role,
-        status: "active",
-        created_by_hub: true,
-      });
-
-    if (memberError) {
-      console.error("Error inserting workspace member:", memberError);
-      await adminClient.auth.admin.deleteUser(newUser.user.id);
-      return new Response(
-        JSON.stringify({ error: memberError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-
+    // === Path B: usuário NÃO existe na EVA ===
+    // Não criamos contas com senha definida pelo dono do hub — isso seria
+    // catastrófico se o e-mail já estivesse cadastrado em outro contexto.
+    // Pedimos que a pessoa crie a conta gratuita primeiro.
     return new Response(
       JSON.stringify({
-        success: true,
-        member: {
-          id: newUser.user.id,
-          email,
-          name,
-          role,
-        },
+        error: "Este e-mail ainda não tem conta na EVA. Peça para a pessoa criar uma conta gratuita em eva.tec.br e, assim que ela existir, envie o convite novamente.",
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("Unexpected error:", err);
