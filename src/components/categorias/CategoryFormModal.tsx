@@ -17,19 +17,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { DRE_SECTIONS as SHARED_DRE_SECTIONS } from "@/lib/dreSections";
 
 const DRE_SECTIONS = [
-  { value: "__none__", label: "Nenhum", sign: null },
-  { value: "receita_operacional", label: "Receita Operacional", sign: "+" },
-  { value: "impostos_venda", label: "Impostos sobre Venda", sign: "-" },
-  { value: "cmv_csp", label: "CMV / CSP (Custos)", sign: "-" },
-  { value: "despesas_vendas", label: "Despesas com Vendas", sign: "-" },
-  { value: "despesas_operacionais", label: "Despesas Operacionais e Adm.", sign: "-" },
-  { value: "despesas_gerais", label: "Despesas Gerais e Adm.", sign: "-" },
-  { value: "depreciacao_amortizacao", label: "Depreciação e Amortização", sign: "-" },
-  { value: "receita_financeira", label: "Receita Financeira", sign: "+" },
-  { value: "despesas_financeiras", label: "Despesas Financeiras", sign: "-" },
-  { value: "tributos_sobre_lucro", label: "IRPJ / CSLL (Tributos sobre o Lucro)", sign: "-" },
+  { value: "__none__", label: "Nenhum", sign: null as null },
+  ...SHARED_DRE_SECTIONS.map((s) => ({ value: s.key, label: s.label, sign: s.sign })),
 ];
 
 interface CategoryFormModalProps {
