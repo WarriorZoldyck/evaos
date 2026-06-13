@@ -48,6 +48,115 @@ async function generateSeriesFingerprint(description: string, totalAmount: numbe
   return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
+// --- Boleto reconciliation helpers ---
+function normalizeText(s: string | null | undefined): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenSet(s: string | null | undefined): Set<string> {
+  return new Set(normalizeText(s).split(" ").filter((t) => t.length >= 3));
+}
+
+function jaccardSimilarity(a: string | null | undefined, b: string | null | undefined): number {
+  const A = tokenSet(a), B = tokenSet(b);
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+  const union = A.size + B.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+function amountMatches(a: number, b: number): boolean {
+  return Math.abs(a - b) <= Math.max(0.02, b * 0.005);
+}
+
+/**
+ * Looks for an existing Pendente expense that the user is now paying.
+ * Returns the best candidate when at least 2/3 criteria match
+ * (supplier, amount, description).
+ */
+async function findMatchingPendingBoleto(
+  supabase: any,
+  params: {
+    userId: string;
+    companyId: string | null;
+    supplierId: string | null;
+    supplierName: string | null;
+    amount: number;
+    description: string;
+  }
+): Promise<{ tx: any; supplierName: string | null; score: number } | null> {
+  if (!params.amount || params.amount <= 0) return null;
+
+  const today = new Date();
+  const from = new Date(today); from.setDate(from.getDate() - 180);
+  const to = new Date(today); to.setDate(to.getDate() + 30);
+  const fromStr = from.toISOString().slice(0, 10);
+  const toStr = to.toISOString().slice(0, 10);
+
+  let q = supabase
+    .from("transactions")
+    .select("id, description, amount, payment_date, supplier_id, contact_name, company_id, notes")
+    .eq("user_id", params.userId)
+    .eq("type", "despesa")
+    .eq("status", "Pendente")
+    .gte("payment_date", fromStr)
+    .lte("payment_date", toStr)
+    .limit(50);
+
+  if (params.companyId) q = q.eq("company_id", params.companyId);
+  else q = q.is("company_id", null);
+
+  const { data: candidates, error } = await q;
+  if (error) {
+    console.error("findMatchingPendingBoleto error:", error);
+    return null;
+  }
+  if (!candidates || candidates.length === 0) return null;
+
+  const supplierIds = Array.from(new Set(candidates.map((c: any) => c.supplier_id).filter(Boolean))) as string[];
+  const supplierMap: Record<string, string> = {};
+  if (supplierIds.length > 0) {
+    const { data: sups } = await supabase.from("suppliers").select("id, name").in("id", supplierIds);
+    (sups || []).forEach((s: any) => { supplierMap[s.id] = s.name; });
+  }
+
+  let best: { tx: any; supplierName: string | null; score: number } | null = null;
+
+  for (const c of candidates) {
+    const candSupplierName: string | null = c.supplier_id ? (supplierMap[c.supplier_id] || null) : (c.contact_name || null);
+    const supplierMatch =
+      (!!params.supplierId && params.supplierId === c.supplier_id) ||
+      jaccardSimilarity(params.supplierName, candSupplierName) >= 0.5 ||
+      (!!params.supplierName && !!candSupplierName &&
+        normalizeText(candSupplierName).includes(normalizeText(params.supplierName)));
+    const amountMatch = amountMatches(Number(c.amount), params.amount);
+    const descMatch =
+      jaccardSimilarity(params.description, c.description) >= 0.4 ||
+      jaccardSimilarity(params.description, c.notes) >= 0.4;
+
+    const score = (supplierMatch ? 1 : 0) + (amountMatch ? 1 : 0) + (descMatch ? 1 : 0);
+
+    // Never propose very different amounts as the same boleto.
+    if (Math.abs(Number(c.amount) - params.amount) > Math.max(2, params.amount * 0.1)) continue;
+    if (score < 2) continue;
+
+    if (!best || score > best.score) {
+      best = { tx: c, supplierName: candSupplierName, score };
+    }
+  }
+
+  return best;
+}
+
+
+
 // --- Evolution API helper: send reply back to WhatsApp ---
 async function sendEvolutionReply(phone: string, text: string) {
   const evoUrl = Deno.env.get("EVOLUTION_API_URL");
