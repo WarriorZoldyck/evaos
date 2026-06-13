@@ -260,31 +260,39 @@ export function useDREData(filters: DREFilters) {
       despesas_nao_classificadas: new Map(),
     };
 
-    // Resolve dre_section using ROOT-FIRST priority:
-    // The root category's mapping wins over child mappings. Children only matter
-    // when the root has no dre_section (then we walk down looking for one).
-    // This matches the user's mental model in Centros de Custos: drag the root,
-    // everything under it follows.
-    const resolveDreSection = (categoryRef: string | null | undefined): DreSectionKey | null => {
-      if (!categoryRef) return null;
-      let cat = categories.find((c) => c.id === categoryRef);
-      if (!cat) cat = categories.find((c) => c.name.toLowerCase() === categoryRef.toLowerCase());
-      if (!cat) return null;
-
-      // Build chain leaf → root
+    // Walk a category up to its root and return the FIRST (root-most) explicit
+    // dre_section in the ancestry chain.
+    const sectionFor = (cat: CategoryRecord): DreSectionKey | null => {
       const ancestry: CategoryRecord[] = [];
       let current: CategoryRecord | undefined = cat;
       while (current) {
         ancestry.push(current);
         current = current.parent_id ? categories.find((c) => c.id === current!.parent_id) : undefined;
       }
-      // Reverse to root → leaf and return the FIRST (root-most) explicit dre_section
       for (let i = ancestry.length - 1; i >= 0; i--) {
-        const raw = ancestry[i].dre_section;
-        const v = normalizeLegacySection(raw);
+        const v = normalizeLegacySection(ancestry[i].dre_section);
         if (v && VALID_SECTION_KEYS.includes(v as DreSectionKey)) {
           return v as DreSectionKey;
         }
+      }
+      return null;
+    };
+
+    // Resolve dre_section with ROOT-FIRST priority. When a transaction
+    // references a category by NAME (legacy/text), prefer a homonym whose
+    // chain has a mapping — this avoids losing transactions to "Não
+    // Classificadas" just because the first match by name was an unmapped
+    // duplicate.
+    const resolveDreSection = (categoryRef: string | null | undefined): DreSectionKey | null => {
+      if (!categoryRef) return null;
+      const byId = categories.find((c) => c.id === categoryRef);
+      if (byId) return sectionFor(byId);
+      const homonyms = categories.filter(
+        (c) => c.name.toLowerCase() === categoryRef.toLowerCase()
+      );
+      for (const h of homonyms) {
+        const s = sectionFor(h);
+        if (s) return s;
       }
       return null;
     };
