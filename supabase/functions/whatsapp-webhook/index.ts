@@ -3460,7 +3460,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         supplier_id: supplierId,
         client_id: clientId,
         contact_name: contactName,
-        notes: buildNotes(aiParsed.notes),
+        notes: (buildNotes(aiParsed.notes) || "") + (boletoSuggestionBlock || ""),
         attachment_url: attachmentUrl,
         original_message: originalUserText || null,
         ai_response_message: aiParsed.friendly_message || null,
