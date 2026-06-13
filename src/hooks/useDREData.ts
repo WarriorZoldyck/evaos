@@ -47,6 +47,8 @@ type DreSectionKey =
   | "despesas_financeiras"
   | "receita_financeira"
   | "despesas_gerais"
+  | "depreciacao_amortizacao"
+  | "tributos_sobre_lucro"
   | "receitas_nao_classificadas"
   | "despesas_nao_classificadas";
 
@@ -59,6 +61,8 @@ const VALID_SECTION_KEYS: DreSectionKey[] = [
   "despesas_financeiras",
   "receita_financeira",
   "despesas_gerais",
+  "depreciacao_amortizacao",
+  "tributos_sobre_lucro",
 ];
 
 
