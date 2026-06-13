@@ -49,7 +49,7 @@ async function generateSeriesFingerprint(description: string, totalAmount: numbe
 }
 
 // --- Boleto reconciliation helpers ---
-function normalizeText(s: string | null | undefined): string {
+function normalizeBoletoText(s: string | null | undefined): string {
   return (s || "")
     .toLowerCase()
     .normalize("NFD")
@@ -60,7 +60,7 @@ function normalizeText(s: string | null | undefined): string {
 }
 
 function tokenSet(s: string | null | undefined): Set<string> {
-  return new Set(normalizeText(s).split(" ").filter((t) => t.length >= 3));
+  return new Set(normalizeBoletoText(s).split(" ").filter((t) => t.length >= 3));
 }
 
 function jaccardSimilarity(a: string | null | undefined, b: string | null | undefined): number {
