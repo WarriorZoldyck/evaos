@@ -108,21 +108,25 @@ function pendingToTransaction(item: AIPendingTransaction): Transaction {
 }
 // ── Single item card ──
 function PendingCard({
-  item, onApprove, onReject, onEdit,
-  isApproving, isRejecting, categoryName, accountName, compact = false,
+  item, onApprove, onReject, onEdit, onReconcile,
+  isApproving, isRejecting, isReconciling = false,
+  categoryName, accountName, compact = false,
 }: {
   item: AIPendingTransaction;
   onApprove: () => void;
   onReject: () => void;
   onEdit?: () => void;
+  onReconcile?: (suggestion: BoletoSuggestion) => void;
   isApproving: boolean;
   isRejecting: boolean;
+  isReconciling?: boolean;
   categoryName: string;
   accountName: string;
   compact?: boolean;
 }) {
   const isReceita = item.type === "receita";
   const signedAttachmentUrl = useSignedAttachmentUrl(item.attachment_url);
+  const suggestion = useMemo(() => parseBoletoSuggestion(item.notes), [item.notes]);
 
   if (compact) {
     return (
