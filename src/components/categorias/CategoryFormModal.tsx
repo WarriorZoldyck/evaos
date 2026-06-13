@@ -96,6 +96,16 @@ export function CategoryFormModal({ open, onClose, parentName, editData, default
               placeholder="Nome da categoria"
               required
             />
+            {duplicateMatch && (
+              <div className="flex items-start gap-2 text-xs p-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-200">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Já existe uma categoria com este nome
+                  {duplicateMatch.dre_section ? " mapeada no DRE" : " sem mapeamento"}.
+                  Criar uma duplicata pode dispersar suas transações entre os relatórios.
+                </span>
+              </div>
+            )}
           </div>
           {!parentName && (
             <div className="space-y-2">
