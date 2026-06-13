@@ -210,9 +210,19 @@ export default function CentrosDeCustos() {
 
   const rootCategories = categories.filter((c) => !c.parent_id);
   const sectionsToShow = DRE_SECTIONS.filter((s) => s.key !== "mdr" || mdrEnabled);
-  const unassigned = rootCategories.filter(
-    (c) => !c.dre_section || !sectionsToShow.some((s) => s.key === c.dre_section)
-  );
+
+  // Effective section per root: explicit dre_section wins; otherwise fall back
+  // to the type-based default (receita → receita_operacional, despesa →
+  // despesas_operacionais). Categories show up under that bucket and are NOT
+  // listed in "Sem centro de custo" anymore — matches the same logic used by
+  // useDREData so the report and this page stay in sync.
+  const effectiveSection = (c: Category): string | null => {
+    if (c.dre_section && sectionsToShow.some((s) => s.key === c.dre_section)) return c.dre_section;
+    if (c.dre_section === "mdr") return mdrEnabled ? "mdr" : "despesas_vendas";
+    return defaultSectionForType(c.type) ?? null;
+  };
+
+  const unassigned = rootCategories.filter((c) => !effectiveSection(c));
 
   return (
     <AssignContext.Provider value={{ sections: sectionsToShow as any, onAssign: updateCategorySection, isMobile }}>
