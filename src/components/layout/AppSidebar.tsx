@@ -81,6 +81,9 @@ const comingSoonItems = [
 export function AppSidebar() {
   const { signOut, user } = useAuth();
   const { companies, viewAll, setViewAll, toggleCompanyId, togglePersonal, personalSelected, selectedCompanyIds } = useCompany();
+  // DRE is a business report — hide it when the user is viewing only the Personal context.
+  const onlyPersonal = !viewAll && personalSelected && selectedCompanyIds.length === 0;
+  const visibleFinanceMenuItems = financeMenuItems.filter((i) => !(onlyPersonal && i.url === "/dre"));
   const { pendingCount } = useAIPendingTransactions();
   const { state } = useSidebar();
   const { isHubMember, isOwnerWithMembers } = useHub();
