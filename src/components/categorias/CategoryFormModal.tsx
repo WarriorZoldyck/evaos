@@ -16,8 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { DRE_SECTIONS as SHARED_DRE_SECTIONS } from "@/lib/dreSections";
+import { useCategories } from "@/hooks/useCategories";
 
 const DRE_SECTIONS = [
   { value: "__none__", label: "Nenhum", sign: null as null },
