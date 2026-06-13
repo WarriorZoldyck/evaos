@@ -34,11 +34,12 @@ interface CategoryRecord {
   name: string;
   parent_id: string | null;
   dre_section: string | null;
+  type: string | null;
 }
 
 // ── DRE section keys ──────────────────────────────
 
-import { VALID_SECTION_KEYS as SHARED_VALID_KEYS, normalizeLegacySection, type DreSectionKey as SharedDreKey } from "@/lib/dreSections";
+import { VALID_SECTION_KEYS as SHARED_VALID_KEYS, normalizeLegacySection, defaultSectionForType, type DreSectionKey as SharedDreKey } from "@/lib/dreSections";
 
 type DreSectionKey =
   | SharedDreKey
