@@ -361,6 +361,7 @@ function CostCenterFolder({
   label,
   sign,
   categories,
+  autoIds,
   expanded,
   onToggle,
   draggedId,
