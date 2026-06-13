@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Info, AlertTriangle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -9,6 +9,7 @@ import { DRETableContabil } from "@/components/relatorios/DRETableContabil";
 import { DREIndicatorCards } from "@/components/relatorios/DREIndicatorCards";
 import { useDREData, type DREFilters } from "@/hooks/useDREData";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useCompany } from "@/contexts/CompanyContext";
 
 
 export default function DRE() {
