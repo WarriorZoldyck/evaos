@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { name, email, password, role } = await req.json();
+    const { name, email, role } = await req.json();
 
     if (!name || !email || !role) {
       return new Response(
