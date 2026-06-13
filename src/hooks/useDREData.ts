@@ -34,11 +34,12 @@ interface CategoryRecord {
   name: string;
   parent_id: string | null;
   dre_section: string | null;
+  type: string | null;
 }
 
 // ── DRE section keys ──────────────────────────────
 
-import { VALID_SECTION_KEYS as SHARED_VALID_KEYS, normalizeLegacySection, type DreSectionKey as SharedDreKey } from "@/lib/dreSections";
+import { VALID_SECTION_KEYS as SHARED_VALID_KEYS, normalizeLegacySection, defaultSectionForType, type DreSectionKey as SharedDreKey } from "@/lib/dreSections";
 
 type DreSectionKey =
   | SharedDreKey
@@ -97,7 +98,7 @@ export function useDREData(filters: DREFilters) {
   useEffect(() => {
     if (!user) return;
     const fetchCats = async () => {
-      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section");
+      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section, type");
       if (data) setCategories(data as CategoryRecord[]);
     };
     const fetchCards = async () => {
@@ -262,8 +263,13 @@ export function useDREData(filters: DREFilters) {
       despesas_nao_classificadas: new Map(),
     };
 
-    // Walk a category up to its root and return the FIRST (root-most) explicit
-    // dre_section in the ancestry chain.
+    // Walk a category up to its root and return either:
+    //  - the FIRST (root-most) explicit dre_section in the ancestry chain, or
+    //  - a smart default derived from the root's `type` (receita/despesa).
+    // The default lets users skip the drag-to-bucket step in Centros de
+    // Custos: any category typed as "receita" maps to Receita Operacional,
+    // "despesa" maps to Despesas Operacionais e Adm. The user can still
+    // override by setting an explicit dre_section.
     const sectionFor = (cat: CategoryRecord): DreSectionKey | null => {
       const ancestry: CategoryRecord[] = [];
       let current: CategoryRecord | undefined = cat;
@@ -277,14 +283,12 @@ export function useDREData(filters: DREFilters) {
           return v as DreSectionKey;
         }
       }
-      return null;
+      // Fallback: root's type → default bucket
+      const root = ancestry[ancestry.length - 1];
+      const def = defaultSectionForType(root?.type);
+      return (def as DreSectionKey | null) ?? null;
     };
 
-    // Resolve dre_section with ROOT-FIRST priority. When a transaction
-    // references a category by NAME (legacy/text), prefer a homonym whose
-    // chain has a mapping — this avoids losing transactions to "Não
-    // Classificadas" just because the first match by name was an unmapped
-    // duplicate.
     const resolveDreSection = (categoryRef: string | null | undefined): DreSectionKey | null => {
       if (!categoryRef) return null;
       const byId = categories.find((c) => c.id === categoryRef);
@@ -308,7 +312,6 @@ export function useDREData(filters: DREFilters) {
 
       const chain = buildChain(t.category, t.subcategory, t.subcategory2);
 
-      // Resolve from the most specific reference; resolver already prefers root over leaf
       let sectionKey: DreSectionKey | null = null;
       const refsInOrder = [t.subcategory2, t.subcategory, t.category];
       for (const ref of refsInOrder) {
@@ -316,10 +319,18 @@ export function useDREData(filters: DREFilters) {
         if (sectionKey) break;
       }
 
+      // Last-resort fallback based on the transaction's own type — covers
+      // text-only categories that don't exist in `categories` at all.
+      if (!sectionKey) {
+        const def = defaultSectionForType(t.type);
+        if (def) sectionKey = def as DreSectionKey;
+      }
+
       if (!sectionKey) {
         sectionKey = t.type === "receita" ? "receitas_nao_classificadas" : "despesas_nao_classificadas";
         if (chain[0]) unmappedCategoryIds.add(chain[0].id);
       }
+
 
       const tree = sectionTrees[sectionKey];
       let currentLevel = tree;

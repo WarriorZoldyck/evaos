@@ -35,7 +35,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { CategoryDiagnosticsPanel } from "@/components/centros-custos/CategoryDiagnosticsPanel";
 
-import { DRE_SECTIONS as SHARED_DRE_SECTIONS, SECTION_LABEL as SHARED_SECTION_LABEL } from "@/lib/dreSections";
+import { DRE_SECTIONS as SHARED_DRE_SECTIONS, SECTION_LABEL as SHARED_SECTION_LABEL, defaultSectionForType } from "@/lib/dreSections";
 
 const DRE_SECTIONS = [
   ...SHARED_DRE_SECTIONS.map((s) => ({ key: s.key as string, label: s.label, sign: s.sign })),
@@ -210,9 +210,19 @@ export default function CentrosDeCustos() {
 
   const rootCategories = categories.filter((c) => !c.parent_id);
   const sectionsToShow = DRE_SECTIONS.filter((s) => s.key !== "mdr" || mdrEnabled);
-  const unassigned = rootCategories.filter(
-    (c) => !c.dre_section || !sectionsToShow.some((s) => s.key === c.dre_section)
-  );
+
+  // Effective section per root: explicit dre_section wins; otherwise fall back
+  // to the type-based default (receita → receita_operacional, despesa →
+  // despesas_operacionais). Categories show up under that bucket and are NOT
+  // listed in "Sem centro de custo" anymore — matches the same logic used by
+  // useDREData so the report and this page stay in sync.
+  const effectiveSection = (c: Category): string | null => {
+    if (c.dre_section && sectionsToShow.some((s) => s.key === c.dre_section)) return c.dre_section;
+    if (c.dre_section === "mdr") return mdrEnabled ? "mdr" : "despesas_vendas";
+    return defaultSectionForType(c.type) ?? null;
+  };
+
+  const unassigned = rootCategories.filter((c) => !effectiveSection(c));
 
   return (
     <AssignContext.Provider value={{ sections: sectionsToShow as any, onAssign: updateCategorySection, isMobile }}>
@@ -228,6 +238,11 @@ export default function CentrosDeCustos() {
           <p className="text-xs text-muted-foreground mt-1">
             A raiz governa todo o subgrupo. Subcategorias podem ter mapeamento próprio só se você
             quiser sobrescrever — caso contrário, herdam da raiz.
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            <span className="text-primary font-medium">Automático:</span> categorias do tipo "Receita"
+            entram em Receita Operacional e do tipo "Despesa" em Despesas Operacionais e Adm. por
+            padrão. Arraste para sobrescrever quando precisar de um centro de custo específico.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -248,7 +263,10 @@ export default function CentrosDeCustos() {
         <div className="space-y-3">
           <CategoryDiagnosticsPanel categories={categories} onChanged={refetch} />
           {sectionsToShow.map((section) => {
-            const sectionCats = rootCategories.filter((c) => c.dre_section === section.key);
+            const sectionCats = rootCategories.filter((c) => effectiveSection(c) === section.key);
+            const autoIds = new Set(
+              sectionCats.filter((c) => !c.dre_section).map((c) => c.id)
+            );
             const isExpanded = expandedSections[section.key] ?? sectionCats.length > 0;
 
             return (
@@ -258,6 +276,7 @@ export default function CentrosDeCustos() {
                 label={section.label}
                 sign={section.sign}
                 categories={sectionCats}
+                autoIds={autoIds}
                 expanded={isExpanded}
                 onToggle={() => toggleSection(section.key)}
                 draggedId={draggedId}
@@ -327,6 +346,7 @@ interface CostCenterFolderProps {
   label: string;
   sign: string;
   categories: Category[];
+  autoIds?: Set<string>;
   expanded: boolean;
   onToggle: () => void;
   draggedId: string | null;
@@ -341,6 +361,7 @@ function CostCenterFolder({
   label,
   sign,
   categories,
+  autoIds,
   expanded,
   onToggle,
   draggedId,
@@ -415,6 +436,7 @@ function CostCenterFolder({
                   <RootCategoryRow
                     key={cat.id}
                     category={cat}
+                    isAuto={autoIds?.has(cat.id) ?? false}
                     draggedId={draggedId}
                     childrenOf={childrenOf}
                     onClearDescendants={() => onClearDescendants(cat.id)}
@@ -433,12 +455,13 @@ function CostCenterFolder({
 
 interface RootCategoryRowProps {
   category: Category;
+  isAuto?: boolean;
   draggedId: string | null;
   childrenOf: Map<string | null, Category[]>;
   onClearDescendants: () => void;
 }
 
-function RootCategoryRow({ category, draggedId, childrenOf, onClearDescendants }: RootCategoryRowProps) {
+function RootCategoryRow({ category, isAuto, draggedId, childrenOf, onClearDescendants }: RootCategoryRowProps) {
   const [open, setOpen] = useState(false);
   const kids = childrenOf.get(category.id) || [];
   const hasOverrides = useMemo(() => {
@@ -471,7 +494,21 @@ function RootCategoryRow({ category, draggedId, childrenOf, onClearDescendants }
           <span className="w-6" />
         )}
         <div className="flex-1">
-          <DraggableCategoryItem category={category} draggedId={draggedId} />
+          <DraggableCategoryItem
+            category={category}
+            draggedId={draggedId}
+            badge={
+              isAuto ? (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] shrink-0 border-primary/40 text-primary"
+                  title="Mapeamento automático pelo tipo (Receita/Despesa). Arraste para sobrescrever."
+                >
+                  Auto
+                </Badge>
+              ) : null
+            }
+          />
         </div>
         {hasOverrides && (
           <Button

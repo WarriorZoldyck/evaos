@@ -53,3 +53,16 @@ export function normalizeLegacySection(key: string | null | undefined): string |
   if (key === "mdr") return "despesas_vendas";
   return key;
 }
+
+/**
+ * Smart default when a category has no explicit `dre_section`. We use the
+ * category's own `type` (receita/despesa) to pick a sensible bucket so users
+ * don't have to drag every single category to a cost center. The Centros de
+ * Custos UI shows these as "Automático" so the user knows they can override.
+ */
+export function defaultSectionForType(type: string | null | undefined): DreSectionKey | null {
+  if (type === "receita") return "receita_operacional";
+  if (type === "despesa") return "despesas_operacionais";
+  return null;
+}
+
