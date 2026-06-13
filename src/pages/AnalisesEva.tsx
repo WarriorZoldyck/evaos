@@ -237,6 +237,33 @@ function PendingCard({
           </div>
         </div>
 
+        {suggestion && onReconcile && (
+          <div className="mt-3 p-3 rounded-md border border-amber-500/30 bg-amber-500/5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+              <Link2 className="h-3.5 w-3.5" />
+              EVA encontrou um lançamento pendente parecido
+            </div>
+            <div className="text-sm">
+              <p className="font-medium">{suggestion.descricao || "—"}</p>
+              <p className="text-xs text-muted-foreground">
+                {fmt(suggestion.valor)}
+                {suggestion.vencimento ? ` • venc. ${fmtDate(suggestion.vencimento)}` : ""}
+                {suggestion.fornecedor ? ` • ${suggestion.fornecedor}` : ""}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="default"
+              disabled={isReconciling || isApproving || isRejecting}
+              onClick={() => onReconcile(suggestion)}
+              className="gap-1.5"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Dar baixa no pendente (não criar novo)
+            </Button>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50">
           <Button size="sm" onClick={onApprove} disabled={isApproving || isRejecting} className="gap-1.5">
             <Check className="h-3.5 w-3.5" />
