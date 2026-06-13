@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { CategoryDiagnosticsPanel } from "@/components/centros-custos/CategoryDiagnosticsPanel";
 
 import { DRE_SECTIONS as SHARED_DRE_SECTIONS, SECTION_LABEL as SHARED_SECTION_LABEL } from "@/lib/dreSections";
 
@@ -245,6 +246,7 @@ export default function CentrosDeCustos() {
         </div>
       ) : (
         <div className="space-y-3">
+          <CategoryDiagnosticsPanel categories={categories} onChanged={refetch} />
           {sectionsToShow.map((section) => {
             const sectionCats = rootCategories.filter((c) => c.dre_section === section.key);
             const isExpanded = expandedSections[section.key] ?? sectionCats.length > 0;

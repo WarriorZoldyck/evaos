@@ -16,8 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { DRE_SECTIONS as SHARED_DRE_SECTIONS } from "@/lib/dreSections";
+import { useCategories } from "@/hooks/useCategories";
 
 const DRE_SECTIONS = [
   { value: "__none__", label: "Nenhum", sign: null as null },
@@ -38,6 +39,7 @@ export function CategoryFormModal({ open, onClose, parentName, editData, default
   const [type, setType] = useState("ambos");
   const [dreSection, setDreSection] = useState("__none__");
   const [saving, setSaving] = useState(false);
+  const { categories } = useCategories();
 
   useEffect(() => {
     if (open) {
@@ -46,6 +48,19 @@ export function CategoryFormModal({ open, onClose, parentName, editData, default
       setDreSection(editData?.dre_section || "__none__");
     }
   }, [open, editData, defaultType]);
+
+  // Detect duplicate-name (same level: root vs. sibling under same parent)
+  const duplicateMatch = (() => {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) return null;
+    const sameName = categories.find(
+      (c) =>
+        c.name.trim().toLowerCase() === trimmed &&
+        c.id !== editData?.id &&
+        !c.parent_id === !parentName // both roots OR both children
+    );
+    return sameName || null;
+  })();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +96,16 @@ export function CategoryFormModal({ open, onClose, parentName, editData, default
               placeholder="Nome da categoria"
               required
             />
+            {duplicateMatch && (
+              <div className="flex items-start gap-2 text-xs p-2 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-200">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Já existe uma categoria com este nome
+                  {duplicateMatch.dre_section ? " mapeada no DRE" : " sem mapeamento"}.
+                  Criar uma duplicata pode dispersar suas transações entre os relatórios.
+                </span>
+              </div>
+            )}
           </div>
           {!parentName && (
             <div className="space-y-2">
