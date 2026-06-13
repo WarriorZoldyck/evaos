@@ -59,6 +59,8 @@ export default function DRE() {
           bankAccounts={bankAccounts}
           showVerticalAnalysis={showVerticalAnalysis}
           onToggleVerticalAnalysis={setShowVerticalAnalysis}
+          showHorizontalAnalysis={showHorizontalAnalysis}
+          onToggleHorizontalAnalysis={setShowHorizontalAnalysis}
         />
       </div>
 
