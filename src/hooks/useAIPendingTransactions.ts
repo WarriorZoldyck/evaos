@@ -258,22 +258,17 @@ export function useAIPendingTransactions() {
   }
 
   const keepOneMutation = useMutation({
-    mutationFn: async ({ keepId, rejectIds }: { keepId: string; rejectIds: string[] }) => {
-      // Approve the kept one by setting to pending
+    mutationFn: async ({ keepId }: { keepId: string; rejectIds?: string[] }) => {
+      // Only move the clicked item to pending. The others remain as duplicate_suspect
+      // so the user can decide each one individually (or use "Rejeitar Todos").
       const { error: keepError } = await supabase
         .from("ai_pending_transactions")
         .update({ status: "pending" })
         .eq("id", keepId);
       if (keepError) throw keepError;
-      // Reject the others
-      const { error: rejectError } = await supabase
-        .from("ai_pending_transactions")
-        .update({ status: "rejected", reviewed_at: new Date().toISOString() })
-        .in("id", rejectIds);
-      if (rejectError) throw rejectError;
     },
     onSuccess: () => {
-      toast.success("Duplicata resolvida! O item mantido foi movido para a aba Pendentes para aprovação.");
+      toast.success("Item mantido e movido para Pendentes. Os demais continuam aguardando sua decisão.");
       invalidateAll();
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
