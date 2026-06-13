@@ -428,7 +428,12 @@ export function useDREData(filters: DREFilters) {
     unmappedCategoryCount: contabilData.unmappedCategoryCount,
     indicators: {
       receitaOperacional: contabilData.recOp,
+      receitaLiquida: contabilData.recLiquida,
       lucroBruto: contabilData.lucroBruto,
+      ebitda: contabilData.ebitda,
+      ebit: contabilData.ebit,
+      resultadoFinanceiro: contabilData.resultadoFinanceiro,
+      lair: contabilData.lair,
       lucroLiquido: contabilData.lucroLiquido,
     },
   };
