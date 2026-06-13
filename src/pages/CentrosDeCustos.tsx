@@ -246,6 +246,7 @@ export default function CentrosDeCustos() {
         </div>
       ) : (
         <div className="space-y-3">
+          <CategoryDiagnosticsPanel categories={categories} onChanged={refetch} />
           {sectionsToShow.map((section) => {
             const sectionCats = rootCategories.filter((c) => c.dre_section === section.key);
             const isExpanded = expandedSections[section.key] ?? sectionCats.length > 0;
