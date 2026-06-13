@@ -10,6 +10,7 @@ interface DRETableContabilProps {
   sections: DRESection[];
   loading: boolean;
   showVerticalAnalysis: boolean;
+  showHorizontalAnalysis: boolean;
 }
 
 const INDENT_PX = 20;
@@ -18,6 +19,45 @@ const fmt = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 });
 
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
+
+const fmtAh = (curr: number, prev: number): { text: string; color: string } => {
+  if (prev === 0) {
+    if (curr === 0) return { text: "—", color: "text-muted-foreground" };
+    return { text: "novo", color: "text-muted-foreground" };
+  }
+  const pct = ((curr - prev) / Math.abs(prev)) * 100;
+  const sign = pct > 0 ? "+" : "";
+  const color = pct > 0
+    ? "text-emerald-600 dark:text-emerald-400"
+    : pct < 0
+      ? "text-destructive"
+      : "text-muted-foreground";
+  return { text: `${sign}${pct.toFixed(1)}%`, color };
+};
+
+function ValueCell({
+  curr,
+  prev,
+  showAh,
+  baseClass,
+  displaySign = 1,
+}: {
+  curr: number;
+  prev: number | null;
+  showAh: boolean;
+  baseClass: string;
+  displaySign?: number;
+}) {
+  return (
+    <td className={cn("text-right text-xs py-2 tabular-nums", baseClass)}>
+      <div>{fmt(curr * displaySign)}</div>
+      {showAh && prev !== null && (() => {
+        const ah = fmtAh(curr, prev);
+        return <div className={cn("text-[10px] font-normal", ah.color)}>{ah.text}</div>;
+      })()}
+    </td>
+  );
+}
 
 function CategoryRows({
   rows,
@@ -29,6 +69,7 @@ function CategoryRows({
   rowCounter,
   receitaTotal,
   showPct,
+  showAh,
 }: {
   rows: DRECategoryRow[];
   periods: string[];
@@ -39,6 +80,7 @@ function CategoryRows({
   rowCounter: { current: number };
   receitaTotal: number;
   showPct: boolean;
+  showAh: boolean;
 }) {
   return (
     <>
@@ -69,11 +111,18 @@ function CategoryRows({
                   {row.categoryName.toUpperCase()}
                 </span>
               </td>
-              {periods.map((p) => (
-                <td key={p} className={cn("text-right text-xs py-2 tabular-nums", colorClass)}>
-                  {fmt(row.monthlyTotals[p] || 0)}
-                </td>
-              ))}
+              {periods.map((p, idx) => {
+                const prev = idx > 0 ? (row.monthlyTotals[periods[idx - 1]] || 0) : null;
+                return (
+                  <ValueCell
+                    key={p}
+                    curr={row.monthlyTotals[p] || 0}
+                    prev={prev}
+                    showAh={showAh}
+                    baseClass={colorClass}
+                  />
+                );
+              })}
               <td className={cn("text-right text-xs py-2 pr-2 font-semibold tabular-nums", colorClass)}>
                 {fmt(total)}
               </td>
@@ -94,6 +143,7 @@ function CategoryRows({
                 rowCounter={rowCounter}
                 receitaTotal={receitaTotal}
                 showPct={showPct}
+                showAh={showAh}
               />
             )}
           </Fragment>
@@ -103,14 +153,22 @@ function CategoryRows({
   );
 }
 
+const FINAL_KEY = "lucro_liquido";
+const MAJOR_SUBTOTAL_KEYS = new Set(["receita_liquida", "lucro_bruto", "ebitda", "ebit", "resultado_financeiro", "lair"]);
+
 function getSectionStyle(section: DRESection) {
   if (section.isCalculated) {
-    // Result rows
     const total = Object.values(section.monthlyTotals).reduce((s, v) => s + v, 0);
-    if (section.key === "lucro_liquido") {
+    if (section.key === FINAL_KEY) {
       return {
-        row: cn("font-bold border-t-2 border-b", total >= 0 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-destructive/10 text-destructive"),
+        row: cn("font-bold border-t-2 border-b", total >= 0 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-destructive/15 text-destructive"),
         color: total >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive",
+      };
+    }
+    if (MAJOR_SUBTOTAL_KEYS.has(section.key)) {
+      return {
+        row: "font-bold bg-muted/70 border-b border-t",
+        color: "text-foreground",
       };
     }
     return {
@@ -130,7 +188,7 @@ function getSectionStyle(section: DRESection) {
   };
 }
 
-export function DRETableContabil({ periods, sections, loading, showVerticalAnalysis }: DRETableContabilProps) {
+export function DRETableContabil({ periods, sections, loading, showVerticalAnalysis, showHorizontalAnalysis }: DRETableContabilProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
 
@@ -160,9 +218,10 @@ export function DRETableContabil({ periods, sections, loading, showVerticalAnaly
     );
   }
 
-  const receitaOperacional = sections.find((s) => s.key === "receita_operacional");
-  const receitaTotal = receitaOperacional
-    ? Object.values(receitaOperacional.monthlyTotals).reduce((s, v) => s + v, 0)
+  // AV% denominator: Receita Líquida (accounting standard)
+  const receitaLiquida = sections.find((s) => s.key === "receita_liquida");
+  const receitaTotal = receitaLiquida
+    ? Object.values(receitaLiquida.monthlyTotals).reduce((s, v) => s + v, 0)
     : 0;
 
   const colCount = periods.length + 2 + (showVerticalAnalysis ? 1 : 0);
@@ -198,7 +257,6 @@ export function DRETableContabil({ periods, sections, loading, showVerticalAnaly
             const isOpen = openSections.has(section.key);
             const rowCounter = { current: 0 };
 
-            // Display values: for subtraction sections, show negative
             const displaySign = section.sign === "-" ? -1 : 1;
 
             return (
@@ -217,11 +275,19 @@ export function DRETableContabil({ periods, sections, loading, showVerticalAnaly
                       {section.label}
                     </span>
                   </td>
-                  {periods.map((p) => (
-                    <td key={p} className="text-right text-xs py-2 tabular-nums">
-                      {fmt((section.monthlyTotals[p] || 0) * displaySign)}
-                    </td>
-                  ))}
+                  {periods.map((p, idx) => {
+                    const prev = idx > 0 ? (section.monthlyTotals[periods[idx - 1]] || 0) : null;
+                    return (
+                      <ValueCell
+                        key={p}
+                        curr={section.monthlyTotals[p] || 0}
+                        prev={prev}
+                        showAh={showHorizontalAnalysis}
+                        baseClass="font-bold"
+                        displaySign={displaySign}
+                      />
+                    );
+                  })}
                   <td className="text-right text-xs py-2 pr-2 tabular-nums font-bold">
                     {fmt(grand * displaySign)}
                   </td>
@@ -242,6 +308,7 @@ export function DRETableContabil({ periods, sections, loading, showVerticalAnaly
                     rowCounter={rowCounter}
                     receitaTotal={receitaTotal}
                     showPct={showVerticalAnalysis}
+                    showAh={showHorizontalAnalysis}
                   />
                 )}
               </Fragment>
