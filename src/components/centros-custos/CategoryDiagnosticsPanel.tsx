@@ -28,15 +28,19 @@ interface DuplicateGroup {
   resolvedSection: string;
 }
 
-// Walk up a category chain to find the root-most dre_section.
+// Walk up a category chain to find the root-most explicit dre_section, or
+// fall back to the smart default derived from the root's `type`.
 function resolveSection(cat: Category, byId: Map<string, Category>): string | null {
   let current: Category | undefined = cat;
-  let last: string | null = null;
+  let explicit: string | null = null;
+  let root: Category | undefined = cat;
   while (current) {
-    if (current.dre_section) last = current.dre_section;
+    if (current.dre_section) explicit = current.dre_section;
+    root = current;
     current = current.parent_id ? byId.get(current.parent_id) : undefined;
   }
-  return last;
+  if (explicit) return explicit;
+  return defaultSectionForType(root?.type) ?? null;
 }
 
 export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
