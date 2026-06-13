@@ -167,14 +167,13 @@ export function useWorkspaceMembers() {
     ]);
   }, [user, fetchMembers, fetchAvailableWorkspaces, fetchWorkspaces, fetchOwnerProfile, fetchPendingInvitations]);
 
-  const createMember = async (name: string, email: string, password: string | undefined, role: string) => {
+  const createMember = async (name: string, email: string, role: string) => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
       if (!token) throw new Error("Not authenticated");
 
       const body: Record<string, unknown> = { name, email, role };
-      if (password) body.password = password;
       const res = await supabase.functions.invoke("create-hub-member", { body });
 
       if (res.error) {
@@ -193,7 +192,7 @@ export function useWorkspaceMembers() {
       }
       if (res.data?.error) throw new Error(res.data.error);
 
-      toast.success(res.data?.pending ? "Convite enviado! Aguardando aceitação do usuário." : "Membro criado com sucesso!");
+      toast.success(res.data?.pending ? "Convite enviado! Aguardando aceitação do usuário." : "Membro adicionado!");
       await fetchMembers();
       return res.data;
     } catch (err: any) {
