@@ -436,6 +436,7 @@ function CostCenterFolder({
                   <RootCategoryRow
                     key={cat.id}
                     category={cat}
+                    isAuto={autoIds?.has(cat.id) ?? false}
                     draggedId={draggedId}
                     childrenOf={childrenOf}
                     onClearDescendants={() => onClearDescendants(cat.id)}
