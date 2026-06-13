@@ -229,6 +229,11 @@ export default function CentrosDeCustos() {
             A raiz governa todo o subgrupo. Subcategorias podem ter mapeamento próprio só se você
             quiser sobrescrever — caso contrário, herdam da raiz.
           </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            <span className="text-primary font-medium">Automático:</span> categorias do tipo "Receita"
+            entram em Receita Operacional e do tipo "Despesa" em Despesas Operacionais e Adm. por
+            padrão. Arraste para sobrescrever quando precisar de um centro de custo específico.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Switch id="mdr-toggle" checked={mdrEnabled} onCheckedChange={toggleMdr} />
