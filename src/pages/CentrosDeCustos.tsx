@@ -455,12 +455,13 @@ function CostCenterFolder({
 
 interface RootCategoryRowProps {
   category: Category;
+  isAuto?: boolean;
   draggedId: string | null;
   childrenOf: Map<string | null, Category[]>;
   onClearDescendants: () => void;
 }
 
-function RootCategoryRow({ category, draggedId, childrenOf, onClearDescendants }: RootCategoryRowProps) {
+function RootCategoryRow({ category, isAuto, draggedId, childrenOf, onClearDescendants }: RootCategoryRowProps) {
   const [open, setOpen] = useState(false);
   const kids = childrenOf.get(category.id) || [];
   const hasOverrides = useMemo(() => {
