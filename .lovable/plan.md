@@ -1,66 +1,90 @@
-# Correção do WhatsApp + Reconciliação via Análises EVA
+## Objetivo
 
-## Diagnóstico
+Tornar a DRE Contábil do EVA totalmente aderente ao padrão contábil brasileiro, com a estrutura escalonada completa e análises vertical (AV%) e horizontal (AH%) na mesma tabela.
 
-A foto do Renato **não foi respondida** porque o `whatsapp-webhook` está com **boot error** desde a última deploy:
+## Estrutura final da DRE (resultado esperado na tela)
 
+```text
+(+) Receita Operacional Bruta
+(−) Deduções e Impostos sobre Venda
+(=) Receita Líquida
+(−) CMV / CSP
+(=) Lucro Bruto
+(−) Despesas com Vendas
+(−) Despesas Operacionais e Administrativas
+(−) Despesas Gerais e Administrativas
+(=) EBITDA                          ← NOVO subtotal
+(−) Depreciação e Amortização       ← NOVA seção
+(=) EBIT (Resultado Operacional)    ← NOVO subtotal
+(+) Receitas Financeiras
+(−) Despesas Financeiras
+(=) Resultado Financeiro            ← NOVO subtotal
+(=) LAIR (Lucro Antes de IR/CSLL)   ← NOVO subtotal
+(−) IRPJ / CSLL                     ← NOVA seção
+(=) Lucro Líquido do Exercício      ← renomeado (era "Resultado Líquido")
 ```
-worker boot error: Uncaught SyntaxError:
-Identifier 'normalizeText' has already been declared
-at .../whatsapp-webhook/index.ts:203:1
-```
 
-Na implementação anterior eu criei `function normalizeText` na linha 52 sem perceber que já existia outra `function normalizeText` na linha 248. Como o arquivo não compila, **nenhuma mensagem está sendo processada** (não é só boleto — é tudo).
+Linhas "Não Classificadas" continuam sendo exibidas só quando houver valor, abaixo da seção compatível (receitas → antes da Receita Líquida; despesas → antes de EBITDA).
 
-Além disso, você decidiu mudar a UX: em vez de perguntar via WhatsApp e dar baixa direto, o match deve ir para **Análises EVA** com a sugestão visível, e o usuário decide lá com calma.
+## Mudanças por área
 
-## Mudanças
+### 1. Banco de dados (1 migração)
 
-### 1. `supabase/functions/whatsapp-webhook/index.ts` — corrigir boot
-- Renomear os helpers novos para não colidir com os existentes:
-  - `normalizeText` (linha 52) → `normalizeBoletoText`
-  - `tokens` (auxiliar) → `boletoTokens`
-  - `jaccardSimilarity` mantém o nome (não colide).
-- Atualizar as chamadas dentro de `findMatchingPendingBoleto` para usar os novos nomes. Nada fora dessa função é tocado.
+Adicionar 2 novos valores válidos à coluna `categories.dre_section` (texto livre hoje, sem CHECK constraint — só precisamos refletir nos lugares que validam o set):
+- `depreciacao_amortizacao`
+- `tributos_sobre_lucro`
 
-### 2. Reverter fluxo de confirmação por WhatsApp
-- **Remover** o branch que cria `whatsapp_pending_actions` do tipo `confirm_boleto_match` e envia "Encontrei um boleto já lançado… responda Sim/Não".
-- **Remover** o handler `if (pendingAction.action_type === "confirm_boleto_match")` (linhas ~1515+).
-- Não há mais UPDATE direto em `transactions` pelo webhook a partir de comprovante.
+Não há tabela nova, não há mudança de RLS, não há GRANT novo. A migração serve apenas para documentar e popular categorias padrão no trigger de onboarding (se existir mapeamento), se já houver categoria "Depreciação" ou "IRPJ"/"CSLL" em algum usuário, fica a critério do usuário re-mapear via UI.
 
-### 3. Novo fluxo: sugestão dentro de Análises EVA
-Quando `findMatchingPendingBoleto` retornar um candidato com score ≥ 2:
-- Continuar inserindo a transação em `ai_pending_transactions` (fluxo normal),
-- Adicionar no campo `notes` um bloco estruturado de sugestão, ex.:
-  ```
-  [SUGESTAO_BAIXA]
-  transaction_id: <uuid>
-  descricao: <desc do pendente>
-  valor: 1234.56
-  vencimento: 2026-06-10
-  fornecedor: <nome>
-  score: 2
-  ```
-- Anexar também na `ai_response_message` a frase humana: *"Encontrei um lançamento pendente parecido: {desc} • R$ {valor} • venc. {data}. Confira em Análises EVA e dê baixa se for o mesmo."*
-- Enviar 1 mensagem ao usuário no WhatsApp: *"📥 Recebi seu comprovante e encontrei um possível lançamento pendente parecido no sistema. Coloquei em **Análises EVA** com a sugestão — confira no app e confirme a baixa por lá. 👍"*
-- Se não houver match: comportamento atual (mensagem padrão de "lançamento criado em Análises EVA").
+### 2. UI de Categorias (`src/components/categorias/CategoryFormModal.tsx`)
 
-### 4. UI — Análises EVA exibe sugestão
-- `src/pages/AnalisesEva.tsx` / componente que lista os pendentes: detectar o bloco `[SUGESTAO_BAIXA]` no `notes` e mostrar um **badge "Possível baixa de pendente"** + card secundário com os dados do candidato e botão **"Dar baixa no pendente em vez de criar novo"**.
-- Esse botão chama uma nova mutation que:
-  1. `UPDATE transactions SET status='Pago', payment_date=<do pending>, bank_account_id/wallet_id=<do pending>, attachment_url=<do pending>` na transação `transaction_id` extraída.
-  2. `UPDATE ai_pending_transactions SET status='approved', reviewed_at=now()` no pending (sem inserir nova linha em `transactions`).
-- Botões já existentes (Aprovar / Rejeitar / Editar) continuam funcionando para o caso de o usuário decidir que **não** é o mesmo boleto.
+Adicionar 2 novas opções no dropdown `DRE_SECTIONS`:
+- `depreciacao_amortizacao` → "Depreciação e Amortização" (sinal −)
+- `tributos_sobre_lucro` → "IRPJ / CSLL (Tributos sobre o Lucro)" (sinal −)
 
-### 5. Memória
-- Atualizar `mem://whatsapp/boleto-reconciliation` refletindo o novo fluxo (Análises EVA, sem confirmação por WhatsApp, sem UPDATE direto no webhook).
+### 3. Cálculo da DRE (`src/hooks/useDREData.ts`)
 
-## Detalhes técnicos
+- Estender `DreSectionKey` e `VALID_SECTION_KEYS` com as duas novas chaves.
+- Adicionar `sectionTrees` para elas.
+- Calcular novos subtotais por período:
+  - `ebitda = lucroBruto − despVendas − despOp − despGerais`
+  - `ebit = ebitda − dep_amort`
+  - `resultadoFinanceiro = recFin − despFin`
+  - `lair = ebit + resultadoFinanceiro`
+  - `lucroLiquido = lair − tributosLucro` (substitui a fórmula atual)
+- Reordenar o array `sections` para o layout acima, marcando todos os novos como `isCalculated: true` (subtotais não têm `categoryRows`).
+- Expandir o objeto `indicators` retornado: incluir `ebitda`, `ebit`, `resultadoFinanceiro`, `lair`, mantendo `receitaOperacional`, `lucroBruto`, `lucroLiquido`.
 
-- Sem mudanças de schema. O `notes` já existe em `ai_pending_transactions` e em `transactions` — o bloco `[SUGESTAO_BAIXA]` é só um marcador parseado no front.
-- `findMatchingPendingBoleto` permanece (lógica de score 0–3, janela −180/+30 dias, tolerância de valor). Só muda o que se faz com o resultado.
-- Após o deploy, o `whatsapp-webhook` volta a bootar e a Eva passa a responder novamente (incluindo o comprovante que o Renato mandou).
+### 4. Tabela contábil (`src/components/relatorios/DRETableContabil.tsx`)
 
-## Itens não inclusos
-- Reprocessar retroativamente a foto que o Renato enviou enquanto a função estava quebrada (Evolution só reentrega se reenviarmos a mensagem). Posso fazer se quiser.
-- Auto-baixa sem revisão.
+- Adicionar prop `showHorizontalAnalysis: boolean` (paralelo ao `showVerticalAnalysis` que já existe).
+- AH%: para cada linha de valor, calcular `(periodo_atual − periodo_anterior) / |periodo_anterior| * 100`. Renderizar abaixo do valor em cor verde/vermelho ou em coluna lateral (decisão: célula compacta abaixo, em cinza/verde/vermelho, para não dobrar a largura da tabela).
+- Estilizar visualmente as novas linhas calculadas (EBITDA, EBIT, Resultado Financeiro, LAIR) com a mesma faixa `bg-muted/60` já usada por Receita Líquida e Lucro Bruto. A linha final (Lucro Líquido do Exercício) mantém o destaque verde/vermelho com borda mais grossa.
+
+### 5. Filtros (`src/pages/DRE.tsx` + `DREPeriodFilter.tsx`)
+
+Adicionar toggle "AH% (variação)" ao lado do toggle "AV%" já existente, e propagar como prop `showHorizontalAnalysis` para a tabela.
+
+### 6. Indicadores do topo (`src/components/relatorios/DREIndicatorCards.tsx`)
+
+Substituir/ampliar os 4 cards:
+- Receita Operacional (mantém)
+- Margem Bruta % (mantém)
+- **Margem EBITDA %** (novo — `EBITDA / Receita Líquida`)
+- Margem Líquida % (mantém)
+
+Remover o card duplicado "Lucratividade" (era igual a Margem Líquida).
+
+## Notas técnicas
+
+- Tudo continua em **regime de competência** via `competence_date` (sem mudança).
+- Transferências internas continuam excluídas (sem mudança).
+- AH% só aparece a partir do 2º período da grade (Jan fica em branco quando granularidade = mensal).
+- AV% continua usando "Receita Líquida" como denominador para ficar alinhado à prática contábil — hoje usa Receita Operacional Bruta, ajustar nesse momento.
+
+## Fora de escopo (próximos passos sugeridos, não nesta entrega)
+
+- Orçado vs Realizado
+- DRE comparativa multi-ano
+- Trigger de onboarding criando categorias "Depreciação", "IRPJ" e "CSLL" automaticamente
+- Separação Operacional × Não-Operacional (resultado não recorrente)

@@ -17,9 +17,11 @@ interface DREPeriodFilterProps {
   bankAccounts: { id: string; name: string }[];
   showVerticalAnalysis: boolean;
   onToggleVerticalAnalysis: (v: boolean) => void;
+  showHorizontalAnalysis: boolean;
+  onToggleHorizontalAnalysis: (v: boolean) => void;
 }
 
-export function DREPeriodFilter({ filters, onChange, bankAccounts, showVerticalAnalysis, onToggleVerticalAnalysis }: DREPeriodFilterProps) {
+export function DREPeriodFilter({ filters, onChange, bankAccounts, showVerticalAnalysis, onToggleVerticalAnalysis, showHorizontalAnalysis, onToggleHorizontalAnalysis }: DREPeriodFilterProps) {
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
   const isContabil = filters.viewMode === "contabil";
@@ -48,6 +50,20 @@ export function DREPeriodFilter({ filters, onChange, bankAccounts, showVerticalA
             id="dre-av"
             checked={showVerticalAnalysis}
             onCheckedChange={onToggleVerticalAnalysis}
+          />
+        </div>
+      )}
+
+      {/* Horizontal analysis toggle (contábil only) */}
+      {isContabil && (
+        <div className="flex items-center gap-1.5 mr-2">
+          <Label htmlFor="dre-ah" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+            AH %
+          </Label>
+          <Switch
+            id="dre-ah"
+            checked={showHorizontalAnalysis}
+            onCheckedChange={onToggleHorizontalAnalysis}
           />
         </div>
       )}

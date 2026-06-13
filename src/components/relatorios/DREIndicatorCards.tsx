@@ -1,10 +1,11 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, BarChart3, Target } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, Target, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DREIndicatorCardsProps {
-  receitaOperacional: Record<string, number>;
+  receitaLiquida: Record<string, number>;
   lucroBruto: Record<string, number>;
+  ebitda: Record<string, number>;
   lucroLiquido: Record<string, number>;
 }
 
@@ -13,19 +14,20 @@ const fmt = (v: number) =>
 
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
 
-export function DREIndicatorCards({ receitaOperacional, lucroBruto, lucroLiquido }: DREIndicatorCardsProps) {
-  const totalReceita = Object.values(receitaOperacional).reduce((s, v) => s + v, 0);
+export function DREIndicatorCards({ receitaLiquida, lucroBruto, ebitda, lucroLiquido }: DREIndicatorCardsProps) {
+  const totalRecLiquida = Object.values(receitaLiquida).reduce((s, v) => s + v, 0);
   const totalBruto = Object.values(lucroBruto).reduce((s, v) => s + v, 0);
+  const totalEbitda = Object.values(ebitda).reduce((s, v) => s + v, 0);
   const totalLiquido = Object.values(lucroLiquido).reduce((s, v) => s + v, 0);
 
-  const margemBruta = totalReceita > 0 ? (totalBruto / totalReceita) * 100 : 0;
-  const margemLiquida = totalReceita > 0 ? (totalLiquido / totalReceita) * 100 : 0;
-  const lucratividade = totalReceita > 0 ? (totalLiquido / totalReceita) * 100 : 0;
+  const margemBruta = totalRecLiquida > 0 ? (totalBruto / totalRecLiquida) * 100 : 0;
+  const margemEbitda = totalRecLiquida > 0 ? (totalEbitda / totalRecLiquida) * 100 : 0;
+  const margemLiquida = totalRecLiquida > 0 ? (totalLiquido / totalRecLiquida) * 100 : 0;
 
   const cards = [
     {
-      label: "Receita Operacional",
-      value: fmt(totalReceita),
+      label: "Receita Líquida",
+      value: fmt(totalRecLiquida),
       icon: BarChart3,
       color: "text-primary",
     },
@@ -37,17 +39,18 @@ export function DREIndicatorCards({ receitaOperacional, lucroBruto, lucroLiquido
       color: margemBruta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
     },
     {
+      label: "Margem EBITDA",
+      value: fmtPct(margemEbitda),
+      subtitle: fmt(totalEbitda),
+      icon: Activity,
+      color: margemEbitda >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
+    },
+    {
       label: "Margem Líquida",
       value: fmtPct(margemLiquida),
       subtitle: fmt(totalLiquido),
       icon: margemLiquida >= 0 ? TrendingUp : TrendingDown,
       color: margemLiquida >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
-    },
-    {
-      label: "Lucratividade",
-      value: fmtPct(lucratividade),
-      icon: lucratividade >= 0 ? TrendingUp : TrendingDown,
-      color: lucratividade >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive",
     },
   ];
 
