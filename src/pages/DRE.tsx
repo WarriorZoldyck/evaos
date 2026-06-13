@@ -18,6 +18,7 @@ export default function DRE() {
     viewMode: "contabil",
   });
   const [showVerticalAnalysis, setShowVerticalAnalysis] = useState(false);
+  const [showHorizontalAnalysis, setShowHorizontalAnalysis] = useState(false);
   const { bankAccounts } = useAccounts();
   const data = useDREData(filters);
 
