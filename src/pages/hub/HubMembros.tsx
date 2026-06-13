@@ -281,18 +281,19 @@ function MemberCard({
 function InviteMemberModal({ open, onClose, onCreate, onCreated }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string, email: string, password: string | undefined, role: string) => Promise<any>;
+  onCreate: (name: string, email: string, role: string) => Promise<any>;
   onCreated?: () => void;
 }) {
   const { user } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [role, setRole] = useState("viewer");
   const [saving, setSaving] = useState(false);
   const [resources, setResources] = useState<ResourceOption[]>([]);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loadingRes, setLoadingRes] = useState(false);
+  const [context, setContext] = useState<string>(PESSOAL);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -300,17 +301,19 @@ function InviteMemberModal({ open, onClose, onCreate, onCreated }: {
     (async () => {
       const [c, b, cc, ct, w] = await Promise.all([
         supabase.from("companies").select("id, name").eq("user_id", user.id),
-        supabase.from("bank_accounts").select("id, name").eq("user_id", user.id),
-        supabase.from("credit_cards").select("id, name").eq("user_id", user.id),
-        supabase.from("card_terminals").select("id, name").eq("user_id", user.id),
-        supabase.from("wallets").select("id, name").eq("user_id", user.id),
+        supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", user.id),
+        supabase.from("credit_cards").select("id, name, company_id").eq("user_id", user.id),
+        supabase.from("card_terminals").select("id, name, company_id").eq("user_id", user.id),
+        supabase.from("wallets").select("id, name, company_id").eq("user_id", user.id),
       ]);
+      const companyList: CompanyOption[] = ((c.data as any[]) || []).map((r) => ({ id: r.id, name: r.name }));
+      setCompanies(companyList);
       const all: ResourceOption[] = [
-        ...((c.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "company" as const })),
-        ...((b.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "bank_account" as const })),
-        ...((cc.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "credit_card" as const })),
-        ...((ct.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "card_terminal" as const })),
-        ...((w.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "wallet" as const })),
+        ...companyList.map((r) => ({ id: r.id, name: r.name, type: "company" as const, company_id: r.id })),
+        ...((b.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "bank_account" as const, company_id: r.company_id ?? null })),
+        ...((cc.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "credit_card" as const, company_id: r.company_id ?? null })),
+        ...((ct.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "card_terminal" as const, company_id: r.company_id ?? null })),
+        ...((w.data as any[]) || []).map((r) => ({ id: r.id, name: r.name, type: "wallet" as const, company_id: r.company_id ?? null })),
       ];
       setResources(all);
       setLoadingRes(false);
@@ -327,18 +330,17 @@ function InviteMemberModal({ open, onClose, onCreate, onCreated }: {
   };
 
   const reset = () => {
-    setName(""); setEmail(""); setPassword(""); setRole("viewer"); setSelected(new Set());
+    setName(""); setEmail(""); setRole("viewer"); setSelected(new Set()); setContext(PESSOAL);
   };
 
   const handleSubmit = async () => {
     if (!name || !email || !user) return;
     setSaving(true);
     try {
-      const res = await onCreate(name, email, password || undefined, role);
+      const res = await onCreate(name, email, role);
       const newUserId: string | undefined = res?.member?.id;
 
       if (newUserId && selected.size > 0) {
-        // Find workspace_members.id for this newly created/invited member
         const { data: wm } = await supabase
           .from("workspace_members")
           .select("id")
@@ -362,16 +364,23 @@ function InviteMemberModal({ open, onClose, onCreate, onCreated }: {
       onCreated?.();
       onClose();
     } catch {
-      // toast already handled in onCreate
+      /* toast handled in onCreate */
     } finally { setSaving(false); }
   };
 
   const hasAnySelection = selected.size > 0;
 
+  const filteredResources = resources.filter((r) => {
+    if (context === PESSOAL) return r.type !== "company" && r.company_id === null;
+    return r.company_id === context;
+  });
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader><DialogTitle>Convidar Membro</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Convidar Membro</DialogTitle>
+        </DialogHeader>
         <div className="space-y-4 overflow-y-auto flex-1 pr-1">
           <div className="space-y-2">
             <Label>Nome</Label>
@@ -380,12 +389,8 @@ function InviteMemberModal({ open, onClose, onCreate, onCreated }: {
           <div className="space-y-2">
             <Label>Email</Label>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" />
-          </div>
-          <div className="space-y-2">
-            <Label>Senha <span className="text-xs text-muted-foreground">(opcional)</span></Label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Apenas se o usuário ainda não tiver conta EVA" />
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Se o e-mail já tiver conta na EVA, ele receberá um convite para aceitar — a senha não é necessária. Caso contrário, defina uma senha para criar a conta dele.
+              A pessoa precisa ter uma conta gratuita na EVA. Ela receberá um convite pendente para aceitar — nós nunca alteramos a senha dela.
             </p>
           </div>
           <div className="space-y-2">
@@ -415,16 +420,36 @@ function InviteMemberModal({ open, onClose, onCreate, onCreated }: {
             <p className="text-[11px] text-muted-foreground leading-relaxed">
               {hasAnySelection
                 ? "O membro verá APENAS os recursos marcados."
-                : "Sem nada marcado, o membro verá TUDO da sua conta. Você pode ajustar depois."}
+                : "Sem nada marcado, o membro verá TUDO da sua conta."}
             </p>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Contexto</Label>
+              <Select value={context} onValueChange={setContext}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={PESSOAL}>
+                    <span className="flex items-center gap-2"><User className="h-3.5 w-3.5" /> Pessoal</span>
+                  </SelectItem>
+                  {companies.map((co) => (
+                    <SelectItem key={co.id} value={co.id}>
+                      <span className="flex items-center gap-2"><Building2 className="h-3.5 w-3.5" /> {co.name}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {loadingRes ? (
               <div className="flex justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-primary" /></div>
-            ) : resources.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-3">Nenhum recurso cadastrado ainda.</p>
+            ) : filteredResources.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3">Nenhum recurso cadastrado neste contexto.</p>
             ) : (
               <div className="space-y-3 max-h-[220px] overflow-y-auto rounded-md border border-border/40 p-2">
                 {RES_ORDER.map((type) => {
-                  const items = resources.filter((r) => r.type === type);
+                  const items = filteredResources.filter((r) => r.type === type);
                   if (items.length === 0) return null;
                   const meta = RES_META[type];
                   const Icon = meta.icon;
