@@ -119,7 +119,9 @@ export function useDREData(filters: DREFilters) {
         .select("id, amount, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id, transfer_id")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr)
-        .is("transfer_id", null);
+        .or("transfer_id.is.null,is_internal_transfer.eq.false")
+        .not("category", "ilike", "transfer%")
+        .not("category", "ilike", "transferência%");
 
       q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       if (accountId) {
