@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { DRE_SECTIONS, SECTION_LABEL } from "@/lib/dreSections";
+import { DRE_SECTIONS, SECTION_LABEL, defaultSectionForType } from "@/lib/dreSections";
 import type { Category } from "@/hooks/useCategories";
 
 interface Props {
