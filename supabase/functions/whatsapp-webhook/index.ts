@@ -3394,7 +3394,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // Single transaction (no installments)
       // --- Boleto reconciliation: if user is paying NOW (status=Pago) for a
       // despesa without credit card, check whether a Pendente transaction
-      // already exists in the system and ask for confirmation.
+      // already exists in the system. If so, attach a [SUGESTAO_BAIXA] block
+      // to the pending entry so the user can resolve it in Análises EVA.
+      let boletoSuggestionBlock: string | null = null;
+      let boletoSuggestionMessage: string | null = null;
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
         try {
           const supplierName = supplierId
@@ -3409,63 +3412,28 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             description: aiParsed.description || "",
           });
           if (match) {
-            console.log("=== BOLETO MATCH FOUND ===", { txId: match.tx.id, score: match.score });
-            const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-            await supabase.from("whatsapp_pending_actions").insert({
-              user_id: userId,
-              action_type: "confirm_boleto_match",
-              context_company_id: companyId,
-              expires_at: expiresAt,
-              payload: {
-                matched_transaction_id: match.tx.id,
-                matched_description: match.tx.description,
-                matched_amount: Number(match.tx.amount),
-                matched_payment_date: match.tx.payment_date,
-                matched_supplier_name: match.supplierName,
-                new_payment_date: paymentDate,
-                new_bank_account_id: bankAccountId,
-                new_wallet_id: walletId,
-                new_payment_method: paymentMethod,
-                new_attachment_url: attachmentUrl,
-                // Fallback insert payload — used if user says "Não"
-                fallback_tx: {
-                  description: aiParsed.description || "Lançamento via WhatsApp",
-                  amount: Math.abs(aiParsed.amount || 0),
-                  type: txType,
-                  category: categoryValue,
-                  subcategory: subcategoryValue,
-                  subcategory2: subcategory2Value,
-                  competence_date: competenceDate,
-                  payment_date: paymentDate,
-                  transaction_status: status,
-                  bank_account_id: bankAccountId,
-                  wallet_id: walletId,
-                  credit_card_id: creditCardId,
-                  company_id: companyId,
-                  payment_method: paymentMethod,
-                  supplier_id: supplierId,
-                  client_id: clientId,
-                  contact_name: contactName,
-                  notes: buildNotes(aiParsed.notes),
-                  attachment_url: attachmentUrl,
-                  original_message: originalUserText || null,
-                  ai_response_message: aiParsed.friendly_message || null,
-                },
-              },
-            });
-
-            const supplierLine = match.supplierName ? `\n👤 ${match.supplierName}` : "";
-            return respond({
-              success: true,
-              intent: "lancamento",
-              message: `📄 Encontrei um lançamento *pendente* parecido no sistema:\n\n📝 ${match.tx.description}\n💰 ${fmt(match.tx.amount)}\n📅 Vencimento: ${formatDate(match.tx.payment_date)}${supplierLine}\n\nÉ o *mesmo* pagamento? Responda *Sim* para dar baixa nesse lançamento ou *Não* para registrar como novo.`,
-              transaction: null,
-            }, 200);
+            console.log("=== BOLETO MATCH FOUND (suggestion) ===", { txId: match.tx.id, score: match.score });
+            boletoSuggestionBlock =
+              `\n\n[SUGESTAO_BAIXA]\n` +
+              `transaction_id: ${match.tx.id}\n` +
+              `descricao: ${match.tx.description || ""}\n` +
+              `valor: ${Number(match.tx.amount)}\n` +
+              `vencimento: ${match.tx.payment_date || ""}\n` +
+              `fornecedor: ${match.supplierName || ""}\n` +
+              `score: ${match.score}`;
+            const supplierLine = match.supplierName ? ` • ${match.supplierName}` : "";
+            boletoSuggestionMessage =
+              `📄 Encontrei um lançamento *pendente* parecido no sistema:\n` +
+              `• ${match.tx.description}${supplierLine}\n` +
+              `• ${fmt(match.tx.amount)} • venc. ${formatDate(match.tx.payment_date)}\n\n` +
+              `Coloquei a sugestão em *Análises EVA* — confirme lá se é o mesmo pagamento para dar baixa sem duplicar. 👍`;
           }
         } catch (e) {
           console.error("Boleto reconciliation skipped due to error:", e);
         }
       }
+
+
 
 
       const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
