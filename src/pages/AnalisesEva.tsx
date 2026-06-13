@@ -628,8 +628,10 @@ export default function AnalisesEva() {
           onApprove={() => approve(g.item)}
           onReject={() => reject(g.item.id)}
           onEdit={() => setEditingItem(g.item)}
+          onReconcile={(suggestion) => handleReconcile(g.item, suggestion)}
           isApproving={isApproving}
           isRejecting={isRejecting}
+          isReconciling={reconcilingId === g.item.id}
           categoryName={getCategoryName(g.item.category)}
           accountName={getAccountName(g.item)}
         />
