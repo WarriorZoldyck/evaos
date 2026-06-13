@@ -414,20 +414,19 @@ function MemberCard({
 function InviteMemberModal({ open, onClose, onCreate }: {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string, email: string, password: string, role: string) => Promise<any>;
+  onCreate: (name: string, email: string, role: string) => Promise<any>;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [role, setRole] = useState("viewer");
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async () => {
-    if (!name || !email || !password) return;
+    if (!name || !email) return;
     setSaving(true);
     try {
-      await onCreate(name, email, password, role);
-      setName(""); setEmail(""); setPassword(""); setRole("viewer");
+      await onCreate(name, email, role);
+      setName(""); setEmail(""); setRole("viewer");
       onClose();
     } catch {} finally { setSaving(false); }
   };
@@ -439,7 +438,6 @@ function InviteMemberModal({ open, onClose, onCreate }: {
         <div className="space-y-4">
           <div><Label>Nome</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome completo" /></div>
           <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@exemplo.com" /></div>
-          <div><Label>Senha</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha de acesso" /></div>
           <div>
             <Label>Permissão</Label>
             <Select value={role} onValueChange={setRole}>
@@ -454,9 +452,9 @@ function InviteMemberModal({ open, onClose, onCreate }: {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={saving || !name || !email || !password}>
+          <Button onClick={handleSubmit} disabled={saving || !name || !email}>
             {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-            Criar Membro
+            Enviar Convite
           </Button>
         </DialogFooter>
       </DialogContent>
