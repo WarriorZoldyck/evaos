@@ -314,12 +314,9 @@ export function useDREData(filters: DREFilters) {
         if (sectionKey) break;
       }
 
-      // Last-resort fallback based on the transaction's own type — covers
-      // text-only categories that don't exist in `categories` at all.
-      if (!sectionKey) {
-        const def = defaultSectionForType(t.type);
-        if (def) sectionKey = def as DreSectionKey;
-      }
+      // No type-based fallback: transactions whose category has no explicit
+      // dre_section mapping fall through to "Não Classificadas" below.
+
 
       if (!sectionKey) {
         sectionKey = t.type === "receita" ? "receitas_nao_classificadas" : "despesas_nao_classificadas";
