@@ -1,6 +1,6 @@
 ## Objetivo
 
-Tornar o DRE estritamente baseado no que o usuário **atrelou manualmente** a um centro de custo. Categorias sem `dre_section` explícito (em si ou em algum ancestral) deixam de aparecer nas seções oficiais do DRE e passam a ser listadas apenas nas linhas informativas **"Receitas/Despesas Não Classificadas (fora do DRE)"**, abaixo do Lucro Líquido.
+Tornar o DRE estritamente baseado no que o usuário **atrelou manualmente** a um centro de custo. Categorias sem `dre_section` explícito (em si ou em algum ancestral) não podem aparecer em hipótese alguma na tela do DRE — nem nas seções oficiais, nem em linhas informativas.
 
 ## Mudança principal
 
@@ -11,7 +11,7 @@ Hoje a resolução tem 3 camadas:
 2. Fallback por `type` da categoria raiz via `defaultSectionForType` (**remover**)
 3. Fallback por `t.type` da transação (**remover**)
 
-Passará a ter apenas a camada 1. Se nenhuma categoria na cadeia tiver `dre_section`, a transação vai para `receitas_nao_classificadas` ou `despesas_nao_classificadas` conforme `t.type`.
+Passará a ter apenas a camada 1. Se nenhuma categoria na cadeia tiver `dre_section`, a transação é ignorada pelo DRE contábil.
 
 ### Trecho atual (a alterar)
 
@@ -32,23 +32,14 @@ if (!sectionKey) {
 }
 ```
 
-Ambos serão removidos. O bloco que já existe abaixo continua tratando o caso "sem mapeamento":
-
-```ts
-if (!sectionKey) {
-  sectionKey = t.type === "receita" ? "receitas_nao_classificadas" : "despesas_nao_classificadas";
-  if (chain[0]) unmappedCategoryIds.add(chain[0].id);
-}
-```
-
-Isso já as joga nas linhas informativas que **não somam no Lucro Líquido** (a lógica `recLiquida = recOp - impVenda`, etc. continua intacta).
+Ambos serão removidos. O bloco "sem mapeamento" apenas incrementa o diagnóstico e dá `return`, sem inserir a transação em qualquer seção visível.
 
 ## Efeitos colaterais esperados (positivos)
 
 - **Receita Operacional** e **Despesas Operacionais e Adm.** vão diminuir para usuários que tinham muitas categorias sem mapear — voltarão ao valor "real" do que está classificado.
 - **Lucro Líquido** muda para esses usuários (passa a refletir só o classificado).
-- O contador `unmappedCategoryCount` (já exibido em `CategoryDiagnosticsPanel` na página Centros de Custos) ficará mais alto, incentivando o usuário a arrastar as categorias para os buckets corretos.
-- As seções "(i) Receitas/Despesas Não Classificadas (fora do DRE)" aparecem automaticamente quando houver valores (lógica `hasRecNc`/`hasDespNc` já existe).
+- O contador `unmappedCategoryCount` continuará avisando que existem categorias sem centro de custo.
+- Nenhuma seção "Não Classificadas" aparece no DRE.
 
 ## Limpeza opcional
 
