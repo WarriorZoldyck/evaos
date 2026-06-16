@@ -47,7 +47,7 @@ export default function DRE() {
             <CollapsibleContent className="mt-2 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed max-w-lg">
               {isContabil ? (
                 <>
-                  O <strong>DRE Contábil</strong> segue a estrutura padrão da Demonstração do Resultado do Exercício e usa os <strong>Centros de Custo</strong> como fonte de classificação. Cada categoria precisa estar vinculada a um centro (Receita Operacional, CMV, Despesas Operacionais, etc.) na página <Link to="/centros-de-custos" className="text-primary hover:underline">Centros de Custos</Link>. Categorias sem vínculo aparecem em "Não Classificadas".
+                  O <strong>DRE Contábil</strong> segue a estrutura padrão da Demonstração do Resultado do Exercício e usa os <strong>Centros de Custo</strong> como única fonte de classificação. Cada categoria precisa estar vinculada a um centro (Receita Operacional, CMV, Despesas Operacionais, etc.) na página <Link to="/centros-de-custos" className="text-primary hover:underline">Centros de Custos</Link>. Categorias sem vínculo não aparecem no DRE.
                 </>
               ) : (
 
@@ -78,7 +78,7 @@ export default function DRE() {
               {data.unmappedCategoryCount} categoria{data.unmappedCategoryCount === 1 ? "" : "s"} sem centro de custo
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Lançamentos dessas categorias estão sendo agrupados em "Não Classificadas". Vincule-as em{" "}
+              Lançamentos dessas categorias não aparecem no DRE. Vincule-as em{" "}
               <Link to="/centros-de-custos" className="text-primary hover:underline font-medium">
                 Centros de Custos
               </Link>{" "}

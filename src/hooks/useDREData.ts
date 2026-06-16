@@ -347,10 +347,8 @@ export function useDREData(filters: DREFilters) {
     const despGerais = sumTree(sectionTrees.despesas_gerais);
     const depAmort = sumTree(sectionTrees.depreciacao_amortizacao);
     const tributosLucro = sumTree(sectionTrees.tributos_sobre_lucro);
-    const recNc = sumTree(sectionTrees.receitas_nao_classificadas);
-    const despNc = sumTree(sectionTrees.despesas_nao_classificadas);
 
-    // Calculated subtotals — include unclassified amounts so the bottom line stays correct
+    // Calculated subtotals use only categories explicitly mapped to cost centers.
     const recLiquida = emptyTotals();
     const lucroBruto = emptyTotals();
     const ebitda = emptyTotals();
@@ -359,8 +357,6 @@ export function useDREData(filters: DREFilters) {
     const lair = emptyTotals();
     const lucroLiquido = emptyTotals();
     periods.forEach((p) => {
-      // Não Classificadas DO NOT affect the bottom line — they are shown
-      // informationally after Lucro Líquido so the user can map them.
       recLiquida[p] = recOp[p] - impVenda[p];
       lucroBruto[p] = recLiquida[p] - cmv[p];
       ebitda[p] = lucroBruto[p] - despVendas[p] - despOp[p] - despGerais[p];
@@ -370,8 +366,6 @@ export function useDREData(filters: DREFilters) {
       lucroLiquido[p] = lair[p] - tributosLucro[p];
     });
 
-    const hasRecNc = Object.values(recNc).some((v) => v !== 0);
-    const hasDespNc = Object.values(despNc).some((v) => v !== 0);
     const hasDepAmort = Object.values(depAmort).some((v) => v !== 0) || sectionTrees.depreciacao_amortizacao.size > 0;
     const hasTributos = Object.values(tributosLucro).some((v) => v !== 0) || sectionTrees.tributos_sobre_lucro.size > 0;
 
@@ -393,10 +387,6 @@ export function useDREData(filters: DREFilters) {
       { key: "lair", label: "(=) LAIR (Lucro Antes de IR/CSLL)", sign: "=", monthlyTotals: lair, categoryRows: [], isCalculated: true },
       ...(hasTributos ? [{ key: "tributos_sobre_lucro", label: "(-) IRPJ / CSLL", sign: "-" as const, monthlyTotals: tributosLucro, categoryRows: toRows(sectionTrees.tributos_sobre_lucro), isCalculated: false }] : []),
       { key: "lucro_liquido", label: "(=) Lucro Líquido do Exercício", sign: "=", monthlyTotals: lucroLiquido, categoryRows: [], isCalculated: true },
-      // Informational sections — DO NOT enter into Lucro Líquido. They sit
-      // below the bottom line so the user can identify what's missing mapping.
-      ...(hasRecNc ? [{ key: "receitas_nao_classificadas", label: "(i) Receitas Não Classificadas (fora do DRE)", sign: "+" as const, monthlyTotals: recNc, categoryRows: toRows(sectionTrees.receitas_nao_classificadas), isCalculated: false }] : []),
-      ...(hasDespNc ? [{ key: "despesas_nao_classificadas", label: "(i) Despesas Não Classificadas (fora do DRE)", sign: "-" as const, monthlyTotals: despNc, categoryRows: toRows(sectionTrees.despesas_nao_classificadas), isCalculated: false }] : []),
     ];
 
     return { sections, recOp, recLiquida, lucroBruto, ebitda, ebit, resultadoFinanceiro, lair, lucroLiquido, unmappedCategoryCount: unmappedCategoryIds.size };
