@@ -337,7 +337,6 @@ interface CostCenterFolderProps {
   label: string;
   sign: string;
   categories: Category[];
-  autoIds?: Set<string>;
   expanded: boolean;
   onToggle: () => void;
   draggedId: string | null;
@@ -352,7 +351,6 @@ function CostCenterFolder({
   label,
   sign,
   categories,
-  autoIds,
   expanded,
   onToggle,
   draggedId,
@@ -427,7 +425,6 @@ function CostCenterFolder({
                   <RootCategoryRow
                     key={cat.id}
                     category={cat}
-                    isAuto={autoIds?.has(cat.id) ?? false}
                     draggedId={draggedId}
                     childrenOf={childrenOf}
                     onClearDescendants={() => onClearDescendants(cat.id)}
@@ -446,13 +443,12 @@ function CostCenterFolder({
 
 interface RootCategoryRowProps {
   category: Category;
-  isAuto?: boolean;
   draggedId: string | null;
   childrenOf: Map<string | null, Category[]>;
   onClearDescendants: () => void;
 }
 
-function RootCategoryRow({ category, isAuto, draggedId, childrenOf, onClearDescendants }: RootCategoryRowProps) {
+function RootCategoryRow({ category, draggedId, childrenOf, onClearDescendants }: RootCategoryRowProps) {
   const [open, setOpen] = useState(false);
   const kids = childrenOf.get(category.id) || [];
   const hasOverrides = useMemo(() => {
@@ -488,17 +484,6 @@ function RootCategoryRow({ category, isAuto, draggedId, childrenOf, onClearDesce
           <DraggableCategoryItem
             category={category}
             draggedId={draggedId}
-            badge={
-              isAuto ? (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] shrink-0 border-primary/40 text-primary"
-                  title="Mapeamento automático pelo tipo (Receita/Despesa). Arraste para sobrescrever."
-                >
-                  Auto
-                </Badge>
-              ) : null
-            }
           />
         </div>
         {hasOverrides && (

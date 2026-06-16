@@ -59,6 +59,6 @@ Vou rodar uma busca por usos antes de decidir.
 
 1. Abrir o DRE de uma conta que tinha categorias sem mapeamento e confirmar que:
    - Receita Operacional / Despesas Operacionais caíram para o valor das categorias com `dre_section` setado.
-   - As linhas "(i) ... Não Classificadas" aparecem com os valores que antes inflavam o DRE.
+   - Nenhuma linha "Não Classificadas" aparece.
    - Lucro Líquido reflete só o classificado.
 2. Painel de Centros de Custos (`CategoryDiagnosticsPanel`) deve mostrar contagem coerente de categorias não mapeadas.
