@@ -39,12 +39,9 @@ interface CategoryRecord {
 
 // ── DRE section keys ──────────────────────────────
 
-import { VALID_SECTION_KEYS as SHARED_VALID_KEYS, normalizeLegacySection, defaultSectionForType, type DreSectionKey as SharedDreKey } from "@/lib/dreSections";
+import { VALID_SECTION_KEYS as SHARED_VALID_KEYS, normalizeLegacySection, type DreSectionKey as SharedDreKey } from "@/lib/dreSections";
 
-type DreSectionKey =
-  | SharedDreKey
-  | "receitas_nao_classificadas"
-  | "despesas_nao_classificadas";
+type DreSectionKey = SharedDreKey;
 
 const VALID_SECTION_KEYS: DreSectionKey[] = SHARED_VALID_KEYS as DreSectionKey[];
 
@@ -259,15 +256,11 @@ export function useDREData(filters: DREFilters) {
       despesas_gerais: new Map(),
       depreciacao_amortizacao: new Map(),
       tributos_sobre_lucro: new Map(),
-      receitas_nao_classificadas: new Map(),
-      despesas_nao_classificadas: new Map(),
     };
 
     // Walk a category up to its root and return the FIRST (root-most) explicit
-    // dre_section found in the ancestry chain. NO automatic fallback by type —
-    // categories without an explicit cost-center mapping go to the informational
-    // "Não Classificadas" rows so the DRE only reflects what the user actually
-    // categorized.
+    // dre_section found in the ancestry chain. NO automatic fallback by type and
+    // NO "Não Classificadas" rows: unmapped categories are ignored by the DRE.
     const sectionFor = (cat: CategoryRecord): DreSectionKey | null => {
       const ancestry: CategoryRecord[] = [];
       let current: CategoryRecord | undefined = cat;
@@ -314,15 +307,10 @@ export function useDREData(filters: DREFilters) {
         if (sectionKey) break;
       }
 
-      // No type-based fallback: transactions whose category has no explicit
-      // dre_section mapping fall through to "Não Classificadas" below.
-
-
       if (!sectionKey) {
-        sectionKey = t.type === "receita" ? "receitas_nao_classificadas" : "despesas_nao_classificadas";
         if (chain[0]) unmappedCategoryIds.add(chain[0].id);
+        return;
       }
-
 
       const tree = sectionTrees[sectionKey];
       let currentLevel = tree;
@@ -359,10 +347,8 @@ export function useDREData(filters: DREFilters) {
     const despGerais = sumTree(sectionTrees.despesas_gerais);
     const depAmort = sumTree(sectionTrees.depreciacao_amortizacao);
     const tributosLucro = sumTree(sectionTrees.tributos_sobre_lucro);
-    const recNc = sumTree(sectionTrees.receitas_nao_classificadas);
-    const despNc = sumTree(sectionTrees.despesas_nao_classificadas);
 
-    // Calculated subtotals — include unclassified amounts so the bottom line stays correct
+    // Calculated subtotals use only categories explicitly mapped to cost centers.
     const recLiquida = emptyTotals();
     const lucroBruto = emptyTotals();
     const ebitda = emptyTotals();
@@ -371,8 +357,6 @@ export function useDREData(filters: DREFilters) {
     const lair = emptyTotals();
     const lucroLiquido = emptyTotals();
     periods.forEach((p) => {
-      // Não Classificadas DO NOT affect the bottom line — they are shown
-      // informationally after Lucro Líquido so the user can map them.
       recLiquida[p] = recOp[p] - impVenda[p];
       lucroBruto[p] = recLiquida[p] - cmv[p];
       ebitda[p] = lucroBruto[p] - despVendas[p] - despOp[p] - despGerais[p];
@@ -382,8 +366,6 @@ export function useDREData(filters: DREFilters) {
       lucroLiquido[p] = lair[p] - tributosLucro[p];
     });
 
-    const hasRecNc = Object.values(recNc).some((v) => v !== 0);
-    const hasDespNc = Object.values(despNc).some((v) => v !== 0);
     const hasDepAmort = Object.values(depAmort).some((v) => v !== 0) || sectionTrees.depreciacao_amortizacao.size > 0;
     const hasTributos = Object.values(tributosLucro).some((v) => v !== 0) || sectionTrees.tributos_sobre_lucro.size > 0;
 
@@ -405,10 +387,6 @@ export function useDREData(filters: DREFilters) {
       { key: "lair", label: "(=) LAIR (Lucro Antes de IR/CSLL)", sign: "=", monthlyTotals: lair, categoryRows: [], isCalculated: true },
       ...(hasTributos ? [{ key: "tributos_sobre_lucro", label: "(-) IRPJ / CSLL", sign: "-" as const, monthlyTotals: tributosLucro, categoryRows: toRows(sectionTrees.tributos_sobre_lucro), isCalculated: false }] : []),
       { key: "lucro_liquido", label: "(=) Lucro Líquido do Exercício", sign: "=", monthlyTotals: lucroLiquido, categoryRows: [], isCalculated: true },
-      // Informational sections — DO NOT enter into Lucro Líquido. They sit
-      // below the bottom line so the user can identify what's missing mapping.
-      ...(hasRecNc ? [{ key: "receitas_nao_classificadas", label: "(i) Receitas Não Classificadas (fora do DRE)", sign: "+" as const, monthlyTotals: recNc, categoryRows: toRows(sectionTrees.receitas_nao_classificadas), isCalculated: false }] : []),
-      ...(hasDespNc ? [{ key: "despesas_nao_classificadas", label: "(i) Despesas Não Classificadas (fora do DRE)", sign: "-" as const, monthlyTotals: despNc, categoryRows: toRows(sectionTrees.despesas_nao_classificadas), isCalculated: false }] : []),
     ];
 
     return { sections, recOp, recLiquida, lucroBruto, ebitda, ebit, resultadoFinanceiro, lair, lucroLiquido, unmappedCategoryCount: unmappedCategoryIds.size };

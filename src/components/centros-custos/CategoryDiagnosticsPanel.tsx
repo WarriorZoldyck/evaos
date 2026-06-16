@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { DRE_SECTIONS, SECTION_LABEL, defaultSectionForType } from "@/lib/dreSections";
+import { DRE_SECTIONS, SECTION_LABEL } from "@/lib/dreSections";
 import type { Category } from "@/hooks/useCategories";
 
 interface Props {
@@ -28,19 +28,15 @@ interface DuplicateGroup {
   resolvedSection: string;
 }
 
-// Walk up a category chain to find the root-most explicit dre_section, or
-// fall back to the smart default derived from the root's `type`.
+// Walk up a category chain to find the root-most explicit dre_section.
 function resolveSection(cat: Category, byId: Map<string, Category>): string | null {
   let current: Category | undefined = cat;
   let explicit: string | null = null;
-  let root: Category | undefined = cat;
   while (current) {
     if (current.dre_section) explicit = current.dre_section;
-    root = current;
     current = current.parent_id ? byId.get(current.parent_id) : undefined;
   }
-  if (explicit) return explicit;
-  return defaultSectionForType(root?.type) ?? null;
+  return explicit;
 }
 
 export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
@@ -172,7 +168,7 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
               </h4>
               <p className="text-xs text-muted-foreground mb-2">
                 Existem categorias com o mesmo nome — algumas mapeadas, outras não. Transações
-                ligadas às não mapeadas caem em "Não Classificadas".
+                ligadas às não mapeadas não aparecem no DRE.
               </p>
               <ul className="space-y-2">
                 {duplicates.map((g) => (
@@ -211,8 +207,7 @@ export function CategoryDiagnosticsPanel({ categories, onChanged }: Props) {
                 Categorias raiz sem centro de custo
               </h4>
               <p className="text-xs text-muted-foreground mb-2">
-                Mapeie direto daqui — todas as transações dessas categorias caem em "Não
-                Classificadas" no DRE.
+                Mapeie direto daqui — transações dessas categorias só aparecem no DRE após o vínculo.
               </p>
               <ul className="space-y-1.5 max-h-72 overflow-auto pr-1">
                 {unmappedRoots.map((cat) => (
