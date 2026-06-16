@@ -1,59 +1,73 @@
-# Diagnóstico: por que o DRE não reconhece categorias vinculadas a centros de custo
+## Objetivo
 
-## O que encontrei nos dados reais (`espclin@hotmail.com`)
+Tornar o DRE estritamente baseado no que o usuário **atrelou manualmente** a um centro de custo. Categorias sem `dre_section` explícito (em si ou em algum ancestral) deixam de aparecer nas seções oficiais do DRE e passam a ser listadas apenas nas linhas informativas **"Receitas/Despesas Não Classificadas (fora do DRE)"**, abaixo do Lucro Líquido.
 
-Cruzei as 1.543 transações com as 374 categorias e a hierarquia de `dre_section`. Resultado:
+## Mudança principal
 
-| Status no DRE | Transações | Valor (R$) |
-|---|---|---|
-| Mapeadas corretamente | 743 | 714.552,82 |
-| **Sem `dre_section` em nenhum nó da cadeia** | **1.073** | **544.363,05** |
-| Referência de categoria não encontrada (transferências/textos antigos) | 105 | 228.957,74 |
+Arquivo: `src/hooks/useDREData.ts` — função `sectionFor` dentro de `contabilData` (useMemo).
 
-**O resolver (`useDREData.ts`) está correto.** O motivo real do "Não Classificadas" não é bug do DRE — é o estado dos dados, com 3 padrões claros:
+Hoje a resolução tem 3 camadas:
+1. `dre_section` explícito do ancestral (mantém)
+2. Fallback por `type` da categoria raiz via `defaultSectionForType` (**remover**)
+3. Fallback por `t.type` da transação (**remover**)
 
-### Causa 1 — Categorias duplicadas com mesmo nome, só uma mapeada
-A base tem categorias homônimas e o usuário mapeou só uma delas no Centros de Custos. As transações ligadas pela outra UUID ficam órfãs.
+Passará a ter apenas a camada 1. Se nenhuma categoria na cadeia tiver `dre_section`, a transação vai para `receitas_nao_classificadas` ou `despesas_nao_classificadas` conforme `t.type`.
 
-Exemplos confirmados:
-- **Honorários** existe 3x — 2 mapeadas em `receita_operacional`, **1 sem mapeamento com 64 tx / R$ 127.504,73**
-- **Administrativos** vs **ADMINISTRATIVOS** (case diferente) — só uma versão tem mapeamento herdado; a outra root acumula R$ 37k+33k
-- **Educação** existe 2x — uma root mapeada, outra (filha de "PESSOAIS") não
-- **Implantes/Dentais/Laboratórios** — roots `cmv_csp` ok, mas as homônimas filhas de "DESPESAS CLÍNICA PF" não herdam nada
+### Trecho atual (a alterar)
 
-### Causa 2 — Roots realmente não mapeadas
-Categorias pessoais como **Supérfulos, Lazer, Moradia, Bancárias, transporte, Saúde, Alimentação, Planejamento** simplesmente nunca foram arrastadas para nenhuma seção do DRE. São 30 roots sem `dre_section` na base.
+```ts
+const sectionFor = (cat) => {
+  // ... busca dre_section nos ancestrais ...
+  // Fallback: root's type → default bucket
+  const root = ancestry[ancestry.length - 1];
+  const def = defaultSectionForType(root?.type);
+  return (def as DreSectionKey | null) ?? null;   // ← remover este fallback
+};
 
-### Causa 3 — Fallback por nome ambíguo no resolver
-Quando `t.category` chega como texto (não-UUID), o resolver faz `categories.find(c => name === ref)` e retorna a **primeira** encontrada — pode cair numa homônima sem `dre_section` mesmo existindo uma irmã mapeada.
+// ...
+// Last-resort fallback based on the transaction's own type
+if (!sectionKey) {
+  const def = defaultSectionForType(t.type);     // ← remover este bloco
+  if (def) sectionKey = def as DreSectionKey;
+}
+```
 
-## O que mudar
+Ambos serão removidos. O bloco que já existe abaixo continua tratando o caso "sem mapeamento":
 
-### 1. Resolver mais inteligente (`src/hooks/useDREData.ts`)
-No fallback por nome, em vez de pegar a primeira categoria, agrupar todas as homônimas, resolver `dre_section` para cada uma (subindo a cadeia) e preferir a que tiver mapeamento. Só retornar `null` se nenhuma das homônimas tiver seção em qualquer nível.
+```ts
+if (!sectionKey) {
+  sectionKey = t.type === "receita" ? "receitas_nao_classificadas" : "despesas_nao_classificadas";
+  if (chain[0]) unmappedCategoryIds.add(chain[0].id);
+}
+```
 
-Não muda nada para transações com UUID válida — só corrige fallback de texto.
+Isso já as joga nas linhas informativas que **não somam no Lucro Líquido** (a lógica `recLiquida = recOp - impVenda`, etc. continua intacta).
 
-### 2. Painel de diagnóstico em Centros de Custos
-Adicionar um card no topo da página `/centros-de-custos` mostrando:
-- **Categorias duplicadas (mesmo nome, mapeamento divergente)** — lista com botão "Aplicar mesmo mapeamento" que copia o `dre_section` da versão mapeada para as homônimas.
-- **Roots sem `dre_section`** — contagem + atalho de scroll para a área "Não classificadas" da página.
-- **Transações órfãs** (referência de categoria inválida) — contagem por período.
+## Efeitos colaterais esperados (positivos)
 
-Objetivo: o usuário vê imediatamente *quais* categorias precisam de atenção em vez de descobrir só pelo número grande do DRE.
+- **Receita Operacional** e **Despesas Operacionais e Adm.** vão diminuir para usuários que tinham muitas categorias sem mapear — voltarão ao valor "real" do que está classificado.
+- **Lucro Líquido** muda para esses usuários (passa a refletir só o classificado).
+- O contador `unmappedCategoryCount` (já exibido em `CategoryDiagnosticsPanel` na página Centros de Custos) ficará mais alto, incentivando o usuário a arrastar as categorias para os buckets corretos.
+- As seções "(i) Receitas/Despesas Não Classificadas (fora do DRE)" aparecem automaticamente quando houver valores (lógica `hasRecNc`/`hasDespNc` já existe).
 
-### 3. Aviso no DRE — drill-down de "Não Classificadas"
-Tornar a linha "Receitas/Despesas Não Classificadas" clicável para abrir um modal listando as categorias responsáveis (top N + valor), com link direto para o Centros de Custos. Hoje o usuário vê só o total agregado.
+## Limpeza opcional
 
-### 4. Validação ao criar categoria (`CategoryFormModal`)
-Quando o nome digitado bater (case-insensitive) com outra categoria existente do mesmo contexto, exibir alerta inline: *"Já existe uma categoria com este nome — deseja unificar?"*. Previne novas duplicatas.
+A função `defaultSectionForType` em `src/lib/dreSections.ts` deixa de ser usada pelo DRE. Verificar usos restantes antes de remover:
+- Se for usada apenas no DRE, remover.
+- Se outras telas (Centros de Custos, formulário de categoria) dependerem dela para sugerir bucket inicial, **manter** — a sugestão na UI é útil; o que estamos removendo é a aplicação **silenciosa** dela no cálculo do DRE.
 
-## Fora de escopo (perguntar depois)
-- Migração automática para **deduplicar** as categorias homônimas existentes (precisa decisão do usuário, caso a caso).
-- Wizard de re-mapeamento em massa pelo extrato.
+Vou rodar uma busca por usos antes de decidir.
 
-## Como vou validar
-Rodar novamente o cruzamento na base do `espclin@hotmail.com` após aplicar (1) e confirmar que:
-- O fallback por nome resolve as homônimas onde existe ao menos uma versão mapeada.
-- O card de diagnóstico exibe corretamente as ~5 duplicatas críticas detectadas acima.
-- O drill-down de "Não Classificadas" lista as roots `Supérfulos`, `Lazer`, `Moradia`, etc.
+## Compatibilidade
+
+- Nenhuma migração de banco. Não altera dados existentes.
+- Vale para **todos os usuários, presentes e futuros**, imediatamente após o deploy.
+- Reversível trivialmente (basta recolocar os dois fallbacks).
+
+## Validação
+
+1. Abrir o DRE de uma conta que tinha categorias sem mapeamento e confirmar que:
+   - Receita Operacional / Despesas Operacionais caíram para o valor das categorias com `dre_section` setado.
+   - As linhas "(i) ... Não Classificadas" aparecem com os valores que antes inflavam o DRE.
+   - Lucro Líquido reflete só o classificado.
+2. Painel de Centros de Custos (`CategoryDiagnosticsPanel`) deve mostrar contagem coerente de categorias não mapeadas.

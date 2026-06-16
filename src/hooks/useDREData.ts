@@ -263,13 +263,11 @@ export function useDREData(filters: DREFilters) {
       despesas_nao_classificadas: new Map(),
     };
 
-    // Walk a category up to its root and return either:
-    //  - the FIRST (root-most) explicit dre_section in the ancestry chain, or
-    //  - a smart default derived from the root's `type` (receita/despesa).
-    // The default lets users skip the drag-to-bucket step in Centros de
-    // Custos: any category typed as "receita" maps to Receita Operacional,
-    // "despesa" maps to Despesas Operacionais e Adm. The user can still
-    // override by setting an explicit dre_section.
+    // Walk a category up to its root and return the FIRST (root-most) explicit
+    // dre_section found in the ancestry chain. NO automatic fallback by type —
+    // categories without an explicit cost-center mapping go to the informational
+    // "Não Classificadas" rows so the DRE only reflects what the user actually
+    // categorized.
     const sectionFor = (cat: CategoryRecord): DreSectionKey | null => {
       const ancestry: CategoryRecord[] = [];
       let current: CategoryRecord | undefined = cat;
@@ -283,10 +281,7 @@ export function useDREData(filters: DREFilters) {
           return v as DreSectionKey;
         }
       }
-      // Fallback: root's type → default bucket
-      const root = ancestry[ancestry.length - 1];
-      const def = defaultSectionForType(root?.type);
-      return (def as DreSectionKey | null) ?? null;
+      return null;
     };
 
     const resolveDreSection = (categoryRef: string | null | undefined): DreSectionKey | null => {
@@ -319,12 +314,9 @@ export function useDREData(filters: DREFilters) {
         if (sectionKey) break;
       }
 
-      // Last-resort fallback based on the transaction's own type — covers
-      // text-only categories that don't exist in `categories` at all.
-      if (!sectionKey) {
-        const def = defaultSectionForType(t.type);
-        if (def) sectionKey = def as DreSectionKey;
-      }
+      // No type-based fallback: transactions whose category has no explicit
+      // dre_section mapping fall through to "Não Classificadas" below.
+
 
       if (!sectionKey) {
         sectionKey = t.type === "receita" ? "receitas_nao_classificadas" : "despesas_nao_classificadas";
