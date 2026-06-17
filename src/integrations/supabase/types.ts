@@ -540,6 +540,7 @@ export type Database = {
       clients: {
         Row: {
           cnpj_cpf: string | null
+          company_id: string | null
           created_at: string | null
           id: string
           name: string
@@ -547,6 +548,7 @@ export type Database = {
         }
         Insert: {
           cnpj_cpf?: string | null
+          company_id?: string | null
           created_at?: string | null
           id?: string
           name: string
@@ -554,12 +556,21 @@ export type Database = {
         }
         Update: {
           cnpj_cpf?: string | null
+          company_id?: string | null
           created_at?: string | null
           id?: string
           name?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       companies: {
         Row: {
@@ -1603,6 +1614,7 @@ export type Database = {
       suppliers: {
         Row: {
           cnpj: string | null
+          company_id: string | null
           created_at: string | null
           id: string
           name: string
@@ -1610,6 +1622,7 @@ export type Database = {
         }
         Insert: {
           cnpj?: string | null
+          company_id?: string | null
           created_at?: string | null
           id?: string
           name: string
@@ -1617,12 +1630,21 @@ export type Database = {
         }
         Update: {
           cnpj?: string | null
+          company_id?: string | null
           created_at?: string | null
           id?: string
           name?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {

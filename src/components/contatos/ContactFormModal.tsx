@@ -9,25 +9,37 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 
 interface ContactFormModalProps {
   open: boolean;
   onClose: () => void;
   type: "supplier" | "client";
-  editData?: { id: string; name: string; document?: string } | null;
-  onSave: (data: { name: string; document?: string }) => Promise<boolean>;
+  editData?: { id: string; name: string; document?: string; company_id?: string | null } | null;
+  companies?: Array<{ id: string; name: string }>;
+  onSave: (data: { name: string; document?: string; company_id?: string | null }) => Promise<boolean>;
 }
 
-export function ContactFormModal({ open, onClose, type, editData, onSave }: ContactFormModalProps) {
+const PERSONAL_VALUE = "__personal__";
+
+export function ContactFormModal({ open, onClose, type, editData, companies = [], onSave }: ContactFormModalProps) {
   const [name, setName] = useState("");
   const [document, setDocument] = useState("");
+  const [companyId, setCompanyId] = useState<string>(PERSONAL_VALUE);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
       setName(editData?.name || "");
       setDocument(editData?.document || "");
+      setCompanyId(editData?.company_id || PERSONAL_VALUE);
     }
   }, [open, editData]);
 
@@ -35,7 +47,11 @@ export function ContactFormModal({ open, onClose, type, editData, onSave }: Cont
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
-    const success = await onSave({ name: name.trim(), document: document.trim() || undefined });
+    const success = await onSave({
+      name: name.trim(),
+      document: document.trim() || undefined,
+      company_id: companyId === PERSONAL_VALUE ? null : companyId,
+    });
     setSaving(false);
     if (success) onClose();
   };
@@ -70,6 +86,23 @@ export function ContactFormModal({ open, onClose, type, editData, onSave }: Cont
               onChange={(e) => setDocument(e.target.value)}
               placeholder={isSupplier ? "00.000.000/0000-00" : "000.000.000-00"}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="contact-context">Contexto padrão</Label>
+            <Select value={companyId} onValueChange={setCompanyId}>
+              <SelectTrigger id="contact-context">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={PERSONAL_VALUE}>Pessoal</SelectItem>
+                {companies.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Lançamentos da EVA (WhatsApp) com este {isSupplier ? "fornecedor" : "cliente"} usarão este contexto automaticamente.
+            </p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={saving}>

@@ -1592,8 +1592,8 @@ serve(async (req) => {
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
       supabase.from("companies").select("id, name, cnpj").eq("user_id", userId),
       supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
-      supabase.from("suppliers").select("id, name").eq("user_id", userId),
-      supabase.from("clients").select("id, name").eq("user_id", userId),
+      supabase.from("suppliers").select("id, name, cnpj, company_id").eq("user_id", userId),
+      supabase.from("clients").select("id, name, company_id").eq("user_id", userId),
       supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
       supabase.from("transactions").select("id, description, amount, type, category, contact_name, supplier_id, client_id, company_id, payment_method, bank_account_id, wallet_id, credit_card_id, payment_date").eq("user_id", userId).gte("payment_date", ninetyDaysAgoStr).order("payment_date", { ascending: false }).limit(1000),
       supabase.from("ai_pending_transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).eq("status", "pending").order("created_at", { ascending: false }).limit(5),
@@ -1660,11 +1660,23 @@ serve(async (req) => {
 
     const buildContactList = () => {
       const parts: string[] = [];
+      const ctxLabel = (cid: string | null | undefined) =>
+        cid ? (companies.find((c: any) => c.id === cid)?.name || "Empresa") : "Pessoal";
       if (suppliersList.length > 0) {
-        parts.push("FORNECEDORES: " + suppliersList.map((s) => `${s.name}[${s.id}]`).join(", "));
+        parts.push(
+          "FORNECEDORES (nome[id] (CNPJ) → contexto padrão): " +
+          suppliersList
+            .map((s: any) => `${s.name}[${s.id}]${s.cnpj ? ` (CNPJ ${s.cnpj})` : ""} → ${ctxLabel(s.company_id)}`)
+            .join(", ")
+        );
       }
       if (clientsList.length > 0) {
-        parts.push("CLIENTES: " + clientsList.map((c) => `${c.name}[${c.id}]`).join(", "));
+        parts.push(
+          "CLIENTES (nome[id] → contexto padrão): " +
+          clientsList
+            .map((c: any) => `${c.name}[${c.id}] → ${ctxLabel(c.company_id)}`)
+            .join(", ")
+        );
       }
       return parts.join("\n");
     };
@@ -1779,6 +1791,13 @@ REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR DOCUMENTO:
 - Priorize o CNPJ do DESTINATÁRIO/TOMADOR (quem está pagando), não do EMITENTE (quem está cobrando).
 - Se não encontrar match com nenhuma empresa, aí sim use "Pessoal".
 - CNPJs das empresas: ${companies.map((c) => `${c.cnpj} = "${c.name}"`).join(", ") || "nenhuma empresa cadastrada"}
+
+REGRA CRÍTICA — CONTEXTO POR FORNECEDOR/CLIENTE CADASTRADO:
+- Se o EMITENTE/MERCHANT/PAGADOR identificado (por nome, razão social, CNPJ ou itens do documento) corresponder a um FORNECEDOR ou CLIENTE da lista CONTATOS abaixo, e esse cadastro tiver "contexto padrão" definido como uma empresa (não "Pessoal"), USE esse contexto AUTOMATICAMENTE.
+- Esta regra TEM PRIORIDADE sobre padrões históricos.
+- Exceção única: se o CNPJ do DESTINATÁRIO do documento bater com outra empresa do usuário (regra acima), o destinatário vence.
+- Match permitido: nome contém, CNPJ exato, ou razão social normalizada.
+- Sempre que usar essa regra, preencha também supplier_id (despesa) ou client_id (receita) com o UUID exato listado.
 
 REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR CARTÃO:
 - Se o documento/imagem citar o NOME, APELIDO, BANDEIRA ou ÚLTIMOS 4 DÍGITOS de um cartão de crédito (ex: "Business Empresas", "Personnalite", "Black", "Platinum", "Gold", "final 7993", "****3552"), procure esse cartão em TODOS os contextos listados em CONTAS, CARTEIRAS E CARTÕES DE CRÉDITO POR CONTEXTO abaixo.
@@ -2218,6 +2237,49 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       } else if (!validateContext(aiParsed.context)) {
         console.warn("AI returned invalid context:", aiParsed.context, "| Available:", contextNames);
         aiParsed.context = "Pessoal";
+      }
+
+      // --- SUPPLIER/CLIENT CONTEXT OVERRIDE ---
+      // If the AI identified a registered supplier/client that has a default
+      // company_id, prefer that context (unless a recipient-CNPJ match already
+      // forced a different one above).
+      if (!documentContextMatch) {
+        const _txType = aiParsed.type === "receita" ? "receita" : "despesa";
+        const _nm = normalizeText(aiParsed.contact_name || "");
+        let _ctxEntity: any = null;
+        if (_txType === "despesa") {
+          if (aiParsed.supplier_id) {
+            _ctxEntity = suppliersList.find((s: any) => s.id === aiParsed.supplier_id);
+          }
+          if (!_ctxEntity && _nm.length >= 3) {
+            _ctxEntity = suppliersList.find((s: any) => {
+              const sn = normalizeText(s.name);
+              return sn === _nm || sn.includes(_nm) || _nm.includes(sn);
+            });
+          }
+        } else {
+          if (aiParsed.client_id) {
+            _ctxEntity = clientsList.find((c: any) => c.id === aiParsed.client_id);
+          }
+          if (!_ctxEntity && _nm.length >= 3) {
+            _ctxEntity = clientsList.find((c: any) => {
+              const cn = normalizeText(c.name);
+              return cn === _nm || cn.includes(_nm) || _nm.includes(cn);
+            });
+          }
+        }
+        if (_ctxEntity?.company_id) {
+          const _target = companies.find((c: any) => c.id === _ctxEntity.company_id);
+          if (_target && aiParsed.context !== _target.name) {
+            console.log("Overriding AI context from supplier/client mapping:", {
+              aiContext: aiParsed.context || null,
+              forcedContext: _target.name,
+              entity: _ctxEntity.name,
+              type: _txType,
+            });
+            aiParsed.context = _target.name;
+          }
+        }
       }
 
       let companyId = resolveContext(aiParsed.context);

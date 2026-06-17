@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Users, Plus, Search, Pencil, Trash2, Building2, User } from "lucide-react";
 import { useContacts, type Supplier, type Client } from "@/hooks/useContacts";
+import { useCompany } from "@/contexts/CompanyContext";
 import { ContactFormModal } from "@/components/contatos/ContactFormModal";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -41,12 +42,16 @@ export default function Contatos() {
     updateClient,
     deleteClient,
   } = useContacts();
+  const { companies } = useCompany();
 
   const [activeTab, setActiveTab] = useState("suppliers");
   const [formOpen, setFormOpen] = useState(false);
   const [formType, setFormType] = useState<"supplier" | "client">("supplier");
-  const [editData, setEditData] = useState<{ id: string; name: string; document?: string } | null>(null);
+  const [editData, setEditData] = useState<{ id: string; name: string; document?: string; company_id?: string | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; type: "supplier" | "client" } | null>(null);
+
+  const contextLabel = (companyId: string | null | undefined) =>
+    companyId ? (companies.find((c) => c.id === companyId)?.name || "Empresa") : "Pessoal";
 
   const openCreate = (type: "supplier" | "client") => {
     setFormType(type);
@@ -56,27 +61,27 @@ export default function Contatos() {
 
   const openEditSupplier = (s: Supplier) => {
     setFormType("supplier");
-    setEditData({ id: s.id, name: s.name, document: s.cnpj || undefined });
+    setEditData({ id: s.id, name: s.name, document: s.cnpj || undefined, company_id: s.company_id });
     setFormOpen(true);
   };
 
   const openEditClient = (c: Client) => {
     setFormType("client");
-    setEditData({ id: c.id, name: c.name, document: c.cnpj_cpf || undefined });
+    setEditData({ id: c.id, name: c.name, document: c.cnpj_cpf || undefined, company_id: c.company_id });
     setFormOpen(true);
   };
 
-  const handleSave = async (data: { name: string; document?: string }) => {
+  const handleSave = async (data: { name: string; document?: string; company_id?: string | null }) => {
     if (formType === "supplier") {
       if (editData) {
-        return updateSupplier(editData.id, { name: data.name, cnpj: data.document });
+        return updateSupplier(editData.id, { name: data.name, cnpj: data.document, company_id: data.company_id });
       }
-      return createSupplier({ name: data.name, cnpj: data.document });
+      return createSupplier({ name: data.name, cnpj: data.document, company_id: data.company_id });
     } else {
       if (editData) {
-        return updateClient(editData.id, { name: data.name, cnpj_cpf: data.document });
+        return updateClient(editData.id, { name: data.name, cnpj_cpf: data.document, company_id: data.company_id });
       }
-      return createClient({ name: data.name, cnpj_cpf: data.document });
+      return createClient({ name: data.name, cnpj_cpf: data.document, company_id: data.company_id });
     }
   };
 
@@ -155,6 +160,7 @@ export default function Contatos() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>CNPJ</TableHead>
+                      <TableHead>Contexto padrão</TableHead>
                       <TableHead className="w-24 text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -163,6 +169,11 @@ export default function Contatos() {
                       <TableRow key={s.id}>
                         <TableCell className="font-medium">{s.name}</TableCell>
                         <TableCell className="text-muted-foreground">{s.cnpj || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={s.company_id ? "default" : "secondary"} className="text-xs">
+                            {contextLabel(s.company_id)}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button
@@ -212,6 +223,7 @@ export default function Contatos() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>CPF/CNPJ</TableHead>
+                      <TableHead>Contexto padrão</TableHead>
                       <TableHead className="w-24 text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -220,6 +232,11 @@ export default function Contatos() {
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">{c.name}</TableCell>
                         <TableCell className="text-muted-foreground">{c.cnpj_cpf || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={c.company_id ? "default" : "secondary"} className="text-xs">
+                            {contextLabel(c.company_id)}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button
@@ -256,6 +273,7 @@ export default function Contatos() {
         onClose={() => setFormOpen(false)}
         type={formType}
         editData={editData}
+        companies={companies}
         onSave={handleSave}
       />
 
