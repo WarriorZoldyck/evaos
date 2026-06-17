@@ -213,6 +213,7 @@ export function SummaryCards({
   prevFaturamento, prevEntradas, prevSaidas, prevSaldo,
   prevEntradaPrevista, prevSaidaPrevista, prevSaldoPrevisto,
   faturamentoSeries, entradasSeries, saidasSeries, saldoSeries, marginSeries,
+  onFaturamentoClick,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
 
