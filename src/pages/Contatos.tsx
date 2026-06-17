@@ -273,6 +273,7 @@ export default function Contatos() {
         onClose={() => setFormOpen(false)}
         type={formType}
         editData={editData}
+        companies={companies}
         onSave={handleSave}
       />
 
