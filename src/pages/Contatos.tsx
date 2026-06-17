@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Users, Plus, Search, Pencil, Trash2, Building2, User } from "lucide-react";
 import { useContacts, type Supplier, type Client } from "@/hooks/useContacts";
+import { useCompany } from "@/contexts/CompanyContext";
 import { ContactFormModal } from "@/components/contatos/ContactFormModal";
 import { Skeleton } from "@/components/ui/skeleton";
 
