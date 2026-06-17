@@ -182,6 +182,17 @@ export default function Dashboard() {
         saidasSeries={saidasSeries}
         saldoSeries={saldoSeries}
         marginSeries={marginSeries}
+        onFaturamentoClick={() => setFaturamentoModalOpen(true)}
+      />
+
+      <FaturamentoDetailModal
+        open={faturamentoModalOpen}
+        onOpenChange={setFaturamentoModalOpen}
+        competenceTransactions={competenceTransactions as any}
+        total={summary.faturamento}
+        prevTotal={prevFaturamento}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
       />
 
 
