@@ -75,16 +75,20 @@ export default function Dashboard() {
       ),
     [allTransactions, prevRange],
   );
-  const prevFaturamento = useMemo(
-    () =>
-      sumInRange(
-        allTransactions as any,
-        prevRange.start,
-        prevRange.end,
-        (t: any) => t.type === "receita",
-      ),
-    [allTransactions, prevRange],
-  );
+  // Faturamento usa competência (não payment_date) para alinhar com o DRE
+  const prevFaturamento = useMemo(() => {
+    const fromStr = format(prevRange.start, "yyyy-MM-dd");
+    const toStr = format(prevRange.end, "yyyy-MM-dd");
+    return (allTransactions as any[])
+      .filter(
+        (t) =>
+          t.type === "receita" &&
+          t.competence_date &&
+          t.competence_date >= fromStr &&
+          t.competence_date <= toStr,
+      )
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+  }, [allTransactions, prevRange]);
   const prevSaldo = prevEntradas - prevSaidas;
 
   // Sparkline series for current period
