@@ -223,6 +223,7 @@ export default function Contatos() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>CPF/CNPJ</TableHead>
+                      <TableHead>Contexto padrão</TableHead>
                       <TableHead className="w-24 text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -231,6 +232,11 @@ export default function Contatos() {
                       <TableRow key={c.id}>
                         <TableCell className="font-medium">{c.name}</TableCell>
                         <TableCell className="text-muted-foreground">{c.cnpj_cpf || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={c.company_id ? "default" : "secondary"} className="text-xs">
+                            {contextLabel(c.company_id)}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button
