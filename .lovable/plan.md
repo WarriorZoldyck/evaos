@@ -1,70 +1,54 @@
-## Causa raiz
+# Corrigir cálculo de Faturamento + modal de detalhamento
 
-Os boletos da Neodent caem em **RENATO BRUGGEMANN (PF)** porque a IA segue, nesta ordem, a detecção de contexto definida em `whatsapp-webhook/index.ts` (linhas 1771-1781):
+## Problema
+No `useDashboardData.ts` (linhas 366-378), o `faturamento` aplica uma lógica especial para parcelados: só conta a parcela 1 e multiplica por `original_amount` ou `amount × installments_total`. Isso faz com que:
+- Períodos que não contêm a parcela 1 mostrem R$ 0 mesmo havendo competência de receita.
+- O `original_amount` (campo usado por terminais para valor bruto antes do MDR) seja confundido com o valor total da venda parcelada — inflando o número quando há terminais.
+- O resultado diverge do DRE, que simplesmente soma `amount` por `competence_date`.
 
-1. CNPJ/razão do **destinatário do documento** → empresa do usuário
-2. **Padrões históricos** (90 dias) — onde Neodent aparece majoritariamente em RENATO BRUGGEMANN
-3. Fallback Pessoal
+Além disso, ao clicar no card "Faturamento", o dashboard navega para `/lancamentos?type=receita` filtrando por `payment_date` — mas faturamento é por **competência**, então o usuário vê números diferentes e fica confuso.
 
-O fornecedor **Neodent (JJGC, supplier_id `019d1748-…`) já está cadastrado e vinculado a IMPLANTES BR LTDA**, mas essa informação não é usada como sinal forte. Hoje o supplier só entra na resolução *depois* da IA escolher o contexto — então ela escolhe pelo histórico/destinatário e ignora o vínculo do fornecedor.
+## Mudanças
 
-## Mudança proposta — priorizar fornecedor cadastrado
+### 1. `src/hooks/useDashboardData.ts`
+Substituir o bloco `faturamento` (linhas 367-378) por soma simples de todas as receitas no `competenceTransactions` do período:
 
-Ajustar a detecção de contexto para que, **se a IA identificar (via nome ou CNPJ no documento/mensagem) um fornecedor cadastrado que tenha `company_id` definido**, ela use AUTOMATICAMENTE o contexto desse fornecedor — sobrescrevendo padrões históricos. Apenas a regra de "CNPJ do destinatário = empresa do usuário" continua acima (já que isso é evidência direta do tomador).
-
-### Nova ordem de precedência
-
-1. CNPJ/razão do **destinatário** do documento bate com empresa do usuário → usa essa empresa
-2. **(NOVO)** Fornecedor identificado (supplier match por nome/CNPJ no emissor/itens) tem `company_id` definido → usa o contexto do fornecedor
-3. Cartão de crédito identificado → usa contexto do cartão (regra atual)
-4. Padrões históricos
-5. Fallback Pessoal
-
-## Implementação técnica
-
-### 1. `supabase/functions/whatsapp-webhook/index.ts`
-
-**a)** No bloco que monta `suppliersList` (~linha 1620-1650), incluir o `company_id` de cada fornecedor no texto enviado à IA. Exemplo:
-```
-FORNECEDORES CADASTRADOS (NOME → CONTEXTO PADRÃO):
-- "JJGC Indústria…" (CNPJ 12345…) → contexto: "IMPLANTES BR LTDA"
-- "Aromas Grill" → contexto: "Pessoal"
+```ts
+const faturamento = competenceTransactions
+  .filter((t) => t.type === "receita")
+  .reduce((acc, t) => acc + Number(t.amount), 0);
 ```
 
-**b)** Adicionar nova seção de regras logo após "REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR DOCUMENTO" (~linha 1781):
-```
-REGRA CRÍTICA — CONTEXTO POR FORNECEDOR CADASTRADO:
-- Se o EMITENTE/MERCHANT identificado (por nome, CNPJ, razão social ou itens da NF) corresponder a um fornecedor da lista FORNECEDORES CADASTRADOS, e esse fornecedor tiver um "contexto: <Empresa>" definido, USE esse contexto AUTOMATICAMENTE.
-- Esta regra TEM PRIORIDADE sobre padrões históricos.
-- Exceção única: se o CNPJ do DESTINATÁRIO do documento bater com outra empresa do usuário, o destinatário vence (regra acima).
-- Match permitido: nome contém / CNPJ exato / razão social normalizada.
-```
+Isso passa a bater 100% com a linha de receita do DRE (mesma base: `amount` por `competence_date`, excluindo transferências internas — já feito na query).
 
-**c)** Após receber a resposta da IA (`txPayload`), adicionar um **safety-net server-side**: se `supplier_id` resolvido pelo matcher de fornecedores existir e tiver `company_id`, e o `txPayload.context` resolvido for diferente do `company_id` do fornecedor **e** não veio de match de destinatário (heurística: `extractedDocument.recipient_cnpj` não bateu com nenhuma empresa), sobrescrever `companyId` para o do fornecedor. Logar a sobrescrita.
+Aplicar a mesma simplificação ao cálculo de `prevFaturamento` (período anterior) em qualquer lugar que use a mesma lógica de installments — buscar e ajustar.
 
-### 2. Tabela `suppliers`
+### 2. Novo componente `src/components/dashboard/FaturamentoDetailModal.tsx`
+Modal acionado pelo clique no card "Faturamento" no lugar da navegação atual. Conteúdo:
 
-Verificar se `suppliers.company_id` já existe. Se não, criar migration adicionando coluna nullable `company_id uuid references companies(id)` e respeitar RLS atual.
+- **Header**: "Faturamento por competência" + intervalo do período (`dateFrom` – `dateTo`).
+- **Resumo no topo**: total do período, ticket médio, nº de lançamentos, comparativo % vs período anterior.
+- **Lista**: receitas do período (vindas de `competenceTransactions`, type=`receita`), ordenadas por `competence_date` desc, com colunas: data de competência, descrição, contato, categoria, conta/cartão, valor. Paginada (50/página) ou virtualizada se >200 itens.
+- **Agrupamentos opcionais (tabs)**: "Por mês de competência", "Por categoria", "Por contato" — cada um mostrando uma mini-tabela com subtotal.
+- **Ações**: botão "Ver todos os lançamentos do período" que navega para `/lancamentos` filtrando explicitamente por competência (passar um parâmetro novo `dateField=competence_date` e ajustar `Lancamentos.tsx` para honrar isso quando presente; manter `payment_date` como default).
 
-(Confirmar antes na fase de build — provavelmente já existe, pois fornecedores hoje são cadastrados por contexto.)
+### 3. `src/components/dashboard/SummaryCards.tsx`
+- Trocar o `onClick` do card "Faturamento" para abrir o modal acima em vez de chamar `go({ type: "receita" })`.
+- Receber via prop um callback `onFaturamentoClick` (ou expor o array de receitas por competência) — provavelmente mais limpo passar `onFaturamentoClick` e deixar o `Dashboard.tsx` orquestrar o estado do modal.
 
-### 3. UI — sem mudanças necessárias
+### 4. `src/pages/Dashboard.tsx`
+- Estado local `faturamentoModalOpen`.
+- Passa o callback para `SummaryCards` e renderiza o `FaturamentoDetailModal` com os dados de `competenceTransactions` (precisa expor isso no retorno do `useDashboardData` se ainda não estiver exposto).
 
-O usuário já cadastra fornecedor com contexto. Apenas garantir que o seletor de "contexto padrão" do fornecedor está claro na tela `Contatos` (verificar; se faltar, adicionar campo).
+### 5. `src/pages/Lancamentos.tsx` (ajuste leve, opcional)
+Suportar `?dateField=competence_date` para que o botão "Ver todos" do modal mostre exatamente o mesmo recorte. Se for inviável neste passo, abrir `/lancamentos` sem esse refinamento e deixar como melhoria futura.
 
 ## Verificação
+- Abrir o dashboard em um período conhecido e conferir que `Faturamento` = soma da linha "Receita Operacional Bruta" do DRE no mesmo intervalo.
+- Clicar no card → modal abre com a lista de receitas por competência, total = valor exibido no card.
+- Trocar o período e o filtro de empresa/pessoal e validar que ambos (card + modal) atualizam consistentemente.
 
-- Reenviar um boleto Neodent pelo WhatsApp → deve cair em **IMPLANTES BR LTDA**
-- Enviar boleto de outro fornecedor cadastrado em outro contexto → respeita o contexto do fornecedor
-- Enviar lançamento livre ("paguei 50 no posto") sem fornecedor cadastrado → continua usando padrões históricos / Pessoal
-- Logs do edge function devem mostrar a fonte da decisão de contexto
-
-## Fora de escopo
-
-- **Histórico não será alterado.** Lançamentos antigos da Neodent em RENATO BRUGGEMANN permanecem como estão.
-- Detecção de cartão de crédito (já funciona).
-- Outras heurísticas (categorias, contas).
-
-## Memória
-
-Atualizar `mem://whatsapp/automatic-context-detection` adicionando a nova prioridade: "Fornecedor cadastrado com company_id vence padrão histórico".
+## Não está no escopo
+- Lógica de DRE (já está correta segundo o usuário).
+- Outras métricas do dashboard (Entradas/Saídas/Saldo continuam por `payment_date`, como hoje).
+- Migrações de banco.

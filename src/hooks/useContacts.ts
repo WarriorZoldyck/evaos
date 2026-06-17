@@ -9,7 +9,6 @@ export interface Supplier {
   id: string;
   name: string;
   cnpj: string | null;
-  company_id: string | null;
   created_at: string | null;
   user_id: string;
 }
@@ -18,7 +17,6 @@ export interface Client {
   id: string;
   name: string;
   cnpj_cpf: string | null;
-  company_id: string | null;
   created_at: string | null;
   user_id: string;
 }
@@ -44,8 +42,8 @@ export function useContacts() {
       supabase.from("clients").select("*").order("name"),
     ]);
 
-    if (supRes.data) setSuppliers(supRes.data as any);
-    if (cliRes.data) setClients(cliRes.data as any);
+    if (supRes.data) setSuppliers(supRes.data);
+    if (cliRes.data) setClients(cliRes.data);
     setLoading(false);
   }, [user]);
 
@@ -53,14 +51,13 @@ export function useContacts() {
     fetchContacts();
   }, [fetchContacts]);
 
-  const createSupplier = async (data: { name: string; cnpj?: string; company_id?: string | null }) => {
+  const createSupplier = async (data: { name: string; cnpj?: string }) => {
     if (!user) return false;
     const { error } = await supabase.from("suppliers").insert({
       name: data.name,
       cnpj: data.cnpj || null,
-      company_id: data.company_id ?? null,
       user_id: effectiveUserId,
-    } as any);
+    });
     if (error) {
       toast({ title: "Erro ao criar fornecedor", description: mapDatabaseError(error), variant: "destructive" });
       return false;
@@ -70,10 +67,10 @@ export function useContacts() {
     return true;
   };
 
-  const updateSupplier = async (id: string, data: { name: string; cnpj?: string; company_id?: string | null }) => {
+  const updateSupplier = async (id: string, data: { name: string; cnpj?: string }) => {
     const { error } = await supabase
       .from("suppliers")
-      .update({ name: data.name, cnpj: data.cnpj || null, company_id: data.company_id ?? null } as any)
+      .update({ name: data.name, cnpj: data.cnpj || null })
       .eq("id", id);
     if (error) {
       toast({ title: "Erro ao atualizar fornecedor", description: mapDatabaseError(error), variant: "destructive" });
@@ -95,14 +92,13 @@ export function useContacts() {
     return true;
   };
 
-  const createClient = async (data: { name: string; cnpj_cpf?: string; company_id?: string | null }) => {
+  const createClient = async (data: { name: string; cnpj_cpf?: string }) => {
     if (!user) return false;
     const { error } = await supabase.from("clients").insert({
       name: data.name,
       cnpj_cpf: data.cnpj_cpf || null,
-      company_id: data.company_id ?? null,
       user_id: effectiveUserId,
-    } as any);
+    });
     if (error) {
       toast({ title: "Erro ao criar cliente", description: mapDatabaseError(error), variant: "destructive" });
       return false;
@@ -112,10 +108,10 @@ export function useContacts() {
     return true;
   };
 
-  const updateClient = async (id: string, data: { name: string; cnpj_cpf?: string; company_id?: string | null }) => {
+  const updateClient = async (id: string, data: { name: string; cnpj_cpf?: string }) => {
     const { error } = await supabase
       .from("clients")
-      .update({ name: data.name, cnpj_cpf: data.cnpj_cpf || null, company_id: data.company_id ?? null } as any)
+      .update({ name: data.name, cnpj_cpf: data.cnpj_cpf || null })
       .eq("id", id);
     if (error) {
       toast({ title: "Erro ao atualizar cliente", description: mapDatabaseError(error), variant: "destructive" });
