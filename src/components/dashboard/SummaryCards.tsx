@@ -253,7 +253,7 @@ export function SummaryCards({
           trend="neutral"
           gradient="bg-gradient-primary"
           loading={loading}
-          onClick={() => go({ type: "receita" })}
+          onClick={onFaturamentoClick ?? (() => go({ type: "receita" }))}
           delta={prevFaturamento !== undefined ? pctChange(faturamento, prevFaturamento) : undefined}
           series={faturamentoSeries}
           accent="hsl(195, 100%, 50%)"
