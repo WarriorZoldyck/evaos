@@ -34,6 +34,7 @@ interface SummaryCardsProps {
   saidasSeries?: SeriesPoint[];
   saldoSeries?: SeriesPoint[];
   marginSeries?: SeriesPoint[];
+  onFaturamentoClick?: () => void;
 }
 
 function formatCurrency(value: number): string {
