@@ -29,9 +29,11 @@ export default function Dashboard() {
   const { bankAccounts } = useAccounts();
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
+  const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
   const {
     transactions,
+    competenceTransactions,
     allTransactions,
     summary,
     saldoAtual,
