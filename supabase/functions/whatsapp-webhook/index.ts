@@ -2239,6 +2239,49 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         aiParsed.context = "Pessoal";
       }
 
+      // --- SUPPLIER/CLIENT CONTEXT OVERRIDE ---
+      // If the AI identified a registered supplier/client that has a default
+      // company_id, prefer that context (unless a recipient-CNPJ match already
+      // forced a different one above).
+      if (!documentContextMatch) {
+        const _txType = aiParsed.type === "receita" ? "receita" : "despesa";
+        const _nm = normalizeText(aiParsed.contact_name || "");
+        let _ctxEntity: any = null;
+        if (_txType === "despesa") {
+          if (aiParsed.supplier_id) {
+            _ctxEntity = suppliersList.find((s: any) => s.id === aiParsed.supplier_id);
+          }
+          if (!_ctxEntity && _nm.length >= 3) {
+            _ctxEntity = suppliersList.find((s: any) => {
+              const sn = normalizeText(s.name);
+              return sn === _nm || sn.includes(_nm) || _nm.includes(sn);
+            });
+          }
+        } else {
+          if (aiParsed.client_id) {
+            _ctxEntity = clientsList.find((c: any) => c.id === aiParsed.client_id);
+          }
+          if (!_ctxEntity && _nm.length >= 3) {
+            _ctxEntity = clientsList.find((c: any) => {
+              const cn = normalizeText(c.name);
+              return cn === _nm || cn.includes(_nm) || _nm.includes(cn);
+            });
+          }
+        }
+        if (_ctxEntity?.company_id) {
+          const _target = companies.find((c: any) => c.id === _ctxEntity.company_id);
+          if (_target && aiParsed.context !== _target.name) {
+            console.log("Overriding AI context from supplier/client mapping:", {
+              aiContext: aiParsed.context || null,
+              forcedContext: _target.name,
+              entity: _ctxEntity.name,
+              type: _txType,
+            });
+            aiParsed.context = _target.name;
+          }
+        }
+      }
+
       let companyId = resolveContext(aiParsed.context);
 
       // --- Resolve category_id ---
