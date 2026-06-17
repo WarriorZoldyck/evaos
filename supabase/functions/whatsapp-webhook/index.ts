@@ -1660,11 +1660,23 @@ serve(async (req) => {
 
     const buildContactList = () => {
       const parts: string[] = [];
+      const ctxLabel = (cid: string | null | undefined) =>
+        cid ? (companies.find((c: any) => c.id === cid)?.name || "Empresa") : "Pessoal";
       if (suppliersList.length > 0) {
-        parts.push("FORNECEDORES: " + suppliersList.map((s) => `${s.name}[${s.id}]`).join(", "));
+        parts.push(
+          "FORNECEDORES (nome[id] (CNPJ) → contexto padrão): " +
+          suppliersList
+            .map((s: any) => `${s.name}[${s.id}]${s.cnpj ? ` (CNPJ ${s.cnpj})` : ""} → ${ctxLabel(s.company_id)}`)
+            .join(", ")
+        );
       }
       if (clientsList.length > 0) {
-        parts.push("CLIENTES: " + clientsList.map((c) => `${c.name}[${c.id}]`).join(", "));
+        parts.push(
+          "CLIENTES (nome[id] → contexto padrão): " +
+          clientsList
+            .map((c: any) => `${c.name}[${c.id}] → ${ctxLabel(c.company_id)}`)
+            .join(", ")
+        );
       }
       return parts.join("\n");
     };
