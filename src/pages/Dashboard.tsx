@@ -11,6 +11,7 @@ import { CategoryBreakdownCard } from "@/components/dashboard/CategoryBreakdownC
 import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransactions";
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
+import { FaturamentoDetailModal } from "@/components/dashboard/FaturamentoDetailModal";
 import { useAccounts } from "@/hooks/useAccounts";
 import { getPreviousPeriodRange, sumInRange, dailySeries } from "@/lib/dashboardInsights";
 import {
