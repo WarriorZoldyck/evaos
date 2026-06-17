@@ -542,6 +542,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
   return {
     transactions,
+    competenceTransactions,
     allTransactions,
     summary,
     saldoAtual,
