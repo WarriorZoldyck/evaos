@@ -160,6 +160,7 @@ export default function Contatos() {
                     <TableRow>
                       <TableHead>Nome</TableHead>
                       <TableHead>CNPJ</TableHead>
+                      <TableHead>Contexto padrão</TableHead>
                       <TableHead className="w-24 text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -168,6 +169,11 @@ export default function Contatos() {
                       <TableRow key={s.id}>
                         <TableCell className="font-medium">{s.name}</TableCell>
                         <TableCell className="text-muted-foreground">{s.cnpj || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={s.company_id ? "default" : "secondary"} className="text-xs">
+                            {contextLabel(s.company_id)}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button
