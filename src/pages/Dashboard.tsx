@@ -11,6 +11,7 @@ import { CategoryBreakdownCard } from "@/components/dashboard/CategoryBreakdownC
 import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransactions";
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
+import { FaturamentoDetailModal } from "@/components/dashboard/FaturamentoDetailModal";
 import { useAccounts } from "@/hooks/useAccounts";
 import { getPreviousPeriodRange, sumInRange, dailySeries } from "@/lib/dashboardInsights";
 import {
@@ -28,9 +29,11 @@ export default function Dashboard() {
   const { bankAccounts } = useAccounts();
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
+  const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
   const {
     transactions,
+    competenceTransactions,
     allTransactions,
     summary,
     saldoAtual,
@@ -72,16 +75,20 @@ export default function Dashboard() {
       ),
     [allTransactions, prevRange],
   );
-  const prevFaturamento = useMemo(
-    () =>
-      sumInRange(
-        allTransactions as any,
-        prevRange.start,
-        prevRange.end,
-        (t: any) => t.type === "receita",
-      ),
-    [allTransactions, prevRange],
-  );
+  // Faturamento usa competência (não payment_date) para alinhar com o DRE
+  const prevFaturamento = useMemo(() => {
+    const fromStr = format(prevRange.start, "yyyy-MM-dd");
+    const toStr = format(prevRange.end, "yyyy-MM-dd");
+    return (allTransactions as any[])
+      .filter(
+        (t) =>
+          t.type === "receita" &&
+          t.competence_date &&
+          t.competence_date >= fromStr &&
+          t.competence_date <= toStr,
+      )
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+  }, [allTransactions, prevRange]);
   const prevSaldo = prevEntradas - prevSaidas;
 
   // Sparkline series for current period
@@ -175,6 +182,17 @@ export default function Dashboard() {
         saidasSeries={saidasSeries}
         saldoSeries={saldoSeries}
         marginSeries={marginSeries}
+        onFaturamentoClick={() => setFaturamentoModalOpen(true)}
+      />
+
+      <FaturamentoDetailModal
+        open={faturamentoModalOpen}
+        onOpenChange={setFaturamentoModalOpen}
+        competenceTransactions={competenceTransactions as any}
+        total={summary.faturamento}
+        prevTotal={prevFaturamento}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
       />
 
 

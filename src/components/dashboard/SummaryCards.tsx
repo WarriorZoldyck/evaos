@@ -34,6 +34,7 @@ interface SummaryCardsProps {
   saidasSeries?: SeriesPoint[];
   saldoSeries?: SeriesPoint[];
   marginSeries?: SeriesPoint[];
+  onFaturamentoClick?: () => void;
 }
 
 function formatCurrency(value: number): string {
@@ -212,6 +213,7 @@ export function SummaryCards({
   prevFaturamento, prevEntradas, prevSaidas, prevSaldo,
   prevEntradaPrevista, prevSaidaPrevista, prevSaldoPrevisto,
   faturamentoSeries, entradasSeries, saidasSeries, saldoSeries, marginSeries,
+  onFaturamentoClick,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
 
@@ -251,7 +253,7 @@ export function SummaryCards({
           trend="neutral"
           gradient="bg-gradient-primary"
           loading={loading}
-          onClick={() => go({ type: "receita" })}
+          onClick={onFaturamentoClick ?? (() => go({ type: "receita" }))}
           delta={prevFaturamento !== undefined ? pctChange(faturamento, prevFaturamento) : undefined}
           series={faturamentoSeries}
           accent="hsl(195, 100%, 50%)"
