@@ -42,12 +42,16 @@ export default function Contatos() {
     updateClient,
     deleteClient,
   } = useContacts();
+  const { companies } = useCompany();
 
   const [activeTab, setActiveTab] = useState("suppliers");
   const [formOpen, setFormOpen] = useState(false);
   const [formType, setFormType] = useState<"supplier" | "client">("supplier");
-  const [editData, setEditData] = useState<{ id: string; name: string; document?: string } | null>(null);
+  const [editData, setEditData] = useState<{ id: string; name: string; document?: string; company_id?: string | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; type: "supplier" | "client" } | null>(null);
+
+  const contextLabel = (companyId: string | null | undefined) =>
+    companyId ? (companies.find((c) => c.id === companyId)?.name || "Empresa") : "Pessoal";
 
   const openCreate = (type: "supplier" | "client") => {
     setFormType(type);
@@ -57,27 +61,27 @@ export default function Contatos() {
 
   const openEditSupplier = (s: Supplier) => {
     setFormType("supplier");
-    setEditData({ id: s.id, name: s.name, document: s.cnpj || undefined });
+    setEditData({ id: s.id, name: s.name, document: s.cnpj || undefined, company_id: s.company_id });
     setFormOpen(true);
   };
 
   const openEditClient = (c: Client) => {
     setFormType("client");
-    setEditData({ id: c.id, name: c.name, document: c.cnpj_cpf || undefined });
+    setEditData({ id: c.id, name: c.name, document: c.cnpj_cpf || undefined, company_id: c.company_id });
     setFormOpen(true);
   };
 
-  const handleSave = async (data: { name: string; document?: string }) => {
+  const handleSave = async (data: { name: string; document?: string; company_id?: string | null }) => {
     if (formType === "supplier") {
       if (editData) {
-        return updateSupplier(editData.id, { name: data.name, cnpj: data.document });
+        return updateSupplier(editData.id, { name: data.name, cnpj: data.document, company_id: data.company_id });
       }
-      return createSupplier({ name: data.name, cnpj: data.document });
+      return createSupplier({ name: data.name, cnpj: data.document, company_id: data.company_id });
     } else {
       if (editData) {
-        return updateClient(editData.id, { name: data.name, cnpj_cpf: data.document });
+        return updateClient(editData.id, { name: data.name, cnpj_cpf: data.document, company_id: data.company_id });
       }
-      return createClient({ name: data.name, cnpj_cpf: data.document });
+      return createClient({ name: data.name, cnpj_cpf: data.document, company_id: data.company_id });
     }
   };
 
