@@ -1792,6 +1792,13 @@ REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR DOCUMENTO:
 - Se não encontrar match com nenhuma empresa, aí sim use "Pessoal".
 - CNPJs das empresas: ${companies.map((c) => `${c.cnpj} = "${c.name}"`).join(", ") || "nenhuma empresa cadastrada"}
 
+REGRA CRÍTICA — CONTEXTO POR FORNECEDOR/CLIENTE CADASTRADO:
+- Se o EMITENTE/MERCHANT/PAGADOR identificado (por nome, razão social, CNPJ ou itens do documento) corresponder a um FORNECEDOR ou CLIENTE da lista CONTATOS abaixo, e esse cadastro tiver "contexto padrão" definido como uma empresa (não "Pessoal"), USE esse contexto AUTOMATICAMENTE.
+- Esta regra TEM PRIORIDADE sobre padrões históricos.
+- Exceção única: se o CNPJ do DESTINATÁRIO do documento bater com outra empresa do usuário (regra acima), o destinatário vence.
+- Match permitido: nome contém, CNPJ exato, ou razão social normalizada.
+- Sempre que usar essa regra, preencha também supplier_id (despesa) ou client_id (receita) com o UUID exato listado.
+
 REGRA CRÍTICA DE DETECÇÃO DE CONTEXTO POR CARTÃO:
 - Se o documento/imagem citar o NOME, APELIDO, BANDEIRA ou ÚLTIMOS 4 DÍGITOS de um cartão de crédito (ex: "Business Empresas", "Personnalite", "Black", "Platinum", "Gold", "final 7993", "****3552"), procure esse cartão em TODOS os contextos listados em CONTAS, CARTEIRAS E CARTÕES DE CRÉDITO POR CONTEXTO abaixo.
 - Se o cartão identificado estiver listado dentro de um bloco [NomeDaEmpresa], TROQUE o contexto da transação para essa empresa AUTOMATICAMENTE — mesmo sem CNPJ visível no documento. O cartão dita o contexto.
