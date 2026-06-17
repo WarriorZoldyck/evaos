@@ -363,19 +363,10 @@ export function useDashboardData(filters: DashboardFilters) {
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // Faturamento: valor bruto total das vendas por competência no período
+    // Faturamento: soma das receitas por competência no período (mesma base do DRE)
     const faturamento = competenceTransactions
       .filter((t) => t.type === "receita")
-      .reduce((acc, t) => {
-        if (!t.series_id) return acc + Number(t.amount);
-        if (t.installment_number === 1) {
-          const totalValue = t.original_amount
-            ? Number(t.original_amount)
-            : Number(t.amount) * (t.installments_total || 1);
-          return acc + totalValue;
-        }
-        return acc;
-      }, 0);
+      .reduce((acc, t) => acc + Number(t.amount), 0);
 
     const saldo = entradas - saidas;
 
