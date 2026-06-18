@@ -166,6 +166,10 @@ export function ImportStatementModal({
     setParsing(true);
     setRows([]);
 
+    const lowerName = file.name.toLowerCase();
+    const ext = lowerName.match(/\.([a-z0-9]+)$/)?.[1] || "";
+    const isBankStatementFile = ["ofx", "qfx", "csv", "txt"].includes(ext);
+
     try {
       const formData = new FormData();
       formData.append("file", file);
@@ -312,6 +316,19 @@ export function ImportStatementModal({
             setTargetBankAccount(`bank:${bankAccId}`);
           }
         }
+      } else if (isBankStatementFile) {
+        // OFX/CSV/TXT without detected cards → assume bank statement (débito em conta)
+        setImportType("debito");
+      }
+
+      // Auto-select the only available destination account when nothing detected/preset
+      const totalDestinations = bankAccounts.length + wallets.length;
+      if (totalDestinations === 1) {
+        if (bankAccounts.length === 1) {
+          setTargetBankAccount((prev) => prev || `bank:${bankAccounts[0].id}`);
+        } else if (wallets.length === 1) {
+          setTargetBankAccount((prev) => prev || `wallet:${wallets[0].id}`);
+        }
       }
 
       const cardNames = resolvedDetectedCards.map((c) =>
@@ -322,7 +339,9 @@ export function ImportStatementModal({
         title: `${result.count} transações encontradas`,
         description: cardNames.length > 0
           ? `Cartão(ões) detectado(s): ${cardNames.join(", ")}`
-          : `Revise antes de importar.`,
+          : (isBankStatementFile
+              ? `Extrato bancário detectado — selecione a conta destino e revise antes de importar.`
+              : `Revise antes de importar.`),
       });
     } catch (err: any) {
       toast({
@@ -334,6 +353,7 @@ export function ImportStatementModal({
 
     setParsing(false);
   };
+
 
   const toggleRow = (idx: number) => {
     setRows((prev) =>
@@ -519,20 +539,19 @@ export function ImportStatementModal({
                 </Select>
               </div>
 
-              {targetBankAccount && (
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-xs text-muted-foreground mb-1 block">Tipo de extrato *</label>
-                  <Select value={importType} onValueChange={(v) => setImportType(v as "debito" | "cartao")}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="debito">💰 Débito em conta</SelectItem>
-                      <SelectItem value="cartao">💳 Cartão de crédito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-xs text-muted-foreground mb-1 block">Tipo de extrato *</label>
+                <Select value={importType} onValueChange={(v) => setImportType(v as "debito" | "cartao")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="debito">💰 Débito em conta</SelectItem>
+                    <SelectItem value="cartao">💳 Cartão de crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
 
               {importType === "cartao" && !isMultiCard && (
                 <div className="flex-1 min-w-[200px]">
