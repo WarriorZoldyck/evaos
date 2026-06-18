@@ -539,20 +539,19 @@ export function ImportStatementModal({
                 </Select>
               </div>
 
-              {targetBankAccount && (
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-xs text-muted-foreground mb-1 block">Tipo de extrato *</label>
-                  <Select value={importType} onValueChange={(v) => setImportType(v as "debito" | "cartao")}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="debito">💰 Débito em conta</SelectItem>
-                      <SelectItem value="cartao">💳 Cartão de crédito</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-xs text-muted-foreground mb-1 block">Tipo de extrato *</label>
+                <Select value={importType} onValueChange={(v) => setImportType(v as "debito" | "cartao")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="debito">💰 Débito em conta</SelectItem>
+                    <SelectItem value="cartao">💳 Cartão de crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
 
               {importType === "cartao" && !isMultiCard && (
                 <div className="flex-1 min-w-[200px]">
