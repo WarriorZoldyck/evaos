@@ -1,54 +1,35 @@
-# Corrigir cálculo de Faturamento + modal de detalhamento
+## Diagnóstico
 
-## Problema
-No `useDashboardData.ts` (linhas 366-378), o `faturamento` aplica uma lógica especial para parcelados: só conta a parcela 1 e multiplica por `original_amount` ou `amount × installments_total`. Isso faz com que:
-- Períodos que não contêm a parcela 1 mostrem R$ 0 mesmo havendo competência de receita.
-- O `original_amount` (campo usado por terminais para valor bruto antes do MDR) seja confundido com o valor total da venda parcelada — inflando o número quando há terminais.
-- O resultado diverge do DRE, que simplesmente soma `amount` por `competence_date`.
+Inspecionei o vídeo enviado, o arquivo OFX e o `ImportStatementModal.tsx`. O parser do edge function (`parse-bank-statement`) extrai corretamente as 25 transações do OFX do Santander (confirmado pelo "25 de 25 selecionadas" exibido no preview). O problema **não é** no parsing, é no fluxo de UI:
 
-Além disso, ao clicar no card "Faturamento", o dashboard navega para `/lancamentos?type=receita` filtrando por `payment_date` — mas faturamento é por **competência**, então o usuário vê números diferentes e fica confuso.
+1. **`Tipo de extrato` fica condicionado à conta destino** — em `ImportStatementModal.tsx` linha 522 o select de tipo só é renderizado quando `targetBankAccount` está preenchido (`{targetBankAccount && (...)}`). Se o usuário tem várias contas e não escolhe primeiro, o seletor fica oculto/parece desabilitado.
+2. **Tipo nunca é auto-definido para OFX/CSV** — a auto-detecção (linhas 289-315) só seta `importType="cartao"` quando um cartão é casado por dígitos. Para extratos bancários (OFX/CSV) nada é pré-selecionado, então o botão "Importar" fica desabilitado mesmo quando o arquivo está válido. O usuário precisa adivinhar que tem que clicar em "Selecione o tipo" → "Débito em conta".
+3. **Bank account não é auto-preenchida quando há só uma** — agrava o item 1.
 
-## Mudanças
+No vídeo, o usuário tem conta e tipo aparentemente visíveis mas o select de tipo continua mostrando "Selecione o tipo" enquanto o botão importar fica rosa/desabilitado — confirmando que a UX exige passos demais e que o tipo deveria estar pré-selecionado para um OFX (que por natureza é débito em conta).
 
-### 1. `src/hooks/useDashboardData.ts`
-Substituir o bloco `faturamento` (linhas 367-378) por soma simples de todas as receitas no `competenceTransactions` do período:
+## Mudanças (somente `src/components/lancamentos/ImportStatementModal.tsx`)
 
-```ts
-const faturamento = competenceTransactions
-  .filter((t) => t.type === "receita")
-  .reduce((acc, t) => acc + Number(t.amount), 0);
-```
+1. **Detectar a extensão do arquivo no upload** (em `handleFileChange`):
+   - Guardar `fileExtension` (ofx/qfx/csv/txt/pdf) em um state.
+2. **Auto-preencher `importType` após parsing**:
+   - Se cartões detectados → `"cartao"` (mantém comportamento atual).
+   - Senão, se extensão `.ofx/.qfx/.csv/.txt` → `"debito"` (novo).
+   - PDF sem cartão detectado → continua vazio para o usuário escolher.
+3. **Auto-selecionar a conta destino quando há apenas uma**:
+   - Se `bankAccounts.length + wallets.length === 1` e ainda não há `targetBankAccount`, definir automaticamente.
+4. **Remover o gate `{targetBankAccount && (...)}`** do bloco do "Tipo de extrato" (linha 522). Mostrar sempre que houver linhas; assim o select fica sempre clicável e o usuário pode preencher em qualquer ordem.
+5. **Mensagem de feedback no toast pós-parsing**: quando for OFX/CSV sem cartão, informar "Extrato bancário detectado — selecione a conta destino" para guiar o usuário.
 
-Isso passa a bater 100% com a linha de receita do DRE (mesma base: `amount` por `competence_date`, excluindo transferências internas — já feito na query).
+## Fora do escopo
 
-Aplicar a mesma simplificação ao cálculo de `prevFaturamento` (período anterior) em qualquer lugar que use a mesma lógica de installments — buscar e ajustar.
-
-### 2. Novo componente `src/components/dashboard/FaturamentoDetailModal.tsx`
-Modal acionado pelo clique no card "Faturamento" no lugar da navegação atual. Conteúdo:
-
-- **Header**: "Faturamento por competência" + intervalo do período (`dateFrom` – `dateTo`).
-- **Resumo no topo**: total do período, ticket médio, nº de lançamentos, comparativo % vs período anterior.
-- **Lista**: receitas do período (vindas de `competenceTransactions`, type=`receita`), ordenadas por `competence_date` desc, com colunas: data de competência, descrição, contato, categoria, conta/cartão, valor. Paginada (50/página) ou virtualizada se >200 itens.
-- **Agrupamentos opcionais (tabs)**: "Por mês de competência", "Por categoria", "Por contato" — cada um mostrando uma mini-tabela com subtotal.
-- **Ações**: botão "Ver todos os lançamentos do período" que navega para `/lancamentos` filtrando explicitamente por competência (passar um parâmetro novo `dateField=competence_date` e ajustar `Lancamentos.tsx` para honrar isso quando presente; manter `payment_date` como default).
-
-### 3. `src/components/dashboard/SummaryCards.tsx`
-- Trocar o `onClick` do card "Faturamento" para abrir o modal acima em vez de chamar `go({ type: "receita" })`.
-- Receber via prop um callback `onFaturamentoClick` (ou expor o array de receitas por competência) — provavelmente mais limpo passar `onFaturamentoClick` e deixar o `Dashboard.tsx` orquestrar o estado do modal.
-
-### 4. `src/pages/Dashboard.tsx`
-- Estado local `faturamentoModalOpen`.
-- Passa o callback para `SummaryCards` e renderiza o `FaturamentoDetailModal` com os dados de `competenceTransactions` (precisa expor isso no retorno do `useDashboardData` se ainda não estiver exposto).
-
-### 5. `src/pages/Lancamentos.tsx` (ajuste leve, opcional)
-Suportar `?dateField=competence_date` para que o botão "Ver todos" do modal mostre exatamente o mesmo recorte. Se for inviável neste passo, abrir `/lancamentos` sem esse refinamento e deixar como melhoria futura.
+- Edge function `parse-bank-statement` (funciona, extrai as 25 transações).
+- Lógica de cartão de crédito, instalments, datas de competência (intocados).
+- Outras telas / modais.
 
 ## Verificação
-- Abrir o dashboard em um período conhecido e conferir que `Faturamento` = soma da linha "Receita Operacional Bruta" do DRE no mesmo intervalo.
-- Clicar no card → modal abre com a lista de receitas por competência, total = valor exibido no card.
-- Trocar o período e o filtro de empresa/pessoal e validar que ambos (card + modal) atualizam consistentemente.
 
-## Não está no escopo
-- Lógica de DRE (já está correta segundo o usuário).
-- Outras métricas do dashboard (Entradas/Saídas/Saldo continuam por `payment_date`, como hoje).
-- Migrações de banco.
+1. Abrir o modal de importar, selecionar o OFX anexado → o seletor "Tipo de extrato" já deve aparecer pré-selecionado como "Débito em conta" e o botão "Importar" deve habilitar assim que a conta destino estiver escolhida.
+2. Repetir com PDF de fatura de cartão → continua auto-detectando cartão e preenchendo "Cartão de crédito".
+3. Em conta com apenas uma conta bancária na empresa → conta destino vem pré-selecionada.
+4. O select "Tipo de extrato" deve estar sempre clicável a partir do momento em que as linhas parseadas aparecem.
