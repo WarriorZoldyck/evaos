@@ -362,6 +362,41 @@ export function ImportStatementModal({
   };
 
 
+  // Trigger reconciliation matching when in "debito" mode with destination set
+  useEffect(() => {
+    if (importType !== "debito" || rows.length === 0 || !targetBankAccount) {
+      resetMatches();
+      return;
+    }
+    const [accType, ...idParts] = targetBankAccount.split(":");
+    const accId = idParts.join(":");
+    const bankId = accType === "bank" ? accId : null;
+    const walletId = accType === "wallet" ? accId : null;
+
+    const lines = rows.map((r) => ({
+      date: r.date,
+      description: r.description,
+      amount: Math.abs(r.amount),
+      type: r.type,
+    }));
+
+    findMatches(lines, bankId, walletId).then((res) => {
+      // Pre-set actions: rows with a match default to "vincular", others to "criar"
+      const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
+      const nextTargets: Record<number, string> = {};
+      rows.forEach((_, i) => {
+        if (res[i]?.best) {
+          nextActions[i] = "vincular";
+          nextTargets[i] = res[i].best!.candidate.id;
+        } else {
+          nextActions[i] = "criar";
+        }
+      });
+      setMatchActions(nextActions);
+      setMatchTargets(nextTargets);
+    });
+  }, [importType, targetBankAccount, rows, findMatches, resetMatches]);
+
   const toggleRow = (idx: number) => {
     setRows((prev) =>
       prev.map((r, i) => (i === idx ? { ...r, selected: !r.selected } : r))
