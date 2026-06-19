@@ -745,6 +745,35 @@ export function ImportStatementModal({
               {fileName} — {selectedRows.length} de {rows.length} selecionadas
             </div>
 
+            {/* Reconciliation summary (debito only) */}
+            {importType === "debito" && targetBankAccount && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
+                <div className="flex items-center gap-2 font-medium text-primary mb-1">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Conciliação inteligente
+                  {matchLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                </div>
+                {(() => {
+                  const counts = { vincular: 0, criar: 0, ignorar: 0 };
+                  selectedRows.forEach((r) => {
+                    const i = rows.indexOf(r);
+                    const a = matchActions[i] || "criar";
+                    counts[a]++;
+                  });
+                  return (
+                    <div className="text-muted-foreground">
+                      <strong className="text-foreground">{counts.vincular}</strong> vincular ·{" "}
+                      <strong className="text-foreground">{counts.criar}</strong> criar novo ·{" "}
+                      <strong className="text-foreground">{counts.ignorar}</strong> ignorar
+                      {counts.vincular === 0 && !matchLoading && (
+                        <span className="ml-2 italic">Nenhuma correspondência com lançamentos pendentes encontrada.</span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             <div className="flex-1 overflow-auto border rounded-lg">
               <table className="w-full text-sm border-collapse">
                 <thead>
@@ -765,10 +794,16 @@ export function ImportStatementModal({
                     {isMultiCard && (
                       <th className="p-2 text-center font-medium">Cartão</th>
                     )}
+                    {importType === "debito" && targetBankAccount && (
+                      <th className="p-2 text-left font-medium">Ação</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, idx) => (
+                  {rows.map((r, idx) => {
+                    const rowMatch = matches[idx];
+                    const action = matchActions[idx] || "criar";
+                    return (
                     <tr key={idx} className={`border-b border-border/50 ${!r.selected ? "opacity-40" : ""}`}>
                       <td className="p-2">
                         <Checkbox checked={r.selected} onCheckedChange={() => toggleRow(idx)} />
@@ -806,8 +841,40 @@ export function ImportStatementModal({
                           )}
                         </td>
                       )}
+                      {importType === "debito" && targetBankAccount && (
+                        <td className="p-2 min-w-[200px]">
+                          <div className="flex flex-col gap-1">
+                            <Select
+                              value={action}
+                              onValueChange={(v) =>
+                                setMatchActions((prev) => ({ ...prev, [idx]: v as any }))
+                              }
+                            >
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="vincular" disabled={!rowMatch?.best}>
+                                  <span className="flex items-center gap-1">
+                                    <Link2 className="h-3 w-3" /> Vincular
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="criar">Criar novo</SelectItem>
+                                <SelectItem value="ignorar">Ignorar</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {action === "vincular" && rowMatch?.best && (
+                              <span className="text-[10px] text-muted-foreground truncate" title={rowMatch.best.candidate.description}>
+                                ✓ {rowMatch.best.candidate.description.slice(0, 30)}
+                                {rowMatch.best.candidate.description.length > 30 ? "…" : ""}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
