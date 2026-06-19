@@ -166,8 +166,55 @@ export default function Lancamentos() {
     setSeriesTarget(null);
   };
 
+  // One-time "new feature" banner: Conciliação inteligente no Importar Extrato
+  const FEATURE_KEY = "eva.feature.import-match.seen.v1";
+  const [showFeatureBanner, setShowFeatureBanner] = useState(() => {
+    try { return localStorage.getItem(FEATURE_KEY) !== "1"; } catch { return false; }
+  });
+  const dismissFeatureBanner = () => {
+    try { localStorage.setItem(FEATURE_KEY, "1"); } catch {}
+    setShowFeatureBanner(false);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* New feature announcement */}
+      {showFeatureBanner && (
+        <div className="relative rounded-lg border border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4 pr-10">
+          <button
+            onClick={dismissFeatureBanner}
+            className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Fechar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div className="flex items-start gap-3">
+            <div className="rounded-md bg-primary/15 p-2 shrink-0">
+              <Sparkles className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-foreground">
+                Novidade! Conciliação inteligente ao importar extrato 🎉
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Agora, ao importar um extrato bancário (OFX/CSV), o EVA identifica automaticamente quais lançamentos
+                <strong className="text-foreground"> já estavam cadastrados como Pendentes</strong> e sugere
+                <strong className="text-foreground"> vinculá-los</strong> em vez de criar duplicidade. Você decide linha
+                por linha: <em>Vincular</em>, <em>Criar novo</em> ou <em>Ignorar</em>. Sem alteração nos seus dados existentes.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3 h-7 text-xs"
+                onClick={() => { dismissFeatureBanner(); setImportOpen(true); }}
+              >
+                <Upload className="h-3 w-3 mr-1" /> Experimentar agora
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
