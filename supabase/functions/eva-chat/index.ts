@@ -770,6 +770,7 @@ ${historicalPatternsBlock}`;
 
     // === CONSULTA ===
     if (aiParsed.intent === "consulta") {
+      if (!aiParsed.context) aiParsed.context = activeContextName;
       const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
 
