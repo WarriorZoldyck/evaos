@@ -873,20 +873,39 @@ ${historicalPatternsBlock}`;
             break;
           }
           case "gastos_categoria": {
-            const categoryFilter = aiParsed.category_filter || "";
-            const filterCat = categories.find((c: any) => c.name.toLowerCase() === categoryFilter.toLowerCase());
+            const categoryFilter = (aiParsed.category_filter || "").trim();
+            const normFilter = normalizeText(categoryFilter);
+            // Try category match (exact, then partial, including subcategories)
+            let filterCat = categories.find((c: any) => normalizeText(c.name) === normFilter);
+            if (!filterCat && normFilter) {
+              filterCat = categories.find((c: any) => {
+                const cn = normalizeText(c.name);
+                return cn.includes(normFilter) || normFilter.includes(cn);
+              });
+            }
             const catIds: string[] = [];
-            if (filterCat) { catIds.push(filterCat.id); categories.filter((c: any) => c.parent_id === filterCat.id).forEach((s: any) => catIds.push(s.id)); }
-            let q = supabase.from("transactions").select("amount, description, payment_date, contact_name, status").eq("user_id", userId).eq("type", "despesa").gte("payment_date", periodStart).lte("payment_date", periodEnd).order("payment_date", { ascending: false }).limit(20);
-            if (catIds.length > 0) q = q.in("category", catIds);
-            else if (categoryFilter) q = q.ilike("category", `%${categoryFilter}%`);
+            if (filterCat) {
+              catIds.push(filterCat.id);
+              categories.filter((c: any) => c.parent_id === filterCat!.id).forEach((s: any) => catIds.push(s.id));
+            }
+            let q = supabase.from("transactions").select("amount, description, payment_date, contact_name, status, category").eq("user_id", userId).eq("type", "despesa").gte("payment_date", periodStart).lte("payment_date", periodEnd).order("payment_date", { ascending: false }).limit(50);
+            if (catIds.length > 0) {
+              q = q.in("category", catIds);
+            } else if (categoryFilter) {
+              // Fallback: search by merchant/description (treat filter as estabelecimento)
+              const safe = categoryFilter.replace(/[%_,]/g, "");
+              q = q.or(`contact_name.ilike.%${safe}%,description.ilike.%${safe}%`);
+            }
             q = addContextFilter(q);
             const { data: catExpenses } = await q;
-            const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
-            if (!catExpenses || catExpenses.length === 0) responseMessage = `📊 Nenhum gasto com "${filterCat?.name || categoryFilter}" ${periodLabel}.`;
-            else {
-              const items = catExpenses.map((t: any) => `  • ${t.description}${t.contact_name ? ` — ${t.contact_name}` : ""}: ${fmt(t.amount)} (${formatDate(t.payment_date)})`).join("\n");
-              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}:\n\n${items}\n\n💰 Total: ${fmt(total)}`;
+            const total = (catExpenses || []).reduce((s: number, t: any) => s + Number(t.amount), 0);
+            const label = filterCat?.name || categoryFilter;
+            if (!catExpenses || catExpenses.length === 0) {
+              responseMessage = `📊 Nenhum gasto encontrado com "${label}" ${periodLabel}.\n\nDica: tente um termo diferente (categoria ou nome do estabelecimento).`;
+            } else {
+              const items = catExpenses.slice(0, 20).map((t: any) => `  • ${t.description}${t.contact_name ? ` — ${t.contact_name}` : ""}: ${fmt(Number(t.amount))} (${formatDate(t.payment_date)})`).join("\n");
+              const extra = catExpenses.length > 20 ? `\n  ...e mais ${catExpenses.length - 20} lançamento(s)` : "";
+              responseMessage = `📊 Gastos com "${label}" ${periodLabel}:\n\n${items}${extra}\n\n💰 Total: ${fmt(total)} (${catExpenses.length} lançamento(s))`;
             }
             break;
           }
