@@ -263,6 +263,11 @@ export function TransactionDetailModal({
         {/* Actions */}
         <Separator className="my-2" />
         <div className="flex flex-wrap gap-2">
+          {needsReview && (
+            <Button size="sm" onClick={handleMarkReviewed} disabled={marking} className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white">
+              <ShieldCheck className="h-3.5 w-3.5" /> {marking ? "Marcando..." : "Marcar como conferido"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => { onClose(); onEdit(t); }} className="gap-1.5">
             <Edit className="h-3.5 w-3.5" /> Editar
           </Button>
