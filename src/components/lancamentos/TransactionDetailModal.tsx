@@ -168,6 +168,12 @@ export function TransactionDetailModal({
           <DialogTitle className="text-lg mt-2">{t.description}</DialogTitle>
         </DialogHeader>
 
+        {needsReview && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            Este lançamento foi <strong>restaurado/corrigido automaticamente pela EVA</strong>. Confira conta, valor e categoria. Quando estiver tudo certo, clique em <strong>Marcar como conferido</strong> para remover este aviso.
+          </div>
+        )}
+
         <div className="space-y-1">
           {/* Amount */}
           <div className="text-center py-3">
