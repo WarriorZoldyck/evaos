@@ -135,6 +135,12 @@ export function ImportStatementModal({
   const [targetCard, setTargetCard] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
 
+  // Per-row reconciliation action: "vincular" | "criar" | "ignorar"
+  // Default is "criar" (legacy behavior). "vincular" is suggested when a match exists.
+  const [matchActions, setMatchActions] = useState<Record<number, "vincular" | "criar" | "ignorar">>({});
+  const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
+  const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
+
   const rootCategories = categories.filter((c) => !c.parent_id);
 
   // Derive detected cards summary (use real card IDs, not collapsed to parent)
