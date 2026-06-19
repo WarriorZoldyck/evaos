@@ -226,10 +226,20 @@ serve(async (req) => {
       });
     }
 
+    // Resolve active context selected in the UI (from CompanyContext)
+    const activeCompany = requestedCompanyId
+      ? companies.find((c: any) => c.id === requestedCompanyId)
+      : null;
+    const activeContextName = activeCompany ? activeCompany.name : "Pessoal";
+
     // Build system prompt (same as whatsapp-webhook but adapted for in-app chat)
     const systemPrompt = `Você é a EVA, assistente financeira inteligente do EVA OS. O usuário está conversando com você dentro do sistema web. Analise a mensagem e classifique a intenção.
 
 IMPORTANTE: Você está dentro do sistema, então pode executar ações diretamente. NÃO precisa de confirmações via pending_actions. Execute as ações e retorne o resultado.
+
+CONTEXTO ATIVO NO MOMENTO: "${activeContextName}"
+- Se o usuário NÃO mencionar explicitamente outro contexto, USE SEMPRE "${activeContextName}" no campo "context".
+- Só troque para outro contexto se o usuário citar o nome dele.
 
 REGRAS:
 1. Classifique como: "lancamento", "editar_lancamento", "consulta", "gerenciar_categoria" ou "conversa"
@@ -239,11 +249,19 @@ REGRAS:
 5. Responda SEMPRE em português brasileiro
 6. Retorne APENAS um JSON válido, sem texto adicional
 
+REGRA CRÍTICA — PERGUNTAS SEMPRE VIRAM "consulta", NUNCA "conversa":
+- "Quanto gastei em X?" / "Quanto recebi de Y?" → intent="consulta", query_type="gastos_categoria", category_filter="X" (X pode ser categoria OU estabelecimento — o backend tenta ambos)
+- "Qual meu saldo?" → query_type="saldo"
+- "Resumo do mês" / "Como foi meu mês?" → query_type="resumo_mes"
+- "O que tenho a pagar?" / "Pendentes" → query_type="pendentes"
+- "Quanto gastei esse mês?" (sem categoria) → query_type="gastos_mes"
+- NUNCA responda "não tenho essa informação" — dispare a consulta apropriada.
+
 CONTEXTOS DISPONÍVEIS (use EXATAMENTE um destes valores no campo "context"):
 ${contextNames.map((n) => `  - "${n}"`).join("\n")}
 - "Pessoal" é para finanças pessoais do usuário
 ${companies.map((c: any) => `- "${c.name}" (CNPJ: ${c.cnpj}) é uma empresa do usuário`).join("\n")}
-- Se o usuário NÃO especificar o contexto, use "Pessoal"
+- Se o usuário NÃO especificar o contexto, use "${activeContextName}"
 
 CATEGORIAS POR CONTEXTO (formato: Nome[UUID] (TIPO)):
 ${categoryListByContext || "Nenhuma categoria cadastrada"}
@@ -752,6 +770,7 @@ ${historicalPatternsBlock}`;
 
     // === CONSULTA ===
     if (aiParsed.intent === "consulta") {
+      if (!aiParsed.context) aiParsed.context = activeContextName;
       const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
 
@@ -854,20 +873,39 @@ ${historicalPatternsBlock}`;
             break;
           }
           case "gastos_categoria": {
-            const categoryFilter = aiParsed.category_filter || "";
-            const filterCat = categories.find((c: any) => c.name.toLowerCase() === categoryFilter.toLowerCase());
+            const categoryFilter = (aiParsed.category_filter || "").trim();
+            const normFilter = normalizeText(categoryFilter);
+            // Try category match (exact, then partial, including subcategories)
+            let filterCat = categories.find((c: any) => normalizeText(c.name) === normFilter);
+            if (!filterCat && normFilter) {
+              filterCat = categories.find((c: any) => {
+                const cn = normalizeText(c.name);
+                return cn.includes(normFilter) || normFilter.includes(cn);
+              });
+            }
             const catIds: string[] = [];
-            if (filterCat) { catIds.push(filterCat.id); categories.filter((c: any) => c.parent_id === filterCat.id).forEach((s: any) => catIds.push(s.id)); }
-            let q = supabase.from("transactions").select("amount, description, payment_date, contact_name, status").eq("user_id", userId).eq("type", "despesa").gte("payment_date", periodStart).lte("payment_date", periodEnd).order("payment_date", { ascending: false }).limit(20);
-            if (catIds.length > 0) q = q.in("category", catIds);
-            else if (categoryFilter) q = q.ilike("category", `%${categoryFilter}%`);
+            if (filterCat) {
+              catIds.push(filterCat.id);
+              categories.filter((c: any) => c.parent_id === filterCat!.id).forEach((s: any) => catIds.push(s.id));
+            }
+            let q = supabase.from("transactions").select("amount, description, payment_date, contact_name, status, category").eq("user_id", userId).eq("type", "despesa").gte("payment_date", periodStart).lte("payment_date", periodEnd).order("payment_date", { ascending: false }).limit(50);
+            if (catIds.length > 0) {
+              q = q.in("category", catIds);
+            } else if (categoryFilter) {
+              // Fallback: search by merchant/description (treat filter as estabelecimento)
+              const safe = categoryFilter.replace(/[%_,]/g, "");
+              q = q.or(`contact_name.ilike.%${safe}%,description.ilike.%${safe}%`);
+            }
             q = addContextFilter(q);
             const { data: catExpenses } = await q;
-            const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
-            if (!catExpenses || catExpenses.length === 0) responseMessage = `📊 Nenhum gasto com "${filterCat?.name || categoryFilter}" ${periodLabel}.`;
-            else {
-              const items = catExpenses.map((t: any) => `  • ${t.description}${t.contact_name ? ` — ${t.contact_name}` : ""}: ${fmt(t.amount)} (${formatDate(t.payment_date)})`).join("\n");
-              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}:\n\n${items}\n\n💰 Total: ${fmt(total)}`;
+            const total = (catExpenses || []).reduce((s: number, t: any) => s + Number(t.amount), 0);
+            const label = filterCat?.name || categoryFilter;
+            if (!catExpenses || catExpenses.length === 0) {
+              responseMessage = `📊 Nenhum gasto encontrado com "${label}" ${periodLabel}.\n\nDica: tente um termo diferente (categoria ou nome do estabelecimento).`;
+            } else {
+              const items = catExpenses.slice(0, 20).map((t: any) => `  • ${t.description}${t.contact_name ? ` — ${t.contact_name}` : ""}: ${fmt(Number(t.amount))} (${formatDate(t.payment_date)})`).join("\n");
+              const extra = catExpenses.length > 20 ? `\n  ...e mais ${catExpenses.length - 20} lançamento(s)` : "";
+              responseMessage = `📊 Gastos com "${label}" ${periodLabel}:\n\n${items}${extra}\n\n💰 Total: ${fmt(total)} (${catExpenses.length} lançamento(s))`;
             }
             break;
           }
