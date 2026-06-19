@@ -55,8 +55,19 @@ interface ImportStatementModalProps {
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
 }
 
+/** Detects descriptions that look like a credit-card BILL PAYMENT (not a card purchase). */
+function isBillPaymentDescription(desc: string): boolean {
+  const d = desc.toLowerCase();
+  return /pag(?:t|to|amento|amt)?\.?\s*(?:de\s+)?(?:fatura|cart[ãa]o|credit?o?)/i.test(d) ||
+    /fatura\s+cart[ãa]o/i.test(d) ||
+    /pgto\s+cart[ãa]o/i.test(d);
+}
+
 /** Try to find 4-digit card numbers in a description */
 function detectDigitsInDescription(desc: string, cards: { id: string; last_four_digits: string | null; parent_card_id?: string | null }[]): string | undefined {
+  // Skip card-match when the line is clearly a bill payment (saída para o cartão),
+  // since that belongs to the bank account, not to the card's purchases.
+  if (isBillPaymentDescription(desc)) return undefined;
   for (const card of cards) {
     if (!card.last_four_digits) continue;
     if (desc.includes(card.last_four_digits)) return card.id;
@@ -248,7 +259,8 @@ export function ImportStatementModal({
         const { _installment_number, _installments_total, _base_description, ...rest } = t;
 
         let matchedCardId: string | undefined;
-        if (t.detected_card_digits) {
+        const looksLikeBillPayment = isBillPaymentDescription(t.description);
+        if (t.detected_card_digits && !looksLikeBillPayment) {
           const card = creditCards.find((c) => c.last_four_digits === t.detected_card_digits);
           if (card) matchedCardId = card.id;
         }

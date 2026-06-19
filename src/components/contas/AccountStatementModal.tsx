@@ -60,7 +60,7 @@ export function AccountStatementModal({
 
       let query = supabase
         .from("transactions")
-        .select("id, payment_date, description, type, amount, status, category")
+        .select("id, payment_date, description, type, amount, status, category, credit_card_id")
         .eq("status", "Pago")
         .gte("payment_date", dateFrom)
         .lte("payment_date", dateTo)
@@ -78,7 +78,58 @@ export function AccountStatementModal({
       const { data, error } = await query;
 
       if (!error && data) {
-        setRows(data as StatementRow[]);
+        if (accountType === "card") {
+          // Card statement: show every transaction as-is
+          setRows(data.map(({ credit_card_id: _c, ...r }) => r) as StatementRow[]);
+        } else {
+          // Bank/wallet statement: hide individual card purchases (rows with credit_card_id)
+          // and replace them with a single synthetic "Pagamento Fatura X" line per
+          // (card, payment_date), so the user only sees the bill payment.
+          const direct: StatementRow[] = [];
+          const billGroups: Record<string, { amount: number; date: string; cardId: string }> = {};
+
+          for (const r of data) {
+            if (r.credit_card_id) {
+              const key = `${r.credit_card_id}__${r.payment_date}`;
+              if (!billGroups[key]) {
+                billGroups[key] = { amount: 0, date: r.payment_date, cardId: r.credit_card_id };
+              }
+              // Sum despesa as positive bill, receita (refund/credit) reduces it
+              billGroups[key].amount += r.type === "despesa" ? r.amount : -r.amount;
+            } else {
+              const { credit_card_id: _c, ...rest } = r;
+              direct.push(rest as StatementRow);
+            }
+          }
+
+          // Resolve card names in a single query
+          const cardIds = Array.from(new Set(Object.values(billGroups).map((g) => g.cardId)));
+          let cardNames: Record<string, string> = {};
+          if (cardIds.length > 0) {
+            const { data: cards } = await supabase
+              .from("credit_cards")
+              .select("id, name")
+              .in("id", cardIds);
+            cardNames = Object.fromEntries((cards || []).map((c: any) => [c.id, c.name]));
+          }
+
+          const synthetic: StatementRow[] = Object.entries(billGroups)
+            .filter(([, g]) => Math.abs(g.amount) > 0.005)
+            .map(([key, g]) => ({
+              id: `bill__${key}`,
+              payment_date: g.date,
+              description: `Pagamento fatura ${cardNames[g.cardId] || "cartão"}`,
+              type: g.amount >= 0 ? "despesa" : "receita",
+              amount: Math.abs(g.amount),
+              status: "Pago",
+              category: "Cartão de Crédito",
+            }));
+
+          const merged = [...direct, ...synthetic].sort((a, b) =>
+            a.payment_date.localeCompare(b.payment_date)
+          );
+          setRows(merged);
+        }
       }
       setLoading(false);
     };
@@ -87,6 +138,8 @@ export function AccountStatementModal({
   }, [open, accountId, accountType, dateFrom, dateTo]);
 
   // For bank/wallet, also fetch all paid transactions BEFORE the period to compute carry-over balance
+  // (uses the same logic: card purchases collapse into bill payments, so the balance math is
+  // identical to what the user sees in the visible rows)
   const [priorBalance, setPriorBalance] = useState(0);
 
   useEffect(() => {
@@ -96,23 +149,36 @@ export function AccountStatementModal({
     }
 
     const fetchPrior = async () => {
-      let query = supabase
+      // Direct (non-card) prior transactions
+      let directQ = supabase
         .from("transactions")
         .select("type, amount")
         .eq("status", "Pago")
+        .is("credit_card_id", null)
         .lt("payment_date", dateFrom);
+      if (accountType === "bank") directQ = directQ.eq("bank_account_id", accountId);
+      else directQ = directQ.eq("wallet_id", accountId);
 
-      if (accountType === "bank") query = query.eq("bank_account_id", accountId);
-      else query = query.eq("wallet_id", accountId);
+      // Prior card bill payments routed to this account (despesa adds to debit, receita subtracts)
+      let billQ = supabase
+        .from("transactions")
+        .select("type, amount")
+        .eq("status", "Pago")
+        .not("credit_card_id", "is", null)
+        .lt("payment_date", dateFrom);
+      if (accountType === "bank") billQ = billQ.eq("bank_account_id", accountId);
+      else billQ = billQ.eq("wallet_id", accountId);
 
-      const { data } = await query;
-
-      if (data) {
-        const sum = data.reduce((acc, t) => {
-          return acc + (t.type === "receita" ? t.amount : -t.amount);
-        }, 0);
-        setPriorBalance(initialBalance + sum);
-      }
+      const [{ data: dData }, { data: bData }] = await Promise.all([directQ, billQ]);
+      const sumDirect = (dData || []).reduce(
+        (acc, t: any) => acc + (t.type === "receita" ? t.amount : -t.amount),
+        0
+      );
+      const sumBill = (bData || []).reduce(
+        (acc, t: any) => acc + (t.type === "receita" ? t.amount : -t.amount),
+        0
+      );
+      setPriorBalance(initialBalance + sumDirect + sumBill);
     };
 
     fetchPrior();
