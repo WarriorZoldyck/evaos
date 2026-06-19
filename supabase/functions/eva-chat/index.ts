@@ -226,10 +226,20 @@ serve(async (req) => {
       });
     }
 
+    // Resolve active context selected in the UI (from CompanyContext)
+    const activeCompany = requestedCompanyId
+      ? companies.find((c: any) => c.id === requestedCompanyId)
+      : null;
+    const activeContextName = activeCompany ? activeCompany.name : "Pessoal";
+
     // Build system prompt (same as whatsapp-webhook but adapted for in-app chat)
     const systemPrompt = `Você é a EVA, assistente financeira inteligente do EVA OS. O usuário está conversando com você dentro do sistema web. Analise a mensagem e classifique a intenção.
 
 IMPORTANTE: Você está dentro do sistema, então pode executar ações diretamente. NÃO precisa de confirmações via pending_actions. Execute as ações e retorne o resultado.
+
+CONTEXTO ATIVO NO MOMENTO: "${activeContextName}"
+- Se o usuário NÃO mencionar explicitamente outro contexto, USE SEMPRE "${activeContextName}" no campo "context".
+- Só troque para outro contexto se o usuário citar o nome dele.
 
 REGRAS:
 1. Classifique como: "lancamento", "editar_lancamento", "consulta", "gerenciar_categoria" ou "conversa"
@@ -239,11 +249,19 @@ REGRAS:
 5. Responda SEMPRE em português brasileiro
 6. Retorne APENAS um JSON válido, sem texto adicional
 
+REGRA CRÍTICA — PERGUNTAS SEMPRE VIRAM "consulta", NUNCA "conversa":
+- "Quanto gastei em X?" / "Quanto recebi de Y?" → intent="consulta", query_type="gastos_categoria", category_filter="X" (X pode ser categoria OU estabelecimento — o backend tenta ambos)
+- "Qual meu saldo?" → query_type="saldo"
+- "Resumo do mês" / "Como foi meu mês?" → query_type="resumo_mes"
+- "O que tenho a pagar?" / "Pendentes" → query_type="pendentes"
+- "Quanto gastei esse mês?" (sem categoria) → query_type="gastos_mes"
+- NUNCA responda "não tenho essa informação" — dispare a consulta apropriada.
+
 CONTEXTOS DISPONÍVEIS (use EXATAMENTE um destes valores no campo "context"):
 ${contextNames.map((n) => `  - "${n}"`).join("\n")}
 - "Pessoal" é para finanças pessoais do usuário
 ${companies.map((c: any) => `- "${c.name}" (CNPJ: ${c.cnpj}) é uma empresa do usuário`).join("\n")}
-- Se o usuário NÃO especificar o contexto, use "Pessoal"
+- Se o usuário NÃO especificar o contexto, use "${activeContextName}"
 
 CATEGORIAS POR CONTEXTO (formato: Nome[UUID] (TIPO)):
 ${categoryListByContext || "Nenhuma categoria cadastrada"}
