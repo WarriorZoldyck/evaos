@@ -53,6 +53,27 @@ export function TransactionDetailModal({
   onDelete,
 }: TransactionDetailModalProps) {
   const signedAttachmentUrl = useSignedAttachmentUrl(t?.attachment_url);
+  const [marking, setMarking] = useState(false);
+
+  const needsReview = !!t && EVA_REVIEW_PREFIX_REGEX.test(t.description);
+
+  const handleMarkReviewed = async () => {
+    if (!t) return;
+    const cleaned = t.description.replace(EVA_REVIEW_PREFIX_REGEX, "").trim();
+    setMarking(true);
+    const { error } = await supabase
+      .from("transactions")
+      .update({ description: cleaned })
+      .eq("id", t.id);
+    setMarking(false);
+    if (error) {
+      toast({ title: "Erro ao marcar como conferido", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Lançamento conferido", description: "O aviso de revisão foi removido." });
+    window.dispatchEvent(new CustomEvent("transaction-created"));
+    onClose();
+  };
 
   if (!t) return null;
 
