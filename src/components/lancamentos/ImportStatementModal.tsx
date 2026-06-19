@@ -1,5 +1,5 @@
-import { useState, useRef, useMemo } from "react";
-import { Upload, FileText, Loader2, Check, CreditCard } from "lucide-react";
+import { useState, useRef, useMemo, useEffect } from "react";
+import { Upload, FileText, Loader2, Check, CreditCard, Sparkles, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { TransactionInsert } from "@/hooks/useTransactions";
+import { useImportMatching } from "@/hooks/useImportMatching";
 
 interface ParsedTransaction {
   date: string;
@@ -133,6 +134,12 @@ export function ImportStatementModal({
   const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
   const [targetCard, setTargetCard] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
+
+  // Per-row reconciliation action: "vincular" | "criar" | "ignorar"
+  // Default is "criar" (legacy behavior). "vincular" is suggested when a match exists.
+  const [matchActions, setMatchActions] = useState<Record<number, "vincular" | "criar" | "ignorar">>({});
+  const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
+  const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
 
   const rootCategories = categories.filter((c) => !c.parent_id);
 
@@ -355,6 +362,41 @@ export function ImportStatementModal({
   };
 
 
+  // Trigger reconciliation matching when in "debito" mode with destination set
+  useEffect(() => {
+    if (importType !== "debito" || rows.length === 0 || !targetBankAccount) {
+      resetMatches();
+      return;
+    }
+    const [accType, ...idParts] = targetBankAccount.split(":");
+    const accId = idParts.join(":");
+    const bankId = accType === "bank" ? accId : null;
+    const walletId = accType === "wallet" ? accId : null;
+
+    const lines = rows.map((r) => ({
+      date: r.date,
+      description: r.description,
+      amount: Math.abs(r.amount),
+      type: r.type,
+    }));
+
+    findMatches(lines, bankId, walletId).then((res) => {
+      // Pre-set actions: rows with a match default to "vincular", others to "criar"
+      const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
+      const nextTargets: Record<number, string> = {};
+      rows.forEach((_, i) => {
+        if (res[i]?.best) {
+          nextActions[i] = "vincular";
+          nextTargets[i] = res[i].best!.candidate.id;
+        } else {
+          nextActions[i] = "criar";
+        }
+      });
+      setMatchActions(nextActions);
+      setMatchTargets(nextTargets);
+    });
+  }, [importType, targetBankAccount, rows, findMatches, resetMatches]);
+
   const toggleRow = (idx: number) => {
     setRows((prev) =>
       prev.map((r, i) => (i === idx ? { ...r, selected: !r.selected } : r))
@@ -396,7 +438,49 @@ export function ImportStatementModal({
       ? (detectedCards.find(c => !c.parent_card_id)?.id || detectedCards[0]?.id || null)
       : null;
 
-    const transactions: TransactionInsert[] = selectedRows.map((r) => {
+    // Split rows by action (debito mode only — cartao always "criar")
+    const isDebito = importType === "debito";
+    const rowsToCreate: ParsedTransaction[] = [];
+    const rowsToLink: { row: ParsedTransaction; txId: string }[] = [];
+
+    selectedRows.forEach((r) => {
+      const realIdx = rows.indexOf(r);
+      const action = isDebito ? (matchActions[realIdx] || "criar") : "criar";
+      if (action === "ignorar") return;
+      if (action === "vincular" && matchTargets[realIdx]) {
+        rowsToLink.push({ row: r, txId: matchTargets[realIdx] });
+      } else {
+        rowsToCreate.push(r);
+      }
+    });
+
+    // 1) Link existing pending transactions → mark Pago, set payment_date from statement
+    let linkOk = 0;
+    let linkFail = 0;
+    if (rowsToLink.length > 0) {
+      await Promise.all(
+        rowsToLink.map(async ({ row, txId }) => {
+          const { error } = await supabase
+            .from("transactions")
+            .update({
+              status: "Pago",
+              payment_date: row.date,
+              is_reconciled: true,
+            })
+            .eq("id", txId)
+            .eq("status", "Pendente"); // race-safe: only update if still pending
+          if (error) {
+            console.error("[ImportStatement] link error", error);
+            linkFail++;
+          } else {
+            linkOk++;
+          }
+        })
+      );
+    }
+
+    // 2) Create new transactions (legacy path)
+    const transactions: TransactionInsert[] = rowsToCreate.map((r) => {
       const detectedCard = r.matched_card_id
         ? creditCards.find((c) => c.id === r.matched_card_id)
         : undefined;
@@ -413,12 +497,10 @@ export function ImportStatementModal({
         ? (r.statement_due_date || r.date)
         : r.date;
 
-      // For credit cards: competence = close date (billing cycle), not original purchase date
       const competenceDate = importType === "cartao"
         ? (r.resolved_competence_date || r.statement_close_date || r.statement_due_date || r.date)
         : r.date;
 
-      // Preserve original purchase date for credit card imports
       const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
 
       return {
@@ -443,12 +525,29 @@ export function ImportStatementModal({
       };
     });
 
-    const success = await onImport(transactions);
+    let createOk = true;
+    if (transactions.length > 0) {
+      createOk = await onImport(transactions);
+    }
+
     setImporting(false);
 
-    if (success) {
+    if (createOk) {
+      const parts: string[] = [];
+      if (linkOk > 0) parts.push(`${linkOk} vinculado${linkOk > 1 ? "s" : ""}`);
+      if (transactions.length > 0) parts.push(`${transactions.length} criado${transactions.length > 1 ? "s" : ""}`);
+      if (linkFail > 0) parts.push(`${linkFail} falhou(ram)`);
+      if (parts.length > 0) {
+        toast({
+          title: "Importação concluída",
+          description: parts.join(" · "),
+        });
+      }
       setRows([]);
       setFileName("");
+      setMatchActions({});
+      setMatchTargets({});
+      resetMatches();
       onClose();
     }
   };
@@ -460,6 +559,9 @@ export function ImportStatementModal({
     setImportType("");
     setTargetCard("");
     setDefaultCategory("");
+    setMatchActions({});
+    setMatchTargets({});
+    resetMatches();
     onClose();
   };
 
@@ -643,6 +745,35 @@ export function ImportStatementModal({
               {fileName} — {selectedRows.length} de {rows.length} selecionadas
             </div>
 
+            {/* Reconciliation summary (debito only) */}
+            {importType === "debito" && targetBankAccount && (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
+                <div className="flex items-center gap-2 font-medium text-primary mb-1">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Conciliação inteligente
+                  {matchLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                </div>
+                {(() => {
+                  const counts = { vincular: 0, criar: 0, ignorar: 0 };
+                  selectedRows.forEach((r) => {
+                    const i = rows.indexOf(r);
+                    const a = matchActions[i] || "criar";
+                    counts[a]++;
+                  });
+                  return (
+                    <div className="text-muted-foreground">
+                      <strong className="text-foreground">{counts.vincular}</strong> vincular ·{" "}
+                      <strong className="text-foreground">{counts.criar}</strong> criar novo ·{" "}
+                      <strong className="text-foreground">{counts.ignorar}</strong> ignorar
+                      {counts.vincular === 0 && !matchLoading && (
+                        <span className="ml-2 italic">Nenhuma correspondência com lançamentos pendentes encontrada.</span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             <div className="flex-1 overflow-auto border rounded-lg">
               <table className="w-full text-sm border-collapse">
                 <thead>
@@ -663,10 +794,16 @@ export function ImportStatementModal({
                     {isMultiCard && (
                       <th className="p-2 text-center font-medium">Cartão</th>
                     )}
+                    {importType === "debito" && targetBankAccount && (
+                      <th className="p-2 text-left font-medium">Ação</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, idx) => (
+                  {rows.map((r, idx) => {
+                    const rowMatch = matches[idx];
+                    const action = matchActions[idx] || "criar";
+                    return (
                     <tr key={idx} className={`border-b border-border/50 ${!r.selected ? "opacity-40" : ""}`}>
                       <td className="p-2">
                         <Checkbox checked={r.selected} onCheckedChange={() => toggleRow(idx)} />
@@ -704,8 +841,40 @@ export function ImportStatementModal({
                           )}
                         </td>
                       )}
+                      {importType === "debito" && targetBankAccount && (
+                        <td className="p-2 min-w-[200px]">
+                          <div className="flex flex-col gap-1">
+                            <Select
+                              value={action}
+                              onValueChange={(v) =>
+                                setMatchActions((prev) => ({ ...prev, [idx]: v as any }))
+                              }
+                            >
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="vincular" disabled={!rowMatch?.best}>
+                                  <span className="flex items-center gap-1">
+                                    <Link2 className="h-3 w-3" /> Vincular
+                                  </span>
+                                </SelectItem>
+                                <SelectItem value="criar">Criar novo</SelectItem>
+                                <SelectItem value="ignorar">Ignorar</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            {action === "vincular" && rowMatch?.best && (
+                              <span className="text-[10px] text-muted-foreground truncate" title={rowMatch.best.candidate.description}>
+                                ✓ {rowMatch.best.candidate.description.slice(0, 30)}
+                                {rowMatch.best.candidate.description.length > 30 ? "…" : ""}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
