@@ -10,9 +10,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Edit, Copy, CheckCircle2, Trash2, ExternalLink } from "lucide-react";
+import { Edit, Copy, CheckCircle2, Trash2, ExternalLink, ShieldCheck } from "lucide-react";
 import type { Transaction, Category, CardTerminalInfo } from "@/hooks/useTransactions";
 import { useSignedAttachmentUrl } from "@/hooks/useSignedAttachmentUrl";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+import { useState } from "react";
+
+const EVA_REVIEW_PREFIX_REGEX = /^⚠️\s*\[(RECUPERAÇÃO|CORREÇÃO)\s+EVA[^\]]*\]\s*/;
 
 interface TransactionDetailModalProps {
   transaction: Transaction | null;
@@ -48,6 +53,27 @@ export function TransactionDetailModal({
   onDelete,
 }: TransactionDetailModalProps) {
   const signedAttachmentUrl = useSignedAttachmentUrl(t?.attachment_url);
+  const [marking, setMarking] = useState(false);
+
+  const needsReview = !!t && EVA_REVIEW_PREFIX_REGEX.test(t.description);
+
+  const handleMarkReviewed = async () => {
+    if (!t) return;
+    const cleaned = t.description.replace(EVA_REVIEW_PREFIX_REGEX, "").trim();
+    setMarking(true);
+    const { error } = await supabase
+      .from("transactions")
+      .update({ description: cleaned })
+      .eq("id", t.id);
+    setMarking(false);
+    if (error) {
+      toast({ title: "Erro ao marcar como conferido", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Lançamento conferido", description: "O aviso de revisão foi removido." });
+    window.dispatchEvent(new CustomEvent("transaction-created"));
+    onClose();
+  };
 
   if (!t) return null;
 
@@ -142,6 +168,12 @@ export function TransactionDetailModal({
           <DialogTitle className="text-lg mt-2">{t.description}</DialogTitle>
         </DialogHeader>
 
+        {needsReview && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            Este lançamento foi <strong>restaurado/corrigido automaticamente pela EVA</strong>. Confira conta, valor e categoria. Quando estiver tudo certo, clique em <strong>Marcar como conferido</strong> para remover este aviso.
+          </div>
+        )}
+
         <div className="space-y-1">
           {/* Amount */}
           <div className="text-center py-3">
@@ -231,6 +263,11 @@ export function TransactionDetailModal({
         {/* Actions */}
         <Separator className="my-2" />
         <div className="flex flex-wrap gap-2">
+          {needsReview && (
+            <Button size="sm" onClick={handleMarkReviewed} disabled={marking} className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white">
+              <ShieldCheck className="h-3.5 w-3.5" /> {marking ? "Marcando..." : "Marcar como conferido"}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => { onClose(); onEdit(t); }} className="gap-1.5">
             <Edit className="h-3.5 w-3.5" /> Editar
           </Button>
