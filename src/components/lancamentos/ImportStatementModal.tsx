@@ -438,7 +438,49 @@ export function ImportStatementModal({
       ? (detectedCards.find(c => !c.parent_card_id)?.id || detectedCards[0]?.id || null)
       : null;
 
-    const transactions: TransactionInsert[] = selectedRows.map((r) => {
+    // Split rows by action (debito mode only — cartao always "criar")
+    const isDebito = importType === "debito";
+    const rowsToCreate: ParsedTransaction[] = [];
+    const rowsToLink: { row: ParsedTransaction; txId: string }[] = [];
+
+    selectedRows.forEach((r) => {
+      const realIdx = rows.indexOf(r);
+      const action = isDebito ? (matchActions[realIdx] || "criar") : "criar";
+      if (action === "ignorar") return;
+      if (action === "vincular" && matchTargets[realIdx]) {
+        rowsToLink.push({ row: r, txId: matchTargets[realIdx] });
+      } else {
+        rowsToCreate.push(r);
+      }
+    });
+
+    // 1) Link existing pending transactions → mark Pago, set payment_date from statement
+    let linkOk = 0;
+    let linkFail = 0;
+    if (rowsToLink.length > 0) {
+      await Promise.all(
+        rowsToLink.map(async ({ row, txId }) => {
+          const { error } = await supabase
+            .from("transactions")
+            .update({
+              status: "Pago",
+              payment_date: row.date,
+              is_reconciled: true,
+            })
+            .eq("id", txId)
+            .eq("status", "Pendente"); // race-safe: only update if still pending
+          if (error) {
+            console.error("[ImportStatement] link error", error);
+            linkFail++;
+          } else {
+            linkOk++;
+          }
+        })
+      );
+    }
+
+    // 2) Create new transactions (legacy path)
+    const transactions: TransactionInsert[] = rowsToCreate.map((r) => {
       const detectedCard = r.matched_card_id
         ? creditCards.find((c) => c.id === r.matched_card_id)
         : undefined;
@@ -455,12 +497,10 @@ export function ImportStatementModal({
         ? (r.statement_due_date || r.date)
         : r.date;
 
-      // For credit cards: competence = close date (billing cycle), not original purchase date
       const competenceDate = importType === "cartao"
         ? (r.resolved_competence_date || r.statement_close_date || r.statement_due_date || r.date)
         : r.date;
 
-      // Preserve original purchase date for credit card imports
       const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
 
       return {
@@ -485,12 +525,29 @@ export function ImportStatementModal({
       };
     });
 
-    const success = await onImport(transactions);
+    let createOk = true;
+    if (transactions.length > 0) {
+      createOk = await onImport(transactions);
+    }
+
     setImporting(false);
 
-    if (success) {
+    if (createOk) {
+      const parts: string[] = [];
+      if (linkOk > 0) parts.push(`${linkOk} vinculado${linkOk > 1 ? "s" : ""}`);
+      if (transactions.length > 0) parts.push(`${transactions.length} criado${transactions.length > 1 ? "s" : ""}`);
+      if (linkFail > 0) parts.push(`${linkFail} falhou(ram)`);
+      if (parts.length > 0) {
+        toast({
+          title: "Importação concluída",
+          description: parts.join(" · "),
+        });
+      }
       setRows([]);
       setFileName("");
+      setMatchActions({});
+      setMatchTargets({});
+      resetMatches();
       onClose();
     }
   };
@@ -502,6 +559,9 @@ export function ImportStatementModal({
     setImportType("");
     setTargetCard("");
     setDefaultCategory("");
+    setMatchActions({});
+    setMatchTargets({});
+    resetMatches();
     onClose();
   };
 
