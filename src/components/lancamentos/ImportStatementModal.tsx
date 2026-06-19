@@ -259,7 +259,8 @@ export function ImportStatementModal({
         const { _installment_number, _installments_total, _base_description, ...rest } = t;
 
         let matchedCardId: string | undefined;
-        if (t.detected_card_digits) {
+        const looksLikeBillPayment = isBillPaymentDescription(t.description);
+        if (t.detected_card_digits && !looksLikeBillPayment) {
           const card = creditCards.find((c) => c.last_four_digits === t.detected_card_digits);
           if (card) matchedCardId = card.id;
         }
