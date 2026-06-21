@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from "react";
-import { Upload, FileText, Loader2, Check, CreditCard, Sparkles, Link2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Upload, FileText, Loader2, Check, CreditCard, Sparkles, ArrowRight, ArrowLeft, CheckCircle2, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching } from "@/hooks/useImportMatching";
+import { ReconcileStep } from "./import/ReconcileStep";
 
 interface ParsedTransaction {
   date: string;
@@ -135,6 +137,7 @@ export function ImportStatementModal({
   const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId } = useCompany();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [parsing, setParsing] = useState(false);
@@ -145,6 +148,17 @@ export function ImportStatementModal({
   const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
   const [targetCard, setTargetCard] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
+
+  // Wizard step
+  const [step, setStep] = useState<"preview" | "reconcile" | "summary">("preview");
+  const [importResult, setImportResult] = useState<{
+    linked: number;
+    created: number;
+    ignored: number;
+    failed: number;
+    dateFrom: string;
+    dateTo: string;
+  } | null>(null);
 
   // Per-row reconciliation action: "vincular" | "criar" | "ignorar"
   // Default is "criar" (legacy behavior). "vincular" is suggested when a match exists.
@@ -545,26 +559,28 @@ export function ImportStatementModal({
     setImporting(false);
 
     if (createOk) {
-      const parts: string[] = [];
-      if (linkOk > 0) parts.push(`${linkOk} vinculado${linkOk > 1 ? "s" : ""}`);
-      if (transactions.length > 0) parts.push(`${transactions.length} criado${transactions.length > 1 ? "s" : ""}`);
-      if (linkFail > 0) parts.push(`${linkFail} falhou(ram)`);
-      if (parts.length > 0) {
-        toast({
-          title: "Importação concluída",
-          description: parts.join(" · "),
-        });
-      }
-      setRows([]);
-      setFileName("");
-      setMatchActions({});
-      setMatchTargets({});
-      resetMatches();
-      onClose();
+      // Compute date range across all imported rows for the post-import filter
+      const allDates = selectedRows
+        .filter((r) => (matchActions[rows.indexOf(r)] || "criar") !== "ignorar")
+        .map((r) => r.date)
+        .sort();
+      const ignoredCount = selectedRows.filter(
+        (r) => matchActions[rows.indexOf(r)] === "ignorar"
+      ).length;
+
+      setImportResult({
+        linked: linkOk,
+        created: transactions.length,
+        ignored: ignoredCount,
+        failed: linkFail,
+        dateFrom: allDates[0] || "",
+        dateTo: allDates[allDates.length - 1] || "",
+      });
+      setStep("summary");
     }
   };
 
-  const handleClose = () => {
+  const resetAll = () => {
     setRows([]);
     setFileName("");
     setTargetBankAccount("");
@@ -573,8 +589,24 @@ export function ImportStatementModal({
     setDefaultCategory("");
     setMatchActions({});
     setMatchTargets({});
+    setImportResult(null);
+    setStep("preview");
     resetMatches();
+  };
+
+  const handleClose = () => {
+    resetAll();
     onClose();
+  };
+
+  const handleViewNew = () => {
+    const params = new URLSearchParams();
+    params.set("category", "__sem_categoria__");
+    if (importResult?.dateFrom) params.set("dateFrom", importResult.dateFrom);
+    if (importResult?.dateTo) params.set("dateTo", importResult.dateTo);
+    params.set("status", "Pago");
+    handleClose();
+    navigate(`/lancamentos?${params.toString()}`);
   };
 
   const formatCurrency = (v: number) =>
@@ -627,8 +659,23 @@ export function ImportStatementModal({
           </div>
         )}
 
-        {/* Preview */}
-        {rows.length > 0 && (
+        {/* Step indicator (when we have rows) */}
+        {rows.length > 0 && step !== "summary" && (
+          <div className="flex items-center gap-2 text-xs">
+            <Badge variant={step === "preview" ? "default" : "secondary"} className="text-[10px]">1. Conferir</Badge>
+            {importType === "debito" && targetBankAccount && (
+              <>
+                <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                <Badge variant={step === "reconcile" ? "default" : "secondary"} className="text-[10px]">2. Conciliar</Badge>
+              </>
+            )}
+            <ArrowRight className="h-3 w-3 text-muted-foreground" />
+            <Badge variant="outline" className="text-[10px]">Importar</Badge>
+          </div>
+        )}
+
+        {/* PREVIEW STEP */}
+        {rows.length > 0 && step === "preview" && (
           <>
             <div className="flex flex-wrap gap-3 items-end">
               {/* Account select */}
@@ -675,7 +722,6 @@ export function ImportStatementModal({
                       <SelectValue placeholder="Selecione o cartão" />
                     </SelectTrigger>
                     <SelectContent>
-                      {/* Parent cards first, then children grouped under them */}
                       {creditCards
                         .filter(c => !c.parent_card_id)
                         .map((parent) => {
@@ -691,7 +737,6 @@ export function ImportStatementModal({
                             ))
                           ];
                         })}
-                      {/* Orphan cards (parent_card_id set but parent not in list) */}
                       {creditCards
                         .filter(c => c.parent_card_id && !creditCards.some(p => p.id === c.parent_card_id))
                         .map(c => (
@@ -757,30 +802,19 @@ export function ImportStatementModal({
               {fileName} — {selectedRows.length} de {rows.length} selecionadas
             </div>
 
-            {/* Reconciliation summary (debito only) */}
             {importType === "debito" && targetBankAccount && (
-              <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs">
-                <div className="flex items-center gap-2 font-medium text-primary mb-1">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Conciliação inteligente
-                  {matchLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-                </div>
-                {(() => {
-                  const counts = { vincular: 0, criar: 0, ignorar: 0 };
-                  selectedRows.forEach((r) => {
-                    const i = rows.indexOf(r);
-                    const a = matchActions[i] || "criar";
-                    counts[a]++;
-                  });
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-2 text-xs flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                {matchLoading ? (
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    Procurando correspondências... <Loader2 className="h-3 w-3 animate-spin" />
+                  </span>
+                ) : (() => {
+                  const matched = selectedRows.filter((r) => matches[rows.indexOf(r)]?.best).length;
                   return (
-                    <div className="text-muted-foreground">
-                      <strong className="text-foreground">{counts.vincular}</strong> vincular ·{" "}
-                      <strong className="text-foreground">{counts.criar}</strong> criar novo ·{" "}
-                      <strong className="text-foreground">{counts.ignorar}</strong> ignorar
-                      {counts.vincular === 0 && !matchLoading && (
-                        <span className="ml-2 italic">Nenhuma correspondência com lançamentos pendentes encontrada.</span>
-                      )}
-                    </div>
+                    <span className="text-muted-foreground">
+                      <strong className="text-foreground">{matched}</strong> de {selectedRows.length} linhas têm correspondência no EVA — você vai conferir e conciliar na próxima etapa.
+                    </span>
                   );
                 })()}
               </div>
@@ -806,16 +840,10 @@ export function ImportStatementModal({
                     {isMultiCard && (
                       <th className="p-2 text-center font-medium">Cartão</th>
                     )}
-                    {importType === "debito" && targetBankAccount && (
-                      <th className="p-2 text-left font-medium">Ação</th>
-                    )}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, idx) => {
-                    const rowMatch = matches[idx];
-                    const action = matchActions[idx] || "criar";
-                    return (
+                  {rows.map((r, idx) => (
                     <tr key={idx} className={`border-b border-border/50 ${!r.selected ? "opacity-40" : ""}`}>
                       <td className="p-2">
                         <Checkbox checked={r.selected} onCheckedChange={() => toggleRow(idx)} />
@@ -853,59 +881,135 @@ export function ImportStatementModal({
                           )}
                         </td>
                       )}
-                      {importType === "debito" && targetBankAccount && (
-                        <td className="p-2 min-w-[200px]">
-                          <div className="flex flex-col gap-1">
-                            <Select
-                              value={action}
-                              onValueChange={(v) =>
-                                setMatchActions((prev) => ({ ...prev, [idx]: v as any }))
-                              }
-                            >
-                              <SelectTrigger className="h-7 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="vincular" disabled={!rowMatch?.best}>
-                                  <span className="flex items-center gap-1">
-                                    <Link2 className="h-3 w-3" /> Vincular
-                                  </span>
-                                </SelectItem>
-                                <SelectItem value="criar">Criar novo</SelectItem>
-                                <SelectItem value="ignorar">Ignorar</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            {action === "vincular" && rowMatch?.best && (
-                              <span className="text-[10px] text-muted-foreground truncate" title={rowMatch.best.candidate.description}>
-                                ✓ {rowMatch.best.candidate.description.slice(0, 30)}
-                                {rowMatch.best.candidate.description.length > 30 ? "…" : ""}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
                     </tr>
-                    );
-                  })}
+                  ))}
                 </tbody>
               </table>
             </div>
           </>
         )}
 
-        {rows.length > 0 && (
+        {/* RECONCILE STEP */}
+        {rows.length > 0 && step === "reconcile" && (() => {
+          const [accType, ...idParts] = targetBankAccount.split(":");
+          const accId = idParts.join(":");
+          const bankId = accType === "bank" ? accId : null;
+          const walletId = accType === "wallet" ? accId : null;
+          return (
+            <ReconcileStep
+              rows={rows}
+              matches={matches}
+              matchLoading={matchLoading}
+              matchActions={matchActions}
+              matchTargets={matchTargets}
+              onActionChange={(idx, action) =>
+                setMatchActions((prev) => ({ ...prev, [idx]: action }))
+              }
+              onTargetChange={(idx, txId) =>
+                setMatchTargets((prev) => ({ ...prev, [idx]: txId }))
+              }
+              bankAccountId={bankId}
+              walletId={walletId}
+            />
+          );
+        })()}
+
+        {/* SUMMARY STEP */}
+        {step === "summary" && importResult && (
+          <div className="flex flex-col items-center text-center gap-4 py-8">
+            <div className="rounded-full bg-primary/10 p-4">
+              <CheckCircle2 className="h-10 w-10 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Importação concluída</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                {importResult.linked > 0 && (
+                  <><strong>{importResult.linked}</strong> conciliado{importResult.linked > 1 ? "s" : ""} · </>
+                )}
+                <strong>{importResult.created}</strong> criado{importResult.created !== 1 ? "s" : ""}
+                {importResult.ignored > 0 && (
+                  <> · <strong>{importResult.ignored}</strong> ignorado{importResult.ignored > 1 ? "s" : ""}</>
+                )}
+                {importResult.failed > 0 && (
+                  <> · <span className="text-destructive">{importResult.failed} falhou(ram)</span></>
+                )}
+              </p>
+            </div>
+            {importResult.created > 0 ? (
+              <p className="text-xs text-muted-foreground max-w-md">
+                Os lançamentos novos foram criados sem categoria. Que tal categorizá-los agora?
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground max-w-md">
+                Tudo foi conciliado com lançamentos já existentes — não há novos para categorizar.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* FOOTER — step-aware */}
+        {rows.length > 0 && step === "preview" && (
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={handleClose}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleImport}
-              disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !isMultiCard && !targetCard)}
-              className="gap-2"
-            >
-              {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-              Importar {selectedRows.length} transações
-            </Button>
+            <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+            {importType === "debito" && targetBankAccount ? (
+              <Button
+                onClick={() => setStep("reconcile")}
+                disabled={selectedRows.length === 0 || matchLoading}
+                className="gap-2"
+              >
+                Próximo: Conciliar <ArrowRight className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleImport}
+                disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !isMultiCard && !targetCard)}
+                className="gap-2"
+              >
+                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Importar {selectedRows.length} transações
+              </Button>
+            )}
+          </DialogFooter>
+        )}
+
+        {rows.length > 0 && step === "reconcile" && (() => {
+          const counts = { vincular: 0, criar: 0, ignorar: 0 };
+          selectedRows.forEach((r) => {
+            const i = rows.indexOf(r);
+            const a = matchActions[i] || "criar";
+            counts[a]++;
+          });
+          const toImport = counts.vincular + counts.criar;
+          return (
+            <DialogFooter className="gap-2 sm:justify-between flex-col-reverse sm:flex-row">
+              <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
+                <ArrowLeft className="h-4 w-4" /> Voltar
+              </Button>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">
+                  <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
+                </span>
+                <Button
+                  onClick={handleImport}
+                  disabled={importing || toImport === 0}
+                  className="gap-2"
+                >
+                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Importar
+                </Button>
+              </div>
+            </DialogFooter>
+          );
+        })()}
+
+        {step === "summary" && importResult && (
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={handleClose}>Fechar</Button>
+            {importResult.created > 0 && (
+              <Button onClick={handleViewNew} className="gap-2">
+                Ver novos para categorizar <ArrowRight className="h-4 w-4" />
+              </Button>
+            )}
           </DialogFooter>
         )}
       </DialogContent>

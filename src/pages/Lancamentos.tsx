@@ -93,12 +93,15 @@ export default function Lancamentos() {
     const dateToParam = searchParams.get("dateTo");
 
     if (categoryParam || typeParam || statusParam || dateFromParam || dateToParam) {
-      const matchedCat = categories.find(
-        (c) => c.name === categoryParam && !c.parent_id
-      );
+      const isUncategorizedSentinel = categoryParam === "__sem_categoria__";
+      const matchedCat = !isUncategorizedSentinel
+        ? categories.find((c) => c.name === categoryParam && !c.parent_id)
+        : null;
       setFilters((prev) => ({
         ...prev,
-        categoryId: matchedCat?.id || prev.categoryId,
+        categoryId: isUncategorizedSentinel
+          ? "__sem_categoria__"
+          : matchedCat?.id || prev.categoryId,
         type: (typeParam as "receita" | "despesa") || prev.type,
         status: (statusParam as "Pago" | "Pendente") || prev.status,
         dateFrom: dateFromParam || prev.dateFrom,
