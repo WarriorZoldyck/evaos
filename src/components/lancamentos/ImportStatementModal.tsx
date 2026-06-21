@@ -559,26 +559,28 @@ export function ImportStatementModal({
     setImporting(false);
 
     if (createOk) {
-      const parts: string[] = [];
-      if (linkOk > 0) parts.push(`${linkOk} vinculado${linkOk > 1 ? "s" : ""}`);
-      if (transactions.length > 0) parts.push(`${transactions.length} criado${transactions.length > 1 ? "s" : ""}`);
-      if (linkFail > 0) parts.push(`${linkFail} falhou(ram)`);
-      if (parts.length > 0) {
-        toast({
-          title: "Importação concluída",
-          description: parts.join(" · "),
-        });
-      }
-      setRows([]);
-      setFileName("");
-      setMatchActions({});
-      setMatchTargets({});
-      resetMatches();
-      onClose();
+      // Compute date range across all imported rows for the post-import filter
+      const allDates = selectedRows
+        .filter((r) => (matchActions[rows.indexOf(r)] || "criar") !== "ignorar")
+        .map((r) => r.date)
+        .sort();
+      const ignoredCount = selectedRows.filter(
+        (r) => matchActions[rows.indexOf(r)] === "ignorar"
+      ).length;
+
+      setImportResult({
+        linked: linkOk,
+        created: transactions.length,
+        ignored: ignoredCount,
+        failed: linkFail,
+        dateFrom: allDates[0] || "",
+        dateTo: allDates[allDates.length - 1] || "",
+      });
+      setStep("summary");
     }
   };
 
-  const handleClose = () => {
+  const resetAll = () => {
     setRows([]);
     setFileName("");
     setTargetBankAccount("");
@@ -587,8 +589,24 @@ export function ImportStatementModal({
     setDefaultCategory("");
     setMatchActions({});
     setMatchTargets({});
+    setImportResult(null);
+    setStep("preview");
     resetMatches();
+  };
+
+  const handleClose = () => {
+    resetAll();
     onClose();
+  };
+
+  const handleViewNew = () => {
+    const params = new URLSearchParams();
+    params.set("category", "__sem_categoria__");
+    if (importResult?.dateFrom) params.set("dateFrom", importResult.dateFrom);
+    if (importResult?.dateTo) params.set("dateTo", importResult.dateTo);
+    params.set("status", "Pago");
+    handleClose();
+    navigate(`/lancamentos?${params.toString()}`);
   };
 
   const formatCurrency = (v: number) =>
