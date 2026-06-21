@@ -529,6 +529,9 @@ export function ImportStatementModal({
 
       const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
 
+      const realIdx = rows.indexOf(r);
+      const rowCat = rowCategories[realIdx] || catName;
+
       return {
         description: r.description,
         amount: r.amount,
@@ -536,7 +539,7 @@ export function ImportStatementModal({
         payment_date: billingDate,
         competence_date: competenceDate,
         status: "Pago" as const,
-        category: catName,
+        category: rowCat,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
