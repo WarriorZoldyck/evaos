@@ -153,7 +153,7 @@ Return ONLY a valid JSON array of transaction objects. Each object must have:
 - "cardholder_name": full name of the cardholder of this transaction (from the section header), or null
 - "statement_due_date": "YYYY-MM-DD", repeated on every object, or null
 - "statement_close_date": "YYYY-MM-DD", repeated on every object, or null
-- "statement_total": total value of THIS statement (R$ total da fatura), repeated on every object, or null
+- "statement_total": total value of THIS statement (R$ total da fatura / "Valor total a pagar" / "Total da fatura atual"), repeated on every object, or null. Must be a plain decimal number in reais with a DOT as decimal separator (e.g. 8850.02), NEVER use thousand separators or comma (8.850,02 is WRONG, send 8850.02). If the bill says "R$ 8.850,02" you MUST send 8850.02.
 
 CRITICAL RULES:
 - Statements often have MULTIPLE cards/cardholders (titular + adicionais). Each section starts with a header like "NOME (final 1234)". Tag every transaction with its card_digits AND cardholder_name.
@@ -373,7 +373,20 @@ serve(async (req) => {
       }
     }
 
-    const statementTotal = transactions.find((t) => t.statement_total !== undefined)?.statement_total ?? null;
+    let statementTotal = transactions.find((t) => t.statement_total !== undefined)?.statement_total ?? null;
+
+    // Sanity check: if the AI returned a statement_total that's >100× the sum of line amounts,
+    // it almost certainly misread the number (e.g. 885002.00 instead of 8850.02). Drop it.
+    if (statementTotal !== null) {
+      const sumAmounts = transactions.reduce((acc, t) => acc + (t.amount || 0), 0);
+      if (sumAmounts > 0 && statementTotal > sumAmounts * 100) {
+        console.warn(
+          `Discarding implausible statement_total=${statementTotal} (sum of amounts=${sumAmounts.toFixed(2)})`
+        );
+        statementTotal = null;
+      }
+    }
+
 
     return new Response(
       JSON.stringify({ transactions, count: transactions.length, statement_total: statementTotal }),

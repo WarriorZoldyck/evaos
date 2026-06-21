@@ -1,59 +1,38 @@
-# Fatura R$ 10.865,52 — diagnóstico e correção
+# Corrigir o campo "Total informado pelo banco" no Importador
 
-## Diagnóstico (já validado contra a fatura)
+## Diagnóstico
 
-Fatura tem 5 titulares (1973, 6035, 9615, 7940, 7355) todos colapsados sob MASTERCARD BLACK no sistema. Diferença de R$ 541,89:
+Na tela enviada, o usuário digitou `885002,00` no campo "Total informado pelo banco". O parser lê esse valor como **R$ 885.002,00**, comparando contra o total real importado (**R$ 8.825,02**) e gerando a "divergência" gigante de **R$ 876.176,98**. O bug é de UX/entrada de dado, não de cálculo:
 
-**Extras no sistema (R$ 604,50):**
-- "Pneus moto" R$ 549,60 duplicado (2 registros idênticos parcela 1/5).
-- "Empório Moscato" R$ 54,90 (29/04) não consta na fatura.
+1. O parser do PDF (`parse-bank-statement`) **já extrai** o `statement_total` da fatura e o backend já devolve esse valor — o `ImportStatementModal` armazena em `statementTotal` (linha 199/412–415), mas **nunca preenche o input** `statementTotalInput`. O usuário precisa redigitar à mão, e erra a formatação.
+2. O input aceita texto livre sem máscara. Quem digita `885002,00` esperando "oito mil oitocentos e cinquenta e dois reais" não recebe nenhum feedback visual.
+3. Mesmo quando o parser falha em pegar o total, o campo fica em branco — sem placeholder claro do formato esperado.
 
-**Ausentes no sistema (R$ 62,60):**
-- "Carne de Sol 1008" R$ 5,00 (final 7940 — Vitoria).
-- IOF internacional R$ 57,60 (GetYourGuide).
+## O que será feito
 
-604,50 − 62,60 = 541,90 ≈ 541,89 ✅
+### 1. Auto-preencher o input a partir do total detectado pelo parser
+- Em `src/components/lancamentos/ImportStatementModal.tsx`, quando `parsedStatementTotal` for definido (linha ~412), também setar `statementTotalInput` com o valor formatado em pt-BR (ex.: `8.850,02`).
+- Quando o usuário trocar de arquivo / resetar (linha ~799), limpar `statementTotalInput` também.
+- Mostrar uma badge discreta `(detectado da fatura)` ao lado do label quando o valor veio do parser, para o usuário saber que pode confiar ou editar.
 
----
+### 2. Máscara/normalização no input
+- Trocar o `<input>` por um campo controlado que:
+  - Aceita apenas dígitos, vírgula e ponto;
+  - Em `onBlur`, normaliza para o formato pt-BR (`1.234,56`) usando `toLocaleString("pt-BR", { minimumFractionDigits: 2 })`;
+  - Mantém parsing atual (remove `.`, troca `,` por `.`) — já correto.
+- Placeholder mais claro: `Ex.: 8.850,02`.
+- Pequena dica visual quando o número parecer fora de escala (>10× o total importado): tooltip "Verifique o separador decimal" — sem bloquear, só alertar.
 
-## Passo 1 — Corrigir dados do usuário (espclin@hotmail.com)
+### 3. Reforçar extração do total no parser
+- No prompt do edge function `parse-bank-statement/index.ts`, deixar explícito que o `statement_total` deve ser o "Total da fatura atual" / "Valor total a pagar", em reais, **número decimal com ponto** (ex.: `8850.02`), nunca com separadores de milhar.
+- Adicionar sanity check no servidor: se `statement_total` for >100× a soma de `amount` dos itens, descartar (provavelmente leitura errada de número).
 
-Script service-role (SQL via insert tool):
-- DELETE id `b337e07a-f48f-4a08-87db-df1a45aa90d0` (duplicata Pneus moto).
-- DELETE id `a782a66a-9b11-4b31-92cc-c9b8cbca8828` (Empório Moscato 54,90 — se o usuário confirmar, mas como bate exato com a diferença, vou prosseguir com a exclusão e avisá-lo).
-- INSERT "Carne de Sol 1008" R$ 5,00, despesa, status Pendente, competence_date 2026-04-16, payment_date 2026-05-21, credit_card_id 1973.
-- INSERT "IOF Internacional - GetYourGuide" R$ 57,60, despesa, status Pendente, competence_date 2026-05-14, payment_date 2026-05-21, credit_card_id 1973.
+## Arquivos alterados
 
-Total final esperado: R$ 10.865,52.
+- `src/components/lancamentos/ImportStatementModal.tsx` — auto-fill, máscara, badge "detectado".
+- `supabase/functions/parse-bank-statement/index.ts` — clareza no prompt + sanity check do total.
 
----
+## Fora do escopo
 
-## Passo 2 — Endurecer o parser `parse-bank-statement`
-
-Edge function `supabase/functions/parse-bank-statement/index.ts`:
-
-1. **Capturar IOF internacional**: detectar linha "Repasse de IOF em R$ <valor>" no bloco internacional e emitir como lançamento separado (descrição "IOF Internacional - <merchant>", data = data da compra internacional).
-2. **Capturar lançamentos internacionais** com a data da linha "DATA ESTABELECIMENTO" do bloco internacional (hoje cai na data do fechamento).
-3. **Detectar cartões adicionais** (`NOME (final XXXX)` headers). Para cada subtotal, etiquetar as transações com `additional_cardholder` na resposta — o cliente pode prefixar a descrição com `[final XXXX]` para o usuário identificar e (futuramente) sugerir criação de cartão-filho.
-4. **Dedup dentro do mesmo extrato** já existe em `ImportStatementModal.tsx`; ampliar a chave para também colapsar parcelas com mesmo `installment_number/installments_total + amount + base_description` (cobre o caso "Pneus moto 1/5 × 2").
-
----
-
-## Passo 3 — Validação pós-conciliação na UI
-
-Em `ImportStatementModal.tsx` (etapa `reconcile`):
-
-1. Adicionar campo opcional **"Total informado na fatura (R$)"** acima do footer da etapa de conciliação — usuário cola o total que o banco informou.
-2. No footer, mostrar `Total no extrato após import: X · Diferença vs fatura: Y`.
-3. Se `|diferença| > 1,00`, mostrar `Alert` vermelho **bloqueando o botão Importar** até o usuário marcar "Entendi a divergência, importar mesmo assim". Mensagem orienta a revisar linhas duplicadas/ausentes.
-4. Tentar auto-preencher o campo a partir do parser quando ele detectar "Total desta fatura" no PDF (já temos `statement_total` em vários parsers).
-
----
-
-## Arquivos afetados
-
-- `supabase/functions/parse-bank-statement/index.ts` — passos 2.1, 2.2, 2.3
-- `src/components/lancamentos/ImportStatementModal.tsx` — passos 2.4, 3
-- SQL data fix (via insert tool) — passo 1
-
-Sem mudanças de schema, RLS ou novas tabelas.
+- Não mexe na lógica de matching, de criação de lançamentos, nem no schema/RLS.
+- Não altera o comportamento da checkbox "Entendi a divergência" — apenas reduz a chance de cair nela por erro de digitação.
