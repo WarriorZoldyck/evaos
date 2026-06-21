@@ -1,46 +1,76 @@
-## Problemas identificados na importação de espclin@hotmail.com
+## Revisão completa do modal de Importação / Conciliação
 
-**1. Status incorreto (Realizado em vez de Projetado)**
-No fluxo de importação por cartão de crédito (`ImportStatementModal.tsx`, linha 576), todas as transações criadas estão sendo gravadas com `status: "Pago"`. Para compras de cartão de crédito, o correto é `status: "Pendente"` (Projetado) — elas só viram "Pago" quando a fatura for paga via fluxo "Pagar Fatura". Inclusive o formulário manual de novo lançamento por cartão já default para "Pendente" (linha 355 do `TransactionFormModal.tsx`).
-
-**2. Etapa Conciliar/Categorizar pulada no cartão**
-Hoje o wizard só mostra `1. Conferir → 2. Importar` para cartão (a etapa "Conciliar" é pulada quando `importType === "cartao"`). Resultado: o usuário não vê a coluna de **Categoria sugerida** (histórico/IA) nem pode revisar categorias antes de criar. Isso anula o benefício da categorização automática que foi implementada.
+Cobrindo todos os pontos: botão "Manter" + tooltip explicativo do "X", verificar/eliminar duplicação aparente, textos de ajuda em cada bloco, auto-propagação de categoria para linhas iguais, e categorização hierárquica (categoria → subcategoria → sub-subcategoria).
 
 ---
 
-## Mudanças propostas
+### 1. Ações na seção "Compras já lançadas no cartão"
 
-### A) Status correto para cartão de crédito
-Em `ImportStatementModal.tsx`, ao montar as transações novas:
-- Se `importType === "cartao"` → `status: "Pendente"` (Projetado).
-- Caso contrário (débito/conta) → manter `status: "Pago"` como hoje.
+Hoje só existe **X** (que cria uma cópia nova) e o usuário não entende. Manter o **X** como ação avançada e adicionar a ação principal "Manter existente":
 
-Efeitos colaterais a ajustar:
-- O filtro pós-import ("Ver novos para categorizar") hoje força `status=Pago`. Quando a importação for de cartão, redirecionar com `status=Pendente` (ou `status=todos`) para o usuário encontrar os lançamentos recém-criados.
-- Mensagem de sucesso/resumo: trocar "lançamentos realizados" por "lançamentos projetados" quando for cartão.
+```
+[ Trocar ]  [ ✓ Manter existente ]  [ ✕ ]
+```
 
-### B) Habilitar etapa "Conciliar" também para cartão (modo categorização)
-Reaproveitar o passo 2 do wizard para cartão, mas em modo simplificado:
-- **Sem busca de pendentes para conciliar** (compras de cartão não têm contrapartida pendente em conta corrente). Não exibir a seção "Correspondências encontradas".
-- **Exibir apenas a seção "Criar no sistema"** com a tabela já existente do `ReconcileStep`, incluindo:
-  - Coluna **Categoria sugerida** (badge "📚 histórico" ou "✨ IA").
-  - Dropdown editável para o usuário ajustar antes de importar.
-- Footer: "Voltar | Importar N transações como Projetadas".
+- **✓ Manter existente** (novo, ação padrão sugerida, verde): ação = `ignorar` da linha do extrato. O lançamento que já existe no sistema **permanece intacto**, e a linha do extrato é descartada (vai para "Ignorados", restaurável). Sem duplicata.
+- **✕** (mantido como hoje): ação = `criar`. Desfaz o vínculo e importa a linha do extrato como **um lançamento novo, além do que já existe** — útil só se o usuário identificar que são compras diferentes com mesmo valor/data. Adicionar `<Tooltip>` no hover/foco com texto claro: *"Desfaz o vínculo e cria um lançamento NOVO a partir da linha do extrato. O lançamento que já existe no sistema continua existindo — pode gerar duplicata. Use só se for realmente uma segunda compra."*
+- Adicionar um pequeno bloco informativo (Alert/box discreto) acima da lista da seção explicando: *"Encontramos esses lançamentos que você já tinha registrado. Por padrão eles serão **vinculados** (status mantido). Use ✓ Manter existente para descartar a linha do extrato sem criar nada novo, ou ✕ para forçar a criação de um lançamento adicional."*
 
-Para isso:
-- Remover o early-skip que pula direto de `preview → summary` no cartão.
-- Passar uma flag `mode: "card" | "debit"` para `ReconcileStep` que oculta o bloco de matches e o título "Conciliar", mostrando algo como "Revisar categorias antes de importar".
-- Disparar `useCategorySuggestions` no momento da transição `preview → reconcile` para cartão também (hoje já roda, mas a UI nunca é mostrada).
+### 2. Box explicativo em cada seção
 
-### C) Texto do stepper
-Renomear chips quando for cartão: `1. Conferir → 2. Categorizar → 3. Importar` (em vez de "Conciliar"), deixando claro o que acontece nessa etapa para faturas.
+Adicionar um `<Alert>` curto, com ícone, no topo de cada uma das três seções:
 
----
+- **Compras já lançadas no cartão** — *"Linhas do extrato que casam com lançamentos já existentes. Vínculo padrão = não duplica nada."*
+- **Criar no sistema** — *"Linhas novas do extrato que não tinham correspondente. Serão importadas como projetadas até a fatura ser paga. Defina categoria (e subcategorias) antes de importar."*
+- **Ignorados** — *"Linhas descartadas. Não entram na importação. Clique em Restaurar para trazer de volta."*
 
-## Arquivos afetados
-- `src/components/lancamentos/ImportStatementModal.tsx` — status condicional, não pular reconcile para cartão, ajustar filtro pós-import e textos.
-- `src/components/lancamentos/import/ReconcileStep.tsx` — aceitar prop `mode` para esconder seção de conciliação no modo cartão e ajustar título/labels.
+### 3. Verificação de duplicação entre seções
 
-## Fora de escopo
-- Mudar lógica de fatura / pagamento de fatura.
-- Reprocessar a importação já feita pelo espclin@hotmail.com (se quiser, posso rodar um script de service-role separado para virar os 59 lançamentos importados de "Pago" para "Pendente").
+Confirmação técnica: hoje cada linha (`i`) só aparece em **uma** seção, porque `matchedRows`/`newRows`/`ignoredRows` são partições disjuntas baseadas em `matchActions[i]`. A sensação de duplicata vem de:
+
+a) **Multi-cartão:** o hook `useImportMatching` faz `setMatches(result)` a cada chamada por grupo, sobrescrevendo o estado e fazendo linhas de cartões anteriores caírem em "Criar no sistema". Corrigir: a função externa retornará todos os matches consolidados e o modal fará um único `setMatches` com o merge dos grupos (acumulando em vez de sobrescrever).
+b) **Dedup visual de extrato:** dentro de "Criar no sistema", agrupar linhas idênticas (mesma descrição normalizada + valor + tipo) com um contador `×N` opcional — sem fundir, mas alertando que são repetidas. Permite revisão rápida.
+
+### 4. Auto-propagação de categoria para linhas iguais
+
+Quando o usuário escolher categoria (ou sub/sub-sub) em uma linha de "Criar no sistema":
+
+- Identificar todas as outras linhas em "Criar no sistema" cuja **descrição normalizada** (lowercase, sem acento, sem múltiplos espaços) **e** valor absoluto sejam iguais e que ainda **não tenham categoria definida manualmente pelo usuário** (só sugestão da IA/histórico ou vazio).
+- Aplicar a mesma `category` + `subcategory` + `subcategory2` nelas.
+- Mostrar um toast discreto: *"Categoria aplicada a mais N lançamentos iguais. Desfazer"* — clicando em Desfazer, volta as N linhas ao estado anterior.
+- Marcar internamente cada linha com `categoryTouched` para distinguir "sugestão automática" de "escolha manual" (sugestão pode ser sobrescrita pela propagação; escolha manual nunca é).
+
+### 5. Categorização hierárquica (sub e sub-sub)
+
+Substituir o `Select` único da coluna "Categoria sugerida" por **três selects encadeados** (mesma lógica de `TransactionFormModal`):
+
+1. **Categoria** — itens com `parent_id === null`.
+2. **Subcategoria** — filhas da categoria selecionada (oculto se não houver).
+3. **Sub-subcategoria** — filhas da subcategoria selecionada (oculto se não houver).
+
+- A sugestão da IA/histórico hoje retorna um nome único. No client, ao receber a sugestão, resolvemos o nome contra todos os níveis e preenchemos os ancestrais automaticamente (busca por nome normalizado em qualquer `parent_id`). Mantém o selo "baseado no histórico" / "sugerido pela IA".
+- Layout compacto na coluna (3 selects empilhados, `h-7 text-xs`), com placeholders "Categoria", "Subcategoria", "Sub-sub" para caber sem quebrar a tabela.
+- Persistir os 3 campos no insert (`category`, `subcategory`, `subcategory2`).
+
+### 6. Estado e tipos
+
+- `rowCategories` em `ImportStatementModal` passa a ser `Record<number, { category: string; subcategory?: string; subcategory2?: string; touched?: boolean }>`.
+- `onCategoryChange(i, payload)` em `ReconcileStep` recebe objeto, não string.
+- `handleImport` envia os três campos no `insert`.
+
+### Arquivos afetados
+
+- `src/components/lancamentos/import/ReconcileStep.tsx`
+  - Novo botão **Manter existente** + Tooltip explicativo do **X**.
+  - `<Alert>` em cada seção.
+  - 3 selects encadeados de categoria.
+  - Agrupamento visual `×N` para linhas idênticas em "Criar no sistema".
+- `src/components/lancamentos/ImportStatementModal.tsx`
+  - `rowCategories` com 3 níveis + flag `touched`.
+  - Propagação de categoria para linhas iguais + toast com "Desfazer".
+  - Merge de `matches` por grupo de cartão (sem sobrescrever).
+  - Insert grava `subcategory` e `subcategory2`.
+- `src/hooks/useImportMatching.ts`
+  - Suportar merge (aceitar um `mergeWith` ou apenas devolver e deixar o modal compor) para não sobrescrever entre grupos de cartão.
+
+Sem mudanças de banco, RLS, edge functions ou na função `suggest-categories`.
