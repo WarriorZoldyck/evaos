@@ -373,7 +373,35 @@ export function ImportStatementModal({
         };
       });
 
-      setRows(parsed);
+      // Intra-statement dedup: collapse rows that differ only by whitespace/punctuation
+      // (some bank PDFs emit the same purchase twice with subtle spacing differences).
+      // Only collapse when date + amount + type + normalized description all match,
+      // and the row has no series_id (avoid touching legitimate installments).
+      const seen = new Map<string, number>();
+      const deduped: ParsedTransaction[] = [];
+      let dedupedCount = 0;
+      for (const r of parsed) {
+        const normDesc = (r.description || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, "");
+        const key = `${r.date}|${Math.abs(r.amount).toFixed(2)}|${r.type}|${normDesc}|${r.series_id || ""}|${r.installment_number || ""}`;
+        if (seen.has(key)) {
+          dedupedCount++;
+          continue;
+        }
+        seen.set(key, deduped.length);
+        deduped.push(r);
+      }
+      if (dedupedCount > 0) {
+        toast({
+          title: `${dedupedCount} linha(s) duplicada(s) removida(s) do extrato`,
+          description: "Encontramos lançamentos idênticos repetidos no arquivo.",
+        });
+      }
+
+      setRows(deduped);
 
       const detectedCardIds = new Set(parsed.map((r) => r.matched_card_id).filter(Boolean));
       const resolvedDetectedCards = creditCards.filter((c) => detectedCardIds.has(c.id));
