@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, Link2, Search, X, ArrowLeftRight, Sparkles, Loader2 } from "lucide-react";
+import { Check, Link2, Search, X, ArrowLeftRight, Sparkles, Loader2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,9 +8,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ManualMatchModal } from "@/components/conciliacao/ManualMatchModal";
 import type { RowMatch } from "@/hooks/useImportMatching";
-import type { CandidateTx } from "@/lib/import/matching";
+import type { SuggestionSource } from "@/hooks/useCategorySuggestions";
 
 export interface ParsedRow {
   date: string;
@@ -30,6 +37,11 @@ interface ReconcileStepProps {
   onTargetChange: (idx: number, txId: string) => void;
   bankAccountId: string | null;
   walletId: string | null;
+  categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+  rowCategories: Record<number, string>;
+  suggestions: Record<number, SuggestionSource>;
+  suggestLoading: boolean;
+  onCategoryChange: (idx: number, name: string) => void;
 }
 
 const fmt = (n: number) =>
