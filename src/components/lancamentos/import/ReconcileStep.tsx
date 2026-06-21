@@ -140,7 +140,8 @@ export function ReconcileStep({
       </div>
 
       <div className="flex-1 overflow-auto space-y-4 pr-1">
-        {/* SECTION A — Matches */}
+        {/* SECTION A — Matches (debit only) */}
+        {!isCardMode && (
         <section>
           <header className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold flex items-center gap-2">
