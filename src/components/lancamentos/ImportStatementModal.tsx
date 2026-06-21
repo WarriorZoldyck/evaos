@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from "react";
-import { Upload, FileText, Loader2, Check, CreditCard, Sparkles, Link2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Upload, FileText, Loader2, Check, CreditCard, Sparkles, ArrowRight, ArrowLeft, CheckCircle2, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching } from "@/hooks/useImportMatching";
+import { ReconcileStep } from "./import/ReconcileStep";
 
 interface ParsedTransaction {
   date: string;
