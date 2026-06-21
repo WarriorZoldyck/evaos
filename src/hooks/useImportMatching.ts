@@ -21,12 +21,8 @@ function shiftISO(iso: string, days: number): string {
 
 /**
  * Hook to find best-match suggestions for parsed statement lines against
- * pending transactions on a given bank account.
- *
- * Notes for v1:
- *  - Only matches against status='Pendente' real DB rows (no recurring projections).
- *  - Uses payment_date as the date axis.
- *  - Excludes credit-card transactions (only debit-in-account matches).
+ * existing transactions (Pendente or Pago) for a given destination —
+ * either a bank account/wallet (debit) or a credit card.
  */
 export function useImportMatching() {
   const [loading, setLoading] = useState(false);
@@ -36,9 +32,10 @@ export function useImportMatching() {
     async (
       lines: StatementLine[],
       bankAccountId: string | null,
-      walletId: string | null
+      walletId: string | null,
+      creditCardId: string | null = null,
     ) => {
-      if (lines.length === 0 || (!bankAccountId && !walletId)) {
+      if (lines.length === 0 || (!bankAccountId && !walletId && !creditCardId)) {
         setMatches({});
         return {};
       }
@@ -57,14 +54,18 @@ export function useImportMatching() {
           .select(
             "id, description, amount, payment_date, type, status, category, contact_name, series_id, installment_number, installments_total, credit_card_id"
           )
-          .eq("status", "Pendente")
-          .is("credit_card_id", null)
+          .in("status", ["Pendente", "Pago"])
           .gte("payment_date", minDate)
           .lte("payment_date", maxDate)
           .in("amount", uniqAmounts);
 
-        if (bankAccountId) query = query.eq("bank_account_id", bankAccountId);
-        if (walletId) query = query.eq("wallet_id", walletId);
+        if (creditCardId) {
+          query = query.eq("credit_card_id", creditCardId);
+        } else {
+          query = query.is("credit_card_id", null);
+          if (bankAccountId) query = query.eq("bank_account_id", bankAccountId);
+          if (walletId) query = query.eq("wallet_id", walletId);
+        }
 
         const { data, error } = await query.limit(1000);
         if (error) {

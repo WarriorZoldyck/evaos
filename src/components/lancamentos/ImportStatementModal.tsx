@@ -394,40 +394,104 @@ export function ImportStatementModal({
   };
 
 
-  // Trigger reconciliation matching when in "debito" mode with destination set
+  // Trigger reconciliation matching for both debit accounts and credit cards
   useEffect(() => {
-    if (importType !== "debito" || rows.length === 0 || !targetBankAccount) {
+    if (rows.length === 0) {
       resetMatches();
       return;
     }
-    const [accType, ...idParts] = targetBankAccount.split(":");
-    const accId = idParts.join(":");
-    const bankId = accType === "bank" ? accId : null;
-    const walletId = accType === "wallet" ? accId : null;
 
-    const lines = rows.map((r) => ({
-      date: r.date,
-      description: r.description,
-      amount: Math.abs(r.amount),
-      type: r.type,
-    }));
+    // DEBIT MODE — match against bank account / wallet
+    if (importType === "debito") {
+      if (!targetBankAccount) {
+        resetMatches();
+        return;
+      }
+      const [accType, ...idParts] = targetBankAccount.split(":");
+      const accId = idParts.join(":");
+      const bankId = accType === "bank" ? accId : null;
+      const walletId = accType === "wallet" ? accId : null;
 
-    findMatches(lines, bankId, walletId).then((res) => {
-      // Pre-set actions: rows with a match default to "vincular", others to "criar"
-      const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
-      const nextTargets: Record<number, string> = {};
-      rows.forEach((_, i) => {
-        if (res[i]?.best) {
-          nextActions[i] = "vincular";
-          nextTargets[i] = res[i].best!.candidate.id;
-        } else {
-          nextActions[i] = "criar";
-        }
+      const lines = rows.map((r) => ({
+        date: r.date,
+        description: r.description,
+        amount: Math.abs(r.amount),
+        type: r.type,
+      }));
+
+      findMatches(lines, bankId, walletId, null).then((res) => {
+        const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
+        const nextTargets: Record<number, string> = {};
+        rows.forEach((_, i) => {
+          if (res[i]?.best) {
+            nextActions[i] = "vincular";
+            nextTargets[i] = res[i].best!.candidate.id;
+          } else {
+            nextActions[i] = "criar";
+          }
+        });
+        setMatchActions(nextActions);
+        setMatchTargets(nextTargets);
       });
-      setMatchActions(nextActions);
-      setMatchTargets(nextTargets);
-    });
-  }, [importType, targetBankAccount, rows, findMatches, resetMatches]);
+      return;
+    }
+
+    // CARD MODE — match against credit_card_id (single or per-row for multi-card)
+    if (importType === "cartao") {
+      const hasDestination = isMultiCard
+        ? rows.some((r) => r.matched_card_id)
+        : !!targetCard;
+      if (!hasDestination) {
+        resetMatches();
+        return;
+      }
+
+      // Group rows by card id
+      const groups = new Map<string, number[]>();
+      rows.forEach((r, i) => {
+        const cardId = isMultiCard ? r.matched_card_id : targetCard;
+        if (!cardId) return;
+        const arr = groups.get(cardId) || [];
+        arr.push(i);
+        groups.set(cardId, arr);
+      });
+
+      Promise.all(
+        Array.from(groups.entries()).map(async ([cardId, indices]) => {
+          const lines = indices.map((i) => {
+            const r = rows[i];
+            // For cards, match on the billing/payment date — manual launches use due date
+            const matchDate = r.statement_due_date || r.resolved_competence_date || r.date;
+            return {
+              date: matchDate,
+              description: r.description,
+              amount: Math.abs(r.amount),
+              type: r.type,
+            };
+          });
+          const res = await findMatches(lines, null, null, cardId);
+          return indices.map((rowIdx, localIdx) => ({ rowIdx, match: res[localIdx] }));
+        }),
+      ).then((groupResults) => {
+        const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
+        const nextTargets: Record<number, string> = {};
+        rows.forEach((_, i) => {
+          nextActions[i] = "criar";
+        });
+        groupResults.flat().forEach(({ rowIdx, match }) => {
+          if (match?.best) {
+            nextActions[rowIdx] = "vincular";
+            nextTargets[rowIdx] = match.best.candidate.id;
+          }
+        });
+        setMatchActions(nextActions);
+        setMatchTargets(nextTargets);
+      });
+      return;
+    }
+
+    resetMatches();
+  }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
 
   // Trigger AI category suggestions once rows + categories are available.
   // Pre-applies suggestion to rowCategories so the user just edits exceptions.
