@@ -1047,7 +1047,11 @@ export function ImportStatementModal({
               </Button>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">
-                  <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
+                  {importType === "cartao" ? (
+                    <><strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar</>
+                  ) : (
+                    <><strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar</>
+                  )}
                 </span>
                 <Button
                   onClick={handleImport}
@@ -1055,7 +1059,7 @@ export function ImportStatementModal({
                   className="gap-2"
                 >
                   {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  Importar
+                  {importType === "cartao" ? `Importar ${toImport} como projetadas` : "Importar"}
                 </Button>
               </div>
             </DialogFooter>
