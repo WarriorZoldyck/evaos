@@ -403,7 +403,7 @@ export function ImportStatementModal({
 
       setRows(deduped);
 
-      const detectedCardIds = new Set(parsed.map((r) => r.matched_card_id).filter(Boolean));
+      const detectedCardIds = new Set(deduped.map((r) => r.matched_card_id).filter(Boolean));
       const resolvedDetectedCards = creditCards.filter((c) => detectedCardIds.has(c.id));
 
       if (detectedCardIds.size >= 1) {
