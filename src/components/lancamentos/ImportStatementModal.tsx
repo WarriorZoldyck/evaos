@@ -778,7 +778,7 @@ export function ImportStatementModal({
               <>
                 <ArrowRight className="h-3 w-3 text-muted-foreground" />
                 <Badge variant={step === "reconcile" ? "default" : "secondary"} className="text-[10px]">
-                  {importType === "cartao" ? "2. Categorizar" : "2. Conciliar"}
+                  {importType === "cartao" ? "2. Conciliar & Categorizar" : "2. Conciliar"}
                 </Badge>
               </>
             )}
@@ -1067,7 +1067,7 @@ export function ImportStatementModal({
                   disabled={selectedRows.length === 0 || matchLoading}
                   className="gap-2"
                 >
-                  {importType === "cartao" ? "Próximo: Categorizar" : "Próximo: Conciliar"} <ArrowRight className="h-4 w-4" />
+                  {importType === "cartao" ? "Próximo: Conciliar & Categorizar" : "Próximo: Conciliar"} <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
                 <Button
