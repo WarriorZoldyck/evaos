@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   pickBestMatch,
   DATE_WINDOW_DAYS,
+  CARD_DATE_WINDOW_DAYS,
+  AMOUNT_TOLERANCE,
   type CandidateTx,
   type StatementLine,
   type ScoredCandidate,
@@ -10,7 +12,7 @@ import {
 
 export interface RowMatch {
   best: ScoredCandidate | null;
-  alternatives: CandidateTx[]; // other candidates (max 5)
+  alternatives: CandidateTx[];
 }
 
 function shiftISO(iso: string, days: number): string {
@@ -19,11 +21,6 @@ function shiftISO(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/**
- * Hook to find best-match suggestions for parsed statement lines against
- * existing transactions (Pendente or Pago) for a given destination —
- * either a bank account/wallet (debit) or a credit card.
- */
 export function useImportMatching() {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<Record<number, RowMatch>>({});
@@ -41,25 +38,27 @@ export function useImportMatching() {
         return {};
       }
 
-
       setLoading(true);
       try {
+        const isCard = !!creditCardId;
+        const window = isCard ? CARD_DATE_WINDOW_DAYS : DATE_WINDOW_DAYS;
         const dates = lines.map((l) => l.date).sort();
-        const minDate = shiftISO(dates[0], -DATE_WINDOW_DAYS);
-        const maxDate = shiftISO(dates[dates.length - 1], DATE_WINDOW_DAYS);
+        const minDate = shiftISO(dates[0], -window);
+        const maxDate = shiftISO(dates[dates.length - 1], window);
 
-        // Get unique amounts to narrow the query
-        const uniqAmounts = Array.from(new Set(lines.map((l) => Math.abs(l.amount))));
+        // For cards, filter the DB query by competence_date (purchase date),
+        // not payment_date (bill due date). All purchases in a billing cycle
+        // share the same payment_date, so payment_date filtering is useless.
+        const dateColumn = isCard ? "competence_date" : "payment_date";
 
         let query = supabase
           .from("transactions")
           .select(
-            "id, description, amount, payment_date, type, status, category, contact_name, series_id, installment_number, installments_total, credit_card_id"
+            "id, description, amount, payment_date, competence_date, type, status, category, contact_name, series_id, installment_number, installments_total, credit_card_id"
           )
           .in("status", ["Pendente", "Pago"])
-          .gte("payment_date", minDate)
-          .lte("payment_date", maxDate)
-          .in("amount", uniqAmounts);
+          .gte(dateColumn, minDate)
+          .lte(dateColumn, maxDate);
 
         if (creditCardId) {
           query = query.eq("credit_card_id", creditCardId);
@@ -76,9 +75,12 @@ export function useImportMatching() {
           return {};
         }
 
-        const candidates = (data || []) as CandidateTx[];
+        // Amount filter applied in-memory using AMOUNT_TOLERANCE (covers ±0.02).
+        const lineAmounts = lines.map((l) => Math.abs(l.amount));
+        const candidates = ((data || []) as CandidateTx[]).filter((c) =>
+          lineAmounts.some((a) => Math.abs(c.amount - a) <= AMOUNT_TOLERANCE),
+        );
 
-        // Track which transaction IDs are already claimed to avoid double-binding
         const claimed = new Set<string>();
         const result: Record<number, RowMatch> = {};
 
@@ -87,9 +89,11 @@ export function useImportMatching() {
           .map((l, i) => ({ i, l }))
           .sort((a, b) => a.l.date.localeCompare(b.l.date));
 
+        const scoreOpts = { useCompetenceDate: isCard, dayWindow: window };
+
         for (const { i, l } of order) {
           const available = candidates.filter((c) => !claimed.has(c.id));
-          const best = pickBestMatch(l, available);
+          const best = pickBestMatch(l, available, scoreOpts);
           const alternatives = available
             .filter((c) => c.id !== best?.candidate.id)
             .slice(0, 5);
@@ -103,7 +107,6 @@ export function useImportMatching() {
           setMatches(result);
         }
         return result;
-
       } finally {
         setLoading(false);
       }

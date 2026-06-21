@@ -373,9 +373,37 @@ export function ImportStatementModal({
         };
       });
 
-      setRows(parsed);
+      // Intra-statement dedup: collapse rows that differ only by whitespace/punctuation
+      // (some bank PDFs emit the same purchase twice with subtle spacing differences).
+      // Only collapse when date + amount + type + normalized description all match,
+      // and the row has no series_id (avoid touching legitimate installments).
+      const seen = new Map<string, number>();
+      const deduped: ParsedTransaction[] = [];
+      let dedupedCount = 0;
+      for (const r of parsed) {
+        const normDesc = (r.description || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, "");
+        const key = `${r.date}|${Math.abs(r.amount).toFixed(2)}|${r.type}|${normDesc}|${r.series_id || ""}|${r.installment_number || ""}`;
+        if (seen.has(key)) {
+          dedupedCount++;
+          continue;
+        }
+        seen.set(key, deduped.length);
+        deduped.push(r);
+      }
+      if (dedupedCount > 0) {
+        toast({
+          title: `${dedupedCount} linha(s) duplicada(s) removida(s) do extrato`,
+          description: "Encontramos lançamentos idênticos repetidos no arquivo.",
+        });
+      }
 
-      const detectedCardIds = new Set(parsed.map((r) => r.matched_card_id).filter(Boolean));
+      setRows(deduped);
+
+      const detectedCardIds = new Set(deduped.map((r) => r.matched_card_id).filter(Boolean));
       const resolvedDetectedCards = creditCards.filter((c) => detectedCardIds.has(c.id));
 
       if (detectedCardIds.size >= 1) {
@@ -511,8 +539,9 @@ export function ImportStatementModal({
         Array.from(groups.entries()).map(async ([cardId, indices], groupIdx) => {
           const lines = indices.map((i) => {
             const r = rows[i];
-            // For cards, match on the billing/payment date — manual launches use due date
-            const matchDate = r.statement_due_date || r.resolved_competence_date || r.date;
+            // For cards we match on competence_date (purchase date), since all
+            // purchases in a billing cycle share the same payment_date.
+            const matchDate = r.resolved_competence_date || r.purchase_date_original || r.date;
             return {
               date: matchDate,
               description: r.description,
@@ -1178,29 +1207,36 @@ export function ImportStatementModal({
 
         {rows.length > 0 && step === "reconcile" && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
+          let totalToCreate = 0;
+          let totalToLink = 0;
           selectedRows.forEach((r) => {
             const i = rows.indexOf(r);
             const a = matchActions[i] || "criar";
             counts[a]++;
+            const signed = r.type === "receita" ? Math.abs(r.amount) : -Math.abs(r.amount);
+            if (a === "criar") totalToCreate += signed;
+            if (a === "vincular") totalToLink += signed;
           });
           const toImport = counts.vincular + counts.criar;
+          const grandTotal = totalToCreate + totalToLink;
+          const fmt = (v: number) =>
+            v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
           return (
             <DialogFooter className="gap-2 sm:justify-between flex-col-reverse sm:flex-row">
               <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
                 <ArrowLeft className="h-4 w-4" /> Voltar
               </Button>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end gap-1">
                 <span className="text-xs text-muted-foreground">
-                  {importType === "cartao" ? (
-                    <><strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar</>
-                  ) : (
-                    <><strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar</>
-                  )}
+                  <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Total no extrato após import: <strong className={grandTotal < 0 ? "text-destructive" : "text-foreground"}>{fmt(grandTotal)}</strong>
                 </span>
                 <Button
                   onClick={handleImport}
                   disabled={importing || toImport === 0}
-                  className="gap-2"
+                  className="gap-2 mt-1"
                 >
                   {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                   {importType === "cartao" ? `Importar ${toImport} como projetadas` : "Importar"}
