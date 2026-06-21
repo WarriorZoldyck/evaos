@@ -456,8 +456,10 @@ export function ImportStatementModal({
         groups.set(cardId, arr);
       });
 
+      // Reset matches first; then run each group with merge=true to accumulate
+      resetMatches();
       Promise.all(
-        Array.from(groups.entries()).map(async ([cardId, indices]) => {
+        Array.from(groups.entries()).map(async ([cardId, indices], groupIdx) => {
           const lines = indices.map((i) => {
             const r = rows[i];
             // For cards, match on the billing/payment date — manual launches use due date
@@ -469,7 +471,8 @@ export function ImportStatementModal({
               type: r.type,
             };
           });
-          const res = await findMatches(lines, null, null, cardId);
+          // First call (groupIdx=0) doesn't merge; subsequent ones do.
+          const res = await findMatches(lines, null, null, cardId, { merge: groupIdx > 0 });
           return indices.map((rowIdx, localIdx) => ({ rowIdx, match: res[localIdx] }));
         }),
       ).then((groupResults) => {
@@ -489,6 +492,7 @@ export function ImportStatementModal({
       });
       return;
     }
+
 
     resetMatches();
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
