@@ -26,6 +26,7 @@ import {
 import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching } from "@/hooks/useImportMatching";
 import { ReconcileStep } from "./import/ReconcileStep";
+import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
 
 interface ParsedTransaction {
   date: string;
@@ -165,6 +166,10 @@ export function ImportStatementModal({
   const [matchActions, setMatchActions] = useState<Record<number, "vincular" | "criar" | "ignorar">>({});
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
   const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
+
+  // Per-row category override (name). Pre-filled from suggestions when available.
+  const [rowCategories, setRowCategories] = useState<Record<number, string>>({});
+  const { suggest, suggestions, loading: suggestLoading, reset: resetSuggestions } = useCategorySuggestions();
 
   const rootCategories = categories.filter((c) => !c.parent_id);
 
@@ -423,6 +428,36 @@ export function ImportStatementModal({
     });
   }, [importType, targetBankAccount, rows, findMatches, resetMatches]);
 
+  // Trigger AI category suggestions once rows + categories are available.
+  // Pre-applies suggestion to rowCategories so the user just edits exceptions.
+  useEffect(() => {
+    if (rows.length === 0 || categories.length === 0) return;
+    if (Object.keys(suggestions).length > 0) return; // only once per file
+
+    const items = rows
+      .filter((r) => r.selected)
+      .map((r) => ({
+        index: rows.indexOf(r),
+        description: r.description,
+        type: r.type,
+        amount: Math.abs(r.amount),
+      }));
+
+    suggest(items, categories).then((res) => {
+      // Pre-apply only where user hasn't already set a category
+      setRowCategories((prev) => {
+        const next = { ...prev };
+        Object.entries(res).forEach(([k, v]) => {
+          const idx = Number(k);
+          if (!next[idx]) next[idx] = v.category;
+        });
+        return next;
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length, categories.length]);
+
+
   const toggleRow = (idx: number) => {
     setRows((prev) =>
       prev.map((r, i) => (i === idx ? { ...r, selected: !r.selected } : r))
@@ -529,6 +564,9 @@ export function ImportStatementModal({
 
       const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
 
+      const realIdx = rows.indexOf(r);
+      const rowCat = rowCategories[realIdx] || catName;
+
       return {
         description: r.description,
         amount: r.amount,
@@ -536,7 +574,7 @@ export function ImportStatementModal({
         payment_date: billingDate,
         competence_date: competenceDate,
         status: "Pago" as const,
-        category: catName,
+        category: rowCat,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
@@ -589,9 +627,11 @@ export function ImportStatementModal({
     setDefaultCategory("");
     setMatchActions({});
     setMatchTargets({});
+    setRowCategories({});
     setImportResult(null);
     setStep("preview");
     resetMatches();
+    resetSuggestions();
   };
 
   const handleClose = () => {
@@ -910,7 +950,15 @@ export function ImportStatementModal({
               }
               bankAccountId={bankId}
               walletId={walletId}
+              categories={rootCategories}
+              rowCategories={rowCategories}
+              suggestions={suggestions}
+              suggestLoading={suggestLoading}
+              onCategoryChange={(idx, name) =>
+                setRowCategories((prev) => ({ ...prev, [idx]: name }))
+              }
             />
+
           );
         })()}
 

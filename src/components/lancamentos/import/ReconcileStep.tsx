@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, Link2, Search, X, ArrowLeftRight, Sparkles, Loader2 } from "lucide-react";
+import { Check, Link2, Search, X, ArrowLeftRight, Sparkles, Loader2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,9 +8,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ManualMatchModal } from "@/components/conciliacao/ManualMatchModal";
 import type { RowMatch } from "@/hooks/useImportMatching";
-import type { CandidateTx } from "@/lib/import/matching";
+import type { SuggestionSource } from "@/hooks/useCategorySuggestions";
 
 export interface ParsedRow {
   date: string;
@@ -30,6 +37,11 @@ interface ReconcileStepProps {
   onTargetChange: (idx: number, txId: string) => void;
   bankAccountId: string | null;
   walletId: string | null;
+  categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+  rowCategories: Record<number, string>;
+  suggestions: Record<number, SuggestionSource>;
+  suggestLoading: boolean;
+  onCategoryChange: (idx: number, name: string) => void;
 }
 
 const fmt = (n: number) =>
@@ -50,6 +62,11 @@ export function ReconcileStep({
   onTargetChange,
   bankAccountId,
   walletId,
+  categories,
+  rowCategories,
+  suggestions,
+  suggestLoading,
+  onCategoryChange,
 }: ReconcileStepProps) {
   const [manualForRow, setManualForRow] = useState<number | null>(null);
 
@@ -221,13 +238,17 @@ export function ReconcileStep({
           )}
         </section>
 
-        {/* SECTION B — Create new */}
         <section>
           <header className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-amber-500" />
               Criar no sistema
               <Badge variant="secondary" className="text-[10px]">{newRows.length}</Badge>
+              {suggestLoading && (
+                <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-normal">
+                  <Loader2 className="h-3 w-3 animate-spin" /> sugerindo categorias...
+                </span>
+              )}
             </h3>
           </header>
           {newRows.length === 0 ? (
@@ -242,29 +263,57 @@ export function ReconcileStep({
                     <th className="p-2 text-left font-medium">Data</th>
                     <th className="p-2 text-left font-medium">Descrição</th>
                     <th className="p-2 text-right font-medium">Valor</th>
-                    <th className="p-2 text-center font-medium">Tipo</th>
-                    <th className="p-2 text-center font-medium w-20">Ignorar</th>
+                    <th className="p-2 text-left font-medium w-[200px]">Categoria sugerida</th>
+                    <th className="p-2 text-center font-medium w-16">Ignorar</th>
                   </tr>
                 </thead>
                 <tbody>
                   {newRows.map(({ r, i }) => {
-                    const hasMatch = !!matches[i]?.best;
+                    const sug = suggestions[i];
+                    const currentCat = rowCategories[i] || "";
                     return (
                       <tr key={i} className="border-b last:border-0 hover:bg-accent/30">
                         <td className="p-2 text-muted-foreground whitespace-nowrap text-xs">{fmtDate(r.date)}</td>
-                        <td className="p-2 max-w-[280px] truncate" title={r.description}>
-                          {r.description}
-                          {hasMatch && (
-                            <Badge variant="outline" className="ml-2 text-[9px]" title="Havia sugestão de conciliação">
-                              sugestão disponível
-                            </Badge>
-                          )}
-                        </td>
-                        <td className="p-2 text-right font-mono">{fmt(r.amount)}</td>
-                        <td className="p-2 text-center">
-                          <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[10px]">
+                        <td className="p-2 max-w-[260px]">
+                          <p className="truncate" title={r.description}>{r.description}</p>
+                          <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[9px] mt-0.5">
                             {r.type === "receita" ? "Entrada" : "Saída"}
                           </Badge>
+                        </td>
+                        <td className="p-2 text-right font-mono whitespace-nowrap">{fmt(r.amount)}</td>
+                        <td className="p-2">
+                          <div className="flex flex-col gap-1">
+                            <Select
+                              value={currentCat || "__none__"}
+                              onValueChange={(v) =>
+                                onCategoryChange(i, v === "__none__" ? "" : v)
+                              }
+                            >
+                              <SelectTrigger className="h-7 text-xs">
+                                <SelectValue placeholder="Sem categoria" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Sem categoria</SelectItem>
+                                {categories.map((c) => (
+                                  <SelectItem key={c.id} value={c.name}>
+                                    {c.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {sug && currentCat === sug.category && (
+                              <span
+                                className="text-[10px] text-muted-foreground flex items-center gap-1"
+                                title={sug.source === "history" ? "Baseado em lançamentos anteriores seus" : "Sugerido pela IA"}
+                              >
+                                {sug.source === "history" ? (
+                                  <><BookOpen className="h-2.5 w-2.5" /> baseado no histórico</>
+                                ) : (
+                                  <><Sparkles className="h-2.5 w-2.5 text-amber-500" /> sugerido pela IA</>
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2 text-center">
                           <Checkbox
@@ -281,6 +330,7 @@ export function ReconcileStep({
             </div>
           )}
         </section>
+
 
         {/* SECTION C — Ignored */}
         {ignoredRows.length > 0 && (
