@@ -1,124 +1,104 @@
 
-# Conciliação inteligente no Importar Extrato (OFX/CSV/PDF)
+# Conciliação lado-a-lado no Importar Extrato
 
-## Para a Marcela (explicação simples, sem termo técnico)
+## Para a Marcela (sem termo técnico)
 
-Hoje, quando você importa o extrato do banco, o sistema cria **todos os lançamentos do zero**. Isso é um problema pro BPO porque você normalmente já lançou as contas fixas (aluguel, internet, salários, parcelas) **antes** do dinheiro sair da conta — elas ficam como "Pendente" esperando a data. Aí, quando você importa o OFX no fim do mês, o sistema duplica tudo: fica o lançamento antigo Pendente + o novo do extrato Pago.
+Hoje, ao subir um extrato (OFX/CSV/PDF), a sugestão de "vincular" aparece junto da tabela de conferência — funciona, mas mistura tudo numa tela só. Os melhores BPOs separam isso em uma etapa dedicada: **de um lado a linha do extrato do banco, do outro o lançamento que o EVA já tem cadastrado, e um botão "Conciliar" no meio**. O que sobrar sem par fica numa segunda lista "Criar no sistema" — você decide o que importar como novo e o que ignorar.
 
-**O que vai mudar:** antes de importar, o sistema compara cada linha do extrato com o que você já tem no EVA (lançamentos pendentes + parcelas de cartão + recorrências dos próximos 90 dias). Para cada linha encontrar um "par", você decide:
+Esse é, sim, o padrão de mercado (Conta Azul, Omie, QuickBooks): chama-se "conciliação assistida". É melhor que mostrar tudo junto porque:
+- O olho bate rápido (mesma data, mesmo valor, mesma descrição lado a lado).
+- Você não precisa decidir nada para as linhas que o sistema já achou par — só confirma em lote.
+- Sobra uma lista enxuta de "novos" para você categorizar.
 
-| Ação | O que faz |
-|---|---|
-| **Vincular** | Não cria nada novo. Pega o lançamento que já existia, marca como **Pago**, ajusta a data de pagamento pra do extrato e concilia. |
-| **Criar novo** | Comportamento atual: gera um lançamento novo. |
-| **Ignorar** | Pula essa linha do extrato (ex: tarifa que você não quer registrar). |
-
-Linhas que **não** acham par seguem normalmente como "Criar novo" (pré-marcadas).
-
-Resultado: zero duplicidade, fechamento de mês em minutos, e os Pendentes desaparecem sozinhos conforme caem na conta.
+Depois de importar, o EVA abre a tela de Lançamentos já filtrada nos **novos sem categoria**, prontos para você atribuir centro de custo/categoria.
 
 ---
 
-## Como o "match" funciona (regra de negócio)
-
-Para cada linha do extrato o sistema busca candidatos em `transactions` com:
-
-1. **Mesma conta de destino** (a conta selecionada na importação).
-2. **Status = Pendente** OU **recorrência projetada** dos próximos 90 dias (mesma lógica do `useRecurringTransactions`).
-3. **Mesmo tipo** (crédito do extrato → receita; débito → despesa).
-4. **Mesmo valor exato** (`amount`).
-5. **Data de vencimento dentro de ±7 dias** da data do extrato (janela configurável; default 7).
-
-**Score de confiança** (ordena os candidatos quando há mais de um):
-- +40 valor exato (obrigatório)
-- +20 mesma data exata / +10 até 3 dias / +5 até 7 dias
-- +15 descrição com termo em comum (contato ou categoria)
-- +10 mesmo contato (se a importação já resolveu)
-
-Apenas o candidato de maior score vira sugestão pré-marcada como **Vincular**. Os outros ficam acessíveis num "trocar correspondência".
-
-Recorrência projetada (ainda não materializada) → ao Vincular, o sistema materializa a ocorrência real (insere em `transactions` com status Pago) em vez de atualizar.
-
-Parcela de cartão e fatura: fora do escopo desta v1 (cartão já tem fluxo próprio de pagamento de fatura).
-
----
-
-## UX no modal Importar Extrato
-
-Adiciona uma **etapa 3 "Conciliar"** entre o preview atual e o "Importar":
+## Fluxo do wizard
 
 ```text
-[ 1.Arquivo ] → [ 2.Conferir ] → [ 3.Conciliar ] → [ 4.Importar ]
+[ 1.Arquivo ] → [ 2.Conferir ] → [ 3.Conciliar ] → [ 4.Resumo ]
 ```
 
-Tabela da etapa Conciliar:
+### Etapa 3 — Conciliar (nova UI lado-a-lado)
+
+Duas seções verticais:
+
+**A) Correspondências encontradas** (cabeçalho: "X linhas com par no EVA · [Conciliar todos]")
 
 ```text
-┌──────────────┬──────────┬──────────┬─────────────────────────┬──────────────────┐
-│ Data extrato │ Descrição│ Valor    │ Sugestão do EVA         │ Ação             │
-├──────────────┼──────────┼──────────┼─────────────────────────┼──────────────────┤
-│ 05/06        │ ALUGUEL  │ -3.500,00│ ✓ Aluguel Junho (Pend.) │ [Vincular ▾]     │
-│ 05/06        │ ENEL     │   -287,40│ — sem correspondência   │ [Criar novo ▾]   │
-│ 06/06        │ PIX João │ +1.200,00│ ✓ Recorrência Cliente J │ [Vincular ▾]     │
-│ 06/06        │ TARIFA   │     -9,90│ — sem correspondência   │ [Ignorar ▾]      │
-└──────────────┴──────────┴──────────┴─────────────────────────┴──────────────────┘
-Resumo: 12 vincular · 8 criar novo · 2 ignorar
+┌─ Extrato do banco ──────────────┬─ Lançamento no EVA ─────────────┬──────────────┐
+│ 05/06  ALUGUEL JUN     -3.500,00│ 05/06  Aluguel Junho  -3.500,00 │ [✓ Conciliar]│
+│                                  │ Pendente · Imóvel · ACME Imov.  │ [Trocar ▾]   │
+├──────────────────────────────────┼──────────────────────────────────┼──────────────┤
+│ 06/06  PIX JOAO        +1.200,00 │ 06/06  Cliente João   +1.200,00 │ [✓ Conciliar]│
+│                                  │ Pendente · Vendas · João Silva  │ [Trocar ▾]   │
+└──────────────────────────────────┴──────────────────────────────────┴──────────────┘
 ```
 
-- Topo: contador + botão "Marcar todos os match como Vincular" / "Criar tudo do zero" (volta ao comportamento atual).
-- Clique na sugestão abre um popover com os outros candidatos e link "Ver lançamento".
-- Botão final: **Importar (12 vinculados, 8 criados, 2 ignorados)**.
+- "Trocar" abre popover com outros candidatos + opção "Buscar manualmente…" (reaproveita `ManualMatchModal`).
+- Botão de cabeçalho **Conciliar todos** marca todos em lote.
+- Cada linha pode ser desmarcada → cai para a seção B como "criar novo".
+
+**B) Sem correspondência — criar no sistema** (cabeçalho: "Y linhas novas · [Selecionar todos]")
+
+Tabela compacta (igual ao "Conferir" atual): data, descrição, valor, categoria padrão, ✓ selecionar / 🚫 ignorar.
+
+**Rodapé fixo:**
+```text
+[ Voltar ]   Resumo: 12 conciliar · 8 criar · 2 ignorar   [ Importar ]
+```
+
+### Etapa 4 — Resumo pós-import
+
+Tela curta confirmando: "12 conciliados · 8 criados · 2 ignorados" + dois botões:
+- **Ver novos para categorizar** → fecha modal, navega para `/lancamentos` com filtro pré-aplicado: `categoria=__sem_categoria__` + janela de datas do extrato + flag de origem `?origem=import:<batchId>`.
+- **Fechar**.
 
 ---
 
-## Detalhes técnicos
+## Mudanças técnicas
 
-**Arquivos a alterar:**
-- `src/components/lancamentos/ImportStatementModal.tsx` — nova etapa "Conciliar"; estado `matches: Map<lineId, { action, transactionId? }>`.
-- `src/hooks/useImportMatching.ts` (novo) — recebe linhas parseadas + accountId, busca candidatos em lote, calcula score, devolve sugestões. Inclui recorrências projetadas usando o mesmo gerador de `useRecurringTransactions`.
-- `src/lib/import/matching.ts` (novo) — funções puras `scoreCandidate`, `pickBestMatch`, testáveis.
-- `src/components/lancamentos/import/MatchRow.tsx` (novo) — linha da tabela com popover de candidatos.
+**Reorganização (sem reescrever o motor já existente — `useImportMatching` + `lib/import/matching.ts` permanecem):**
 
-**Persistência ao confirmar:**
-- `Vincular` → `UPDATE transactions SET status='Pago', payment_date=<data extrato>, is_reconciled=true, bank_account_id=<conta>` (só se ainda Pendente — proteção contra race).
-- `Vincular` em recorrência projetada → `INSERT` na `transactions` (materializa) com status Pago + `recurring_transaction_id` preenchido.
-- `Criar novo` → fluxo atual de inserção.
-- `Ignorar` → nada.
+- `src/components/lancamentos/ImportStatementModal.tsx`
+  - Refatorar para steps explícitos: `'arquivo' | 'conferir' | 'conciliar' | 'resumo'` (state machine simples).
+  - Remover bloco de matching da tela "Conferir" (linhas ~760–890) e mover para nova etapa.
+  - Adicionar tela de Resumo com CTA "Ver novos para categorizar".
 
-Tudo numa transação lógica no client (Promise.all com rollback visual em caso de falha parcial — mostra quais linhas falharam).
+- `src/components/lancamentos/import/ReconcileStep.tsx` (novo)
+  - Recebe `rows`, `matches`, `matchActions`, `matchTargets` e callbacks.
+  - Renderiza as duas seções (Conciliar / Criar novo) lado-a-lado.
+  - Integra popover "Trocar correspondência" + botão "Buscar manualmente" que abre `ManualMatchModal`.
 
-**Busca em lote (1 query só):**
-```sql
-SELECT id, description, amount, due_date, type, status, recurring_transaction_id, contact_id, category_id
-FROM transactions
-WHERE bank_account_id = $1
-  AND status = 'Pendente'
-  AND due_date BETWEEN <min_data - 7> AND <max_data + 7>
-  AND amount IN (<lista de valores únicos do extrato>)
-```
-+ chamada paralela ao gerador de recorrências projetadas da mesma conta/janela.
+- `src/components/lancamentos/import/ReconcileRow.tsx` (novo)
+  - Linha lado-a-lado (extrato | EVA | ação).
 
-**Configurações (constantes, sem UI v1):**
-- Janela de data: ±7 dias.
-- Tolerância de valor: 0 (exato). v2 pode abrir ±R$ 0,02 pra arredondamento.
+- `src/pages/Lancamentos.tsx`
+  - Ler `?origem=import:<batchId>&sem_categoria=1&from=YYYY-MM-DD&to=YYYY-MM-DD` na primeira renderização e aplicar nos filtros existentes (já há sentinel `__sem_categoria__`).
+  - `batchId` = uuid gerado no momento do import, salvo num novo campo opcional `import_batch_id text` em `transactions` (apenas nas linhas criadas pelo import, para destacar/filtrar). **Migration:** `ALTER TABLE transactions ADD COLUMN import_batch_id text NULL` + índice parcial.
 
-**Fora do escopo desta entrega:**
-- Match de fatura de cartão (fluxo separado já existe).
-- Match many-to-one (uma transferência do extrato cobrindo várias contas).
-- Aprendizado/sugestão por descrição (machine learning).
-- Tela dedicada de "Conciliação" para OFX (hoje `/conciliacao` é só Asaas).
+**Persistência (mantém o que já existe):**
+- "Conciliar" → `UPDATE transactions SET status='Pago', payment_date=<data extrato>, is_reconciled=true WHERE id=? AND status='Pendente'`.
+- "Criar" → insere com `import_batch_id` preenchido.
+- "Ignorar" → nada.
+
+**Fora do escopo desta v1 (mantém o que o plano original já definiu):**
+- Match em recorrências projetadas (segue só Pendente real).
+- Conciliação de fatura de cartão (tem fluxo próprio).
+- Match many-to-one.
 
 ---
 
 ## Critérios de aceite
 
-1. Importar um OFX com 10 linhas, sendo 6 já cadastradas como Pendente: etapa Conciliar mostra 6 sugestões de Vincular, 4 de Criar novo.
-2. Confirmar a importação: as 6 Pendentes viram Pago com a data do extrato; 4 novas são criadas; nenhum duplicado.
-3. Importar um OFX com uma recorrência ainda não materializada (próximos 90 dias): aparece como sugestão de Vincular; ao confirmar, é materializada como Pago.
-4. Botão "Criar tudo do zero" reproduz exatamente o comportamento atual (regressão zero).
-5. Linha sem candidato continua com "Criar novo" pré-marcado.
-
----
+1. Importar OFX com 10 linhas, 6 já cadastradas como Pendente → etapa Conciliar mostra 6 pares na seção A e 4 na seção B.
+2. Clicar **Conciliar todos** + **Importar**: as 6 Pendentes viram Pago com data do extrato; 4 novas são criadas com `import_batch_id`; nada duplicado.
+3. Tela de Resumo aparece com os números corretos e botão **Ver novos para categorizar**.
+4. Ao clicar, abre `/lancamentos` filtrado em "Sem categoria" mostrando exatamente as 4 recém-criadas.
+5. Botão "Trocar" em uma linha conciliada permite escolher outro candidato ou abrir busca manual.
+6. Desmarcar uma linha da seção A move ela para B como "criar novo".
+7. Regressão: extratos de cartão (`importType='cartao'`) pulam a etapa Conciliar (vai direto Conferir → Resumo), mantendo comportamento atual.
 
 ## Estimativa
-Médio — 1 hook novo, 1 lib pura com testes, 1 etapa nova no modal de import, 2 caminhos de persistência. Sem migração de banco.
+Médio — 2 componentes novos, 1 migration trivial (`import_batch_id`), refactor do modal em steps, leitura de query params na página de Lançamentos. Sem mudança no motor de matching.
