@@ -159,6 +159,7 @@ export function ImportStatementModal({
     failed: number;
     dateFrom: string;
     dateTo: string;
+    status: "Pago" | "Pendente";
   } | null>(null);
 
   // Per-row reconciliation action: "vincular" | "criar" | "ignorar"
