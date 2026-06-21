@@ -245,6 +245,8 @@ export function ReconcileStep({
             </div>
           )}
         </section>
+        )}
+
 
         <section>
           <header className="flex items-center justify-between mb-2">
