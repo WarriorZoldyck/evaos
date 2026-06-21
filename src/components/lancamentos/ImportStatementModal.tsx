@@ -648,7 +648,7 @@ export function ImportStatementModal({
     params.set("category", "__sem_categoria__");
     if (importResult?.dateFrom) params.set("dateFrom", importResult.dateFrom);
     if (importResult?.dateTo) params.set("dateTo", importResult.dateTo);
-    params.set("status", "Pago");
+    params.set("status", importResult?.status || "Pago");
     handleClose();
     navigate(`/lancamentos?${params.toString()}`);
   };
