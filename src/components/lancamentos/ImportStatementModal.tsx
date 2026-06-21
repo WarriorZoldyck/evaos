@@ -168,11 +168,13 @@ export function ImportStatementModal({
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
   const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
 
-  // Per-row category override (name). Pre-filled from suggestions when available.
-  const [rowCategories, setRowCategories] = useState<Record<number, string>>({});
+  // Per-row category override (with 3-level hierarchy). Pre-filled from suggestions when available.
+  // `touched: true` means the user manually edited this row — never overwrite via propagation.
+  const [rowCategories, setRowCategories] = useState<Record<number, RowCategoryValue>>({});
   const { suggest, suggestions, loading: suggestLoading, reset: resetSuggestions } = useCategorySuggestions();
 
   const rootCategories = categories.filter((c) => !c.parent_id);
+
 
   // Derive detected cards summary (use real card IDs, not collapsed to parent)
   const detectedCards = useMemo(() => {
