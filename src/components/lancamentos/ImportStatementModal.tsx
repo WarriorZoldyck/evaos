@@ -137,6 +137,7 @@ export function ImportStatementModal({
   const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId } = useCompany();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [parsing, setParsing] = useState(false);
@@ -147,6 +148,17 @@ export function ImportStatementModal({
   const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
   const [targetCard, setTargetCard] = useState("");
   const [defaultCategory, setDefaultCategory] = useState("");
+
+  // Wizard step
+  const [step, setStep] = useState<"preview" | "reconcile" | "summary">("preview");
+  const [importResult, setImportResult] = useState<{
+    linked: number;
+    created: number;
+    ignored: number;
+    failed: number;
+    dateFrom: string;
+    dateTo: string;
+  } | null>(null>;
 
   // Per-row reconciliation action: "vincular" | "criar" | "ignorar"
   // Default is "criar" (legacy behavior). "vincular" is suggested when a match exists.
