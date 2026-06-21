@@ -616,6 +616,7 @@ export function ImportStatementModal({
         failed: linkFail,
         dateFrom: allDates[0] || "",
         dateTo: allDates[allDates.length - 1] || "",
+        status: importType === "cartao" ? "Pendente" : "Pago",
       });
       setStep("summary");
     }
