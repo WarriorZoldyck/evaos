@@ -408,6 +408,14 @@ export function ImportStatementModal({
 
       setRows(deduped);
 
+      // Capture statement total reported by the bank (used to validate the import).
+      const parsedStatementTotal = typeof result.statement_total === "number" && result.statement_total > 0
+        ? Number(result.statement_total)
+        : null;
+      setStatementTotal(parsedStatementTotal);
+      setStatementTotalInput(parsedStatementTotal ? parsedStatementTotal.toFixed(2).replace(".", ",") : "");
+      setAcknowledgeDivergence(false);
+
       const detectedCardIds = new Set(deduped.map((r) => r.matched_card_id).filter(Boolean));
       const resolvedDetectedCards = creditCards.filter((c) => detectedCardIds.has(c.id));
 
@@ -788,7 +796,9 @@ export function ImportStatementModal({
     setTargetBankAccount("");
     setImportType("");
     setTargetCard("");
-    
+    setStatementTotal(null);
+    setStatementTotalInput("");
+    setAcknowledgeDivergence(false);
     setMatchActions({});
     setMatchTargets({});
     setRowCategories({});
