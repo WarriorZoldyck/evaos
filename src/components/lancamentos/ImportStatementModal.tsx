@@ -564,14 +564,13 @@ export function ImportStatementModal({
       ? (detectedCards.find(c => !c.parent_card_id)?.id || detectedCards[0]?.id || null)
       : null;
 
-    // Split rows by action (debito mode only — cartao always "criar")
-    const isDebito = importType === "debito";
+    // Split rows by action — both debit and card now support vincular
     const rowsToCreate: ParsedTransaction[] = [];
     const rowsToLink: { row: ParsedTransaction; txId: string }[] = [];
 
     selectedRows.forEach((r) => {
       const realIdx = rows.indexOf(r);
-      const action = isDebito ? (matchActions[realIdx] || "criar") : "criar";
+      const action = matchActions[realIdx] || "criar";
       if (action === "ignorar") return;
       if (action === "vincular" && matchTargets[realIdx]) {
         rowsToLink.push({ row: r, txId: matchTargets[realIdx] });
@@ -580,21 +579,25 @@ export function ImportStatementModal({
       }
     });
 
-    // 1) Link existing pending transactions → mark Pago, set payment_date from statement
+    // 1) Link existing transactions — mark Pago (debit) or just reconcile (card / already-Pago)
     let linkOk = 0;
     let linkFail = 0;
     if (rowsToLink.length > 0) {
       await Promise.all(
         rowsToLink.map(async ({ row, txId }) => {
+          // Card-mode links keep status as-is (purchases stay projected until bill is paid).
+          // Debit-mode promotes Pendente → Pago. Already-Pago stays Pago either way.
+          const updatePayload: Record<string, unknown> = {
+            is_reconciled: true,
+          };
+          if (importType === "debito") {
+            updatePayload.status = "Pago";
+            updatePayload.payment_date = row.date;
+          }
           const { error } = await supabase
             .from("transactions")
-            .update({
-              status: "Pago",
-              payment_date: row.date,
-              is_reconciled: true,
-            })
-            .eq("id", txId)
-            .eq("status", "Pendente"); // race-safe: only update if still pending
+            .update(updatePayload)
+            .eq("id", txId);
           if (error) {
             console.error("[ImportStatement] link error", error);
             linkFail++;
