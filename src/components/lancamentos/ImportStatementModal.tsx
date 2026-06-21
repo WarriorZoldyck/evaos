@@ -943,6 +943,7 @@ export function ImportStatementModal({
           const walletId = accType === "wallet" ? accId : null;
           return (
             <ReconcileStep
+              mode={importType === "cartao" ? "card" : "debit"}
               rows={rows}
               matches={matches}
               matchLoading={matchLoading}
