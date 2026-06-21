@@ -42,6 +42,8 @@ interface ReconcileStepProps {
   suggestions: Record<number, SuggestionSource>;
   suggestLoading: boolean;
   onCategoryChange: (idx: number, name: string) => void;
+  /** "debit" shows conciliation against pending entries. "card" only shows categorization. */
+  mode?: "debit" | "card";
 }
 
 const fmt = (n: number) =>
@@ -67,7 +69,9 @@ export function ReconcileStep({
   suggestions,
   suggestLoading,
   onCategoryChange,
+  mode = "debit",
 }: ReconcileStepProps) {
+  const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
 
   // Build indexed list of selected rows
@@ -115,25 +119,29 @@ export function ReconcileStep({
       <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
         <div className="flex items-center gap-2 text-sm font-medium text-primary">
           <Sparkles className="h-4 w-4" />
-          Conciliação assistida
-          {matchLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {isCardMode ? "Categorização assistida" : "Conciliação assistida"}
+          {(matchLoading || (isCardMode && suggestLoading)) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          O EVA comparou o extrato com os lançamentos pendentes na conta.
-          Confirme as correspondências e escolha o que criar do zero.
+          {isCardMode
+            ? "O EVA sugeriu categorias com base no seu histórico e na IA. Revise antes de importar — as compras entram como projetadas até a fatura ser paga."
+            : "O EVA comparou o extrato com os lançamentos pendentes na conta. Confirme as correspondências e escolha o que criar do zero."}
         </p>
-        <div className="flex flex-wrap gap-2 mt-2">
-          <Button size="sm" variant="outline" onClick={conciliateAll} className="h-7 text-xs gap-1">
-            <Check className="h-3 w-3" /> Conciliar todos os pares
-          </Button>
-          <Button size="sm" variant="ghost" onClick={createAll} className="h-7 text-xs">
-            Criar tudo do zero
-          </Button>
-        </div>
+        {!isCardMode && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            <Button size="sm" variant="outline" onClick={conciliateAll} className="h-7 text-xs gap-1">
+              <Check className="h-3 w-3" /> Conciliar todos os pares
+            </Button>
+            <Button size="sm" variant="ghost" onClick={createAll} className="h-7 text-xs">
+              Criar tudo do zero
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-auto space-y-4 pr-1">
-        {/* SECTION A — Matches */}
+        {/* SECTION A — Matches (debit only) */}
+        {!isCardMode && (
         <section>
           <header className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -237,6 +245,8 @@ export function ReconcileStep({
             </div>
           )}
         </section>
+        )}
+
 
         <section>
           <header className="flex items-center justify-between mb-2">

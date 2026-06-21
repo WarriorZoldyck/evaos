@@ -159,6 +159,7 @@ export function ImportStatementModal({
     failed: number;
     dateFrom: string;
     dateTo: string;
+    status: "Pago" | "Pendente";
   } | null>(null);
 
   // Per-row reconciliation action: "vincular" | "criar" | "ignorar"
@@ -573,7 +574,9 @@ export function ImportStatementModal({
         type: r.type,
         payment_date: billingDate,
         competence_date: competenceDate,
-        status: "Pago" as const,
+        // Cartão de crédito: compras são projetadas (Pendente) até a fatura ser paga.
+        // Débito/conta corrente: já saíram da conta, então ficam Pago.
+        status: (importType === "cartao" ? "Pendente" : "Pago") as "Pendente" | "Pago",
         category: rowCat,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
@@ -613,6 +616,7 @@ export function ImportStatementModal({
         failed: linkFail,
         dateFrom: allDates[0] || "",
         dateTo: allDates[allDates.length - 1] || "",
+        status: importType === "cartao" ? "Pendente" : "Pago",
       });
       setStep("summary");
     }
@@ -644,7 +648,7 @@ export function ImportStatementModal({
     params.set("category", "__sem_categoria__");
     if (importResult?.dateFrom) params.set("dateFrom", importResult.dateFrom);
     if (importResult?.dateTo) params.set("dateTo", importResult.dateTo);
-    params.set("status", "Pago");
+    params.set("status", importResult?.status || "Pago");
     handleClose();
     navigate(`/lancamentos?${params.toString()}`);
   };
@@ -703,10 +707,12 @@ export function ImportStatementModal({
         {rows.length > 0 && step !== "summary" && (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant={step === "preview" ? "default" : "secondary"} className="text-[10px]">1. Conferir</Badge>
-            {importType === "debito" && targetBankAccount && (
+            {((importType === "debito" && targetBankAccount) || importType === "cartao") && (
               <>
                 <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                <Badge variant={step === "reconcile" ? "default" : "secondary"} className="text-[10px]">2. Conciliar</Badge>
+                <Badge variant={step === "reconcile" ? "default" : "secondary"} className="text-[10px]">
+                  {importType === "cartao" ? "2. Categorizar" : "2. Conciliar"}
+                </Badge>
               </>
             )}
             <ArrowRight className="h-3 w-3 text-muted-foreground" />
@@ -937,6 +943,7 @@ export function ImportStatementModal({
           const walletId = accType === "wallet" ? accId : null;
           return (
             <ReconcileStep
+              mode={importType === "cartao" ? "card" : "debit"}
               rows={rows}
               matches={matches}
               matchLoading={matchLoading}
@@ -996,29 +1003,34 @@ export function ImportStatementModal({
         )}
 
         {/* FOOTER — step-aware */}
-        {rows.length > 0 && step === "preview" && (
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-            {importType === "debito" && targetBankAccount ? (
-              <Button
-                onClick={() => setStep("reconcile")}
-                disabled={selectedRows.length === 0 || matchLoading}
-                className="gap-2"
-              >
-                Próximo: Conciliar <ArrowRight className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                onClick={handleImport}
-                disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !isMultiCard && !targetCard)}
-                className="gap-2"
-              >
-                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Importar {selectedRows.length} transações
-              </Button>
-            )}
-          </DialogFooter>
-        )}
+        {rows.length > 0 && step === "preview" && (() => {
+          const canGoReconcile =
+            (importType === "debito" && !!targetBankAccount) ||
+            (importType === "cartao" && (isMultiCard || !!targetCard));
+          return (
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+              {canGoReconcile ? (
+                <Button
+                  onClick={() => setStep("reconcile")}
+                  disabled={selectedRows.length === 0 || matchLoading}
+                  className="gap-2"
+                >
+                  {importType === "cartao" ? "Próximo: Categorizar" : "Próximo: Conciliar"} <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleImport}
+                  disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !isMultiCard && !targetCard)}
+                  className="gap-2"
+                >
+                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Importar {selectedRows.length} transações
+                </Button>
+              )}
+            </DialogFooter>
+          );
+        })()}
 
         {rows.length > 0 && step === "reconcile" && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
@@ -1035,7 +1047,11 @@ export function ImportStatementModal({
               </Button>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-muted-foreground">
-                  <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
+                  {importType === "cartao" ? (
+                    <><strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar</>
+                  ) : (
+                    <><strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar</>
+                  )}
                 </span>
                 <Button
                   onClick={handleImport}
@@ -1043,7 +1059,7 @@ export function ImportStatementModal({
                   className="gap-2"
                 >
                   {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  Importar
+                  {importType === "cartao" ? `Importar ${toImport} como projetadas` : "Importar"}
                 </Button>
               </div>
             </DialogFooter>
