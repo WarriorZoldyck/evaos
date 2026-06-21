@@ -48,6 +48,53 @@ interface ParsedTransaction {
   purchase_date_original?: string;
 }
 
+interface RowCategoryValue {
+  category: string;
+  subcategory?: string;
+  subcategory2?: string;
+  touched?: boolean;
+}
+
+/** Normalize a string: lowercase, no accents, single-spaced. */
+function normalizeText(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Resolve a category name (which can be a leaf at any level) into the full
+ * { category, subcategory, subcategory2 } path by walking parent_id upwards.
+ */
+function resolveCategoryPath(
+  name: string,
+  categories: { id: string; name: string; parent_id: string | null }[],
+): RowCategoryValue {
+  if (!name) return { category: "" };
+  const norm = normalizeText(name);
+  const found = categories.find((c) => normalizeText(c.name) === norm);
+  if (!found) return { category: name };
+  // Walk up
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const chain: { id: string; name: string; parent_id: string | null }[] = [found];
+  let cur = found;
+  while (cur.parent_id) {
+    const parent = byId.get(cur.parent_id);
+    if (!parent) break;
+    chain.unshift(parent);
+    cur = parent;
+  }
+  return {
+    category: chain[0]?.name || "",
+    subcategory: chain[1]?.name,
+    subcategory2: chain[2]?.name,
+  };
+}
+
+
 interface ImportStatementModalProps {
   open: boolean;
   onClose: () => void;
@@ -168,11 +215,13 @@ export function ImportStatementModal({
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
   const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
 
-  // Per-row category override (name). Pre-filled from suggestions when available.
-  const [rowCategories, setRowCategories] = useState<Record<number, string>>({});
+  // Per-row category override (with 3-level hierarchy). Pre-filled from suggestions when available.
+  // `touched: true` means the user manually edited this row — never overwrite via propagation.
+  const [rowCategories, setRowCategories] = useState<Record<number, RowCategoryValue>>({});
   const { suggest, suggestions, loading: suggestLoading, reset: resetSuggestions } = useCategorySuggestions();
 
   const rootCategories = categories.filter((c) => !c.parent_id);
+
 
   // Derive detected cards summary (use real card IDs, not collapsed to parent)
   const detectedCards = useMemo(() => {
@@ -456,8 +505,10 @@ export function ImportStatementModal({
         groups.set(cardId, arr);
       });
 
+      // Reset matches first; then run each group with merge=true to accumulate
+      resetMatches();
       Promise.all(
-        Array.from(groups.entries()).map(async ([cardId, indices]) => {
+        Array.from(groups.entries()).map(async ([cardId, indices], groupIdx) => {
           const lines = indices.map((i) => {
             const r = rows[i];
             // For cards, match on the billing/payment date — manual launches use due date
@@ -469,7 +520,8 @@ export function ImportStatementModal({
               type: r.type,
             };
           });
-          const res = await findMatches(lines, null, null, cardId);
+          // First call (groupIdx=0) doesn't merge; subsequent ones do.
+          const res = await findMatches(lines, null, null, cardId, { merge: groupIdx > 0 });
           return indices.map((rowIdx, localIdx) => ({ rowIdx, match: res[localIdx] }));
         }),
       ).then((groupResults) => {
@@ -490,6 +542,7 @@ export function ImportStatementModal({
       return;
     }
 
+
     resetMatches();
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
 
@@ -509,16 +562,19 @@ export function ImportStatementModal({
       }));
 
     suggest(items, categories).then((res) => {
-      // Pre-apply only where user hasn't already set a category
+      // Pre-apply only where user hasn't already set a category. Resolve full path.
       setRowCategories((prev) => {
         const next = { ...prev };
         Object.entries(res).forEach(([k, v]) => {
           const idx = Number(k);
-          if (!next[idx]) next[idx] = v.category;
+          if (!next[idx] || !next[idx].category) {
+            next[idx] = { ...resolveCategoryPath(v.category, categories), touched: false };
+          }
         });
         return next;
       });
     });
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length, categories.length]);
 
@@ -633,7 +689,7 @@ export function ImportStatementModal({
       const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
 
       const realIdx = rows.indexOf(r);
-      const rowCat = rowCategories[realIdx] || catName;
+      const rowCat = rowCategories[realIdx];
 
       return {
         description: r.description,
@@ -644,7 +700,9 @@ export function ImportStatementModal({
         // Cartão de crédito: compras são projetadas (Pendente) até a fatura ser paga.
         // Débito/conta corrente: já saíram da conta, então ficam Pago.
         status: (importType === "cartao" ? "Pendente" : "Pago") as "Pendente" | "Pago",
-        category: rowCat,
+        category: rowCat?.category || catName,
+        subcategory: rowCat?.subcategory || null,
+        subcategory2: rowCat?.subcategory2 || null,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
@@ -657,6 +715,7 @@ export function ImportStatementModal({
         original_amount: r.original_amount || null,
         purchase_date_original: purchaseDateOriginal || null,
       };
+
     });
 
     let createOk = true;
@@ -1008,14 +1067,47 @@ export function ImportStatementModal({
               }
               bankAccountId={bankId}
               walletId={walletId}
-              categories={rootCategories}
+              categories={categories}
               rowCategories={rowCategories}
               suggestions={suggestions}
               suggestLoading={suggestLoading}
-              onCategoryChange={(idx, name) =>
-                setRowCategories((prev) => ({ ...prev, [idx]: name }))
-              }
+              onCategoryChange={(idx, value) => {
+                // Mark this row as user-touched, then propagate to identical untouched rows.
+                setRowCategories((prev) => {
+                  const next: Record<number, RowCategoryValue> = { ...prev };
+                  next[idx] = { ...value, touched: true };
+                  const target = rows[idx];
+                  if (target && value.category) {
+                    const targetDesc = normalizeText(target.description);
+                    const targetAmount = Math.abs(target.amount);
+                    let propagated = 0;
+                    rows.forEach((r, i) => {
+                      if (i === idx) return;
+                      if (!r.selected) return;
+                      if (
+                        normalizeText(r.description) === targetDesc &&
+                        Math.abs(r.amount) === targetAmount &&
+                        r.type === target.type
+                      ) {
+                        const existing = next[i];
+                        if (!existing?.touched) {
+                          next[i] = { ...value, touched: false };
+                          propagated++;
+                        }
+                      }
+                    });
+                    if (propagated > 0) {
+                      toast({
+                        title: `Categoria aplicada a +${propagated} lançamento${propagated > 1 ? "s" : ""} igua${propagated > 1 ? "is" : "l"}`,
+                        description: "Linhas com mesma descrição e valor foram categorizadas automaticamente.",
+                      });
+                    }
+                  }
+                  return next;
+                });
+              }}
             />
+
 
           );
         })()}
