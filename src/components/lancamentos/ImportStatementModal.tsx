@@ -148,7 +148,7 @@ export function ImportStatementModal({
   const [targetBankAccount, setTargetBankAccount] = useState("");
   const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
   const [targetCard, setTargetCard] = useState("");
-  const [defaultCategory, setDefaultCategory] = useState("");
+  
 
   // Wizard step
   const [step, setStep] = useState<"preview" | "reconcile" | "summary">("preview");
@@ -394,40 +394,104 @@ export function ImportStatementModal({
   };
 
 
-  // Trigger reconciliation matching when in "debito" mode with destination set
+  // Trigger reconciliation matching for both debit accounts and credit cards
   useEffect(() => {
-    if (importType !== "debito" || rows.length === 0 || !targetBankAccount) {
+    if (rows.length === 0) {
       resetMatches();
       return;
     }
-    const [accType, ...idParts] = targetBankAccount.split(":");
-    const accId = idParts.join(":");
-    const bankId = accType === "bank" ? accId : null;
-    const walletId = accType === "wallet" ? accId : null;
 
-    const lines = rows.map((r) => ({
-      date: r.date,
-      description: r.description,
-      amount: Math.abs(r.amount),
-      type: r.type,
-    }));
+    // DEBIT MODE — match against bank account / wallet
+    if (importType === "debito") {
+      if (!targetBankAccount) {
+        resetMatches();
+        return;
+      }
+      const [accType, ...idParts] = targetBankAccount.split(":");
+      const accId = idParts.join(":");
+      const bankId = accType === "bank" ? accId : null;
+      const walletId = accType === "wallet" ? accId : null;
 
-    findMatches(lines, bankId, walletId).then((res) => {
-      // Pre-set actions: rows with a match default to "vincular", others to "criar"
-      const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
-      const nextTargets: Record<number, string> = {};
-      rows.forEach((_, i) => {
-        if (res[i]?.best) {
-          nextActions[i] = "vincular";
-          nextTargets[i] = res[i].best!.candidate.id;
-        } else {
-          nextActions[i] = "criar";
-        }
+      const lines = rows.map((r) => ({
+        date: r.date,
+        description: r.description,
+        amount: Math.abs(r.amount),
+        type: r.type,
+      }));
+
+      findMatches(lines, bankId, walletId, null).then((res) => {
+        const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
+        const nextTargets: Record<number, string> = {};
+        rows.forEach((_, i) => {
+          if (res[i]?.best) {
+            nextActions[i] = "vincular";
+            nextTargets[i] = res[i].best!.candidate.id;
+          } else {
+            nextActions[i] = "criar";
+          }
+        });
+        setMatchActions(nextActions);
+        setMatchTargets(nextTargets);
       });
-      setMatchActions(nextActions);
-      setMatchTargets(nextTargets);
-    });
-  }, [importType, targetBankAccount, rows, findMatches, resetMatches]);
+      return;
+    }
+
+    // CARD MODE — match against credit_card_id (single or per-row for multi-card)
+    if (importType === "cartao") {
+      const hasDestination = isMultiCard
+        ? rows.some((r) => r.matched_card_id)
+        : !!targetCard;
+      if (!hasDestination) {
+        resetMatches();
+        return;
+      }
+
+      // Group rows by card id
+      const groups = new Map<string, number[]>();
+      rows.forEach((r, i) => {
+        const cardId = isMultiCard ? r.matched_card_id : targetCard;
+        if (!cardId) return;
+        const arr = groups.get(cardId) || [];
+        arr.push(i);
+        groups.set(cardId, arr);
+      });
+
+      Promise.all(
+        Array.from(groups.entries()).map(async ([cardId, indices]) => {
+          const lines = indices.map((i) => {
+            const r = rows[i];
+            // For cards, match on the billing/payment date — manual launches use due date
+            const matchDate = r.statement_due_date || r.resolved_competence_date || r.date;
+            return {
+              date: matchDate,
+              description: r.description,
+              amount: Math.abs(r.amount),
+              type: r.type,
+            };
+          });
+          const res = await findMatches(lines, null, null, cardId);
+          return indices.map((rowIdx, localIdx) => ({ rowIdx, match: res[localIdx] }));
+        }),
+      ).then((groupResults) => {
+        const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
+        const nextTargets: Record<number, string> = {};
+        rows.forEach((_, i) => {
+          nextActions[i] = "criar";
+        });
+        groupResults.flat().forEach(({ rowIdx, match }) => {
+          if (match?.best) {
+            nextActions[rowIdx] = "vincular";
+            nextTargets[rowIdx] = match.best.candidate.id;
+          }
+        });
+        setMatchActions(nextActions);
+        setMatchTargets(nextTargets);
+      });
+      return;
+    }
+
+    resetMatches();
+  }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
 
   // Trigger AI category suggestions once rows + categories are available.
   // Pre-applies suggestion to rowCategories so the user just edits exceptions.
@@ -493,21 +557,20 @@ export function ImportStatementModal({
     const accId = idParts.join(":");
 
     // Resolve category name from UUID
-    const catName = rootCategories.find(c => c.id === defaultCategory)?.name || "Sem Categoria";
+    const catName = "Sem Categoria";
 
     // Find parent card for multi-card fallback
     const parentCardId = isMultiCard
       ? (detectedCards.find(c => !c.parent_card_id)?.id || detectedCards[0]?.id || null)
       : null;
 
-    // Split rows by action (debito mode only — cartao always "criar")
-    const isDebito = importType === "debito";
+    // Split rows by action — both debit and card now support vincular
     const rowsToCreate: ParsedTransaction[] = [];
     const rowsToLink: { row: ParsedTransaction; txId: string }[] = [];
 
     selectedRows.forEach((r) => {
       const realIdx = rows.indexOf(r);
-      const action = isDebito ? (matchActions[realIdx] || "criar") : "criar";
+      const action = matchActions[realIdx] || "criar";
       if (action === "ignorar") return;
       if (action === "vincular" && matchTargets[realIdx]) {
         rowsToLink.push({ row: r, txId: matchTargets[realIdx] });
@@ -516,21 +579,25 @@ export function ImportStatementModal({
       }
     });
 
-    // 1) Link existing pending transactions → mark Pago, set payment_date from statement
+    // 1) Link existing transactions — mark Pago (debit) or just reconcile (card / already-Pago)
     let linkOk = 0;
     let linkFail = 0;
     if (rowsToLink.length > 0) {
       await Promise.all(
         rowsToLink.map(async ({ row, txId }) => {
+          // Card-mode links keep status as-is (purchases stay projected until bill is paid).
+          // Debit-mode promotes Pendente → Pago. Already-Pago stays Pago either way.
+          const updatePayload: Record<string, unknown> = {
+            is_reconciled: true,
+          };
+          if (importType === "debito") {
+            updatePayload.status = "Pago";
+            updatePayload.payment_date = row.date;
+          }
           const { error } = await supabase
             .from("transactions")
-            .update({
-              status: "Pago",
-              payment_date: row.date,
-              is_reconciled: true,
-            })
-            .eq("id", txId)
-            .eq("status", "Pendente"); // race-safe: only update if still pending
+            .update(updatePayload)
+            .eq("id", txId);
           if (error) {
             console.error("[ImportStatement] link error", error);
             linkFail++;
@@ -628,7 +695,7 @@ export function ImportStatementModal({
     setTargetBankAccount("");
     setImportType("");
     setTargetCard("");
-    setDefaultCategory("");
+    
     setMatchActions({});
     setMatchTargets({});
     setRowCategories({});
@@ -711,7 +778,7 @@ export function ImportStatementModal({
               <>
                 <ArrowRight className="h-3 w-3 text-muted-foreground" />
                 <Badge variant={step === "reconcile" ? "default" : "secondary"} className="text-[10px]">
-                  {importType === "cartao" ? "2. Categorizar" : "2. Conciliar"}
+                  {importType === "cartao" ? "2. Conciliar & Categorizar" : "2. Conciliar"}
                 </Badge>
               </>
             )}
@@ -795,22 +862,6 @@ export function ImportStatementModal({
                 </div>
               )}
 
-              {/* Default category */}
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-xs text-muted-foreground mb-1 block">Categoria padrão</label>
-                <Select value={defaultCategory} onValueChange={setDefaultCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Opcional" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {rootCategories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             {/* Auto-detection feedback */}
@@ -1016,7 +1067,7 @@ export function ImportStatementModal({
                   disabled={selectedRows.length === 0 || matchLoading}
                   className="gap-2"
                 >
-                  {importType === "cartao" ? "Próximo: Categorizar" : "Próximo: Conciliar"} <ArrowRight className="h-4 w-4" />
+                  {importType === "cartao" ? "Próximo: Conciliar & Categorizar" : "Próximo: Conciliar"} <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
                 <Button

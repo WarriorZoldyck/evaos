@@ -119,49 +119,50 @@ export function ReconcileStep({
       <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
         <div className="flex items-center gap-2 text-sm font-medium text-primary">
           <Sparkles className="h-4 w-4" />
-          {isCardMode ? "Categorização assistida" : "Conciliação assistida"}
-          {(matchLoading || (isCardMode && suggestLoading)) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {isCardMode ? "Conciliação & categorização" : "Conciliação assistida"}
+          {(matchLoading || suggestLoading) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         </div>
         <p className="text-xs text-muted-foreground mt-1">
           {isCardMode
-            ? "O EVA sugeriu categorias com base no seu histórico e na IA. Revise antes de importar — as compras entram como projetadas até a fatura ser paga."
-            : "O EVA comparou o extrato com os lançamentos pendentes na conta. Confirme as correspondências e escolha o que criar do zero."}
+            ? "O EVA cruzou as compras do extrato com lançamentos que você já tinha no cartão e sugeriu categorias com base no seu histórico e na IA. As compras novas entram como projetadas até a fatura ser paga."
+            : "O EVA comparou o extrato com os lançamentos da conta (pendentes e pagos). Confirme as correspondências e escolha o que criar do zero."}
         </p>
-        {!isCardMode && (
-          <div className="flex flex-wrap gap-2 mt-2">
-            <Button size="sm" variant="outline" onClick={conciliateAll} className="h-7 text-xs gap-1">
-              <Check className="h-3 w-3" /> Conciliar todos os pares
-            </Button>
-            <Button size="sm" variant="ghost" onClick={createAll} className="h-7 text-xs">
-              Criar tudo do zero
-            </Button>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2 mt-2">
+          <Button size="sm" variant="outline" onClick={conciliateAll} className="h-7 text-xs gap-1">
+            <Check className="h-3 w-3" /> Conciliar todos os pares
+          </Button>
+          <Button size="sm" variant="ghost" onClick={createAll} className="h-7 text-xs">
+            Criar tudo do zero
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto space-y-4 pr-1">
-        {/* SECTION A — Matches (debit only) */}
-        {!isCardMode && (
+        {/* SECTION A — Matches */}
         <section>
           <header className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <Link2 className="h-4 w-4 text-primary" />
-              Correspondências encontradas
+              {isCardMode ? "Compras já lançadas no cartão" : "Correspondências encontradas"}
               <Badge variant="secondary" className="text-[10px]">{matchedRows.length}</Badge>
             </h3>
           </header>
           {matchedRows.length === 0 ? (
             <p className="text-xs text-muted-foreground italic px-2 py-3 border rounded-lg bg-muted/20">
-              Nenhuma correspondência automática.
-              {indexed.some(({ i }) => matches[i]?.best) && (
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0 ml-2 text-xs"
-                  onClick={conciliateAll}
-                >
-                  Aceitar sugestões
-                </Button>
+              {indexed.some(({ i }) => matches[i]?.best) ? (
+                <>
+                  Nenhuma correspondência aceita ainda.
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="h-auto p-0 ml-2 text-xs"
+                    onClick={conciliateAll}
+                  >
+                    Aceitar sugestões
+                  </Button>
+                </>
+              ) : (
+                <>Nenhum lançamento existente bate com este extrato.</>
               )}
             </p>
           ) : (
@@ -181,7 +182,15 @@ export function ReconcileStep({
                     <ArrowLeftRight className="h-4 w-4 text-primary shrink-0" />
                     {/* EVA */}
                     <div className="min-w-0">
-                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">EVA — Pendente</p>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5 flex items-center gap-1">
+                        EVA
+                        <Badge
+                          variant={cand.status === "Pago" ? "default" : "secondary"}
+                          className="text-[9px] px-1 py-0 h-3.5"
+                        >
+                          {cand.status}
+                        </Badge>
+                      </p>
                       <p className="font-medium text-sm truncate" title={cand.description}>{cand.description}</p>
                       <p className="text-xs text-muted-foreground">
                         {fmtDate(cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
@@ -219,14 +228,16 @@ export function ReconcileStep({
                               ))}
                             </div>
                           )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full mt-2 h-7 text-xs gap-1"
-                            onClick={() => setManualForRow(i)}
-                          >
-                            <Search className="h-3 w-3" /> Buscar manualmente
-                          </Button>
+                          {!isCardMode && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full mt-2 h-7 text-xs gap-1"
+                              onClick={() => setManualForRow(i)}
+                            >
+                              <Search className="h-3 w-3" /> Buscar manualmente
+                            </Button>
+                          )}
                         </PopoverContent>
                       </Popover>
                       <Button
@@ -245,7 +256,6 @@ export function ReconcileStep({
             </div>
           )}
         </section>
-        )}
 
 
         <section>
