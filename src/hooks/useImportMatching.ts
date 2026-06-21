@@ -34,11 +34,13 @@ export function useImportMatching() {
       bankAccountId: string | null,
       walletId: string | null,
       creditCardId: string | null = null,
+      options: { merge?: boolean } = {},
     ) => {
       if (lines.length === 0 || (!bankAccountId && !walletId && !creditCardId)) {
-        setMatches({});
+        if (!options.merge) setMatches({});
         return {};
       }
+
 
       setLoading(true);
       try {
