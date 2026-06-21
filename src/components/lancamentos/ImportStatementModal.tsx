@@ -703,10 +703,12 @@ export function ImportStatementModal({
         {rows.length > 0 && step !== "summary" && (
           <div className="flex items-center gap-2 text-xs">
             <Badge variant={step === "preview" ? "default" : "secondary"} className="text-[10px]">1. Conferir</Badge>
-            {importType === "debito" && targetBankAccount && (
+            {((importType === "debito" && targetBankAccount) || importType === "cartao") && (
               <>
                 <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                <Badge variant={step === "reconcile" ? "default" : "secondary"} className="text-[10px]">2. Conciliar</Badge>
+                <Badge variant={step === "reconcile" ? "default" : "secondary"} className="text-[10px]">
+                  {importType === "cartao" ? "2. Categorizar" : "2. Conciliar"}
+                </Badge>
               </>
             )}
             <ArrowRight className="h-3 w-3 text-muted-foreground" />
