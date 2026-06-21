@@ -597,9 +597,11 @@ export function ImportStatementModal({
     setDefaultCategory("");
     setMatchActions({});
     setMatchTargets({});
+    setRowCategories({});
     setImportResult(null);
     setStep("preview");
     resetMatches();
+    resetSuggestions();
   };
 
   const handleClose = () => {
