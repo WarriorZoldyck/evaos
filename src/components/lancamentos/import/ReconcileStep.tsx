@@ -42,6 +42,8 @@ interface ReconcileStepProps {
   suggestions: Record<number, SuggestionSource>;
   suggestLoading: boolean;
   onCategoryChange: (idx: number, name: string) => void;
+  /** "debit" shows conciliation against pending entries. "card" only shows categorization. */
+  mode?: "debit" | "card";
 }
 
 const fmt = (n: number) =>
