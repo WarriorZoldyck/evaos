@@ -69,7 +69,9 @@ export function ReconcileStep({
   suggestions,
   suggestLoading,
   onCategoryChange,
+  mode = "debit",
 }: ReconcileStepProps) {
+  const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
 
   // Build indexed list of selected rows
