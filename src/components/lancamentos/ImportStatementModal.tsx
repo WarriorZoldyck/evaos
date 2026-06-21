@@ -950,7 +950,15 @@ export function ImportStatementModal({
               }
               bankAccountId={bankId}
               walletId={walletId}
+              categories={rootCategories}
+              rowCategories={rowCategories}
+              suggestions={suggestions}
+              suggestLoading={suggestLoading}
+              onCategoryChange={(idx, name) =>
+                setRowCategories((prev) => ({ ...prev, [idx]: name }))
+              }
             />
+
           );
         })()}
 
