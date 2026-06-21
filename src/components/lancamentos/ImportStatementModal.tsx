@@ -1002,29 +1002,34 @@ export function ImportStatementModal({
         )}
 
         {/* FOOTER — step-aware */}
-        {rows.length > 0 && step === "preview" && (
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-            {importType === "debito" && targetBankAccount ? (
-              <Button
-                onClick={() => setStep("reconcile")}
-                disabled={selectedRows.length === 0 || matchLoading}
-                className="gap-2"
-              >
-                Próximo: Conciliar <ArrowRight className="h-4 w-4" />
-              </Button>
-            ) : (
-              <Button
-                onClick={handleImport}
-                disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !isMultiCard && !targetCard)}
-                className="gap-2"
-              >
-                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                Importar {selectedRows.length} transações
-              </Button>
-            )}
-          </DialogFooter>
-        )}
+        {rows.length > 0 && step === "preview" && (() => {
+          const canGoReconcile =
+            (importType === "debito" && !!targetBankAccount) ||
+            (importType === "cartao" && (isMultiCard || !!targetCard));
+          return (
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+              {canGoReconcile ? (
+                <Button
+                  onClick={() => setStep("reconcile")}
+                  disabled={selectedRows.length === 0 || matchLoading}
+                  className="gap-2"
+                >
+                  {importType === "cartao" ? "Próximo: Categorizar" : "Próximo: Conciliar"} <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleImport}
+                  disabled={importing || selectedRows.length === 0 || !targetBankAccount || !importType || (importType === "cartao" && !isMultiCard && !targetCard)}
+                  className="gap-2"
+                >
+                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Importar {selectedRows.length} transações
+                </Button>
+              )}
+            </DialogFooter>
+          );
+        })()}
 
         {rows.length > 0 && step === "reconcile" && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
