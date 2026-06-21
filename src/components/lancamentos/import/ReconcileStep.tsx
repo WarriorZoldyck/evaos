@@ -62,6 +62,11 @@ export function ReconcileStep({
   onTargetChange,
   bankAccountId,
   walletId,
+  categories,
+  rowCategories,
+  suggestions,
+  suggestLoading,
+  onCategoryChange,
 }: ReconcileStepProps) {
   const [manualForRow, setManualForRow] = useState<number | null>(null);
 
