@@ -26,6 +26,7 @@ import {
 import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching } from "@/hooks/useImportMatching";
 import { ReconcileStep } from "./import/ReconcileStep";
+import { useCategorySuggestions, type SuggestionSource } from "@/hooks/useCategorySuggestions";
 
 interface ParsedTransaction {
   date: string;
