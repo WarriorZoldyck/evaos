@@ -13,8 +13,10 @@ interface ParsedTransaction {
   amount: number;
   type: "receita" | "despesa";
   detected_card_digits?: string;
+  cardholder_name?: string;
   statement_due_date?: string;
   statement_close_date?: string;
+  statement_total?: number;
   raw_statement_date?: string;
 }
 
@@ -143,34 +145,42 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
           content: `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
 
 Return ONLY a valid JSON array of transaction objects. Each object must have:
-- "raw_date": string — the date EXACTLY as printed on the statement line, in "DD/MM" format (e.g. "23/12", "01/01", "08/03"). Do NOT convert or guess the year. Just the day and month as they appear.
+- "raw_date": string — the date EXACTLY as printed on the statement line, in "DD/MM" format. Do NOT convert or guess the year.
 - "description": string with the transaction description  
 - "amount": number (always positive)
 - "type": "despesa" for purchases/expenses, "receita" ONLY for actual refunds/chargebacks (estornos)
-- "card_digits": last 4 digits of the card this transaction belongs to (string), or null if not identifiable
-- "statement_due_date": statement/fatura due date in "YYYY-MM-DD" format, repeated on every transaction object, or null if not identifiable
-- "statement_close_date": the closing date of the billing cycle in "YYYY-MM-DD" format (the date up to which purchases are included in this statement), repeated on every transaction object, or null if not identifiable
+- "card_digits": last 4 digits of the card this transaction belongs to (string), or null
+- "cardholder_name": full name of the cardholder of this transaction (from the section header), or null
+- "statement_due_date": "YYYY-MM-DD", repeated on every object, or null
+- "statement_close_date": "YYYY-MM-DD", repeated on every object, or null
+- "statement_total": total value of THIS statement (R$ total da fatura), repeated on every object, or null
 
 CRITICAL RULES:
-- Credit card statements often have MULTIPLE cards in one PDF. Each card section has a header like "NOME DO TITULAR - 4258 XXXX XXXX 7014". The last 4 digits identify which card each transaction belongs to.
-- For each section/card, set "card_digits" to those last 4 digits for ALL transactions under that section.
-- All transactions from the same statement should carry the same "statement_due_date" and "statement_close_date" when the PDF shows them.
-- Brazilian statements ALWAYS use DD/MM date format, NEVER MM/DD. Return raw_date as DD/MM exactly as printed.
-- DO NOT try to resolve the year for raw_date. The year will be resolved deterministically by the importing system using the billing cycle.
+- Statements often have MULTIPLE cards/cardholders (titular + adicionais). Each section starts with a header like "NOME (final 1234)". Tag every transaction with its card_digits AND cardholder_name.
+- Brazilian statements use DD/MM, NEVER MM/DD.
+- DO NOT resolve the year for raw_date. The system resolves it deterministically.
 - Amount must always be positive.
-- For installment purchases (parcelas), the date printed is often the ORIGINAL purchase date from months/years ago. Still return it as raw_date — the system will handle it.
+- For installments, the printed date is the ORIGINAL purchase date. Keep it as raw_date.
 
-EXCLUDE THESE ENTRIES (they are NOT real transactions):
-- "DEB AUTOM DE FATURA" or "PAGAMENTO DE FATURA" or "PAGAMENTO FATURA" — these are bill payments
-- Opening/closing balances, total summaries, saldo anterior
-- "ANUIDADE" with R$0.00 value
-- Any line that represents a payment toward the credit card bill itself
-- Credits labeled as "PAGAMENTO" or "PAG FATURA" — these are bill payments, NOT refunds
+INTERNATIONAL TRANSACTIONS — VERY IMPORTANT:
+- "Lançamentos internacionais" sections list purchases in USD/EUR with the converted R$ value. ALWAYS use the printed transaction date (the "DATA" of the line), NOT the closing date.
+- Emit one transaction per international purchase using the R$ amount.
+- ALSO emit a SEPARATE transaction for the "Repasse de IOF em R$" line — this is REAL money on the bill. Use the same date as the international purchase(s), description "IOF Internacional - <merchant>" (or just "IOF Internacional" if multiple), type "despesa". NEVER skip the IOF.
 
-Only classify as "receita" actual purchase refunds/chargebacks (e.g., "ESTORNO", "DEVOLUCAO").
+DEDUPLICATION:
+- If the SAME purchase line appears twice (same date, amount, description — possibly with subtle whitespace differences), include it ONLY ONCE.
 
-- Installment info in the "Parcela" column (like "3/6") should be included in the description.
-- Return ONLY the JSON array, no markdown, no wrapping object, no explanation.`
+EXCLUDE (NOT real transactions):
+- Bill payments: "DEB AUTOM DE FATURA", "PAGAMENTO DE FATURA", "PAG FATURA"
+- Summary/header lines: "Total da fatura anterior", "Pagamento efetuado em ...", "Saldo financiado", "Lançamentos atuais"
+- Section totals: "Lançamentos no cartão (final XXXX) VALOR", "Total transações inter. em R$", "Total lançamentos inter. em R$"
+- Opening/closing balances, "ANUIDADE" R$ 0,00
+- "Compras parceladas - próximas faturas" — this is FUTURE bills, SKIP entirely.
+
+Only classify as "receita" real refunds/chargebacks ("ESTORNO", "DEVOLUCAO").
+
+- Installment info ("3/6") goes inside description.
+- Return ONLY the JSON array, no markdown, no wrapping object.`
         },
         {
           role: "user",
