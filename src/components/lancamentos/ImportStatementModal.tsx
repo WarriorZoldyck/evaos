@@ -1207,29 +1207,36 @@ export function ImportStatementModal({
 
         {rows.length > 0 && step === "reconcile" && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
+          let totalToCreate = 0;
+          let totalToLink = 0;
           selectedRows.forEach((r) => {
             const i = rows.indexOf(r);
             const a = matchActions[i] || "criar";
             counts[a]++;
+            const signed = r.type === "receita" ? Math.abs(r.amount) : -Math.abs(r.amount);
+            if (a === "criar") totalToCreate += signed;
+            if (a === "vincular") totalToLink += signed;
           });
           const toImport = counts.vincular + counts.criar;
+          const grandTotal = totalToCreate + totalToLink;
+          const fmt = (v: number) =>
+            v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
           return (
             <DialogFooter className="gap-2 sm:justify-between flex-col-reverse sm:flex-row">
               <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
                 <ArrowLeft className="h-4 w-4" /> Voltar
               </Button>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col items-end gap-1">
                 <span className="text-xs text-muted-foreground">
-                  {importType === "cartao" ? (
-                    <><strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar</>
-                  ) : (
-                    <><strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar</>
-                  )}
+                  <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Total no extrato após import: <strong className={grandTotal < 0 ? "text-destructive" : "text-foreground"}>{fmt(grandTotal)}</strong>
                 </span>
                 <Button
                   onClick={handleImport}
                   disabled={importing || toImport === 0}
-                  className="gap-2"
+                  className="gap-2 mt-1"
                 >
                   {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                   {importType === "cartao" ? `Importar ${toImport} como projetadas` : "Importar"}
