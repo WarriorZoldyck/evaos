@@ -573,7 +573,9 @@ export function ImportStatementModal({
         type: r.type,
         payment_date: billingDate,
         competence_date: competenceDate,
-        status: "Pago" as const,
+        // Cartão de crédito: compras são projetadas (Pendente) até a fatura ser paga.
+        // Débito/conta corrente: já saíram da conta, então ficam Pago.
+        status: (importType === "cartao" ? "Pendente" : "Pago") as "Pendente" | "Pago",
         category: rowCat,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
