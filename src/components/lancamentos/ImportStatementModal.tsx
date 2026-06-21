@@ -1067,14 +1067,47 @@ export function ImportStatementModal({
               }
               bankAccountId={bankId}
               walletId={walletId}
-              categories={rootCategories}
+              categories={categories}
               rowCategories={rowCategories}
               suggestions={suggestions}
               suggestLoading={suggestLoading}
-              onCategoryChange={(idx, name) =>
-                setRowCategories((prev) => ({ ...prev, [idx]: name }))
-              }
+              onCategoryChange={(idx, value) => {
+                // Mark this row as user-touched, then propagate to identical untouched rows.
+                setRowCategories((prev) => {
+                  const next: Record<number, RowCategoryValue> = { ...prev };
+                  next[idx] = { ...value, touched: true };
+                  const target = rows[idx];
+                  if (target && value.category) {
+                    const targetDesc = normalizeText(target.description);
+                    const targetAmount = Math.abs(target.amount);
+                    let propagated = 0;
+                    rows.forEach((r, i) => {
+                      if (i === idx) return;
+                      if (!r.selected) return;
+                      if (
+                        normalizeText(r.description) === targetDesc &&
+                        Math.abs(r.amount) === targetAmount &&
+                        r.type === target.type
+                      ) {
+                        const existing = next[i];
+                        if (!existing?.touched) {
+                          next[i] = { ...value, touched: false };
+                          propagated++;
+                        }
+                      }
+                    });
+                    if (propagated > 0) {
+                      toast({
+                        title: `Categoria aplicada a +${propagated} lançamento${propagated > 1 ? "s" : ""} igua${propagated > 1 ? "is" : "l"}`,
+                        description: "Linhas com mesma descrição e valor foram categorizadas automaticamente.",
+                      });
+                    }
+                  }
+                  return next;
+                });
+              }}
             />
+
 
           );
         })()}
