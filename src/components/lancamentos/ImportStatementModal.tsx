@@ -413,7 +413,11 @@ export function ImportStatementModal({
         ? Number(result.statement_total)
         : null;
       setStatementTotal(parsedStatementTotal);
-      setStatementTotalInput(parsedStatementTotal ? parsedStatementTotal.toFixed(2).replace(".", ",") : "");
+      setStatementTotalInput(
+        parsedStatementTotal
+          ? parsedStatementTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : ""
+      );
       setAcknowledgeDivergence(false);
 
       const detectedCardIds = new Set(deduped.map((r) => r.matched_card_id).filter(Boolean));
