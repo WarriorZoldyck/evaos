@@ -195,6 +195,11 @@ export function ImportStatementModal({
   const [targetBankAccount, setTargetBankAccount] = useState("");
   const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
   const [targetCard, setTargetCard] = useState("");
+  // Statement total reported by the bank (auto-filled from the parser, user-editable).
+  const [statementTotal, setStatementTotal] = useState<number | null>(null);
+  const [statementTotalInput, setStatementTotalInput] = useState<string>("");
+  // When divergence > R$ 1,00, user must explicitly acknowledge to import.
+  const [acknowledgeDivergence, setAcknowledgeDivergence] = useState(false);
   
 
   // Wizard step
@@ -402,6 +407,14 @@ export function ImportStatementModal({
       }
 
       setRows(deduped);
+
+      // Capture statement total reported by the bank (used to validate the import).
+      const parsedStatementTotal = typeof result.statement_total === "number" && result.statement_total > 0
+        ? Number(result.statement_total)
+        : null;
+      setStatementTotal(parsedStatementTotal);
+      setStatementTotalInput(parsedStatementTotal ? parsedStatementTotal.toFixed(2).replace(".", ",") : "");
+      setAcknowledgeDivergence(false);
 
       const detectedCardIds = new Set(deduped.map((r) => r.matched_card_id).filter(Boolean));
       const resolvedDetectedCards = creditCards.filter((c) => detectedCardIds.has(c.id));
@@ -783,7 +796,9 @@ export function ImportStatementModal({
     setTargetBankAccount("");
     setImportType("");
     setTargetCard("");
-    
+    setStatementTotal(null);
+    setStatementTotalInput("");
+    setAcknowledgeDivergence(false);
     setMatchActions({});
     setMatchTargets({});
     setRowCategories({});
@@ -1221,21 +1236,81 @@ export function ImportStatementModal({
           const grandTotal = totalToCreate + totalToLink;
           const fmt = (v: number) =>
             v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+          // Validate vs. statement total reported by the bank.
+          // For credit cards the bill is a positive amount; compare against absolute import total.
+          const userStatementTotal = (() => {
+            const cleaned = statementTotalInput.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+            const n = Number(cleaned);
+            return Number.isFinite(n) && n > 0 ? n : null;
+          })();
+          const importedAbs = Math.abs(grandTotal);
+          const diff = userStatementTotal !== null ? +(importedAbs - userStatementTotal).toFixed(2) : null;
+          const hasDivergence = diff !== null && Math.abs(diff) > 1.00;
+          const blockedByDivergence = hasDivergence && !acknowledgeDivergence;
+
           return (
-            <DialogFooter className="gap-2 sm:justify-between flex-col-reverse sm:flex-row">
+            <DialogFooter className="gap-2 sm:justify-between flex-col-reverse sm:flex-row items-stretch">
               <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
                 <ArrowLeft className="h-4 w-4" /> Voltar
               </Button>
-              <div className="flex flex-col items-end gap-1">
-                <span className="text-xs text-muted-foreground">
+              <div className="flex flex-col items-stretch sm:items-end gap-2 min-w-[320px]">
+                <div className="flex items-center gap-2 justify-end">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">
+                    Total informado pelo banco (R$):
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={statementTotalInput}
+                    onChange={(e) => {
+                      setStatementTotalInput(e.target.value);
+                      setAcknowledgeDivergence(false);
+                    }}
+                    className="h-7 w-28 rounded border bg-background px-2 text-right text-xs font-mono"
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground text-right">
                   <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  Total no extrato após import: <strong className={grandTotal < 0 ? "text-destructive" : "text-foreground"}>{fmt(grandTotal)}</strong>
+                <span className="text-xs text-muted-foreground text-right">
+                  Total no extrato após import:{" "}
+                  <strong className={grandTotal < 0 ? "text-destructive" : "text-foreground"}>
+                    {fmt(grandTotal)}
+                  </strong>
                 </span>
+                {diff !== null && (
+                  <span
+                    className={`text-xs text-right ${
+                      hasDivergence ? "text-destructive font-medium" : "text-emerald-600"
+                    }`}
+                  >
+                    {hasDivergence ? "⚠ Divergência" : "✓ Bate com a fatura"}:{" "}
+                    <strong>{fmt(diff)}</strong>
+                    {hasDivergence ? ` (esperado ${fmt(userStatementTotal!)})` : ""}
+                  </span>
+                )}
+                {hasDivergence && (
+                  <div className="rounded border border-destructive/40 bg-destructive/5 p-2 text-[11px] text-left text-destructive max-w-[360px]">
+                    <p className="font-medium mb-1">A importação não bate com o valor da fatura.</p>
+                    <p className="text-muted-foreground mb-2">
+                      Revise se existem linhas duplicadas no extrato, lançamentos ausentes
+                      (IOF internacional, anuidades, cartões adicionais) ou correspondências erradas.
+                    </p>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                      <Checkbox
+                        checked={acknowledgeDivergence}
+                        onCheckedChange={(c) => setAcknowledgeDivergence(!!c)}
+                        className="mt-0.5"
+                      />
+                      <span>Entendi a divergência e quero importar mesmo assim.</span>
+                    </label>
+                  </div>
+                )}
                 <Button
                   onClick={handleImport}
-                  disabled={importing || toImport === 0}
+                  disabled={importing || toImport === 0 || blockedByDivergence}
                   className="gap-2 mt-1"
                 >
                   {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}

@@ -1,60 +1,59 @@
-## Causa raiz (investigada no banco do usuário)
+# Fatura R$ 10.865,52 — diagnóstico e correção
 
-A fatura subiu de **R$ 10.865,52** para **R$ 12.257,79** porque a importação criou **lançamentos duplicados** ao invés de vincular aos já existentes. Diferença ≈ **R$ 1.392,27**.
+## Diagnóstico (já validado contra a fatura)
 
-A conciliação falhou por **dois bugs estruturais** no algoritmo (`src/lib/import/matching.ts`):
+Fatura tem 5 titulares (1973, 6035, 9615, 7940, 7355) todos colapsados sob MASTERCARD BLACK no sistema. Diferença de R$ 541,89:
 
-### Bug 1 — Janela de data errada para cartão de crédito
-O matching compara `statement.date` (data da **compra**, ex.: 18/abr) contra `transaction.payment_date`. Para cartão de crédito, `payment_date` é sempre a **data de vencimento da fatura** (ex.: 21/mai). A diferença passa de 30 dias → nunca cai na janela de 7 dias → **nenhum** lançamento já cadastrado como Pendente é encontrado.
+**Extras no sistema (R$ 604,50):**
+- "Pneus moto" R$ 549,60 duplicado (2 registros idênticos parcela 1/5).
+- "Empório Moscato" R$ 54,90 (29/04) não consta na fatura.
 
-Evidência: o usuário tinha dezenas de Pendentes no MASTERCARD BLACK com `payment_date = 2026-05-21` (Almoço Aromas, Caldos Da Lu, Drogasil 2/2 R$278,69, Bisturi elétrico, Aramis, AirBNB, parcelas, etc.) — todos deveriam ter dado match e foram recriados.
+**Ausentes no sistema (R$ 62,60):**
+- "Carne de Sol 1008" R$ 5,00 (final 7940 — Vitoria).
+- IOF internacional R$ 57,60 (GetYourGuide).
 
-### Bug 2 — Sem deduplicação dentro do próprio extrato
-O extrato traz a mesma compra com pequenas variações de espaço (ex.: "CARNE DE SOL 1008 ALIMENTAÇÃO .GOIANIA" vs "CARNE DE SOL 1008 ALIMENTAÇÃO.GOIANIA", mesmo valor R$5, mesma data) e ambas foram inseridas. Idem várias linhas "DL*UberRides".
-
-### Bug 3 — Tolerância de centavo
-Drogasil 2/2 existia como R$ 278,69 e veio no extrato como R$ 278,70 → não casou.
+604,50 − 62,60 = 541,90 ≈ 541,89 ✅
 
 ---
 
-## Plano
+## Passo 1 — Corrigir dados do usuário (espclin@hotmail.com)
 
-### 1. Corrigir matching para cartão de crédito (`src/lib/import/matching.ts` + `useImportMatching.ts`)
-- Adicionar campo opcional `competence_date` em `CandidateTx`.
-- Quando o destino é cartão de crédito, comparar `line.date` contra `candidate.competence_date` (data da compra) — não `payment_date`.
-- Incluir `competence_date` no `SELECT` do `useImportMatching` e ampliar janela para **15 dias** em cartão (lançamentos manuais costumam ter a data aproximada).
-- Aumentar tolerância de valor para **R$ 0,02** (cobre arredondamento de centavo).
+Script service-role (SQL via insert tool):
+- DELETE id `b337e07a-f48f-4a08-87db-df1a45aa90d0` (duplicata Pneus moto).
+- DELETE id `a782a66a-9b11-4b31-92cc-c9b8cbca8828` (Empório Moscato 54,90 — se o usuário confirmar, mas como bate exato com a diferença, vou prosseguir com a exclusão e avisá-lo).
+- INSERT "Carne de Sol 1008" R$ 5,00, despesa, status Pendente, competence_date 2026-04-16, payment_date 2026-05-21, credit_card_id 1973.
+- INSERT "IOF Internacional - GetYourGuide" R$ 57,60, despesa, status Pendente, competence_date 2026-05-14, payment_date 2026-05-21, credit_card_id 1973.
 
-### 2. Deduplicação intra-extrato (`ImportStatementModal.tsx`)
-Antes de exibir as linhas no `ReconcileStep`, agrupar por `(date, amount, normalize(description))` colapsando variações de espaço/pontuação. Linhas idênticas viram uma só com badge `×N` (já existe a estrutura visual). Isso elimina o caso "CARNE DE SOL" duplicado e os Ubers repetidos.
+Total final esperado: R$ 10.865,52.
 
-### 3. Auto-match agressivo para cartão (mesmo destino + mesmo valor + janela)
-Quando há **exatamente um** candidato Pendente no mesmo cartão com mesmo valor dentro da janela e nenhuma outra linha do extrato concorre por ele, marcar automaticamente como `vincular` por padrão (em vez de "criar novo"), mesmo com descrição diferente. Usuário ainda pode trocar para "criar novo".
+---
 
-### 4. Mensagem de revisão final
-No último passo antes de confirmar, mostrar resumo:
-> "Vamos criar **X** novos lançamentos, vincular **Y** existentes e ignorar **Z**. Total da fatura após import: **R$ ___**."
-Para o usuário ver se o total bate com o extrato antes de gravar.
+## Passo 2 — Endurecer o parser `parse-bank-statement`
 
-### 5. Limpeza dos dados do usuário `espclin@hotmail.com`
-Script único (service role) para a fatura MASTERCARD BLACK / mai-2026:
-- Identificar pares de duplicatas criados em `2026-06-21 20:48` cuja `(amount, normalize(description), payment_date)` colide com um lançamento mais antigo no mesmo cartão.
-- Para cada par: **manter** o mais antigo (com categoria/descrição customizada do usuário) e **deletar** a duplicata recém-importada.
-- Tratar separadamente o caso "CARNE DE SOL" (deletar 1 das 2) e remover a linha esdrúxula `DROGASIL ... R$ 0,01`.
-- Reportar lista de IDs removidos para conferência antes de executar.
+Edge function `supabase/functions/parse-bank-statement/index.ts`:
 
-### 6. Validação
-- Adicionar testes em `src/lib/import/matching.test.ts` cobrindo: cartão de crédito com `competence_date`, tolerância 0,02, dedup de descrição com espaços extras.
-- Conferir total da fatura mai-2026 pós-limpeza == R$ 10.865,52.
+1. **Capturar IOF internacional**: detectar linha "Repasse de IOF em R$ <valor>" no bloco internacional e emitir como lançamento separado (descrição "IOF Internacional - <merchant>", data = data da compra internacional).
+2. **Capturar lançamentos internacionais** com a data da linha "DATA ESTABELECIMENTO" do bloco internacional (hoje cai na data do fechamento).
+3. **Detectar cartões adicionais** (`NOME (final XXXX)` headers). Para cada subtotal, etiquetar as transações com `additional_cardholder` na resposta — o cliente pode prefixar a descrição com `[final XXXX]` para o usuário identificar e (futuramente) sugerir criação de cartão-filho.
+4. **Dedup dentro do mesmo extrato** já existe em `ImportStatementModal.tsx`; ampliar a chave para também colapsar parcelas com mesmo `installment_number/installments_total + amount + base_description` (cobre o caso "Pneus moto 1/5 × 2").
+
+---
+
+## Passo 3 — Validação pós-conciliação na UI
+
+Em `ImportStatementModal.tsx` (etapa `reconcile`):
+
+1. Adicionar campo opcional **"Total informado na fatura (R$)"** acima do footer da etapa de conciliação — usuário cola o total que o banco informou.
+2. No footer, mostrar `Total no extrato após import: X · Diferença vs fatura: Y`.
+3. Se `|diferença| > 1,00`, mostrar `Alert` vermelho **bloqueando o botão Importar** até o usuário marcar "Entendi a divergência, importar mesmo assim". Mensagem orienta a revisar linhas duplicadas/ausentes.
+4. Tentar auto-preencher o campo a partir do parser quando ele detectar "Total desta fatura" no PDF (já temos `statement_total` em vários parsers).
 
 ---
 
 ## Arquivos afetados
-- `src/lib/import/matching.ts` — janela por tipo de destino, tolerância, uso de `competence_date`.
-- `src/lib/import/matching.test.ts` — novos testes.
-- `src/hooks/useImportMatching.ts` — SELECT inclui `competence_date`; passar flag de cartão.
-- `src/components/lancamentos/ImportStatementModal.tsx` — dedup intra-extrato + resumo final.
-- `src/components/lancamentos/import/ReconcileStep.tsx` — exibir auto-match em cartão.
-- Script SQL pontual (service role) — limpeza da conta do usuário.
 
-Sem alterações de schema ou RLS.
+- `supabase/functions/parse-bank-statement/index.ts` — passos 2.1, 2.2, 2.3
+- `src/components/lancamentos/ImportStatementModal.tsx` — passos 2.4, 3
+- SQL data fix (via insert tool) — passo 1
+
+Sem mudanças de schema, RLS ou novas tabelas.
