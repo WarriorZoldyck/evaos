@@ -158,7 +158,7 @@ export function ImportStatementModal({
     failed: number;
     dateFrom: string;
     dateTo: string;
-  } | null>(null>;
+  } | null>(null);
 
   // Per-row reconciliation action: "vincular" | "criar" | "ignorar"
   // Default is "criar" (legacy behavior). "vincular" is suggested when a match exists.
