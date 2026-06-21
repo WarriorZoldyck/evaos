@@ -1079,14 +1079,14 @@ export function ImportStatementModal({
                   const target = rows[idx];
                   if (target && value.category) {
                     const targetDesc = normalizeText(target.description);
-                    const targetAmount = Math.abs(target.amount);
                     let propagated = 0;
                     rows.forEach((r, i) => {
                       if (i === idx) return;
                       if (!r.selected) return;
+                      // Propagate by normalized description + type (ignore amount,
+                      // since the same merchant may have purchases of different values).
                       if (
                         normalizeText(r.description) === targetDesc &&
-                        Math.abs(r.amount) === targetAmount &&
                         r.type === target.type
                       ) {
                         const existing = next[i];
@@ -1098,11 +1098,12 @@ export function ImportStatementModal({
                     });
                     if (propagated > 0) {
                       toast({
-                        title: `Categoria aplicada a +${propagated} lançamento${propagated > 1 ? "s" : ""} igua${propagated > 1 ? "is" : "l"}`,
-                        description: "Linhas com mesma descrição e valor foram categorizadas automaticamente.",
+                        title: `Categoria aplicada a +${propagated} lançamento${propagated > 1 ? "s" : ""} similar${propagated > 1 ? "es" : ""}`,
+                        description: "Linhas com a mesma descrição foram categorizadas automaticamente.",
                       });
                     }
                   }
+
                   return next;
                 });
               }}
