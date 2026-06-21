@@ -562,16 +562,19 @@ export function ImportStatementModal({
       }));
 
     suggest(items, categories).then((res) => {
-      // Pre-apply only where user hasn't already set a category
+      // Pre-apply only where user hasn't already set a category. Resolve full path.
       setRowCategories((prev) => {
         const next = { ...prev };
         Object.entries(res).forEach(([k, v]) => {
           const idx = Number(k);
-          if (!next[idx]) next[idx] = v.category;
+          if (!next[idx] || !next[idx].category) {
+            next[idx] = { ...resolveCategoryPath(v.category, categories), touched: false };
+          }
         });
         return next;
       });
     });
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length, categories.length]);
 
