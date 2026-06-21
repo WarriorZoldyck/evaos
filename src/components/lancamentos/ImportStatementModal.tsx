@@ -511,8 +511,9 @@ export function ImportStatementModal({
         Array.from(groups.entries()).map(async ([cardId, indices], groupIdx) => {
           const lines = indices.map((i) => {
             const r = rows[i];
-            // For cards, match on the billing/payment date — manual launches use due date
-            const matchDate = r.statement_due_date || r.resolved_competence_date || r.date;
+            // For cards we match on competence_date (purchase date), since all
+            // purchases in a billing cycle share the same payment_date.
+            const matchDate = r.resolved_competence_date || r.purchase_date_original || r.date;
             return {
               date: matchDate,
               description: r.description,
