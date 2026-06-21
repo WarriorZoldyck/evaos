@@ -1259,22 +1259,42 @@ export function ImportStatementModal({
                 <ArrowLeft className="h-4 w-4" /> Voltar
               </Button>
               <div className="flex flex-col items-stretch sm:items-end gap-2 min-w-[320px]">
-                <div className="flex items-center gap-2 justify-end">
+                <div className="flex items-center gap-2 justify-end flex-wrap">
                   <label className="text-xs text-muted-foreground whitespace-nowrap">
                     Total informado pelo banco (R$):
                   </label>
                   <input
                     type="text"
                     inputMode="decimal"
-                    placeholder="0,00"
+                    placeholder="Ex.: 8.850,02"
                     value={statementTotalInput}
                     onChange={(e) => {
-                      setStatementTotalInput(e.target.value);
+                      // Only allow digits, dot, comma
+                      const v = e.target.value.replace(/[^\d.,]/g, "");
+                      setStatementTotalInput(v);
                       setAcknowledgeDivergence(false);
                     }}
-                    className="h-7 w-28 rounded border bg-background px-2 text-right text-xs font-mono"
+                    onBlur={() => {
+                      const cleaned = statementTotalInput.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+                      const n = Number(cleaned);
+                      if (Number.isFinite(n) && n > 0) {
+                        setStatementTotalInput(
+                          n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        );
+                      }
+                    }}
+                    className="h-7 w-32 rounded border bg-background px-2 text-right text-xs font-mono"
                   />
+                  {statementTotal !== null && userStatementTotal !== null && Math.abs(userStatementTotal - statementTotal) < 0.01 && (
+                    <span className="text-[10px] text-emerald-600 whitespace-nowrap">(detectado da fatura)</span>
+                  )}
                 </div>
+                {userStatementTotal !== null && importedAbs > 0 && userStatementTotal > importedAbs * 10 && (
+                  <span className="text-[11px] text-amber-600 text-right">
+                    ⚠ Valor parece fora de escala. Confira o separador decimal (use vírgula: 8.850,02).
+                  </span>
+                )}
+
                 <span className="text-xs text-muted-foreground text-right">
                   <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
                 </span>
