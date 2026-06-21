@@ -282,6 +282,15 @@ Only classify as "receita" real refunds/chargebacks ("ESTORNO", "DEVOLUCAO").
         ? String(t.statement_close_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
         : undefined;
 
+      const statementTotalRaw = t.statement_total;
+      let statementTotal: number | undefined;
+      if (statementTotalRaw !== undefined && statementTotalRaw !== null && statementTotalRaw !== "") {
+        const n = Number(String(statementTotalRaw).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
+        if (Number.isFinite(n) && n > 0) statementTotal = n;
+      }
+
+      const cardholderName = t.cardholder_name ? String(t.cardholder_name).trim() : undefined;
+
       // Use raw_date if available, fallback to date field
       const rawDate = t.raw_date ? String(t.raw_date).trim() : undefined;
       // If AI returned a full YYYY-MM-DD date, use it as fallback
@@ -293,8 +302,10 @@ Only classify as "receita" real refunds/chargebacks ("ESTORNO", "DEVOLUCAO").
         amount: Math.abs(Number(t.amount) || 0),
         type: t.type === "receita" ? "receita" as const : "despesa" as const,
         ...(detectedDigits ? { detected_card_digits: detectedDigits } : {}),
+        ...(cardholderName ? { cardholder_name: cardholderName } : {}),
         ...(statementDueDate ? { statement_due_date: statementDueDate } : {}),
         ...(statementCloseDate ? { statement_close_date: statementCloseDate } : {}),
+        ...(statementTotal ? { statement_total: statementTotal } : {}),
         ...(rawDate ? { raw_statement_date: rawDate } : {}),
       };
     }).filter((t: ParsedTransaction) => t.amount > 0 && (t.date || t.raw_statement_date));
@@ -362,8 +373,10 @@ serve(async (req) => {
       }
     }
 
+    const statementTotal = transactions.find((t) => t.statement_total !== undefined)?.statement_total ?? null;
+
     return new Response(
-      JSON.stringify({ transactions, count: transactions.length }),
+      JSON.stringify({ transactions, count: transactions.length, statement_total: statementTotal }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
