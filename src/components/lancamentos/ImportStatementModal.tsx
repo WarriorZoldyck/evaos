@@ -148,7 +148,7 @@ export function ImportStatementModal({
   const [targetBankAccount, setTargetBankAccount] = useState("");
   const [importType, setImportType] = useState<"" | "debito" | "cartao">("");
   const [targetCard, setTargetCard] = useState("");
-  const [defaultCategory, setDefaultCategory] = useState("");
+  
 
   // Wizard step
   const [step, setStep] = useState<"preview" | "reconcile" | "summary">("preview");
@@ -557,7 +557,7 @@ export function ImportStatementModal({
     const accId = idParts.join(":");
 
     // Resolve category name from UUID
-    const catName = rootCategories.find(c => c.id === defaultCategory)?.name || "Sem Categoria";
+    const catName = "Sem Categoria";
 
     // Find parent card for multi-card fallback
     const parentCardId = isMultiCard
@@ -862,22 +862,6 @@ export function ImportStatementModal({
                 </div>
               )}
 
-              {/* Default category */}
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-xs text-muted-foreground mb-1 block">Categoria padrão</label>
-                <Select value={defaultCategory} onValueChange={setDefaultCategory}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Opcional" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {rootCategories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
 
             {/* Auto-detection feedback */}
