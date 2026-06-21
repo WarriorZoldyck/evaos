@@ -167,6 +167,10 @@ export function ImportStatementModal({
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
   const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
 
+  // Per-row category override (name). Pre-filled from suggestions when available.
+  const [rowCategories, setRowCategories] = useState<Record<number, string>>({});
+  const { suggest, suggestions, loading: suggestLoading, reset: resetSuggestions } = useCategorySuggestions();
+
   const rootCategories = categories.filter((c) => !c.parent_id);
 
   // Derive detected cards summary (use real card IDs, not collapsed to parent)
