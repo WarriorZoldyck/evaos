@@ -48,6 +48,53 @@ interface ParsedTransaction {
   purchase_date_original?: string;
 }
 
+interface RowCategoryValue {
+  category: string;
+  subcategory?: string;
+  subcategory2?: string;
+  touched?: boolean;
+}
+
+/** Normalize a string: lowercase, no accents, single-spaced. */
+function normalizeText(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Resolve a category name (which can be a leaf at any level) into the full
+ * { category, subcategory, subcategory2 } path by walking parent_id upwards.
+ */
+function resolveCategoryPath(
+  name: string,
+  categories: { id: string; name: string; parent_id: string | null }[],
+): RowCategoryValue {
+  if (!name) return { category: "" };
+  const norm = normalizeText(name);
+  const found = categories.find((c) => normalizeText(c.name) === norm);
+  if (!found) return { category: name };
+  // Walk up
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const chain: { id: string; name: string; parent_id: string | null }[] = [found];
+  let cur = found;
+  while (cur.parent_id) {
+    const parent = byId.get(cur.parent_id);
+    if (!parent) break;
+    chain.unshift(parent);
+    cur = parent;
+  }
+  return {
+    category: chain[0]?.name || "",
+    subcategory: chain[1]?.name,
+    subcategory2: chain[2]?.name,
+  };
+}
+
+
 interface ImportStatementModalProps {
   open: boolean;
   onClose: () => void;
