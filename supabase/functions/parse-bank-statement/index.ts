@@ -375,17 +375,21 @@ serve(async (req) => {
 
     let statementTotal = transactions.find((t) => t.statement_total !== undefined)?.statement_total ?? null;
 
-    // Sanity check: if the AI returned a statement_total that's >100× the sum of line amounts,
-    // it almost certainly misread the number (e.g. 885002.00 instead of 8850.02). Drop it.
+    // Sanity check: if the AI returned a statement_total that's clearly out of scale
+    // vs. the sum of line amounts, it almost certainly misread the number
+    // (e.g. 885002.00 instead of 8850.02 — a decimal-separator misread is ~100×).
+    // We use a 20× threshold to catch this class of error with margin (a real bill
+    // total should be roughly equal to the sum of its lines, never an order of magnitude bigger).
     if (statementTotal !== null) {
       const sumAmounts = transactions.reduce((acc, t) => acc + (t.amount || 0), 0);
-      if (sumAmounts > 0 && statementTotal > sumAmounts * 100) {
+      if (sumAmounts > 0 && statementTotal > sumAmounts * 20) {
         console.warn(
-          `Discarding implausible statement_total=${statementTotal} (sum of amounts=${sumAmounts.toFixed(2)})`
+          `Discarding implausible statement_total=${statementTotal} (sum of amounts=${sumAmounts.toFixed(2)}, ratio=${(statementTotal / sumAmounts).toFixed(1)}x)`
         );
         statementTotal = null;
       }
     }
+
 
 
     return new Response(
