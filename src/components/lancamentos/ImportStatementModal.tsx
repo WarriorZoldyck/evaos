@@ -689,7 +689,7 @@ export function ImportStatementModal({
       const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
 
       const realIdx = rows.indexOf(r);
-      const rowCat = rowCategories[realIdx] || catName;
+      const rowCat = rowCategories[realIdx];
 
       return {
         description: r.description,
@@ -700,7 +700,9 @@ export function ImportStatementModal({
         // Cartão de crédito: compras são projetadas (Pendente) até a fatura ser paga.
         // Débito/conta corrente: já saíram da conta, então ficam Pago.
         status: (importType === "cartao" ? "Pendente" : "Pago") as "Pendente" | "Pago",
-        category: rowCat,
+        category: rowCat?.category || catName,
+        subcategory: rowCat?.subcategory || null,
+        subcategory2: rowCat?.subcategory2 || null,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
@@ -713,6 +715,7 @@ export function ImportStatementModal({
         original_amount: r.original_amount || null,
         purchase_date_original: purchaseDateOriginal || null,
       };
+
     });
 
     let createOk = true;
