@@ -97,8 +97,13 @@ export function useImportMatching() {
           result[i] = { best, alternatives };
         }
 
-        setMatches(result);
+        if (options.merge) {
+          setMatches((prev) => ({ ...prev, ...result }));
+        } else {
+          setMatches(result);
+        }
         return result;
+
       } finally {
         setLoading(false);
       }
