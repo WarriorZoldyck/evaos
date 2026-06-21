@@ -695,7 +695,7 @@ export function ImportStatementModal({
     setTargetBankAccount("");
     setImportType("");
     setTargetCard("");
-    setDefaultCategory("");
+    
     setMatchActions({});
     setMatchTargets({});
     setRowCategories({});
