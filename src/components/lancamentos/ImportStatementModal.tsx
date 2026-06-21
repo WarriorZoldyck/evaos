@@ -428,6 +428,36 @@ export function ImportStatementModal({
     });
   }, [importType, targetBankAccount, rows, findMatches, resetMatches]);
 
+  // Trigger AI category suggestions once rows + categories are available.
+  // Pre-applies suggestion to rowCategories so the user just edits exceptions.
+  useEffect(() => {
+    if (rows.length === 0 || categories.length === 0) return;
+    if (Object.keys(suggestions).length > 0) return; // only once per file
+
+    const items = rows
+      .filter((r) => r.selected)
+      .map((r) => ({
+        index: rows.indexOf(r),
+        description: r.description,
+        type: r.type,
+        amount: Math.abs(r.amount),
+      }));
+
+    suggest(items, categories).then((res) => {
+      // Pre-apply only where user hasn't already set a category
+      setRowCategories((prev) => {
+        const next = { ...prev };
+        Object.entries(res).forEach(([k, v]) => {
+          const idx = Number(k);
+          if (!next[idx]) next[idx] = v.category;
+        });
+        return next;
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length, categories.length]);
+
+
   const toggleRow = (idx: number) => {
     setRows((prev) =>
       prev.map((r, i) => (i === idx ? { ...r, selected: !r.selected } : r))
