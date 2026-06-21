@@ -373,7 +373,20 @@ serve(async (req) => {
       }
     }
 
-    const statementTotal = transactions.find((t) => t.statement_total !== undefined)?.statement_total ?? null;
+    let statementTotal = transactions.find((t) => t.statement_total !== undefined)?.statement_total ?? null;
+
+    // Sanity check: if the AI returned a statement_total that's >100× the sum of line amounts,
+    // it almost certainly misread the number (e.g. 885002.00 instead of 8850.02). Drop it.
+    if (statementTotal !== null) {
+      const sumAmounts = transactions.reduce((acc, t) => acc + (t.amount || 0), 0);
+      if (sumAmounts > 0 && statementTotal > sumAmounts * 100) {
+        console.warn(
+          `Discarding implausible statement_total=${statementTotal} (sum of amounts=${sumAmounts.toFixed(2)})`
+        );
+        statementTotal = null;
+      }
+    }
+
 
     return new Response(
       JSON.stringify({ transactions, count: transactions.length, statement_total: statementTotal }),
