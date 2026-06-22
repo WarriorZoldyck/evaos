@@ -419,6 +419,7 @@ export function ImportStatementModal({
           ? parsedStatementTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           : ""
       );
+      setAmountRescaled(Boolean(result.amount_rescaled));
       setAcknowledgeDivergence(false);
 
       const detectedCardIds = new Set(deduped.map((r) => r.matched_card_id).filter(Boolean));
