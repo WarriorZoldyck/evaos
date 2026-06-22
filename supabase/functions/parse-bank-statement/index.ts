@@ -374,12 +374,51 @@ serve(async (req) => {
     }
 
     let statementTotal = transactions.find((t) => t.statement_total !== undefined)?.statement_total ?? null;
+    let amountRescaled = false;
+
+    // Heuristic: detect when the AI returned all amounts multiplied by 100
+    // (i.e. read "R$ 8.850,02" as 885002 instead of 8850.02 by dropping the
+    // decimal separator). If the majority of amounts are integers > 100 with
+    // no decimal part, OR if the statement_total is ~100× smaller than the
+    // sum of lines, divide all amounts by 100.
+    if (transactions.length > 0) {
+      const total = transactions.length;
+      const integerBig = transactions.filter(
+        (t) => t.amount > 100 && Number.isInteger(t.amount)
+      ).length;
+      const integerRatio = integerBig / total;
+
+      let shouldRescale = false;
+      let reason = "";
+
+      // Signal 1: statement_total is sane but sum of lines is ~100× bigger
+      if (statementTotal !== null) {
+        const sumAmounts = transactions.reduce((acc, t) => acc + (t.amount || 0), 0);
+        if (sumAmounts > 0 && sumAmounts > statementTotal * 50 && sumAmounts < statementTotal * 200) {
+          shouldRescale = true;
+          reason = `sum=${sumAmounts.toFixed(2)} ~100× statement_total=${statementTotal}`;
+        }
+      }
+
+      // Signal 2: 70%+ of amounts are integers > 100 (no decimals at all)
+      if (!shouldRescale && integerRatio >= 0.7) {
+        shouldRescale = true;
+        reason = `${integerBig}/${total} amounts are integers > 100 (${(integerRatio * 100).toFixed(0)}%) — AI likely dropped decimals`;
+      }
+
+      if (shouldRescale) {
+        console.warn(`Rescaling amounts /100: ${reason}`);
+        transactions = transactions.map((t) => ({
+          ...t,
+          amount: Math.round((t.amount / 100) * 100) / 100,
+          ...(t.statement_total ? { statement_total: t.statement_total } : {}),
+        }));
+        amountRescaled = true;
+      }
+    }
 
     // Sanity check: if the AI returned a statement_total that's clearly out of scale
-    // vs. the sum of line amounts, it almost certainly misread the number
-    // (e.g. 885002.00 instead of 8850.02 — a decimal-separator misread is ~100×).
-    // We use a 20× threshold to catch this class of error with margin (a real bill
-    // total should be roughly equal to the sum of its lines, never an order of magnitude bigger).
+    // vs. the sum of line amounts, it almost certainly misread the number.
     if (statementTotal !== null) {
       const sumAmounts = transactions.reduce((acc, t) => acc + (t.amount || 0), 0);
       if (sumAmounts > 0 && statementTotal > sumAmounts * 20) {
@@ -390,10 +429,8 @@ serve(async (req) => {
       }
     }
 
-
-
     return new Response(
-      JSON.stringify({ transactions, count: transactions.length, statement_total: statementTotal }),
+      JSON.stringify({ transactions, count: transactions.length, statement_total: statementTotal, amount_rescaled: amountRescaled }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
