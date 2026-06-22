@@ -147,7 +147,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
 Return ONLY a valid JSON array of transaction objects. Each object must have:
 - "raw_date": string — the date EXACTLY as printed on the statement line, in "DD/MM" format. Do NOT convert or guess the year.
 - "description": string with the transaction description  
-- "amount": number (always positive)
+- "amount": number (always positive), in REAIS with TWO DECIMAL PLACES. Brazilian statements use "." as thousand separator and "," as decimal separator. You MUST convert: "R$ 8.850,02" → 8850.02 (NEVER 885002, NEVER 8850). "R$ 49,90" → 49.90. "R$ 1.234.567,89" → 1234567.89. "R$ 100,00" → 100.00 (NEVER 10000). The decimal part after the comma MUST be preserved as ".XX" in the output. If you cannot see decimal places, the value is wrong — re-read the line.
 - "type": "despesa" for purchases/expenses, "receita" ONLY for actual refunds/chargebacks (estornos)
 - "card_digits": last 4 digits of the card this transaction belongs to (string), or null
 - "cardholder_name": full name of the cardholder of this transaction (from the section header), or null
