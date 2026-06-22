@@ -198,6 +198,7 @@ export function ImportStatementModal({
   // Statement total reported by the bank (auto-filled from the parser, user-editable).
   const [statementTotal, setStatementTotal] = useState<number | null>(null);
   const [statementTotalInput, setStatementTotalInput] = useState<string>("");
+  const [amountRescaled, setAmountRescaled] = useState<boolean>(false);
   // When divergence > R$ 1,00, user must explicitly acknowledge to import.
   const [acknowledgeDivergence, setAcknowledgeDivergence] = useState(false);
   
@@ -418,6 +419,7 @@ export function ImportStatementModal({
           ? parsedStatementTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           : ""
       );
+      setAmountRescaled(Boolean(result.amount_rescaled));
       setAcknowledgeDivergence(false);
 
       const detectedCardIds = new Set(deduped.map((r) => r.matched_card_id).filter(Boolean));
@@ -802,6 +804,7 @@ export function ImportStatementModal({
     setTargetCard("");
     setStatementTotal(null);
     setStatementTotalInput("");
+    setAmountRescaled(false);
     setAcknowledgeDivergence(false);
     setMatchActions({});
     setMatchTargets({});
@@ -897,6 +900,11 @@ export function ImportStatementModal({
         {/* PREVIEW STEP */}
         {rows.length > 0 && step === "preview" && (
           <>
+            {amountRescaled && (
+              <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-700 dark:text-yellow-300">
+                <strong>Atenção:</strong> os valores foram ajustados automaticamente porque o leitor de PDF confundiu o separador decimal (interpretou <code>8.850,02</code> como <code>885002</code>). Confira cada linha antes de importar.
+              </div>
+            )}
             <div className="flex flex-wrap gap-3 items-end">
               {/* Account select */}
               <div className="flex-1 min-w-[200px]">
