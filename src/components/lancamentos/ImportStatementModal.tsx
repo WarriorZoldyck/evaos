@@ -900,6 +900,11 @@ export function ImportStatementModal({
         {/* PREVIEW STEP */}
         {rows.length > 0 && step === "preview" && (
           <>
+            {amountRescaled && (
+              <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-700 dark:text-yellow-300">
+                <strong>Atenção:</strong> os valores foram ajustados automaticamente porque o leitor de PDF confundiu o separador decimal (interpretou <code>8.850,02</code> como <code>885002</code>). Confira cada linha antes de importar.
+              </div>
+            )}
             <div className="flex flex-wrap gap-3 items-end">
               {/* Account select */}
               <div className="flex-1 min-w-[200px]">
