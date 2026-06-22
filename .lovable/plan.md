@@ -1,38 +1,101 @@
-## Diagnóstico
+## Objetivo
 
-O sanity check anterior só protege o `statement_total` (descarta se >20× a soma das linhas). Mas pelo que você descreve ("está passando para oitocentos mil" no total importado, não só no campo do banco), o problema agora é diferente: **a IA está lendo os valores das próprias linhas multiplicados por 100** — provavelmente pegando `8.850,02` como `885002`. Quando a soma das linhas também fica inflada, o sanity check de 20× não dispara, porque a razão `statement_total / soma` continua ≈ 1.
+Permitir que o usuário cadastre **conta bancária, cartão de crédito ou carteira** pelo WhatsApp da EVA, com confirmação em duas etapas, respeitando contexto (Pessoal/Empresa) e os limites do plano.
 
-O prompt atual instrui "use ponto como decimal", mas o Gemini, ao ver `8.850,02`, às vezes interpreta o `.` como separador de milhar, remove o `.` e a `,`, e devolve `885002`. Sem casas decimais explícitas, vira inteiro em reais.
+Quando estiver no ar, removemos a trava do fix (B) e a IA passa a executar de verdade o que hoje só fala em redirecionar para o app.
 
-## Preciso da fatura
+## Escopo
 
-Manda o PDF (pode anonimizar nome/cartão) para eu confirmar **o formato exato** dos números na fatura antes de aplicar o fix. Saber se é `R$ 8.850,02`, `8.850,02`, ou outro padrão (ex.: alguns bancos usam `8 850,02`) muda a robustez da defesa.
+**Incluído**
+- Criar `bank_account`, `credit_card` e `wallet` (não inclui maquininha — fluxo diferente, fica para depois).
+- Coleta conversacional dos campos mínimos, com defaults sensatos.
+- Confirmação obrigatória antes de gravar (igual ao padrão de lançamentos).
+- Respeito a `usePlanLimits.canCreateAccount(kind)` — bloqueia se atingiu limite do plano.
+- Respeito a contexto Pessoal (`company_id=null`) vs Empresa (`company_id=<uuid>`).
+- Auditoria: registrar criação em `whatsapp_messages` (já existente) e via Hub audit log quando aplicável.
 
-## O que será feito (assim que confirmar com a fatura)
+**Fora de escopo**
+- Edição/exclusão de contas pelo WhatsApp.
+- Cadastro de maquininha (precisa MDR, D+X, bandeiras — complexo).
+- Cadastro de empresa, membro de hub, metas.
 
-### 1. Endurecer o prompt do parser (`supabase/functions/parse-bank-statement/index.ts`)
-- Instruir explicitamente: "Brazilian statements use `.` as thousand separator and `,` as decimal. `R$ 1.234,56` MUST become `1234.56`, NEVER `123456` nor `1234`. Always include the 2 decimal places."
-- Adicionar 2-3 exemplos no prompt: `R$ 8.850,02 → 8850.02`, `R$ 49,90 → 49.90`, `R$ 1.234.567,89 → 1234567.89`.
-- Reforçar nas instruções do `amount` (hoje só diz "always positive") que o número deve preservar centavos.
+## Fluxo conversacional
 
-### 2. Pós-processamento defensivo do `amount`
-No bloco `txArray.map(...)`, após parsear `t.amount`:
-- Se o número vier **inteiro** (sem casas decimais) E for >100, marcar como suspeito.
-- Se a maioria dos `amount` numa fatura forem inteiros >100 (heurística: >70% das linhas), assumir que a IA esqueceu os decimais e **dividir todos por 100** uniformemente. Logar `console.warn` com a heurística aplicada para auditoria.
-- Esse fallback só age quando o padrão é consistente em toda a fatura (evita corromper linhas legítimas como `R$ 1.000,00`).
+```text
+Usuário: "Quero cadastrar uma conta do Itaú no Pessoal"
+EVA:     "Posso criar para você. Confirma os dados?
+          • Tipo: Conta bancária
+          • Nome: Itaú
+          • Contexto: Pessoal
+          • Saldo inicial: R$ 0,00
+          Responda *sim* para confirmar ou me diga o que ajustar."
+Usuário: "sim"
+EVA:     "Pronto! Conta 'Itaú' criada no Pessoal. Pode lançar."
+```
 
-### 3. Sanity check cruzado com `statement_total`
-Hoje descartamos o total se ele for >20× a soma. Adicionar a inversa: se o `statement_total` for confiável (ex.: bate com soma/100), e a soma das linhas for ~100× o total, dividir as linhas por 100 (mesma heurística do item 2, mas ancorada num valor confiável da própria fatura).
+Se o usuário pedir cartão de crédito, a EVA também pergunta (em uma única mensagem) limite, dia de fechamento e dia de vencimento — todos opcionais com defaults (limite=0, fechamento=1, vencimento=10) que ele pode ajustar depois.
 
-### 4. UI — sinalizar quando o fallback foi aplicado
-No `ImportStatementModal.tsx`, se o backend devolver um flag `amount_rescaled: true` (novo campo de resposta), mostrar um aviso amarelo no topo da tabela de pré-importação: "Os valores foram ajustados automaticamente porque o leitor confundiu os separadores decimais. Confira antes de importar."
+## Mudanças técnicas
 
-## Arquivos a alterar
+### 1. Prompt (`supabase/functions/whatsapp-webhook/index.ts`)
+- Remover/relaxar a trava do fix (B) **só para criar conta**.
+- Adicionar novo intent `gerenciar_conta` com `action: "criar"` e payload:
+  ```json
+  {
+    "intent": "gerenciar_conta",
+    "action": "criar",
+    "account_kind": "bank|card|wallet",
+    "name": "...",
+    "context": "Pessoal|<NomeEmpresa>",
+    "initial_balance": 0,
+    "credit_limit": null,
+    "closing_day": null,
+    "due_day": null,
+    "friendly_message": "..."
+  }
+  ```
+- Reforçar: NUNCA gravar sem passar pelo fluxo de confirmação (`whatsapp_pending_actions`).
 
-- `supabase/functions/parse-bank-statement/index.ts` — prompt + heurística + flag de resposta.
-- `src/components/lancamentos/ImportStatementModal.tsx` — aviso amarelo quando `amount_rescaled` vier `true`.
+### 2. Pending action (`whatsapp_pending_actions`)
+- Novo `action_type: "create_account"`, TTL 10 min (padrão da tabela).
+- Payload guarda o JSON completo retornado pela IA + `user_id` + `company_id` resolvido.
+- Usuário responde "sim" → handler dispara o insert; "não" → descarta.
 
-## Fora do escopo
+### 3. Handler (`whatsapp-webhook/index.ts`)
+- Função nova `handleCreateAccount(payload, supabase, userId)`:
+  1. Resolver `company_id` a partir do `context`.
+  2. Checar limite do plano lendo `subscription_plans` + contagens atuais (replicar lógica de `usePlanLimits.canCreateAccount`). Se bloquear, devolver mensagem amigável de upgrade.
+  3. Validar campos por `account_kind`:
+     - `bank`: `name` obrigatório, `initial_balance` numérico.
+     - `card`: `name`, `credit_limit`, `closing_day` 1-31, `due_day` 1-31.
+     - `wallet`: `name`, `initial_balance`.
+  4. Insert em `bank_accounts` / `credit_cards` / `wallets` com `user_id`, `company_id`, defaults.
+  5. Responder confirmação e dica de próximo passo.
+- Mesmas regras de RLS já existem nas tabelas (insert pelo service role via webhook, sem mudança de policy).
 
-- Não muda matching, criação de lançamentos, schema, RLS, nem o sanity check existente do `statement_total`.
-- Nenhum dado já importado é alterado retroativamente.
+### 4. Resolução de contexto
+- Se usuário disse "Pessoal" → `company_id = null`.
+- Se mencionou nome/CNPJ de empresa → match exato em `companies` do user. Se ambíguo, IA pergunta primeiro (já é padrão do prompt).
+
+### 5. Sem mudança de schema
+Tabelas `bank_accounts`, `credit_cards`, `wallets` já existem. Nenhuma migração necessária. Nenhum GRANT novo.
+
+### 6. Testes manuais (checklist)
+- [ ] Criar conta bancária no Pessoal → aparece em /contas.
+- [ ] Criar conta na empresa pelo nome → vai com `company_id` correto.
+- [ ] Criar cartão com limite e fechamento/vencimento → aparece em /contas com 3D card.
+- [ ] Criar carteira → aparece como VirtualWallet.
+- [ ] Tentar criar quando plano lotado → mensagem de upgrade.
+- [ ] Dizer "não" na confirmação → nada é gravado e pending é descartado.
+- [ ] Lançar gasto logo depois → usa a conta recém-criada normalmente.
+
+## Arquivos afetados
+
+- `supabase/functions/whatsapp-webhook/index.ts` — prompt + intent + handler + pending action handling.
+- (Opcional) `mem://whatsapp/account-creation` — novo memory descrevendo o fluxo.
+
+Nenhuma mudança de frontend.
+
+## Estimativa
+
+Implementação + teste manual: ~1 sessão de trabalho focada. Sem dependências externas.
