@@ -804,6 +804,7 @@ export function ImportStatementModal({
     setTargetCard("");
     setStatementTotal(null);
     setStatementTotalInput("");
+    setAmountRescaled(false);
     setAcknowledgeDivergence(false);
     setMatchActions({});
     setMatchTargets({});
