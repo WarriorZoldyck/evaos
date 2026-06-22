@@ -198,6 +198,7 @@ export function ImportStatementModal({
   // Statement total reported by the bank (auto-filled from the parser, user-editable).
   const [statementTotal, setStatementTotal] = useState<number | null>(null);
   const [statementTotalInput, setStatementTotalInput] = useState<string>("");
+  const [amountRescaled, setAmountRescaled] = useState<boolean>(false);
   // When divergence > R$ 1,00, user must explicitly acknowledge to import.
   const [acknowledgeDivergence, setAcknowledgeDivergence] = useState(false);
   
