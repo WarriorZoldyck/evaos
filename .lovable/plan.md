@@ -1,38 +1,38 @@
-# Corrigir o campo "Total informado pelo banco" no Importador
-
 ## Diagnóstico
 
-Na tela enviada, o usuário digitou `885002,00` no campo "Total informado pelo banco". O parser lê esse valor como **R$ 885.002,00**, comparando contra o total real importado (**R$ 8.825,02**) e gerando a "divergência" gigante de **R$ 876.176,98**. O bug é de UX/entrada de dado, não de cálculo:
+O sanity check anterior só protege o `statement_total` (descarta se >20× a soma das linhas). Mas pelo que você descreve ("está passando para oitocentos mil" no total importado, não só no campo do banco), o problema agora é diferente: **a IA está lendo os valores das próprias linhas multiplicados por 100** — provavelmente pegando `8.850,02` como `885002`. Quando a soma das linhas também fica inflada, o sanity check de 20× não dispara, porque a razão `statement_total / soma` continua ≈ 1.
 
-1. O parser do PDF (`parse-bank-statement`) **já extrai** o `statement_total` da fatura e o backend já devolve esse valor — o `ImportStatementModal` armazena em `statementTotal` (linha 199/412–415), mas **nunca preenche o input** `statementTotalInput`. O usuário precisa redigitar à mão, e erra a formatação.
-2. O input aceita texto livre sem máscara. Quem digita `885002,00` esperando "oito mil oitocentos e cinquenta e dois reais" não recebe nenhum feedback visual.
-3. Mesmo quando o parser falha em pegar o total, o campo fica em branco — sem placeholder claro do formato esperado.
+O prompt atual instrui "use ponto como decimal", mas o Gemini, ao ver `8.850,02`, às vezes interpreta o `.` como separador de milhar, remove o `.` e a `,`, e devolve `885002`. Sem casas decimais explícitas, vira inteiro em reais.
 
-## O que será feito
+## Preciso da fatura
 
-### 1. Auto-preencher o input a partir do total detectado pelo parser
-- Em `src/components/lancamentos/ImportStatementModal.tsx`, quando `parsedStatementTotal` for definido (linha ~412), também setar `statementTotalInput` com o valor formatado em pt-BR (ex.: `8.850,02`).
-- Quando o usuário trocar de arquivo / resetar (linha ~799), limpar `statementTotalInput` também.
-- Mostrar uma badge discreta `(detectado da fatura)` ao lado do label quando o valor veio do parser, para o usuário saber que pode confiar ou editar.
+Manda o PDF (pode anonimizar nome/cartão) para eu confirmar **o formato exato** dos números na fatura antes de aplicar o fix. Saber se é `R$ 8.850,02`, `8.850,02`, ou outro padrão (ex.: alguns bancos usam `8 850,02`) muda a robustez da defesa.
 
-### 2. Máscara/normalização no input
-- Trocar o `<input>` por um campo controlado que:
-  - Aceita apenas dígitos, vírgula e ponto;
-  - Em `onBlur`, normaliza para o formato pt-BR (`1.234,56`) usando `toLocaleString("pt-BR", { minimumFractionDigits: 2 })`;
-  - Mantém parsing atual (remove `.`, troca `,` por `.`) — já correto.
-- Placeholder mais claro: `Ex.: 8.850,02`.
-- Pequena dica visual quando o número parecer fora de escala (>10× o total importado): tooltip "Verifique o separador decimal" — sem bloquear, só alertar.
+## O que será feito (assim que confirmar com a fatura)
 
-### 3. Reforçar extração do total no parser
-- No prompt do edge function `parse-bank-statement/index.ts`, deixar explícito que o `statement_total` deve ser o "Total da fatura atual" / "Valor total a pagar", em reais, **número decimal com ponto** (ex.: `8850.02`), nunca com separadores de milhar.
-- Adicionar sanity check no servidor: se `statement_total` for >100× a soma de `amount` dos itens, descartar (provavelmente leitura errada de número).
+### 1. Endurecer o prompt do parser (`supabase/functions/parse-bank-statement/index.ts`)
+- Instruir explicitamente: "Brazilian statements use `.` as thousand separator and `,` as decimal. `R$ 1.234,56` MUST become `1234.56`, NEVER `123456` nor `1234`. Always include the 2 decimal places."
+- Adicionar 2-3 exemplos no prompt: `R$ 8.850,02 → 8850.02`, `R$ 49,90 → 49.90`, `R$ 1.234.567,89 → 1234567.89`.
+- Reforçar nas instruções do `amount` (hoje só diz "always positive") que o número deve preservar centavos.
 
-## Arquivos alterados
+### 2. Pós-processamento defensivo do `amount`
+No bloco `txArray.map(...)`, após parsear `t.amount`:
+- Se o número vier **inteiro** (sem casas decimais) E for >100, marcar como suspeito.
+- Se a maioria dos `amount` numa fatura forem inteiros >100 (heurística: >70% das linhas), assumir que a IA esqueceu os decimais e **dividir todos por 100** uniformemente. Logar `console.warn` com a heurística aplicada para auditoria.
+- Esse fallback só age quando o padrão é consistente em toda a fatura (evita corromper linhas legítimas como `R$ 1.000,00`).
 
-- `src/components/lancamentos/ImportStatementModal.tsx` — auto-fill, máscara, badge "detectado".
-- `supabase/functions/parse-bank-statement/index.ts` — clareza no prompt + sanity check do total.
+### 3. Sanity check cruzado com `statement_total`
+Hoje descartamos o total se ele for >20× a soma. Adicionar a inversa: se o `statement_total` for confiável (ex.: bate com soma/100), e a soma das linhas for ~100× o total, dividir as linhas por 100 (mesma heurística do item 2, mas ancorada num valor confiável da própria fatura).
+
+### 4. UI — sinalizar quando o fallback foi aplicado
+No `ImportStatementModal.tsx`, se o backend devolver um flag `amount_rescaled: true` (novo campo de resposta), mostrar um aviso amarelo no topo da tabela de pré-importação: "Os valores foram ajustados automaticamente porque o leitor confundiu os separadores decimais. Confira antes de importar."
+
+## Arquivos a alterar
+
+- `supabase/functions/parse-bank-statement/index.ts` — prompt + heurística + flag de resposta.
+- `src/components/lancamentos/ImportStatementModal.tsx` — aviso amarelo quando `amount_rescaled` vier `true`.
 
 ## Fora do escopo
 
-- Não mexe na lógica de matching, de criação de lançamentos, nem no schema/RLS.
-- Não altera o comportamento da checkbox "Entendi a divergência" — apenas reduz a chance de cair nela por erro de digitação.
+- Não muda matching, criação de lançamentos, schema, RLS, nem o sanity check existente do `statement_total`.
+- Nenhum dado já importado é alterado retroativamente.
