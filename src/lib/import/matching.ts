@@ -135,7 +135,12 @@ export function scoreCandidate(
   return { candidate: c, score, dayDiff, similarity: bestSim };
 }
 
-/** Picks the best candidate, ties broken by smallest dayDiff. */
+/**
+ * Picks the best candidate, ties broken by smallest dayDiff.
+ * Only returns a match when the description similarity passes
+ * `AUTO_LINK_MIN_SIMILARITY` — otherwise returns null so the UI defaults
+ * to "create new" instead of silently linking unrelated rows.
+ */
 export function pickBestMatch(
   line: StatementLine,
   candidates: CandidateTx[],
@@ -145,5 +150,8 @@ export function pickBestMatch(
     .map((c) => scoreCandidate(line, c, opts))
     .filter((s): s is ScoredCandidate => s !== null)
     .sort((a, b) => b.score - a.score || a.dayDiff - b.dayDiff);
-  return scored[0] ?? null;
+  const top = scored[0];
+  if (!top) return null;
+  if (top.similarity < AUTO_LINK_MIN_SIMILARITY) return null;
+  return top;
 }
