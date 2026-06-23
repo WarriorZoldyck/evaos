@@ -205,7 +205,7 @@ export function ReconcileStep({
             <Alert className="mb-2 py-2 px-3 bg-muted/40 border-muted-foreground/20">
               <Info className="h-3.5 w-3.5" />
               <AlertDescription className="text-[11px] leading-snug ml-1">
-                Linhas do extrato que casam com lançamentos que você já tinha no sistema. Por padrão serão <strong>vinculadas</strong> (sem duplicar nada). Use <strong>Manter existente</strong> para descartar a linha do extrato sem criar nada novo, ou o <strong>✕</strong> para forçar a criação de um lançamento adicional.
+                Linhas do extrato que casam com lançamentos já existentes. Por padrão serão <strong>casadas</strong> (atualiza o existente, sem duplicar). Use <strong>"Já existe — não importar"</strong> para descartar a linha do extrato sem mexer no existente, ou <strong>"Importar como novo"</strong> só se for de fato uma segunda compra.
               </AlertDescription>
             </Alert>
 
