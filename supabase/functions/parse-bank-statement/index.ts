@@ -376,6 +376,10 @@ serve(async (req) => {
     let statementTotal = transactions.find((t) => t.statement_total !== undefined)?.statement_total ?? null;
     let amountRescaled = false;
 
+    // Integer-cents helper to avoid floating-point drift on long sums.
+    const toCents = (n: number) => Math.round(n * 100);
+    const fromCents = (c: number) => Math.round(c) / 100;
+
     // Heuristic: detect when the AI returned all amounts multiplied by 100
     // (i.e. read "R$ 8.850,02" as 885002 instead of 8850.02 by dropping the
     // decimal separator). If the majority of amounts are integers > 100 with
