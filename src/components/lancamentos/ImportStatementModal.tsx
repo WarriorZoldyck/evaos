@@ -1365,7 +1365,9 @@ export function ImportStatementModal({
                   className="gap-2 mt-1"
                 >
                   {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {importType === "cartao" ? `Importar ${toImport} como projetadas` : "Importar"}
+                  {importType === "cartao"
+                    ? `Importar ${toImport} lançamento${toImport === 1 ? "" : "s"} para a fatura`
+                    : `Importar ${toImport} lançamento${toImport === 1 ? "" : "s"}`}
                 </Button>
               </div>
             </DialogFooter>
