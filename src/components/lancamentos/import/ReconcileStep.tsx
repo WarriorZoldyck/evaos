@@ -107,9 +107,12 @@ export function ReconcileStep({
   suggestLoading,
   onCategoryChange,
   mode = "debit",
+  orphans = [],
+  orphansLoading = false,
 }: ReconcileStepProps) {
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
+  const [showOrphans, setShowOrphans] = useState(false);
 
   // Build indexed list of selected rows
   const indexed = useMemo(
