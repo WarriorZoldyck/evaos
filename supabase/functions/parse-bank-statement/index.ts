@@ -433,8 +433,25 @@ serve(async (req) => {
       }
     }
 
+    // Final tallies in INTEGER CENTS to avoid float drift on long sums.
+    const parsedTotalCents = transactions.reduce(
+      (acc, t) => acc + toCents(Math.abs(t.amount || 0)),
+      0,
+    );
+    const statementTotalCents = statementTotal !== null ? toCents(statementTotal) : null;
+    const diffCents = statementTotalCents !== null ? parsedTotalCents - statementTotalCents : null;
+
     return new Response(
-      JSON.stringify({ transactions, count: transactions.length, statement_total: statementTotal, amount_rescaled: amountRescaled }),
+      JSON.stringify({
+        transactions,
+        count: transactions.length,
+        statement_total: statementTotal,
+        statement_total_cents: statementTotalCents,
+        parsed_total: fromCents(parsedTotalCents),
+        parsed_total_cents: parsedTotalCents,
+        diff_cents: diffCents,
+        amount_rescaled: amountRescaled,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
