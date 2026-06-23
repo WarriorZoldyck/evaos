@@ -234,11 +234,11 @@ export function ReconcileStep({
                   const best = m.best!;
                   const cand = best.candidate;
                   return (
-                    <div key={i} className="grid grid-cols-[1fr_auto_1fr_auto] gap-3 items-center p-3 hover:bg-accent/30">
+                    <div key={i} className="grid grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)_auto] gap-4 items-start p-3 hover:bg-accent/30">
                       {/* Extrato */}
                       <div className="min-w-0">
                         <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Extrato</p>
-                        <p className="font-medium text-sm truncate" title={r.description}>{r.description}</p>
+                        <p className="font-medium text-sm break-words leading-snug" title={r.description}>{r.description}</p>
                         <p className="text-xs text-muted-foreground">{fmtDate(r.date)} · <span className="font-mono">{fmt(r.amount)}</span></p>
                       </div>
                       <ArrowLeftRight className="h-4 w-4 text-primary shrink-0" />
@@ -253,7 +253,7 @@ export function ReconcileStep({
                             {cand.status}
                           </Badge>
                         </p>
-                        <p className="font-medium text-sm truncate" title={cand.description}>{cand.description}</p>
+                        <p className="font-medium text-sm break-words leading-snug" title={cand.description}>{cand.description}</p>
                         <p className="text-xs text-muted-foreground">
                           {fmtDate(cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
                           {cand.contact_name ? ` · ${cand.contact_name}` : ""}
@@ -376,14 +376,14 @@ export function ReconcileStep({
                 Nenhum lançamento novo a criar.
               </p>
             ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="border rounded-lg overflow-x-auto">
+                <table className="w-full text-sm min-w-[900px]">
                   <thead>
                     <tr className="bg-muted/40 border-b text-xs">
-                      <th className="p-2 text-left font-medium">Data</th>
+                      <th className="p-2 text-left font-medium whitespace-nowrap">Data</th>
                       <th className="p-2 text-left font-medium">Descrição</th>
-                      <th className="p-2 text-right font-medium">Valor</th>
-                      <th className="p-2 text-left font-medium w-[260px]">Categoria</th>
+                      <th className="p-2 text-right font-medium whitespace-nowrap">Valor</th>
+                      <th className="p-2 text-left font-medium min-w-[200px]">Categoria</th>
                       <th className="p-2 text-center font-medium w-16">Ignorar</th>
                     </tr>
                   </thead>
@@ -398,8 +398,8 @@ export function ReconcileStep({
                       return (
                         <tr key={i} className="border-b last:border-0 hover:bg-accent/30">
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
-                          <td className="p-2 max-w-[260px] align-top">
-                            <p className="truncate" title={r.description}>{r.description}</p>
+                          <td className="p-2 align-top min-w-[280px]">
+                            <p className="break-words leading-snug" title={r.description}>{r.description}</p>
                             <div className="flex items-center gap-1 mt-0.5">
                               <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[9px]">
                                 {r.type === "receita" ? "Entrada" : "Saída"}
