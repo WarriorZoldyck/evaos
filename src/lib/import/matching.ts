@@ -30,6 +30,8 @@ export interface ScoredCandidate {
   candidate: CandidateTx;
   score: number;
   dayDiff: number;
+  /** Token-overlap similarity 0..1 between line and candidate descriptions. */
+  similarity: number;
 }
 
 /** Tolerance window (days) for matching by date — debit accounts. */
@@ -38,6 +40,13 @@ export const DATE_WINDOW_DAYS = 7;
 export const CARD_DATE_WINDOW_DAYS = 31;
 /** Currency tolerance — covers 1-cent rounding between statement and manual entry. */
 export const AMOUNT_TOLERANCE = 0.02;
+/**
+ * Minimum description similarity (0..1) required to AUTO-LINK a candidate.
+ * Below this, the candidate may still be shown as a suggestion but must not
+ * be auto-selected — this prevents silent links across unrelated descriptions
+ * that happen to share value and date (the Sabrina/Renato ghost case).
+ */
+export const AUTO_LINK_MIN_SIMILARITY = 0.34;
 
 function diffDays(aISO: string, bISO: string): number {
   const a = new Date(aISO + "T00:00:00").getTime();
@@ -71,6 +80,20 @@ function sharesToken(a: string, b: string): boolean {
   return false;
 }
 
+/**
+ * Jaccard-like similarity over normalized tokens (length ≥ 3).
+ * Returns 0..1. Empty token sets return 0.
+ */
+export function descriptionSimilarity(a: string, b: string): number {
+  const ta = new Set(normalize(a).split(" ").filter((t) => t.length >= 3));
+  const tb = new Set(normalize(b).split(" ").filter((t) => t.length >= 3));
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let inter = 0;
+  for (const t of ta) if (tb.has(t)) inter++;
+  const union = ta.size + tb.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
 export interface ScoreOptions {
   /** When true, prefer matching against candidate.competence_date instead of payment_date. */
   useCompetenceDate?: boolean;
@@ -94,6 +117,12 @@ export function scoreCandidate(
   const dayDiff = diffDays(line.date, candidateDate);
   if (dayDiff > window) return null;
 
+  const similarity = descriptionSimilarity(line.description, c.description);
+  const contactSim = c.contact_name
+    ? descriptionSimilarity(line.description, c.contact_name)
+    : 0;
+  const bestSim = Math.max(similarity, contactSim);
+
   let score = 40;
   if (dayDiff === 0) score += 20;
   else if (dayDiff <= 3) score += 10;
@@ -101,11 +130,17 @@ export function scoreCandidate(
 
   if (c.contact_name && sharesToken(line.description, c.contact_name)) score += 15;
   if (sharesToken(line.description, c.description)) score += 10;
+  score += Math.round(bestSim * 30);
 
-  return { candidate: c, score, dayDiff };
+  return { candidate: c, score, dayDiff, similarity: bestSim };
 }
 
-/** Picks the best candidate, ties broken by smallest dayDiff. */
+/**
+ * Picks the best candidate, ties broken by smallest dayDiff.
+ * Only returns a match when the description similarity passes
+ * `AUTO_LINK_MIN_SIMILARITY` — otherwise returns null so the UI defaults
+ * to "create new" instead of silently linking unrelated rows.
+ */
 export function pickBestMatch(
   line: StatementLine,
   candidates: CandidateTx[],
@@ -115,5 +150,8 @@ export function pickBestMatch(
     .map((c) => scoreCandidate(line, c, opts))
     .filter((s): s is ScoredCandidate => s !== null)
     .sort((a, b) => b.score - a.score || a.dayDiff - b.dayDiff);
-  return scored[0] ?? null;
+  const top = scored[0];
+  if (!top) return null;
+  if (top.similarity < AUTO_LINK_MIN_SIMILARITY) return null;
+  return top;
 }

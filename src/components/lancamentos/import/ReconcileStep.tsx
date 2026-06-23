@@ -177,16 +177,16 @@ export function ReconcileStep({
             {(matchLoading || suggestLoading) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {isCardMode
-              ? "O EVA cruzou as compras do extrato com lançamentos que você já tinha no cartão e sugeriu categorias com base no seu histórico e na IA. As compras novas entram como projetadas até a fatura ser paga."
-              : "O EVA comparou o extrato com os lançamentos da conta (pendentes e pagos). Confirme as correspondências e escolha o que criar do zero."}
+            Cada linha do extrato vira uma ação no seu sistema:{" "}
+            <strong>casar com lançamento existente</strong>, <strong>importar como novo</strong>{" "}
+            ou <strong>já existe — não importar</strong>. Revise antes de confirmar.
           </p>
           <div className="flex flex-wrap gap-2 mt-2">
             <Button size="sm" variant="outline" onClick={conciliateAll} className="h-7 text-xs gap-1">
-              <Check className="h-3 w-3" /> Conciliar todos os pares
+              <Check className="h-3 w-3" /> Casar automaticamente os pares sugeridos
             </Button>
             <Button size="sm" variant="ghost" onClick={createAll} className="h-7 text-xs">
-              Criar tudo do zero
+              Importar tudo como novo
             </Button>
           </div>
         </div>
@@ -205,7 +205,7 @@ export function ReconcileStep({
             <Alert className="mb-2 py-2 px-3 bg-muted/40 border-muted-foreground/20">
               <Info className="h-3.5 w-3.5" />
               <AlertDescription className="text-[11px] leading-snug ml-1">
-                Linhas do extrato que casam com lançamentos que você já tinha no sistema. Por padrão serão <strong>vinculadas</strong> (sem duplicar nada). Use <strong>Manter existente</strong> para descartar a linha do extrato sem criar nada novo, ou o <strong>✕</strong> para forçar a criação de um lançamento adicional.
+                Linhas do extrato que casam com lançamentos já existentes. Por padrão serão <strong>casadas</strong> (atualiza o existente, sem duplicar). Use <strong>"Já existe — não importar"</strong> para descartar a linha do extrato sem mexer no existente, ou <strong>"Importar como novo"</strong> só se for de fato uma segunda compra.
               </AlertDescription>
             </Alert>
 
@@ -303,7 +303,7 @@ export function ReconcileStep({
                           </PopoverContent>
                         </Popover>
 
-                        {/* Manter existente (primary safe action) */}
+                        {/* Já existe — não importar (primary safe action) */}
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
@@ -312,7 +312,7 @@ export function ReconcileStep({
                               className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
                               onClick={() => onActionChange(i, "ignorar")}
                             >
-                              <ShieldCheck className="h-3 w-3" /> Manter
+                              <ShieldCheck className="h-3 w-3" /> Já existe — não importar
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-[260px] text-xs">
@@ -320,16 +320,16 @@ export function ReconcileStep({
                           </TooltipContent>
                         </Tooltip>
 
-                        {/* Criar novo (X — danger / advanced) */}
+                        {/* Importar como novo (X — danger / advanced) */}
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={() => onActionChange(i, "criar")}
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-3 w-3" /> Importar como novo
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-[280px] text-xs">

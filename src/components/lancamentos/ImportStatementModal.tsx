@@ -774,6 +774,13 @@ export function ImportStatementModal({
     setImporting(false);
 
     if (createOk) {
+      // If only links happened (no inserts), createMultipleTransactions wasn't
+      // called and the page list won't auto-refresh — fire the global event
+      // that Lancamentos.tsx listens to, so the UI updates immediately.
+      if (transactions.length === 0 && (linkOk > 0 || linkFail > 0)) {
+        window.dispatchEvent(new Event("transaction-created"));
+      }
+
       // Compute date range across all imported rows for the post-import filter
       const allDates = selectedRows
         .filter((r) => (matchActions[rows.indexOf(r)] || "criar") !== "ignorar")
@@ -854,11 +861,23 @@ export function ImportStatementModal({
         {rows.length === 0 && (
           <div className="flex flex-col items-center gap-4 py-8">
             <div className="border-2 border-dashed rounded-lg p-8 text-center w-full cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => fileRef.current?.click()}>
+              onClick={() => !parsing && fileRef.current?.click()}>
               {parsing ? (
-                <div className="flex flex-col items-center gap-2">
+                <div className="flex flex-col items-center gap-3">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground">Processando arquivo...</p>
+                  <p className="text-sm font-medium">Analisando arquivo com IA…</p>
+                  <p className="text-[11px] text-muted-foreground max-w-xs">
+                    Pode levar até <strong>40 segundos</strong> em faturas grandes (PDFs com muitas linhas). Não feche esta janela.
+                  </p>
+                  <div className="w-full max-w-md mt-2 space-y-1.5">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-6 rounded bg-muted/60 animate-pulse"
+                        style={{ animationDelay: `${i * 100}ms`, width: `${100 - i * 6}%` }}
+                      />
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <>
@@ -1346,7 +1365,9 @@ export function ImportStatementModal({
                   className="gap-2 mt-1"
                 >
                   {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {importType === "cartao" ? `Importar ${toImport} como projetadas` : "Importar"}
+                  {importType === "cartao"
+                    ? `Importar ${toImport} lançamento${toImport === 1 ? "" : "s"} para a fatura`
+                    : `Importar ${toImport} lançamento${toImport === 1 ? "" : "s"}`}
                 </Button>
               </div>
             </DialogFooter>
