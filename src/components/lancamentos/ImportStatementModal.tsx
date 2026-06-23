@@ -221,6 +221,14 @@ export function ImportStatementModal({
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
   const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
 
+  // Orphans = transactions already in the system, in the bill window, that DID NOT match any
+  // line of the statement. They are potential errors/duplications: the statement is the source
+  // of truth — if it's not there, it shouldn't exist in the system.
+  const [orphans, setOrphans] = useState<
+    { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[]
+  >([]);
+  const [orphansLoading, setOrphansLoading] = useState(false);
+
   // Per-row category override (with 3-level hierarchy). Pre-filled from suggestions when available.
   // `touched: true` means the user manually edited this row — never overwrite via propagation.
   const [rowCategories, setRowCategories] = useState<Record<number, RowCategoryValue>>({});
@@ -593,6 +601,58 @@ export function ImportStatementModal({
 
     resetMatches();
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
+
+  // ORPHAN DETECTOR (card mode) — flag system transactions that DON'T appear in the statement.
+  // The bank statement is the source of truth: any extra line in the system is a likely error.
+  useEffect(() => {
+    if (importType !== "cartao" || step !== "reconcile" || rows.length === 0 || matchLoading) {
+      return;
+    }
+    const cardIds = new Set<string>();
+    let minDate = "9999-12-31";
+    let maxDate = "0000-01-01";
+    rows.forEach((r) => {
+      if (!r.selected) return;
+      const cardId = isMultiCard ? r.matched_card_id : targetCard;
+      if (!cardId) return;
+      cardIds.add(cardId);
+      const d = r.resolved_competence_date || r.purchase_date_original || r.date;
+      if (d && d < minDate) minDate = d;
+      if (d && d > maxDate) maxDate = d;
+    });
+    if (cardIds.size === 0 || minDate > maxDate) {
+      setOrphans([]);
+      return;
+    }
+
+    const matchedIds = new Set(Object.values(matchTargets).filter(Boolean));
+    setOrphansLoading(true);
+    supabase
+      .from("transactions")
+      .select("id, description, amount, competence_date, payment_date, status")
+      .in("credit_card_id", Array.from(cardIds))
+      .gte("competence_date", minDate)
+      .lte("competence_date", maxDate)
+      .then(({ data, error }) => {
+        setOrphansLoading(false);
+        if (error || !data) {
+          setOrphans([]);
+          return;
+        }
+        const orphanList = data
+          .filter((t) => !matchedIds.has(t.id))
+          .map((t) => ({
+            id: t.id,
+            description: t.description || "",
+            amount: Number(t.amount),
+            competence_date: t.competence_date,
+            payment_date: t.payment_date,
+            status: t.status,
+          }));
+        setOrphans(orphanList);
+      });
+  }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard]);
+
 
   // Trigger AI category suggestions once rows + categories are available.
   // Pre-applies suggestion to rowCategories so the user just edits exceptions.
@@ -1142,6 +1202,8 @@ export function ImportStatementModal({
               }
               bankAccountId={bankId}
               walletId={walletId}
+              orphans={orphans}
+              orphansLoading={orphansLoading}
               categories={categories}
               rowCategories={rowCategories}
               suggestions={suggestions}

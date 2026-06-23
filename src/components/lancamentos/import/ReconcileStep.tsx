@@ -70,6 +70,9 @@ interface ReconcileStepProps {
   onCategoryChange: (idx: number, value: RowCategoryValue) => void;
   /** "debit" shows conciliation against pending entries. "card" only shows categorization. */
   mode?: "debit" | "card";
+  /** Transactions already in the system that DID NOT match any line of the statement. */
+  orphans?: { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[];
+  orphansLoading?: boolean;
 }
 
 const fmt = (n: number) =>
@@ -104,9 +107,12 @@ export function ReconcileStep({
   suggestLoading,
   onCategoryChange,
   mode = "debit",
+  orphans = [],
+  orphansLoading = false,
 }: ReconcileStepProps) {
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
+  const [showOrphans, setShowOrphans] = useState(false);
 
   // Build indexed list of selected rows
   const indexed = useMemo(
@@ -192,6 +198,51 @@ export function ReconcileStep({
         </div>
 
         <div className="flex-1 overflow-auto space-y-4 pr-1">
+          {/* ORPHANS — system has more than the statement (likely errors/duplicates) */}
+          {isCardMode && !orphansLoading && orphans.length > 0 && (
+            <Alert className="border-destructive/50 bg-destructive/5">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="text-xs leading-relaxed ml-1">
+                <div className="font-semibold text-destructive mb-1">
+                  Encontramos {orphans.length} lançamento{orphans.length > 1 ? "s" : ""} no sistema que NÃO está{orphans.length > 1 ? "ão" : ""} no extrato do cartão
+                  {" — "}
+                  <span className="font-mono">
+                    {orphans.reduce((s, o) => s + Math.abs(o.amount), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </span>
+                </div>
+                <p className="text-muted-foreground">
+                  O extrato do banco é a verdade. Lançamentos extras no sistema costumam ser <strong>erros</strong> (digitação duplicada, importação anterior corrompida, ghost de recuperação) ou pertencem a outra fatura. Recomendamos revisar e excluir os incorretos para a sua fatura bater certinho.
+                </p>
+                <Button
+                  size="sm"
+                  variant="link"
+                  className="h-auto p-0 mt-1 text-xs text-destructive"
+                  onClick={() => setShowOrphans((v) => !v)}
+                >
+                  {showOrphans ? "Ocultar lista" : `Ver ${orphans.length} suspeito${orphans.length > 1 ? "s" : ""}`}
+                </Button>
+                {showOrphans && (
+                  <div className="mt-2 border rounded bg-background max-h-48 overflow-auto divide-y">
+                    {orphans
+                      .slice()
+                      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+                      .map((o) => (
+                        <div key={o.id} className="flex items-start justify-between gap-2 px-2 py-1.5 text-xs">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium break-words leading-snug">{o.description || "(sem descrição)"}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {fmtDate(o.competence_date)} · <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
+                            </p>
+                          </div>
+                          <span className="font-mono text-xs whitespace-nowrap">{fmt(Math.abs(o.amount))}</span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* SECTION A — Matches */}
           <section>
             <header className="flex items-center justify-between mb-2">
