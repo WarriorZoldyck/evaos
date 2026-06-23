@@ -117,6 +117,12 @@ export function scoreCandidate(
   const dayDiff = diffDays(line.date, candidateDate);
   if (dayDiff > window) return null;
 
+  const similarity = descriptionSimilarity(line.description, c.description);
+  const contactSim = c.contact_name
+    ? descriptionSimilarity(line.description, c.contact_name)
+    : 0;
+  const bestSim = Math.max(similarity, contactSim);
+
   let score = 40;
   if (dayDiff === 0) score += 20;
   else if (dayDiff <= 3) score += 10;
@@ -124,8 +130,9 @@ export function scoreCandidate(
 
   if (c.contact_name && sharesToken(line.description, c.contact_name)) score += 15;
   if (sharesToken(line.description, c.description)) score += 10;
+  score += Math.round(bestSim * 30);
 
-  return { candidate: c, score, dayDiff };
+  return { candidate: c, score, dayDiff, similarity: bestSim };
 }
 
 /** Picks the best candidate, ties broken by smallest dayDiff. */
