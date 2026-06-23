@@ -221,6 +221,14 @@ export function ImportStatementModal({
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
   const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
 
+  // Orphans = transactions already in the system, in the bill window, that DID NOT match any
+  // line of the statement. They are potential errors/duplications: the statement is the source
+  // of truth — if it's not there, it shouldn't exist in the system.
+  const [orphans, setOrphans] = useState<
+    { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[]
+  >([]);
+  const [orphansLoading, setOrphansLoading] = useState(false);
+
   // Per-row category override (with 3-level hierarchy). Pre-filled from suggestions when available.
   // `touched: true` means the user manually edited this row — never overwrite via propagation.
   const [rowCategories, setRowCategories] = useState<Record<number, RowCategoryValue>>({});
