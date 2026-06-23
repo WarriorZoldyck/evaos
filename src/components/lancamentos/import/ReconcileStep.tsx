@@ -177,16 +177,16 @@ export function ReconcileStep({
             {(matchLoading || suggestLoading) && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            {isCardMode
-              ? "O EVA cruzou as compras do extrato com lançamentos que você já tinha no cartão e sugeriu categorias com base no seu histórico e na IA. As compras novas entram como projetadas até a fatura ser paga."
-              : "O EVA comparou o extrato com os lançamentos da conta (pendentes e pagos). Confirme as correspondências e escolha o que criar do zero."}
+            Cada linha do extrato vira uma ação no seu sistema:{" "}
+            <strong>casar com lançamento existente</strong>, <strong>importar como novo</strong>{" "}
+            ou <strong>já existe — não importar</strong>. Revise antes de confirmar.
           </p>
           <div className="flex flex-wrap gap-2 mt-2">
             <Button size="sm" variant="outline" onClick={conciliateAll} className="h-7 text-xs gap-1">
-              <Check className="h-3 w-3" /> Conciliar todos os pares
+              <Check className="h-3 w-3" /> Casar automaticamente os pares sugeridos
             </Button>
             <Button size="sm" variant="ghost" onClick={createAll} className="h-7 text-xs">
-              Criar tudo do zero
+              Importar tudo como novo
             </Button>
           </div>
         </div>
