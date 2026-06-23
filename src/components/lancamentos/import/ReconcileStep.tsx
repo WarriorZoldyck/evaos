@@ -303,7 +303,7 @@ export function ReconcileStep({
                           </PopoverContent>
                         </Popover>
 
-                        {/* Manter existente (primary safe action) */}
+                        {/* Já existe — não importar (primary safe action) */}
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
@@ -312,7 +312,7 @@ export function ReconcileStep({
                               className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
                               onClick={() => onActionChange(i, "ignorar")}
                             >
-                              <ShieldCheck className="h-3 w-3" /> Manter
+                              <ShieldCheck className="h-3 w-3" /> Já existe — não importar
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-[260px] text-xs">
@@ -320,16 +320,16 @@ export function ReconcileStep({
                           </TooltipContent>
                         </Tooltip>
 
-                        {/* Criar novo (X — danger / advanced) */}
+                        {/* Importar como novo (X — danger / advanced) */}
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={() => onActionChange(i, "criar")}
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-3 w-3" /> Importar como novo
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="top" className="max-w-[280px] text-xs">
