@@ -774,6 +774,13 @@ export function ImportStatementModal({
     setImporting(false);
 
     if (createOk) {
+      // If only links happened (no inserts), createMultipleTransactions wasn't
+      // called and the page list won't auto-refresh — fire the global event
+      // that Lancamentos.tsx listens to, so the UI updates immediately.
+      if (transactions.length === 0 && (linkOk > 0 || linkFail > 0)) {
+        window.dispatchEvent(new Event("transaction-created"));
+      }
+
       // Compute date range across all imported rows for the post-import filter
       const allDates = selectedRows
         .filter((r) => (matchActions[rows.indexOf(r)] || "criar") !== "ignorar")
