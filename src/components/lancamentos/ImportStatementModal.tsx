@@ -1202,6 +1202,9 @@ export function ImportStatementModal({
               }
               bankAccountId={bankId}
               walletId={walletId}
+              orphans={orphans}
+              orphansLoading={orphansLoading}
+              walletId={walletId}
               categories={categories}
               rowCategories={rowCategories}
               suggestions={suggestions}
