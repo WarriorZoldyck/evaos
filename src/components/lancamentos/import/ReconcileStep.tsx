@@ -70,6 +70,9 @@ interface ReconcileStepProps {
   onCategoryChange: (idx: number, value: RowCategoryValue) => void;
   /** "debit" shows conciliation against pending entries. "card" only shows categorization. */
   mode?: "debit" | "card";
+  /** Transactions already in the system that DID NOT match any line of the statement. */
+  orphans?: { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[];
+  orphansLoading?: boolean;
 }
 
 const fmt = (n: number) =>
