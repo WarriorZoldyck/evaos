@@ -8,6 +8,10 @@ export interface StatementLine {
   description: string;
   amount: number;
   type: "receita" | "despesa";
+  /** Installment number parsed from the statement description (e.g. "V03/12" → 3). */
+  installment_number?: number | null;
+  /** Total installments parsed from the statement description (e.g. "V03/12" → 12). */
+  installments_total?: number | null;
 }
 
 export interface CandidateTx {
