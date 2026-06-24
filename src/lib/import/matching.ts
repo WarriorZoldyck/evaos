@@ -8,6 +8,10 @@ export interface StatementLine {
   description: string;
   amount: number;
   type: "receita" | "despesa";
+  /** Installment number parsed from the statement description (e.g. "V03/12" → 3). */
+  installment_number?: number | null;
+  /** Total installments parsed from the statement description (e.g. "V03/12" → 12). */
+  installments_total?: number | null;
 }
 
 export interface CandidateTx {
@@ -36,8 +40,12 @@ export interface ScoredCandidate {
 
 /** Tolerance window (days) for matching by date — debit accounts. */
 export const DATE_WINDOW_DAYS = 7;
-/** Wider tolerance for credit cards (purchase date may drift days from manual entry). */
-export const CARD_DATE_WINDOW_DAYS = 31;
+/**
+ * Tolerance window (days) for matching by date — credit cards.
+ * Kept tight so we NEVER cross billing cycles. A purchase on the statement
+ * must match a system transaction within the same cycle, not the previous month.
+ */
+export const CARD_DATE_WINDOW_DAYS = 5;
 /** Currency tolerance — covers 1-cent rounding between statement and manual entry. */
 export const AMOUNT_TOLERANCE = 0.02;
 /**
@@ -99,6 +107,10 @@ export interface ScoreOptions {
   useCompetenceDate?: boolean;
   /** Override the day window (defaults to DATE_WINDOW_DAYS). */
   dayWindow?: number;
+  /** Optional installment number of the statement line (for strict matching). */
+  lineInstallmentNumber?: number | null;
+  /** Optional installment total of the statement line (for strict matching). */
+  lineInstallmentsTotal?: number | null;
 }
 
 /** Returns score >= 0 for a candidate; null means not a match. */
@@ -109,6 +121,14 @@ export function scoreCandidate(
 ): ScoredCandidate | null {
   if (c.type !== line.type) return null;
   if (Math.abs(c.amount - Math.abs(line.amount)) > AMOUNT_TOLERANCE) return null;
+
+  // Strict installment guard: if BOTH sides declare installment numbers and they differ,
+  // it is NOT the same purchase (e.g. statement "V03/12" must not match system "V02/12").
+  const lineN = opts.lineInstallmentNumber ?? null;
+  const lineT = opts.lineInstallmentsTotal ?? null;
+  if (lineN != null && c.installment_number != null && lineN !== c.installment_number) return null;
+  if (lineT != null && c.installments_total != null && lineT !== c.installments_total) return null;
+
 
   const candidateDate = opts.useCompetenceDate
     ? (c.competence_date || c.payment_date)
