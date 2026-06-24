@@ -103,6 +103,10 @@ export interface ScoreOptions {
   useCompetenceDate?: boolean;
   /** Override the day window (defaults to DATE_WINDOW_DAYS). */
   dayWindow?: number;
+  /** Optional installment number of the statement line (for strict matching). */
+  lineInstallmentNumber?: number | null;
+  /** Optional installment total of the statement line (for strict matching). */
+  lineInstallmentsTotal?: number | null;
 }
 
 /** Returns score >= 0 for a candidate; null means not a match. */
@@ -113,6 +117,14 @@ export function scoreCandidate(
 ): ScoredCandidate | null {
   if (c.type !== line.type) return null;
   if (Math.abs(c.amount - Math.abs(line.amount)) > AMOUNT_TOLERANCE) return null;
+
+  // Strict installment guard: if BOTH sides declare installment numbers and they differ,
+  // it is NOT the same purchase (e.g. statement "V03/12" must not match system "V02/12").
+  const lineN = opts.lineInstallmentNumber ?? null;
+  const lineT = opts.lineInstallmentsTotal ?? null;
+  if (lineN != null && c.installment_number != null && lineN !== c.installment_number) return null;
+  if (lineT != null && c.installments_total != null && lineT !== c.installments_total) return null;
+
 
   const candidateDate = opts.useCompetenceDate
     ? (c.competence_date || c.payment_date)
