@@ -93,7 +93,12 @@ export function useImportMatching() {
 
         for (const { i, l } of order) {
           const available = candidates.filter((c) => !claimed.has(c.id));
-          const best = pickBestMatch(l, available, scoreOpts);
+          const perLineOpts = {
+            ...scoreOpts,
+            lineInstallmentNumber: l.installment_number ?? null,
+            lineInstallmentsTotal: l.installments_total ?? null,
+          };
+          const best = pickBestMatch(l, available, perLineOpts);
           const alternatives = available
             .filter((c) => c.id !== best?.candidate.id)
             .slice(0, 5);
