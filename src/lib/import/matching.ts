@@ -36,8 +36,12 @@ export interface ScoredCandidate {
 
 /** Tolerance window (days) for matching by date — debit accounts. */
 export const DATE_WINDOW_DAYS = 7;
-/** Wider tolerance for credit cards (purchase date may drift days from manual entry). */
-export const CARD_DATE_WINDOW_DAYS = 31;
+/**
+ * Tolerance window (days) for matching by date — credit cards.
+ * Kept tight so we NEVER cross billing cycles. A purchase on the statement
+ * must match a system transaction within the same cycle, not the previous month.
+ */
+export const CARD_DATE_WINDOW_DAYS = 5;
 /** Currency tolerance — covers 1-cent rounding between statement and manual entry. */
 export const AMOUNT_TOLERANCE = 0.02;
 /**
