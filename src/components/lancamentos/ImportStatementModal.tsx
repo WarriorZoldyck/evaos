@@ -574,6 +574,8 @@ export function ImportStatementModal({
               description: r.description,
               amount: Math.abs(r.amount),
               type: r.type,
+              installment_number: r.installment_number ?? null,
+              installments_total: r.installments_total ?? null,
             };
           });
           // First call (groupIdx=0) doesn't merge; subsequent ones do.
