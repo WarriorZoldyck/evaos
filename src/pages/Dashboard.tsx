@@ -179,7 +179,9 @@ export default function Dashboard() {
         prevEntradas={prevEntradas}
         prevSaidas={prevSaidas}
         prevSaldo={prevSaldo}
+        internalTransfersTotal={internalTransfersTotal}
         faturamentoSeries={faturamentoSeries}
+
         entradasSeries={entradasSeries}
         saidasSeries={saidasSeries}
         saldoSeries={saldoSeries}
