@@ -218,8 +218,10 @@ export function SummaryCards({
   prevEntradaPrevista, prevSaidaPrevista, prevSaldoPrevisto,
   faturamentoSeries, entradasSeries, saidasSeries, saldoSeries, marginSeries,
   onFaturamentoClick,
+  internalTransfersTotal,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
+
 
   const go = (params: Record<string, string>) => {
     const sp = new URLSearchParams();
