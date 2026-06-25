@@ -314,6 +314,34 @@ export function SummaryCards({
         />
       </div>
 
+      {/* Aviso de transferências internas excluídas do dashboard/DRE */}
+      {!loading && (internalTransfersTotal ?? 0) > 0 && (
+        <TooltipProvider>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-border/60 bg-muted/40 text-xs text-muted-foreground">
+            <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span>
+              {formatCurrency(internalTransfersTotal ?? 0)} em transferências entre contas próprias foram excluídas dos totais.
+            </span>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[10px] font-bold text-muted-foreground hover:bg-muted"
+                  aria-label="Por que está excluído?"
+                >
+                  ?
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                Transferências entre contas próprias não são receita nem despesa — é o mesmo dinheiro mudando de conta. Por isso ficam de fora do Dashboard e do DRE, mas continuam visíveis na tela de Lançamentos.
+              </TooltipContent>
+            </UITooltip>
+          </div>
+        </TooltipProvider>
+      )}
+
+
+
       {/* Forecast cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <ForecastCard
