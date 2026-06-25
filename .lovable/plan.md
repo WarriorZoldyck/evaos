@@ -1,49 +1,51 @@
-# Correção: EVA vazando dict cru no WhatsApp
+# Diagnóstico: divergência Dashboard × Lançamentos da Sabrina
 
-## Diagnóstico
+## Resposta direta
+**Não é erro do sistema** — os números do dashboard estão certos. A diferença é exatamente **R$ 3.379,99** de um lado e outro, e corresponde a **uma transferência interna entre as contas dela própria**.
 
-A imagem mostra que a EVA enviou ao usuário o **dict bruto em formato Python** (aspas simples, `None`, `\n` literais) em vez da `friendly_message`.
+## O que aconteceu
 
-Rastreando em `supabase/functions/whatsapp-webhook/index.ts`:
+Na conta da `sabrinadomingues04@gmail.com` (status Pago):
 
-1. A IA respondeu nesse caso com sintaxe **Python**, não JSON: `{'intent': 'lancamento', ... 'category_id': '160d90e0-...', ... None, ...}`.
-2. `parseJsonRobust` (linhas 2086-2118) só tenta `JSON.parse` — falha em aspas simples e em `None`/`True`/`False`.
-3. Cai no fallback (linha 2121-2131): envia o **texto cru** como `friendly_message` ao usuário. É exatamente o que aparece no print.
+| Origem        | Entradas    | Saídas      |
+|---------------|-------------|-------------|
+| Lançamentos (tudo) | R$ 11.230,00 | R$ 11.939,34 |
+| Dashboard / DRE    | R$ 7.850,01  | R$ 8.559,35  |
+| **Diferença**      | **R$ 3.379,99** | **R$ 3.379,99** |
 
-A memória `mem://whatsapp/json-parsing-resilience` já prevê "markdown salvage", mas não cobre o caso "Python dict literal".
-
-## Correção
-
-Em `supabase/functions/whatsapp-webhook/index.ts`, dentro de `parseJsonRobust`, adicionar uma **etapa final de salvamento Python→JSON** antes de desistir:
+A transferência identificada no banco:
 
 ```text
-- Detectar quando o texto parece dict Python (contém "': '" ou ": None" / ": True" / ": False").
-- Converter de forma segura:
-    • None → null
-    • True → true
-    • False → false
-    • aspas simples delimitadoras de chave/valor → aspas duplas
-      (sem quebrar apóstrofos dentro de strings: usar um conversor que
-       respeite o estado dentro/fora de string, em vez de replace global)
-- Tentar JSON.parse no resultado.
+2026-06-05  PIX RECEBIDO  SABRINA RODRIGUES DOMINGU
+  → débito de R$ 3.379,99 na conta A (1613aa1d…)
+  → crédito de R$ 3.379,99 na conta B (9a18725…)
+  transfer_id: 168f4e12-…  is_internal_transfer: true
 ```
 
-Implementação: pequeno tokenizador linear que percorre os caracteres mantendo o estado `inString` e o caractere de abertura (`'` ou `"`). Quando `'` está fora de string, troca por `"`; aspas duplas dentro de string passam a ser escapadas. `None|True|False` são substituídos só quando estão fora de strings.
+Esse par está marcado como **transferência interna** (mesmo dono, dinheiro saindo de uma conta dela e entrando em outra). Pela regra do sistema (memória `features/internal-transfers`), transferências internas são **excluídas do Dashboard e do DRE**, porque não representam receita nem despesa reais — é só dinheiro mudando de bolso. Já a tela de Lançamentos lista tudo (inclusive transferências), por isso ela vê "entradas e saídas corretas" lá.
 
-Adicional de defesa-em-profundidade no fallback (linha 2121):
+## Conclusão para a usuária
+O cálculo está coerente:
+- Lançamentos = visão bruta (todo movimento financeiro).
+- Dashboard = visão econômica (exclui dinheiro entre contas próprias).
 
-- Se mesmo após o salvamento Python ainda falhar e o texto **parecer um dict** (começa com `{` e contém `'intent'`), **não** enviar o cru. Em vez disso:
-  - Tentar extrair via regex apenas o valor de `friendly_message` (`'friendly_message': '...'`) e enviar só ele.
-  - Caso contrário, devolver a mensagem genérica "não consegui entender, pode reformular?" — nunca o JSON cru.
+Não há nada a corrigir nos dados dela. A "diferença" é o comportamento esperado.
 
-## Validação
+## Proposta (opcional, evita esse tipo de dúvida no futuro)
 
-- Atualizar `supabase/functions/whatsapp-webhook/index.ts` apenas (sem mudanças de schema).
-- Não há testes desta função no projeto; validar manualmente:
-  1. Após o deploy, refazer um lançamento do mesmo tipo (pix Vanessa → Banco do Brasil) e confirmar que o usuário recebe a `friendly_message` ("📋 Lançamento enviado para aprovação...").
-  2. Verificar nos logs que, se a IA voltar a responder em Python, aparece o warning de salvamento e a resposta enviada ao WhatsApp é a `friendly_message`, não o dict.
+A confusão se repete com vários usuários. Para resolver de vez, sugiro um pequeno ajuste de UX no `Dashboard.tsx` — sem mudar nenhuma regra de negócio:
 
-## Escopo
+1. **Indicador discreto nos cards de Entradas e Saídas**: quando houver transferências internas no período filtrado, mostrar um rodapé pequeno no card no formato:
+   ```text
+   ⓘ R$ 3.379,99 em transferências entre contas próprias foram excluídas
+   ```
+2. **Tooltip explicativo** no ícone (ⓘ) com o texto:
+   > "Transferências entre contas próprias não contam como receita nem despesa, por isso ficam de fora do dashboard e do DRE. Você ainda consegue vê-las na tela de Lançamentos."
 
-- 1 arquivo alterado: `supabase/functions/whatsapp-webhook/index.ts` (função `parseJsonRobust` + bloco de fallback imediatamente abaixo).
-- Sem alteração de prompt, sem alteração de banco, sem alteração de UI.
+### Implementação técnica
+- Em `src/hooks/useDashboardData.ts`, computar `internalTransfersTotal` somando linhas com `is_internal_transfer = true` (ou `transfer_id IS NOT NULL`) e `status = 'Pago'` no período filtrado, e devolver no `summary`.
+- Em `src/components/dashboard/HeroSummaryCards.tsx`, renderizar o aviso quando `internalTransfersTotal > 0`.
+- Sem migração e sem mudança em edge function.
+
+## Devolutiva para a Sabrina
+Quer que eu mande a explicação a ela pelo WhatsApp da Eva (mesmo padrão usado para a Sabrina anterior e para o Renato), confirmando que está tudo certo e indicando a transferência específica?
