@@ -2083,6 +2083,71 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     // Parse AI response — robust fallback for truncated/malformed JSON
     let aiParsed: any;
+
+    // Converts Python-style dict literals to JSON, respecting string boundaries.
+    // Handles: single-quote delimiters, None/True/False, apostrophes inside strings.
+    const pythonDictToJson = (src: string): string => {
+      let out = "";
+      let inString = false;
+      let quoteChar: string | null = null;
+      for (let i = 0; i < src.length; i++) {
+        const ch = src[i];
+        const prev = i > 0 ? src[i - 1] : "";
+        if (inString) {
+          if (ch === quoteChar && prev !== "\\") {
+            // Closing the string — always emit a double quote
+            out += '"';
+            inString = false;
+            quoteChar = null;
+          } else if (ch === '"' && quoteChar === "'") {
+            // Escape embedded double quotes when re-delimiting
+            out += '\\"';
+          } else if (ch === "'" && quoteChar === "'" && prev === "\\") {
+            // \' inside a single-quoted string → just '
+            out = out.slice(0, -1) + "'";
+          } else {
+            out += ch;
+          }
+        } else {
+          if (ch === "'" || ch === '"') {
+            inString = true;
+            quoteChar = ch;
+            out += '"';
+          } else {
+            out += ch;
+          }
+        }
+      }
+      // Replace Python literals only outside strings — do a token-aware pass
+      // by walking the produced string again with the same state machine.
+      let final = "";
+      inString = false;
+      for (let i = 0; i < out.length; i++) {
+        const ch = out[i];
+        const prev = i > 0 ? out[i - 1] : "";
+        if (inString) {
+          final += ch;
+          if (ch === '"' && prev !== "\\") inString = false;
+        } else {
+          if (ch === '"') {
+            inString = true;
+            final += ch;
+          } else {
+            // Try to match a Python keyword at this position
+            const rest = out.slice(i);
+            const m = rest.match(/^(None|True|False)\b/);
+            if (m) {
+              final += m[1] === "None" ? "null" : m[1].toLowerCase();
+              i += m[1].length - 1;
+            } else {
+              final += ch;
+            }
+          }
+        }
+      }
+      return final;
+    };
+
     const parseJsonRobust = (text: string): any => {
       // Try direct parse first
       try { return JSON.parse(text.trim()); } catch {}
@@ -2095,7 +2160,12 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const firstBrace = text.indexOf("{");
       const lastBrace = text.lastIndexOf("}");
       if (firstBrace !== -1 && lastBrace > firstBrace) {
-        try { return JSON.parse(text.substring(firstBrace, lastBrace + 1)); } catch {}
+        const slice = text.substring(firstBrace, lastBrace + 1);
+        try { return JSON.parse(slice); } catch {}
+        // Python dict literal salvage
+        if (/'\s*:\s*/.test(slice) || /:\s*(None|True|False)\b/.test(slice)) {
+          try { return JSON.parse(pythonDictToJson(slice)); } catch {}
+        }
       }
       // Try to repair truncated JSON by closing open braces/brackets
       if (firstBrace !== -1) {
@@ -2113,6 +2183,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
         partial += "]".repeat(Math.max(0, openBrackets)) + "}".repeat(Math.max(0, openBraces));
         try { return JSON.parse(partial); } catch {}
+        // Last-ditch Python salvage on the repaired partial
+        try { return JSON.parse(pythonDictToJson(partial)); } catch {}
       }
       return null;
     };
@@ -2121,6 +2193,25 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     if (!aiParsed) {
       console.warn("Failed to parse AI response as JSON, using raw text as friendly_message:", rawContent.substring(0, 300));
       const cleanText = rawContent.replace(/```[\s\S]*?```/g, "").trim();
+
+      // Defense-in-depth: if it still looks like a dict literal, NEVER dump the raw
+      // structure to the user. Try to extract just the friendly_message field.
+      const looksLikeDict =
+        cleanText.startsWith("{") &&
+        (/'intent'\s*:/.test(cleanText) || /"intent"\s*:/.test(cleanText));
+      if (looksLikeDict) {
+        const fm = cleanText.match(/['"]friendly_message['"]\s*:\s*['"]([\s\S]*?)['"]\s*[,}]/);
+        const extracted = fm?.[1]?.replace(/\\n/g, "\n").replace(/\\'/g, "'").trim();
+        return respond({
+          success: true,
+          intent: "conversa",
+          message: extracted && extracted.length > 0
+            ? extracted
+            : "Desculpe, não consegui processar sua mensagem agora. Pode tentar novamente?",
+          transaction: null,
+        }, 200);
+      }
+
       if (cleanText && cleanText.length > 5) {
         return respond({
           success: true,
@@ -2136,6 +2227,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         transaction: null,
       }, 200);
     }
+
 
     if (aiParsed && typeof aiParsed === "object") {
       if (aiParsed.intent === "lancamento") {
