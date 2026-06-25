@@ -308,9 +308,38 @@ export function useDashboardData(filters: DashboardFilters) {
       setCompetenceTransactions(allData);
     };
 
+    const fetchInternalTransfersTotal = async () => {
+      // Sum of internal transfers (one side only — receita) excluded from dashboard,
+      // used to display a transparent badge to the user.
+      let query = supabase
+        .from("transactions")
+        .select("amount, type", { count: "exact" })
+        .gte("payment_date", startStr)
+        .lte("payment_date", endStr)
+        .eq("status", "Pago")
+        .eq("is_internal_transfer", true)
+        .eq("type", "receita");
+
+      query = applyCompanyFilter(query, companyCtx);
+      query = applyAccountFilter(query, accountId, linkedCardIds);
+
+      const { data, error } = await query;
+      if (!error && data) {
+        const total = (data as { amount: number }[]).reduce(
+          (acc, t) => acc + Number(t.amount || 0),
+          0,
+        );
+        setInternalTransfersTotal(total);
+      } else {
+        setInternalTransfersTotal(0);
+      }
+    };
+
     fetchTransactions();
     fetchCompetenceTransactions();
+    fetchInternalTransfersTotal();
   }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, fetchTrigger]);
+
 
   // Fetch transactions for projections (limited to 2 years back)
   useEffect(() => {
