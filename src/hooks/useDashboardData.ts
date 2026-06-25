@@ -582,8 +582,10 @@ export function useDashboardData(filters: DashboardFilters) {
     getProjectionData,
     performance,
     creditCards,
+    internalTransfersTotal,
     dateRange: { start, end },
     loading: loading || recurringLoading,
     refetch,
   };
 }
+
