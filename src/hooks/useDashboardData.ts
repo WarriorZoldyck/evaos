@@ -148,6 +148,8 @@ export function useDashboardData(filters: DashboardFilters) {
   const [categoryRecords, setCategoryRecords] = useState<CategoryRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchTrigger, setFetchTrigger] = useState(0);
+  const [internalTransfersTotal, setInternalTransfersTotal] = useState(0);
+
 
   const { start, end } = getDateRange(filters);
   const startStr = format(start, "yyyy-MM-dd");
