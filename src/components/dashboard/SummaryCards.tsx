@@ -35,7 +35,9 @@ interface SummaryCardsProps {
   saldoSeries?: SeriesPoint[];
   marginSeries?: SeriesPoint[];
   onFaturamentoClick?: () => void;
+  internalTransfersTotal?: number;
 }
+
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
