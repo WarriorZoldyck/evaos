@@ -42,9 +42,11 @@ export default function Dashboard() {
     getProjectionData,
     performance,
     creditCards,
+    internalTransfersTotal,
     loading,
     refetch,
   } = useDashboardData(filters);
+
 
   const handleLiquidated = useCallback(() => {
     refetch();
