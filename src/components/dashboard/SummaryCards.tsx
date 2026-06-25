@@ -1,8 +1,10 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, Landmark, Percent } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, Landmark, Percent, ArrowLeftRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResponsiveContainer, AreaChart, Area } from "recharts";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 interface SeriesPoint { date: string; v: number }
 
@@ -35,7 +37,9 @@ interface SummaryCardsProps {
   saldoSeries?: SeriesPoint[];
   marginSeries?: SeriesPoint[];
   onFaturamentoClick?: () => void;
+  internalTransfersTotal?: number;
 }
+
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -214,8 +218,10 @@ export function SummaryCards({
   prevEntradaPrevista, prevSaidaPrevista, prevSaldoPrevisto,
   faturamentoSeries, entradasSeries, saidasSeries, saldoSeries, marginSeries,
   onFaturamentoClick,
+  internalTransfersTotal,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
+
 
   const go = (params: Record<string, string>) => {
     const sp = new URLSearchParams();
@@ -307,6 +313,34 @@ export function SummaryCards({
           accent="hsl(265, 80%, 60%)"
         />
       </div>
+
+      {/* Aviso de transferências internas excluídas do dashboard/DRE */}
+      {!loading && (internalTransfersTotal ?? 0) > 0 && (
+        <TooltipProvider>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-border/60 bg-muted/40 text-xs text-muted-foreground">
+            <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span>
+              {formatCurrency(internalTransfersTotal ?? 0)} em transferências entre contas próprias foram excluídas dos totais.
+            </span>
+            <UITooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-border text-[10px] font-bold text-muted-foreground hover:bg-muted"
+                  aria-label="Por que está excluído?"
+                >
+                  ?
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                Transferências entre contas próprias não são receita nem despesa — é o mesmo dinheiro mudando de conta. Por isso ficam de fora do Dashboard e do DRE, mas continuam visíveis na tela de Lançamentos.
+              </TooltipContent>
+            </UITooltip>
+          </div>
+        </TooltipProvider>
+      )}
+
+
 
       {/* Forecast cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

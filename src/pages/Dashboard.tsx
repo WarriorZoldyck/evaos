@@ -42,9 +42,11 @@ export default function Dashboard() {
     getProjectionData,
     performance,
     creditCards,
+    internalTransfersTotal,
     loading,
     refetch,
   } = useDashboardData(filters);
+
 
   const handleLiquidated = useCallback(() => {
     refetch();
@@ -177,7 +179,9 @@ export default function Dashboard() {
         prevEntradas={prevEntradas}
         prevSaidas={prevSaidas}
         prevSaldo={prevSaldo}
+        internalTransfersTotal={internalTransfersTotal}
         faturamentoSeries={faturamentoSeries}
+
         entradasSeries={entradasSeries}
         saidasSeries={saidasSeries}
         saldoSeries={saldoSeries}
