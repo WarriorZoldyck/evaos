@@ -1944,6 +1944,24 @@ export type Database = {
           },
         ]
       }
+      whatsapp_processed_messages: {
+        Row: {
+          created_at: string
+          message_id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          message_id: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          message_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       workspace_member_permissions: {
         Row: {
           id: string

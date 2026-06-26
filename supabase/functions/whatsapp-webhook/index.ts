@@ -597,6 +597,28 @@ serve(async (req) => {
 
     console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, hasDocument, hasAudio, messageId: messageId?.substring(0, 20) });
 
+    // ============================================================
+    // IDEMPOTENCY: dedupe by WhatsApp messageId to avoid retries
+    // causing duplicate AI calls + spam replies to the user.
+    // ============================================================
+    if (messageId) {
+      const { error: dedupErr } = await supabase
+        .from("whatsapp_processed_messages")
+        .insert({ message_id: messageId });
+      if (dedupErr) {
+        // 23505 = unique_violation → already processed
+        const code = (dedupErr as any).code || "";
+        if (code === "23505" || /duplicate/i.test(dedupErr.message || "")) {
+          console.log("Duplicate webhook delivery, skipping. messageId:", messageId);
+          return new Response(JSON.stringify({ success: true, ignored: true, reason: "duplicate" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.warn("Dedup insert failed (non-fatal):", dedupErr.message);
+      }
+    }
+
     // Allow media-only messages (no text caption)
     if (!phone || (!message && !hasMedia)) {
       return buildResponse(
@@ -2066,11 +2088,28 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI Gateway error:", aiResponse.status, errText);
+
+      // Detect unreadable/encrypted/empty PDFs and other 4xx content issues.
+      // Return 200 so Evolution does NOT retry the webhook (which caused spam).
+      const isContentError =
+        aiResponse.status >= 400 && aiResponse.status < 500;
+      const isPdfBroken =
+        /document has no pages|INVALID_ARGUMENT|encrypted|password|unsupported/i.test(errText);
+
+      let friendly = "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.";
+      if (hasDocument && (isPdfBroken || isContentError)) {
+        friendly = "📄 Não consegui ler este PDF — ele pode estar criptografado, protegido por senha ou vazio. Por favor, envie uma versão desbloqueada ou tire um print das informações.";
+      } else if (aiResponse.status === 429) {
+        friendly = "⏳ Estou recebendo muitas mensagens agora. Tente novamente em alguns segundos.";
+      } else if (aiResponse.status === 402) {
+        friendly = "💳 Limite de uso de IA atingido. Acesse o app para verificar seu plano.";
+      }
+
       return respond({
         success: false,
-        error: "Erro ao processar mensagem com IA",
-        message: "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.",
-      }, 500);
+        error: "ai_gateway_error",
+        message: friendly,
+      }, 200);
     }
 
     const aiData = await aiResponse.json();
