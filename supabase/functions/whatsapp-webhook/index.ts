@@ -597,6 +597,28 @@ serve(async (req) => {
 
     console.log("Evolution normalized:", { phone, message: message?.substring(0, 50), hasImage, hasDocument, hasAudio, messageId: messageId?.substring(0, 20) });
 
+    // ============================================================
+    // IDEMPOTENCY: dedupe by WhatsApp messageId to avoid retries
+    // causing duplicate AI calls + spam replies to the user.
+    // ============================================================
+    if (messageId) {
+      const { error: dedupErr } = await supabase
+        .from("whatsapp_processed_messages")
+        .insert({ message_id: messageId });
+      if (dedupErr) {
+        // 23505 = unique_violation → already processed
+        const code = (dedupErr as any).code || "";
+        if (code === "23505" || /duplicate/i.test(dedupErr.message || "")) {
+          console.log("Duplicate webhook delivery, skipping. messageId:", messageId);
+          return new Response(JSON.stringify({ success: true, ignored: true, reason: "duplicate" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.warn("Dedup insert failed (non-fatal):", dedupErr.message);
+      }
+    }
+
     // Allow media-only messages (no text caption)
     if (!phone || (!message && !hasMedia)) {
       return buildResponse(
