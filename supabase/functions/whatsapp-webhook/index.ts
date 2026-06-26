@@ -513,8 +513,14 @@ serve(async (req) => {
 
   // Declare phone early so error handler can use it
   let phone = "";
+  let shouldAcknowledgeOnError = false;
 
   try {
+    // Admin Supabase client must exist before idempotency checks.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
     const rawBody = await req.text();
     console.log("RAW BODY:", rawBody.substring(0, 1500));
     // Debug: log message keys to understand structure
@@ -570,6 +576,7 @@ serve(async (req) => {
     // Extract phone from remoteJid
     phone = key?.remoteJid?.replace("@s.whatsapp.net", "") || "";
     const remoteJid = key?.remoteJid || "";
+    shouldAcknowledgeOnError = true;
 
     // Extract message text
     // Unwrap ephemeral messages (disappearing messages / temporary messages)
@@ -654,11 +661,6 @@ serve(async (req) => {
         console.log("Audio media fetched, mimetype:", mediaMimetype, "length:", imageBase64.length);
       }
     }
-
-    // 2. Create admin Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // --- Prepare media for private, owner-scoped storage after user resolution ---
     let attachmentUrl: string | null = null;
@@ -2101,7 +2103,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         friendly = "📄 Não consegui ler este PDF — ele pode estar criptografado, protegido por senha ou vazio. Por favor, envie uma versão desbloqueada ou tire um print das informações.";
       } else if (aiResponse.status === 429) {
         friendly = "⏳ Estou recebendo muitas mensagens agora. Tente novamente em alguns segundos.";
-      } else if (aiResponse.status === 402) {
+      } else if (aiResponse.status === 402 || aiResponse.status === 403) {
         friendly = "💳 Limite de uso de IA atingido. Acesse o app para verificar seu plano.";
       }
 
@@ -4562,7 +4564,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       success: false,
       error: error instanceof Error ? error.message : "Erro interno",
       message: "Ocorreu um erro inesperado. Tente novamente.",
-    }, 500, phone);
+    }, shouldAcknowledgeOnError ? 200 : 500, phone);
   }
 });
 
