@@ -2088,11 +2088,28 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI Gateway error:", aiResponse.status, errText);
+
+      // Detect unreadable/encrypted/empty PDFs and other 4xx content issues.
+      // Return 200 so Evolution does NOT retry the webhook (which caused spam).
+      const isContentError =
+        aiResponse.status >= 400 && aiResponse.status < 500;
+      const isPdfBroken =
+        /document has no pages|INVALID_ARGUMENT|encrypted|password|unsupported/i.test(errText);
+
+      let friendly = "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.";
+      if (hasDocument && (isPdfBroken || isContentError)) {
+        friendly = "📄 Não consegui ler este PDF — ele pode estar criptografado, protegido por senha ou vazio. Por favor, envie uma versão desbloqueada ou tire um print das informações.";
+      } else if (aiResponse.status === 429) {
+        friendly = "⏳ Estou recebendo muitas mensagens agora. Tente novamente em alguns segundos.";
+      } else if (aiResponse.status === 402) {
+        friendly = "💳 Limite de uso de IA atingido. Acesse o app para verificar seu plano.";
+      }
+
       return respond({
         success: false,
-        error: "Erro ao processar mensagem com IA",
-        message: "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.",
-      }, 500);
+        error: "ai_gateway_error",
+        message: friendly,
+      }, 200);
     }
 
     const aiData = await aiResponse.json();
