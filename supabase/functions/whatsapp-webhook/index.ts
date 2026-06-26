@@ -2124,7 +2124,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       } else if (aiResponse.status === 429) {
         friendly = "⏳ Estou recebendo muitas mensagens agora. Tente novamente em alguns segundos.";
       } else if (aiResponse.status === 402 || aiResponse.status === 403) {
-        friendly = "💳 Limite de uso de IA atingido. Acesse o app para verificar seu plano.";
+        friendly = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
       }
 
       return respond({
