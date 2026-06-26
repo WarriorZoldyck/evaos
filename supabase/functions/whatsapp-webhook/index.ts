@@ -626,6 +626,26 @@ serve(async (req) => {
       }
     }
 
+    // ============================================================
+    // KILL SWITCH: maintenance mode — stop all AI processing and
+    // reply with a single friendly maintenance message. Toggle by
+    // setting the EVA_MAINTENANCE_MODE secret to "off" to disable.
+    // ============================================================
+    const maintenanceMode = (Deno.env.get("EVA_MAINTENANCE_MODE") ?? "on").toLowerCase();
+    if (maintenanceMode !== "off" && maintenanceMode !== "false" && maintenanceMode !== "0") {
+      console.log("MAINTENANCE_MODE active — short-circuiting reply for phone:", phone);
+      if (phone) {
+        await sendEvolutionReply(
+          phone,
+          "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!"
+        );
+      }
+      return new Response(
+        JSON.stringify({ success: true, maintenance: true }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Allow media-only messages (no text caption)
     if (!phone || (!message && !hasMedia)) {
       return buildResponse(
