@@ -627,13 +627,17 @@ serve(async (req) => {
     }
 
     // ============================================================
-    // KILL SWITCH: maintenance mode — stop all AI processing and
-    // reply with a single friendly maintenance message. Toggle by
-    // setting the EVA_MAINTENANCE_MODE secret to "off" to disable.
+    // KILL SWITCH: maintenance mode — SAFE-BY-DEFAULT.
+    // Only activates when EVA_MAINTENANCE_MODE is explicitly set to
+    // "on", "true", or "1". Any other value (including missing) =>
+    // normal operation. This prevents accidental lockouts when the
+    // secret is unset or has whitespace.
     // ============================================================
-    const maintenanceMode = (Deno.env.get("EVA_MAINTENANCE_MODE") ?? "on").toLowerCase();
-    if (maintenanceMode !== "off" && maintenanceMode !== "false" && maintenanceMode !== "0") {
-      console.log("MAINTENANCE_MODE active — short-circuiting reply for phone:", phone);
+    const maintenanceRaw = (Deno.env.get("EVA_MAINTENANCE_MODE") ?? "").trim().toLowerCase();
+    const isMaintenance = maintenanceRaw === "on" || maintenanceRaw === "true" || maintenanceRaw === "1";
+    console.log(`MAINTENANCE_MODE check — raw="${maintenanceRaw}" active=${isMaintenance}`);
+    if (isMaintenance) {
+      console.log("MAINTENANCE_MODE ON — short-circuiting reply for phone:", phone);
       if (phone) {
         await sendEvolutionReply(
           phone,
