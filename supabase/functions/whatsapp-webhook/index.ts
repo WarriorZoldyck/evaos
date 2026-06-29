@@ -332,7 +332,7 @@ async function extractDocumentParties(apiKey: string, userContent: any) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           {
             role: "system",
@@ -2101,7 +2101,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         max_tokens: 4096,
         messages: [
           { role: "system", content: effectiveSystemPrompt },
