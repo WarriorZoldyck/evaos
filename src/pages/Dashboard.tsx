@@ -12,6 +12,10 @@ import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransaction
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
 import { FaturamentoDetailModal } from "@/components/dashboard/FaturamentoDetailModal";
+import { MdrDetailModal } from "@/components/dashboard/MdrDetailModal";
+import { useMdrSummary } from "@/hooks/useMdrSummary";
+import { Card, CardContent } from "@/components/ui/card";
+import { Percent } from "lucide-react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { getPreviousPeriodRange, sumInRange, dailySeries } from "@/lib/dashboardInsights";
 import {
@@ -30,6 +34,8 @@ export default function Dashboard() {
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
   const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
+  const [mdrModalOpen, setMdrModalOpen] = useState(false);
+  const mdr = useMdrSummary();
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
   const {
     transactions,
@@ -198,6 +204,44 @@ export default function Dashboard() {
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
       />
+
+      {/* MDR — taxas de maquininha no mês */}
+      <Card
+        className="card-hover shadow-premium overflow-hidden relative group cursor-pointer"
+        onClick={() => setMdrModalOpen(true)}
+        role="button"
+        aria-label="Abrir detalhes de MDR"
+      >
+        <CardContent className="p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-destructive text-white shadow-lg shrink-0">
+              <Percent className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">
+                MDR pago no mês
+              </p>
+              <p className="text-xl font-bold font-display text-destructive">
+                {mdr.loading
+                  ? "..."
+                  : mdr.currentMonth.fee.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </p>
+              {!mdr.loading && (
+                <p className="text-[11px] text-muted-foreground">
+                  {mdr.currentMonth.effectiveRate.toFixed(2)}% sobre{" "}
+                  {mdr.currentMonth.gross.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}{" "}
+                  · {mdr.currentMonth.count} vendas
+                </p>
+              )}
+            </div>
+          </div>
+          <span className="text-[11px] text-primary hidden sm:inline">Ver detalhes →</span>
+        </CardContent>
+      </Card>
+
+      <MdrDetailModal open={mdrModalOpen} onOpenChange={setMdrModalOpen} />
+
+
 
 
       {/* Categorias — Receitas e Despesas (card unificado) */}
