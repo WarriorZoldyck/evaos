@@ -10,6 +10,9 @@ interface SeriesPoint { date: string; v: number }
 
 interface SummaryCardsProps {
   faturamento: number;
+  receitaOperacional?: number;
+  unmappedRevenueCount?: number;
+  faturamentoNaoMapeado?: number;
   entradas: number;
   saidas: number;
   saldo: number;
@@ -211,7 +214,8 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
 }
 
 export function SummaryCards({
-  faturamento, entradas, saidas, saldo, saldoAtual,
+  faturamento, receitaOperacional, unmappedRevenueCount = 0, faturamentoNaoMapeado = 0,
+  entradas, saidas, saldo, saldoAtual,
   entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent,
   loading, dateFrom, dateTo,
   prevFaturamento, prevEntradas, prevSaidas, prevSaldo,
