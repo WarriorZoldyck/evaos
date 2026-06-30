@@ -34,6 +34,8 @@ export default function Dashboard() {
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
   const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
+  const [mdrModalOpen, setMdrModalOpen] = useState(false);
+  const mdr = useMdrSummary();
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
   const {
     transactions,
