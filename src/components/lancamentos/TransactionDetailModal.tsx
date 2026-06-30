@@ -10,7 +10,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Edit, Copy, CheckCircle2, Trash2, ExternalLink, ShieldCheck } from "lucide-react";
+import { Edit, Copy, CheckCircle2, Trash2, ExternalLink, ShieldCheck, CreditCard, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Transaction, Category, CardTerminalInfo } from "@/hooks/useTransactions";
 import { useSignedAttachmentUrl } from "@/hooks/useSignedAttachmentUrl";
 import { supabase } from "@/integrations/supabase/client";
