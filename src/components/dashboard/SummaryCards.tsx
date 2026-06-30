@@ -291,12 +291,14 @@ export function SummaryCards({
               ? `Op.: ${formatCurrency(receitaOperacional)}${unmappedRevenueCount > 0 ? ` · ${unmappedRevenueCount} s/ DRE` : ""}`
               : undefined
           }
+          tooltip={
+            "Faturamento Bruto = todas as receitas do período por competência (bate com DRE Gerencial).\n" +
+            "Receita Operacional (Op.) = subconjunto cuja categoria está mapeada para uma seção do DRE Contábil.\n" +
+            (unmappedRevenueCount > 0
+              ? `Diferença não mapeada: ${formatCurrency(faturamentoNaoMapeado)} em ${unmappedRevenueCount} categoria(s). Mapeie em Categorias → DRE.`
+              : "Todas as categorias de receita estão mapeadas para o DRE.")
+          }
         />
-        {unmappedRevenueCount > 0 && (
-          <div className="hidden" aria-hidden>
-            {/* tooltip data carried via subtitle; non-mapped diff = {faturamentoNaoMapeado} */}
-          </div>
-        )}
         <SummaryCard
           title="Entradas"
           value={entradas}
