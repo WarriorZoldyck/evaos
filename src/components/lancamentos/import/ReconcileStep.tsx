@@ -112,10 +112,11 @@ export function ReconcileStep({
   mode = "debit",
   orphans = [],
   orphansLoading = false,
+  onDeleteOrphan,
 }: ReconcileStepProps) {
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
-  const [showOrphans, setShowOrphans] = useState(false);
+  const [showOrphans, setShowOrphans] = useState(true);
 
   // Build indexed list of selected rows
   const indexed = useMemo(
@@ -126,14 +127,25 @@ export function ReconcileStep({
     [rows]
   );
 
-  const matchedRows = indexed.filter(
-    ({ i }) => (matchActions[i] || "criar") === "vincular" && matches[i]?.best
+  // SPLIT matched rows by tier: exact (Q1) vs tolerance (Q2)
+  const matchedExactRows = indexed.filter(
+    ({ i }) =>
+      (matchActions[i] || "criar") === "vincular" &&
+      matches[i]?.best &&
+      matches[i]!.best!.tier === "exact"
+  );
+  const matchedToleranceRows = indexed.filter(
+    ({ i }) =>
+      (matchActions[i] || "criar") === "vincular" &&
+      matches[i]?.best &&
+      matches[i]!.best!.tier === "tolerance"
   );
   const newRows = indexed.filter(({ i }) => {
     const a = matchActions[i] || "criar";
     return a === "criar" || (a === "vincular" && !matches[i]?.best);
   });
   const ignoredRows = indexed.filter(({ i }) => matchActions[i] === "ignorar");
+
 
   // Count of identical rows (same desc+amount+type) for the "×N" badge in "Criar no sistema".
   const duplicateCounts = useMemo(() => {
