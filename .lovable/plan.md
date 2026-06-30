@@ -1,61 +1,60 @@
+## Objetivo
 
-# Conciliação 2.0 — Modelo de 4 Quadrantes
+1. Destacar visualmente a **decomposição MDR** (bruto → taxa → líquido) ao abrir o detalhe de um lançamento de maquininha.
+2. Adicionar **card "MDR pago no mês"** no Dashboard, com modal de drilldown mostrando histórico mensal + quebra por terminal/bandeira.
 
-Reorganizar `ReconcileStep.tsx` para refletir exatamente a matriz desenhada: cada linha cai num dos 4 cenários abaixo, com ações claras e regras de tolerância explícitas.
+Sem mudanças de schema. Tudo calculado em memória a partir de `transactions` + `card_terminals` (mesma fórmula já usada no `TransactionDetailModal`).
 
-## A matriz
+---
 
-```text
-┌──────────────────────────────┬──────────────────────────────┬─────────────────────────────────┐
-│ EXTRATO                      │ SISTEMA                      │ AÇÃO                            │
-├──────────────────────────────┼──────────────────────────────┼─────────────────────────────────┤
-│ 1. 100,00  Ref XYZ           │ 100,00  Categoria XYZ        │ ① Casar (baixa automática)      │
-│ 2. 101,20                    │ 101,19                       │ ① Casar c/ desconto             │
-│                              │                              │ ② Observar / Categorizar        │
-│ 3. 105,00                    │ —                            │ ① Criar  ② Vincular manual      │
-│ 4. —                         │ 115,25                       │ ① Excluir  ② Editar/Reagendar   │
-└──────────────────────────────┴──────────────────────────────┴─────────────────────────────────┘
-```
+## 1) Destaque do MDR no detalhe do lançamento
 
-## Layout novo da tela
+Arquivo: `src/components/lancamentos/TransactionDetailModal.tsx`
 
-Quatro seções colapsáveis, cada uma com cor/ícone próprios e contador:
+- Reposicionar o bloco "Detalhes MDR" para **logo abaixo do cabeçalho** (acima de Forma de Pagamento), para virar a primeira coisa que o usuário vê quando o lançamento é de maquininha.
+- Trocar o container atual por um painel destacado com:
+  - Borda âmbar/cyan + ícone de maquininha.
+  - Grid 3 colunas: **Bruto** (valor da venda) | **Taxa MDR** (em vermelho, com %) | **Líquido** (em verde, fonte maior).
+  - Linha inferior com badge "Recebimento D+X — dd/mm/aaaa".
+  - Tooltip explicando o cálculo (`bruto × taxa = MDR`) e a origem da taxa (débito / crédito à vista / parcelado N×).
+- Manter o cálculo atual intacto (mesma função, só re-renderizado).
 
-1. **Match perfeito** (verde · Check) — valor idêntico, dentro da janela
-   Ações: `Casar` (default) · `Trocar` · `Já existe — não importar`
+## 2) Card "MDR pago no mês" no Dashboard
 
-2. **Tolerância de centavos** (amarelo · Scale) — diferença ≤ R$ 0,05 (configurável)
-   Mostra a diferença ao lado (ex: `Δ -0,01`)
-   Ações: `Casar c/ ajuste` (lança a diferença como desconto/juros conforme sinal) · `Observar` (manda pra fila e abre seletor de categoria) · `Importar como novo`
+Arquivo: `src/components/dashboard/SummaryCards.tsx` (ou irmão) + novo hook `src/hooks/useMdrSummary.ts`.
 
-3. **Só no extrato** (azul · Plus) — sobra no banco
-   Ações: `Criar lançamento` (default) · `Vincular manual` (popover de busca) · `Ignorar`
+- Hook `useMdrSummary(period)`:
+  - Carrega transações de receita com `card_terminal_id` no período + terminais.
+  - Calcula MDR por linha usando a mesma lógica do modal (débito / crédito à vista / parcelado via `rates_info`).
+  - Retorna: `totalMdrMes`, `totalBrutoMes`, `taxaMediaPct`, `serieMensal[]` (últimos 12 meses), `porTerminal[]`, `porBandeira[]` (quando disponível em `payment_method`/`rates_info`).
+- Novo card no Dashboard (mesma grade dos demais SummaryCards):
+  - Título: "MDR pago no mês"
+  - Valor principal: `R$ X` em vermelho
+  - Subtítulo: `Y% sobre R$ Z bruto · N vendas`
+  - Card clicável → abre `MdrDetailModal`.
 
-4. **Só no sistema** (vermelho · AlertTriangle) — fantasmas / previstos não pagos
-   Reaproveita o painel atual de "Orphans" e adiciona ações por item:
-   `Excluir` · `Editar / Reagendar` (abre modal com nova data) · `Manter como previsto`
+## 3) Modal de drilldown MDR
 
-## Regras de negócio (rodapé do desenho)
+Novo arquivo: `src/components/dashboard/MdrDetailModal.tsx`
 
-- **Janela de busca:** 35 dias (default, ajustável por aba: 5 para cartão, 35 para conta).
-- **Tolerância centavos:** ±R$ 0,05 → Quadrante 2. Acima disso, vira Q3+Q4.
-- **Desconto/Juros automático:** quando o usuário escolhe `Casar c/ ajuste`, criamos um lançamento-filho da categoria "Descontos obtidos" (extrato < sistema) ou "Juros/Multas" (extrato > sistema) com a diferença.
-- **Vínculo manual selecionando do extrato:** botão `Bater selecionando` em Q3 e Q4 → abre `ManualMatchModal` já existente, mas passando o lado oposto como fonte.
-- **Volumetria:** processar em lote de 70 itens por vez (paginação interna) para não travar a UI em extratos grandes.
+Conteúdo:
+- **KPIs no topo**: MDR do mês, MDR YTD, taxa média efetiva, ticket médio líquido.
+- **Gráfico de barras** (Recharts) — últimos 12 meses, barras de MDR mensal + linha de taxa efetiva %.
+- **Tabela por terminal** (mês selecionado): terminal · acquirer · bruto · MDR · taxa efetiva · nº vendas · líquido.
+- **Tabela por modalidade**: Débito, Crédito à vista, Parcelado 2x, 3x… (agrupado pelo que existe em `installments_total` + `rates_info`).
+- Seletor de mês no topo (default = mês corrente do contexto).
+- Botão "Ver lançamentos" que leva para `/lancamentos` filtrado por terminal + mês.
 
-## Arquivos a tocar
+## Considerações técnicas
 
-- `src/components/lancamentos/import/ReconcileStep.tsx` — reescrever o corpo nos 4 quadrantes; consolidar tooltips/alerts atuais.
-- `src/lib/import/matching.ts` — adicionar campo `tier: "exact" | "tolerance" | "none"` no `MatchScore` para o front classificar sem recalcular. Atualizar testes.
-- `src/hooks/useImportMatching.ts` — expor `tolerance` (default 0,05) e propagar `tier`.
-- `src/components/lancamentos/ImportStatementModal.tsx` — passar `orphans` + handlers `onDeleteOrphan` / `onRescheduleOrphan` (já existe deleção; adicionar reschedule chamando `updateTransaction`).
-- (Opcional) `src/components/configuracoes/TransactionFieldsCard.tsx` — slider de tolerância (default 0,05) salvo no profile.
+- 100% client-side, reaproveita queries que o Dashboard já faz; sem nova migration.
+- Respeita o `HubContext`/`ContextSelector` global (pessoal vs empresa) — usa as mesmas listas que `useTransactions`/`useAccounts` já filtram.
+- Performance: memorizar cálculos por `(transactionId, terminalId)` no hook.
+- Acessibilidade: card do Dashboard é `<button>` com `aria-label`; modal usa o `Dialog` padrão do shadcn.
+- Sem mudanças em edge functions, RLS ou Supabase.
 
-## Fora do escopo (anotado pra depois)
+## Fora de escopo (deixar explícito)
 
-- Reabrir a investigação do saldo da Sabrina (Itaú/Santander) — fica como está por enquanto, conforme combinado.
-- Aprendizado automático de categoria por descrição já existe; só vamos reaproveitar.
-
-## Resultado esperado
-
-Cada linha do extrato e cada lançamento do sistema vão estar exatamente em **um** quadrante, com ação primária óbvia e ação secundária (avançada) atrás de tooltip. Acaba a sensação atual de "duas ações fazendo quase a mesma coisa" e o usuário entende, batendo o olho, onde a Eva precisa da decisão dele.
+- Não persistir MDR como lançamento filho.
+- Não alterar conciliação bancária / fluxo de liquidação D+X (já existente).
+- Não tocar em DRE — MDR continua implícito na receita líquida; se quiser categorizar como despesa real, é outra rodada.
