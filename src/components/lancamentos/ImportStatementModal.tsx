@@ -1206,6 +1206,18 @@ export function ImportStatementModal({
               walletId={walletId}
               orphans={orphans}
               orphansLoading={orphansLoading}
+              onDeleteOrphan={async (id) => {
+                const ok = window.confirm("Excluir este lançamento do sistema? Esta ação não pode ser desfeita.");
+                if (!ok) return;
+                const { error } = await supabase.from("transactions").delete().eq("id", id);
+                if (error) {
+                  toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+                  return;
+                }
+                setOrphans((prev) => prev.filter((o) => o.id !== id));
+                toast({ title: "Lançamento excluído" });
+              }}
+
               categories={categories}
               rowCategories={rowCategories}
               suggestions={suggestions}
