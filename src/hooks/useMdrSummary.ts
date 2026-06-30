@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { applyCompanyFilter } from "@/lib/companyFilter";
 
