@@ -328,207 +328,70 @@ export function ReconcileStep({
         </div>
 
         <div className="flex-1 overflow-auto space-y-4 pr-1">
-          {/* ORPHANS — system has more than the statement (likely errors/duplicates) */}
-          {isCardMode && !orphansLoading && orphans.length > 0 && (
-            <Alert className="border-destructive/50 bg-destructive/5">
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-              <AlertDescription className="text-xs leading-relaxed ml-1">
-                <div className="font-semibold text-destructive mb-1">
-                  Encontramos {orphans.length} lançamento{orphans.length > 1 ? "s" : ""} no sistema que NÃO está{orphans.length > 1 ? "ão" : ""} no extrato do cartão
-                  {" — "}
-                  <span className="font-mono">
-                    {orphans.reduce((s, o) => s + Math.abs(o.amount), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  </span>
-                </div>
-                <p className="text-muted-foreground">
-                  O extrato do banco é a verdade. Lançamentos extras no sistema costumam ser <strong>erros</strong> (digitação duplicada, importação anterior corrompida, ghost de recuperação) ou pertencem a outra fatura. Recomendamos revisar e excluir os incorretos para a sua fatura bater certinho.
-                </p>
-                <Button
-                  size="sm"
-                  variant="link"
-                  className="h-auto p-0 mt-1 text-xs text-destructive"
-                  onClick={() => setShowOrphans((v) => !v)}
-                >
-                  {showOrphans ? "Ocultar lista" : `Ver ${orphans.length} suspeito${orphans.length > 1 ? "s" : ""}`}
-                </Button>
-                {showOrphans && (
-                  <div className="mt-2 border rounded bg-background max-h-48 overflow-auto divide-y">
-                    {orphans
-                      .slice()
-                      .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-                      .map((o) => (
-                        <div key={o.id} className="flex items-start justify-between gap-2 px-2 py-1.5 text-xs">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium break-words leading-snug">{o.description || "(sem descrição)"}</p>
-                            <p className="text-[10px] text-muted-foreground">
-                              {fmtDate(o.competence_date)} · <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
-                            </p>
-                          </div>
-                          <span className="font-mono text-xs whitespace-nowrap">{fmt(Math.abs(o.amount))}</span>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
+          {/* Matrix legend */}
+          <Alert className="py-2 px-3 bg-muted/30 border-muted-foreground/20">
+            <Info className="h-3.5 w-3.5" />
+            <AlertDescription className="text-[11px] leading-snug ml-1">
+              Cada linha cai em um dos 4 cenários: <strong className="text-emerald-700">Match perfeito</strong> ·{" "}
+              <strong className="text-amber-700">Tolerância de centavos</strong> ·{" "}
+              <strong className="text-sky-700">Só no extrato</strong> ·{" "}
+              <strong className="text-destructive">Só no sistema</strong>.
+            </AlertDescription>
+          </Alert>
 
-          {/* SECTION A — Matches */}
+          {/* Q1 — MATCH PERFEITO */}
           <section>
             <header className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Link2 className="h-4 w-4 text-primary" />
-                {isCardMode ? "Compras já lançadas no cartão" : "Correspondências encontradas"}
-                <Badge variant="secondary" className="text-[10px]">{matchedRows.length}</Badge>
+              <h3 className="text-sm font-semibold flex items-center gap-2 text-emerald-700">
+                <Check className="h-4 w-4" />
+                Match perfeito
+                <Badge variant="secondary" className="text-[10px]">{matchedExactRows.length}</Badge>
+                <span className="text-[10px] text-muted-foreground font-normal">— valor idêntico, casa direto</span>
               </h3>
             </header>
-
-            <Alert className="mb-2 py-2 px-3 bg-muted/40 border-muted-foreground/20">
-              <Info className="h-3.5 w-3.5" />
-              <AlertDescription className="text-[11px] leading-snug ml-1">
-                Linhas do extrato que casam com lançamentos já existentes. Por padrão serão <strong>casadas</strong> (atualiza o existente, sem duplicar). Use <strong>"Já existe — não importar"</strong> para descartar a linha do extrato sem mexer no existente, ou <strong>"Importar como novo"</strong> só se for de fato uma segunda compra.
-              </AlertDescription>
-            </Alert>
-
-            {matchedRows.length === 0 ? (
+            {matchedExactRows.length === 0 ? (
               <p className="text-xs text-muted-foreground italic px-2 py-3 border rounded-lg bg-muted/20">
-                {indexed.some(({ i }) => matches[i]?.best) ? (
+                {indexed.some(({ i }) => matches[i]?.best && matches[i]!.best!.tier === "exact") ? (
                   <>
-                    Nenhuma correspondência aceita ainda.
-                    <Button
-                      variant="link"
-                      size="sm"
-                      className="h-auto p-0 ml-2 text-xs"
-                      onClick={conciliateAll}
-                    >
+                    Há sugestões exatas não aceitas.{" "}
+                    <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={conciliateAll}>
                       Aceitar sugestões
                     </Button>
                   </>
                 ) : (
-                  <>Nenhum lançamento existente bate com este extrato.</>
+                  <>Nenhuma correspondência exata encontrada.</>
                 )}
               </p>
             ) : (
-              <div className="border rounded-lg overflow-hidden divide-y">
-                {matchedRows.map(({ r, i }) => {
-                  const m = matches[i]!;
-                  const best = m.best!;
-                  const cand = best.candidate;
-                  return (
-                    <div key={i} className="grid grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)_auto] gap-4 items-start p-3 hover:bg-accent/30">
-                      {/* Extrato */}
-                      <div className="min-w-0">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Extrato</p>
-                        <p className="font-medium text-sm break-words leading-snug" title={r.description}>{r.description}</p>
-                        <p className="text-xs text-muted-foreground">{fmtDate(r.date)} · <span className="font-mono">{fmt(r.amount)}</span></p>
-                      </div>
-                      <ArrowLeftRight className="h-4 w-4 text-primary shrink-0" />
-                      {/* EVA */}
-                      <div className="min-w-0">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5 flex items-center gap-1">
-                          EVA
-                          <Badge
-                            variant={cand.status === "Pago" ? "default" : "secondary"}
-                            className="text-[9px] px-1 py-0 h-3.5"
-                          >
-                            {cand.status}
-                          </Badge>
-                        </p>
-                        <p className="font-medium text-sm break-words leading-snug" title={cand.description}>{cand.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {fmtDate(cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
-                          {cand.contact_name ? ` · ${cand.contact_name}` : ""}
-                        </p>
-                      </div>
-                      {/* Actions */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" title="Trocar correspondência">
-                              <ArrowLeftRight className="h-3 w-3" /> Trocar
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent align="end" className="w-80 p-2">
-                            <p className="text-xs font-medium mb-2">Outros candidatos</p>
-                            {m.alternatives.length === 0 ? (
-                              <p className="text-xs text-muted-foreground italic">Sem outras sugestões automáticas.</p>
-                            ) : (
-                              <div className="space-y-1 max-h-48 overflow-auto">
-                                {m.alternatives.map((alt) => (
-                                  <button
-                                    key={alt.id}
-                                    type="button"
-                                    onClick={() => onTargetChange(i, alt.id)}
-                                    className={`w-full text-left p-2 rounded text-xs hover:bg-accent ${
-                                      matchTargets[i] === alt.id ? "bg-primary/10" : ""
-                                    }`}
-                                  >
-                                    <p className="font-medium truncate">{alt.description}</p>
-                                    <p className="text-muted-foreground">
-                                      {fmtDate(alt.payment_date)} · <span className="font-mono">{fmt(Number(alt.amount))}</span>
-                                    </p>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                            {!isCardMode && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="w-full mt-2 h-7 text-xs gap-1"
-                                onClick={() => setManualForRow(i)}
-                              >
-                                <Search className="h-3 w-3" /> Buscar manualmente
-                              </Button>
-                            )}
-                          </PopoverContent>
-                        </Popover>
-
-                        {/* Já existe — não importar (primary safe action) */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
-                              onClick={() => onActionChange(i, "ignorar")}
-                            >
-                              <ShieldCheck className="h-3 w-3" /> Já existe — não importar
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[260px] text-xs">
-                            Mantém o lançamento que já existe no sistema e <strong>descarta esta linha do extrato</strong>. Nada novo é criado.
-                          </TooltipContent>
-                        </Tooltip>
-
-                        {/* Importar como novo (X — danger / advanced) */}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                              onClick={() => onActionChange(i, "criar")}
-                            >
-                              <X className="h-3 w-3" /> Importar como novo
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[280px] text-xs">
-                            <div className="flex items-start gap-1.5">
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                              <span>
-                                Desfaz o vínculo e cria um lançamento <strong>NOVO</strong> a partir da linha do extrato. O que já existia continua existindo — <strong>pode gerar duplicata</strong>. Use só se for realmente uma segunda compra.
-                              </span>
-                            </div>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="border border-emerald-500/30 rounded-lg overflow-hidden divide-y">
+                {matchedExactRows.map(renderMatchRow)}
               </div>
             )}
           </section>
+
+          {/* Q2 — TOLERÂNCIA DE CENTAVOS */}
+          {matchedToleranceRows.length > 0 && (
+            <section>
+              <header className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-amber-700">
+                  <AlertTriangle className="h-4 w-4" />
+                  Diferença de centavos
+                  <Badge variant="secondary" className="text-[10px]">{matchedToleranceRows.length}</Badge>
+                  <span className="text-[10px] text-muted-foreground font-normal">— provável desconto/juros, revise antes de casar</span>
+                </h3>
+              </header>
+              <Alert className="mb-2 py-2 px-3 bg-amber-500/5 border-amber-500/30">
+                <Info className="h-3.5 w-3.5 text-amber-600" />
+                <AlertDescription className="text-[11px] leading-snug ml-1">
+                  Casa pelo valor próximo (até R$ 0,05 de diferença). Pode ser desconto por pontualidade ou pequeno juros. Confirme manualmente se quiser absorver a diferença, ou use <strong>"Importar como novo"</strong> se forem compras distintas.
+                </AlertDescription>
+              </Alert>
+              <div className="border border-amber-500/30 rounded-lg overflow-hidden divide-y">
+                {matchedToleranceRows.map(renderMatchRow)}
+              </div>
+            </section>
+          )}
+
 
 
           <section>
