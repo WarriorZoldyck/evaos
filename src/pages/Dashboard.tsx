@@ -205,6 +205,44 @@ export default function Dashboard() {
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
       />
 
+      {/* MDR — taxas de maquininha no mês */}
+      <Card
+        className="card-hover shadow-premium overflow-hidden relative group cursor-pointer"
+        onClick={() => setMdrModalOpen(true)}
+        role="button"
+        aria-label="Abrir detalhes de MDR"
+      >
+        <CardContent className="p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-gradient-destructive text-white shadow-lg shrink-0">
+              <Percent className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">
+                MDR pago no mês
+              </p>
+              <p className="text-xl font-bold font-display text-destructive">
+                {mdr.loading
+                  ? "..."
+                  : mdr.currentMonth.fee.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              </p>
+              {!mdr.loading && (
+                <p className="text-[11px] text-muted-foreground">
+                  {mdr.currentMonth.effectiveRate.toFixed(2)}% sobre{" "}
+                  {mdr.currentMonth.gross.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}{" "}
+                  · {mdr.currentMonth.count} vendas
+                </p>
+              )}
+            </div>
+          </div>
+          <span className="text-[11px] text-primary hidden sm:inline">Ver detalhes →</span>
+        </CardContent>
+      </Card>
+
+      <MdrDetailModal open={mdrModalOpen} onOpenChange={setMdrModalOpen} />
+
+
+
 
       {/* Categorias — Receitas e Despesas (card unificado) */}
       <CategoryBreakdownCard
