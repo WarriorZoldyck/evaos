@@ -187,6 +187,121 @@ export function ReconcileStep({
     return categories.filter((c) => c.parent_id === parent.id);
   };
 
+  // Renders a single matched row (used by Q1 + Q2 sections).
+  const renderMatchRow = ({ r, i }: { r: ParsedRow; i: number }) => {
+    const m = matches[i]!;
+    const best = m.best!;
+    const cand = best.candidate;
+    const delta = r.amount - Number(cand.amount);
+    const showDelta = best.tier === "tolerance";
+    return (
+      <div key={i} className="grid grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)_auto] gap-4 items-start p-3 hover:bg-accent/30">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Extrato</p>
+          <p className="font-medium text-sm break-words leading-snug" title={r.description}>{r.description}</p>
+          <p className="text-xs text-muted-foreground">{fmtDate(r.date)} · <span className="font-mono">{fmt(r.amount)}</span></p>
+        </div>
+        <div className="flex flex-col items-center gap-0.5 shrink-0">
+          <ArrowLeftRight className="h-4 w-4 text-primary" />
+          {showDelta && (
+            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-amber-500/50 text-amber-700 font-mono">
+              Δ {delta >= 0 ? "+" : ""}{delta.toFixed(2)}
+            </Badge>
+          )}
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5 flex items-center gap-1">
+            EVA
+            <Badge variant={cand.status === "Pago" ? "default" : "secondary"} className="text-[9px] px-1 py-0 h-3.5">
+              {cand.status}
+            </Badge>
+          </p>
+          <p className="font-medium text-sm break-words leading-snug" title={cand.description}>{cand.description}</p>
+          <p className="text-xs text-muted-foreground">
+            {fmtDate(cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
+            {cand.contact_name ? ` · ${cand.contact_name}` : ""}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" title="Trocar correspondência">
+                <ArrowLeftRight className="h-3 w-3" /> Trocar
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-2">
+              <p className="text-xs font-medium mb-2">Outros candidatos</p>
+              {m.alternatives.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">Sem outras sugestões automáticas.</p>
+              ) : (
+                <div className="space-y-1 max-h-48 overflow-auto">
+                  {m.alternatives.map((alt) => (
+                    <button
+                      key={alt.id}
+                      type="button"
+                      onClick={() => onTargetChange(i, alt.id)}
+                      className={`w-full text-left p-2 rounded text-xs hover:bg-accent ${
+                        matchTargets[i] === alt.id ? "bg-primary/10" : ""
+                      }`}
+                    >
+                      <p className="font-medium truncate">{alt.description}</p>
+                      <p className="text-muted-foreground">
+                        {fmtDate(alt.payment_date)} · <span className="font-mono">{fmt(Number(alt.amount))}</span>
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!isCardMode && (
+                <Button size="sm" variant="outline" className="w-full mt-2 h-7 text-xs gap-1" onClick={() => setManualForRow(i)}>
+                  <Search className="h-3 w-3" /> Buscar manualmente
+                </Button>
+              )}
+            </PopoverContent>
+          </Popover>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                onClick={() => onActionChange(i, "ignorar")}
+              >
+                <ShieldCheck className="h-3 w-3" /> Já existe — não importar
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[260px] text-xs">
+              Mantém o lançamento que já existe no sistema e <strong>descarta esta linha do extrato</strong>. Nada novo é criado.
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => onActionChange(i, "criar")}
+              >
+                <X className="h-3 w-3" /> Importar como novo
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[280px] text-xs">
+              <div className="flex items-start gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <span>
+                  Desfaz o vínculo e cria um lançamento <strong>NOVO</strong> a partir da linha do extrato. O que já existia continua existindo — <strong>pode gerar duplicata</strong>. Use só se for realmente uma segunda compra.
+                </span>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    );
+  };
+
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex flex-col gap-4 flex-1 overflow-hidden">
