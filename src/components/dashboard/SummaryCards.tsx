@@ -10,6 +10,9 @@ interface SeriesPoint { date: string; v: number }
 
 interface SummaryCardsProps {
   faturamento: number;
+  receitaOperacional?: number;
+  unmappedRevenueCount?: number;
+  faturamentoNaoMapeado?: number;
   entradas: number;
   saidas: number;
   saldo: number;
@@ -64,7 +67,9 @@ interface CardItemProps {
   delta?: number | null;
   series?: SeriesPoint[];
   accent?: string;
-  invertDeltaColor?: boolean; // for "saídas" where up = bad
+  invertDeltaColor?: boolean;
+  subtitle?: string;
+  tooltip?: string;
 }
 
 function SummaryCard({
@@ -79,6 +84,8 @@ function SummaryCard({
   series,
   accent = "hsl(195, 100%, 50%)",
   invertDeltaColor = false,
+  subtitle,
+  tooltip,
 }: CardItemProps) {
   const trendColor =
     trend === "up"
@@ -105,13 +112,28 @@ function SummaryCard({
       <CardContent className="p-4 relative z-10 space-y-2">
         <div className="flex items-center justify-between">
           <div className="space-y-1 min-w-0">
-            <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">{title}</p>
+            <div className="flex items-center gap-1">
+              <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">{title}</p>
+              {tooltip && (
+                <TooltipProvider delayDuration={150}>
+                  <UITooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-[10px] text-muted-foreground cursor-help border border-border rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none">?</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-xs whitespace-pre-line">{tooltip}</TooltipContent>
+                  </UITooltip>
+                </TooltipProvider>
+              )}
+            </div>
             {loading ? (
               <Skeleton className="h-7 w-28" />
             ) : (
               <p className={`text-xl font-bold font-display ${trendColor}`}>
                 {typeof value === "number" ? formatCurrency(value) : value}
               </p>
+            )}
+            {subtitle && !loading && (
+              <p className="text-[10px] text-muted-foreground">{subtitle}</p>
             )}
           </div>
           <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${gradient} text-white shadow-lg transition-transform duration-300 group-hover:scale-110 shrink-0`}>
@@ -211,7 +233,8 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
 }
 
 export function SummaryCards({
-  faturamento, entradas, saidas, saldo, saldoAtual,
+  faturamento, receitaOperacional, unmappedRevenueCount = 0, faturamentoNaoMapeado = 0,
+  entradas, saidas, saldo, saldoAtual,
   entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent,
   loading, dateFrom, dateTo,
   prevFaturamento, prevEntradas, prevSaidas, prevSaldo,
@@ -263,6 +286,18 @@ export function SummaryCards({
           delta={prevFaturamento !== undefined ? pctChange(faturamento, prevFaturamento) : undefined}
           series={faturamentoSeries}
           accent="hsl(195, 100%, 50%)"
+          subtitle={
+            receitaOperacional !== undefined
+              ? `Op.: ${formatCurrency(receitaOperacional)}${unmappedRevenueCount > 0 ? ` · ${unmappedRevenueCount} s/ DRE` : ""}`
+              : undefined
+          }
+          tooltip={
+            "Faturamento Bruto = todas as receitas do período por competência (bate com DRE Gerencial).\n" +
+            "Receita Operacional (Op.) = subconjunto cuja categoria está mapeada para uma seção do DRE Contábil.\n" +
+            (unmappedRevenueCount > 0
+              ? `Diferença não mapeada: ${formatCurrency(faturamentoNaoMapeado)} em ${unmappedRevenueCount} categoria(s). Mapeie em Categorias → DRE.`
+              : "Todas as categorias de receita estão mapeadas para o DRE.")
+          }
         />
         <SummaryCard
           title="Entradas"

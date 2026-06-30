@@ -168,6 +168,9 @@ export default function Dashboard() {
       {/* Cards principais (com comparativo + sparkline + margem) */}
       <SummaryCards
         faturamento={summary.faturamento}
+        receitaOperacional={summary.receitaOperacional}
+        unmappedRevenueCount={summary.unmappedRevenueCount}
+        faturamentoNaoMapeado={summary.faturamentoNaoMapeado}
         entradas={summary.entradas}
         saidas={summary.saidas}
         saldo={summary.saldo}
