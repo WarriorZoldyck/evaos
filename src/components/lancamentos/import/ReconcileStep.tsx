@@ -573,7 +573,68 @@ export function ReconcileStep({
           </section>
 
 
-          {/* SECTION C — Ignored */}
+          {/* Q4 — SÓ NO SISTEMA (orphans) */}
+          {isCardMode && !orphansLoading && orphans.length > 0 && (
+            <section>
+              <header className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  Só no sistema
+                  <Badge variant="secondary" className="text-[10px]">{orphans.length}</Badge>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    — {orphans.reduce((s, o) => s + Math.abs(o.amount), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </span>
+                </h3>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setShowOrphans((v) => !v)}>
+                  {showOrphans ? "Ocultar" : "Mostrar"}
+                </Button>
+              </header>
+              <Alert className="mb-2 py-2 px-3 bg-destructive/5 border-destructive/30">
+                <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                <AlertDescription className="text-[11px] leading-snug ml-1">
+                  Lançamentos que existem no sistema mas <strong>não aparecem no extrato</strong>. Costumam ser erros (digitação duplicada, importação anterior corrompida, ghost de recuperação) ou pertencem a outra fatura. Exclua os incorretos para a fatura bater certinho.
+                </AlertDescription>
+              </Alert>
+              {showOrphans && (
+                <div className="border border-destructive/30 rounded-lg bg-background max-h-72 overflow-auto divide-y">
+                  {orphans
+                    .slice()
+                    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+                    .map((o) => (
+                      <div key={o.id} className="flex items-start justify-between gap-2 px-2 py-1.5 text-xs">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium break-words leading-snug">{o.description || "(sem descrição)"}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {fmtDate(o.competence_date)} ·{" "}
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
+                          </p>
+                        </div>
+                        <span className="font-mono text-xs whitespace-nowrap self-center">{fmt(Math.abs(o.amount))}</span>
+                        {onDeleteOrphan && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => onDeleteOrphan(o.id)}
+                              >
+                                <X className="h-3 w-3" /> Excluir
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="text-xs max-w-[240px]">
+                              Remove o lançamento do sistema. Use quando for um ghost/duplicata. Esta ação não pode ser desfeita aqui.
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </section>
+          )}
+
+
           {ignoredRows.length > 0 && (
             <section>
               <header className="mb-2">
