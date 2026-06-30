@@ -267,7 +267,17 @@ export function SummaryCards({
           delta={prevFaturamento !== undefined ? pctChange(faturamento, prevFaturamento) : undefined}
           series={faturamentoSeries}
           accent="hsl(195, 100%, 50%)"
+          subtitle={
+            receitaOperacional !== undefined
+              ? `Op.: ${formatCurrency(receitaOperacional)}${unmappedRevenueCount > 0 ? ` · ${unmappedRevenueCount} s/ DRE` : ""}`
+              : undefined
+          }
         />
+        {unmappedRevenueCount > 0 && (
+          <div className="hidden" aria-hidden>
+            {/* tooltip data carried via subtitle; non-mapped diff = {faturamentoNaoMapeado} */}
+          </div>
+        )}
         <SummaryCard
           title="Entradas"
           value={entradas}
