@@ -73,7 +73,10 @@ interface ReconcileStepProps {
   /** Transactions already in the system that DID NOT match any line of the statement. */
   orphans?: { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[];
   orphansLoading?: boolean;
+  /** Optional: when provided, shows a "Excluir" button on each orphan. */
+  onDeleteOrphan?: (id: string) => void;
 }
+
 
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
