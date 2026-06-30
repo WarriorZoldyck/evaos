@@ -36,6 +36,14 @@ export interface ScoredCandidate {
   dayDiff: number;
   /** Token-overlap similarity 0..1 between line and candidate descriptions. */
   similarity: number;
+  /** Absolute amount difference (line.amount - candidate.amount). */
+  amountDiff: number;
+  /**
+   * Quality tier of the value match:
+   * - "exact"     → |Δ| ≤ EXACT_AMOUNT_TOLERANCE (effectively equal)
+   * - "tolerance" → EXACT_AMOUNT_TOLERANCE < |Δ| ≤ AMOUNT_TOLERANCE (cent-level diff)
+   */
+  tier: "exact" | "tolerance";
 }
 
 /** Tolerance window (days) for matching by date — debit accounts. */
@@ -46,8 +54,11 @@ export const DATE_WINDOW_DAYS = 7;
  * must match a system transaction within the same cycle, not the previous month.
  */
 export const CARD_DATE_WINDOW_DAYS = 5;
-/** Currency tolerance — covers 1-cent rounding between statement and manual entry. */
-export const AMOUNT_TOLERANCE = 0.02;
+/** Amount considered effectively identical — only float rounding. */
+export const EXACT_AMOUNT_TOLERANCE = 0.005;
+/** Currency tolerance — covers small differences like discounts/juros up to 5 centavos. */
+export const AMOUNT_TOLERANCE = 0.05;
+
 /**
  * Minimum description similarity (0..1) required to AUTO-LINK a candidate.
  * Below this, the candidate may still be shown as a suggestion but must not
