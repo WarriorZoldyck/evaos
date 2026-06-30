@@ -399,10 +399,44 @@ export function useDashboardData(filters: DashboardFilters) {
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // Faturamento: soma das receitas por competência no período (mesma base do DRE)
-    const faturamento = competenceTransactions
-      .filter((t) => t.type === "receita")
-      .reduce((acc, t) => acc + Number(t.amount), 0);
+    // Faturamento Bruto: TODAS as receitas por competência (bate com DRE Gerencial)
+    const receitasCompetencia = competenceTransactions.filter((t) => t.type === "receita");
+    const faturamento = receitasCompetencia.reduce((acc, t) => acc + Number(t.amount), 0);
+
+    // Receita Operacional: só receitas cuja categoria (ou ancestral) tem dre_section mapeado
+    // — bate com "(+) Receita Operacional Bruta" do DRE Contábil.
+    const catById = new Map(categoryRecords.map((c) => [c.id, c]));
+    const catByName = new Map<string, CategoryRecord>();
+    categoryRecords.forEach((c) => {
+      const key = c.name.toLowerCase();
+      if (!catByName.has(key)) catByName.set(key, c);
+    });
+    const resolveCat = (ref: string | null | undefined): CategoryRecord | null => {
+      if (!ref) return null;
+      return catById.get(ref) ?? catByName.get(ref.toLowerCase()) ?? null;
+    };
+    const hasDreSection = (cat: CategoryRecord | null): boolean => {
+      let current: CategoryRecord | null | undefined = cat;
+      const seen = new Set<string>();
+      while (current && !seen.has(current.id)) {
+        if (current.dre_section && current.dre_section.trim() !== "") return true;
+        seen.add(current.id);
+        current = current.parent_id ? catById.get(current.parent_id) ?? null : null;
+      }
+      return false;
+    };
+    let receitaOperacional = 0;
+    const unmappedCategoryIds = new Set<string>();
+    receitasCompetencia.forEach((t) => {
+      const cat = resolveCat((t as any).subcategory) ?? resolveCat(t.category);
+      if (hasDreSection(cat)) {
+        receitaOperacional += Number(t.amount);
+      } else {
+        unmappedCategoryIds.add(cat?.id ?? t.category ?? "—");
+      }
+    });
+    const unmappedRevenueCount = unmappedCategoryIds.size;
+    const faturamentoNaoMapeado = faturamento - receitaOperacional;
 
     const saldo = entradas - saidas;
 
@@ -425,8 +459,12 @@ export function useDashboardData(filters: DashboardFilters) {
     const mdrTaxas = mdrBruto - mdrLiquido;
     const mdrPercent = mdrBruto > 0 ? (mdrTaxas / mdrBruto) * 100 : 0;
 
-    return { faturamento, entradas, saidas, saldo, entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent };
-  }, [transactions, competenceTransactions]);
+    return {
+      faturamento, receitaOperacional, faturamentoNaoMapeado, unmappedRevenueCount,
+      entradas, saidas, saldo, entradaPrevista, saidaPrevista,
+      mdrBruto, mdrLiquido, mdrTaxas, mdrPercent,
+    };
+  }, [transactions, competenceTransactions, categoryRecords]);
 
   // Upcoming (Pendente) transactions
   const upcomingTransactions = useMemo(() => {
