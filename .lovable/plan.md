@@ -1,52 +1,61 @@
-## Diagnóstico
 
-A Eva mandou as duas mensagens contraditórias ("Eva voltou a responder!" e logo depois "🛠️ A Eva está em manutenção…") porque o kill switch no `whatsapp-webhook` tem **default invertido e inseguro**:
+# Conciliação 2.0 — Modelo de 4 Quadrantes
 
-```ts
-const maintenanceMode = (Deno.env.get("EVA_MAINTENANCE_MODE") ?? "on").toLowerCase();
-if (maintenanceMode !== "off" && maintenanceMode !== "false" && maintenanceMode !== "0") {
-  // responde mensagem de manutenção
-}
+Reorganizar `ReconcileStep.tsx` para refletir exatamente a matriz desenhada: cada linha cai num dos 4 cenários abaixo, com ações claras e regras de tolerância explícitas.
+
+## A matriz
+
+```text
+┌──────────────────────────────┬──────────────────────────────┬─────────────────────────────────┐
+│ EXTRATO                      │ SISTEMA                      │ AÇÃO                            │
+├──────────────────────────────┼──────────────────────────────┼─────────────────────────────────┤
+│ 1. 100,00  Ref XYZ           │ 100,00  Categoria XYZ        │ ① Casar (baixa automática)      │
+│ 2. 101,20                    │ 101,19                       │ ① Casar c/ desconto             │
+│                              │                              │ ② Observar / Categorizar        │
+│ 3. 105,00                    │ —                            │ ① Criar  ② Vincular manual      │
+│ 4. —                         │ 115,25                       │ ① Excluir  ② Editar/Reagendar   │
+└──────────────────────────────┴──────────────────────────────┴─────────────────────────────────┘
 ```
 
-Problemas:
-1. **Default = `"on"`** → se o secret não estiver presente/propagado na edge function naquele momento, ela cai em manutenção automaticamente.
-2. Mesmo tendo setado `EVA_MAINTENANCE_MODE=false`, qualquer valor diferente exato de `off`/`false`/`0` (espaço, maiúscula estranha, valor antigo em cache de deploy) ativa manutenção.
-3. Resultado: a usuária (Drogaria Total Itatiba) recebeu a mensagem de "voltei" às 12:42 e ao testar às 12:48 caiu no kill switch de novo.
+## Layout novo da tela
 
-## Plano
+Quatro seções colapsáveis, cada uma com cor/ícone próprios e contador:
 
-### 1. Inverter o default do kill switch (seguro por padrão)
-Em `supabase/functions/whatsapp-webhook/index.ts` (~linha 634):
+1. **Match perfeito** (verde · Check) — valor idêntico, dentro da janela
+   Ações: `Casar` (default) · `Trocar` · `Já existe — não importar`
 
-- Default passa a ser `"off"`.
-- Só ativa manutenção quando o secret está explicitamente em `on`/`true`/`1`.
-- Log mais claro indicando o valor lido.
+2. **Tolerância de centavos** (amarelo · Scale) — diferença ≤ R$ 0,05 (configurável)
+   Mostra a diferença ao lado (ex: `Δ -0,01`)
+   Ações: `Casar c/ ajuste` (lança a diferença como desconto/juros conforme sinal) · `Observar` (manda pra fila e abre seletor de categoria) · `Importar como novo`
 
-```ts
-const maintenanceMode = (Deno.env.get("EVA_MAINTENANCE_MODE") ?? "off").trim().toLowerCase();
-const isMaintenance = maintenanceMode === "on" || maintenanceMode === "true" || maintenanceMode === "1";
-if (isMaintenance) {
-  console.log("MAINTENANCE_MODE ON — short-circuiting reply for phone:", phone);
-  // … resposta de manutenção
-}
-```
+3. **Só no extrato** (azul · Plus) — sobra no banco
+   Ações: `Criar lançamento` (default) · `Vincular manual` (popover de busca) · `Ignorar`
 
-### 2. Garantir o estado do secret
-- Atualizar `EVA_MAINTENANCE_MODE` para `off` (valor canônico, sem espaços).
-- Assim, mesmo com o código novo, o secret também confirma o estado.
+4. **Só no sistema** (vermelho · AlertTriangle) — fantasmas / previstos não pagos
+   Reaproveita o painel atual de "Orphans" e adiciona ações por item:
+   `Excluir` · `Editar / Reagendar` (abre modal com nova data) · `Manter como previsto`
 
-### 3. Reenviar confirmação para a Drogaria Total Itatiba
-Disparar via Evolution API uma única mensagem para o número que recebeu o falso "em manutenção" (+55 11 92692-6629) avisando que já está 100% liberada.
+## Regras de negócio (rodapé do desenho)
 
-### 4. Validação
-- Conferir nos logs do edge function `whatsapp-webhook` que a próxima mensagem recebida **não** entra no branch de manutenção.
-- Acompanhar o AI Gateway para confirmar que a chamada ao Gemini volta a ocorrer.
+- **Janela de busca:** 35 dias (default, ajustável por aba: 5 para cartão, 35 para conta).
+- **Tolerância centavos:** ±R$ 0,05 → Quadrante 2. Acima disso, vira Q3+Q4.
+- **Desconto/Juros automático:** quando o usuário escolhe `Casar c/ ajuste`, criamos um lançamento-filho da categoria "Descontos obtidos" (extrato < sistema) ou "Juros/Multas" (extrato > sistema) com a diferença.
+- **Vínculo manual selecionando do extrato:** botão `Bater selecionando` em Q3 e Q4 → abre `ManualMatchModal` já existente, mas passando o lado oposto como fonte.
+- **Volumetria:** processar em lote de 70 itens por vez (paginação interna) para não travar a UI em extratos grandes.
 
-## Detalhes técnicos
-- Arquivo único alterado: `supabase/functions/whatsapp-webhook/index.ts` (bloco do kill switch).
-- Sem mudanças de schema, sem migrações, sem impacto em UI.
-- Secret atualizado via `secrets--update_secret`.
-- Mensagem de aviso enviada via Evolution API (mesmo padrão já utilizado anteriormente).
+## Arquivos a tocar
 
-Posso seguir com a implementação?
+- `src/components/lancamentos/import/ReconcileStep.tsx` — reescrever o corpo nos 4 quadrantes; consolidar tooltips/alerts atuais.
+- `src/lib/import/matching.ts` — adicionar campo `tier: "exact" | "tolerance" | "none"` no `MatchScore` para o front classificar sem recalcular. Atualizar testes.
+- `src/hooks/useImportMatching.ts` — expor `tolerance` (default 0,05) e propagar `tier`.
+- `src/components/lancamentos/ImportStatementModal.tsx` — passar `orphans` + handlers `onDeleteOrphan` / `onRescheduleOrphan` (já existe deleção; adicionar reschedule chamando `updateTransaction`).
+- (Opcional) `src/components/configuracoes/TransactionFieldsCard.tsx` — slider de tolerância (default 0,05) salvo no profile.
+
+## Fora do escopo (anotado pra depois)
+
+- Reabrir a investigação do saldo da Sabrina (Itaú/Santander) — fica como está por enquanto, conforme combinado.
+- Aprendizado automático de categoria por descrição já existe; só vamos reaproveitar.
+
+## Resultado esperado
+
+Cada linha do extrato e cada lançamento do sistema vão estar exatamente em **um** quadrante, com ação primária óbvia e ação secundária (avançada) atrás de tooltip. Acaba a sensação atual de "duas ações fazendo quase a mesma coisa" e o usuário entende, batendo o olho, onde a Eva precisa da decisão dele.
