@@ -77,6 +77,7 @@ interface CategoryRecord {
   id: string;
   name: string;
   parent_id: string | null;
+  dre_section?: string | null;
 }
 
 const CHART_COLORS = [
@@ -184,7 +185,7 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     const fetchCategories = async () => {
-      const { data } = await supabase.from("categories").select("id, name, parent_id");
+      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section");
       if (data) setCategoryRecords(data);
     };
 
@@ -263,7 +264,9 @@ export function useDashboardData(filters: DashboardFilters) {
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("payment_date", startStr)
         .lte("payment_date", endStr)
-        .or("transfer_id.is.null,is_internal_transfer.eq.false");
+        .or("transfer_id.is.null,is_internal_transfer.eq.false")
+        .not("category", "ilike", "transfer%")
+        .not("category", "ilike", "transferência%");
 
       query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
@@ -289,7 +292,9 @@ export function useDashboardData(filters: DashboardFilters) {
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr)
-        .or("transfer_id.is.null,is_internal_transfer.eq.false");
+        .or("transfer_id.is.null,is_internal_transfer.eq.false")
+        .not("category", "ilike", "transfer%")
+        .not("category", "ilike", "transferência%");
 
       query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
