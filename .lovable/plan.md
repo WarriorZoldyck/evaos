@@ -1,60 +1,51 @@
-## Objetivo
+## Resposta curta
 
-1. Destacar visualmente a **decomposição MDR** (bruto → taxa → líquido) ao abrir o detalhe de um lançamento de maquininha.
-2. Adicionar **card "MDR pago no mês"** no Dashboard, com modal de drilldown mostrando histórico mensal + quebra por terminal/bandeira.
+**Não batem garantido — por 3 motivos de design diferentes entre os dois hooks.** Posso corrigir.
 
-Sem mudanças de schema. Tudo calculado em memória a partir de `transactions` + `card_terminals` (mesma fórmula já usada no `TransactionDetailModal`).
+## Diagnóstico
 
----
+Comparei `useDashboardData.ts` (campo `faturamento`) com `useDREData.ts` (Receita Bruta).
 
-## 1) Destaque do MDR no detalhe do lançamento
+| Aspecto | Dashboard `faturamento` | DRE Gerencial | DRE Contábil |
+|---|---|---|---|
+| Base de data | `competence_date` ✓ | `competence_date` ✓ | `competence_date` ✓ |
+| Status | Pago + Pendente ✓ | Pago + Pendente ✓ | Pago + Pendente ✓ |
+| Exclui transferência interna | `is_internal_transfer=false` | `is_internal_transfer=false` **+** `category ilike 'transfer%'` | idem Gerencial |
+| Filtro por mapeamento contábil | **Nenhum** — soma toda receita | Nenhum | **Só categorias com `dre_section` preenchido** |
+| Tratamento de não-mapeadas | Conta | Conta | **Ignora silenciosamente** (vira `unmappedCategoryCount`) |
 
-Arquivo: `src/components/lancamentos/TransactionDetailModal.tsx`
+### Onde divergem
 
-- Reposicionar o bloco "Detalhes MDR" para **logo abaixo do cabeçalho** (acima de Forma de Pagamento), para virar a primeira coisa que o usuário vê quando o lançamento é de maquininha.
-- Trocar o container atual por um painel destacado com:
-  - Borda âmbar/cyan + ícone de maquininha.
-  - Grid 3 colunas: **Bruto** (valor da venda) | **Taxa MDR** (em vermelho, com %) | **Líquido** (em verde, fonte maior).
-  - Linha inferior com badge "Recebimento D+X — dd/mm/aaaa".
-  - Tooltip explicando o cálculo (`bruto × taxa = MDR`) e a origem da taxa (débito / crédito à vista / parcelado N×).
-- Manter o cálculo atual intacto (mesma função, só re-renderizado).
+1. **Faturamento (dash) ≠ Receita Op. Bruta (DRE Contábil)** sempre que existir receita em categoria sem `dre_section`. É o caso mais comum hoje (várias categorias herdadas sem mapeamento).
+2. **Faturamento (dash) ≠ Receita Gerencial** se houver categoria com nome começando por "transfer"/"transferência" que **não** esteja marcada como `is_internal_transfer=true` (legado pré-flag).
+3. Dashboard não filtra categorias "transfer%" por nome — então transferências antigas sem flag inflam o faturamento.
 
-## 2) Card "MDR pago no mês" no Dashboard
+## Plano de correção
 
-Arquivo: `src/components/dashboard/SummaryCards.tsx` (ou irmão) + novo hook `src/hooks/useMdrSummary.ts`.
+### 1. Unificar regra de exclusão de transferências
+Em `useDashboardData.ts`, replicar o filtro do DRE: adicionar `.not("category","ilike","transfer%")` e `.not("category","ilike","transferência%")` nas queries `transactions` e `competenceTransactions`. Garante que dashboard e DRE Gerencial usem exatamente o mesmo universo de linhas.
 
-- Hook `useMdrSummary(period)`:
-  - Carrega transações de receita com `card_terminal_id` no período + terminais.
-  - Calcula MDR por linha usando a mesma lógica do modal (débito / crédito à vista / parcelado via `rates_info`).
-  - Retorna: `totalMdrMes`, `totalBrutoMes`, `taxaMediaPct`, `serieMensal[]` (últimos 12 meses), `porTerminal[]`, `porBandeira[]` (quando disponível em `payment_method`/`rates_info`).
-- Novo card no Dashboard (mesma grade dos demais SummaryCards):
-  - Título: "MDR pago no mês"
-  - Valor principal: `R$ X` em vermelho
-  - Subtítulo: `Y% sobre R$ Z bruto · N vendas`
-  - Card clicável → abre `MdrDetailModal`.
+### 2. Expor as duas leituras no card "Faturamento"
+Em `SummaryCards.tsx` (card Faturamento), trocar o número único por:
+- **Faturamento Bruto** (toda receita por competência) — bate com DRE Gerencial.
+- **Receita Operacional** (só categorias mapeadas) — bate com DRE Contábil "(+) Receita Operacional Bruta".
+- Badge com contagem de categorias não classificadas e link "Mapear no DRE" → leva pra tela de categorias com o filtro de não-mapeadas.
 
-## 3) Modal de drilldown MDR
+Calcular ambos dentro de `useDashboardData.ts` reaproveitando `categories.dre_section` (já há fetch de categorias em outros pontos; senão, adiciono um fetch leve).
 
-Novo arquivo: `src/components/dashboard/MdrDetailModal.tsx`
+### 3. Tooltip educativo
+Tooltip no card explicando: "Faturamento Bruto = todas as receitas do período (regime de competência). Receita Operacional = subconjunto mapeado para o DRE Contábil."
 
-Conteúdo:
-- **KPIs no topo**: MDR do mês, MDR YTD, taxa média efetiva, ticket médio líquido.
-- **Gráfico de barras** (Recharts) — últimos 12 meses, barras de MDR mensal + linha de taxa efetiva %.
-- **Tabela por terminal** (mês selecionado): terminal · acquirer · bruto · MDR · taxa efetiva · nº vendas · líquido.
-- **Tabela por modalidade**: Débito, Crédito à vista, Parcelado 2x, 3x… (agrupado pelo que existe em `installments_total` + `rates_info`).
-- Seletor de mês no topo (default = mês corrente do contexto).
-- Botão "Ver lançamentos" que leva para `/lancamentos` filtrado por terminal + mês.
+### 4. Validação
+Após o ajuste, rodar query de sanity em 2-3 usuários ativos (`espclin`, `sabrina`, `renato`) e comparar:
+- `SUM(amount) WHERE type='receita' AND competence_date BETWEEN ...` (dashboard)
+- mesmo valor agrupado por `dre_section` (DRE Contábil)
+- diff esperado = receita em categorias sem mapeamento.
 
-## Considerações técnicas
+## Arquivos afetados
 
-- 100% client-side, reaproveita queries que o Dashboard já faz; sem nova migration.
-- Respeita o `HubContext`/`ContextSelector` global (pessoal vs empresa) — usa as mesmas listas que `useTransactions`/`useAccounts` já filtram.
-- Performance: memorizar cálculos por `(transactionId, terminalId)` no hook.
-- Acessibilidade: card do Dashboard é `<button>` com `aria-label`; modal usa o `Dialog` padrão do shadcn.
-- Sem mudanças em edge functions, RLS ou Supabase.
+- `src/hooks/useDashboardData.ts` — adicionar filtro `transfer%`, novo cálculo `receitaOperacional`, fetch de categorias.
+- `src/components/dashboard/SummaryCards.tsx` — exibir Bruto + Operacional + badge de não-mapeadas.
+- (opcional) `src/pages/Categories.tsx` — receber query param `?unmapped=1` pra filtrar.
 
-## Fora de escopo (deixar explícito)
-
-- Não persistir MDR como lançamento filho.
-- Não alterar conciliação bancária / fluxo de liquidação D+X (já existente).
-- Não tocar em DRE — MDR continua implícito na receita líquida; se quiser categorizar como despesa real, é outra rodada.
+Nenhuma mudança de schema. Nenhuma alteração de dados.
