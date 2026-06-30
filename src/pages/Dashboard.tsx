@@ -12,6 +12,10 @@ import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransaction
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
 import { FaturamentoDetailModal } from "@/components/dashboard/FaturamentoDetailModal";
+import { MdrDetailModal } from "@/components/dashboard/MdrDetailModal";
+import { useMdrSummary } from "@/hooks/useMdrSummary";
+import { Card, CardContent } from "@/components/ui/card";
+import { Percent } from "lucide-react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { getPreviousPeriodRange, sumInRange, dailySeries } from "@/lib/dashboardInsights";
 import {
