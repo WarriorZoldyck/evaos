@@ -163,8 +163,12 @@ export function scoreCandidate(
   if (sharesToken(line.description, c.description)) score += 10;
   score += Math.round(bestSim * 30);
 
-  return { candidate: c, score, dayDiff, similarity: bestSim };
+  const amountDiff = Math.abs(c.amount - Math.abs(line.amount));
+  const tier: "exact" | "tolerance" = amountDiff <= EXACT_AMOUNT_TOLERANCE ? "exact" : "tolerance";
+
+  return { candidate: c, score, dayDiff, similarity: bestSim, amountDiff, tier };
 }
+
 
 /**
  * Picks the best candidate, ties broken by smallest dayDiff.
