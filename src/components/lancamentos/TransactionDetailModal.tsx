@@ -183,6 +183,73 @@ export function TransactionDetailModal({
             </span>
           </div>
 
+          {/* MDR — quebra destacada (logo abaixo do valor) */}
+          {terminal && (
+            <div className="rounded-xl border-2 border-amber-500/30 bg-gradient-to-br from-amber-500/5 to-destructive/5 p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                    Quebra MDR
+                  </span>
+                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" className="text-muted-foreground hover:text-foreground" aria-label="Como o MDR é calculado">
+                        <HelpCircle className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-xs">
+                      Taxa aplicada: <strong>{mdrRate}%</strong>{" "}
+                      ({t.payment_method === "Cartão de Débito"
+                        ? "débito"
+                        : t.installments_total && t.installments_total >= 2
+                          ? `crédito ${t.installments_total}×`
+                          : "crédito à vista"}).
+                      Cálculo: bruto × taxa = MDR. Líquido = bruto − MDR.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-md bg-background/60 p-2 text-center">
+                  <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Bruto</p>
+                  <p className="text-sm font-bold font-mono">{formatCurrency(grossAmount)}</p>
+                </div>
+                <div className="rounded-md bg-destructive/10 p-2 text-center">
+                  <p className="text-[10px] uppercase text-destructive/80 tracking-wide">
+                    MDR ({mdrRate}%)
+                  </p>
+                  <p className="text-sm font-bold font-mono text-destructive">
+                    -{formatCurrency(feeAmount)}
+                  </p>
+                </div>
+                <div className="rounded-md bg-emerald-500/10 p-2 text-center">
+                  <p className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300 tracking-wide">
+                    Líquido
+                  </p>
+                  <p className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {formatCurrency(netAmount)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-amber-500/20">
+                <span>
+                  {terminal.name}
+                  {terminal.acquirer ? ` · ${terminal.acquirer}` : ""}
+                </span>
+                {settlementDate && (
+                  <span>
+                    Recebimento <strong>D+{mdrDays}</strong> · {format(settlementDate, "dd/MM/yyyy")}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           <Separator />
 
           {/* Dates */}
@@ -207,38 +274,11 @@ export function TransactionDetailModal({
             <>
               <Separator className="my-2" />
               <InfoRow label="Parcela" value={`${t.installment_number} de ${t.installments_total}`} />
-              {t.original_amount && <InfoRow label="Valor Original da Série" value={formatCurrency(t.original_amount)} />}
+              {t.original_amount && !terminal && <InfoRow label="Valor Original da Série" value={formatCurrency(t.original_amount)} />}
             </>
           )}
 
-          {/* MDR info */}
-          {terminal && (
-            <>
-              <Separator className="my-2" />
-              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
-                <h4 className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Detalhes MDR</h4>
-                <InfoRow label="Maquininha" value={`${terminal.name}${terminal.acquirer ? ` (${terminal.acquirer})` : ""}`} />
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Valor bruto</span>
-                  <span className="font-medium">{formatCurrency(grossAmount)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-destructive">Taxa MDR ({mdrRate}%)</span>
-                  <span className="text-destructive font-medium">-{formatCurrency(feeAmount)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-semibold border-t border-border pt-1.5">
-                  <span>Valor líquido</span>
-                  <span className="text-emerald-600 dark:text-emerald-400">{formatCurrency(netAmount)}</span>
-                </div>
-                {settlementDate && (
-                  <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border">
-                    <span>Recebimento (D+{mdrDays})</span>
-                    <span>{format(settlementDate, "dd/MM/yyyy")}</span>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+
 
           {/* Notes / Barcode / Attachment */}
           {t.notes && (
