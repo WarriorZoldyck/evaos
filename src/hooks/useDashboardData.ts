@@ -400,9 +400,11 @@ export function useDashboardData(filters: DashboardFilters) {
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // Faturamento Bruto: TODAS as receitas por competência (bate com DRE Gerencial)
+    // Faturamento Bruto: TODAS as receitas por competência, usando valor BRUTO
+    // (original_amount quando existir — vendas na maquininha guardam bruto ali)
     const receitasCompetencia = competenceTransactions.filter((t) => t.type === "receita");
-    const faturamento = receitasCompetencia.reduce((acc, t) => acc + Number(t.amount), 0);
+    const grossOf = (t: Transaction) => Number(t.original_amount ?? t.amount);
+    const faturamento = receitasCompetencia.reduce((acc, t) => acc + grossOf(t), 0);
 
     // Receita Operacional: só receitas cuja categoria (ou ancestral) tem dre_section mapeado
     // — bate com "(+) Receita Operacional Bruta" do DRE Contábil.
@@ -431,7 +433,7 @@ export function useDashboardData(filters: DashboardFilters) {
     receitasCompetencia.forEach((t) => {
       const cat = resolveCat((t as any).subcategory) ?? resolveCat(t.category);
       if (hasDreSection(cat)) {
-        receitaOperacional += Number(t.amount);
+        receitaOperacional += grossOf(t);
       } else {
         unmappedCategoryIds.add(cat?.id ?? t.category ?? "—");
       }
