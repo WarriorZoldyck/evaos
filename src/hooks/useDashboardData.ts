@@ -262,7 +262,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, payment_method")
         .gte("payment_date", startStr)
         .lte("payment_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false")
