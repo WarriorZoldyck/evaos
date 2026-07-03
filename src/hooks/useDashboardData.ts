@@ -49,6 +49,7 @@ interface Transaction {
   installment_number: number | null;
   installments_total: number | null;
   original_amount: number | null;
+  payment_method: string | null;
 }
 
 export interface CreditCardInfo {
