@@ -629,6 +629,7 @@ export function useDashboardData(filters: DashboardFilters) {
     performance,
     creditCards,
     internalTransfersTotal,
+    resolveCategoryName,
     dateRange: { start, end },
     loading: loading || recurringLoading,
     refetch,
