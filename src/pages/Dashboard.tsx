@@ -85,6 +85,7 @@ export default function Dashboard() {
     [allTransactions, prevRange],
   );
   // Faturamento usa competência (não payment_date) para alinhar com o DRE
+  // e valor BRUTO (original_amount quando existir)
   const prevFaturamento = useMemo(() => {
     const fromStr = format(prevRange.start, "yyyy-MM-dd");
     const toStr = format(prevRange.end, "yyyy-MM-dd");
@@ -96,7 +97,7 @@ export default function Dashboard() {
           t.competence_date >= fromStr &&
           t.competence_date <= toStr,
       )
-      .reduce((acc, t) => acc + Number(t.amount), 0);
+      .reduce((acc, t) => acc + Number(t.original_amount ?? t.amount), 0);
   }, [allTransactions, prevRange]);
   const prevSaldo = prevEntradas - prevSaidas;
 
