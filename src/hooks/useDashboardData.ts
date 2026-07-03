@@ -49,6 +49,7 @@ interface Transaction {
   installment_number: number | null;
   installments_total: number | null;
   original_amount: number | null;
+  payment_method: string | null;
 }
 
 export interface CreditCardInfo {
@@ -261,7 +262,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, payment_method")
         .gte("payment_date", startStr)
         .lte("payment_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false")
@@ -289,7 +290,7 @@ export function useDashboardData(filters: DashboardFilters) {
     const fetchCompetenceTransactions = async () => {
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, payment_method")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false")
@@ -399,9 +400,11 @@ export function useDashboardData(filters: DashboardFilters) {
       .filter((t) => t.type === "despesa")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // Faturamento Bruto: TODAS as receitas por competência (bate com DRE Gerencial)
+    // Faturamento Bruto: TODAS as receitas por competência, usando valor BRUTO
+    // (original_amount quando existir — vendas na maquininha guardam bruto ali)
     const receitasCompetencia = competenceTransactions.filter((t) => t.type === "receita");
-    const faturamento = receitasCompetencia.reduce((acc, t) => acc + Number(t.amount), 0);
+    const grossOf = (t: Transaction) => Number(t.original_amount ?? t.amount);
+    const faturamento = receitasCompetencia.reduce((acc, t) => acc + grossOf(t), 0);
 
     // Receita Operacional: só receitas cuja categoria (ou ancestral) tem dre_section mapeado
     // — bate com "(+) Receita Operacional Bruta" do DRE Contábil.
@@ -430,7 +433,7 @@ export function useDashboardData(filters: DashboardFilters) {
     receitasCompetencia.forEach((t) => {
       const cat = resolveCat((t as any).subcategory) ?? resolveCat(t.category);
       if (hasDreSection(cat)) {
-        receitaOperacional += Number(t.amount);
+        receitaOperacional += grossOf(t);
       } else {
         unmappedCategoryIds.add(cat?.id ?? t.category ?? "—");
       }
@@ -626,6 +629,7 @@ export function useDashboardData(filters: DashboardFilters) {
     performance,
     creditCards,
     internalTransfersTotal,
+    resolveCategoryName,
     dateRange: { start, end },
     loading: loading || recurringLoading,
     refetch,
