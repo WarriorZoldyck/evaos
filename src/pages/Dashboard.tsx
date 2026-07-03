@@ -49,6 +49,7 @@ export default function Dashboard() {
     performance,
     creditCards,
     internalTransfersTotal,
+    resolveCategoryName,
     loading,
     refetch,
   } = useDashboardData(filters);
