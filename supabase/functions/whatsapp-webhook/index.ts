@@ -3506,7 +3506,34 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       // --- INSTALLMENT SUPPORT ---
       const installmentCount = aiParsed.installments || 1;
-      const installmentDetails = aiParsed.installment_details || null;
+      let installmentDetails = aiParsed.installment_details || null;
+
+      // Auto-generate installment_details when the AI signaled N>1 parcelas but
+      // didn't provide the per-parcel breakdown (common for follow-up messages
+      // like "Parcelado em 5x" where the AI infers count but not each due date).
+      if (installmentCount > 1 && (!installmentDetails || !Array.isArray(installmentDetails) || installmentDetails.length === 0)) {
+        const totalAmt = Math.abs(Number(aiParsed.amount) || 0);
+        if (totalAmt > 0) {
+          const per = Math.floor((totalAmt * 100) / installmentCount) / 100;
+          const distributed = per * installmentCount;
+          const cardForAuto = creditCardId ? contextCards.find((c) => c.id === creditCardId) : null;
+          installmentDetails = Array.from({ length: installmentCount }, (_, idx) => {
+            const amt = idx === installmentCount - 1
+              ? Math.round((totalAmt - distributed + per) * 100) / 100
+              : per;
+            let due: string;
+            if (cardForAuto) {
+              due = getInstallmentDueDate(competenceDate, cardForAuto.closing_day, cardForAuto.due_day, idx + 1);
+            } else {
+              const d = new Date((paymentDate || competenceDate) + "T12:00:00");
+              d.setMonth(d.getMonth() + idx);
+              due = d.toISOString().slice(0, 10);
+            }
+            return { amount: amt, due_date: due, barcode: null };
+          });
+          console.log(`Auto-generated ${installmentCount} installment_details (per=${per}, last=${installmentDetails[installmentCount - 1].amount})`);
+        }
+      }
 
       if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
         // Create multiple transactions as a series
@@ -3737,7 +3764,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // ("Parcelado em 5x", "no crédito", "amanhã") as edits. Without a
       // trigger + without a target transaction, do NOT list recent
       // transactions — respond as conversation asking for clarification.
-      const EDIT_VERB_RE = /\b(edita|edite|editar|muda|mude|mudar|troca|troque|trocar|altera|altere|alterar|corrige|corrija|corrigir|apaga|apagar|exclui|excluir|excluído|remove|remover|removido|cancela|cancelar|cancelado|na verdade era|era r\$)\b|aquele lan[çc]amento|o [úu]ltimo lan[çc]amento|essa despesa que criei|o lan[çc]amento acima/i;
+      const EDIT_VERB_RE = /\b(edita|edite|editar|muda|mude|mudar|troca|troque|trocar|altera|altere|alterar|corrige|corrija|corrigir|apaga|apagar|exclui|excluir|excluído|remove|remover|removido|cancela|cancelar|cancelado|na verdade era|era r\$|parcel[ae]?|parcelad[oa]|parcelar|parcelamento|parcele|vezes)\b|aquele lan[çc]amento|o [úu]ltimo lan[çc]amento|essa despesa que criei|o lan[çc]amento acima|\b\d+\s*x\b/i;
       const userMsgRaw = (message || "").trim();
       const matchedEditVerb = EDIT_VERB_RE.test(userMsgRaw);
       console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed), "matchedEditVerb=", matchedEditVerb, "isNewSession=", isNewSession, "lastMsgAgeMin=", Math.round(lastMsgAgeMin));
@@ -3929,10 +3956,195 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           newValueLabel = String(newValue);
           break;
         }
+        case "installments":
+        case "parcelas":
+        case "installments_total": {
+          // Convert an existing single lançamento into a series of N parcelas.
+          const parsedN = parseInt(String(newValue).replace(/[^\d]/g, ""), 10);
+          if (!parsedN || parsedN < 2 || parsedN > 60) {
+            return respond({
+              success: false, intent: "editar_lancamento",
+              message: "❌ Informe um número de parcelas entre 2 e 60.",
+              transaction: null,
+            }, 200);
+          }
+
+          // Fetch the full row (we only selected a limited set earlier).
+          const { data: fullRow, error: fullErr } = await supabase
+            .from(editTable)
+            .select("*")
+            .eq("id", transactionId)
+            .eq("user_id", userId)
+            .single();
+          if (fullErr || !fullRow) {
+            return respond({
+              success: false, intent: "editar_lancamento",
+              message: "❌ Não consegui carregar o lançamento para parcelar. Tente de novo.",
+              transaction: null,
+            }, 200);
+          }
+
+          if (fullRow.series_id || (fullRow.installments_total && fullRow.installments_total > 1)) {
+            return respond({
+              success: false, intent: "editar_lancamento",
+              message: "⚠️ Esse lançamento já faz parte de uma série de parcelas. Rejeite/exclua e crie novamente para parcelar de forma diferente.",
+              transaction: null,
+            }, 200);
+          }
+
+          const totalAmt = Math.abs(Number(fullRow.amount) || 0);
+          if (totalAmt <= 0) {
+            return respond({
+              success: false, intent: "editar_lancamento",
+              message: "❌ Valor do lançamento é zero — não dá para parcelar.",
+              transaction: null,
+            }, 200);
+          }
+
+          // Even split with rounding residue on the LAST parcel.
+          const per = Math.floor((totalAmt * 100) / parsedN) / 100;
+          const amounts: number[] = Array(parsedN).fill(per);
+          const distributed = per * parsedN;
+          amounts[parsedN - 1] = Math.round((totalAmt - distributed + per) * 100) / 100;
+
+          // Resolve the card (if any) to compute per-installment due dates.
+          const cardForRow = fullRow.credit_card_id
+            ? creditCards.find((c: any) => c.id === fullRow.credit_card_id)
+            : null;
+          const baseCompetence: string = fullRow.competence_date || today;
+          const fallbackPayment: string = fullRow.payment_date || baseCompetence;
+
+          const computeDate = (idx: number): string => {
+            if (cardForRow) {
+              return getInstallmentDueDate(baseCompetence, cardForRow.closing_day, cardForRow.due_day, idx + 1);
+            }
+            const d = new Date(fallbackPayment + "T12:00:00");
+            d.setMonth(d.getMonth() + idx);
+            return d.toISOString().slice(0, 10);
+          };
+
+          const seriesId = crypto.randomUUID();
+          const baseDescription = String(fullRow.description || "Lançamento").replace(/\s*\(\d+\/\d+\)\s*$/, "");
+
+          // Build the parcel rows. Preserve every field from the original row.
+          const parcelRows = amounts.map((amt, idx) => {
+            const payDate = computeDate(idx);
+            const parcelStatus = cardForRow ? "Pendente" : (payDate > today ? "Pendente" : "Pago");
+            if (editTable === "ai_pending_transactions") {
+              return {
+                user_id: fullRow.user_id,
+                source: fullRow.source || "whatsapp",
+                status: "pending",
+                fingerprint: null,
+                description: `${baseDescription} (${idx + 1}/${parsedN})`,
+                amount: amt,
+                type: fullRow.type,
+                category: fullRow.category,
+                subcategory: fullRow.subcategory,
+                subcategory2: fullRow.subcategory2,
+                competence_date: baseCompetence,
+                payment_date: payDate,
+                transaction_status: parcelStatus,
+                bank_account_id: fullRow.bank_account_id,
+                wallet_id: fullRow.wallet_id,
+                credit_card_id: fullRow.credit_card_id,
+                card_terminal_id: fullRow.card_terminal_id,
+                company_id: fullRow.company_id,
+                payment_method: fullRow.payment_method,
+                supplier_id: fullRow.supplier_id,
+                client_id: fullRow.client_id,
+                contact_name: fullRow.contact_name,
+                notes: fullRow.notes,
+                attachment_url: fullRow.attachment_url,
+                barcode: fullRow.barcode,
+                series_id: seriesId,
+                installment_number: idx + 1,
+                installments_total: parsedN,
+                original_message: fullRow.original_message,
+                ai_response_message: fullRow.ai_response_message,
+              };
+            }
+            // transactions table
+            return {
+              user_id: fullRow.user_id,
+              description: `${baseDescription} (${idx + 1}/${parsedN})`,
+              amount: amt,
+              type: fullRow.type,
+              category: fullRow.category,
+              subcategory: fullRow.subcategory,
+              subcategory2: fullRow.subcategory2,
+              competence_date: baseCompetence,
+              payment_date: payDate,
+              status: parcelStatus,
+              bank_account_id: fullRow.bank_account_id,
+              wallet_id: fullRow.wallet_id,
+              credit_card_id: fullRow.credit_card_id,
+              card_terminal_id: fullRow.card_terminal_id,
+              company_id: fullRow.company_id,
+              payment_method: fullRow.payment_method,
+              supplier_id: fullRow.supplier_id,
+              client_id: fullRow.client_id,
+              contact_name: fullRow.contact_name,
+              notes: fullRow.notes,
+              attachment_url: fullRow.attachment_url,
+              barcode: fullRow.barcode,
+              series_id: seriesId,
+              installment_number: idx + 1,
+              installments_total: parsedN,
+              installments: parsedN,
+            };
+          });
+
+          // Delete original, then insert parcelas.
+          const { error: delErr } = await supabase
+            .from(editTable)
+            .delete()
+            .eq("id", transactionId)
+            .eq("user_id", userId);
+          if (delErr) {
+            console.error("Parcelar: delete original failed", delErr);
+            return respond({
+              success: false, intent: "editar_lancamento",
+              message: "❌ Erro ao converter para parcelas. Tente novamente.",
+              transaction: null,
+            }, 200);
+          }
+          const { error: insErr } = await supabase
+            .from(editTable)
+            .insert(parcelRows as any);
+          if (insErr) {
+            console.error("Parcelar: insert parcelas failed", insErr);
+            return respond({
+              success: false, intent: "editar_lancamento",
+              message: "❌ Erro ao gravar as parcelas. Tente novamente.",
+              transaction: null,
+            }, 200);
+          }
+
+          const parcelsDisplay = amounts.map((amt, i) => {
+            const d = computeDate(i);
+            return `  ${i + 1}/${parsedN}: ${fmt(amt)} — vence ${formatDate(d)}`;
+          }).join("\n");
+          const cardLine = cardForRow ? `\n💳 ${cardForRow.name}` : "";
+          const dest = editTable === "ai_pending_transactions"
+            ? `\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`
+            : "";
+          return respond({
+            success: true, intent: "editar_lancamento",
+            message: `📋 ${parsedN} parcelas geradas para *${baseDescription}*!\n\n💰 Total: ${fmt(totalAmt)}${cardLine}\n\n📋 Parcelas:\n${parcelsDisplay}${dest}`,
+            transaction: {
+              id: null,
+              description: baseDescription,
+              amount: totalAmt,
+              installments: parsedN,
+              series_id: seriesId,
+            },
+          }, 200);
+        }
         default:
           return respond({
             success: false, intent: "editar_lancamento",
-            message: `❌ Não é possível editar o campo "${field}". Campos editáveis: valor, descrição, categoria, data de pagamento, data de competência, status, observações.`,
+            message: `❌ Não é possível editar o campo "${field}". Campos editáveis: valor, descrição, categoria, data de pagamento, data de competência, status, observações, parcelas.`,
             transaction: null,
           }, 200);
       }

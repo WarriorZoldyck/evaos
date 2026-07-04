@@ -408,8 +408,8 @@ export function TransactionFormModal({
         form.reset({
           description: editTransaction.description,
           amount: editTransaction.original_amount ?? editTransaction.amount,
-          payment_date: new Date(editTransaction.payment_date + "T00:00:00"),
-          competence_date: new Date(editTransaction.competence_date + "T00:00:00"),
+          payment_date: editTransaction.payment_date ? new Date(editTransaction.payment_date + "T00:00:00") : new Date(),
+          competence_date: editTransaction.competence_date ? new Date(editTransaction.competence_date + "T00:00:00") : new Date(),
           status: editTransaction.status,
           category: editTransaction.category,
           subcategory: editTransaction.subcategory || "",
@@ -603,6 +603,14 @@ export function TransactionFormModal({
       const { user_id, ...updateData } = baseData;
       // Use current form values for type, status, and company_id
       updateData.company_id = formCompanyId;
+      // Forward installment toggle so callers (e.g. Análises EVA) can convert
+      // a single pending into a series of N parcelas on save.
+      if (data.is_installment && data.installments_count && data.installments_count >= 2) {
+        (updateData as any).is_installment = true;
+        (updateData as any).installments_count = data.installments_count;
+        (updateData as any).installment_interval_type = data.installment_interval_type || "monthly";
+        (updateData as any).installment_custom_days = data.installment_custom_days || null;
+      }
       success = await onUpdate(editTransaction.id, updateData);
       // Also apply series installment amount changes if any
       if (success && seriesUpdates.length > 0 && onUpdateMultiple) {
