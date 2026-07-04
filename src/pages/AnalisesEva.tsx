@@ -13,6 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { useSignedAttachmentUrl } from "@/hooks/useSignedAttachmentUrl";
 import type { Transaction, Category as TxCategory } from "@/hooks/useTransactions";
