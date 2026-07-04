@@ -1130,7 +1130,7 @@ export default function AnalisesEva() {
 
       <TransactionFormModal
         open={!!editingItem}
-        onClose={() => setEditingItem(null)}
+        onClose={() => { setEditingItem(null); setEditingSeries(null); }}
         editTransaction={editTransaction}
         onSave={dummySave}
         onSaveMultiple={dummySaveMultiple}
@@ -1145,6 +1145,43 @@ export default function AnalisesEva() {
         companies={companies}
         fieldSettings={fieldSettings}
       />
+
+      <AlertDialog open={!!seriesChoice} onOpenChange={(o) => { if (!o) setSeriesChoice(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Editar lançamento parcelado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este lançamento faz parte de uma série de{" "}
+              {seriesChoice?.series.length ?? 0} parcelas. O que você deseja editar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!seriesChoice) return;
+                setEditingSeries(null);
+                setEditingItem(seriesChoice.item);
+                setSeriesChoice(null);
+              }}
+            >
+              Apenas esta parcela
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                if (!seriesChoice) return;
+                const aggregate = buildSeriesAggregate(seriesChoice.series);
+                setEditingSeries(seriesChoice.series);
+                setEditingItem(aggregate);
+                setSeriesChoice(null);
+              }}
+            >
+              Lançamento inteiro
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
