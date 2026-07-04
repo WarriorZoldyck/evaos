@@ -1041,24 +1041,61 @@ serve(async (req) => {
       .order("created_at", { ascending: true })
       .limit(500);
 
-    const allMessages = (chatHistory || []).map((m: any) => ({
+    const allMessagesWithTs = (chatHistory || []).map((m: any) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
+      created_at: m.created_at as string,
     }));
 
-    // Smart summarization: keep last 30 messages integral, summarize older ones
+    // Session cutoff: if the last stored message is older than 60 min, treat the
+    // current incoming message as a NEW session — do not feed the old exchange
+    // as active context (avoids "Parcelado em 5x" being interpreted as a
+    // continuation of a lançamento from hours/days ago).
+    const SESSION_GAP_MINUTES = 60;
+    const lastMsg = allMessagesWithTs[allMessagesWithTs.length - 1];
+    const lastMsgAgeMin = lastMsg
+      ? (Date.now() - new Date(lastMsg.created_at).getTime()) / 60000
+      : Infinity;
+    const isNewSession = lastMsgAgeMin > SESSION_GAP_MINUTES;
+
+    // Split into "active session" (contiguous run within SESSION_GAP_MINUTES
+    // of the current time, walking backwards) vs "older" for summary.
+    let activeSessionStart = allMessagesWithTs.length;
+    if (!isNewSession) {
+      for (let i = allMessagesWithTs.length - 1; i > 0; i--) {
+        const prevTs = new Date(allMessagesWithTs[i - 1].created_at).getTime();
+        const curTs = new Date(allMessagesWithTs[i].created_at).getTime();
+        if ((curTs - prevTs) / 60000 > SESSION_GAP_MINUTES) {
+          activeSessionStart = i;
+          break;
+        }
+        activeSessionStart = i - 1;
+      }
+    }
+
+    const olderMessages = isNewSession
+      ? allMessagesWithTs
+      : allMessagesWithTs.slice(0, activeSessionStart);
+    const activeMessages = isNewSession
+      ? []
+      : allMessagesWithTs.slice(activeSessionStart);
+
     const RECENT_COUNT = 30;
     let conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
 
-    if (allMessages.length > RECENT_COUNT) {
-      const olderMessages = allMessages.slice(0, allMessages.length - RECENT_COUNT);
-      const recentMessages = allMessages.slice(-RECENT_COUNT);
+    // Trim active session to last RECENT_COUNT (safety cap).
+    const recentMessages = activeMessages.slice(-RECENT_COUNT).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
 
-      // Build compact summary of older messages
+    if (olderMessages.length > 0) {
+      // Build compact summary of older/closed-session messages
       const summaryParts: string[] = [];
-      for (let i = 0; i < olderMessages.length; i += 2) {
-        const userMsg = olderMessages[i];
-        const assistantMsg = olderMessages[i + 1];
+      const summaryPool = olderMessages.slice(-60); // cap summary size
+      for (let i = 0; i < summaryPool.length; i += 2) {
+        const userMsg = summaryPool[i];
+        const assistantMsg = summaryPool[i + 1];
         if (userMsg?.role === "user") {
           const userSnippet = userMsg.content.length > 80 ? userMsg.content.slice(0, 80) + "..." : userMsg.content;
           if (assistantMsg?.role === "assistant") {
@@ -1066,22 +1103,36 @@ serve(async (req) => {
             summaryParts.push(`Usuário: ${userSnippet} → EVA: ${assistantSnippet}`);
           } else {
             summaryParts.push(`Usuário: ${userSnippet}`);
-            i--; // re-process this message as it wasn't paired
+            i--;
           }
         }
       }
 
-      const summaryText = `[RESUMO DA CONVERSA ANTERIOR — últimos 30 dias]\n${summaryParts.join("\n")}`;
+      const headerLabel = isNewSession
+        ? `[RESUMO — SESSÕES ANTERIORES ENCERRADAS (última interação há ${Math.round(lastMsgAgeMin)} min). Trate a próxima mensagem como INÍCIO de nova conversa, sem assumir continuidade de lançamentos anteriores.]`
+        : `[RESUMO DA CONVERSA ANTERIOR — sessões encerradas]`;
+      const summaryText = `${headerLabel}\n${summaryParts.join("\n")}`;
       conversationHistory = [
         { role: "user", content: summaryText },
-        { role: "assistant", content: "Entendido, tenho o contexto da conversa anterior." },
+        { role: "assistant", content: "Entendido, tenho o contexto anterior apenas como referência." },
         ...recentMessages,
       ];
     } else {
-      conversationHistory = allMessages;
+      conversationHistory = recentMessages;
     }
 
-    console.log("Conversation history loaded:", allMessages.length, "messages (", conversationHistory.length, "sent to AI)");
+    console.log(
+      "Conversation history loaded:",
+      allMessagesWithTs.length,
+      "messages (",
+      conversationHistory.length,
+      "sent to AI); isNewSession=",
+      isNewSession,
+      "lastMsgAgeMin=",
+      Math.round(lastMsgAgeMin),
+      "activeSessionMsgs=",
+      activeMessages.length,
+    );
 
     // Save incoming user message
     const userMsgText = message || (hasAudio ? "[áudio enviado]" : hasDocument ? "[documento enviado]" : "[imagem enviada]");
