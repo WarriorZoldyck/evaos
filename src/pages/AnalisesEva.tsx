@@ -1129,6 +1129,7 @@ export default function AnalisesEva() {
       </Tabs>
 
       <TransactionFormModal
+        key={editingItem?.id ?? "new"}
         open={!!editingItem}
         onClose={() => { setEditingItem(null); setEditingSeries(null); }}
         editTransaction={editTransaction}
