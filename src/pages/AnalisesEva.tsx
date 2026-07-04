@@ -890,7 +890,7 @@ export default function AnalisesEva() {
           item={g.item}
           onApprove={() => approve(g.item)}
           onReject={() => reject(g.item.id)}
-          onEdit={() => setEditingItem(g.item)}
+          onEdit={() => handleEditClick(g.item)}
           onReconcile={(suggestion) => handleReconcile(g.item, suggestion)}
           isApproving={isApproving}
           isRejecting={isRejecting}
