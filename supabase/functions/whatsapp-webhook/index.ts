@@ -2013,21 +2013,26 @@ REGRAS DE PERÍODO:
 Para editar lançamento existente:
 {"intent":"editar_lancamento","transaction_id":"UUID-do-lancamento-da-lista-ou-null","field":"amount|description|category|payment_date|competence_date|status|notes","new_value":"novo valor","friendly_message":"..."}
 
-REGRAS DE EDIÇÃO DE LANÇAMENTO:
-- Se o usuário diz "muda o valor", "corrige pra X", "era R$Y não R$Z", "edita aquele lançamento", "na verdade era...", classifique como "editar_lancamento"
-- Use o HISTÓRICO DA CONVERSA e a LISTA DE LANÇAMENTOS RECENTES abaixo para identificar qual lançamento o usuário quer editar
-- Se o lançamento foi mencionado na conversa ou acabou de ser criado, use o transaction_id correspondente
-- Se não conseguir identificar qual lançamento, retorne transaction_id como null — o sistema perguntará ao usuário
+REGRAS DE EDIÇÃO DE LANÇAMENTO (MUITO RESTRITIVAS):
+- SÓ classifique como "editar_lancamento" quando a mensagem contém EXPLICITAMENTE um verbo/expressão de edição, como: "edita", "edite", "editar", "muda", "mude", "mudar", "troca", "troque", "trocar", "altera", "altere", "alterar", "corrige", "corrija", "corrigir", "corrige pra", "na verdade era", "era R$X, não R$Y", "apaga", "apagar", "exclui", "excluir", "remove", "remover", "cancela aquele", "cancela esse último", OU referência inequívoca a um lançamento anterior ("aquele lançamento", "o último", "essa despesa que criei", "o lançamento acima").
+- Se a mensagem NÃO contém nenhum desses gatilhos, NUNCA classifique como "editar_lancamento", mesmo que seja curta ou ambígua.
+- Mensagens como "Parcelado em 5x", "3 vezes", "no crédito", "pix", "boleto", "amanhã", "pago", "pendente", "hoje", "dinheiro" NÃO são edições por si só. Se vierem SOLTAS (sem lançamento em andamento na sessão ATUAL), classifique como "conversa" e peça esclarecimento (ex: "A que compra esses 5x se referem? Me passe valor e descrição.").
+- Se detectar um [RESUMO — SESSÕES ANTERIORES ENCERRADAS] no histórico, NÃO trate mensagens antigas como lançamento em andamento — a conversa ATUAL começa a partir da mensagem do usuário.
+- Use o HISTÓRICO DA CONVERSA (apenas da sessão atual) e a LISTA DE LANÇAMENTOS RECENTES abaixo para identificar qual lançamento o usuário quer editar — somente quando o gatilho de edição estiver presente.
+- Se o lançamento foi mencionado na conversa atual ou acabou de ser criado, use o transaction_id correspondente.
+- Se não conseguir identificar qual lançamento, retorne transaction_id como null.
 - Para field="amount", new_value deve ser o número (ex: "45.90")
 - Para field="status", new_value deve ser "Pago" ou "Pendente"
 - Para field="payment_date" ou "competence_date", new_value deve ser "YYYY-MM-DD"
 
-REGRA CRÍTICA — DETECÇÃO DE CORREÇÃO/RECATEGORIZAÇÃO:
-- Se o usuário enviar uma mensagem CURTA (1-3 palavras) logo após um lançamento ter sido criado na conversa, e essa mensagem parece ser um NOME DE CATEGORIA ou SUBCATEGORIA (ex: "Supérfluos saídas", "Alimentação", "Bar", "Pet cachorra"), interprete como uma CORREÇÃO DE CATEGORIA do lançamento anterior, NÃO como um novo lançamento.
-- Nesse caso, use intent="editar_lancamento" com field="category" e new_value contendo o nome da categoria/subcategoria desejada.
-- NUNCA crie um novo lançamento duplicado com o mesmo valor quando o usuário está claramente tentando recategorizar.
-- Sinais de que é uma correção: mensagem curta sem valor monetário, enviada logo após um lançamento, texto corresponde a uma categoria existente ou subcategoria.
-- Quando for uma correção de categoria, tente encontrar o UUID da categoria na lista de categorias acima. Se houver match, use o UUID. Se não, trate como sugestão de nova categoria.
+REGRA DE CORREÇÃO/RECATEGORIZAÇÃO (ESCOPO RESTRITO):
+- SÓ trate mensagem curta (1-3 palavras) como correção de categoria se TODAS estas condições forem verdadeiras:
+  1. A ÚLTIMA mensagem do assistente na sessão ATUAL foi uma confirmação de lançamento recém-criado (contém "Lançamento enviado para aprovação" ou similar).
+  2. A mensagem do usuário bate EXATAMENTE (case-insensitive) com o nome de uma categoria ou subcategoria listada acima.
+  3. A mensagem não contém valor monetário, verbo de ação nem termos como "parcelado", "vezes", "x", "crédito", "débito", "pix", "boleto", "dinheiro".
+- Se as três condições forem satisfeitas, use intent="editar_lancamento" com field="category" e new_value = nome da categoria.
+- Caso contrário, NÃO invoque essa regra — classifique como "lancamento" (se houver dados) ou "conversa" (se ambíguo).
+- NUNCA crie um lançamento duplicado com o mesmo valor quando o usuário está recategorizando.
 
 REGRA CRÍTICA — DESCRIÇÃO NUNCA DEVE SER NOME DE CATEGORIA:
 - O campo "description" NUNCA deve conter APENAS o nome de uma categoria ou subcategoria (ex: "Saídas", "Alimentação", "Supérfluos").
