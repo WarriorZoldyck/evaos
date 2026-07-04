@@ -3737,7 +3737,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // ("Parcelado em 5x", "no crédito", "amanhã") as edits. Without a
       // trigger + without a target transaction, do NOT list recent
       // transactions — respond as conversation asking for clarification.
-      const EDIT_VERB_RE = /\b(edita|edite|editar|muda|mude|mudar|troca|troque|trocar|altera|altere|alterar|corrige|corrija|corrigir|apaga|apagar|exclui|excluir|excluído|remove|remover|removido|cancela|cancelar|cancelado|na verdade era|era r\$)\b|aquele lan[çc]amento|o [úu]ltimo lan[çc]amento|essa despesa que criei|o lan[çc]amento acima/i;
+      const EDIT_VERB_RE = /\b(edita|edite|editar|muda|mude|mudar|troca|troque|trocar|altera|altere|alterar|corrige|corrija|corrigir|apaga|apagar|exclui|excluir|excluído|remove|remover|removido|cancela|cancelar|cancelado|na verdade era|era r\$|parcel[ae]?|parcelad[oa]|parcelar|parcelamento|parcele|vezes)\b|aquele lan[çc]amento|o [úu]ltimo lan[çc]amento|essa despesa que criei|o lan[çc]amento acima|\b\d+\s*x\b/i;
       const userMsgRaw = (message || "").trim();
       const matchedEditVerb = EDIT_VERB_RE.test(userMsgRaw);
       console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed), "matchedEditVerb=", matchedEditVerb, "isNewSession=", isNewSession, "lastMsgAgeMin=", Math.round(lastMsgAgeMin));
