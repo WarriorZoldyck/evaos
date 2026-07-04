@@ -407,7 +407,7 @@ export function TransactionFormModal({
         setActiveTab(editTransaction.type);
         form.reset({
           description: editTransaction.description,
-          amount: editTransaction.amount,
+          amount: editTransaction.original_amount ?? editTransaction.amount,
           payment_date: new Date(editTransaction.payment_date + "T00:00:00"),
           competence_date: new Date(editTransaction.competence_date + "T00:00:00"),
           status: editTransaction.status,
@@ -919,7 +919,7 @@ export function TransactionFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent key={editTransaction?.id ?? "new"} className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Editar Lançamento" : "Novo Lançamento"}

@@ -69,7 +69,7 @@ function pendingToTransaction(item: AIPendingTransaction): Transaction {
     id: item.id,
     user_id: item.user_id,
     description: item.description,
-    amount: item.amount,
+    amount: item.original_amount ?? item.amount,
     type: item.type as "receita" | "despesa",
     category: item.category || "",
     subcategory: item.subcategory || null,

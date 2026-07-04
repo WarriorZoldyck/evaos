@@ -315,6 +315,7 @@ export function useAIPendingTransactions() {
     approveAll: approveAllMutation.mutate,
     rejectAll: rejectAllMutation.mutate,
     updatePending: updatePendingMutation.mutate,
+    updatePendingAsync: updatePendingMutation.mutateAsync,
     keepOne: keepOneMutation.mutate,
     keepAll: keepAllMutation.mutate,
     rejectCluster: rejectClusterMutation.mutate,
