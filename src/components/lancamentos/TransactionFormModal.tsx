@@ -1725,10 +1725,12 @@ function MainFormContent({
                       totalAmount={terminalPreview ? terminalPreview.netTotal : watchAmount}
                       installmentsCount={watchInstallmentsCount}
                       paymentDate={
-                        addBusinessDays(addDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), 30), terminalPreview?.settlementDays ?? 0)
+                        terminalPreview
+                          ? addMonths(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), 1)
+                          : (watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate))
                       }
-                      intervalType={terminalPreview ? "custom_days" : ((watchIntervalType as "monthly" | "custom_days") || "monthly")}
-                      customDays={terminalPreview ? 30 : (watchCustomDays ? Number(watchCustomDays) : undefined)}
+                      intervalType={terminalPreview ? "monthly" : ((watchIntervalType as "monthly" | "custom_days") || "monthly")}
+                      customDays={terminalPreview ? undefined : (watchCustomDays ? Number(watchCustomDays) : undefined)}
                       interestRate={terminalPreview ? 0 : (watchInterestRate || 0)}
                       customAmounts={customInstallmentAmounts}
                       onCustomAmountsChange={onCustomInstallmentAmountsChange}
