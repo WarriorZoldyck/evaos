@@ -408,8 +408,8 @@ export function TransactionFormModal({
         form.reset({
           description: editTransaction.description,
           amount: editTransaction.original_amount ?? editTransaction.amount,
-          payment_date: new Date(editTransaction.payment_date + "T00:00:00"),
-          competence_date: new Date(editTransaction.competence_date + "T00:00:00"),
+          payment_date: editTransaction.payment_date ? new Date(editTransaction.payment_date + "T00:00:00") : new Date(),
+          competence_date: editTransaction.competence_date ? new Date(editTransaction.competence_date + "T00:00:00") : new Date(),
           status: editTransaction.status,
           category: editTransaction.category,
           subcategory: editTransaction.subcategory || "",
