@@ -1,41 +1,42 @@
 
-## Objetivo
-Impedir que mensagens ambíguas como `"Parcelado em 5x"` sejam classificadas como `editar_lancamento` e disparem a listagem dos 5 lançamentos recentes.
+## Problemas identificados
 
-## Arquivo único: `supabase/functions/whatsapp-webhook/index.ts`
+**1. Lançamentos — valor BRUTO vem descontado o MDR ao editar**
+No `TransactionFormModal.tsx` (linha ~410), o `form.reset` usa `editTransaction.amount`, que já é o valor **líquido** (após MDR) para receitas passadas por maquininha. O valor bruto real está em `editTransaction.original_amount`.
 
-### 1. Corte de sessão no histórico enviado ao classificador (linhas 1034-1082)
-Manter os 30 dias no banco (histórico completo continua salvo), mas separar o que é considerado "conversa em curso":
-- Se a última mensagem anterior à atual tem mais de **60 minutos**, tratar como nova sessão: enviar só a mensagem atual + um bloco resumido curto (`[RESUMO — sessões anteriores encerradas]`) sem misturar lançamentos antigos como contexto ativo.
-- Se está dentro dos 60 min, comportamento atual (lista integral dos últimos 30 + resumo).
-- Isso elimina o gatilho de "pareceu continuação" quando o usuário volta depois de horas.
+**2. Lançamentos — campos vêm em branco na 1ª abertura, precisa fechar/reabrir**
+O `TransactionFormModal` permanece montado no DOM entre aberturas (mesmo com `open=false`). Quando `editTransaction` muda de `null` (novo lançamento) para uma transação existente, o `useEffect([editTransaction, open])` dispara mas os Selects (categoria, conta, forma de pagamento) já renderizaram valores stale/vazios em ciclo anterior, e o `form.reset` chega depois do primeiro paint — daí a sensação de "tudo vazio". Reabrir força um novo ciclo limpo.
 
-### 2. Endurecer a regra de `editar_lancamento` no prompt do sistema (linhas 1965-1979)
-Substituir a regra vaga por gatilhos explícitos:
-- **Só** classificar como `editar_lancamento` quando a mensagem contém verbo/expressão explícita de edição: `edita`, `edite`, `editar`, `muda`, `mude`, `mudar`, `troca`, `troque`, `altera`, `altere`, `corrige`, `corrige pra`, `na verdade era`, `era R$X não R$Y`, `apaga`, `exclui`, `remove`, `cancela esse último`, ou referência inequívoca a um lançamento anterior (`aquele lançamento`, `o último`, `essa despesa que criei`).
-- Remover a regra atual de "mensagem curta 1-3 palavras após lançamento vira `editar_lancamento`" — hoje ela pega qualquer coisa; deixar aplicável **apenas** se a última mensagem do assistente foi confirmação de lançamento **e** ocorreu há menos de 10 min **e** o texto bate com nome de categoria/subcategoria conhecida.
-- Adicionar exemplo negativo explícito: mensagens como `"Parcelado em 5x"`, `"3 vezes"`, `"no crédito"`, `"pix"`, `"amanhã"` NÃO são edições. Se vierem soltas (sem lançamento em andamento na sessão atual), classificar como `conversa` e perguntar a que compra se refere.
+**3. Análises EVA — edição não puxa tudo e não reflete**
+- Mesmo bug do BRUTO: `pendingToTransaction` mapeia `item.amount` como valor da transação, ignorando `item.original_amount` quando existe (transações de cartão via terminal criadas pela EVA).
+- `handlePendingUpdate` chama `updatePending.mutate` (fire-and-forget) e retorna `true` imediatamente, então o modal fecha antes do UPDATE completar; se o usuário aprovar rapidamente, aprova dados stale. Precisa aguardar a mutation via `mutateAsync`.
+- O update também não está gravando `original_amount`, então uma edição de valor perde a referência do bruto original.
 
-### 3. Guarda-corpo no código (linhas 3691-3712)
-Quando o classificador ainda assim retornar `editar_lancamento` com `transaction_id=null` **e** a mensagem original do usuário não bater com nenhum dos verbos de edição da regra 2:
-- Não listar os 5 recentes. Responder `conversa`: *"Não entendi bem — você quer editar algum lançamento ou criar um novo? Se for editar, me diga qual (nome ou nº na lista de Análises EVA)."*
-- Só cair no fluxo "lista os 5 recentes" se o texto tiver verbo de edição explícito.
+## Correções
 
-### 4. Log de diagnóstico
-Adicionar `console.log` com `sessionAgeMinutes`, `messageText`, `matchedEditVerb` no branch de `editar_lancamento` para facilitar auditar casos futuros pelos logs de edge function.
+### `src/components/lancamentos/TransactionFormModal.tsx`
+- No bloco de reset com `editTransaction` (linha ~408): usar `editTransaction.original_amount ?? editTransaction.amount` no campo `amount` para mostrar o BRUTO quando houver MDR aplicado.
+- Adicionar `key={editTransaction?.id ?? "new"}` no Dialog raiz (ou envolver o conteúdo) para forçar remontagem limpa a cada nova transação editada, eliminando o problema de "campos em branco na primeira abertura".
 
-## Escopo / não-impacto
-- **Não** altera banco de dados nem esquema.
-- **Não** mexe em criação de lançamentos, categorização, contexto, cartão, MDR, parcelas, ou lógica financeira.
-- **Não** afeta o `eva-chat` (chat in-app) — só o WhatsApp.
-- Histórico de 30 dias continua salvo integralmente; apenas o que vai no prompt do classificador respeita a janela de sessão.
-- Aplica-se a todos os usuários (não só espclin).
+### `src/pages/Lancamentos.tsx`
+- Ao passar `editTransaction` para o `TransactionFormModal`, garantir que o `key` prop no modal seja único por transação (parte da mudança acima).
 
-## Verificação após implantar
-1. Enviar `"Parcelado em 5x"` sem contexto → deve receber pergunta pedindo esclarecimento, não a lista.
-2. Criar um lançamento e em seguida enviar `"muda pra 200"` em <10min → deve editar normalmente.
-3. Criar um lançamento, esperar 2h, enviar `"muda pra 200"` → deve pedir para confirmar qual lançamento (com verbo de edição, cai no fluxo atual de listar os 5).
-4. Enviar `"Alimentação"` logo após criar um lançamento (correção de categoria) → continua funcionando.
+### `src/pages/AnalisesEva.tsx`
+- `pendingToTransaction`: preencher `amount` com `item.original_amount ?? item.amount` para que o modal já mostre o BRUTO.
+- `handlePendingUpdate`: aguardar a mutation com `mutateAsync` antes de retornar `true`. Incluir `original_amount` no payload de update (preservando o bruto quando o valor for editado, ou limpando quando o usuário mudar completamente).
 
-## Arquivos alterados
-- `supabase/functions/whatsapp-webhook/index.ts` (apenas)
+### `src/hooks/useAIPendingTransactions.ts`
+- Expor `updatePendingAsync = updatePendingMutation.mutateAsync` para uso em `handlePendingUpdate`.
+
+## Escopo e não-impacto
+
+- Nenhuma alteração no DRE, hooks financeiros, edge functions, WhatsApp ou banco.
+- Nenhuma migração de dados retroativa (o `original_amount` já está gravado corretamente hoje; só estamos corrigindo a exibição e o salvamento na edição).
+- Fluxo de criação (novo lançamento) não muda.
+- Aprovação de lançamentos EVA continua igual — apenas a edição prévia passa a refletir os campos completos.
+
+## Verificação após implementação
+
+1. Lançamentos → editar receita de cartão com MDR: campo "Valor Bruto" mostra o bruto (ex.: R$ 7.160,00), não o líquido (R$ 6.781,24). Categoria, conta e forma de pagamento aparecem preenchidas na 1ª abertura.
+2. Salvar sem mudanças: valor líquido no banco permanece igual (MDR re-aplicado sobre o mesmo bruto).
+3. Análises EVA → editar item pendente: todos os campos originais aparecem (categoria, contato, conta, método, notas, anexo). Salvar reflete no card e persiste após reload.
