@@ -3731,10 +3731,31 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     // === EDITAR LANÇAMENTO ===
     if (aiParsed.intent === "editar_lancamento") {
       const viewerBlock = denyIfViewer(); if (viewerBlock) return viewerBlock;
-      console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed));
+
+      // Guard-rail: verify the user's message actually contains an edit trigger.
+      // The classifier occasionally mislabels ambiguous short messages
+      // ("Parcelado em 5x", "no crédito", "amanhã") as edits. Without a
+      // trigger + without a target transaction, do NOT list recent
+      // transactions — respond as conversation asking for clarification.
+      const EDIT_VERB_RE = /\b(edita|edite|editar|muda|mude|mudar|troca|troque|trocar|altera|altere|alterar|corrige|corrija|corrigir|apaga|apagar|exclui|excluir|excluído|remove|remover|removido|cancela|cancelar|cancelado|na verdade era|era r\$)\b|aquele lan[çc]amento|o [úu]ltimo lan[çc]amento|essa despesa que criei|o lan[çc]amento acima/i;
+      const userMsgRaw = (message || "").trim();
+      const matchedEditVerb = EDIT_VERB_RE.test(userMsgRaw);
+      console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed), "matchedEditVerb=", matchedEditVerb, "isNewSession=", isNewSession, "lastMsgAgeMin=", Math.round(lastMsgAgeMin));
+
       let transactionId = aiParsed.transaction_id;
       const field = aiParsed.field;
       const newValue = aiParsed.new_value;
+
+      // If classifier returned no target AND user didn't use an edit verb,
+      // treat as ambiguous conversation — do NOT list recent transactions.
+      if (!transactionId && !matchedEditVerb) {
+        console.log("Edit intent rejected — no edit verb in user message; converting to conversa.");
+        return respond({
+          success: true, intent: "conversa",
+          message: "Não entendi bem — você quer editar um lançamento existente ou criar um novo?\n\nSe for editar, me diga qual (por exemplo: \"muda o valor do último para R$ 200\").\nSe for criar, me passe o valor, a descrição e a forma de pagamento.",
+          transaction: null,
+        }, 200);
+      }
 
       if (!field || newValue === undefined || newValue === null) {
         return respond({
