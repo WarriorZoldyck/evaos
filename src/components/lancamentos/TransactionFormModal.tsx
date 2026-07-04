@@ -320,7 +320,11 @@ export function TransactionFormModal({
   const { selectedCompanyId, isPersonal } = useCompany();
   const [activeTab, setActiveTab] = useState<"receita" | "despesa" | "transferencia">("despesa");
   const [saving, setSaving] = useState(false);
-  const [formCompanyId, setFormCompanyId] = useState<string | null>(null);
+  const [formCompanyId, setFormCompanyId] = useState<string | null>(
+    editTransaction
+      ? (editTransaction.company_id ?? null)
+      : (isPersonal ? null : selectedCompanyId)
+  );
   const [formCategories, setFormCategories] = useState<Category[]>([]);
   const [customInstallmentAmounts, setCustomInstallmentAmounts] = useState<Record<number, number>>({});
   const [customInstallmentDates, setCustomInstallmentDates] = useState<Record<number, Date>>({});

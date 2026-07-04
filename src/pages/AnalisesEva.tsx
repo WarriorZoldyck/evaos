@@ -13,6 +13,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { useSignedAttachmentUrl } from "@/hooks/useSignedAttachmentUrl";
 import type { Transaction, Category as TxCategory } from "@/hooks/useTransactions";
@@ -476,8 +480,46 @@ export default function AnalisesEva() {
   const { settings: fieldSettings } = useFormFieldSettings();
 
   const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
+  const [editingSeries, setEditingSeries] = useState<AIPendingTransaction[] | null>(null);
+  const [seriesChoice, setSeriesChoice] = useState<{ item: AIPendingTransaction; series: AIPendingTransaction[] } | null>(null);
   const [reconcilingId, setReconcilingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Called by cards. If item belongs to a multi-installment series still fully
+  // pending, ask user whether to edit the whole thing or just this parcela.
+  const handleEditClick = (item: AIPendingTransaction) => {
+    if (item.series_id && (item.installments_total ?? 0) > 1) {
+      const siblings = pendingTransactions.filter(
+        (p) => p.series_id === item.series_id
+      );
+      if (siblings.length > 1) {
+        setSeriesChoice({ item, series: siblings });
+        return;
+      }
+    }
+    setEditingSeries(null);
+    setEditingItem(item);
+  };
+
+  // Build a consolidated "series" pseudo-item to edit all parcelas together.
+  const buildSeriesAggregate = (series: AIPendingTransaction[]): AIPendingTransaction => {
+    const sorted = [...series].sort(
+      (a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0)
+    );
+    const first = sorted[0];
+    const total = sorted.reduce((s, r) => s + Math.abs(Number(r.amount) || 0), 0);
+    const baseDesc = String(first.description ?? "Lançamento").replace(/\s*\(\d+\/\d+\)\s*$/, "");
+    return {
+      ...first,
+      description: baseDesc,
+      amount: total,
+      original_amount: total,
+      installment_number: null,
+      installments: sorted.length,
+      installments_total: sorted.length,
+    } as AIPendingTransaction;
+  };
+
 
   const handleReconcile = async (pending: AIPendingTransaction, suggestion: BoletoSuggestion) => {
     setReconcilingId(pending.id);
@@ -557,7 +599,108 @@ export default function AnalisesEva() {
       ? current?.original_amount ?? null
       : null;
 
-    // ── PARCELAMENTO ON EDIT ──
+    // ── EDITING WHOLE SERIES (regenerate all parcelas) ──
+    if (editingSeries && editingSeries.length > 0 && current) {
+      const existingSeriesId = editingSeries[0].series_id || crypto.randomUUID();
+      const siblingIds = editingSeries.map((s) => s.id);
+      const n = data.is_installment && data.installments_count && data.installments_count >= 2
+        ? data.installments_count
+        : editingSeries.length;
+
+      const totalAmt = Math.abs(Number(data.amount ?? current.amount) || 0);
+      if (totalAmt <= 0) {
+        toast.error("Valor precisa ser maior que zero.");
+        return false;
+      }
+      const per = Math.floor((totalAmt * 100) / n) / 100;
+      const distributed = per * n;
+      const amounts = Array.from({ length: n }, (_, i) =>
+        i === n - 1 ? Math.round((totalAmt - distributed + per) * 100) / 100 : per
+      );
+
+      const card = data.credit_card_id
+        ? creditCards.find((c: any) => c.id === data.credit_card_id)
+        : null;
+      const baseCompetenceStr = (data.competence_date ?? current.competence_date ?? new Date().toISOString().slice(0, 10)) as string;
+      const basePaymentStr = (data.payment_date ?? current.payment_date ?? baseCompetenceStr) as string;
+      const intervalDays = data.installment_interval_type === "custom" && data.installment_custom_days
+        ? data.installment_custom_days
+        : null;
+
+      const computeDate = (idx: number): string => {
+        if (card && card.closing_day != null && card.due_day != null) {
+          const d = new Date(baseCompetenceStr + "T12:00:00");
+          d.setMonth(d.getMonth() + idx);
+          d.setDate(Math.min(card.due_day, 28));
+          return d.toISOString().slice(0, 10);
+        }
+        const d = new Date(basePaymentStr + "T12:00:00");
+        if (intervalDays) d.setDate(d.getDate() + idx * intervalDays);
+        else d.setMonth(d.getMonth() + idx);
+        return d.toISOString().slice(0, 10);
+      };
+
+      const baseDescription = String(data.description ?? current.description ?? "Lançamento").replace(/\s*\(\d+\/\d+\)\s*$/, "");
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      const rows = amounts.map((amt, idx) => {
+        const payDate = computeDate(idx);
+        const parcelStatus = data.credit_card_id ? "Pendente" : (payDate > todayStr ? "Pendente" : "Pago");
+        return {
+          user_id: current.user_id,
+          source: current.source || "whatsapp",
+          status: "pending" as const,
+          description: n > 1 ? `${baseDescription} (${idx + 1}/${n})` : baseDescription,
+          amount: amt,
+          type: (data.type ?? current.type) as "receita" | "despesa",
+          category: (data.category ?? current.category) || "",
+          subcategory: data.subcategory ?? current.subcategory ?? null,
+          subcategory2: data.subcategory2 ?? current.subcategory2 ?? null,
+          competence_date: baseCompetenceStr,
+          payment_date: payDate,
+          transaction_status: parcelStatus,
+          bank_account_id: (data.bank_account_id ?? current.bank_account_id) || null,
+          wallet_id: (data.wallet_id ?? current.wallet_id) || null,
+          credit_card_id: (data.credit_card_id ?? current.credit_card_id) || null,
+          card_terminal_id: (data.card_terminal_id ?? current.card_terminal_id) || null,
+          company_id: (data.company_id ?? current.company_id) || null,
+          payment_method: (data.payment_method ?? current.payment_method) || null,
+          supplier_id: (data.supplier_id ?? current.supplier_id) || null,
+          client_id: (data.client_id ?? current.client_id) || null,
+          contact_name: (data.contact_name ?? current.contact_name) || null,
+          notes: (data.notes ?? current.notes) || null,
+          attachment_url: (data.attachment_url ?? current.attachment_url) || null,
+          barcode: (data.barcode ?? current.barcode) || null,
+          series_id: n > 1 ? existingSeriesId : null,
+          installment_number: n > 1 ? idx + 1 : null,
+          installments_total: n > 1 ? n : null,
+          installments: n > 1 ? n : 1,
+          original_message: current.original_message,
+          ai_response_message: current.ai_response_message,
+        };
+      });
+
+      try {
+        const { error: delErr } = await supabase
+          .from("ai_pending_transactions")
+          .delete()
+          .in("id", siblingIds);
+        if (delErr) throw delErr;
+        const { error: insErr } = await supabase
+          .from("ai_pending_transactions")
+          .insert(rows as any);
+        if (insErr) throw insErr;
+        toast.success(n > 1 ? `Série atualizada: ${n} parcelas.` : "Lançamento consolidado.");
+        queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
+        queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
+        return true;
+      } catch (e: any) {
+        toast.error("Erro ao atualizar série: " + (e?.message || String(e)));
+        return false;
+      }
+    }
+
+    // ── PARCELAMENTO ON EDIT (single → série) ──
     if (data.is_installment && data.installments_count && data.installments_count >= 2 && current) {
       const n = data.installments_count;
       const totalAmt = Math.abs(Number(data.amount ?? current.amount) || 0);
@@ -582,19 +725,14 @@ export default function AnalisesEva() {
 
       const computeDate = (idx: number): string => {
         if (card && card.closing_day != null && card.due_day != null) {
-          // Reuse the same monthly-shift logic used elsewhere (approximate: +N months from competence)
           const d = new Date(baseCompetenceStr + "T12:00:00");
           d.setMonth(d.getMonth() + idx);
-          // Snap to due day
           d.setDate(Math.min(card.due_day, 28));
           return d.toISOString().slice(0, 10);
         }
         const d = new Date(basePaymentStr + "T12:00:00");
-        if (intervalDays) {
-          d.setDate(d.getDate() + idx * intervalDays);
-        } else {
-          d.setMonth(d.getMonth() + idx);
-        }
+        if (intervalDays) d.setDate(d.getDate() + idx * intervalDays);
+        else d.setMonth(d.getMonth() + idx);
         return d.toISOString().slice(0, 10);
       };
 
@@ -658,6 +796,7 @@ export default function AnalisesEva() {
         return false;
       }
     }
+
 
     const updates: Partial<AIPendingTransaction> = {
       description: data.description,
@@ -737,7 +876,7 @@ export default function AnalisesEva() {
             items={g.items}
             onApproveAll={() => approveAll(g.items)}
             onRejectAll={() => rejectAll(g.items)}
-            onEditItem={(item) => setEditingItem(item)}
+            onEditItem={(item) => handleEditClick(item)}
             isApproving={isApproving}
             isRejecting={isRejecting}
             getCategoryName={getCategoryName}
@@ -751,7 +890,7 @@ export default function AnalisesEva() {
           item={g.item}
           onApprove={() => approve(g.item)}
           onReject={() => reject(g.item.id)}
-          onEdit={() => setEditingItem(g.item)}
+          onEdit={() => handleEditClick(g.item)}
           onReconcile={(suggestion) => handleReconcile(g.item, suggestion)}
           isApproving={isApproving}
           isRejecting={isRejecting}
@@ -991,7 +1130,7 @@ export default function AnalisesEva() {
 
       <TransactionFormModal
         open={!!editingItem}
-        onClose={() => setEditingItem(null)}
+        onClose={() => { setEditingItem(null); setEditingSeries(null); }}
         editTransaction={editTransaction}
         onSave={dummySave}
         onSaveMultiple={dummySaveMultiple}
@@ -1006,6 +1145,43 @@ export default function AnalisesEva() {
         companies={companies}
         fieldSettings={fieldSettings}
       />
+
+      <AlertDialog open={!!seriesChoice} onOpenChange={(o) => { if (!o) setSeriesChoice(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Editar lançamento parcelado</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este lançamento faz parte de uma série de{" "}
+              {seriesChoice?.series.length ?? 0} parcelas. O que você deseja editar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!seriesChoice) return;
+                setEditingSeries(null);
+                setEditingItem(seriesChoice.item);
+                setSeriesChoice(null);
+              }}
+            >
+              Apenas esta parcela
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                if (!seriesChoice) return;
+                const aggregate = buildSeriesAggregate(seriesChoice.series);
+                setEditingSeries(seriesChoice.series);
+                setEditingItem(aggregate);
+                setSeriesChoice(null);
+              }}
+            >
+              Lançamento inteiro
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
