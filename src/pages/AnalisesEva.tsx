@@ -464,7 +464,7 @@ function groupPending(items: AIPendingTransaction[]): GroupedItem[] {
 export default function AnalisesEva() {
   const {
     pendingTransactions, reviewedTransactions, duplicateClusters, pendingCount,
-    isLoading, approve, reject, approveAll, rejectAll, updatePending,
+    isLoading, approve, reject, approveAll, rejectAll, updatePendingAsync,
     keepOne, keepAll, rejectCluster,
     isApproving, isRejecting,
   } = useAIPendingTransactions();
@@ -540,9 +540,20 @@ export default function AnalisesEva() {
 
   // Handler: intercept TransactionFormModal's onUpdate to save to ai_pending_transactions
   const handlePendingUpdate = async (id: string, data: Partial<Transaction>): Promise<boolean> => {
+    // Preserve the current pending item to detect if amount was actually changed
+    const current = pendingTransactions.find((p) => p.id === id)
+      || reviewedTransactions.find((p) => p.id === id);
+    const prevBruto = current?.original_amount ?? current?.amount ?? null;
+    const newBruto = data.amount ?? null;
+    // If user kept the same bruto, keep original_amount as-is; if changed, reset it
+    const nextOriginalAmount = prevBruto != null && newBruto != null && Math.abs(prevBruto - newBruto) < 0.005
+      ? current?.original_amount ?? null
+      : null;
+
     const updates: Partial<AIPendingTransaction> = {
       description: data.description,
       amount: data.amount,
+      original_amount: nextOriginalAmount,
       type: data.type,
       category: data.category || null,
       subcategory: data.subcategory || null,
@@ -563,8 +574,12 @@ export default function AnalisesEva() {
       attachment_url: data.attachment_url || null,
       barcode: data.barcode || null,
     };
-    updatePending({ id, updates });
-    return true;
+    try {
+      await updatePendingAsync({ id, updates });
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   // Dummy handlers (not used for pending edits but required by TransactionFormModal)
