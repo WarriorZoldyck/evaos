@@ -639,7 +639,8 @@ export function TransactionFormModal({
             card_terminal_id: selectedTerminal.id,
           });
         } else {
-          // No anticipation: N separate transactions with 30-day intervals + D+X settlement
+          // No anticipation: N separate transactions, each installment credited
+          // on the SAME day of the purchase, N months later (parcela 1 = +1 mês, etc.).
           const seriesId = crypto.randomUUID();
           const grossFloor = Math.floor((data.amount / count) * 100) / 100;
           const grossLast = Math.round((data.amount - grossFloor * (count - 1)) * 100) / 100;
@@ -651,8 +652,7 @@ export function TransactionFormModal({
             const thisFee = Math.round(thisGross * (rate / 100) * 100) / 100;
             const thisNet = Math.round((thisGross - thisFee) * 100) / 100;
 
-            const vencimento = addDays(data.competence_date, 30 * (i + 1));
-            const payDate = addBusinessDays(vencimento, settlementDays);
+            const payDate = addMonths(data.competence_date, i + 1);
             installments.push({
               ...baseData,
               amount: thisNet,
@@ -1725,10 +1725,12 @@ function MainFormContent({
                       totalAmount={terminalPreview ? terminalPreview.netTotal : watchAmount}
                       installmentsCount={watchInstallmentsCount}
                       paymentDate={
-                        addBusinessDays(addDays(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), 30), terminalPreview?.settlementDays ?? 0)
+                        terminalPreview
+                          ? addMonths(watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate), 1)
+                          : (watchPaymentDate instanceof Date ? watchPaymentDate : new Date(watchPaymentDate))
                       }
-                      intervalType={terminalPreview ? "custom_days" : ((watchIntervalType as "monthly" | "custom_days") || "monthly")}
-                      customDays={terminalPreview ? 30 : (watchCustomDays ? Number(watchCustomDays) : undefined)}
+                      intervalType={terminalPreview ? "monthly" : ((watchIntervalType as "monthly" | "custom_days") || "monthly")}
+                      customDays={terminalPreview ? undefined : (watchCustomDays ? Number(watchCustomDays) : undefined)}
                       interestRate={terminalPreview ? 0 : (watchInterestRate || 0)}
                       customAmounts={customInstallmentAmounts}
                       onCustomAmountsChange={onCustomInstallmentAmountsChange}
