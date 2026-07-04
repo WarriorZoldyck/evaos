@@ -538,8 +538,15 @@ export default function AnalisesEva() {
     [cardTerminals]
   );
 
-  // Handler: intercept TransactionFormModal's onUpdate to save to ai_pending_transactions
-  const handlePendingUpdate = async (id: string, data: Partial<Transaction>): Promise<boolean> => {
+  // Handler: intercept TransactionFormModal's onUpdate to save to ai_pending_transactions.
+  // If the user turned "Parcelado?" on, convert the single pending into a series
+  // of N parcelas (delete original + insert N rows with the same series_id).
+  const handlePendingUpdate = async (id: string, data: Partial<Transaction> & {
+    is_installment?: boolean;
+    installments_count?: number;
+    installment_interval_type?: "monthly" | "custom";
+    installment_custom_days?: number | null;
+  }): Promise<boolean> => {
     // Preserve the current pending item to detect if amount was actually changed
     const current = pendingTransactions.find((p) => p.id === id)
       || reviewedTransactions.find((p) => p.id === id);
@@ -549,6 +556,108 @@ export default function AnalisesEva() {
     const nextOriginalAmount = prevBruto != null && newBruto != null && Math.abs(prevBruto - newBruto) < 0.005
       ? current?.original_amount ?? null
       : null;
+
+    // ── PARCELAMENTO ON EDIT ──
+    if (data.is_installment && data.installments_count && data.installments_count >= 2 && current) {
+      const n = data.installments_count;
+      const totalAmt = Math.abs(Number(data.amount ?? current.amount) || 0);
+      if (totalAmt <= 0) {
+        toast.error("Valor precisa ser maior que zero para parcelar.");
+        return false;
+      }
+      const per = Math.floor((totalAmt * 100) / n) / 100;
+      const distributed = per * n;
+      const amounts = Array.from({ length: n }, (_, i) =>
+        i === n - 1 ? Math.round((totalAmt - distributed + per) * 100) / 100 : per
+      );
+
+      const card = data.credit_card_id
+        ? creditCards.find((c: any) => c.id === data.credit_card_id)
+        : null;
+      const baseCompetenceStr = (data.competence_date ?? current.competence_date ?? new Date().toISOString().slice(0, 10)) as string;
+      const basePaymentStr = (data.payment_date ?? current.payment_date ?? baseCompetenceStr) as string;
+      const intervalDays = data.installment_interval_type === "custom" && data.installment_custom_days
+        ? data.installment_custom_days
+        : null;
+
+      const computeDate = (idx: number): string => {
+        if (card && card.closing_day != null && card.due_day != null) {
+          // Reuse the same monthly-shift logic used elsewhere (approximate: +N months from competence)
+          const d = new Date(baseCompetenceStr + "T12:00:00");
+          d.setMonth(d.getMonth() + idx);
+          // Snap to due day
+          d.setDate(Math.min(card.due_day, 28));
+          return d.toISOString().slice(0, 10);
+        }
+        const d = new Date(basePaymentStr + "T12:00:00");
+        if (intervalDays) {
+          d.setDate(d.getDate() + idx * intervalDays);
+        } else {
+          d.setMonth(d.getMonth() + idx);
+        }
+        return d.toISOString().slice(0, 10);
+      };
+
+      const seriesId = crypto.randomUUID();
+      const baseDescription = String(data.description ?? current.description ?? "Lançamento").replace(/\s*\(\d+\/\d+\)\s*$/, "");
+      const todayStr = new Date().toISOString().slice(0, 10);
+
+      const rows = amounts.map((amt, idx) => {
+        const payDate = computeDate(idx);
+        const parcelStatus = data.credit_card_id ? "Pendente" : (payDate > todayStr ? "Pendente" : "Pago");
+        return {
+          user_id: current.user_id,
+          source: current.source || "whatsapp",
+          status: "pending" as const,
+          description: `${baseDescription} (${idx + 1}/${n})`,
+          amount: amt,
+          type: (data.type ?? current.type) as "receita" | "despesa",
+          category: (data.category ?? current.category) || "",
+          subcategory: data.subcategory ?? current.subcategory ?? null,
+          subcategory2: data.subcategory2 ?? current.subcategory2 ?? null,
+          competence_date: baseCompetenceStr,
+          payment_date: payDate,
+          transaction_status: parcelStatus,
+          bank_account_id: (data.bank_account_id ?? current.bank_account_id) || null,
+          wallet_id: (data.wallet_id ?? current.wallet_id) || null,
+          credit_card_id: (data.credit_card_id ?? current.credit_card_id) || null,
+          card_terminal_id: (data.card_terminal_id ?? current.card_terminal_id) || null,
+          company_id: (data.company_id ?? current.company_id) || null,
+          payment_method: (data.payment_method ?? current.payment_method) || null,
+          supplier_id: (data.supplier_id ?? current.supplier_id) || null,
+          client_id: (data.client_id ?? current.client_id) || null,
+          contact_name: (data.contact_name ?? current.contact_name) || null,
+          notes: (data.notes ?? current.notes) || null,
+          attachment_url: (data.attachment_url ?? current.attachment_url) || null,
+          barcode: (data.barcode ?? current.barcode) || null,
+          series_id: seriesId,
+          installment_number: idx + 1,
+          installments_total: n,
+          installments: n,
+          original_message: current.original_message,
+          ai_response_message: current.ai_response_message,
+        };
+      });
+
+      try {
+        const { error: delErr } = await supabase
+          .from("ai_pending_transactions")
+          .delete()
+          .eq("id", id);
+        if (delErr) throw delErr;
+        const { error: insErr } = await supabase
+          .from("ai_pending_transactions")
+          .insert(rows as any);
+        if (insErr) throw insErr;
+        toast.success(`${n} parcelas geradas!`);
+        queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
+        queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
+        return true;
+      } catch (e: any) {
+        toast.error("Erro ao parcelar: " + (e?.message || String(e)));
+        return false;
+      }
+    }
 
     const updates: Partial<AIPendingTransaction> = {
       description: data.description,
