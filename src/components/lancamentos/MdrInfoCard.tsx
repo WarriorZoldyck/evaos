@@ -106,11 +106,11 @@ export function MdrInfoCard({
       const feePerInstallment = perInstallment[0].fee;
       const netPerInstallment = perInstallment[0].net;
 
-      // Generate installment dates: 30-day intervals + D+X business days
+      // Parcela N recebida em paymentDate + settlementDays + 30 * (N - 1) dias corridos.
+      // Ex.: D+30, 2x → +30d e +60d.
       const installmentDates: Date[] = [];
       for (let i = 0; i < count; i++) {
-        const vencimento = addDays(paymentDate, 30 * (i + 1));
-        installmentDates.push(addBusinessDays(vencimento, settlementDays));
+        installmentDates.push(addDays(paymentDate, settlementDays + 30 * i));
       }
 
       return {

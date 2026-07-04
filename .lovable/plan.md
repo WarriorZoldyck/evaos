@@ -1,51 +1,41 @@
-## Resposta curta
+## Correção: datas de recebimento parcelado no cartão (D+30)
 
-**Não batem garantido — por 3 motivos de design diferentes entre os dois hooks.** Posso corrigir.
+### Bug
 
-## Diagnóstico
+Em `src/components/lancamentos/MdrInfoCard.tsx`, linhas 109–114, o settlement (D+30) é somado **duas vezes**:
 
-Comparei `useDashboardData.ts` (campo `faturamento`) com `useDREData.ts` (Receita Bruta).
+```ts
+for (let i = 0; i < count; i++) {
+  const vencimento = addDays(paymentDate, 30 * (i + 1));       // já +30, +60...
+  installmentDates.push(addBusinessDays(vencimento, settlementDays)); // + outros ~30 úteis
+}
+```
 
-| Aspecto | Dashboard `faturamento` | DRE Gerencial | DRE Contábil |
-|---|---|---|---|
-| Base de data | `competence_date` ✓ | `competence_date` ✓ | `competence_date` ✓ |
-| Status | Pago + Pendente ✓ | Pago + Pendente ✓ | Pago + Pendente ✓ |
-| Exclui transferência interna | `is_internal_transfer=false` | `is_internal_transfer=false` **+** `category ilike 'transfer%'` | idem Gerencial |
-| Filtro por mapeamento contábil | **Nenhum** — soma toda receita | Nenhum | **Só categorias com `dre_section` preenchido** |
-| Tratamento de não-mapeadas | Conta | Conta | **Ignora silenciosamente** (vira `unmappedCategoryCount`) |
+Resultado para venda em julho, 2x: parcelas caem em 11/09 e 12/10 (agosto pulado, ~80 dias a mais).
 
-### Onde divergem
+### Regra correta
 
-1. **Faturamento (dash) ≠ Receita Op. Bruta (DRE Contábil)** sempre que existir receita em categoria sem `dre_section`. É o caso mais comum hoje (várias categorias herdadas sem mapeamento).
-2. **Faturamento (dash) ≠ Receita Gerencial** se houver categoria com nome começando por "transfer"/"transferência" que **não** esteja marcada como `is_internal_transfer=true` (legado pré-flag).
-3. Dashboard não filtra categorias "transfer%" por nome — então transferências antigas sem flag inflam o faturamento.
+Parcela N (D+X, sem antecipação): `paymentDate + settlementDays + 30 * (N - 1)` dias corridos.
+Para D+30, 2x → +30d e +60d. Para 3x → +30, +60, +90.
 
-## Plano de correção
+### Alteração
 
-### 1. Unificar regra de exclusão de transferências
-Em `useDashboardData.ts`, replicar o filtro do DRE: adicionar `.not("category","ilike","transfer%")` e `.not("category","ilike","transferência%")` nas queries `transactions` e `competenceTransactions`. Garante que dashboard e DRE Gerencial usem exatamente o mesmo universo de linhas.
+Único arquivo: `src/components/lancamentos/MdrInfoCard.tsx` (linhas 109–114). Substituir o loop por:
 
-### 2. Expor as duas leituras no card "Faturamento"
-Em `SummaryCards.tsx` (card Faturamento), trocar o número único por:
-- **Faturamento Bruto** (toda receita por competência) — bate com DRE Gerencial.
-- **Receita Operacional** (só categorias mapeadas) — bate com DRE Contábil "(+) Receita Operacional Bruta".
-- Badge com contagem de categorias não classificadas e link "Mapear no DRE" → leva pra tela de categorias com o filtro de não-mapeadas.
+```ts
+const installmentDates: Date[] = [];
+for (let i = 0; i < count; i++) {
+  installmentDates.push(addDays(paymentDate, settlementDays + 30 * i));
+}
+```
 
-Calcular ambos dentro de `useDashboardData.ts` reaproveitando `categories.dre_section` (já há fetch de categorias em outros pontos; senão, adiciono um fetch leve).
+### Escopo / impacto
 
-### 3. Tooltip educativo
-Tooltip no card explicando: "Faturamento Bruto = todas as receitas do período (regime de competência). Receita Operacional = subconjunto mapeado para o DRE Contábil."
+- **Não retroativo.** Só afeta o card de pré-visualização ao criar/editar lançamentos. Transações já salvas no banco permanecem inalteradas.
+- Demais cálculos (débito, crédito à vista, lump sum com antecipação, taxa por parcela, MDR, líquidos) já estão corretos e não serão tocados.
+- Sem mudanças de UI, sem mudanças em `TransactionFormModal`, sem migrações.
 
-### 4. Validação
-Após o ajuste, rodar query de sanity em 2-3 usuários ativos (`espclin`, `sabrina`, `renato`) e comparar:
-- `SUM(amount) WHERE type='receita' AND competence_date BETWEEN ...` (dashboard)
-- mesmo valor agrupado por `dre_section` (DRE Contábil)
-- diff esperado = receita em categorias sem mapeamento.
+### Verificação
 
-## Arquivos afetados
-
-- `src/hooks/useDashboardData.ts` — adicionar filtro `transfer%`, novo cálculo `receitaOperacional`, fetch de categorias.
-- `src/components/dashboard/SummaryCards.tsx` — exibir Bruto + Operacional + badge de não-mapeadas.
-- (opcional) `src/pages/Categories.tsx` — receber query param `?unmapped=1` pra filtrar.
-
-Nenhuma mudança de schema. Nenhuma alteração de dados.
+- Terminal D+30, venda hoje, 2x → parcelas em +30d e +60d.
+- Terminal D+2/D+1 continua caindo em `lump_sum` (inalterado).
