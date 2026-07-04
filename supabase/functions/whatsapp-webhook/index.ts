@@ -1041,24 +1041,61 @@ serve(async (req) => {
       .order("created_at", { ascending: true })
       .limit(500);
 
-    const allMessages = (chatHistory || []).map((m: any) => ({
+    const allMessagesWithTs = (chatHistory || []).map((m: any) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
+      created_at: m.created_at as string,
     }));
 
-    // Smart summarization: keep last 30 messages integral, summarize older ones
+    // Session cutoff: if the last stored message is older than 60 min, treat the
+    // current incoming message as a NEW session — do not feed the old exchange
+    // as active context (avoids "Parcelado em 5x" being interpreted as a
+    // continuation of a lançamento from hours/days ago).
+    const SESSION_GAP_MINUTES = 60;
+    const lastMsg = allMessagesWithTs[allMessagesWithTs.length - 1];
+    const lastMsgAgeMin = lastMsg
+      ? (Date.now() - new Date(lastMsg.created_at).getTime()) / 60000
+      : Infinity;
+    const isNewSession = lastMsgAgeMin > SESSION_GAP_MINUTES;
+
+    // Split into "active session" (contiguous run within SESSION_GAP_MINUTES
+    // of the current time, walking backwards) vs "older" for summary.
+    let activeSessionStart = allMessagesWithTs.length;
+    if (!isNewSession) {
+      for (let i = allMessagesWithTs.length - 1; i > 0; i--) {
+        const prevTs = new Date(allMessagesWithTs[i - 1].created_at).getTime();
+        const curTs = new Date(allMessagesWithTs[i].created_at).getTime();
+        if ((curTs - prevTs) / 60000 > SESSION_GAP_MINUTES) {
+          activeSessionStart = i;
+          break;
+        }
+        activeSessionStart = i - 1;
+      }
+    }
+
+    const olderMessages = isNewSession
+      ? allMessagesWithTs
+      : allMessagesWithTs.slice(0, activeSessionStart);
+    const activeMessages = isNewSession
+      ? []
+      : allMessagesWithTs.slice(activeSessionStart);
+
     const RECENT_COUNT = 30;
     let conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
 
-    if (allMessages.length > RECENT_COUNT) {
-      const olderMessages = allMessages.slice(0, allMessages.length - RECENT_COUNT);
-      const recentMessages = allMessages.slice(-RECENT_COUNT);
+    // Trim active session to last RECENT_COUNT (safety cap).
+    const recentMessages = activeMessages.slice(-RECENT_COUNT).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
 
-      // Build compact summary of older messages
+    if (olderMessages.length > 0) {
+      // Build compact summary of older/closed-session messages
       const summaryParts: string[] = [];
-      for (let i = 0; i < olderMessages.length; i += 2) {
-        const userMsg = olderMessages[i];
-        const assistantMsg = olderMessages[i + 1];
+      const summaryPool = olderMessages.slice(-60); // cap summary size
+      for (let i = 0; i < summaryPool.length; i += 2) {
+        const userMsg = summaryPool[i];
+        const assistantMsg = summaryPool[i + 1];
         if (userMsg?.role === "user") {
           const userSnippet = userMsg.content.length > 80 ? userMsg.content.slice(0, 80) + "..." : userMsg.content;
           if (assistantMsg?.role === "assistant") {
@@ -1066,22 +1103,36 @@ serve(async (req) => {
             summaryParts.push(`Usuário: ${userSnippet} → EVA: ${assistantSnippet}`);
           } else {
             summaryParts.push(`Usuário: ${userSnippet}`);
-            i--; // re-process this message as it wasn't paired
+            i--;
           }
         }
       }
 
-      const summaryText = `[RESUMO DA CONVERSA ANTERIOR — últimos 30 dias]\n${summaryParts.join("\n")}`;
+      const headerLabel = isNewSession
+        ? `[RESUMO — SESSÕES ANTERIORES ENCERRADAS (última interação há ${Math.round(lastMsgAgeMin)} min). Trate a próxima mensagem como INÍCIO de nova conversa, sem assumir continuidade de lançamentos anteriores.]`
+        : `[RESUMO DA CONVERSA ANTERIOR — sessões encerradas]`;
+      const summaryText = `${headerLabel}\n${summaryParts.join("\n")}`;
       conversationHistory = [
         { role: "user", content: summaryText },
-        { role: "assistant", content: "Entendido, tenho o contexto da conversa anterior." },
+        { role: "assistant", content: "Entendido, tenho o contexto anterior apenas como referência." },
         ...recentMessages,
       ];
     } else {
-      conversationHistory = allMessages;
+      conversationHistory = recentMessages;
     }
 
-    console.log("Conversation history loaded:", allMessages.length, "messages (", conversationHistory.length, "sent to AI)");
+    console.log(
+      "Conversation history loaded:",
+      allMessagesWithTs.length,
+      "messages (",
+      conversationHistory.length,
+      "sent to AI); isNewSession=",
+      isNewSession,
+      "lastMsgAgeMin=",
+      Math.round(lastMsgAgeMin),
+      "activeSessionMsgs=",
+      activeMessages.length,
+    );
 
     // Save incoming user message
     const userMsgText = message || (hasAudio ? "[áudio enviado]" : hasDocument ? "[documento enviado]" : "[imagem enviada]");
@@ -1962,21 +2013,26 @@ REGRAS DE PERÍODO:
 Para editar lançamento existente:
 {"intent":"editar_lancamento","transaction_id":"UUID-do-lancamento-da-lista-ou-null","field":"amount|description|category|payment_date|competence_date|status|notes","new_value":"novo valor","friendly_message":"..."}
 
-REGRAS DE EDIÇÃO DE LANÇAMENTO:
-- Se o usuário diz "muda o valor", "corrige pra X", "era R$Y não R$Z", "edita aquele lançamento", "na verdade era...", classifique como "editar_lancamento"
-- Use o HISTÓRICO DA CONVERSA e a LISTA DE LANÇAMENTOS RECENTES abaixo para identificar qual lançamento o usuário quer editar
-- Se o lançamento foi mencionado na conversa ou acabou de ser criado, use o transaction_id correspondente
-- Se não conseguir identificar qual lançamento, retorne transaction_id como null — o sistema perguntará ao usuário
+REGRAS DE EDIÇÃO DE LANÇAMENTO (MUITO RESTRITIVAS):
+- SÓ classifique como "editar_lancamento" quando a mensagem contém EXPLICITAMENTE um verbo/expressão de edição, como: "edita", "edite", "editar", "muda", "mude", "mudar", "troca", "troque", "trocar", "altera", "altere", "alterar", "corrige", "corrija", "corrigir", "corrige pra", "na verdade era", "era R$X, não R$Y", "apaga", "apagar", "exclui", "excluir", "remove", "remover", "cancela aquele", "cancela esse último", OU referência inequívoca a um lançamento anterior ("aquele lançamento", "o último", "essa despesa que criei", "o lançamento acima").
+- Se a mensagem NÃO contém nenhum desses gatilhos, NUNCA classifique como "editar_lancamento", mesmo que seja curta ou ambígua.
+- Mensagens como "Parcelado em 5x", "3 vezes", "no crédito", "pix", "boleto", "amanhã", "pago", "pendente", "hoje", "dinheiro" NÃO são edições por si só. Se vierem SOLTAS (sem lançamento em andamento na sessão ATUAL), classifique como "conversa" e peça esclarecimento (ex: "A que compra esses 5x se referem? Me passe valor e descrição.").
+- Se detectar um [RESUMO — SESSÕES ANTERIORES ENCERRADAS] no histórico, NÃO trate mensagens antigas como lançamento em andamento — a conversa ATUAL começa a partir da mensagem do usuário.
+- Use o HISTÓRICO DA CONVERSA (apenas da sessão atual) e a LISTA DE LANÇAMENTOS RECENTES abaixo para identificar qual lançamento o usuário quer editar — somente quando o gatilho de edição estiver presente.
+- Se o lançamento foi mencionado na conversa atual ou acabou de ser criado, use o transaction_id correspondente.
+- Se não conseguir identificar qual lançamento, retorne transaction_id como null.
 - Para field="amount", new_value deve ser o número (ex: "45.90")
 - Para field="status", new_value deve ser "Pago" ou "Pendente"
 - Para field="payment_date" ou "competence_date", new_value deve ser "YYYY-MM-DD"
 
-REGRA CRÍTICA — DETECÇÃO DE CORREÇÃO/RECATEGORIZAÇÃO:
-- Se o usuário enviar uma mensagem CURTA (1-3 palavras) logo após um lançamento ter sido criado na conversa, e essa mensagem parece ser um NOME DE CATEGORIA ou SUBCATEGORIA (ex: "Supérfluos saídas", "Alimentação", "Bar", "Pet cachorra"), interprete como uma CORREÇÃO DE CATEGORIA do lançamento anterior, NÃO como um novo lançamento.
-- Nesse caso, use intent="editar_lancamento" com field="category" e new_value contendo o nome da categoria/subcategoria desejada.
-- NUNCA crie um novo lançamento duplicado com o mesmo valor quando o usuário está claramente tentando recategorizar.
-- Sinais de que é uma correção: mensagem curta sem valor monetário, enviada logo após um lançamento, texto corresponde a uma categoria existente ou subcategoria.
-- Quando for uma correção de categoria, tente encontrar o UUID da categoria na lista de categorias acima. Se houver match, use o UUID. Se não, trate como sugestão de nova categoria.
+REGRA DE CORREÇÃO/RECATEGORIZAÇÃO (ESCOPO RESTRITO):
+- SÓ trate mensagem curta (1-3 palavras) como correção de categoria se TODAS estas condições forem verdadeiras:
+  1. A ÚLTIMA mensagem do assistente na sessão ATUAL foi uma confirmação de lançamento recém-criado (contém "Lançamento enviado para aprovação" ou similar).
+  2. A mensagem do usuário bate EXATAMENTE (case-insensitive) com o nome de uma categoria ou subcategoria listada acima.
+  3. A mensagem não contém valor monetário, verbo de ação nem termos como "parcelado", "vezes", "x", "crédito", "débito", "pix", "boleto", "dinheiro".
+- Se as três condições forem satisfeitas, use intent="editar_lancamento" com field="category" e new_value = nome da categoria.
+- Caso contrário, NÃO invoque essa regra — classifique como "lancamento" (se houver dados) ou "conversa" (se ambíguo).
+- NUNCA crie um lançamento duplicado com o mesmo valor quando o usuário está recategorizando.
 
 REGRA CRÍTICA — DESCRIÇÃO NUNCA DEVE SER NOME DE CATEGORIA:
 - O campo "description" NUNCA deve conter APENAS o nome de uma categoria ou subcategoria (ex: "Saídas", "Alimentação", "Supérfluos").
@@ -3675,10 +3731,31 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     // === EDITAR LANÇAMENTO ===
     if (aiParsed.intent === "editar_lancamento") {
       const viewerBlock = denyIfViewer(); if (viewerBlock) return viewerBlock;
-      console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed));
+
+      // Guard-rail: verify the user's message actually contains an edit trigger.
+      // The classifier occasionally mislabels ambiguous short messages
+      // ("Parcelado em 5x", "no crédito", "amanhã") as edits. Without a
+      // trigger + without a target transaction, do NOT list recent
+      // transactions — respond as conversation asking for clarification.
+      const EDIT_VERB_RE = /\b(edita|edite|editar|muda|mude|mudar|troca|troque|trocar|altera|altere|alterar|corrige|corrija|corrigir|apaga|apagar|exclui|excluir|excluído|remove|remover|removido|cancela|cancelar|cancelado|na verdade era|era r\$)\b|aquele lan[çc]amento|o [úu]ltimo lan[çc]amento|essa despesa que criei|o lan[çc]amento acima/i;
+      const userMsgRaw = (message || "").trim();
+      const matchedEditVerb = EDIT_VERB_RE.test(userMsgRaw);
+      console.log("=== INTENT: EDITAR LANÇAMENTO ===", JSON.stringify(aiParsed), "matchedEditVerb=", matchedEditVerb, "isNewSession=", isNewSession, "lastMsgAgeMin=", Math.round(lastMsgAgeMin));
+
       let transactionId = aiParsed.transaction_id;
       const field = aiParsed.field;
       const newValue = aiParsed.new_value;
+
+      // If classifier returned no target AND user didn't use an edit verb,
+      // treat as ambiguous conversation — do NOT list recent transactions.
+      if (!transactionId && !matchedEditVerb) {
+        console.log("Edit intent rejected — no edit verb in user message; converting to conversa.");
+        return respond({
+          success: true, intent: "conversa",
+          message: "Não entendi bem — você quer editar um lançamento existente ou criar um novo?\n\nSe for editar, me diga qual (por exemplo: \"muda o valor do último para R$ 200\").\nSe for criar, me passe o valor, a descrição e a forma de pagamento.",
+          transaction: null,
+        }, 200);
+      }
 
       if (!field || newValue === undefined || newValue === null) {
         return respond({
