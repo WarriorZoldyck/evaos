@@ -480,8 +480,46 @@ export default function AnalisesEva() {
   const { settings: fieldSettings } = useFormFieldSettings();
 
   const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
+  const [editingSeries, setEditingSeries] = useState<AIPendingTransaction[] | null>(null);
+  const [seriesChoice, setSeriesChoice] = useState<{ item: AIPendingTransaction; series: AIPendingTransaction[] } | null>(null);
   const [reconcilingId, setReconcilingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  // Called by cards. If item belongs to a multi-installment series still fully
+  // pending, ask user whether to edit the whole thing or just this parcela.
+  const handleEditClick = (item: AIPendingTransaction) => {
+    if (item.series_id && (item.installments_total ?? 0) > 1) {
+      const siblings = pendingTransactions.filter(
+        (p) => p.series_id === item.series_id
+      );
+      if (siblings.length > 1) {
+        setSeriesChoice({ item, series: siblings });
+        return;
+      }
+    }
+    setEditingSeries(null);
+    setEditingItem(item);
+  };
+
+  // Build a consolidated "series" pseudo-item to edit all parcelas together.
+  const buildSeriesAggregate = (series: AIPendingTransaction[]): AIPendingTransaction => {
+    const sorted = [...series].sort(
+      (a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0)
+    );
+    const first = sorted[0];
+    const total = sorted.reduce((s, r) => s + Math.abs(Number(r.amount) || 0), 0);
+    const baseDesc = String(first.description ?? "Lançamento").replace(/\s*\(\d+\/\d+\)\s*$/, "");
+    return {
+      ...first,
+      description: baseDesc,
+      amount: total,
+      original_amount: total,
+      installment_number: null,
+      installments: sorted.length,
+      installments_total: sorted.length,
+    } as AIPendingTransaction;
+  };
+
 
   const handleReconcile = async (pending: AIPendingTransaction, suggestion: BoletoSuggestion) => {
     setReconcilingId(pending.id);
