@@ -876,7 +876,7 @@ export default function AnalisesEva() {
             items={g.items}
             onApproveAll={() => approveAll(g.items)}
             onRejectAll={() => rejectAll(g.items)}
-            onEditItem={(item) => setEditingItem(item)}
+            onEditItem={(item) => handleEditClick(item)}
             isApproving={isApproving}
             isRejecting={isRejecting}
             getCategoryName={getCategoryName}
