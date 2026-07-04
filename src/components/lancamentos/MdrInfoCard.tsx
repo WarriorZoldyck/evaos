@@ -106,11 +106,11 @@ export function MdrInfoCard({
       const feePerInstallment = perInstallment[0].fee;
       const netPerInstallment = perInstallment[0].net;
 
-      // Parcela N recebida em paymentDate + settlementDays + 30 * (N - 1) dias corridos.
-      // Ex.: D+30, 2x → +30d e +60d.
+      // Cada parcela vence no MESMO dia da compra, N meses depois.
+      // Ex.: compra 14/07, 2x → 14/08 e 14/09.
       const installmentDates: Date[] = [];
       for (let i = 0; i < count; i++) {
-        installmentDates.push(addDays(paymentDate, settlementDays + 30 * i));
+        installmentDates.push(addMonths(paymentDate, i + 1));
       }
 
       return {
