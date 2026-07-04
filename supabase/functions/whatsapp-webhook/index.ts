@@ -3506,7 +3506,34 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       // --- INSTALLMENT SUPPORT ---
       const installmentCount = aiParsed.installments || 1;
-      const installmentDetails = aiParsed.installment_details || null;
+      let installmentDetails = aiParsed.installment_details || null;
+
+      // Auto-generate installment_details when the AI signaled N>1 parcelas but
+      // didn't provide the per-parcel breakdown (common for follow-up messages
+      // like "Parcelado em 5x" where the AI infers count but not each due date).
+      if (installmentCount > 1 && (!installmentDetails || !Array.isArray(installmentDetails) || installmentDetails.length === 0)) {
+        const totalAmt = Math.abs(Number(aiParsed.amount) || 0);
+        if (totalAmt > 0) {
+          const per = Math.floor((totalAmt * 100) / installmentCount) / 100;
+          const distributed = per * installmentCount;
+          const cardForAuto = creditCardId ? contextCards.find((c) => c.id === creditCardId) : null;
+          installmentDetails = Array.from({ length: installmentCount }, (_, idx) => {
+            const amt = idx === installmentCount - 1
+              ? Math.round((totalAmt - distributed + per) * 100) / 100
+              : per;
+            let due: string;
+            if (cardForAuto) {
+              due = getInstallmentDueDate(competenceDate, cardForAuto.closing_day, cardForAuto.due_day, idx + 1);
+            } else {
+              const d = new Date((paymentDate || competenceDate) + "T12:00:00");
+              d.setMonth(d.getMonth() + idx);
+              due = d.toISOString().slice(0, 10);
+            }
+            return { amount: amt, due_date: due, barcode: null };
+          });
+          console.log(`Auto-generated ${installmentCount} installment_details (per=${per}, last=${installmentDetails[installmentCount - 1].amount})`);
+        }
+      }
 
       if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
         // Create multiple transactions as a series
