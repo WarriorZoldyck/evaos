@@ -254,7 +254,7 @@ export function FaturamentoDetailModal({
               {formatCurrency(totals.net)}
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              {count} {count === 1 ? "lançamento" : "lançamentos"}
+              {count} {count === 1 ? "venda" : "vendas"}
             </p>
           </div>
           <div className="rounded-lg border p-3">
