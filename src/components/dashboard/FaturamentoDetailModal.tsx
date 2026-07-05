@@ -595,7 +595,9 @@ function SaleDetailDialog({
             </div>
           )}
           <div className="rounded-lg border p-2">
-            <p className="text-[10px] uppercase text-muted-foreground">Líquido</p>
+            <p className="text-[10px] uppercase text-muted-foreground">
+              {hasGross ? "Líquido" : "Valor"}
+            </p>
             <p className="text-base font-bold font-display text-success">{formatCurrency(net)}</p>
           </div>
           <div className="rounded-lg border p-2">
