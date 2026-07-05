@@ -249,7 +249,50 @@ export default function HubIntegridade() {
     }
   };
 
-  const totalIssues = orphans.length + divergent.length + missingCtx.length;
+  const assignAccountContext = async (accountId: string) => {
+    const targetCompany = pendingAccountCompany[accountId];
+    if (!targetCompany) {
+      toast.error("Escolha um contexto antes de aplicar");
+      return;
+    }
+    const companyIdToSet = targetCompany === "__personal__" ? null : targetCompany;
+    const row = orphanAccounts.find((a) => a.id === accountId);
+    if (!row) return;
+    const label = companyIdToSet
+      ? companyOptions.find((c) => c.id === companyIdToSet)?.name || "empresa"
+      : "Pessoal";
+    if (!window.confirm(
+      `Vincular a conta "${row.name}" ao contexto "${label}"?\n\n` +
+      `Isso também vai atribuir esse contexto a ${row.transactions_count} lançamento(s) da conta que hoje estão sem contexto.`
+    )) return;
+
+    setFixingAccount(accountId);
+    try {
+      // 1) Update account
+      const { error: e1 } = await supabase
+        .from("bank_accounts")
+        .update({ company_id: companyIdToSet })
+        .eq("id", accountId);
+      if (e1) throw e1;
+
+      // 2) Propagate to transactions that are NULL on this account
+      const { error: e2 } = await supabase
+        .from("transactions")
+        .update({ company_id: companyIdToSet })
+        .eq("bank_account_id", accountId)
+        .is("company_id", null);
+      if (e2) throw e2;
+
+      toast.success(`Conta vinculada. ${row.transactions_count} lançamento(s) atribuído(s) a ${label}.`);
+      await runChecks();
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || String(err)));
+    } finally {
+      setFixingAccount(null);
+    }
+  };
+
+  const totalIssues = orphans.length + divergent.length + missingCtx.length + orphanAccounts.length;
 
   // Hub members shouldn't see this — only owners
   if (isHubMember) return <Navigate to="/eva-hub/contas" replace />;
