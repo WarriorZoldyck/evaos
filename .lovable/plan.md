@@ -1,66 +1,47 @@
 ## Diagnóstico
 
-Confirmei nas imagens que os totais do topo (Bruto R$ 28.666, MDR R$ 2.953,45) batem exatamente com a aba "Por cliente/contato". O problema real é outro:
+### 1. Card "Faturamento" no Dashboard mostra o líquido, não o bruto
+Em `src/hooks/useDashboardData.ts` (linha 406), `faturamento` é calculado como `Σ t.amount` sobre as receitas por competência. Para vendas em cartão, `t.amount` já é a fração **líquida** (após MDR); o valor **bruto** vive em `t.original_amount`. Por isso o card mostra R$ 25.712,55 (líquido) e o modal mostra R$ 26.666,00 (bruto) — o card está errado.
 
-### Bug — MDR aplicado à venda inteira mesmo quando só parte é cartão
+### 2. Onde está o lançamento de ~R$ 12.000
+Ele **não sumiu** — continua na lista. O contador diz "7 vendas" (linha 368 do modal usa `count = filteredLines.length`) e a tabela é rolável (`ScrollArea h-[45vh]`). No screenshot só 5 linhas cabem visíveis; as outras 2 (incluindo a de R$ 11–12k do Claudio) estão abaixo do fold. A soma das 5 visíveis (R$ 15.616) + as 2 ocultas fecha nos R$ 26.666.
 
-Na venda do "Claudio (irmão)" (R$ 12.600), o valor foi pago em partes: R$ 2.000 transferência, R$ 1.000 débito, resto boleto. Hoje a agregação por série faz:
+Ou seja: nada foi filtrado indevidamente pela mudança de "Por cliente/contato" → "Por cliente" (aquela mudança só afeta a aba de agrupamento, não a Lista). Vou confirmar isso no build reordenando as colunas para que a linha do Claudio fique explicitamente identificável (com cliente + descrição + contato visíveis lado a lado).
 
-1. `classifyItems` olha o grupo inteiro e retorna UM `kind` (encontrou débito → `kind = "debito"`).
-2. Marca a série como cartão (`isCard = true`).
-3. Calcula `fee = gross_total − net_total = R$ 12.600 − R$ 10.582 = R$ 2.018` — trata a venda inteira como se fosse toda no cartão.
+## Correções
 
-Resultado: MDR de R$ 2.018 numa venda em que só R$ 1.000 passou em débito. O real seria ~R$ 25 (MDR do débito).
+### A. `src/hooks/useDashboardData.ts` — Faturamento bruto real
+Trocar o cálculo de `faturamento` para usar a mesma lógica per-item do modal:
 
-### Bug — "Sem contato" agrupando por `contact_name`
-
-O agrupamento por cliente usa só `contact_name`. Quando não existe contato preenchido, todas as vendas caem em "Sem contato". O correto é cair para a **descrição/cliente do lançamento**.
-
-## Correção
-
-Arquivo único: `src/components/dashboard/FaturamentoDetailModal.tsx`
-
-### 1. Cálculo per-item, depois agrega
-
-Substituir a heurística `max vs sum` por cálculo **por parcela**:
-
-- Para cada `item` da série:
-  - Se `isCardItem(item)` (tem `card_terminal_id` ou `payment_method` é crédito/débito):
-    - `gross_i = original_amount_i > 0 ? original_amount_i : amount_i`
-    - `fee_i = max(0, gross_i − amount_i)`
-    - `net_i = amount_i`
-  - Senão (boleto/pix/dinheiro/transferência/outros):
-    - `gross_i = net_i = amount_i`, `fee_i = 0` (ignora `original_amount` — não há MDR)
-- Agregado da venda: soma direto (`gross = Σ gross_i`, `fee = Σ fee_i`, `net = Σ net_i`).
-- `hasGross = fee > 0` (mostra colunas MDR/Bruto sempre que existir cartão em qualquer parcela).
-
-Isso corrige exatamente o caso Claudio: transferência e boleto contribuem só com o próprio `amount` (sem MDR), e o débito contribui com o próprio MDR real.
-
-### 2. Filtro por forma de pagamento
-
-Passa a ser "**qualquer parcela ∈ forma X**":
-
-- `saleHasKind(sale, kind)`: `true` se alguma parcela do grupo tem esse kind.
-- `paymentFilter` chama `saleHasKind` — permite ver a venda mista quando o usuário filtra por "Débito".
-- O `kind` primário (para display do card no sub-dialog e chip) passa a ser calculado por **maior soma de `amount`** dentro do grupo, com fallback "misto" se houver empate ou cartão + não-cartão relevantes.
-- Chip da barra de filtros mostra todas as formas presentes nas vendas visíveis (`availableKinds` continua igual).
-
-### 3. Sub-dialog de detalhes por venda
-
-Na tabela de parcelas do sub-dialog, adicionar coluna **Forma** por parcela (crédito/débito/boleto/…) e uma coluna **MDR** só preenchida quando aquela parcela específica é cartão. Assim o usuário enxerga exatamente quanto de MDR incide em cada parcela.
-
-### 4. Agrupamento "Por cliente" — fallback para descrição
-
-Trocar o key do `byContact` de `t.contact_name || "Sem contato"` para:
-
-```
-t.contact_name?.trim() || t.description?.trim() || "Sem cliente"
+```ts
+// para cada receita por competência:
+//   se é cartão E original_amount > amount → soma original_amount (bruto)
+//   senão → soma amount
 ```
 
-E renomear a aba/rótulo interno de "Por cliente/contato" para **"Por cliente"** (mantém a semântica, evita confusão).
+Vou reusar helpers `isCardItem`/`classifyItem` (extrair para `src/lib/paymentKind.ts` para não duplicar). Também vou passar a expor `faturamentoLiquido` para métricas que já dependiam do net (nenhuma até onde vi — o "MDR pago no mês" já usa `mdrBruto/mdrLiquido/mdrTaxas` próprios). A "Margem" (linha ~) usa `faturamento` como denominador; mudar para bruto é mais correto contabilmente (margem sobre receita bruta).
 
-### 5. Sanidade
+### B. `FaturamentoDetailModal.tsx` — Lista com colunas reordenadas
+Nova ordem de colunas da aba **Lista** (uma linha por venda, como hoje):
 
-Depois do fix, os totais do topo continuam sendo `Σ` das linhas visíveis (Lista == cards == Por mês == Por categoria == Por cliente, dentro do subset filtrado).
+```
+Cliente | Descrição | Contato | Competência | Pagamento | Categoria | Forma | Bruto | MDR | Líquido
+```
 
-Nenhuma alteração em banco, hooks ou outras telas.
+- **Cliente** = `contact_name || description` (mesmo fallback usado em "Por cliente"), truncado, negrito. Sem contato explícito, herda da descrição.
+- **Descrição** = descrição original + badge de parcelas (2x, 3x) + badge de status (Pendente/Parcial).
+- **Contato** = `contact_name || "—"` (mostra "—" quando o cliente veio da descrição).
+- **Forma** = badge com `KIND_LABEL[primaryKind]` (crédito/débito/boleto/…/Misto).
+- Bruto/MDR só aparecem se `hasAnyMdr`.
+- Datas ficam em fonte menor no meio (menos peso visual).
+
+### C. Aba "Por cliente" — adicionar Qtd e %
+Adicionar colunas `Qtd` (vendas) e `%` (participação sobre `totals.gross`) na tabela agrupada por cliente, ordenada por bruto desc. Mesmo tratamento nas outras abas agregadas (Por mês, Por categoria) para consistência.
+
+## Verificação
+1. Abrir modal em Jun/2026 → conferir se o lançamento do Claudio aparece na Lista, com Cliente = "Claudio…" / Contato visível separadamente.
+2. Conferir Dashboard: card Faturamento deve bater com `Bruto` do modal (R$ 26.666,00 no exemplo).
+3. Conferir soma da coluna Bruto na Lista == card Bruto do modal == card Faturamento do Dashboard.
+
+## Fora de escopo
+Não mexo em hooks de MDR (`mdrBruto/mdrLiquido`), em `SummaryCards` layout, nem em outras telas.

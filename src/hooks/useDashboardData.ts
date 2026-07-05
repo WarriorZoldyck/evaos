@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useRecurringTransactions, type RecurringOccurrence } from "@/hooks/useRecurringTransactions";
+import { itemGross } from "@/lib/paymentKind";
 import {
   startOfDay,
   endOfDay,
@@ -402,8 +403,9 @@ export function useDashboardData(filters: DashboardFilters) {
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
     // Faturamento Bruto: TODAS as receitas por competência (bate com DRE Gerencial)
+    // Para vendas em cartão, amount é a fatia líquida (após MDR) e original_amount é o bruto.
     const receitasCompetencia = competenceTransactions.filter((t) => t.type === "receita");
-    const faturamento = receitasCompetencia.reduce((acc, t) => acc + Number(t.amount), 0);
+    const faturamento = receitasCompetencia.reduce((acc, t) => acc + itemGross(t as any), 0);
 
     // Receita Operacional: só receitas cuja categoria (ou ancestral) tem dre_section mapeado
     // — bate com "(+) Receita Operacional Bruta" do DRE Contábil.
@@ -431,8 +433,9 @@ export function useDashboardData(filters: DashboardFilters) {
     const unmappedCategoryIds = new Set<string>();
     receitasCompetencia.forEach((t) => {
       const cat = resolveCat((t as any).subcategory) ?? resolveCat(t.category);
+      const gross = itemGross(t as any);
       if (hasDreSection(cat)) {
-        receitaOperacional += Number(t.amount);
+        receitaOperacional += gross;
       } else {
         unmappedCategoryIds.add(cat?.id ?? t.category ?? "—");
       }
