@@ -10,7 +10,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, ArrowRight } from "lucide-react";
@@ -598,160 +598,104 @@ export function FaturamentoDetailModal({
           </div>
         </div>
 
-        <Tabs defaultValue="lista" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="self-start">
-            <TabsTrigger value="lista">Lista</TabsTrigger>
-            <TabsTrigger value="mes">Por mês</TabsTrigger>
-            <TabsTrigger value="categoria">Por categoria</TabsTrigger>
-            <TabsTrigger value="contato">Por cliente</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="lista" className="flex-1 overflow-hidden mt-3">
-            <div className="overflow-auto h-[45vh] pr-2">
-              {paginated.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-12">
-                  Nenhuma receita encontrada para esse período.
-                </p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-background">
-                    <tr className="border-b">
-                      <th className="text-left py-2 pr-3">Cliente</th>
-                      <th className="text-left py-2 pr-3">Descrição</th>
-                      <th className="text-left py-2 pr-3 hidden md:table-cell">Competência</th>
-                      <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
-                      <th className="text-left py-2 pr-3 hidden lg:table-cell">Categoria</th>
-                      <th className="text-left py-2 pr-3 hidden md:table-cell">Forma</th>
-                      {hasAnyMdr && <th className="text-right py-2 pr-3">Bruto</th>}
-                      {hasAnyMdr && <th className="text-right py-2 pr-3">MDR</th>}
-                      <th className="text-right py-2">{hasAnyMdr ? "Líquido" : "Valor"}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginated.map((l) => {
-                      const t = l.tx;
-                      const clienteLabel = t.contact_name?.trim() || t.description?.trim() || "Sem cliente";
-                      return (
-                        <tr
-                          key={t.id}
-                          className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${dupIds.has(t.id) ? "bg-amber-500/5" : ""}`}
-                          onClick={() => setSelectedSale(l)}
-                        >
-                          <td className="py-2 pr-3 font-medium truncate max-w-[240px]">
-                            {clienteLabel}
-                          </td>
-                          <td className="py-2 pr-3">
-                            <div className="flex items-center gap-2">
-                              <span className="truncate max-w-[320px] text-muted-foreground">
-                                {t.description}
-                              </span>
-                              {(t.status === "Pendente" || t.status === "Parcial") && (
-                                <Badge variant="outline" className="text-[9px]">
-                                  {t.status}
-                                </Badge>
-                              )}
-                              {dupIds.has(t.id) && (
-                                <Badge variant="outline" className="text-[9px] border-amber-500 text-amber-600 dark:text-amber-400">
-                                  Possível duplicata
-                                </Badge>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell">
-                            {l.isSeries ? (
-                              <span
-                                className="underline decoration-dotted decoration-muted-foreground/50 cursor-help"
-                                title={`Competência fixa da 1ª parcela (venda em ${formatDate(t.competence_date)}). Cada uma das ${l.parcels} parcelas é paga em data diferente, mas contabilizadas na competência da venda original.`}
-                              >
-                                {formatDate(t.competence_date)}
-                              </span>
-                            ) : (
-                              formatDate(t.competence_date)
+        <div className="flex-1 overflow-hidden flex flex-col mt-3">
+          <div className="overflow-auto h-[50vh] pr-2">
+            {filteredLines.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-12">
+                Nenhuma receita encontrada para esse período.
+              </p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-background">
+                  <tr className="border-b">
+                    <th className="text-left py-2 pr-3">Cliente</th>
+                    <th className="text-left py-2 pr-3">Descrição</th>
+                    <th className="text-left py-2 pr-3 hidden md:table-cell">Competência</th>
+                    <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
+                    <th className="text-left py-2 pr-3 hidden lg:table-cell">Categoria</th>
+                    <th className="text-left py-2 pr-3 hidden md:table-cell">Forma</th>
+                    {hasAnyMdr && <th className="text-right py-2 pr-3">Bruto</th>}
+                    {hasAnyMdr && <th className="text-right py-2 pr-3">MDR</th>}
+                    <th className="text-right py-2">{hasAnyMdr ? "Líquido" : "Valor"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLines.map((l) => {
+                    const t = l.tx;
+                    const clienteLabel = t.contact_name?.trim() || t.description?.trim() || "Sem cliente";
+                    return (
+                      <tr
+                        key={t.id}
+                        className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${dupIds.has(t.id) ? "bg-amber-500/5" : ""}`}
+                        onClick={() => setSelectedSale(l)}
+                      >
+                        <td className="py-2 pr-3 font-medium truncate max-w-[240px]">
+                          {clienteLabel}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate max-w-[320px] text-muted-foreground">
+                              {t.description}
+                            </span>
+                            {(t.status === "Pendente" || t.status === "Parcial") && (
+                              <Badge variant="outline" className="text-[9px]">
+                                {t.status}
+                              </Badge>
                             )}
-                          </td>
-                          <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
-                            {formatDate(t.payment_date)}
-                          </td>
-                          <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[200px]">
-                            {resolveCategory(t.category)}
-                          </td>
-                          <td className="py-2 pr-3 hidden md:table-cell text-xs">
-                            <Badge variant="outline" className="text-[10px] font-normal">
-                              {KIND_LABEL[l.kind]}
-                            </Badge>
-                          </td>
-                          {hasAnyMdr && (
-                            <td className="py-2 pr-3 text-right font-mono text-xs">
-                              {formatCurrency(l.gross)}
-                            </td>
+                            {dupIds.has(t.id) && (
+                              <Badge variant="outline" className="text-[9px] border-amber-500 text-amber-600 dark:text-amber-400">
+                                Possível duplicata
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell">
+                          {l.isSeries ? (
+                            <span
+                              className="underline decoration-dotted decoration-muted-foreground/50 cursor-help"
+                              title={`Competência fixa da 1ª parcela (venda em ${formatDate(t.competence_date)}). Cada uma das ${l.parcels} parcelas é paga em data diferente, mas contabilizadas na competência da venda original.`}
+                            >
+                              {formatDate(t.competence_date)}
+                            </span>
+                          ) : (
+                            formatDate(t.competence_date)
                           )}
-                          {hasAnyMdr && (
-                            <td className="py-2 pr-3 text-right font-mono text-xs text-destructive">
-                              {l.fee > 0 ? `-${formatCurrency(l.fee)}` : "—"}
-                            </td>
-                          )}
-                          <td className="py-2 text-right font-mono font-medium text-success">
-                            {formatCurrency(l.net)}
+                        </td>
+                        <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
+                          {formatDate(t.payment_date)}
+                        </td>
+                        <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[200px]">
+                          {resolveCategory(t.category)}
+                        </td>
+                        <td className="py-2 pr-3 hidden md:table-cell text-xs">
+                          <Badge variant="outline" className="text-[10px] font-normal">
+                            {KIND_LABEL[l.kind]}
+                          </Badge>
+                        </td>
+                        {hasAnyMdr && (
+                          <td className="py-2 pr-3 text-right font-mono text-xs">
+                            {formatCurrency(l.gross)}
                           </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            {(totalPages > 1 || count > PAGE_SIZE) && (
-              <div className="flex items-center justify-between pt-3 text-xs flex-wrap gap-2">
-                <span className="text-muted-foreground">
-                  {showAll
-                    ? `Mostrando todas as ${count} vendas`
-                    : `Página ${page} de ${totalPages} · ${count} venda(s) no total`}
-                </span>
-                <div className="flex gap-2">
-                  {count > PAGE_SIZE && count <= 500 && (
-                    <Button
-                      size="sm"
-                      variant={showAll ? "default" : "outline"}
-                      onClick={() => { setShowAll((v) => !v); setPage(1); }}
-                    >
-                      {showAll ? "Paginar" : `Mostrar todos (${count})`}
-                    </Button>
-                  )}
-                  {!showAll && (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={page === 1}
-                        onClick={() => setPage((p) => p - 1)}
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={page === totalPages}
-                        onClick={() => setPage((p) => p + 1)}
-                      >
-                        Próxima
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
+                        )}
+                        {hasAnyMdr && (
+                          <td className="py-2 pr-3 text-right font-mono text-xs text-destructive">
+                            {l.fee > 0 ? `-${formatCurrency(l.fee)}` : "—"}
+                          </td>
+                        )}
+                        <td className="py-2 text-right font-mono font-medium text-success">
+                          {formatCurrency(l.net)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             )}
-          </TabsContent>
-
-          <TabsContent value="mes" className="mt-3">
-            <GroupTable rows={byMonth} totalGross={totals.gross} hasAnyMdr={hasAnyMdr} />
-          </TabsContent>
-          <TabsContent value="categoria" className="mt-3">
-            <GroupTable rows={byCategory} totalGross={totals.gross} hasAnyMdr={hasAnyMdr} />
-          </TabsContent>
-          <TabsContent value="contato" className="mt-3">
-            <GroupTable rows={byContact} totalGross={totals.gross} hasAnyMdr={hasAnyMdr} />
-          </TabsContent>
-        </Tabs>
+          </div>
+          <div className="pt-2 text-xs text-muted-foreground">
+            {filteredLines.length} venda(s) listada(s)
+          </div>
+        </div>
 
         <div className="flex justify-end pt-2 border-t">
           <Button variant="outline" size="sm" onClick={goToLancamentos} className="gap-2">
