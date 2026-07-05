@@ -29,6 +29,58 @@ type Tx = {
   series_id?: string | null;
   installment_number?: number | null;
   installments_total?: number | null;
+  card_terminal_id?: string | null;
+  payment_method?: string | null;
+};
+
+type PaymentKind =
+  | "credito"
+  | "debito"
+  | "boleto"
+  | "pix"
+  | "dinheiro"
+  | "transferencia"
+  | "outros";
+
+const CARD_KINDS: PaymentKind[] = ["credito", "debito"];
+
+function normalizePM(pm?: string | null): string {
+  return (pm ?? "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s_-]+/g, "");
+}
+
+function classifyItems(items: Tx[]): PaymentKind {
+  const hasTerminal = items.some((t) => !!t.card_terminal_id);
+  const pms = items.map((t) => normalizePM(t.payment_method));
+  const isCredit = pms.some((p) =>
+    ["credito", "cartaocredito", "creditcard", "cartao"].includes(p),
+  );
+  const isDebit = pms.some((p) =>
+    ["debito", "cartaodebito", "debitcard"].includes(p),
+  );
+  if (isDebit) return "debito";
+  if (isCredit || hasTerminal) return "credito";
+  if (pms.some((p) => p.includes("boleto"))) return "boleto";
+  if (pms.some((p) => p.includes("pix"))) return "pix";
+  if (pms.some((p) => p.includes("dinheiro") || p === "cash" || p.includes("especie")))
+    return "dinheiro";
+  if (pms.some((p) => p.includes("transferencia") || p === "ted" || p === "doc"))
+    return "transferencia";
+  return "outros";
+}
+
+const KIND_LABEL: Record<PaymentKind, string> = {
+  credito: "Cartão de crédito",
+  debito: "Cartão de débito",
+  boleto: "Boleto",
+  pix: "PIX",
+  dinheiro: "Dinheiro",
+  transferencia: "Transferência",
+  outros: "Outros",
 };
 
 interface FaturamentoDetailModalProps {
