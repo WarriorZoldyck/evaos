@@ -195,26 +195,28 @@ export function FaturamentoDetailModal({
         const first = sorted[0];
         const isSeries = !!first.series_id && items.length > 1;
         const totalParcels = first.installments_total ?? items.length;
-        const kind = classifyItems(items);
-        const isCard = CARD_KINDS.includes(kind);
+        const kind = primaryKind(items);
 
-        const net = r2(items.reduce((acc, t) => acc + (Number(t.amount) || 0), 0));
-        const grossCandidates = items
-          .map((t) => (t.original_amount != null ? Number(t.original_amount) : 0))
-          .filter((n) => n > 0);
-        const maxOA = grossCandidates.length > 0 ? Math.max(...grossCandidates) : 0;
-        const sumOA = grossCandidates.reduce((a, b) => a + b, 0);
-        // Heurística — `original_amount` tem duas semânticas conforme o meio:
-        //  - Boleto/parcelamento manual: cada parcela guarda o TOTAL da venda → usar max
-        //  - Cartão (maquininha): cada parcela guarda o próprio bruto proporcional → somar
-        // Distinção: se max(oa) já cobre a soma dos amounts (net), o total já está numa parcela.
-        const rawGross = isSeries
-          ? (maxOA >= net - 0.01 ? maxOA : sumOA)
-          : (grossCandidates[0] ?? 0);
-        // MDR só existe em cartão (crédito/débito). Para boleto/pix/etc. ignora original_amount.
-        const hasGross = isCard && rawGross > 0 && rawGross > net + 0.01;
-        const gross = hasGross ? r2(rawGross) : net;
-        const fee = hasGross ? r2(Math.max(0, gross - net)) : 0;
+        // Per-item computation: MDR só onde a parcela é cartão.
+        let gross = 0;
+        let fee = 0;
+        let net = 0;
+        items.forEach((t) => {
+          const amt = Number(t.amount) || 0;
+          const oa = Number(t.original_amount) || 0;
+          if (isCardItem(t) && oa > amt) {
+            gross += oa;
+            fee += oa - amt;
+            net += amt;
+          } else {
+            gross += amt;
+            net += amt;
+          }
+        });
+        gross = r2(gross);
+        fee = r2(fee);
+        net = r2(net);
+        const hasGross = fee > 0;
 
         const paidCount = items.filter((t) => t.status === "Pago").length;
         const aggStatus =
