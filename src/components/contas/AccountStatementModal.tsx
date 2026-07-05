@@ -32,6 +32,8 @@ interface StatementRow {
   amount: number;
   status: string;
   category: string;
+  transfer_id?: string | null;
+  peerAccount?: string | null;
 }
 
 const formatCurrency = (v: number) =>
@@ -60,7 +62,7 @@ export function AccountStatementModal({
 
       let query = supabase
         .from("transactions")
-        .select("id, payment_date, description, type, amount, status, category, credit_card_id")
+        .select("id, payment_date, description, type, amount, status, category, credit_card_id, transfer_id, bank_account_id, wallet_id")
         .eq("status", "Pago")
         .gte("payment_date", dateFrom)
         .lte("payment_date", dateTo)
@@ -78,9 +80,43 @@ export function AccountStatementModal({
       const { data, error } = await query;
 
       if (!error && data) {
+        const transferIds = Array.from(new Set(data.map((r: any) => r.transfer_id).filter(Boolean)));
+        const peerByTxId = new Map<string, string>();
+
+        if (transferIds.length > 0) {
+          const { data: peers } = await supabase
+            .from("transactions")
+            .select("id, transfer_id, bank_account_id, wallet_id")
+            .in("transfer_id", transferIds);
+
+          const peerBankIds = Array.from(new Set((peers || []).map((p: any) => p.bank_account_id).filter(Boolean)));
+          const peerWalletIds = Array.from(new Set((peers || []).map((p: any) => p.wallet_id).filter(Boolean)));
+          const [bankRes, walletRes] = await Promise.all([
+            peerBankIds.length > 0
+              ? supabase.from("bank_accounts").select("id, name").in("id", peerBankIds)
+              : Promise.resolve({ data: [] as any[] }),
+            peerWalletIds.length > 0
+              ? supabase.from("wallets").select("id, name").in("id", peerWalletIds)
+              : Promise.resolve({ data: [] as any[] }),
+          ]);
+
+          const accountNames = new Map<string, string>();
+          (bankRes.data || []).forEach((a: any) => accountNames.set(a.id, a.name));
+          (walletRes.data || []).forEach((w: any) => accountNames.set(w.id, w.name));
+
+          data.forEach((row: any) => {
+            if (!row.transfer_id) return;
+            const peer = (peers || []).find((p: any) => p.transfer_id === row.transfer_id && p.id !== row.id);
+            const peerName = peer ? accountNames.get(peer.bank_account_id || peer.wallet_id) : null;
+            if (peerName) peerByTxId.set(row.id, peerName);
+          });
+        }
+
+        const withPeer = data.map((row: any) => ({ ...row, peerAccount: peerByTxId.get(row.id) ?? null }));
+
         if (accountType === "card") {
           // Card statement: show every transaction as-is
-          setRows(data.map(({ credit_card_id: _c, ...r }) => r) as StatementRow[]);
+          setRows(withPeer.map(({ credit_card_id: _c, bank_account_id: _b, wallet_id: _w, ...r }) => r) as StatementRow[]);
         } else {
           // Bank/wallet statement: hide individual card purchases (rows with credit_card_id)
           // and replace them with a single synthetic "Pagamento Fatura X" line per
@@ -88,7 +124,7 @@ export function AccountStatementModal({
           const direct: StatementRow[] = [];
           const billGroups: Record<string, { amount: number; date: string; cardId: string }> = {};
 
-          for (const r of data) {
+          for (const r of withPeer) {
             if (r.credit_card_id) {
               const key = `${r.credit_card_id}__${r.payment_date}`;
               if (!billGroups[key]) {
@@ -97,7 +133,7 @@ export function AccountStatementModal({
               // Sum despesa as positive bill, receita (refund/credit) reduces it
               billGroups[key].amount += r.type === "despesa" ? r.amount : -r.amount;
             } else {
-              const { credit_card_id: _c, ...rest } = r;
+              const { credit_card_id: _c, bank_account_id: _b, wallet_id: _w, ...rest } = r;
               direct.push(rest as StatementRow);
             }
           }
@@ -262,6 +298,11 @@ export function AccountStatementModal({
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0">Pendente</Badge>
                         )}
                       </div>
+                      {r.peerAccount && (
+                        <div className="text-[10px] text-primary/80 mt-0.5">
+                          {r.type === "receita" ? "Origem" : "Destino"}: {r.peerAccount}
+                        </div>
+                      )}
                     </td>
                     <td className="p-2 text-right font-mono text-emerald-600 dark:text-emerald-400">
                       {r.type === "receita" ? formatCurrency(r.amount) : ""}
