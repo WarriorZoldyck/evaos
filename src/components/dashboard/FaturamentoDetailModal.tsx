@@ -571,7 +571,6 @@ export function FaturamentoDetailModal({
                     <tr className="border-b">
                       <th className="text-left py-2 pr-3">Cliente</th>
                       <th className="text-left py-2 pr-3">Descrição</th>
-                      <th className="text-left py-2 pr-3 hidden lg:table-cell">Contato</th>
                       <th className="text-left py-2 pr-3 hidden md:table-cell">Competência</th>
                       <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
                       <th className="text-left py-2 pr-3 hidden lg:table-cell">Categoria</th>
@@ -610,9 +609,6 @@ export function FaturamentoDetailModal({
                                 </Badge>
                               )}
                             </div>
-                          </td>
-                          <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[140px]">
-                            {t.contact_name || "—"}
                           </td>
                           <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell">
                             {formatDate(t.competence_date)}
