@@ -431,11 +431,13 @@ export function FaturamentoDetailModal({
                 <table className="w-full text-sm">
                   <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-background">
                     <tr className="border-b">
-                      <th className="text-left py-2 pr-3">Competência</th>
-                      <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
+                      <th className="text-left py-2 pr-3">Cliente</th>
                       <th className="text-left py-2 pr-3">Descrição</th>
-                      <th className="text-left py-2 pr-3 hidden md:table-cell">Contato</th>
-                      <th className="text-left py-2 pr-3 hidden md:table-cell">Categoria</th>
+                      <th className="text-left py-2 pr-3 hidden lg:table-cell">Contato</th>
+                      <th className="text-left py-2 pr-3 hidden md:table-cell">Competência</th>
+                      <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
+                      <th className="text-left py-2 pr-3 hidden lg:table-cell">Categoria</th>
+                      <th className="text-left py-2 pr-3 hidden md:table-cell">Forma</th>
                       {hasAnyMdr && <th className="text-right py-2 pr-3">Bruto</th>}
                       {hasAnyMdr && <th className="text-right py-2 pr-3">MDR</th>}
                       <th className="text-right py-2">{hasAnyMdr ? "Líquido" : "Valor"}</th>
@@ -444,21 +446,21 @@ export function FaturamentoDetailModal({
                   <tbody>
                     {paginated.map((l) => {
                       const t = l.tx;
+                      const clienteLabel = t.contact_name?.trim() || t.description?.trim() || "Sem cliente";
                       return (
                         <tr
                           key={t.id}
                           className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
                           onClick={() => setSelectedSale(l)}
                         >
-                          <td className="py-2 pr-3 font-mono text-xs">
-                            {formatDate(t.competence_date)}
-                          </td>
-                          <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
-                            {formatDate(t.payment_date)}
+                          <td className="py-2 pr-3 font-medium truncate max-w-[180px]">
+                            {clienteLabel}
                           </td>
                           <td className="py-2 pr-3">
                             <div className="flex items-center gap-2">
-                              <span className="truncate max-w-[240px]">{t.description}</span>
+                              <span className="truncate max-w-[220px] text-muted-foreground">
+                                {t.description}
+                              </span>
                               {(t.status === "Pendente" || t.status === "Parcial") && (
                                 <Badge variant="outline" className="text-[9px]">
                                   {t.status}
@@ -466,11 +468,22 @@ export function FaturamentoDetailModal({
                               )}
                             </div>
                           </td>
-                          <td className="py-2 pr-3 hidden md:table-cell text-muted-foreground truncate max-w-[160px]">
+                          <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[140px]">
                             {t.contact_name || "—"}
                           </td>
-                          <td className="py-2 pr-3 hidden md:table-cell text-muted-foreground truncate max-w-[160px]">
+                          <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell">
+                            {formatDate(t.competence_date)}
+                          </td>
+                          <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
+                            {formatDate(t.payment_date)}
+                          </td>
+                          <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[140px]">
                             {resolveCategory(t.category)}
+                          </td>
+                          <td className="py-2 pr-3 hidden md:table-cell text-xs">
+                            <Badge variant="outline" className="text-[10px] font-normal">
+                              {KIND_LABEL[l.kind]}
+                            </Badge>
                           </td>
                           {hasAnyMdr && (
                             <td className="py-2 pr-3 text-right font-mono text-xs">
