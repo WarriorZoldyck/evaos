@@ -116,12 +116,13 @@ export function useDREData(filters: DREFilters) {
       setLoading(true);
       let q = supabase
         .from("transactions")
-        .select("id, amount, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id, transfer_id")
+        .select("id, amount, original_amount, payment_method, card_terminal_id, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id, transfer_id")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false")
         .not("category", "ilike", "transfer%")
         .not("category", "ilike", "transferência%");
+
 
       q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       if (accountId) {
