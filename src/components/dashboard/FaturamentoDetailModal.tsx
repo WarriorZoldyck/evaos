@@ -420,8 +420,54 @@ export function FaturamentoDetailModal({
           <DialogDescription>
             Vendas/receitas com competência entre{" "}
             <span className="font-medium text-foreground">{formatDate(dateFrom)}</span> e{" "}
-            <span className="font-medium text-foreground">{formatDate(dateTo)}</span>.
+            <span className="font-medium text-foreground">{formatDate(dateTo)}</span>.{" "}
+            <span className="text-muted-foreground">
+              {competenceTransactions.filter((t) => t.type === "receita").length} receita(s) carregada(s) do banco no período · {lines.length} venda(s) após agrupar parcelas.
+            </span>
           </DialogDescription>
+          {(paymentFilter !== "all" || statusFilter !== "all" || showDupOnly) && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] uppercase text-muted-foreground tracking-wide">Filtros do modal:</span>
+              {paymentFilter !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  Forma: {KIND_LABEL[paymentFilter as PaymentKind]}
+                  <button
+                    className="ml-1 hover:text-destructive"
+                    onClick={() => { setPaymentFilter("all"); setPage(1); }}
+                    aria-label="Limpar filtro de forma"
+                  >×</button>
+                </Badge>
+              )}
+              {statusFilter !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  Status: {statusFilter}
+                  <button
+                    className="ml-1 hover:text-destructive"
+                    onClick={() => { setStatusFilter("all"); setPage(1); }}
+                    aria-label="Limpar filtro de status"
+                  >×</button>
+                </Badge>
+              )}
+              {showDupOnly && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  Só duplicatas
+                  <button
+                    className="ml-1 hover:text-destructive"
+                    onClick={() => { setShowDupOnly(false); setPage(1); }}
+                    aria-label="Limpar filtro de duplicatas"
+                  >×</button>
+                </Badge>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => { setPaymentFilter("all"); setStatusFilter("all"); setShowDupOnly(false); setPage(1); }}
+              >
+                Limpar todos
+              </Button>
+            </div>
+          )}
         </DialogHeader>
 
         {/* Resumo */}
