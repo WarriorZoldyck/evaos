@@ -32,6 +32,7 @@ import HubContas from "@/pages/hub/HubContas";
 import HubWorkspaces from "@/pages/hub/HubWorkspaces";
 import HubMembros from "@/pages/hub/HubMembros";
 import HubAuditoria from "@/pages/hub/HubAuditoria";
+import HubIntegridade from "@/pages/hub/HubIntegridade";
 import HubMeuWhatsApp from "@/pages/hub/HubMeuWhatsApp";
 import Planos from "@/pages/Planos";
 import MinhaAssinatura from "@/pages/MinhaAssinatura";
