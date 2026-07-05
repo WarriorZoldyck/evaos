@@ -26,6 +26,9 @@ type Tx = {
   payment_date: string | null;
   category: string;
   contact_name: string | null;
+  series_id?: string | null;
+  installment_number?: number | null;
+  installments_total?: number | null;
 };
 
 interface FaturamentoDetailModalProps {

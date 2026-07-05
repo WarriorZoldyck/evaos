@@ -1,59 +1,46 @@
+## Problema
 
-## Objetivo
+No modal "Faturamento por competência", cada parcela de boleto aparece como um lançamento separado, e o cálculo de MDR fica absurdo (ex.: Julia Rinaldi 9/9 → Bruto R$ 5.500,00, MDR -R$ 4.937,50, Líquido R$ 562,50).
 
-Aprimorar o modal aberto ao clicar em **Faturamento** no Dashboard para (1) mostrar corretamente Bruto vs MDR vs Líquido, (2) exibir "quem/quando" com clareza, e (3) trocar IDs por **nomes de categoria**. Sem tocar em cálculos financeiros do dashboard nem em outras telas.
+Causa raiz: quando uma venda é parcelada, o campo `original_amount` é gravado em **cada** parcela com o **valor total da venda** (R$ 5.500), enquanto `amount` é o valor da parcela (R$ 562,50). Hoje o modal calcula `fee = original_amount − amount` linha a linha, o que infla o MDR e conta a mesma venda N vezes.
 
-## Mudanças
+Cartão aparece correto porque as parcelas de cartão/terminal já são gravadas com `original_amount` proporcional à parcela (MDR é aplicado por parcela).
 
-### 1. `src/hooks/useDashboardData.ts`
-- Expor `categoryRecords` no retorno do hook para permitir o resolver de nome no modal.
+## Solução (apenas no modal, sem tocar em dados nem em outras telas)
 
-### 2. `src/pages/Dashboard.tsx`
-- Consumir `categoryRecords` e construir um `Map<id, name>`.
-- Passar `categoryNameResolver={(id) => map.get(id) ?? "Sem categoria"}` para `<FaturamentoDetailModal />`.
+Agrupar as parcelas da mesma venda (`series_id` igual) em **uma única linha** representando a venda inteira.
 
-### 3. `src/components/dashboard/FaturamentoDetailModal.tsx`
+### Regra de agregação por `series_id`
 
-**Tipo `Tx`:** adicionar `original_amount: number | null`, `payment_method: string | null`, `card_terminal_id: string | null` (já disponíveis? incluir só os presentes; usaremos apenas `original_amount`, opcional).
+Para cada grupo de parcelas com o mesmo `series_id` (quando `series_id` não é nulo):
 
-**Regra Bruto vs Líquido (por linha):**
-- `gross = Number(t.original_amount ?? t.amount)`
-- `net = Number(t.amount)`
-- `fee = round2(gross - net)` (só quando `original_amount` existe e é > 0)
+- **Bruto da venda** = `max(original_amount)` do grupo (todas as parcelas têm o mesmo `original_amount` = total da venda). Se `original_amount` vier nulo/zero, cai em `Σ amount`.
+- **Líquido da venda** = `Σ amount` de todas as parcelas do grupo.
+- **MDR da venda** = `Bruto − Líquido` (nunca negativo; se der ≤ 0, mostra "—").
+- **Descrição** = descrição da primeira parcela, com sufixo `(Nx)` onde N = `installments_total` (ou tamanho do grupo).
+- **Competência / Pagamento** = data da **primeira** parcela (menor `installment_number`).
+- **Status** = "Pago" se todas as parcelas pagas; senão "Parcial" (badge) ou "Pendente" se nenhuma paga.
+- **Categoria / Contato** = da primeira parcela.
+- Contagem `count` do grupo = 1 venda (não N parcelas).
 
-**Totais no cabeçalho (4 cards):**
-- **Bruto** (soma de `gross`)
-- **MDR** (soma de `fee`) — com % efetivo (`fee/gross*100`, 2 casas)
-- **Líquido** (soma de `net`) — este é o `total` já vindo por prop
-- **Lançamentos** (contagem)
-- Adicionar segunda linha compacta: **Ticket médio (bruto)** e **vs período anterior** (mantém compará­vel — usar `prevTotal` como está).
-- Todos os valores formatados via `Intl.NumberFormat pt-BR` (2 casas). Arredondar cada linha antes de somar (`Math.round(x*100)/100`) para não acumular erro de ponto flutuante.
+Lançamentos **sem** `series_id` (venda à vista/boleto único) continuam como linha única, com a mesma fórmula atual (`gross = original_amount ?? amount`, `fee = gross − net`).
 
-**Aba "Lista" (colunas):**
-- Competência | Pagamento | Descrição | Contato (quem) | Categoria (nome resolvido) | Bruto | MDR | Líquido
-- `Pagamento`: `t.payment_date` (ou "—" se ausente).
-- `Contato`: `t.contact_name || "—"`.
-- `Categoria`: usar `categoryNameResolver(t.category)` sempre (não exibir UUID cru). Fallback "Sem categoria".
-- Colunas `MDR` e `Bruto` só aparecem se pelo menos uma linha tiver `original_amount`; caso contrário mostrar somente `Valor` (líquido) — evita ruído em contextos sem maquininha.
+### Impacto nas visões
 
-**Aba "Por categoria":**
-- Agrupar por **nome** já resolvido (elimina IDs). Somar por `gross` (padrão do "Faturamento") e mostrar também coluna `Líquido` e `MDR` quando aplicável.
+- **Aba Lista**: mostra 1 linha por venda (não por parcela). Ticket médio passa a refletir vendas, não parcelas.
+- **Totais (Bruto / MDR / Líquido / % efetivo)**: recalculados a partir das vendas agregadas — corrige o MDR inflado.
+- **Por mês / Por categoria / Por cliente**: agregam sobre as vendas já consolidadas (competência da 1ª parcela define o mês da venda).
+- **Contagem "lançamentos"** vira "vendas".
+- Botão "Ver todos os lançamentos do período" continua indo para `/lancamentos` com os filtros atuais (lá o usuário vê parcela a parcela, comportamento esperado).
 
-**Aba "Por contato" (renomear para "Por cliente/contato"):**
-- Agrupar por `contact_name` (fallback "Sem contato"), mesma lógica de Bruto/MDR/Líquido.
+## Arquivo alterado
 
-**Aba "Por mês":**
-- Mesma lógica de colunas Bruto/MDR/Líquido.
+`src/components/dashboard/FaturamentoDetailModal.tsx`
 
-**`GroupTable`:** aceitar linhas com `{ label, gross, fee, net, count }` e renderizar colunas condicionais (MDR/Líquido só se algum `fee > 0`). Percentual `% do total` calculado sobre **Bruto**.
+1. Estender o tipo `Tx` local com `series_id`, `installment_number`, `installments_total` (já presentes em `competenceTransactions`, só precisa expor).
+2. Antes de calcular `lines`, criar `sales`: agrupar `receitas` por `series_id` (ou `id` quando `series_id` nulo) aplicando as regras acima.
+3. Substituir o uso de `lines` (mapeado 1:1 das receitas) por `sales` em: totais, paginação da Lista, `groupBy`, `byMonth`, `byCategory`, `byContact`.
+4. Ajustar renderização da coluna "Descrição" para mostrar o sufixo `(Nx)` quando for venda parcelada, e um badge "Parcial" quando o status agregado for misto.
+5. Manter o helper `r2` em todas as somas para preservar precisão de 2 casas.
 
-**Precisão decimal:** manter todos os valores em número JS mas usar helper local:
-```ts
-const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-```
-Aplicar em cada `fee`, agregações por grupo, e nas somas do cabeçalho.
-
-## Escopo / não-escopo
-- **Não** altera `useDashboardData` além de expor `categoryRecords`.
-- **Não** altera hooks de MDR nem outras páginas.
-- **Não** mexe em criação/edição de lançamentos.
+Nenhuma alteração em hooks, banco, edição, criação, ou em outras telas. Apenas apresentação do modal.
