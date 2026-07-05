@@ -45,6 +45,7 @@ export default function Dashboard() {
     saldoAtual,
     upcomingTransactions,
     categoryBreakdown,
+    categoryRecords,
     getProjectionData,
     performance,
     creditCards,
@@ -52,6 +53,15 @@ export default function Dashboard() {
     loading,
     refetch,
   } = useDashboardData(filters);
+
+  const categoryNameResolver = useMemo(() => {
+    const map = new Map(categoryRecords.map((c) => [c.id, c.name]));
+    return (id: string) => {
+      if (!id) return "Sem categoria";
+      return map.get(id) ?? (id.length === 36 ? "Sem categoria" : id);
+    };
+  }, [categoryRecords]);
+
 
 
   const handleLiquidated = useCallback(() => {
