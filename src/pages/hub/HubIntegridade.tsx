@@ -139,9 +139,40 @@ export default function HubIntegridade() {
         expected_company: t.bank_accounts?.companies?.name || "—",
       }));
 
+      // Anomaly 4: contas bancárias sem company_id (raiz do problema)
+      const { data: orphanAccData, error: e3 } = await supabase
+        .from("bank_accounts")
+        .select("id, name, type")
+        .eq("user_id", user.id)
+        .is("company_id", null);
+      if (e3) throw e3;
+
+      const orphanAccList: OrphanAccountRow[] = [];
+      for (const acc of orphanAccData || []) {
+        const { count } = await supabase
+          .from("transactions")
+          .select("id", { count: "exact", head: true })
+          .eq("bank_account_id", acc.id);
+        orphanAccList.push({
+          id: acc.id,
+          name: acc.name,
+          type: acc.type,
+          transactions_count: count ?? 0,
+        });
+      }
+
+      // Companies for the select
+      const { data: companyData } = await supabase
+        .from("companies")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .order("name");
+
       setOrphans(orphanList);
       setDivergent(divergentList);
       setMissingCtx(missingList);
+      setOrphanAccounts(orphanAccList);
+      setCompanyOptions(companyData || []);
     } catch (err: any) {
       toast.error("Erro ao verificar integridade: " + (err?.message || String(err)));
     } finally {
