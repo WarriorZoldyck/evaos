@@ -32,6 +32,7 @@ import HubContas from "@/pages/hub/HubContas";
 import HubWorkspaces from "@/pages/hub/HubWorkspaces";
 import HubMembros from "@/pages/hub/HubMembros";
 import HubAuditoria from "@/pages/hub/HubAuditoria";
+import HubIntegridade from "@/pages/hub/HubIntegridade";
 import HubMeuWhatsApp from "@/pages/hub/HubMeuWhatsApp";
 import Planos from "@/pages/Planos";
 import MinhaAssinatura from "@/pages/MinhaAssinatura";
@@ -92,6 +93,7 @@ const App = () => {
                 <Route path="/eva-hub/workspaces" element={<HubWorkspaces />} />
                 <Route path="/eva-hub/membros" element={<HubMembros />} />
                 <Route path="/eva-hub/auditoria" element={<HubAuditoria />} />
+                <Route path="/eva-hub/integridade" element={<HubIntegridade />} />
                 <Route path="/eva-hub/meu-whatsapp" element={<HubMeuWhatsApp />} />
               </Route>
               <Route path="*" element={<NotFound />} />
