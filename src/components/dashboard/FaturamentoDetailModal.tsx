@@ -658,7 +658,16 @@ export function FaturamentoDetailModal({
                             </div>
                           </td>
                           <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell">
-                            {formatDate(t.competence_date)}
+                            {l.isSeries ? (
+                              <span
+                                className="underline decoration-dotted decoration-muted-foreground/50 cursor-help"
+                                title={`Competência fixa da 1ª parcela (venda em ${formatDate(t.competence_date)}). Cada uma das ${l.parcels} parcelas é paga em data diferente, mas contabilizadas na competência da venda original.`}
+                              >
+                                {formatDate(t.competence_date)}
+                              </span>
+                            ) : (
+                              formatDate(t.competence_date)
+                            )}
                           </td>
                           <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
                             {formatDate(t.payment_date)}
