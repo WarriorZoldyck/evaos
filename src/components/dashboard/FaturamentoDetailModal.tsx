@@ -387,8 +387,8 @@ export function FaturamentoDetailModal({
   );
 
   const paginated = useMemo(
-    () => filteredLines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filteredLines, page],
+    () => (showAll ? filteredLines : filteredLines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)),
+    [filteredLines, page, showAll],
   );
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
