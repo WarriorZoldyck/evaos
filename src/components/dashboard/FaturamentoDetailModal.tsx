@@ -446,7 +446,7 @@ export function FaturamentoDetailModal({
                           </td>
                           {hasAnyMdr && (
                             <td className="py-2 pr-3 text-right font-mono text-xs">
-                              {l.hasGross ? formatCurrency(l.gross) : "—"}
+                              {formatCurrency(l.gross)}
                             </td>
                           )}
                           {hasAnyMdr && (
