@@ -202,21 +202,49 @@ export function useDREData(filters: DREFilters) {
     const revTree = new Map<string, TreeNode>();
     const expTree = new Map<string, TreeNode>();
     const emptyTotals = (): Record<string, number> => Object.fromEntries(periods.map((p) => [p, 0]));
+    const mdrPerPeriod: Record<string, number> = emptyTotals();
 
     transactions.forEach((t) => {
-      const tree = t.type === "receita" ? revTree : expTree;
-      const amount = Number(t.amount);
       const pKey = dateToPeriodKey(t.competence_date, granularity);
       if (!periods.includes(pKey)) return;
-      const chain = buildChain(t.category, t.subcategory, t.subcategory2);
-      let currentLevel = tree;
-      for (const { id, name } of chain) {
-        let node = currentLevel.get(id);
-        if (!node) { node = { name, totals: emptyTotals(), children: new Map() }; currentLevel.set(id, node); }
-        node.totals[pKey] = (node.totals[pKey] || 0) + amount;
-        currentLevel = node.children;
+
+      if (t.type === "receita") {
+        const gross = itemGross(t as any);
+        const net = Number(t.amount) || 0;
+        const chain = buildChain(t.category, t.subcategory, t.subcategory2);
+        let currentLevel = revTree;
+        for (const { id, name } of chain) {
+          let node = currentLevel.get(id);
+          if (!node) { node = { name, totals: emptyTotals(), children: new Map() }; currentLevel.set(id, node); }
+          node.totals[pKey] = (node.totals[pKey] || 0) + gross;
+          currentLevel = node.children;
+        }
+        // MDR fee delta (bruto - líquido) para vendas em cartão
+        if (isCardPayment(t as any) && gross > net) {
+          mdrPerPeriod[pKey] = (mdrPerPeriod[pKey] || 0) + (gross - net);
+        }
+      } else {
+        const amount = Number(t.amount);
+        const chain = buildChain(t.category, t.subcategory, t.subcategory2);
+        let currentLevel = expTree;
+        for (const { id, name } of chain) {
+          let node = currentLevel.get(id);
+          if (!node) { node = { name, totals: emptyTotals(), children: new Map() }; currentLevel.set(id, node); }
+          node.totals[pKey] = (node.totals[pKey] || 0) + amount;
+          currentLevel = node.children;
+        }
       }
     });
+
+    // Adiciona MDR como despesa sintética no gerencial
+    const mdrTotal = Object.values(mdrPerPeriod).reduce((s, v) => s + v, 0);
+    if (mdrTotal > 0) {
+      expTree.set("__mdr__", {
+        name: "Taxas de Maquininha (MDR)",
+        totals: mdrPerPeriod,
+        children: new Map(),
+      });
+    }
 
     const toRows = (m: Map<string, TreeNode>): DRECategoryRow[] =>
       Array.from(m.entries())
@@ -241,6 +269,7 @@ export function useDREData(filters: DREFilters) {
 
     return { revenueRows: revRows, expenseRows: expRows, monthlyRevenueTotals: mrt, monthlyExpenseTotals: met, monthlyResults: mr };
   }, [transactions, buildChain, periods, granularity]);
+
 
   // ── Contábil output (new accounting structure) ──
   const contabilData = useMemo(() => {
