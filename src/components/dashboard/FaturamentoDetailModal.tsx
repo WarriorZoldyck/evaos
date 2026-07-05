@@ -159,6 +159,8 @@ export function FaturamentoDetailModal({
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "Pago" | "Pendente" | "Parcial">("all");
+  const [showDupOnly, setShowDupOnly] = useState(false);
   const [selectedSale, setSelectedSale] = useState<SaleLine | null>(null);
   const PAGE_SIZE = 50;
 
