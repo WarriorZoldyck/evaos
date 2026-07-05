@@ -571,7 +571,6 @@ export function FaturamentoDetailModal({
                     <tr className="border-b">
                       <th className="text-left py-2 pr-3">Cliente</th>
                       <th className="text-left py-2 pr-3">Descrição</th>
-                      <th className="text-left py-2 pr-3 hidden lg:table-cell">Contato</th>
                       <th className="text-left py-2 pr-3 hidden md:table-cell">Competência</th>
                       <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
                       <th className="text-left py-2 pr-3 hidden lg:table-cell">Categoria</th>
