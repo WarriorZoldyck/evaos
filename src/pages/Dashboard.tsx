@@ -216,7 +216,9 @@ export default function Dashboard() {
         prevTotal={prevFaturamento}
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
       />
+
 
       {/* MDR — taxas de maquininha no mês */}
       <Card
