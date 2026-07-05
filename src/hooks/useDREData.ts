@@ -351,9 +351,16 @@ export function useDREData(filters: DREFilters) {
       }
 
       if (!sectionKey) {
-        if (chain[0]) unmappedCategoryIds.add(chain[0].id);
-        return;
+        // Receita sem mapeamento cai em Receita Operacional Bruta (bate com Faturamento).
+        // Despesa sem mapeamento fica de fora e alimenta o banner de categorias sem CC.
+        if (isReceita) {
+          sectionKey = "receita_operacional";
+        } else {
+          if (chain[0]) unmappedCategoryIds.add(chain[0].id);
+          return;
+        }
       }
+
 
       const tree = sectionTrees[sectionKey];
       let currentLevel = tree;
