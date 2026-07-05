@@ -182,9 +182,15 @@ export function FaturamentoDetailModal({
         const grossCandidates = items
           .map((t) => (t.original_amount != null ? Number(t.original_amount) : 0))
           .filter((n) => n > 0);
+        const maxOA = grossCandidates.length > 0 ? Math.max(...grossCandidates) : 0;
+        const sumOA = grossCandidates.reduce((a, b) => a + b, 0);
+        // Heurística — `original_amount` tem duas semânticas conforme o meio:
+        //  - Boleto/parcelamento manual: cada parcela guarda o TOTAL da venda → usar max
+        //  - Cartão (maquininha): cada parcela guarda o próprio bruto proporcional → somar
+        // Distinção: se max(oa) já cobre a soma dos amounts (net), o total já está numa parcela.
         const rawGross = isSeries
-          ? grossCandidates.length > 0 ? Math.max(...grossCandidates) : 0
-          : grossCandidates[0] ?? 0;
+          ? (maxOA >= net - 0.01 ? maxOA : sumOA)
+          : (grossCandidates[0] ?? 0);
         // MDR só existe em cartão (crédito/débito). Para boleto/pix/etc. ignora original_amount.
         const hasGross = isCard && rawGross > 0 && rawGross > net + 0.01;
         const gross = hasGross ? r2(rawGross) : net;
