@@ -17,6 +17,7 @@ export interface TransactionFilters {
   categoryId: string;
   dateFrom: string;
   dateTo: string;
+  dateField?: "payment_date" | "competence_date";
   sortOrder: "desc" | "asc";
   accountId: string;
   supplierId: string;
