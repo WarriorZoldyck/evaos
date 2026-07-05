@@ -333,6 +333,75 @@ export default function HubIntegridade() {
         </Alert>
       )}
 
+      {/* Anomaly 0 — Contas bancárias sem contexto (RAIZ) */}
+      <Card className="border-primary/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wallet className="h-4 w-4 text-primary" />
+            Contas bancárias sem contexto
+            <Badge variant={orphanAccounts.length ? "destructive" : "secondary"} className="ml-2">
+              {orphanAccounts.length}
+            </Badge>
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Estas contas não têm empresa vinculada, então <b>todos os lançamentos delas ficam "sem contexto"</b> e só aparecem em "Ver tudo". Escolha o contexto correto para cada uma — vamos propagar automaticamente para os lançamentos existentes que estão sem contexto.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : orphanAccounts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Todas as contas têm contexto vinculado. ✓</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Conta</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Lançamentos</TableHead>
+                  <TableHead>Vincular a</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orphanAccounts.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="text-sm font-medium">{a.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{a.type || "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{a.transactions_count}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={pendingAccountCompany[a.id] || ""}
+                        onValueChange={(v) => setPendingAccountCompany((prev) => ({ ...prev, [a.id]: v }))}
+                      >
+                        <SelectTrigger className="h-8 w-48 text-xs">
+                          <SelectValue placeholder="Escolha um contexto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__personal__">Pessoal (sem empresa)</SelectItem>
+                          {companyOptions.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        onClick={() => assignAccountContext(a.id)}
+                        disabled={fixingAccount === a.id || !pendingAccountCompany[a.id]}
+                      >
+                        {fixingAccount === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Vincular e propagar"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Anomaly 1 — Transferências órfãs */}
       <Card>
         <CardHeader>
