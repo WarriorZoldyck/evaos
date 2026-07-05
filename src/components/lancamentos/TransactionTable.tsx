@@ -156,12 +156,13 @@ interface TransactionRowProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   selectionMode?: boolean;
+  transferPeerAccount?: Map<string, { name: string; direction: "to" | "from" }>;
 }
 
 function TransactionRow({
   t, categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients,
   onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, indented,
-  isSelected, onToggleSelect, selectionMode,
+  isSelected, onToggleSelect, selectionMode, transferPeerAccount,
 }: TransactionRowProps) {
   const { getCategoryHierarchy } = useCategoryHelpers(categories, allCategories);
   const installment = getInstallmentLabel(t);
@@ -169,6 +170,7 @@ function TransactionRow({
   const accountName = getAccountName(t, bankAccounts, wallets, creditCards);
   const accountIcon = getAccountIcon(t);
   const contactName = getContactName(t, suppliers, clients);
+  const peer = t.transfer_id ? transferPeerAccount?.get(t.id) : undefined;
 
   return (
     <div
@@ -227,6 +229,11 @@ function TransactionRow({
             <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/70 shrink-0">
               {accountIcon}
               {accountName}
+            </span>
+          )}
+          {peer && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-primary/80 shrink-0">
+              {peer.direction === "to" ? "→" : "←"} {peer.name}
             </span>
           )}
         </div>
@@ -638,7 +645,30 @@ export function TransactionTable({
     );
   }
 
-  const rowProps = { categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, selectionMode, onToggleSelect: toggleSelect };
+  // Map transfer_id -> peer account name so each leg can show "→ Conta destino/origem"
+  const transferPeerAccount = useMemo(() => {
+    const byTransfer = new Map<string, Transaction[]>();
+    transactions.forEach((t) => {
+      if (!t.transfer_id) return;
+      const arr = byTransfer.get(t.transfer_id) ?? [];
+      arr.push(t);
+      byTransfer.set(t.transfer_id, arr);
+    });
+    const map = new Map<string, { name: string; direction: "to" | "from" }>();
+    byTransfer.forEach((legs) => {
+      if (legs.length !== 2) return;
+      legs.forEach((leg) => {
+        const peer = legs.find((x) => x.id !== leg.id);
+        if (!peer) return;
+        const name = getAccountName(peer, bankAccounts, wallets, creditCards);
+        if (!name) return;
+        map.set(leg.id, { name, direction: leg.type === "despesa" ? "to" : "from" });
+      });
+    });
+    return map;
+  }, [transactions, bankAccounts, wallets, creditCards]);
+
+  const rowProps = { categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, selectionMode, onToggleSelect: toggleSelect, transferPeerAccount };
 
   // Client-side pagination over grouped renderItems so a fatura never gets
   // split across pages. Each fatura group counts as a single item.
