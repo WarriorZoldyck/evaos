@@ -267,6 +267,12 @@ export function TransactionDetailModal({
 
           {/* Payment method + account */}
           {t.payment_method && <InfoRow label="Forma de Pagamento" value={t.payment_method} />}
+          {t.payment_method === "Cartão de Crédito" && t.installments_total && (
+            <InfoRow
+              label="Parcelamento"
+              value={t.installments_total >= 2 ? `em ${t.installments_total} vezes` : "à vista"}
+            />
+          )}
           {accountName && <InfoRow label="Conta" value={accountName} />}
 
           {/* Installment info */}
