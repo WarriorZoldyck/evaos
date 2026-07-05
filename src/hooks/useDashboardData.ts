@@ -463,12 +463,14 @@ export function useDashboardData(filters: DashboardFilters) {
     const mdrLiquido = mdrTransactions.reduce((acc, t) => acc + Number(t.amount), 0);
     const mdrTaxas = mdrBruto - mdrLiquido;
     const mdrPercent = mdrBruto > 0 ? (mdrTaxas / mdrBruto) * 100 : 0;
+    const mdrCount = mdrTransactions.length;
 
     return {
       faturamento, receitaOperacional, faturamentoNaoMapeado, unmappedRevenueCount,
       entradas, saidas, saldo, entradaPrevista, saidaPrevista,
-      mdrBruto, mdrLiquido, mdrTaxas, mdrPercent,
+      mdrBruto, mdrLiquido, mdrTaxas, mdrPercent, mdrCount,
     };
+
   }, [transactions, competenceTransactions, categoryRecords]);
 
   // Upcoming (Pendente) transactions

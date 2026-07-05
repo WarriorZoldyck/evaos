@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { applyCompanyFilter } from "@/lib/companyFilter";
+import { itemGross, isCardPayment } from "@/lib/paymentKind";
+
 
 export type DREGranularity = "monthly" | "quarterly" | "semiannual";
 
@@ -114,12 +116,13 @@ export function useDREData(filters: DREFilters) {
       setLoading(true);
       let q = supabase
         .from("transactions")
-        .select("id, amount, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id, transfer_id")
+        .select("id, amount, original_amount, payment_method, card_terminal_id, type, category, subcategory, subcategory2, competence_date, bank_account_id, credit_card_id, transfer_id")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false")
         .not("category", "ilike", "transfer%")
         .not("category", "ilike", "transferência%");
+
 
       q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       if (accountId) {
@@ -199,21 +202,49 @@ export function useDREData(filters: DREFilters) {
     const revTree = new Map<string, TreeNode>();
     const expTree = new Map<string, TreeNode>();
     const emptyTotals = (): Record<string, number> => Object.fromEntries(periods.map((p) => [p, 0]));
+    const mdrPerPeriod: Record<string, number> = emptyTotals();
 
     transactions.forEach((t) => {
-      const tree = t.type === "receita" ? revTree : expTree;
-      const amount = Number(t.amount);
       const pKey = dateToPeriodKey(t.competence_date, granularity);
       if (!periods.includes(pKey)) return;
-      const chain = buildChain(t.category, t.subcategory, t.subcategory2);
-      let currentLevel = tree;
-      for (const { id, name } of chain) {
-        let node = currentLevel.get(id);
-        if (!node) { node = { name, totals: emptyTotals(), children: new Map() }; currentLevel.set(id, node); }
-        node.totals[pKey] = (node.totals[pKey] || 0) + amount;
-        currentLevel = node.children;
+
+      if (t.type === "receita") {
+        const gross = itemGross(t as any);
+        const net = Number(t.amount) || 0;
+        const chain = buildChain(t.category, t.subcategory, t.subcategory2);
+        let currentLevel = revTree;
+        for (const { id, name } of chain) {
+          let node = currentLevel.get(id);
+          if (!node) { node = { name, totals: emptyTotals(), children: new Map() }; currentLevel.set(id, node); }
+          node.totals[pKey] = (node.totals[pKey] || 0) + gross;
+          currentLevel = node.children;
+        }
+        // MDR fee delta (bruto - líquido) para vendas em cartão
+        if (isCardPayment(t as any) && gross > net) {
+          mdrPerPeriod[pKey] = (mdrPerPeriod[pKey] || 0) + (gross - net);
+        }
+      } else {
+        const amount = Number(t.amount);
+        const chain = buildChain(t.category, t.subcategory, t.subcategory2);
+        let currentLevel = expTree;
+        for (const { id, name } of chain) {
+          let node = currentLevel.get(id);
+          if (!node) { node = { name, totals: emptyTotals(), children: new Map() }; currentLevel.set(id, node); }
+          node.totals[pKey] = (node.totals[pKey] || 0) + amount;
+          currentLevel = node.children;
+        }
       }
     });
+
+    // Adiciona MDR como despesa sintética no gerencial
+    const mdrTotal = Object.values(mdrPerPeriod).reduce((s, v) => s + v, 0);
+    if (mdrTotal > 0) {
+      expTree.set("__mdr__", {
+        name: "Taxas de Maquininha (MDR)",
+        totals: mdrPerPeriod,
+        children: new Map(),
+      });
+    }
 
     const toRows = (m: Map<string, TreeNode>): DRECategoryRow[] =>
       Array.from(m.entries())
@@ -238,6 +269,7 @@ export function useDREData(filters: DREFilters) {
 
     return { revenueRows: revRows, expenseRows: expRows, monthlyRevenueTotals: mrt, monthlyExpenseTotals: met, monthlyResults: mr };
   }, [transactions, buildChain, periods, granularity]);
+
 
   // ── Contábil output (new accounting structure) ──
   const contabilData = useMemo(() => {
@@ -292,11 +324,22 @@ export function useDREData(filters: DREFilters) {
     };
 
     const unmappedCategoryIds = new Set<string>();
+    const mdrPerPeriod: Record<string, number> = emptyTotals();
 
     transactions.forEach((t) => {
-      const amount = Number(t.amount);
       const pKey = dateToPeriodKey(t.competence_date, granularity);
       if (!periods.includes(pKey)) return;
+
+      // Receitas: usar bruto (itemGross) para bater com Faturamento do Dashboard.
+      // A diferença (MDR) é acumulada e adicionada em Despesas com Vendas.
+      const isReceita = t.type === "receita";
+      const gross = isReceita ? itemGross(t as any) : 0;
+      const net = Number(t.amount) || 0;
+      const amount = isReceita ? gross : net;
+
+      if (isReceita && isCardPayment(t as any) && gross > net) {
+        mdrPerPeriod[pKey] = (mdrPerPeriod[pKey] || 0) + (gross - net);
+      }
 
       const chain = buildChain(t.category, t.subcategory, t.subcategory2);
 
@@ -321,6 +364,17 @@ export function useDREData(filters: DREFilters) {
         currentLevel = node.children;
       }
     });
+
+    // Adiciona MDR como linha sintética em Despesas com Vendas
+    const mdrTotal = Object.values(mdrPerPeriod).reduce((s, v) => s + v, 0);
+    if (mdrTotal > 0) {
+      sectionTrees.despesas_vendas.set("__mdr__", {
+        name: "Taxas de Maquininha (MDR)",
+        totals: mdrPerPeriod,
+        children: new Map(),
+      });
+    }
+
 
     const toRows = (m: Map<string, TreeNode>): DRECategoryRow[] =>
       Array.from(m.entries())
