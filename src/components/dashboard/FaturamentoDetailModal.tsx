@@ -408,7 +408,7 @@ export function FaturamentoDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="w-[95vw] max-w-[1400px] max-h-[92vh] p-3 sm:p-4 md:p-6 overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display">
             <div className="h-9 w-9 rounded-xl bg-gradient-primary text-white flex items-center justify-center shadow-lg">
@@ -560,7 +560,7 @@ export function FaturamentoDetailModal({
           </TabsList>
 
           <TabsContent value="lista" className="flex-1 overflow-hidden mt-3">
-            <ScrollArea className="h-[45vh] pr-2">
+            <div className="overflow-auto h-[45vh] pr-2">
               {paginated.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-12">
                   Nenhuma receita encontrada para esse período.
@@ -643,7 +643,7 @@ export function FaturamentoDetailModal({
                   </tbody>
                 </table>
               )}
-            </ScrollArea>
+            </div>
             {totalPages > 1 && (
               <div className="flex items-center justify-between pt-3 text-xs">
                 <span className="text-muted-foreground">
