@@ -471,27 +471,83 @@ export function FaturamentoDetailModal({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] uppercase text-muted-foreground tracking-wide">
-            Forma de pagamento:
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {(["all", "credito", "debito", "boleto", "pix", "dinheiro", "transferencia", "outros"] as const)
-              .filter((k) => k === "all" || availableKinds.has(k as PaymentKind))
-              .map((k) => (
+        {/* Painel de auditoria */}
+        <div className="rounded-lg border bg-muted/30 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span><span className="text-muted-foreground">Vendas:</span> <b>{count}</b></span>
+          <span><span className="text-muted-foreground">Parcelas:</span> <b>{audit.parcels}</b></span>
+          <span className="text-success">Pagas: <b>{audit.paid}</b></span>
+          <span className="text-amber-600 dark:text-amber-400">Pendentes: <b>{audit.pending}</b></span>
+          {audit.partial > 0 && <span>Parcial: <b>{audit.partial}</b></span>}
+          <span className="text-muted-foreground">·</span>
+          <span>Σ Bruto <b>{formatCurrency(totals.gross)}</b></span>
+          <span className="text-destructive">− MDR <b>{formatCurrency(totals.fee)}</b></span>
+          <span className="text-success">= Líquido <b>{formatCurrency(totals.net)}</b></span>
+          <Badge variant={audit.ok ? "outline" : "destructive"} className="text-[10px]">
+            {audit.ok ? "✓ Confere" : `Δ ${formatCurrency(audit.diff)}`}
+          </Badge>
+          {dupIds.size > 0 && (
+            <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600 dark:text-amber-400">
+              {dupIds.size} possível(is) duplicata(s)
+            </Badge>
+          )}
+          <div className="ml-auto flex gap-1">
+            {dupIds.size > 0 && (
+              <Button
+                size="sm"
+                variant={showDupOnly ? "default" : "outline"}
+                className="h-7 px-2 text-xs"
+                onClick={() => { setShowDupOnly((v) => !v); setPage(1); }}
+              >
+                {showDupOnly ? "Mostrar todos" : "Só duplicatas"}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={exportCsv}>
+              Exportar CSV
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] uppercase text-muted-foreground tracking-wide">
+              Forma:
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {(["all", "credito", "debito", "boleto", "pix", "dinheiro", "transferencia", "outros"] as const)
+                .filter((k) => k === "all" || availableKinds.has(k as PaymentKind))
+                .map((k) => (
+                  <Button
+                    key={k}
+                    size="sm"
+                    variant={paymentFilter === k ? "default" : "outline"}
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      setPaymentFilter(k as PaymentKind | "all");
+                      setPage(1);
+                    }}
+                  >
+                    {k === "all" ? "Todas" : KIND_LABEL[k as PaymentKind]}
+                  </Button>
+                ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] uppercase text-muted-foreground tracking-wide">
+              Status:
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {(["all", "Pago", "Pendente", "Parcial"] as const).map((s) => (
                 <Button
-                  key={k}
+                  key={s}
                   size="sm"
-                  variant={paymentFilter === k ? "default" : "outline"}
+                  variant={statusFilter === s ? "default" : "outline"}
                   className="h-7 px-2 text-xs"
-                  onClick={() => {
-                    setPaymentFilter(k as PaymentKind | "all");
-                    setPage(1);
-                  }}
+                  onClick={() => { setStatusFilter(s); setPage(1); }}
                 >
-                  {k === "all" ? "Todas" : KIND_LABEL[k as PaymentKind]}
+                  {s === "all" ? "Todos" : s}
                 </Button>
               ))}
+            </div>
           </div>
         </div>
 
