@@ -324,11 +324,22 @@ export function useDREData(filters: DREFilters) {
     };
 
     const unmappedCategoryIds = new Set<string>();
+    const mdrPerPeriod: Record<string, number> = emptyTotals();
 
     transactions.forEach((t) => {
-      const amount = Number(t.amount);
       const pKey = dateToPeriodKey(t.competence_date, granularity);
       if (!periods.includes(pKey)) return;
+
+      // Receitas: usar bruto (itemGross) para bater com Faturamento do Dashboard.
+      // A diferença (MDR) é acumulada e adicionada em Despesas com Vendas.
+      const isReceita = t.type === "receita";
+      const gross = isReceita ? itemGross(t as any) : 0;
+      const net = Number(t.amount) || 0;
+      const amount = isReceita ? gross : net;
+
+      if (isReceita && isCardPayment(t as any) && gross > net) {
+        mdrPerPeriod[pKey] = (mdrPerPeriod[pKey] || 0) + (gross - net);
+      }
 
       const chain = buildChain(t.category, t.subcategory, t.subcategory2);
 
@@ -353,6 +364,17 @@ export function useDREData(filters: DREFilters) {
         currentLevel = node.children;
       }
     });
+
+    // Adiciona MDR como linha sintética em Despesas com Vendas
+    const mdrTotal = Object.values(mdrPerPeriod).reduce((s, v) => s + v, 0);
+    if (mdrTotal > 0) {
+      sectionTrees.despesas_vendas.set("__mdr__", {
+        name: "Taxas de Maquininha (MDR)",
+        totals: mdrPerPeriod,
+        children: new Map(),
+      });
+    }
+
 
     const toRows = (m: Map<string, TreeNode>): DRECategoryRow[] =>
       Array.from(m.entries())
