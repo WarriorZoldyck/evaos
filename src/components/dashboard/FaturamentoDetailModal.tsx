@@ -114,6 +114,18 @@ function formatDate(iso: string | null | undefined): string {
 
 type Row = { label: string; gross: number; fee: number; net: number; count: number };
 
+type SaleLine = {
+  tx: Tx;
+  gross: number;
+  net: number;
+  fee: number;
+  hasGross: boolean;
+  isSeries: boolean;
+  parcels: number;
+  kind: PaymentKind;
+  items: Tx[];
+};
+
 export function FaturamentoDetailModal({
   open,
   onOpenChange,
