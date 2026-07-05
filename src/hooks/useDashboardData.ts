@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useRecurringTransactions, type RecurringOccurrence } from "@/hooks/useRecurringTransactions";
-import { itemGross } from "@/lib/paymentKind";
+import { itemGross, isCardPayment } from "@/lib/paymentKind";
 import {
   startOfDay,
   endOfDay,
