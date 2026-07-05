@@ -402,8 +402,9 @@ export function useDashboardData(filters: DashboardFilters) {
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
     // Faturamento Bruto: TODAS as receitas por competência (bate com DRE Gerencial)
+    // Para vendas em cartão, amount é a fatia líquida (após MDR) e original_amount é o bruto.
     const receitasCompetencia = competenceTransactions.filter((t) => t.type === "receita");
-    const faturamento = receitasCompetencia.reduce((acc, t) => acc + Number(t.amount), 0);
+    const faturamento = receitasCompetencia.reduce((acc, t) => acc + itemGross(t as any), 0);
 
     // Receita Operacional: só receitas cuja categoria (ou ancestral) tem dre_section mapeado
     // — bate com "(+) Receita Operacional Bruta" do DRE Contábil.
