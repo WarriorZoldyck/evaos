@@ -231,6 +231,11 @@ function TransactionRow({
               {accountName}
             </span>
           )}
+          {peer && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-primary/80 shrink-0">
+              {peer.direction === "to" ? "→" : "←"} {peer.name}
+            </span>
+          )}
         </div>
         {contactName && (
           <p className="text-xs text-muted-foreground/70 truncate">
