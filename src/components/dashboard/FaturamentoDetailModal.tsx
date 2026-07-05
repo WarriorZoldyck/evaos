@@ -509,9 +509,154 @@ export function FaturamentoDetailModal({
           </Button>
         </div>
       </DialogContent>
+      <SaleDetailDialog
+        sale={selectedSale}
+        onClose={() => setSelectedSale(null)}
+        resolveCategory={resolveCategory}
+        onOpenInLancamentos={(sale) => {
+          const sp = new URLSearchParams();
+          sp.set("type", "receita");
+          if (sale.tx.series_id) {
+            sp.set("series_id", sale.tx.series_id);
+          } else {
+            sp.set("dateFrom", sale.tx.competence_date);
+            sp.set("dateTo", sale.tx.competence_date);
+            sp.set("dateField", "competence_date");
+          }
+          navigate(`/lancamentos?${sp.toString()}`);
+        }}
+      />
     </Dialog>
   );
 }
+
+function SaleDetailDialog({
+  sale,
+  onClose,
+  resolveCategory,
+  onOpenInLancamentos,
+}: {
+  sale: SaleLine | null;
+  onClose: () => void;
+  resolveCategory: (id: string) => string;
+  onOpenInLancamentos: (sale: SaleLine) => void;
+}) {
+  const open = !!sale;
+  if (!sale) {
+    return (
+      <Dialog open={false} onOpenChange={(v) => !v && onClose()}>
+        <DialogContent />
+      </Dialog>
+    );
+  }
+  const { tx, items, gross, net, fee, hasGross, isSeries, parcels, kind } = sale;
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="font-display">{tx.description}</DialogTitle>
+          <DialogDescription>
+            <span className="inline-flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <span>
+                <span className="text-muted-foreground">Contato:</span>{" "}
+                <span className="text-foreground">{tx.contact_name || "—"}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">Categoria:</span>{" "}
+                <span className="text-foreground">{resolveCategory(tx.category)}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">Forma de pagamento:</span>{" "}
+                <span className="text-foreground">{KIND_LABEL[kind]}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">Status:</span>{" "}
+                <Badge variant="outline" className="text-[9px] ml-1">
+                  {tx.status}
+                </Badge>
+              </span>
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className={`grid gap-2 ${hasGross ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2"}`}>
+          {hasGross && (
+            <div className="rounded-lg border p-2">
+              <p className="text-[10px] uppercase text-muted-foreground">Bruto</p>
+              <p className="text-base font-bold font-display">{formatCurrency(gross)}</p>
+            </div>
+          )}
+          {hasGross && (
+            <div className="rounded-lg border p-2">
+              <p className="text-[10px] uppercase text-muted-foreground">MDR</p>
+              <p className="text-base font-bold font-display text-destructive">
+                -{formatCurrency(fee)}
+              </p>
+            </div>
+          )}
+          <div className="rounded-lg border p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Líquido</p>
+            <p className="text-base font-bold font-display text-success">{formatCurrency(net)}</p>
+          </div>
+          <div className="rounded-lg border p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Parcelas</p>
+            <p className="text-base font-bold font-display">{parcels}</p>
+          </div>
+        </div>
+
+        {isSeries && (
+          <ScrollArea className="h-[40vh] pr-2 mt-2">
+            <table className="w-full text-sm">
+              <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-background">
+                <tr className="border-b">
+                  <th className="text-left py-2 pr-3">#</th>
+                  <th className="text-left py-2 pr-3">Competência</th>
+                  <th className="text-left py-2 pr-3">Pagamento</th>
+                  <th className="text-left py-2 pr-3">Status</th>
+                  <th className="text-right py-2">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3 font-mono text-xs">
+                      {it.installment_number ?? "—"}/{parcels}
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-xs">
+                      {formatDate(it.competence_date)}
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">
+                      {formatDate(it.payment_date)}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Badge
+                        variant="outline"
+                        className={`text-[9px] ${it.status === "Pago" ? "text-success" : ""}`}
+                      >
+                        {it.status}
+                      </Badge>
+                    </td>
+                    <td className="py-2 text-right font-mono font-medium">
+                      {formatCurrency(Number(it.amount) || 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollArea>
+        )}
+
+        <div className="flex justify-end pt-2 border-t">
+          <Button variant="outline" size="sm" onClick={() => onOpenInLancamentos(sale)} className="gap-2">
+            Abrir na tela de Lançamentos
+            <ArrowRight className="h-3 w-3" />
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 function GroupTable({
   rows,
