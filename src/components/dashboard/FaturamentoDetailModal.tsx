@@ -19,10 +19,11 @@ type Tx = {
   id: string;
   description: string;
   amount: number;
+  original_amount?: number | null;
   type: "receita" | "despesa";
   status: string;
   competence_date: string;
-  payment_date: string;
+  payment_date: string | null;
   category: string;
   contact_name: string | null;
 };
@@ -38,6 +39,8 @@ interface FaturamentoDetailModalProps {
   categoryNameResolver?: (id: string) => string;
 }
 
+const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -45,13 +48,16 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
   try {
     return format(parseISO(iso), "dd/MM/yyyy", { locale: ptBR });
   } catch {
     return iso;
   }
 }
+
+type Row = { label: string; gross: number; fee: number; net: number; count: number };
 
 export function FaturamentoDetailModal({
   open,
@@ -67,6 +73,9 @@ export function FaturamentoDetailModal({
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
 
+  const resolveCategory = (id: string) =>
+    categoryNameResolver ? categoryNameResolver(id) : id || "Sem categoria";
+
   const receitas = useMemo(
     () =>
       competenceTransactions
@@ -75,55 +84,82 @@ export function FaturamentoDetailModal({
     [competenceTransactions],
   );
 
-  const count = receitas.length;
-  const avg = count > 0 ? total / count : 0;
+  // Compute gross/fee/net per line
+  const lines = useMemo(
+    () =>
+      receitas.map((t) => {
+        const net = r2(Number(t.amount) || 0);
+        const rawGross = t.original_amount != null ? Number(t.original_amount) : null;
+        const hasGross = rawGross != null && rawGross > 0;
+        const gross = hasGross ? r2(rawGross!) : net;
+        const fee = hasGross ? r2(gross - net) : 0;
+        return { tx: t, gross, net, fee, hasGross };
+      }),
+    [receitas],
+  );
+
+  const hasAnyMdr = lines.some((l) => l.hasGross);
+
+  const totals = useMemo(() => {
+    let gross = 0,
+      fee = 0,
+      net = 0;
+    lines.forEach((l) => {
+      gross += l.gross;
+      fee += l.fee;
+      net += l.net;
+    });
+    return { gross: r2(gross), fee: r2(fee), net: r2(net) };
+  }, [lines]);
+
+  const count = lines.length;
+  const avgGross = count > 0 ? totals.gross / count : 0;
+  const mdrPercent = totals.gross > 0 ? (totals.fee / totals.gross) * 100 : 0;
   const delta =
     prevTotal !== undefined && prevTotal > 0
       ? ((total - prevTotal) / Math.abs(prevTotal)) * 100
       : null;
 
-  // Agrupamentos
-  const byMonth = useMemo(() => {
-    const map = new Map<string, number>();
-    receitas.forEach((t) => {
-      const key = t.competence_date.slice(0, 7); // YYYY-MM
-      map.set(key, (map.get(key) || 0) + Number(t.amount));
+  const groupBy = (getKey: (l: (typeof lines)[number]) => string): Row[] => {
+    const map = new Map<string, Row>();
+    lines.forEach((l) => {
+      const key = getKey(l);
+      const cur = map.get(key) ?? { label: key, gross: 0, fee: 0, net: 0, count: 0 };
+      cur.gross += l.gross;
+      cur.fee += l.fee;
+      cur.net += l.net;
+      cur.count += 1;
+      map.set(key, cur);
     });
-    return Array.from(map.entries())
-      .sort((a, b) => b[0].localeCompare(a[0]))
-      .map(([k, v]) => ({
-        label: format(parseISO(`${k}-01`), "MMM/yyyy", { locale: ptBR }),
-        value: v,
-      }));
-  }, [receitas]);
+    return Array.from(map.values())
+      .map((r) => ({ ...r, gross: r2(r.gross), fee: r2(r.fee), net: r2(r.net) }))
+      .sort((a, b) => b.gross - a.gross);
+  };
 
-  const byCategory = useMemo(() => {
-    const map = new Map<string, number>();
-    receitas.forEach((t) => {
-      const name = categoryNameResolver
-        ? categoryNameResolver(t.category)
-        : t.category || "Sem categoria";
-      map.set(name, (map.get(name) || 0) + Number(t.amount));
-    });
-    return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, value]) => ({ label, value }));
-  }, [receitas, categoryNameResolver]);
+  const byMonth = useMemo(
+    () =>
+      groupBy((l) => l.tx.competence_date.slice(0, 7))
+        .map((r) => ({
+          ...r,
+          label: format(parseISO(`${r.label}-01`), "MMM/yyyy", { locale: ptBR }),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [lines],
+  );
 
-  const byContact = useMemo(() => {
-    const map = new Map<string, number>();
-    receitas.forEach((t) => {
-      const name = t.contact_name || "Sem contato";
-      map.set(name, (map.get(name) || 0) + Number(t.amount));
-    });
-    return Array.from(map.entries())
-      .sort((a, b) => b[1] - a[1])
-      .map(([label, value]) => ({ label, value }));
-  }, [receitas]);
+  const byCategory = useMemo(
+    () => groupBy((l) => resolveCategory(l.tx.category)),
+    [lines, categoryNameResolver],
+  );
+
+  const byContact = useMemo(
+    () => groupBy((l) => l.tx.contact_name || "Sem contato"),
+    [lines],
+  );
 
   const paginated = useMemo(
-    () => receitas.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [receitas, page],
+    () => lines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [lines, page],
   );
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
@@ -138,7 +174,7 @@ export function FaturamentoDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display">
             <div className="h-9 w-9 rounded-xl bg-gradient-primary text-white flex items-center justify-center shadow-lg">
@@ -156,21 +192,32 @@ export function FaturamentoDetailModal({
         {/* Resumo */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="rounded-lg border p-3">
-            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Total</p>
-            <p className="text-lg font-bold font-display">{formatCurrency(total)}</p>
-          </div>
-          <div className="rounded-lg border p-3">
-            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Lançamentos</p>
-            <p className="text-lg font-bold font-display">{count}</p>
-          </div>
-          <div className="rounded-lg border p-3">
-            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Ticket médio</p>
-            <p className="text-lg font-bold font-display">{formatCurrency(avg)}</p>
-          </div>
-          <div className="rounded-lg border p-3">
-            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">
-              vs anterior
+            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Bruto</p>
+            <p className="text-lg font-bold font-display">{formatCurrency(totals.gross)}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              Ticket médio {formatCurrency(avgGross)}
             </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">MDR (taxas)</p>
+            <p className="text-lg font-bold font-display text-destructive">
+              -{formatCurrency(totals.fee)}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {mdrPercent.toFixed(2)}% efetivo
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Líquido</p>
+            <p className="text-lg font-bold font-display text-success">
+              {formatCurrency(totals.net)}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {count} {count === 1 ? "lançamento" : "lançamentos"}
+            </p>
+          </div>
+          <div className="rounded-lg border p-3">
+            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">vs anterior</p>
             <p
               className={`text-lg font-bold font-display ${
                 delta === null
@@ -182,6 +229,11 @@ export function FaturamentoDetailModal({
             >
               {delta === null ? "—" : `${delta >= 0 ? "↗" : "↘"} ${Math.abs(delta).toFixed(1)}%`}
             </p>
+            {prevTotal !== undefined && prevTotal > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Ant. {formatCurrency(prevTotal)}
+              </p>
+            )}
           </div>
         </div>
 
@@ -190,7 +242,7 @@ export function FaturamentoDetailModal({
             <TabsTrigger value="lista">Lista</TabsTrigger>
             <TabsTrigger value="mes">Por mês</TabsTrigger>
             <TabsTrigger value="categoria">Por categoria</TabsTrigger>
-            <TabsTrigger value="contato">Por contato</TabsTrigger>
+            <TabsTrigger value="contato">Por cliente/contato</TabsTrigger>
           </TabsList>
 
           <TabsContent value="lista" className="flex-1 overflow-hidden mt-3">
@@ -204,35 +256,58 @@ export function FaturamentoDetailModal({
                   <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-background">
                     <tr className="border-b">
                       <th className="text-left py-2 pr-3">Competência</th>
+                      <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
                       <th className="text-left py-2 pr-3">Descrição</th>
                       <th className="text-left py-2 pr-3 hidden md:table-cell">Contato</th>
                       <th className="text-left py-2 pr-3 hidden md:table-cell">Categoria</th>
-                      <th className="text-right py-2">Valor</th>
+                      {hasAnyMdr && <th className="text-right py-2 pr-3">Bruto</th>}
+                      {hasAnyMdr && <th className="text-right py-2 pr-3">MDR</th>}
+                      <th className="text-right py-2">{hasAnyMdr ? "Líquido" : "Valor"}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paginated.map((t) => (
-                      <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
-                        <td className="py-2 pr-3 font-mono text-xs">{formatDate(t.competence_date)}</td>
-                        <td className="py-2 pr-3">
-                          <div className="flex items-center gap-2">
-                            <span className="truncate max-w-[260px]">{t.description}</span>
-                            {t.status === "Pendente" && (
-                              <Badge variant="outline" className="text-[9px]">Pendente</Badge>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2 pr-3 hidden md:table-cell text-muted-foreground truncate max-w-[160px]">
-                          {t.contact_name || "—"}
-                        </td>
-                        <td className="py-2 pr-3 hidden md:table-cell text-muted-foreground truncate max-w-[160px]">
-                          {categoryNameResolver ? categoryNameResolver(t.category) : t.category}
-                        </td>
-                        <td className="py-2 text-right font-mono font-medium text-success">
-                          {formatCurrency(Number(t.amount))}
-                        </td>
-                      </tr>
-                    ))}
+                    {paginated.map((l) => {
+                      const t = l.tx;
+                      return (
+                        <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="py-2 pr-3 font-mono text-xs">
+                            {formatDate(t.competence_date)}
+                          </td>
+                          <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
+                            {formatDate(t.payment_date)}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate max-w-[240px]">{t.description}</span>
+                              {t.status === "Pendente" && (
+                                <Badge variant="outline" className="text-[9px]">
+                                  Pendente
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2 pr-3 hidden md:table-cell text-muted-foreground truncate max-w-[160px]">
+                            {t.contact_name || "—"}
+                          </td>
+                          <td className="py-2 pr-3 hidden md:table-cell text-muted-foreground truncate max-w-[160px]">
+                            {resolveCategory(t.category)}
+                          </td>
+                          {hasAnyMdr && (
+                            <td className="py-2 pr-3 text-right font-mono text-xs">
+                              {l.hasGross ? formatCurrency(l.gross) : "—"}
+                            </td>
+                          )}
+                          {hasAnyMdr && (
+                            <td className="py-2 pr-3 text-right font-mono text-xs text-destructive">
+                              {l.fee > 0 ? `-${formatCurrency(l.fee)}` : "—"}
+                            </td>
+                          )}
+                          <td className="py-2 text-right font-mono font-medium text-success">
+                            {formatCurrency(l.net)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -265,13 +340,13 @@ export function FaturamentoDetailModal({
           </TabsContent>
 
           <TabsContent value="mes" className="mt-3">
-            <GroupTable rows={byMonth} total={total} />
+            <GroupTable rows={byMonth} totalGross={totals.gross} hasAnyMdr={hasAnyMdr} />
           </TabsContent>
           <TabsContent value="categoria" className="mt-3">
-            <GroupTable rows={byCategory} total={total} />
+            <GroupTable rows={byCategory} totalGross={totals.gross} hasAnyMdr={hasAnyMdr} />
           </TabsContent>
           <TabsContent value="contato" className="mt-3">
-            <GroupTable rows={byContact} total={total} />
+            <GroupTable rows={byContact} totalGross={totals.gross} hasAnyMdr={hasAnyMdr} />
           </TabsContent>
         </Tabs>
 
@@ -286,7 +361,15 @@ export function FaturamentoDetailModal({
   );
 }
 
-function GroupTable({ rows, total }: { rows: { label: string; value: number }[]; total: number }) {
+function GroupTable({
+  rows,
+  totalGross,
+  hasAnyMdr,
+}: {
+  rows: Row[];
+  totalGross: number;
+  hasAnyMdr: boolean;
+}) {
   if (rows.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-12">Sem dados para agrupar.</p>
@@ -298,21 +381,34 @@ function GroupTable({ rows, total }: { rows: { label: string; value: number }[];
         <thead className="text-[11px] uppercase text-muted-foreground">
           <tr className="border-b">
             <th className="text-left py-2 pr-3">Item</th>
-            <th className="text-right py-2 pr-3">% do total</th>
-            <th className="text-right py-2">Valor</th>
+            <th className="text-right py-2 pr-3">Qtd</th>
+            <th className="text-right py-2 pr-3">% Bruto</th>
+            <th className="text-right py-2 pr-3">Bruto</th>
+            {hasAnyMdr && <th className="text-right py-2 pr-3">MDR</th>}
+            {hasAnyMdr && <th className="text-right py-2">Líquido</th>}
+            {!hasAnyMdr && <th className="text-right py-2">Valor</th>}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => {
-            const pct = total > 0 ? (r.value / total) * 100 : 0;
+            const pct = totalGross > 0 ? (r.gross / totalGross) * 100 : 0;
             return (
               <tr key={r.label} className="border-b last:border-0 hover:bg-muted/30">
-                <td className="py-2 pr-3 truncate max-w-[280px]">{r.label}</td>
+                <td className="py-2 pr-3 truncate max-w-[260px]">{r.label}</td>
+                <td className="py-2 pr-3 text-right font-mono text-xs text-muted-foreground">
+                  {r.count}
+                </td>
                 <td className="py-2 pr-3 text-right text-muted-foreground font-mono text-xs">
                   {pct.toFixed(1)}%
                 </td>
+                <td className="py-2 pr-3 text-right font-mono">{formatCurrency(r.gross)}</td>
+                {hasAnyMdr && (
+                  <td className="py-2 pr-3 text-right font-mono text-destructive text-xs">
+                    {r.fee > 0 ? `-${formatCurrency(r.fee)}` : "—"}
+                  </td>
+                )}
                 <td className="py-2 text-right font-mono font-medium text-success">
-                  {formatCurrency(r.value)}
+                  {formatCurrency(r.net)}
                 </td>
               </tr>
             );

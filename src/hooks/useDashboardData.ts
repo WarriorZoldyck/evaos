@@ -622,6 +622,7 @@ export function useDashboardData(filters: DashboardFilters) {
     saldoAtual,
     upcomingTransactions,
     categoryBreakdown,
+    categoryRecords,
     getProjectionData,
     performance,
     creditCards,
@@ -631,4 +632,5 @@ export function useDashboardData(filters: DashboardFilters) {
     refetch,
   };
 }
+
 
