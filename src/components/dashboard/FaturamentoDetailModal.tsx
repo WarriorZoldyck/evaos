@@ -418,7 +418,7 @@ export function FaturamentoDetailModal({
             <TabsTrigger value="lista">Lista</TabsTrigger>
             <TabsTrigger value="mes">Por mês</TabsTrigger>
             <TabsTrigger value="categoria">Por categoria</TabsTrigger>
-            <TabsTrigger value="contato">Por cliente/contato</TabsTrigger>
+            <TabsTrigger value="contato">Por cliente</TabsTrigger>
           </TabsList>
 
           <TabsContent value="lista" className="flex-1 overflow-hidden mt-3">
