@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { applyCompanyFilter } from "@/lib/companyFilter";
+import { itemGross, isCardPayment } from "@/lib/paymentKind";
+
 
 export type DREGranularity = "monthly" | "quarterly" | "semiannual";
 
