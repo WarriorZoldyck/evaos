@@ -212,31 +212,35 @@ export function FaturamentoDetailModal({
   );
 
 
-  const hasAnyMdr = lines.some((l) => l.hasGross);
+  const hasAnyMdr = filteredLines.some((l) => l.hasGross);
 
   const totals = useMemo(() => {
     let gross = 0,
       fee = 0,
       net = 0;
-    lines.forEach((l) => {
+    filteredLines.forEach((l) => {
       gross += l.gross;
       fee += l.fee;
       net += l.net;
     });
     return { gross: r2(gross), fee: r2(fee), net: r2(net) };
-  }, [lines]);
+  }, [filteredLines]);
 
-  const count = lines.length;
+  const count = filteredLines.length;
   const avgGross = count > 0 ? totals.gross / count : 0;
-  const mdrPercent = totals.gross > 0 ? (totals.fee / totals.gross) * 100 : 0;
+  // % MDR efetivo considera só o subset que tem MDR (cartão), não infla com boletos.
+  const mdrBase = filteredLines
+    .filter((l) => l.hasGross)
+    .reduce((acc, l) => acc + l.gross, 0);
+  const mdrPercent = mdrBase > 0 ? (totals.fee / mdrBase) * 100 : 0;
   const delta =
     prevTotal !== undefined && prevTotal > 0
       ? ((total - prevTotal) / Math.abs(prevTotal)) * 100
       : null;
 
-  const groupBy = (getKey: (l: (typeof lines)[number]) => string): Row[] => {
+  const groupBy = (getKey: (l: SaleLine) => string): Row[] => {
     const map = new Map<string, Row>();
-    lines.forEach((l) => {
+    filteredLines.forEach((l) => {
       const key = getKey(l);
       const cur = map.get(key) ?? { label: key, gross: 0, fee: 0, net: 0, count: 0 };
       cur.gross += l.gross;
@@ -258,24 +262,30 @@ export function FaturamentoDetailModal({
           label: format(parseISO(`${r.label}-01`), "MMM/yyyy", { locale: ptBR }),
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [lines],
+    [filteredLines],
   );
 
   const byCategory = useMemo(
     () => groupBy((l) => resolveCategory(l.tx.category)),
-    [lines, categoryNameResolver],
+    [filteredLines, categoryNameResolver],
   );
 
   const byContact = useMemo(
     () => groupBy((l) => l.tx.contact_name || "Sem contato"),
-    [lines],
+    [filteredLines],
   );
 
   const paginated = useMemo(
-    () => lines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [lines, page],
+    () => filteredLines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredLines, page],
   );
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+
+  const availableKinds = useMemo(() => {
+    const set = new Set<PaymentKind>();
+    lines.forEach((l) => set.add(l.kind));
+    return set;
+  }, [lines]);
 
   const goToLancamentos = () => {
     const sp = new URLSearchParams();
