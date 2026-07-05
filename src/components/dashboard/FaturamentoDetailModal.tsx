@@ -87,19 +87,57 @@ export function FaturamentoDetailModal({
     [competenceTransactions],
   );
 
-  // Compute gross/fee/net per line
-  const lines = useMemo(
-    () =>
-      receitas.map((t) => {
-        const net = r2(Number(t.amount) || 0);
-        const rawGross = t.original_amount != null ? Number(t.original_amount) : null;
-        const hasGross = rawGross != null && rawGross > 0;
-        const gross = hasGross ? r2(rawGross!) : net;
-        const fee = hasGross ? r2(gross - net) : 0;
-        return { tx: t, gross, net, fee, hasGross };
-      }),
-    [receitas],
-  );
+  // Aggregate installments of the same sale (series_id) into ONE line.
+  // For parcelled sales, original_amount is stored on every installment as the
+  // TOTAL sale value, and amount is the installment slice. So per-row fee is
+  // wildly wrong — must group by series before computing gross/fee/net.
+  const lines = useMemo(() => {
+    type Group = { items: Tx[] };
+    const groups = new Map<string, Group>();
+    receitas.forEach((t) => {
+      const key = t.series_id ? `s:${t.series_id}` : `t:${t.id}`;
+      const g = groups.get(key) ?? { items: [] };
+      g.items.push(t);
+      groups.set(key, g);
+    });
+
+    return Array.from(groups.values()).map(({ items }) => {
+      // Order by installment number so "first" is parcel 1
+      const sorted = [...items].sort(
+        (a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0),
+      );
+      const first = sorted[0];
+      const isSeries = !!first.series_id && items.length > 1;
+      const totalParcels = first.installments_total ?? items.length;
+
+      const net = r2(items.reduce((acc, t) => acc + (Number(t.amount) || 0), 0));
+      // For a series, original_amount is the same total on every installment.
+      // For a single row, original_amount is that row's gross.
+      const grossCandidates = items
+        .map((t) => (t.original_amount != null ? Number(t.original_amount) : 0))
+        .filter((n) => n > 0);
+      const rawGross = isSeries
+        ? (grossCandidates.length > 0 ? Math.max(...grossCandidates) : 0)
+        : (grossCandidates[0] ?? 0);
+      const hasGross = rawGross > 0 && rawGross >= net - 0.01;
+      const gross = hasGross ? r2(rawGross) : net;
+      const fee = hasGross ? r2(Math.max(0, gross - net)) : 0;
+
+      const paidCount = items.filter((t) => t.status === "Pago").length;
+      const aggStatus =
+        paidCount === items.length ? "Pago" : paidCount === 0 ? "Pendente" : "Parcial";
+
+      const tx: Tx = {
+        ...first,
+        description: isSeries ? `${first.description} (${totalParcels}x)` : first.description,
+        amount: net,
+        original_amount: hasGross ? gross : null,
+        status: aggStatus,
+      };
+      return { tx, gross, net, fee, hasGross, isSeries, parcels: totalParcels };
+    }).sort((a, b) => b.tx.competence_date.localeCompare(a.tx.competence_date));
+  }, [receitas]);
+
 
   const hasAnyMdr = lines.some((l) => l.hasGross);
 
