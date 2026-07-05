@@ -408,7 +408,7 @@ export function FaturamentoDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="w-[95vw] max-w-[1400px] max-h-[92vh] p-3 sm:p-4 md:p-6 overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 font-display">
             <div className="h-9 w-9 rounded-xl bg-gradient-primary text-white flex items-center justify-center shadow-lg">
@@ -560,7 +560,7 @@ export function FaturamentoDetailModal({
           </TabsList>
 
           <TabsContent value="lista" className="flex-1 overflow-hidden mt-3">
-            <ScrollArea className="h-[45vh] pr-2">
+            <div className="overflow-auto h-[45vh] pr-2">
               {paginated.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-12">
                   Nenhuma receita encontrada para esse período.
@@ -590,12 +590,12 @@ export function FaturamentoDetailModal({
                           className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${dupIds.has(t.id) ? "bg-amber-500/5" : ""}`}
                           onClick={() => setSelectedSale(l)}
                         >
-                          <td className="py-2 pr-3 font-medium truncate max-w-[180px]">
+                          <td className="py-2 pr-3 font-medium truncate max-w-[240px]">
                             {clienteLabel}
                           </td>
                           <td className="py-2 pr-3">
                             <div className="flex items-center gap-2">
-                              <span className="truncate max-w-[220px] text-muted-foreground">
+                              <span className="truncate max-w-[320px] text-muted-foreground">
                                 {t.description}
                               </span>
                               {(t.status === "Pendente" || t.status === "Parcial") && (
@@ -616,7 +616,7 @@ export function FaturamentoDetailModal({
                           <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
                             {formatDate(t.payment_date)}
                           </td>
-                          <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[140px]">
+                          <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[200px]">
                             {resolveCategory(t.category)}
                           </td>
                           <td className="py-2 pr-3 hidden md:table-cell text-xs">
@@ -643,7 +643,7 @@ export function FaturamentoDetailModal({
                   </tbody>
                 </table>
               )}
-            </ScrollArea>
+            </div>
             {totalPages > 1 && (
               <div className="flex items-center justify-between pt-3 text-xs">
                 <span className="text-muted-foreground">
