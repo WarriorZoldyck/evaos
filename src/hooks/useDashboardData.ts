@@ -455,21 +455,29 @@ export function useDashboardData(filters: DashboardFilters) {
       .filter((t) => t.type === "despesa" && t.status === "Pendente")
       .reduce((acc, t) => acc + Number(t.amount), 0);
 
-    // MDR: taxas de maquininha
-    const mdrTransactions = paidTransactions.filter(
-      (t) => t.original_amount && Number(t.original_amount) > 0
+    // MDR: taxas de maquininha — mesma base do Faturamento (competência, Pago+Pendente),
+    // só vendas em cartão com original_amount > amount. Bate com modal de Faturamento e DRE.
+    const mdrItems = receitasCompetencia.filter(
+      (t) =>
+        isCardPayment(t as any) &&
+        t.original_amount != null &&
+        Number(t.original_amount) > Number(t.amount),
     );
-    const mdrBruto = mdrTransactions.reduce((acc, t) => acc + Number(t.original_amount!), 0);
-    const mdrLiquido = mdrTransactions.reduce((acc, t) => acc + Number(t.amount), 0);
+    const mdrBruto = mdrItems.reduce((acc, t) => acc + Number(t.original_amount!), 0);
+    const mdrLiquido = mdrItems.reduce((acc, t) => acc + Number(t.amount), 0);
     const mdrTaxas = mdrBruto - mdrLiquido;
     const mdrPercent = mdrBruto > 0 ? (mdrTaxas / mdrBruto) * 100 : 0;
-    const mdrCount = mdrTransactions.length;
+    // Agrupa por venda (series_id) para bater com "N vendas" do modal
+    const saleKeys = new Set<string>();
+    mdrItems.forEach((t) => saleKeys.add((t as any).series_id ? `s:${(t as any).series_id}` : `t:${t.id}`));
+    const mdrCount = saleKeys.size;
 
     return {
       faturamento, receitaOperacional, faturamentoNaoMapeado, unmappedRevenueCount,
       entradas, saidas, saldo, entradaPrevista, saidaPrevista,
       mdrBruto, mdrLiquido, mdrTaxas, mdrPercent, mdrCount,
     };
+
 
   }, [transactions, competenceTransactions, categoryRecords]);
 
