@@ -234,24 +234,25 @@ export default function Dashboard() {
             </div>
             <div className="min-w-0">
               <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide">
-                MDR pago no mês
+                MDR no período
               </p>
               <p className="text-xl font-bold font-display text-destructive">
-                {mdr.loading
+                {loading
                   ? "..."
-                  : mdr.currentMonth.fee.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  : summary.mdrTaxas.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
               </p>
-              {!mdr.loading && (
+              {!loading && (
                 <p className="text-[11px] text-muted-foreground">
-                  {mdr.currentMonth.effectiveRate.toFixed(2)}% sobre{" "}
-                  {mdr.currentMonth.gross.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}{" "}
-                  · {mdr.currentMonth.count} vendas
+                  {summary.mdrPercent.toFixed(2)}% sobre{" "}
+                  {summary.mdrBruto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}{" "}
+                  · {summary.mdrCount} vendas
                 </p>
               )}
             </div>
           </div>
           <span className="text-[11px] text-primary hidden sm:inline">Ver detalhes →</span>
         </CardContent>
+
       </Card>
 
       <MdrDetailModal open={mdrModalOpen} onOpenChange={setMdrModalOpen} />
