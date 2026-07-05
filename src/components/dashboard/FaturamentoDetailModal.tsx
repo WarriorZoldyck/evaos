@@ -320,9 +320,9 @@ export function FaturamentoDetailModal({
                           <td className="py-2 pr-3">
                             <div className="flex items-center gap-2">
                               <span className="truncate max-w-[240px]">{t.description}</span>
-                              {t.status === "Pendente" && (
+                              {(t.status === "Pendente" || t.status === "Parcial") && (
                                 <Badge variant="outline" className="text-[9px]">
-                                  Pendente
+                                  {t.status}
                                 </Badge>
                               )}
                             </div>
