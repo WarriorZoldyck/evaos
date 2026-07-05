@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useRecurringTransactions, type RecurringOccurrence } from "@/hooks/useRecurringTransactions";
 import { itemGross, isCardPayment } from "@/lib/paymentKind";
+import { splitContextNeutralTransfers } from "@/lib/transferVisibility";
 import {
   startOfDay,
   endOfDay,
@@ -270,13 +271,6 @@ export function useDashboardData(filters: DashboardFilters) {
         .gte("payment_date", startStr)
         .lte("payment_date", endStr);
 
-      if (!accountId) {
-        query = query
-          .or("transfer_id.is.null,is_internal_transfer.eq.false")
-          .not("category", "ilike", "transfer%")
-          .not("category", "ilike", "transferência%");
-      }
-
       query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
 
@@ -291,7 +285,13 @@ export function useDashboardData(filters: DashboardFilters) {
         from += PAGE;
       }
 
-      setTransactions(allData);
+      const transferVisibility = splitContextNeutralTransfers(allData);
+      setTransactions(transferVisibility.included);
+      setInternalTransfersTotal(
+        transferVisibility.excluded
+          .filter((t) => t.status === "Pago" && t.type === "receita")
+          .reduce((acc, t) => acc + Number(t.amount || 0), 0),
+      );
       setLoading(false);
     };
 
@@ -300,10 +300,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method, transfer_id, is_internal_transfer")
         .gte("competence_date", startStr)
-        .lte("competence_date", endStr)
-        .or("transfer_id.is.null,is_internal_transfer.eq.false")
-        .not("category", "ilike", "transfer%")
-        .not("category", "ilike", "transferência%");
+        .lte("competence_date", endStr);
 
       query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
@@ -319,44 +316,11 @@ export function useDashboardData(filters: DashboardFilters) {
         from += PAGE;
       }
 
-      setCompetenceTransactions(allData);
-    };
-
-    const fetchInternalTransfersTotal = async () => {
-      if (accountId) {
-        setInternalTransfersTotal(0);
-        return;
-      }
-
-      // Sum of internal transfers (one side only — receita) excluded from dashboard,
-      // used to display a transparent badge to the user.
-      let query = supabase
-        .from("transactions")
-        .select("amount, type", { count: "exact" })
-        .gte("payment_date", startStr)
-        .lte("payment_date", endStr)
-        .eq("status", "Pago")
-        .eq("is_internal_transfer", true)
-        .eq("type", "receita");
-
-      query = applyCompanyFilter(query, companyCtx);
-      query = applyAccountFilter(query, accountId, linkedCardIds);
-
-      const { data, error } = await query;
-      if (!error && data) {
-        const total = (data as { amount: number }[]).reduce(
-          (acc, t) => acc + Number(t.amount || 0),
-          0,
-        );
-        setInternalTransfersTotal(total);
-      } else {
-        setInternalTransfersTotal(0);
-      }
+      setCompetenceTransactions(splitContextNeutralTransfers(allData).included);
     };
 
     fetchTransactions();
     fetchCompetenceTransactions();
-    fetchInternalTransfersTotal();
   }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, fetchTrigger]);
 
 
@@ -372,10 +336,6 @@ export function useDashboardData(filters: DashboardFilters) {
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, transfer_id, is_internal_transfer")
         .gte("payment_date", twoYearsAgo);
 
-      if (!accountId) {
-        query = query.or("transfer_id.is.null,is_internal_transfer.eq.false");
-      }
-
       query = query.order("payment_date", { ascending: true }).limit(5000);
 
       query = applyCompanyFilter(query, companyCtx);
@@ -384,7 +344,7 @@ export function useDashboardData(filters: DashboardFilters) {
       const { data, error } = await query;
 
       if (!error && data) {
-        setAllTransactions(data as Transaction[]);
+        setAllTransactions(splitContextNeutralTransfers(data as Transaction[]).included);
       }
     };
 

@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { applyCompanyFilter } from "@/lib/companyFilter";
+import { splitContextNeutralTransfers } from "@/lib/transferVisibility";
 import type { DRECategoryRow, DREGranularity } from "@/hooks/useDREData";
 
 export type CashFlowMode = "caixa" | "competencia";
@@ -80,10 +81,9 @@ export function useCashFlowMonthly(mode: CashFlowMode, filters: CashFlowMonthlyF
 
       let q = supabase
         .from("transactions")
-        .select(`id, amount, type, status, category, subcategory, subcategory2, ${dateField}, bank_account_id, credit_card_id, transfer_id`)
+        .select(`id, amount, type, status, category, subcategory, subcategory2, ${dateField}, bank_account_id, credit_card_id, transfer_id, is_internal_transfer`)
         .gte(dateField, startStr)
-        .lte(dateField, endStr)
-        .or("transfer_id.is.null,is_internal_transfer.eq.false");
+        .lte(dateField, endStr);
 
       if (mode === "caixa") q = q.eq("status", "Pago");
 
@@ -107,7 +107,7 @@ export function useCashFlowMonthly(mode: CashFlowMode, filters: CashFlowMonthlyF
         if (data.length < pageSize) break;
         page++;
       }
-      setTransactions(allData);
+      setTransactions(splitContextNeutralTransfers(allData).included);
       setLoading(false);
     };
     fetchTx();
