@@ -69,8 +69,12 @@ export default function HubIntegridade() {
   const [orphans, setOrphans] = useState<OrphanRow[]>([]);
   const [divergent, setDivergent] = useState<DivergentRow[]>([]);
   const [missingCtx, setMissingCtx] = useState<MissingContextRow[]>([]);
+  const [orphanAccounts, setOrphanAccounts] = useState<OrphanAccountRow[]>([]);
+  const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
+  const [pendingAccountCompany, setPendingAccountCompany] = useState<Record<string, string>>({});
   const [fixingOrphan, setFixingOrphan] = useState<string | null>(null);
   const [fixingCtx, setFixingCtx] = useState<string | null>(null);
+  const [fixingAccount, setFixingAccount] = useState<string | null>(null);
 
   const runChecks = useCallback(async () => {
     if (!user) return;
