@@ -49,6 +49,8 @@ interface Transaction {
   installment_number: number | null;
   installments_total: number | null;
   original_amount: number | null;
+  card_terminal_id?: string | null;
+  payment_method?: string | null;
 }
 
 export interface CreditCardInfo {
@@ -261,7 +263,7 @@ export function useDashboardData(filters: DashboardFilters) {
 
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method")
         .gte("payment_date", startStr)
         .lte("payment_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false")
@@ -289,7 +291,7 @@ export function useDashboardData(filters: DashboardFilters) {
     const fetchCompetenceTransactions = async () => {
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false")

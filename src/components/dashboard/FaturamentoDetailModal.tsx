@@ -29,6 +29,58 @@ type Tx = {
   series_id?: string | null;
   installment_number?: number | null;
   installments_total?: number | null;
+  card_terminal_id?: string | null;
+  payment_method?: string | null;
+};
+
+type PaymentKind =
+  | "credito"
+  | "debito"
+  | "boleto"
+  | "pix"
+  | "dinheiro"
+  | "transferencia"
+  | "outros";
+
+const CARD_KINDS: PaymentKind[] = ["credito", "debito"];
+
+function normalizePM(pm?: string | null): string {
+  return (pm ?? "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s_-]+/g, "");
+}
+
+function classifyItems(items: Tx[]): PaymentKind {
+  const hasTerminal = items.some((t) => !!t.card_terminal_id);
+  const pms = items.map((t) => normalizePM(t.payment_method));
+  const isCredit = pms.some((p) =>
+    ["credito", "cartaocredito", "creditcard", "cartao"].includes(p),
+  );
+  const isDebit = pms.some((p) =>
+    ["debito", "cartaodebito", "debitcard"].includes(p),
+  );
+  if (isDebit) return "debito";
+  if (isCredit || hasTerminal) return "credito";
+  if (pms.some((p) => p.includes("boleto"))) return "boleto";
+  if (pms.some((p) => p.includes("pix"))) return "pix";
+  if (pms.some((p) => p.includes("dinheiro") || p === "cash" || p.includes("especie")))
+    return "dinheiro";
+  if (pms.some((p) => p.includes("transferencia") || p === "ted" || p === "doc"))
+    return "transferencia";
+  return "outros";
+}
+
+const KIND_LABEL: Record<PaymentKind, string> = {
+  credito: "Cartão de crédito",
+  debito: "Cartão de débito",
+  boleto: "Boleto",
+  pix: "PIX",
+  dinheiro: "Dinheiro",
+  transferencia: "Transferência",
+  outros: "Outros",
 };
 
 interface FaturamentoDetailModalProps {
@@ -62,6 +114,18 @@ function formatDate(iso: string | null | undefined): string {
 
 type Row = { label: string; gross: number; fee: number; net: number; count: number };
 
+type SaleLine = {
+  tx: Tx;
+  gross: number;
+  net: number;
+  fee: number;
+  hasGross: boolean;
+  isSeries: boolean;
+  parcels: number;
+  kind: PaymentKind;
+  items: Tx[];
+};
+
 export function FaturamentoDetailModal({
   open,
   onOpenChange,
@@ -74,6 +138,8 @@ export function FaturamentoDetailModal({
 }: FaturamentoDetailModalProps) {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
+  const [selectedSale, setSelectedSale] = useState<SaleLine | null>(null);
   const PAGE_SIZE = 50;
 
   const resolveCategory = (id: string) =>
@@ -91,7 +157,7 @@ export function FaturamentoDetailModal({
   // For parcelled sales, original_amount is stored on every installment as the
   // TOTAL sale value, and amount is the installment slice. So per-row fee is
   // wildly wrong — must group by series before computing gross/fee/net.
-  const lines = useMemo(() => {
+  const lines = useMemo<SaleLine[]>(() => {
     type Group = { items: Tx[] };
     const groups = new Map<string, Group>();
     receitas.forEach((t) => {
@@ -101,69 +167,80 @@ export function FaturamentoDetailModal({
       groups.set(key, g);
     });
 
-    return Array.from(groups.values()).map(({ items }) => {
-      // Order by installment number so "first" is parcel 1
-      const sorted = [...items].sort(
-        (a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0),
-      );
-      const first = sorted[0];
-      const isSeries = !!first.series_id && items.length > 1;
-      const totalParcels = first.installments_total ?? items.length;
+    return Array.from(groups.values())
+      .map<SaleLine>(({ items }) => {
+        const sorted = [...items].sort(
+          (a, b) => (a.installment_number ?? 0) - (b.installment_number ?? 0),
+        );
+        const first = sorted[0];
+        const isSeries = !!first.series_id && items.length > 1;
+        const totalParcels = first.installments_total ?? items.length;
+        const kind = classifyItems(items);
+        const isCard = CARD_KINDS.includes(kind);
 
-      const net = r2(items.reduce((acc, t) => acc + (Number(t.amount) || 0), 0));
-      // For a series, original_amount is the same total on every installment.
-      // For a single row, original_amount is that row's gross.
-      const grossCandidates = items
-        .map((t) => (t.original_amount != null ? Number(t.original_amount) : 0))
-        .filter((n) => n > 0);
-      const rawGross = isSeries
-        ? (grossCandidates.length > 0 ? Math.max(...grossCandidates) : 0)
-        : (grossCandidates[0] ?? 0);
-      const hasGross = rawGross > 0 && rawGross >= net - 0.01;
-      const gross = hasGross ? r2(rawGross) : net;
-      const fee = hasGross ? r2(Math.max(0, gross - net)) : 0;
+        const net = r2(items.reduce((acc, t) => acc + (Number(t.amount) || 0), 0));
+        const grossCandidates = items
+          .map((t) => (t.original_amount != null ? Number(t.original_amount) : 0))
+          .filter((n) => n > 0);
+        const rawGross = isSeries
+          ? grossCandidates.length > 0 ? Math.max(...grossCandidates) : 0
+          : grossCandidates[0] ?? 0;
+        // MDR só existe em cartão (crédito/débito). Para boleto/pix/etc. ignora original_amount.
+        const hasGross = isCard && rawGross > 0 && rawGross > net + 0.01;
+        const gross = hasGross ? r2(rawGross) : net;
+        const fee = hasGross ? r2(Math.max(0, gross - net)) : 0;
 
-      const paidCount = items.filter((t) => t.status === "Pago").length;
-      const aggStatus =
-        paidCount === items.length ? "Pago" : paidCount === 0 ? "Pendente" : "Parcial";
+        const paidCount = items.filter((t) => t.status === "Pago").length;
+        const aggStatus =
+          paidCount === items.length ? "Pago" : paidCount === 0 ? "Pendente" : "Parcial";
 
-      const tx: Tx = {
-        ...first,
-        description: isSeries ? `${first.description} (${totalParcels}x)` : first.description,
-        amount: net,
-        original_amount: hasGross ? gross : null,
-        status: aggStatus,
-      };
-      return { tx, gross, net, fee, hasGross, isSeries, parcels: totalParcels };
-    }).sort((a, b) => b.tx.competence_date.localeCompare(a.tx.competence_date));
+        const tx: Tx = {
+          ...first,
+          description: isSeries ? `${first.description} (${totalParcels}x)` : first.description,
+          amount: net,
+          original_amount: hasGross ? gross : null,
+          status: aggStatus,
+        };
+        return { tx, gross, net, fee, hasGross, isSeries, parcels: totalParcels, kind, items: sorted };
+      })
+      .sort((a, b) => b.tx.competence_date.localeCompare(a.tx.competence_date));
   }, [receitas]);
 
+  const filteredLines = useMemo(
+    () => (paymentFilter === "all" ? lines : lines.filter((l) => l.kind === paymentFilter)),
+    [lines, paymentFilter],
+  );
 
-  const hasAnyMdr = lines.some((l) => l.hasGross);
+
+  const hasAnyMdr = filteredLines.some((l) => l.hasGross);
 
   const totals = useMemo(() => {
     let gross = 0,
       fee = 0,
       net = 0;
-    lines.forEach((l) => {
+    filteredLines.forEach((l) => {
       gross += l.gross;
       fee += l.fee;
       net += l.net;
     });
     return { gross: r2(gross), fee: r2(fee), net: r2(net) };
-  }, [lines]);
+  }, [filteredLines]);
 
-  const count = lines.length;
+  const count = filteredLines.length;
   const avgGross = count > 0 ? totals.gross / count : 0;
-  const mdrPercent = totals.gross > 0 ? (totals.fee / totals.gross) * 100 : 0;
+  // % MDR efetivo considera só o subset que tem MDR (cartão), não infla com boletos.
+  const mdrBase = filteredLines
+    .filter((l) => l.hasGross)
+    .reduce((acc, l) => acc + l.gross, 0);
+  const mdrPercent = mdrBase > 0 ? (totals.fee / mdrBase) * 100 : 0;
   const delta =
     prevTotal !== undefined && prevTotal > 0
       ? ((total - prevTotal) / Math.abs(prevTotal)) * 100
       : null;
 
-  const groupBy = (getKey: (l: (typeof lines)[number]) => string): Row[] => {
+  const groupBy = (getKey: (l: SaleLine) => string): Row[] => {
     const map = new Map<string, Row>();
-    lines.forEach((l) => {
+    filteredLines.forEach((l) => {
       const key = getKey(l);
       const cur = map.get(key) ?? { label: key, gross: 0, fee: 0, net: 0, count: 0 };
       cur.gross += l.gross;
@@ -185,24 +262,30 @@ export function FaturamentoDetailModal({
           label: format(parseISO(`${r.label}-01`), "MMM/yyyy", { locale: ptBR }),
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
-    [lines],
+    [filteredLines],
   );
 
   const byCategory = useMemo(
     () => groupBy((l) => resolveCategory(l.tx.category)),
-    [lines, categoryNameResolver],
+    [filteredLines, categoryNameResolver],
   );
 
   const byContact = useMemo(
     () => groupBy((l) => l.tx.contact_name || "Sem contato"),
-    [lines],
+    [filteredLines],
   );
 
   const paginated = useMemo(
-    () => lines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [lines, page],
+    () => filteredLines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredLines, page],
   );
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
+
+  const availableKinds = useMemo(() => {
+    const set = new Set<PaymentKind>();
+    lines.forEach((l) => set.add(l.kind));
+    return set;
+  }, [lines]);
 
   const goToLancamentos = () => {
     const sp = new URLSearchParams();
@@ -278,6 +361,30 @@ export function FaturamentoDetailModal({
           </div>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] uppercase text-muted-foreground tracking-wide">
+            Forma de pagamento:
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {(["all", "credito", "debito", "boleto", "pix", "dinheiro", "transferencia", "outros"] as const)
+              .filter((k) => k === "all" || availableKinds.has(k as PaymentKind))
+              .map((k) => (
+                <Button
+                  key={k}
+                  size="sm"
+                  variant={paymentFilter === k ? "default" : "outline"}
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    setPaymentFilter(k as PaymentKind | "all");
+                    setPage(1);
+                  }}
+                >
+                  {k === "all" ? "Todas" : KIND_LABEL[k as PaymentKind]}
+                </Button>
+              ))}
+          </div>
+        </div>
+
         <Tabs defaultValue="lista" className="flex-1 overflow-hidden flex flex-col">
           <TabsList className="self-start">
             <TabsTrigger value="lista">Lista</TabsTrigger>
@@ -310,7 +417,11 @@ export function FaturamentoDetailModal({
                     {paginated.map((l) => {
                       const t = l.tx;
                       return (
-                        <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
+                        <tr
+                          key={t.id}
+                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                          onClick={() => setSelectedSale(l)}
+                        >
                           <td className="py-2 pr-3 font-mono text-xs">
                             {formatDate(t.competence_date)}
                           </td>
@@ -398,9 +509,154 @@ export function FaturamentoDetailModal({
           </Button>
         </div>
       </DialogContent>
+      <SaleDetailDialog
+        sale={selectedSale}
+        onClose={() => setSelectedSale(null)}
+        resolveCategory={resolveCategory}
+        onOpenInLancamentos={(sale) => {
+          const sp = new URLSearchParams();
+          sp.set("type", "receita");
+          if (sale.tx.series_id) {
+            sp.set("series_id", sale.tx.series_id);
+          } else {
+            sp.set("dateFrom", sale.tx.competence_date);
+            sp.set("dateTo", sale.tx.competence_date);
+            sp.set("dateField", "competence_date");
+          }
+          navigate(`/lancamentos?${sp.toString()}`);
+        }}
+      />
     </Dialog>
   );
 }
+
+function SaleDetailDialog({
+  sale,
+  onClose,
+  resolveCategory,
+  onOpenInLancamentos,
+}: {
+  sale: SaleLine | null;
+  onClose: () => void;
+  resolveCategory: (id: string) => string;
+  onOpenInLancamentos: (sale: SaleLine) => void;
+}) {
+  const open = !!sale;
+  if (!sale) {
+    return (
+      <Dialog open={false} onOpenChange={(v) => !v && onClose()}>
+        <DialogContent />
+      </Dialog>
+    );
+  }
+  const { tx, items, gross, net, fee, hasGross, isSeries, parcels, kind } = sale;
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="font-display">{tx.description}</DialogTitle>
+          <DialogDescription>
+            <span className="inline-flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <span>
+                <span className="text-muted-foreground">Contato:</span>{" "}
+                <span className="text-foreground">{tx.contact_name || "—"}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">Categoria:</span>{" "}
+                <span className="text-foreground">{resolveCategory(tx.category)}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">Forma de pagamento:</span>{" "}
+                <span className="text-foreground">{KIND_LABEL[kind]}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">Status:</span>{" "}
+                <Badge variant="outline" className="text-[9px] ml-1">
+                  {tx.status}
+                </Badge>
+              </span>
+            </span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className={`grid gap-2 ${hasGross ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2"}`}>
+          {hasGross && (
+            <div className="rounded-lg border p-2">
+              <p className="text-[10px] uppercase text-muted-foreground">Bruto</p>
+              <p className="text-base font-bold font-display">{formatCurrency(gross)}</p>
+            </div>
+          )}
+          {hasGross && (
+            <div className="rounded-lg border p-2">
+              <p className="text-[10px] uppercase text-muted-foreground">MDR</p>
+              <p className="text-base font-bold font-display text-destructive">
+                -{formatCurrency(fee)}
+              </p>
+            </div>
+          )}
+          <div className="rounded-lg border p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Líquido</p>
+            <p className="text-base font-bold font-display text-success">{formatCurrency(net)}</p>
+          </div>
+          <div className="rounded-lg border p-2">
+            <p className="text-[10px] uppercase text-muted-foreground">Parcelas</p>
+            <p className="text-base font-bold font-display">{parcels}</p>
+          </div>
+        </div>
+
+        {isSeries && (
+          <ScrollArea className="h-[40vh] pr-2 mt-2">
+            <table className="w-full text-sm">
+              <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-background">
+                <tr className="border-b">
+                  <th className="text-left py-2 pr-3">#</th>
+                  <th className="text-left py-2 pr-3">Competência</th>
+                  <th className="text-left py-2 pr-3">Pagamento</th>
+                  <th className="text-left py-2 pr-3">Status</th>
+                  <th className="text-right py-2">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.id} className="border-b last:border-0">
+                    <td className="py-2 pr-3 font-mono text-xs">
+                      {it.installment_number ?? "—"}/{parcels}
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-xs">
+                      {formatDate(it.competence_date)}
+                    </td>
+                    <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">
+                      {formatDate(it.payment_date)}
+                    </td>
+                    <td className="py-2 pr-3">
+                      <Badge
+                        variant="outline"
+                        className={`text-[9px] ${it.status === "Pago" ? "text-success" : ""}`}
+                      >
+                        {it.status}
+                      </Badge>
+                    </td>
+                    <td className="py-2 text-right font-mono font-medium">
+                      {formatCurrency(Number(it.amount) || 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollArea>
+        )}
+
+        <div className="flex justify-end pt-2 border-t">
+          <Button variant="outline" size="sm" onClick={() => onOpenInLancamentos(sale)} className="gap-2">
+            Abrir na tela de Lançamentos
+            <ArrowRight className="h-3 w-3" />
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 
 function GroupTable({
   rows,

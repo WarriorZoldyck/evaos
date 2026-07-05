@@ -1,46 +1,38 @@
-## Problema
+## Objetivo
 
-No modal "Faturamento por competência", cada parcela de boleto aparece como um lançamento separado, e o cálculo de MDR fica absurdo (ex.: Julia Rinaldi 9/9 → Bruto R$ 5.500,00, MDR -R$ 4.937,50, Líquido R$ 562,50).
+No modal de Faturamento por competência: (1) só mostrar MDR quando a venda for cartão (crédito/débito), (2) permitir clicar na linha para ver todas as parcelas + dados relevantes, (3) adicionar filtro por forma de pagamento.
 
-Causa raiz: quando uma venda é parcelada, o campo `original_amount` é gravado em **cada** parcela com o **valor total da venda** (R$ 5.500), enquanto `amount` é o valor da parcela (R$ 562,50). Hoje o modal calcula `fee = original_amount − amount` linha a linha, o que infla o MDR e conta a mesma venda N vezes.
+## 1. MDR só para cartão
 
-Cartão aparece correto porque as parcelas de cartão/terminal já são gravadas com `original_amount` proporcional à parcela (MDR é aplicado por parcela).
+`src/hooks/useDashboardData.ts` — incluir `card_terminal_id` e `payment_method` no `.select(...)` das queries `competenceTransactions` e `transactions` (linhas 264 e 292).
 
-## Solução (apenas no modal, sem tocar em dados nem em outras telas)
+`src/components/dashboard/FaturamentoDetailModal.tsx`:
+- Adicionar `card_terminal_id?: string | null` e `payment_method?: string | null` no tipo `Tx`.
+- Helper `isCardPayment(items)`: `true` quando **qualquer** parcela tem `card_terminal_id` não nulo **ou** `payment_method` normalizado ∈ { `credito`, `debito`, `credit_card`, `debit_card`, `cartao_credito`, `cartao_debito`, `cartao` }.
+- Na agregação `lines`, só habilitar `hasGross = isCardPayment(items) && rawGross > 0 && rawGross > net`. Caso contrário `gross = net`, `fee = 0`, coluna MDR/Bruto = "—".
+- Totais, `% MDR efetivo` e agrupamentos passam a refletir só vendas realmente com MDR.
 
-Agrupar as parcelas da mesma venda (`series_id` igual) em **uma única linha** representando a venda inteira.
+## 2. Clique na linha → detalhes da venda
 
-### Regra de agregação por `series_id`
+- Adicionar estado `selectedSale` no modal.
+- Cada `<tr>` da aba Lista fica clicável (`cursor-pointer`) e abre um sub-dialog `SaleDetailDialog`.
+- O sub-dialog mostra:
+  - Cabeçalho: descrição da venda, contato, categoria (resolvida), forma de pagamento, badge do status agregado.
+  - Cards resumo: Bruto, MDR (só se cartão), Líquido, nº de parcelas.
+  - Tabela de parcelas: `#`, competência, pagamento, status (Pago/Pendente), valor da parcela. Ordenadas por `installment_number`.
+  - Botão "Abrir na tela de Lançamentos" que navega para `/lancamentos?series_id=<id>` (usa filtro já existente por descrição/série se disponível — senão passa `dateFrom/dateTo` da venda como fallback).
+- Para vendas não parceladas (série única), o dialog abre com uma única linha e sem seção de "parcelas".
 
-Para cada grupo de parcelas com o mesmo `series_id` (quando `series_id` não é nulo):
+## 3. Filtro por forma de pagamento
 
-- **Bruto da venda** = `max(original_amount)` do grupo (todas as parcelas têm o mesmo `original_amount` = total da venda). Se `original_amount` vier nulo/zero, cai em `Σ amount`.
-- **Líquido da venda** = `Σ amount` de todas as parcelas do grupo.
-- **MDR da venda** = `Bruto − Líquido` (nunca negativo; se der ≤ 0, mostra "—").
-- **Descrição** = descrição da primeira parcela, com sufixo `(Nx)` onde N = `installments_total` (ou tamanho do grupo).
-- **Competência / Pagamento** = data da **primeira** parcela (menor `installment_number`).
-- **Status** = "Pago" se todas as parcelas pagas; senão "Parcial" (badge) ou "Pendente" se nenhuma paga.
-- **Categoria / Contato** = da primeira parcela.
-- Contagem `count` do grupo = 1 venda (não N parcelas).
+- Novo controle acima das abas: `Select` com opções: **Todas**, **Cartão de crédito**, **Cartão de débito**, **Boleto**, **PIX**, **Dinheiro**, **Transferência**, **Outros**.
+- Normalização flexível de `payment_method` (mesmo dicionário do item 1) + fallback: se qualquer parcela tem `card_terminal_id`, classifica como "Cartão" (crédito por padrão, débito só se `payment_method` indicar).
+- Filtro aplica-se ao array `lines` **após** a agregação — todas as visões (Lista, Por mês, Por categoria, Por cliente, cards de resumo) são recalculadas com base no subset filtrado.
+- Estado persiste enquanto o modal está aberto; reseta ao fechar.
 
-Lançamentos **sem** `series_id` (venda à vista/boleto único) continuam como linha única, com a mesma fórmula atual (`gross = original_amount ?? amount`, `fee = gross − net`).
+## Arquivos alterados
 
-### Impacto nas visões
+- `src/hooks/useDashboardData.ts` — expandir `.select`.
+- `src/components/dashboard/FaturamentoDetailModal.tsx` — MDR condicional, filtro de forma de pagamento, sub-dialog de detalhes com lista de parcelas.
 
-- **Aba Lista**: mostra 1 linha por venda (não por parcela). Ticket médio passa a refletir vendas, não parcelas.
-- **Totais (Bruto / MDR / Líquido / % efetivo)**: recalculados a partir das vendas agregadas — corrige o MDR inflado.
-- **Por mês / Por categoria / Por cliente**: agregam sobre as vendas já consolidadas (competência da 1ª parcela define o mês da venda).
-- **Contagem "lançamentos"** vira "vendas".
-- Botão "Ver todos os lançamentos do período" continua indo para `/lancamentos` com os filtros atuais (lá o usuário vê parcela a parcela, comportamento esperado).
-
-## Arquivo alterado
-
-`src/components/dashboard/FaturamentoDetailModal.tsx`
-
-1. Estender o tipo `Tx` local com `series_id`, `installment_number`, `installments_total` (já presentes em `competenceTransactions`, só precisa expor).
-2. Antes de calcular `lines`, criar `sales`: agrupar `receitas` por `series_id` (ou `id` quando `series_id` nulo) aplicando as regras acima.
-3. Substituir o uso de `lines` (mapeado 1:1 das receitas) por `sales` em: totais, paginação da Lista, `groupBy`, `byMonth`, `byCategory`, `byContact`.
-4. Ajustar renderização da coluna "Descrição" para mostrar o sufixo `(Nx)` quando for venda parcelada, e um badge "Parcial" quando o status agregado for misto.
-5. Manter o helper `r2` em todas as somas para preservar precisão de 2 casas.
-
-Nenhuma alteração em hooks, banco, edição, criação, ou em outras telas. Apenas apresentação do modal.
+Nenhuma alteração em banco de dados, edição, criação, WhatsApp ou outras telas.
