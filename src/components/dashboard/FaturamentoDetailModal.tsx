@@ -235,7 +235,7 @@ export function FaturamentoDetailModal({
   }, [receitas]);
 
   const filteredLines = useMemo(
-    () => (paymentFilter === "all" ? lines : lines.filter((l) => l.kind === paymentFilter)),
+    () => (paymentFilter === "all" ? lines : lines.filter((l) => saleHasKind(l.items, paymentFilter))),
     [lines, paymentFilter],
   );
 
