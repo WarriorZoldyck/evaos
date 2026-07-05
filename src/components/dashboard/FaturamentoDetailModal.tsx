@@ -299,7 +299,7 @@ export function FaturamentoDetailModal({
   );
 
   const byContact = useMemo(
-    () => groupBy((l) => l.tx.contact_name || "Sem contato"),
+    () => groupBy((l) => (l.tx.contact_name?.trim() || l.tx.description?.trim() || "Sem cliente")),
     [filteredLines],
   );
 
