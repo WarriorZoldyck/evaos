@@ -433,8 +433,9 @@ export function useDashboardData(filters: DashboardFilters) {
     const unmappedCategoryIds = new Set<string>();
     receitasCompetencia.forEach((t) => {
       const cat = resolveCat((t as any).subcategory) ?? resolveCat(t.category);
+      const gross = itemGross(t as any);
       if (hasDreSection(cat)) {
-        receitaOperacional += Number(t.amount);
+        receitaOperacional += gross;
       } else {
         unmappedCategoryIds.add(cat?.id ?? t.category ?? "—");
       }
