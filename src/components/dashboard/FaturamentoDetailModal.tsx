@@ -361,6 +361,30 @@ export function FaturamentoDetailModal({
           </div>
         </div>
 
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] uppercase text-muted-foreground tracking-wide">
+            Forma de pagamento:
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {(["all", "credito", "debito", "boleto", "pix", "dinheiro", "transferencia", "outros"] as const)
+              .filter((k) => k === "all" || availableKinds.has(k as PaymentKind))
+              .map((k) => (
+                <Button
+                  key={k}
+                  size="sm"
+                  variant={paymentFilter === k ? "default" : "outline"}
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    setPaymentFilter(k as PaymentKind | "all");
+                    setPage(1);
+                  }}
+                >
+                  {k === "all" ? "Todas" : KIND_LABEL[k as PaymentKind]}
+                </Button>
+              ))}
+          </div>
+        </div>
+
         <Tabs defaultValue="lista" className="flex-1 overflow-hidden flex flex-col">
           <TabsList className="self-start">
             <TabsTrigger value="lista">Lista</TabsTrigger>
