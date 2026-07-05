@@ -236,18 +236,40 @@ export function FaturamentoDetailModal({
       .sort((a, b) => b.tx.competence_date.localeCompare(a.tx.competence_date));
   }, [receitas]);
 
-  const filteredLines = useMemo(
-    () => (paymentFilter === "all" ? lines : lines.filter((l) => saleHasKind(l.items, paymentFilter))),
-    [lines, paymentFilter],
-  );
+  // Duplicate detection: same normalized client + same gross + competência ±3 days
+  const dupIds = useMemo(() => {
+    const norm = (s: string) =>
+      s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+    const dayIndex = (iso: string) => Math.floor(new Date(iso + "T00:00:00").getTime() / 86400000);
+    const flagged = new Set<string>();
+    for (let i = 0; i < lines.length; i++) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const a = lines[i], b = lines[j];
+        const ca = norm(a.tx.contact_name || a.tx.description || "");
+        const cb = norm(b.tx.contact_name || b.tx.description || "");
+        if (!ca || ca !== cb) continue;
+        if (Math.abs(a.gross - b.gross) > 0.01) continue;
+        if (Math.abs(dayIndex(a.tx.competence_date) - dayIndex(b.tx.competence_date)) > 3) continue;
+        flagged.add(a.tx.id);
+        flagged.add(b.tx.id);
+      }
+    }
+    return flagged;
+  }, [lines]);
 
+  const preFiltered = useMemo(() => {
+    let out = paymentFilter === "all" ? lines : lines.filter((l) => saleHasKind(l.items, paymentFilter));
+    if (statusFilter !== "all") out = out.filter((l) => l.tx.status === statusFilter);
+    if (showDupOnly) out = out.filter((l) => dupIds.has(l.tx.id));
+    return out;
+  }, [lines, paymentFilter, statusFilter, showDupOnly, dupIds]);
+
+  const filteredLines = preFiltered;
 
   const hasAnyMdr = filteredLines.some((l) => l.hasGross);
 
   const totals = useMemo(() => {
-    let gross = 0,
-      fee = 0,
-      net = 0;
+    let gross = 0, fee = 0, net = 0;
     filteredLines.forEach((l) => {
       gross += l.gross;
       fee += l.fee;
@@ -256,9 +278,23 @@ export function FaturamentoDetailModal({
     return { gross: r2(gross), fee: r2(fee), net: r2(net) };
   }, [filteredLines]);
 
+  // Audit stats: parcelas / pagas / pendentes / confer
+  const audit = useMemo(() => {
+    let parcels = 0, paid = 0, pending = 0, partial = 0;
+    filteredLines.forEach((l) => {
+      parcels += l.items.length;
+      l.items.forEach((it) => {
+        if (it.status === "Pago") paid++;
+        else if (it.status === "Pendente") pending++;
+        else partial++;
+      });
+    });
+    const diff = r2(totals.gross - totals.fee - totals.net);
+    return { parcels, paid, pending, partial, diff, ok: Math.abs(diff) < 0.02 };
+  }, [filteredLines, totals]);
+
   const count = filteredLines.length;
   const avgGross = count > 0 ? totals.gross / count : 0;
-  // % MDR efetivo considera só o subset que tem MDR (cartão), não infla com boletos.
   const mdrBase = filteredLines
     .filter((l) => l.hasGross)
     .reduce((acc, l) => acc + l.gross, 0);
@@ -267,6 +303,50 @@ export function FaturamentoDetailModal({
     prevTotal !== undefined && prevTotal > 0
       ? ((total - prevTotal) / Math.abs(prevTotal)) * 100
       : null;
+
+  const exportCsv = () => {
+    const header = [
+      "competencia","pagamento","serie","parcela","cliente","contato","descricao",
+      "categoria","forma","status","bruto","mdr","liquido",
+    ];
+    const rows: string[][] = [header];
+    filteredLines.forEach((l) => {
+      const cliente = l.tx.contact_name?.trim() || l.tx.description?.trim() || "Sem cliente";
+      l.items.forEach((it) => {
+        const amt = Number(it.amount) || 0;
+        const oa = Number(it.original_amount) || 0;
+        const itKind = classifyItem(it);
+        const isCard = isCardItem(it);
+        const g = isCard && oa > amt ? oa : amt;
+        const f = isCard && oa > amt ? oa - amt : 0;
+        rows.push([
+          it.competence_date,
+          it.payment_date ?? "",
+          it.series_id ?? "",
+          `${it.installment_number ?? 1}/${it.installments_total ?? 1}`,
+          cliente,
+          it.contact_name ?? "",
+          it.description ?? "",
+          resolveCategory(it.category),
+          KIND_LABEL[itKind],
+          it.status,
+          r2(g).toFixed(2).replace(".", ","),
+          r2(f).toFixed(2).replace(".", ","),
+          r2(amt).toFixed(2).replace(".", ","),
+        ]);
+      });
+    });
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";"))
+      .join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `receitas-${dateFrom}_a_${dateTo}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const groupBy = (getKey: (l: SaleLine) => string): Row[] => {
     const map = new Map<string, Row>();
