@@ -52,6 +52,8 @@ interface Transaction {
   original_amount: number | null;
   card_terminal_id?: string | null;
   payment_method?: string | null;
+  transfer_id?: string | null;
+  is_internal_transfer?: boolean | null;
 }
 
 export interface CreditCardInfo {
@@ -264,12 +266,16 @@ export function useDashboardData(filters: DashboardFilters) {
 
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method, transfer_id, is_internal_transfer")
         .gte("payment_date", startStr)
-        .lte("payment_date", endStr)
-        .or("transfer_id.is.null,is_internal_transfer.eq.false")
-        .not("category", "ilike", "transfer%")
-        .not("category", "ilike", "transferência%");
+        .lte("payment_date", endStr);
+
+      if (!accountId) {
+        query = query
+          .or("transfer_id.is.null,is_internal_transfer.eq.false")
+          .not("category", "ilike", "transfer%")
+          .not("category", "ilike", "transferência%");
+      }
 
       query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
@@ -292,7 +298,7 @@ export function useDashboardData(filters: DashboardFilters) {
     const fetchCompetenceTransactions = async () => {
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method, transfer_id, is_internal_transfer")
         .gte("competence_date", startStr)
         .lte("competence_date", endStr)
         .or("transfer_id.is.null,is_internal_transfer.eq.false")
@@ -317,6 +323,11 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     const fetchInternalTransfersTotal = async () => {
+      if (accountId) {
+        setInternalTransfersTotal(0);
+        return;
+      }
+
       // Sum of internal transfers (one side only — receita) excluded from dashboard,
       // used to display a transparent badge to the user.
       let query = supabase
@@ -358,11 +369,14 @@ export function useDashboardData(filters: DashboardFilters) {
       const twoYearsAgo = format(subYears(new Date(), 2), "yyyy-MM-dd");
       let query = supabase
         .from("transactions")
-        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name")
-        .gte("payment_date", twoYearsAgo)
-        .or("transfer_id.is.null,is_internal_transfer.eq.false")
-        .order("payment_date", { ascending: true })
-        .limit(5000);
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, transfer_id, is_internal_transfer")
+        .gte("payment_date", twoYearsAgo);
+
+      if (!accountId) {
+        query = query.or("transfer_id.is.null,is_internal_transfer.eq.false");
+      }
+
+      query = query.order("payment_date", { ascending: true }).limit(5000);
 
       query = applyCompanyFilter(query, companyCtx);
       query = applyAccountFilter(query, accountId, linkedCardIds);
