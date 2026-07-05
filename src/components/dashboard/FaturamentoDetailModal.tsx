@@ -588,7 +588,7 @@ export function FaturamentoDetailModal({
                       return (
                         <tr
                           key={t.id}
-                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                          className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${dupIds.has(t.id) ? "bg-amber-500/5" : ""}`}
                           onClick={() => setSelectedSale(l)}
                         >
                           <td className="py-2 pr-3 font-medium truncate max-w-[180px]">
@@ -602,6 +602,11 @@ export function FaturamentoDetailModal({
                               {(t.status === "Pendente" || t.status === "Parcial") && (
                                 <Badge variant="outline" className="text-[9px]">
                                   {t.status}
+                                </Badge>
+                              )}
+                              {dupIds.has(t.id) && (
+                                <Badge variant="outline" className="text-[9px] border-amber-500 text-amber-600 dark:text-amber-400">
+                                  Possível duplicata
                                 </Badge>
                               )}
                             </div>
