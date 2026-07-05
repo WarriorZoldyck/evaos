@@ -590,12 +590,12 @@ export function FaturamentoDetailModal({
                           className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${dupIds.has(t.id) ? "bg-amber-500/5" : ""}`}
                           onClick={() => setSelectedSale(l)}
                         >
-                          <td className="py-2 pr-3 font-medium truncate max-w-[180px]">
+                          <td className="py-2 pr-3 font-medium truncate max-w-[240px]">
                             {clienteLabel}
                           </td>
                           <td className="py-2 pr-3">
                             <div className="flex items-center gap-2">
-                              <span className="truncate max-w-[220px] text-muted-foreground">
+                              <span className="truncate max-w-[320px] text-muted-foreground">
                                 {t.description}
                               </span>
                               {(t.status === "Pendente" || t.status === "Parcial") && (
@@ -616,7 +616,7 @@ export function FaturamentoDetailModal({
                           <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
                             {formatDate(t.payment_date)}
                           </td>
-                          <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[140px]">
+                          <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[200px]">
                             {resolveCategory(t.category)}
                           </td>
                           <td className="py-2 pr-3 hidden md:table-cell text-xs">
