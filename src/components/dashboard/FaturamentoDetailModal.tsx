@@ -53,25 +53,45 @@ function normalizePM(pm?: string | null): string {
     .replace(/[\s_-]+/g, "");
 }
 
-function classifyItems(items: Tx[]): PaymentKind {
-  const hasTerminal = items.some((t) => !!t.card_terminal_id);
-  const pms = items.map((t) => normalizePM(t.payment_method));
-  const isCredit = pms.some((p) =>
-    ["credito", "cartaocredito", "creditcard", "cartao"].includes(p),
-  );
-  const isDebit = pms.some((p) =>
-    ["debito", "cartaodebito", "debitcard"].includes(p),
-  );
-  if (isDebit) return "debito";
-  if (isCredit || hasTerminal) return "credito";
-  if (pms.some((p) => p.includes("boleto"))) return "boleto";
-  if (pms.some((p) => p.includes("pix"))) return "pix";
-  if (pms.some((p) => p.includes("dinheiro") || p === "cash" || p.includes("especie")))
-    return "dinheiro";
-  if (pms.some((p) => p.includes("transferencia") || p === "ted" || p === "doc"))
-    return "transferencia";
+function classifyItem(t: Tx): PaymentKind {
+  const pm = normalizePM(t.payment_method);
+  if (["debito", "cartaodebito", "debitcard"].includes(pm)) return "debito";
+  if (["credito", "cartaocredito", "creditcard", "cartao"].includes(pm)) return "credito";
+  if (!!t.card_terminal_id) return "credito"; // terminal sem PM explícito → crédito
+  if (pm.includes("boleto")) return "boleto";
+  if (pm.includes("pix")) return "pix";
+  if (pm.includes("dinheiro") || pm === "cash" || pm.includes("especie")) return "dinheiro";
+  if (pm.includes("transferencia") || pm === "ted" || pm === "doc") return "transferencia";
   return "outros";
 }
+
+function isCardItem(t: Tx): boolean {
+  return CARD_KINDS.includes(classifyItem(t));
+}
+
+function saleHasKind(items: Tx[], kind: PaymentKind): boolean {
+  return items.some((t) => classifyItem(t) === kind);
+}
+
+// Kind primário da venda = maior soma de amount por classificação;
+// se houver mistura relevante (cartão + não-cartão), retorna "outros" (Misto).
+function primaryKind(items: Tx[]): PaymentKind {
+  const totals = new Map<PaymentKind, number>();
+  items.forEach((t) => {
+    const k = classifyItem(t);
+    totals.set(k, (totals.get(k) ?? 0) + (Number(t.amount) || 0));
+  });
+  let best: PaymentKind = "outros";
+  let bestVal = -1;
+  totals.forEach((v, k) => {
+    if (v > bestVal) {
+      best = k;
+      bestVal = v;
+    }
+  });
+  return best;
+}
+
 
 const KIND_LABEL: Record<PaymentKind, string> = {
   credito: "Cartão de crédito",
@@ -175,26 +195,28 @@ export function FaturamentoDetailModal({
         const first = sorted[0];
         const isSeries = !!first.series_id && items.length > 1;
         const totalParcels = first.installments_total ?? items.length;
-        const kind = classifyItems(items);
-        const isCard = CARD_KINDS.includes(kind);
+        const kind = primaryKind(items);
 
-        const net = r2(items.reduce((acc, t) => acc + (Number(t.amount) || 0), 0));
-        const grossCandidates = items
-          .map((t) => (t.original_amount != null ? Number(t.original_amount) : 0))
-          .filter((n) => n > 0);
-        const maxOA = grossCandidates.length > 0 ? Math.max(...grossCandidates) : 0;
-        const sumOA = grossCandidates.reduce((a, b) => a + b, 0);
-        // Heurística — `original_amount` tem duas semânticas conforme o meio:
-        //  - Boleto/parcelamento manual: cada parcela guarda o TOTAL da venda → usar max
-        //  - Cartão (maquininha): cada parcela guarda o próprio bruto proporcional → somar
-        // Distinção: se max(oa) já cobre a soma dos amounts (net), o total já está numa parcela.
-        const rawGross = isSeries
-          ? (maxOA >= net - 0.01 ? maxOA : sumOA)
-          : (grossCandidates[0] ?? 0);
-        // MDR só existe em cartão (crédito/débito). Para boleto/pix/etc. ignora original_amount.
-        const hasGross = isCard && rawGross > 0 && rawGross > net + 0.01;
-        const gross = hasGross ? r2(rawGross) : net;
-        const fee = hasGross ? r2(Math.max(0, gross - net)) : 0;
+        // Per-item computation: MDR só onde a parcela é cartão.
+        let gross = 0;
+        let fee = 0;
+        let net = 0;
+        items.forEach((t) => {
+          const amt = Number(t.amount) || 0;
+          const oa = Number(t.original_amount) || 0;
+          if (isCardItem(t) && oa > amt) {
+            gross += oa;
+            fee += oa - amt;
+            net += amt;
+          } else {
+            gross += amt;
+            net += amt;
+          }
+        });
+        gross = r2(gross);
+        fee = r2(fee);
+        net = r2(net);
+        const hasGross = fee > 0;
 
         const paidCount = items.filter((t) => t.status === "Pago").length;
         const aggStatus =
@@ -213,7 +235,7 @@ export function FaturamentoDetailModal({
   }, [receitas]);
 
   const filteredLines = useMemo(
-    () => (paymentFilter === "all" ? lines : lines.filter((l) => l.kind === paymentFilter)),
+    () => (paymentFilter === "all" ? lines : lines.filter((l) => saleHasKind(l.items, paymentFilter))),
     [lines, paymentFilter],
   );
 
@@ -277,7 +299,7 @@ export function FaturamentoDetailModal({
   );
 
   const byContact = useMemo(
-    () => groupBy((l) => l.tx.contact_name || "Sem contato"),
+    () => groupBy((l) => (l.tx.contact_name?.trim() || l.tx.description?.trim() || "Sem cliente")),
     [filteredLines],
   );
 
@@ -289,7 +311,7 @@ export function FaturamentoDetailModal({
 
   const availableKinds = useMemo(() => {
     const set = new Set<PaymentKind>();
-    lines.forEach((l) => set.add(l.kind));
+    lines.forEach((l) => l.items.forEach((t) => set.add(classifyItem(t))));
     return set;
   }, [lines]);
 
@@ -396,7 +418,7 @@ export function FaturamentoDetailModal({
             <TabsTrigger value="lista">Lista</TabsTrigger>
             <TabsTrigger value="mes">Por mês</TabsTrigger>
             <TabsTrigger value="categoria">Por categoria</TabsTrigger>
-            <TabsTrigger value="contato">Por cliente/contato</TabsTrigger>
+            <TabsTrigger value="contato">Por cliente</TabsTrigger>
           </TabsList>
 
           <TabsContent value="lista" className="flex-1 overflow-hidden mt-3">
@@ -620,35 +642,47 @@ function SaleDetailDialog({
                   <th className="text-left py-2 pr-3">#</th>
                   <th className="text-left py-2 pr-3">Competência</th>
                   <th className="text-left py-2 pr-3">Pagamento</th>
+                  <th className="text-left py-2 pr-3">Forma</th>
                   <th className="text-left py-2 pr-3">Status</th>
+                  <th className="text-right py-2 pr-3">MDR</th>
                   <th className="text-right py-2">Valor</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((it) => (
-                  <tr key={it.id} className="border-b last:border-0">
-                    <td className="py-2 pr-3 font-mono text-xs">
-                      {it.installment_number ?? "—"}/{parcels}
-                    </td>
-                    <td className="py-2 pr-3 font-mono text-xs">
-                      {formatDate(it.competence_date)}
-                    </td>
-                    <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">
-                      {formatDate(it.payment_date)}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <Badge
-                        variant="outline"
-                        className={`text-[9px] ${it.status === "Pago" ? "text-success" : ""}`}
-                      >
-                        {it.status}
-                      </Badge>
-                    </td>
-                    <td className="py-2 text-right font-mono font-medium">
-                      {formatCurrency(Number(it.amount) || 0)}
-                    </td>
-                  </tr>
-                ))}
+                {items.map((it) => {
+                  const itKind = classifyItem(it);
+                  const amt = Number(it.amount) || 0;
+                  const oa = Number(it.original_amount) || 0;
+                  const itFee = isCardItem(it) && oa > amt ? r2(oa - amt) : 0;
+                  return (
+                    <tr key={it.id} className="border-b last:border-0">
+                      <td className="py-2 pr-3 font-mono text-xs">
+                        {it.installment_number ?? "—"}/{parcels}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-xs">
+                        {formatDate(it.competence_date)}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">
+                        {formatDate(it.payment_date)}
+                      </td>
+                      <td className="py-2 pr-3 text-xs">{KIND_LABEL[itKind]}</td>
+                      <td className="py-2 pr-3">
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] ${it.status === "Pago" ? "text-success" : ""}`}
+                        >
+                          {it.status}
+                        </Badge>
+                      </td>
+                      <td className="py-2 pr-3 text-right font-mono text-xs text-destructive">
+                        {itFee > 0 ? `-${formatCurrency(itFee)}` : "—"}
+                      </td>
+                      <td className="py-2 text-right font-mono font-medium">
+                        {formatCurrency(amt)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </ScrollArea>
