@@ -126,6 +126,8 @@ export function FaturamentoDetailModal({
 }: FaturamentoDetailModalProps) {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
+  const [selectedSale, setSelectedSale] = useState<SaleLine | null>(null);
   const PAGE_SIZE = 50;
 
   const resolveCategory = (id: string) =>
