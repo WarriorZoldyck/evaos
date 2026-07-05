@@ -44,6 +44,15 @@ type MissingContextRow = {
   expected_company: string;
 };
 
+type OrphanAccountRow = {
+  id: string;
+  name: string;
+  type: string | null;
+  transactions_count: number;
+};
+
+type CompanyOption = { id: string; name: string };
+
 function fmtCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
