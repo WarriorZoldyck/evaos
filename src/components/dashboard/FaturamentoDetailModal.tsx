@@ -417,7 +417,11 @@ export function FaturamentoDetailModal({
                     {paginated.map((l) => {
                       const t = l.tx;
                       return (
-                        <tr key={t.id} className="border-b last:border-0 hover:bg-muted/30">
+                        <tr
+                          key={t.id}
+                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                          onClick={() => setSelectedSale(l)}
+                        >
                           <td className="py-2 pr-3 font-mono text-xs">
                             {formatDate(t.competence_date)}
                           </td>
