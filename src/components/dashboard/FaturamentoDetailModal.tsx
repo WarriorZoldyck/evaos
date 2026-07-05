@@ -691,28 +691,43 @@ export function FaturamentoDetailModal({
                 </table>
               )}
             </div>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-3 text-xs">
+            {(totalPages > 1 || count > PAGE_SIZE) && (
+              <div className="flex items-center justify-between pt-3 text-xs flex-wrap gap-2">
                 <span className="text-muted-foreground">
-                  Página {page} de {totalPages}
+                  {showAll
+                    ? `Mostrando todas as ${count} vendas`
+                    : `Página ${page} de ${totalPages} · ${count} venda(s) no total`}
                 </span>
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Próxima
-                  </Button>
+                  {count > PAGE_SIZE && count <= 500 && (
+                    <Button
+                      size="sm"
+                      variant={showAll ? "default" : "outline"}
+                      onClick={() => { setShowAll((v) => !v); setPage(1); }}
+                    >
+                      {showAll ? "Paginar" : `Mostrar todos (${count})`}
+                    </Button>
+                  )}
+                  {!showAll && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={page === 1}
+                        onClick={() => setPage((p) => p - 1)}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={page === totalPages}
+                        onClick={() => setPage((p) => p + 1)}
+                      >
+                        Próxima
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
