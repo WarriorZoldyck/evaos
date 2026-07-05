@@ -311,7 +311,7 @@ export function FaturamentoDetailModal({
 
   const availableKinds = useMemo(() => {
     const set = new Set<PaymentKind>();
-    lines.forEach((l) => set.add(l.kind));
+    lines.forEach((l) => l.items.forEach((t) => set.add(classifyItem(t))));
     return set;
   }, [lines]);
 
