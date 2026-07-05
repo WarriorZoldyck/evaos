@@ -159,6 +159,8 @@ export function FaturamentoDetailModal({
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "Pago" | "Pendente" | "Parcial">("all");
+  const [showDupOnly, setShowDupOnly] = useState(false);
   const [selectedSale, setSelectedSale] = useState<SaleLine | null>(null);
   const PAGE_SIZE = 50;
 
@@ -234,18 +236,40 @@ export function FaturamentoDetailModal({
       .sort((a, b) => b.tx.competence_date.localeCompare(a.tx.competence_date));
   }, [receitas]);
 
-  const filteredLines = useMemo(
-    () => (paymentFilter === "all" ? lines : lines.filter((l) => saleHasKind(l.items, paymentFilter))),
-    [lines, paymentFilter],
-  );
+  // Duplicate detection: same normalized client + same gross + competência ±3 days
+  const dupIds = useMemo(() => {
+    const norm = (s: string) =>
+      s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+    const dayIndex = (iso: string) => Math.floor(new Date(iso + "T00:00:00").getTime() / 86400000);
+    const flagged = new Set<string>();
+    for (let i = 0; i < lines.length; i++) {
+      for (let j = i + 1; j < lines.length; j++) {
+        const a = lines[i], b = lines[j];
+        const ca = norm(a.tx.contact_name || a.tx.description || "");
+        const cb = norm(b.tx.contact_name || b.tx.description || "");
+        if (!ca || ca !== cb) continue;
+        if (Math.abs(a.gross - b.gross) > 0.01) continue;
+        if (Math.abs(dayIndex(a.tx.competence_date) - dayIndex(b.tx.competence_date)) > 3) continue;
+        flagged.add(a.tx.id);
+        flagged.add(b.tx.id);
+      }
+    }
+    return flagged;
+  }, [lines]);
 
+  const preFiltered = useMemo(() => {
+    let out = paymentFilter === "all" ? lines : lines.filter((l) => saleHasKind(l.items, paymentFilter));
+    if (statusFilter !== "all") out = out.filter((l) => l.tx.status === statusFilter);
+    if (showDupOnly) out = out.filter((l) => dupIds.has(l.tx.id));
+    return out;
+  }, [lines, paymentFilter, statusFilter, showDupOnly, dupIds]);
+
+  const filteredLines = preFiltered;
 
   const hasAnyMdr = filteredLines.some((l) => l.hasGross);
 
   const totals = useMemo(() => {
-    let gross = 0,
-      fee = 0,
-      net = 0;
+    let gross = 0, fee = 0, net = 0;
     filteredLines.forEach((l) => {
       gross += l.gross;
       fee += l.fee;
@@ -254,9 +278,23 @@ export function FaturamentoDetailModal({
     return { gross: r2(gross), fee: r2(fee), net: r2(net) };
   }, [filteredLines]);
 
+  // Audit stats: parcelas / pagas / pendentes / confer
+  const audit = useMemo(() => {
+    let parcels = 0, paid = 0, pending = 0, partial = 0;
+    filteredLines.forEach((l) => {
+      parcels += l.items.length;
+      l.items.forEach((it) => {
+        if (it.status === "Pago") paid++;
+        else if (it.status === "Pendente") pending++;
+        else partial++;
+      });
+    });
+    const diff = r2(totals.gross - totals.fee - totals.net);
+    return { parcels, paid, pending, partial, diff, ok: Math.abs(diff) < 0.02 };
+  }, [filteredLines, totals]);
+
   const count = filteredLines.length;
   const avgGross = count > 0 ? totals.gross / count : 0;
-  // % MDR efetivo considera só o subset que tem MDR (cartão), não infla com boletos.
   const mdrBase = filteredLines
     .filter((l) => l.hasGross)
     .reduce((acc, l) => acc + l.gross, 0);
@@ -265,6 +303,50 @@ export function FaturamentoDetailModal({
     prevTotal !== undefined && prevTotal > 0
       ? ((total - prevTotal) / Math.abs(prevTotal)) * 100
       : null;
+
+  const exportCsv = () => {
+    const header = [
+      "competencia","pagamento","serie","parcela","cliente","contato","descricao",
+      "categoria","forma","status","bruto","mdr","liquido",
+    ];
+    const rows: string[][] = [header];
+    filteredLines.forEach((l) => {
+      const cliente = l.tx.contact_name?.trim() || l.tx.description?.trim() || "Sem cliente";
+      l.items.forEach((it) => {
+        const amt = Number(it.amount) || 0;
+        const oa = Number(it.original_amount) || 0;
+        const itKind = classifyItem(it);
+        const isCard = isCardItem(it);
+        const g = isCard && oa > amt ? oa : amt;
+        const f = isCard && oa > amt ? oa - amt : 0;
+        rows.push([
+          it.competence_date,
+          it.payment_date ?? "",
+          it.series_id ?? "",
+          `${it.installment_number ?? 1}/${it.installments_total ?? 1}`,
+          cliente,
+          it.contact_name ?? "",
+          it.description ?? "",
+          resolveCategory(it.category),
+          KIND_LABEL[itKind],
+          it.status,
+          r2(g).toFixed(2).replace(".", ","),
+          r2(f).toFixed(2).replace(".", ","),
+          r2(amt).toFixed(2).replace(".", ","),
+        ]);
+      });
+    });
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";"))
+      .join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `receitas-${dateFrom}_a_${dateTo}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const groupBy = (getKey: (l: SaleLine) => string): Row[] => {
     const map = new Map<string, Row>();
@@ -389,27 +471,83 @@ export function FaturamentoDetailModal({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] uppercase text-muted-foreground tracking-wide">
-            Forma de pagamento:
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {(["all", "credito", "debito", "boleto", "pix", "dinheiro", "transferencia", "outros"] as const)
-              .filter((k) => k === "all" || availableKinds.has(k as PaymentKind))
-              .map((k) => (
+        {/* Painel de auditoria */}
+        <div className="rounded-lg border bg-muted/30 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span><span className="text-muted-foreground">Vendas:</span> <b>{count}</b></span>
+          <span><span className="text-muted-foreground">Parcelas:</span> <b>{audit.parcels}</b></span>
+          <span className="text-success">Pagas: <b>{audit.paid}</b></span>
+          <span className="text-amber-600 dark:text-amber-400">Pendentes: <b>{audit.pending}</b></span>
+          {audit.partial > 0 && <span>Parcial: <b>{audit.partial}</b></span>}
+          <span className="text-muted-foreground">·</span>
+          <span>Σ Bruto <b>{formatCurrency(totals.gross)}</b></span>
+          <span className="text-destructive">− MDR <b>{formatCurrency(totals.fee)}</b></span>
+          <span className="text-success">= Líquido <b>{formatCurrency(totals.net)}</b></span>
+          <Badge variant={audit.ok ? "outline" : "destructive"} className="text-[10px]">
+            {audit.ok ? "✓ Confere" : `Δ ${formatCurrency(audit.diff)}`}
+          </Badge>
+          {dupIds.size > 0 && (
+            <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600 dark:text-amber-400">
+              {dupIds.size} possível(is) duplicata(s)
+            </Badge>
+          )}
+          <div className="ml-auto flex gap-1">
+            {dupIds.size > 0 && (
+              <Button
+                size="sm"
+                variant={showDupOnly ? "default" : "outline"}
+                className="h-7 px-2 text-xs"
+                onClick={() => { setShowDupOnly((v) => !v); setPage(1); }}
+              >
+                {showDupOnly ? "Mostrar todos" : "Só duplicatas"}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={exportCsv}>
+              Exportar CSV
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] uppercase text-muted-foreground tracking-wide">
+              Forma:
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {(["all", "credito", "debito", "boleto", "pix", "dinheiro", "transferencia", "outros"] as const)
+                .filter((k) => k === "all" || availableKinds.has(k as PaymentKind))
+                .map((k) => (
+                  <Button
+                    key={k}
+                    size="sm"
+                    variant={paymentFilter === k ? "default" : "outline"}
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      setPaymentFilter(k as PaymentKind | "all");
+                      setPage(1);
+                    }}
+                  >
+                    {k === "all" ? "Todas" : KIND_LABEL[k as PaymentKind]}
+                  </Button>
+                ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] uppercase text-muted-foreground tracking-wide">
+              Status:
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {(["all", "Pago", "Pendente", "Parcial"] as const).map((s) => (
                 <Button
-                  key={k}
+                  key={s}
                   size="sm"
-                  variant={paymentFilter === k ? "default" : "outline"}
+                  variant={statusFilter === s ? "default" : "outline"}
                   className="h-7 px-2 text-xs"
-                  onClick={() => {
-                    setPaymentFilter(k as PaymentKind | "all");
-                    setPage(1);
-                  }}
+                  onClick={() => { setStatusFilter(s); setPage(1); }}
                 >
-                  {k === "all" ? "Todas" : KIND_LABEL[k as PaymentKind]}
+                  {s === "all" ? "Todos" : s}
                 </Button>
               ))}
+            </div>
           </div>
         </div>
 
@@ -450,7 +588,7 @@ export function FaturamentoDetailModal({
                       return (
                         <tr
                           key={t.id}
-                          className="border-b last:border-0 hover:bg-muted/30 cursor-pointer"
+                          className={`border-b last:border-0 hover:bg-muted/30 cursor-pointer ${dupIds.has(t.id) ? "bg-amber-500/5" : ""}`}
                           onClick={() => setSelectedSale(l)}
                         >
                           <td className="py-2 pr-3 font-medium truncate max-w-[180px]">
@@ -464,6 +602,11 @@ export function FaturamentoDetailModal({
                               {(t.status === "Pendente" || t.status === "Parcial") && (
                                 <Badge variant="outline" className="text-[9px]">
                                   {t.status}
+                                </Badge>
+                              )}
+                              {dupIds.has(t.id) && (
+                                <Badge variant="outline" className="text-[9px] border-amber-500 text-amber-600 dark:text-amber-400">
+                                  Possível duplicata
                                 </Badge>
                               )}
                             </div>
