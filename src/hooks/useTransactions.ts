@@ -17,6 +17,7 @@ export interface TransactionFilters {
   categoryId: string;
   dateFrom: string;
   dateTo: string;
+  dateField?: "payment_date" | "competence_date";
   sortOrder: "desc" | "asc";
   accountId: string;
   supplierId: string;
@@ -245,11 +246,12 @@ export function useTransactions() {
       ];
       query = query.or(conditions.join(","));
     }
+    const dateColumn = filters.dateField === "competence_date" ? "competence_date" : "payment_date";
     if (filters.dateFrom) {
-      query = query.gte("payment_date", filters.dateFrom);
+      query = query.gte(dateColumn, filters.dateFrom);
     }
     if (filters.dateTo) {
-      query = query.lte("payment_date", filters.dateTo);
+      query = query.lte(dateColumn, filters.dateTo);
     }
     if (filters.accountId) {
       const [accType, ...idParts] = filters.accountId.split(":");

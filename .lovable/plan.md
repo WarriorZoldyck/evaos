@@ -1,60 +1,78 @@
 
-## Consertar a raiz — invariante "transfer_id ⇒ is_internal_transfer=true"
+## Diagnóstico consolidado
 
-Hoje o cálculo de faturamento/DRE depende de `is_internal_transfer`, mas nada no banco garante que essa flag seja setada quando um par de transferência é criado. Resultado: qualquer usuário pode ter pró-labores/transferências contando 2× no faturamento sem a gente perceber. Vou tratar isso em 4 camadas:
+| Sintoma | Causa real | Escopo |
+|---|---|---|
+| "Faturamento por competência não mostra tudo por contexto" | 942 tx (52%) com `company_id NULL` herdado de 5 contas bancárias sem contexto. Só aparecem em "Ver tudo" ou combinações que incluam Pessoal. | Sistêmico — afeta todos os relatórios |
+| "Jane/Dejane aparece só quando junto Implantes + Renato" | A conta "Itaú Personnalite" está sem `company_id`. O usuário provavelmente quer atribuir a Renato. | Dados + UX |
+| "Luiz competência 11/04 está errado" | Regra intencional: parcelas compartilham a competência da 1ª venda (`installment-accrual-logic`). A UI não deixa isso claro. | UX |
+| "Lista do modal não mostra todos" | Paginação de 50 por página; controle de página não está óbvio. | UX |
 
-### 1. Auditoria global (uma query, todos os usuários)
-Identificar todos os lançamentos no sistema com `transfer_id NOT NULL` e `is_internal_transfer=false` — quantos usuários, quantos lançamentos, quanto R$. Isso dá o tamanho real do problema antes de qualquer alteração de esquema.
+## Correções (frontend + dados guiado pelo usuário — sem migration bruta)
 
-### 2. Correção retroativa em massa (data migration)
-Um único `UPDATE` global:
+### 1. Painel "Saúde de Dados" ganha 2 novos checadores
+
+Em `src/pages/hub/HubIntegridade.tsx`:
+
+**a) Contas bancárias sem contexto**
+- Lista as 5 contas com `company_id IS NULL`, quantos lançamentos cada uma tem, e um seletor inline (`Pessoal` / lista de empresas) + botão "Atribuir e propagar".
+- Ação executa `UPDATE bank_accounts SET company_id=X WHERE id=Y` **e** propaga: `UPDATE transactions SET company_id=X WHERE bank_account_id=Y AND company_id IS NULL`.
+- Confirmação obrigatória mostrando quantas transações serão afetadas.
+
+**b) Transações sem contexto cuja conta JÁ tem contexto**
+- Já existe hoje (do painel anterior) — reforçar copy explicando que resolve o "sumiu do faturamento".
+
+### 2. Trigger para não deixar reaparecer
+
+Migration nova (`supabase/migrations/…`):
+
 ```sql
-UPDATE public.transactions
-   SET is_internal_transfer = true
- WHERE transfer_id IS NOT NULL
-   AND is_internal_transfer = false;
-```
-Sem exceções — se tem par de transferência, é transferência interna, ponto.
-
-Além disso, para pares em que um lado ficou com `company_id NULL` mas a conta pertence a uma empresa, herdar o contexto da `bank_accounts.company_id`. Isso cobre o "sem contexto" que apareceu no espclin.
-
-### 3. Trigger de invariante (impede que o problema volte)
-```sql
-CREATE OR REPLACE FUNCTION public.enforce_transfer_flag()
-RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION public.inherit_company_from_account()
+RETURNS trigger LANGUAGE plpgsql SET search_path=public AS $$
 BEGIN
-  IF NEW.transfer_id IS NOT NULL THEN
-    NEW.is_internal_transfer := true;
+  IF NEW.company_id IS NULL AND NEW.bank_account_id IS NOT NULL THEN
+    SELECT company_id INTO NEW.company_id
+    FROM public.bank_accounts WHERE id = NEW.bank_account_id;
   END IF;
   RETURN NEW;
 END $$;
 
-CREATE TRIGGER transactions_enforce_transfer_flag
-BEFORE INSERT OR UPDATE ON public.transactions
-FOR EACH ROW EXECUTE FUNCTION public.enforce_transfer_flag();
+CREATE TRIGGER transactions_inherit_company
+BEFORE INSERT OR UPDATE OF bank_account_id, company_id ON public.transactions
+FOR EACH ROW EXECUTE FUNCTION public.inherit_company_from_account();
 ```
-Com isso, mesmo que qualquer código (frontend, edge function, WhatsApp AI, importador de extrato) esqueça de setar a flag, o banco corrige sozinho. Impossível regressão.
 
-### 4. Auditoria "saúde de dados" recorrente (dashboard interno EVA Hub)
-Uma view/consulta simples que roda quando você quiser (ou como card no `/hub`) mostrando por usuário:
-- lançamentos com `transfer_id` sem par (transferência órfã)
-- lançamentos de receita com `company_id NULL` em contas que **têm** `company_id`
-- pares de transferência com valores diferentes entre os dois lados
+Efeito: qualquer novo lançamento herda o `company_id` da conta se não for informado explicitamente. Não sobrescreve `company_id` já preenchido.
 
-Assim, quando um cliente reclamar "meu faturamento está errado", em vez de você descer no SQL a mão, você abre o painel e vê exatamente qual anomalia bater.
+### 3. Ajuste de UX no `FaturamentoDetailModal`
 
----
+- **Cabeçalho auto-explicativo** (do plano anterior mantido): período ativo, contexto, contagem carregada, chips de filtros internos com "×".
+- **Aba "Lista" com paginação visível**: substituir o `paginated.slice` silencioso por controles "◀ Página X de Y ▶" **e** um botão "Mostrar todos (N)" que expande o `PAGE_SIZE` para todos os itens filtrados. Se `N ≤ 200`, mostra tudo direto (sem paginar).
+- **Alerta de contexto pendente**: se algum item carregado tem `company_id NULL` **ou** o filtro atual exclui itens desse tipo, mostrar um banner: "Existem X receitas sem contexto no período — abrir Saúde de Dados".
+- **Etiqueta de parcelamento**: quando a linha é série (`isSeries`), o tooltip da competência mostra "Competência fixa da 1ª parcela — venda em DD/MM/AAAA. Cada parcela é paga em data diferente." Elimina a percepção de "competência errada" do Luiz.
 
-### Ordem de execução
-1. Rodar a auditoria global (SELECT, só leitura) e trazer os números.
-2. Migração de banco: `UPDATE` retroativo + trigger de invariante (uma única migration).
-3. Adicionar seção "Saúde de dados" no `/hub` (ou nova rota `/hub/integridade`) com as 3 consultas de anomalia.
-4. Documentar no memory do projeto a invariante `transfer_id ⇒ is_internal_transfer` como regra de arquitetura.
+### 4. `useTransactions` honra `dateField`
 
-### O que **não** vou mexer
-- Cálculo do card Faturamento (já correto, usa bruto).
-- Lógica de criação de transferência no frontend (o trigger cobre — não precisa refatorar 5 pontos).
-- Dados de outros usuários manualmente — a migration global cuida.
+Aceitar `filters.dateField: "payment_date" | "competence_date"` (default `payment_date`). `TransactionFilters.tsx` e `Lancamentos.tsx` lêem `?dateField=` da URL. Fecha o loop do drill-down do modal.
 
-### Pergunta antes de executar
-Você quer que eu **inclua o painel "Saúde de dados" nessa rodada** (item 4), ou primeiro só a auditoria + migration (itens 1–3) e o painel eu faço em seguida?
+## Detalhes técnicos
+
+Arquivos afetados:
+- `src/pages/hub/HubIntegridade.tsx` — 2 novos painéis + ações de propagação.
+- `src/components/dashboard/FaturamentoDetailModal.tsx` — cabeçalho, paginação visível, alerta, tooltip de parcelas.
+- `src/pages/Dashboard.tsx` — passar `onJumpToPeriod` (herdado do plano anterior).
+- `src/hooks/useTransactions.ts`, `src/components/lancamentos/TransactionFilters.tsx`, `src/pages/Lancamentos.tsx` — suporte a `dateField`.
+- `supabase/migrations/YYYYMMDD_inherit_company_from_account.sql` — trigger.
+
+**Não faz parte deste plano:**
+- Nenhum `UPDATE` em massa automático — a atribuição das 5 contas é feita pelo usuário no painel, um clique por conta, com preview de quantas transações serão afetadas. Preserva controle.
+- Nenhuma mudança na regra de competência de parcelas (é design intencional).
+
+## Aceite
+
+1. `/eva-hub/integridade` lista as 5 contas sem contexto; ao atribuir "Itaú Personnalite" → Renato, X transações passam para Renato imediatamente.
+2. Após reatribuir, o modal Faturamento com contexto Renato passa a listar as receitas antes órfãs (Dejane etc.).
+3. Novo lançamento criado numa conta com contexto herda automaticamente (validar via inserção de teste).
+4. Aba "Lista" do modal mostra "Página 1 de 3" ou "Mostrar todos (127)"; nenhuma linha fica escondida sem controle visível.
+5. Linha de parcela mostra tooltip explicando competência fixa.
+6. `/lancamentos?dateField=competence_date&dateFrom=…&dateTo=…` filtra por competência.

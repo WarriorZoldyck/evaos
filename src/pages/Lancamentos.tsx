@@ -91,8 +91,9 @@ export default function Lancamentos() {
     const statusParam = searchParams.get("status");
     const dateFromParam = searchParams.get("dateFrom");
     const dateToParam = searchParams.get("dateTo");
+    const dateFieldParam = searchParams.get("dateField");
 
-    if (categoryParam || typeParam || statusParam || dateFromParam || dateToParam) {
+    if (categoryParam || typeParam || statusParam || dateFromParam || dateToParam || dateFieldParam) {
       const isUncategorizedSentinel = categoryParam === "__sem_categoria__";
       const matchedCat = !isUncategorizedSentinel
         ? categories.find((c) => c.name === categoryParam && !c.parent_id)
@@ -106,6 +107,9 @@ export default function Lancamentos() {
         status: (statusParam as "Pago" | "Pendente") || prev.status,
         dateFrom: dateFromParam || prev.dateFrom,
         dateTo: dateToParam || prev.dateTo,
+        dateField: (dateFieldParam === "competence_date" || dateFieldParam === "payment_date")
+          ? dateFieldParam
+          : prev.dateField,
       }));
       if (statusParam === "Pago") setActiveTab("realizado");
       else if (statusParam === "Pendente") setActiveTab("projetado");

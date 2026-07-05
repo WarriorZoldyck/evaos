@@ -10,7 +10,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Loader2, RefreshCw, ShieldCheck, AlertTriangle, ArrowLeftRight, Building2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, RefreshCw, ShieldCheck, AlertTriangle, ArrowLeftRight, Building2, Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -43,6 +44,15 @@ type MissingContextRow = {
   expected_company: string;
 };
 
+type OrphanAccountRow = {
+  id: string;
+  name: string;
+  type: string | null;
+  transactions_count: number;
+};
+
+type CompanyOption = { id: string; name: string };
+
 function fmtCurrency(v: number) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
@@ -59,8 +69,12 @@ export default function HubIntegridade() {
   const [orphans, setOrphans] = useState<OrphanRow[]>([]);
   const [divergent, setDivergent] = useState<DivergentRow[]>([]);
   const [missingCtx, setMissingCtx] = useState<MissingContextRow[]>([]);
+  const [orphanAccounts, setOrphanAccounts] = useState<OrphanAccountRow[]>([]);
+  const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
+  const [pendingAccountCompany, setPendingAccountCompany] = useState<Record<string, string>>({});
   const [fixingOrphan, setFixingOrphan] = useState<string | null>(null);
   const [fixingCtx, setFixingCtx] = useState<string | null>(null);
+  const [fixingAccount, setFixingAccount] = useState<string | null>(null);
 
   const runChecks = useCallback(async () => {
     if (!user) return;
@@ -125,9 +139,40 @@ export default function HubIntegridade() {
         expected_company: t.bank_accounts?.companies?.name || "—",
       }));
 
+      // Anomaly 4: contas bancárias sem company_id (raiz do problema)
+      const { data: orphanAccData, error: e3 } = await supabase
+        .from("bank_accounts")
+        .select("id, name, type")
+        .eq("user_id", user.id)
+        .is("company_id", null);
+      if (e3) throw e3;
+
+      const orphanAccList: OrphanAccountRow[] = [];
+      for (const acc of orphanAccData || []) {
+        const { count } = await supabase
+          .from("transactions")
+          .select("id", { count: "exact", head: true })
+          .eq("bank_account_id", acc.id);
+        orphanAccList.push({
+          id: acc.id,
+          name: acc.name,
+          type: acc.type,
+          transactions_count: count ?? 0,
+        });
+      }
+
+      // Companies for the select
+      const { data: companyData } = await supabase
+        .from("companies")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .order("name");
+
       setOrphans(orphanList);
       setDivergent(divergentList);
       setMissingCtx(missingList);
+      setOrphanAccounts(orphanAccList);
+      setCompanyOptions(companyData || []);
     } catch (err: any) {
       toast.error("Erro ao verificar integridade: " + (err?.message || String(err)));
     } finally {
@@ -204,7 +249,50 @@ export default function HubIntegridade() {
     }
   };
 
-  const totalIssues = orphans.length + divergent.length + missingCtx.length;
+  const assignAccountContext = async (accountId: string) => {
+    const targetCompany = pendingAccountCompany[accountId];
+    if (!targetCompany) {
+      toast.error("Escolha um contexto antes de aplicar");
+      return;
+    }
+    const companyIdToSet = targetCompany === "__personal__" ? null : targetCompany;
+    const row = orphanAccounts.find((a) => a.id === accountId);
+    if (!row) return;
+    const label = companyIdToSet
+      ? companyOptions.find((c) => c.id === companyIdToSet)?.name || "empresa"
+      : "Pessoal";
+    if (!window.confirm(
+      `Vincular a conta "${row.name}" ao contexto "${label}"?\n\n` +
+      `Isso também vai atribuir esse contexto a ${row.transactions_count} lançamento(s) da conta que hoje estão sem contexto.`
+    )) return;
+
+    setFixingAccount(accountId);
+    try {
+      // 1) Update account
+      const { error: e1 } = await supabase
+        .from("bank_accounts")
+        .update({ company_id: companyIdToSet })
+        .eq("id", accountId);
+      if (e1) throw e1;
+
+      // 2) Propagate to transactions that are NULL on this account
+      const { error: e2 } = await supabase
+        .from("transactions")
+        .update({ company_id: companyIdToSet })
+        .eq("bank_account_id", accountId)
+        .is("company_id", null);
+      if (e2) throw e2;
+
+      toast.success(`Conta vinculada. ${row.transactions_count} lançamento(s) atribuído(s) a ${label}.`);
+      await runChecks();
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || String(err)));
+    } finally {
+      setFixingAccount(null);
+    }
+  };
+
+  const totalIssues = orphans.length + divergent.length + missingCtx.length + orphanAccounts.length;
 
   // Hub members shouldn't see this — only owners
   if (isHubMember) return <Navigate to="/eva-hub/contas" replace />;
@@ -244,6 +332,75 @@ export default function HubIntegridade() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Anomaly 0 — Contas bancárias sem contexto (RAIZ) */}
+      <Card className="border-primary/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Wallet className="h-4 w-4 text-primary" />
+            Contas bancárias sem contexto
+            <Badge variant={orphanAccounts.length ? "destructive" : "secondary"} className="ml-2">
+              {orphanAccounts.length}
+            </Badge>
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Estas contas não têm empresa vinculada, então <b>todos os lançamentos delas ficam "sem contexto"</b> e só aparecem em "Ver tudo". Escolha o contexto correto para cada uma — vamos propagar automaticamente para os lançamentos existentes que estão sem contexto.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : orphanAccounts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Todas as contas têm contexto vinculado. ✓</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Conta</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Lançamentos</TableHead>
+                  <TableHead>Vincular a</TableHead>
+                  <TableHead className="text-right">Ação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orphanAccounts.map((a) => (
+                  <TableRow key={a.id}>
+                    <TableCell className="text-sm font-medium">{a.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{a.type || "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{a.transactions_count}</TableCell>
+                    <TableCell>
+                      <Select
+                        value={pendingAccountCompany[a.id] || ""}
+                        onValueChange={(v) => setPendingAccountCompany((prev) => ({ ...prev, [a.id]: v }))}
+                      >
+                        <SelectTrigger className="h-8 w-48 text-xs">
+                          <SelectValue placeholder="Escolha um contexto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__personal__">Pessoal (sem empresa)</SelectItem>
+                          {companyOptions.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        onClick={() => assignAccountContext(a.id)}
+                        disabled={fixingAccount === a.id || !pendingAccountCompany[a.id]}
+                      >
+                        {fixingAccount === a.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Vincular e propagar"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Anomaly 1 — Transferências órfãs */}
       <Card>

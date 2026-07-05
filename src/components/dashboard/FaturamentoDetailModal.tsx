@@ -161,6 +161,7 @@ export function FaturamentoDetailModal({
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "Pago" | "Pendente" | "Parcial">("all");
   const [showDupOnly, setShowDupOnly] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [selectedSale, setSelectedSale] = useState<SaleLine | null>(null);
   const PAGE_SIZE = 50;
 
@@ -386,8 +387,8 @@ export function FaturamentoDetailModal({
   );
 
   const paginated = useMemo(
-    () => filteredLines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filteredLines, page],
+    () => (showAll ? filteredLines : filteredLines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)),
+    [filteredLines, page, showAll],
   );
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
@@ -419,8 +420,54 @@ export function FaturamentoDetailModal({
           <DialogDescription>
             Vendas/receitas com competência entre{" "}
             <span className="font-medium text-foreground">{formatDate(dateFrom)}</span> e{" "}
-            <span className="font-medium text-foreground">{formatDate(dateTo)}</span>.
+            <span className="font-medium text-foreground">{formatDate(dateTo)}</span>.{" "}
+            <span className="text-muted-foreground">
+              {competenceTransactions.filter((t) => t.type === "receita").length} receita(s) carregada(s) do banco no período · {lines.length} venda(s) após agrupar parcelas.
+            </span>
           </DialogDescription>
+          {(paymentFilter !== "all" || statusFilter !== "all" || showDupOnly) && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] uppercase text-muted-foreground tracking-wide">Filtros do modal:</span>
+              {paymentFilter !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  Forma: {KIND_LABEL[paymentFilter as PaymentKind]}
+                  <button
+                    className="ml-1 hover:text-destructive"
+                    onClick={() => { setPaymentFilter("all"); setPage(1); }}
+                    aria-label="Limpar filtro de forma"
+                  >×</button>
+                </Badge>
+              )}
+              {statusFilter !== "all" && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  Status: {statusFilter}
+                  <button
+                    className="ml-1 hover:text-destructive"
+                    onClick={() => { setStatusFilter("all"); setPage(1); }}
+                    aria-label="Limpar filtro de status"
+                  >×</button>
+                </Badge>
+              )}
+              {showDupOnly && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  Só duplicatas
+                  <button
+                    className="ml-1 hover:text-destructive"
+                    onClick={() => { setShowDupOnly(false); setPage(1); }}
+                    aria-label="Limpar filtro de duplicatas"
+                  >×</button>
+                </Badge>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => { setPaymentFilter("all"); setStatusFilter("all"); setShowDupOnly(false); setPage(1); }}
+              >
+                Limpar todos
+              </Button>
+            </div>
+          )}
         </DialogHeader>
 
         {/* Resumo */}
@@ -611,7 +658,16 @@ export function FaturamentoDetailModal({
                             </div>
                           </td>
                           <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell">
-                            {formatDate(t.competence_date)}
+                            {l.isSeries ? (
+                              <span
+                                className="underline decoration-dotted decoration-muted-foreground/50 cursor-help"
+                                title={`Competência fixa da 1ª parcela (venda em ${formatDate(t.competence_date)}). Cada uma das ${l.parcels} parcelas é paga em data diferente, mas contabilizadas na competência da venda original.`}
+                              >
+                                {formatDate(t.competence_date)}
+                              </span>
+                            ) : (
+                              formatDate(t.competence_date)
+                            )}
                           </td>
                           <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
                             {formatDate(t.payment_date)}
@@ -644,28 +700,43 @@ export function FaturamentoDetailModal({
                 </table>
               )}
             </div>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-3 text-xs">
+            {(totalPages > 1 || count > PAGE_SIZE) && (
+              <div className="flex items-center justify-between pt-3 text-xs flex-wrap gap-2">
                 <span className="text-muted-foreground">
-                  Página {page} de {totalPages}
+                  {showAll
+                    ? `Mostrando todas as ${count} vendas`
+                    : `Página ${page} de ${totalPages} · ${count} venda(s) no total`}
                 </span>
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === 1}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={page === totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Próxima
-                  </Button>
+                  {count > PAGE_SIZE && count <= 500 && (
+                    <Button
+                      size="sm"
+                      variant={showAll ? "default" : "outline"}
+                      onClick={() => { setShowAll((v) => !v); setPage(1); }}
+                    >
+                      {showAll ? "Paginar" : `Mostrar todos (${count})`}
+                    </Button>
+                  )}
+                  {!showAll && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={page === 1}
+                        onClick={() => setPage((p) => p - 1)}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={page === totalPages}
+                        onClick={() => setPage((p) => p + 1)}
+                      >
+                        Próxima
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
