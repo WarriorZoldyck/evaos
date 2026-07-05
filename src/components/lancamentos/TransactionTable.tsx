@@ -628,23 +628,6 @@ export function TransactionTable({
     return items;
   }, [transactions, creditCards, parentCardIds, childToParentMap]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (transactions.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-        <p className="text-sm">Nenhum lançamento encontrado</p>
-        <p className="text-xs mt-1">Tente ajustar os filtros ou crie um novo lançamento</p>
-      </div>
-    );
-  }
-
   // Map transfer_id -> peer account name so each leg can show "→ Conta destino/origem"
   const transferPeerAccount = useMemo(() => {
     const byTransfer = new Map<string, Transaction[]>();
@@ -667,6 +650,23 @@ export function TransactionTable({
     });
     return map;
   }, [transactions, bankAccounts, wallets, creditCards]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (transactions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+        <p className="text-sm">Nenhum lançamento encontrado</p>
+        <p className="text-xs mt-1">Tente ajustar os filtros ou crie um novo lançamento</p>
+      </div>
+    );
+  }
 
   const rowProps = { categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients, onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, selectionMode, onToggleSelect: toggleSelect, transferPeerAccount };
 
