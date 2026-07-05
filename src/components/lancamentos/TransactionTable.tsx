@@ -156,12 +156,13 @@ interface TransactionRowProps {
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
   selectionMode?: boolean;
+  transferPeerAccount?: Map<string, { name: string; direction: "to" | "from" }>;
 }
 
 function TransactionRow({
   t, categories, allCategories, bankAccounts, wallets, creditCards, suppliers, clients,
   onEdit, onDuplicate, onDelete, onLiquidate, onViewDetails, indented,
-  isSelected, onToggleSelect, selectionMode,
+  isSelected, onToggleSelect, selectionMode, transferPeerAccount,
 }: TransactionRowProps) {
   const { getCategoryHierarchy } = useCategoryHelpers(categories, allCategories);
   const installment = getInstallmentLabel(t);
@@ -169,6 +170,7 @@ function TransactionRow({
   const accountName = getAccountName(t, bankAccounts, wallets, creditCards);
   const accountIcon = getAccountIcon(t);
   const contactName = getContactName(t, suppliers, clients);
+  const peer = t.transfer_id ? transferPeerAccount?.get(t.id) : undefined;
 
   return (
     <div
