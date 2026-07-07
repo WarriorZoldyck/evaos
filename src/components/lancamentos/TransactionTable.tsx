@@ -260,9 +260,14 @@ function TransactionRow({
       {/* Status */}
       <Badge
         variant={t.status === "Pago" ? "default" : "secondary"}
-        className="text-[10px] shrink-0 hidden sm:inline-flex"
+        className={`text-[10px] shrink-0 hidden sm:inline-flex gap-1 items-center ${
+          t.status === "Pago"
+            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
+            : ""
+        }`}
       >
-        {t.status === "Pago" ? "Liquidado" : "Pendente"}
+        {t.status === "Pago" && <CheckCircle2 className="h-3 w-3" />}
+        {t.status === "Pago" ? "Conciliado" : "Pendente"}
       </Badge>
 
       {/* Actions */}
