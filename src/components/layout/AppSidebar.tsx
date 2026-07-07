@@ -277,6 +277,11 @@ export function AppSidebar() {
                     >
                       <UsersRound className="h-4 w-4" />
                       <span>EVA Hub</span>
+                      {pendingInvitationsCount > 0 && (
+                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
+                          {pendingInvitationsCount}
+                        </span>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
