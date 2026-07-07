@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, Landmark, Percent, ArrowLeftRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowLeftRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResponsiveContainer, AreaChart, Area } from "recharts";
@@ -38,7 +38,6 @@ interface SummaryCardsProps {
   entradasSeries?: SeriesPoint[];
   saidasSeries?: SeriesPoint[];
   saldoSeries?: SeriesPoint[];
-  marginSeries?: SeriesPoint[];
   onFaturamentoClick?: () => void;
   internalTransfersTotal?: number;
 }
@@ -239,7 +238,7 @@ export function SummaryCards({
   loading, dateFrom, dateTo,
   prevFaturamento, prevEntradas, prevSaidas, prevSaldo,
   prevEntradaPrevista, prevSaidaPrevista, prevSaldoPrevisto,
-  faturamentoSeries, entradasSeries, saidasSeries, saldoSeries, marginSeries,
+  faturamentoSeries, entradasSeries, saidasSeries, saldoSeries,
   onFaturamentoClick,
   internalTransfersTotal,
 }: SummaryCardsProps) {
@@ -255,12 +254,6 @@ export function SummaryCards({
   };
 
   const saldoPrevisto = entradaPrevista - saidaPrevista;
-  const margin = entradas > 0 ? ((entradas - saidas) / entradas) * 100 : 0;
-  const prevMargin =
-    prevEntradas !== undefined && prevSaidas !== undefined && prevEntradas > 0
-      ? ((prevEntradas - prevSaidas) / prevEntradas) * 100
-      : null;
-  const marginDelta = prevMargin === null ? null : margin - prevMargin;
 
   return (
     <div className="space-y-4">
@@ -335,17 +328,6 @@ export function SummaryCards({
           delta={prevSaldo !== undefined ? pctChange(saldo, prevSaldo) : undefined}
           series={saldoSeries}
           accent={saldo >= 0 ? "hsl(142, 71%, 45%)" : "hsl(0, 72%, 55%)"}
-        />
-        <SummaryCard
-          title="Margem"
-          value={`${margin.toFixed(1)}%`}
-          icon={Percent}
-          trend={margin >= 0 ? "up" : "down"}
-          gradient="bg-gradient-primary"
-          loading={loading}
-          delta={marginDelta}
-          series={marginSeries}
-          accent="hsl(265, 80%, 60%)"
         />
       </div>
 
