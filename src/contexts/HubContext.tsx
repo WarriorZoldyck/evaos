@@ -63,6 +63,7 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
     if (!user) {
       setIsHubMember(false);
       setIsOwnerWithMembers(false);
+      setPendingInvitationsCount(0);
       setImpersonatingOwnerId(null);
       setImpersonatingOwnerName(null);
       setImpersonatingRole(null);
