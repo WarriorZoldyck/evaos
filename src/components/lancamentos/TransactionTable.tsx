@@ -257,16 +257,25 @@ function TransactionRow({
         </span>
       </div>
 
+      {/* Conciliado checkbox (manual) */}
+      <div
+        className="shrink-0 hidden sm:flex items-center"
+        onClick={(e) => e.stopPropagation()}
+        title={reconciled ? "Conciliado" : "Marcar como conciliado"}
+      >
+        <Checkbox
+          checked={reconciled}
+          onCheckedChange={handleToggleReconciled}
+          aria-label="Conciliado"
+          className={reconciled ? "border-emerald-500 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500" : ""}
+        />
+      </div>
+
       {/* Status */}
       <Badge
         variant={t.status === "Pago" ? "default" : "secondary"}
-        className={`text-[10px] shrink-0 hidden sm:inline-flex gap-1 items-center ${
-          t.status === "Pago"
-            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
-            : ""
-        }`}
+        className="text-[10px] shrink-0 hidden sm:inline-flex"
       >
-        {t.status === "Pago" && <CheckCircle2 className="h-3 w-3" />}
         {t.status === "Pago" ? "Pago" : "Pendente"}
       </Badge>
 
