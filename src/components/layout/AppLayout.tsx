@@ -40,7 +40,7 @@ function AppLayoutInner() {
   const location = useLocation();
   const isOnLancamentos = location.pathname === "/lancamentos";
   const [globalFormOpen, setGlobalFormOpen] = useState(false);
-  const { isHubMember, impersonatingOwnerId, impersonatingOwnerName, impersonatingRole, exitImpersonation } = useHub();
+  const { impersonatingOwnerId, impersonatingOwnerName, impersonatingRole, exitImpersonation } = useHub();
 
   const roleLabel: Record<string, string> = { admin: "Admin", editor: "Editor", viewer: "Leitura" };
 
