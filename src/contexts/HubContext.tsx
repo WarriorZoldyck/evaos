@@ -25,11 +25,12 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
   const [impersonatingOwnerName, setImpersonatingOwnerName] = useState<string | null>(null);
   const [impersonatingRole, setImpersonatingRole] = useState<string | null>(null);
   const [isOwnerWithMembers, setIsOwnerWithMembers] = useState(false);
+  const [pendingInvitationsCount, setPendingInvitationsCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const refreshHubStatus = useCallback(async () => {
     if (!user) return;
-    const [memberRes, ownerRes] = await Promise.all([
+    const [memberRes, ownerRes, pendingRes] = await Promise.all([
       supabase
         .from("workspace_members")
         .select("owner_id, role")
@@ -39,11 +40,17 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
         .from("workspace_members")
         .select("id", { count: "exact", head: true })
         .eq("owner_id", user.id),
+      supabase
+        .from("workspace_members")
+        .select("id", { count: "exact", head: true })
+        .eq("member_user_id", user.id)
+        .eq("status", "pending"),
     ]);
     const activeMemberships = (memberRes.data || []) as Array<{ owner_id: string; role: string | null }>;
     const hubMember = activeMemberships.length > 0;
     setIsHubMember(hubMember);
     setIsOwnerWithMembers((ownerRes.count ?? 0) > 0);
+    setPendingInvitationsCount(pendingRes.count ?? 0);
 
     if (impersonatingOwnerId && !activeMemberships.some((m) => m.owner_id === impersonatingOwnerId)) {
       setImpersonatingOwnerId(null);
