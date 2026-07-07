@@ -16,6 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { Transaction, Category } from "@/hooks/useTransactions";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface CreditCardWithHierarchy {
   id: string;
@@ -171,6 +173,20 @@ function TransactionRow({
   const accountIcon = getAccountIcon(t);
   const contactName = getContactName(t, suppliers, clients);
   const peer = t.transfer_id ? transferPeerAccount?.get(t.id) : undefined;
+  const [reconciled, setReconciled] = useState<boolean>(!!t.is_reconciled);
+  const handleToggleReconciled = async (checked: boolean | "indeterminate") => {
+    const next = checked === true;
+    const prev = reconciled;
+    setReconciled(next);
+    const { error } = await supabase
+      .from("transactions")
+      .update({ is_reconciled: next })
+      .eq("id", t.id);
+    if (error) {
+      setReconciled(prev);
+      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+    }
+  };
 
   return (
     <div
@@ -257,16 +273,25 @@ function TransactionRow({
         </span>
       </div>
 
+      {/* Conciliado checkbox (manual) */}
+      <div
+        className="shrink-0 hidden sm:flex items-center"
+        onClick={(e) => e.stopPropagation()}
+        title={reconciled ? "Conciliado" : "Marcar como conciliado"}
+      >
+        <Checkbox
+          checked={reconciled}
+          onCheckedChange={handleToggleReconciled}
+          aria-label="Conciliado"
+          className={reconciled ? "border-emerald-500 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500" : ""}
+        />
+      </div>
+
       {/* Status */}
       <Badge
         variant={t.status === "Pago" ? "default" : "secondary"}
-        className={`text-[10px] shrink-0 hidden sm:inline-flex gap-1 items-center ${
-          t.status === "Pago"
-            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20"
-            : ""
-        }`}
+        className="text-[10px] shrink-0 hidden sm:inline-flex"
       >
-        {t.status === "Pago" && <CheckCircle2 className="h-3 w-3" />}
         {t.status === "Pago" ? "Pago" : "Pendente"}
       </Badge>
 
