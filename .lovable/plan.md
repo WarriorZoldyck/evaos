@@ -1,61 +1,45 @@
 ## Diagnóstico
 
-### 1. MDR do Dashboard (bug crítico — reportado)
+Confirmei no banco:
 
-`src/hooks/useDashboardData.ts` calcula o MDR do card assim:
+- Nayara (`nayarapereira.med@gmail.com`, id `2eec6f87…`) tem sim um registro em `workspace_members` criado pelo Rômulo (`owner_id = 9716acbe…`), `role=admin`, `status='pending'`, `workspace_id=null`.
+- Rômulo tem assinatura ativa do plano **Família** (`max_users=3`), então o convite é legítimo — o rótulo "exclusividade plano Família" que apareceu para Nayara é engano da UI, não bloqueio real da conta dele.
+- `create-hub-member` (que Rômulo usou) **não envia nenhum e-mail** hoje: só grava o `pending` na tabela. Por isso Nayara não recebeu convite.
+- A tela onde os convites pendentes aparecem (`/hub` → `EvaHub.tsx`) está envolvida pelo `HubLayout.tsx`, que bloqueia qualquer usuário cujo `usePlanLimits().hubAllowed === false` **e** que não seja `isHubMember` **e** que não seja `isOwnerWithMembers`. E o `HubContext` só marca `isHubMember=true` para memberships com `status='active'` — quem tem apenas convite pendente cai fora dos três critérios e recebe a UpgradeGate "EVA Hub é exclusivo do plano Família".
+- Resultado: Nayara nunca consegue chegar até o botão "Aceitar convite", e como também não há e-mail, ela fica sem nenhum canal para descobrir/aceitar o convite.
 
-```ts
-const mdrTransactions = paidTransactions.filter(
-  (t) => t.original_amount && Number(t.original_amount) > 0
-);
-```
+## Correções propostas (todas globais, sem gambiarra para essa conta)
 
-Três problemas, confirmados nos dados:
+### 1. Deixar convites pendentes passarem pelo `HubLayout`
+- Em `HubContext.tsx`: expor um novo flag `hasPendingInvitations` (contando linhas em `workspace_members` para `member_user_id = user.id` com `status='pending'`). Atualizar junto com o resto no `refreshHubStatus`.
+- Em `HubLayout.tsx`: mudar o guard para
+  `if (!hubAllowed && !isHubMember && !isOwnerWithMembers && !hasPendingInvitations) { <UpgradeGate/> }`.
+- Efeito: convidado consegue entrar em `/hub`, ver e aceitar/recusar o convite. Depois de aceitar, o `isHubMember=true` normal cuida do resto.
 
-- **Não filtra por cartão.** No contexto **RENATO BRUGGEMANN** existe "Maria Luiza Cruvinel", `payment_method=Dinheiro`, sem `card_terminal_id`, `amount=3.000`, `original_amount=6.738` (o usuário registrou o valor total da venda parcelada em dinheiro). Isso vira **R$ 3.738 de MDR fantasma**. Somando padrões parecidos nos outros meses, chega aos R$ 10 mil reclamados.
-- **Base é `payment_date`, não competência.** O modal de Faturamento agrega por `competence_date`. Em **IMPLANTES BR / EVA OS** (junho/2026), o valor real por competência é R$ 953,45 (R$ 702,29 Pago + R$ 251,16 Pendente). O card mostra R$ 819 por só pegar parcelas com `payment_date` em junho.
-- **Só conta Pago.** MDR já está comprometido na venda; modal e DRE contam Pago + Pendente.
+### 2. Ajustar a mensagem da UpgradeGate quando fizer sentido
+- Se o usuário chega em `/hub` sem convite e sem membros, mantemos a UpgradeGate atual (correto para owner sem plano).
+- Nenhuma mudança na cobrança — só copy e condição de exibição.
 
-O DRE e o `useMdrSummary` já usam a regra correta. Bug isolado em `useDashboardData.ts`.
+### 3. Notificar o convidado por e-mail
+Duas alternativas (pedir escolha):
+- **A. E-mail próprio da EVA** (recomendado): estender `create-hub-member` para, quando encontra um usuário existente, chamar o Email API (mesmo caminho do `auth-email-hook`, via `@lovable.dev/email-js`) e enviar um novo template `hub-invite.tsx` com botão "Ver convite" → `https://eva.tec.br/hub`. Depende do domínio `notify.eva.tec.br` verificado — hoje ele está com verificação DNS expirada. Enquanto o DNS não valida, o e-mail cai no fluxo de fallback do provisionamento.
+- **B. Sem e-mail agora**: mostrar aviso in-app no login (toast/badge no menu) contando quantos convites pendentes há. Rápido e não depende de DNS.
 
-### 2. Receita Bruta do DRE ≠ Faturamento do Dashboard (reportado agora)
+Sugestão: fazer **B agora** (imediato, sem depender de infra) e **A** logo em seguida quando o DNS de `notify.eva.tec.br` estiver ok.
 
-- **Dashboard Faturamento:** soma **todas** as receitas por competência (bruto via `itemGross`), independente de a categoria estar mapeada a centro de custo.
-- **DRE "(+) Receita Operacional Bruta":** só soma receitas cuja categoria (ou ancestral) tem `dre_section` preenchido. Receitas sem mapeamento entram no banner "N categorias sem centro de custo" e ficam de fora da linha.
+### 4. Notificação in-app leve (parte do B)
+- Já temos `pendingInvitations` em `useWorkspaceMembers`. Adicionar um badge com a contagem no item "EVA Hub" da sidebar (`AppSidebar.tsx`) e um `toast.info` uma vez por sessão quando `pendingInvitations.length > 0`, com ação "Ver convites" → `/hub`.
 
-Enquanto houver receita sem mapeamento, a linha do DRE mostrará menos que o Faturamento. Para o usuário isso é inaceitável — "receita bruta = faturamento".
+## Detalhes técnicos
 
-Correção: no DRE Contábil, toda receita não mapeada cai por padrão em **Receita Operacional Bruta**. Assim a linha bate exatamente com o card Faturamento em qualquer mês, e o banner de "categorias sem centro de custo" passa a contar apenas **despesas** sem mapeamento (que é o que realmente prejudica o resultado).
+Arquivos a editar:
+- `src/contexts/HubContext.tsx` — nova query de pendentes + campo no contexto.
+- `src/components/layout/HubLayout.tsx` — incluir `hasPendingInvitations` no guard.
+- `src/components/layout/AppSidebar.tsx` — badge no link do Hub.
+- `src/App.tsx` (ou provider raiz do layout autenticado) — toast único por sessão quando houver pendentes.
 
-## Correções
+Sem migration necessária. Nenhuma alteração em RLS (as policies de `workspace_members` já permitem o convidado ler o próprio convite via `member_user_id = auth.uid()`).
 
-### `src/hooks/useDashboardData.ts` — cálculo do MDR do summary
+## Pergunta para você antes de implementar
 
-Substituir o bloco `mdrTransactions … mdrPercent … mdrCount` por:
-
-- **Base:** `competenceTransactions.filter(t => t.type === "receita")` (mesma base do Faturamento, inclui Pago + Pendente).
-- **Filtro:** `isCardPayment(t)` de `@/lib/paymentKind` **e** `Number(original_amount) > Number(amount)`.
-- `mdrBruto = Σ original_amount`, `mdrLiquido = Σ amount`, `mdrTaxas = bruto − líquido`, `mdrPercent = taxas/bruto*100`.
-- **Contagem "vendas":** agrupar por `series_id` (fallback `id`) para bater com o "14 vendas" do modal.
-
-### `src/hooks/useDREData.ts` — receitas sem mapeamento vão para Receita Operacional
-
-Dentro do `contabilData` useMemo, no loop `transactions.forEach`:
-
-- Se `sectionKey` não resolveu **e** `t.type === "receita"`, forçar `sectionKey = "receita_operacional"` em vez de descartar.
-- Só contar categorias em `unmappedCategoryIds` (que alimenta o banner) quando `t.type === "despesa"`.
-
-A linha "Taxas de Maquininha (MDR)" em Despesas com Vendas continua igual (já usa a regra correta `isCardPayment + gross>net`).
-
-## Resultado esperado
-
-- Card **MDR no período** do Dashboard passa a bater exatamente com o "MDR (taxas)" do modal de Faturamento (ex.: R$ 953,45 em junho/EVA OS; R$ 0 em Renato).
-- Linha **(+) Receita Operacional Bruta** do DRE Contábil passa a bater mês a mês com o card **Faturamento** do Dashboard.
-- Banner amarelo do DRE só reclama de despesas sem centro de custo.
-
-Sem migração no banco. Nenhuma outra tela precisa mudar.
-
-## Arquivos
-
-- `src/hooks/useDashboardData.ts`
-- `src/hooks/useDREData.ts`
+Qual caminho para o convite? **B agora** (só in-app) ou **A + B** (in-app já e e-mail assim que o `notify.eva.tec.br` verificar)?
