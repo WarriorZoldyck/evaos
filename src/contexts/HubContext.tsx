@@ -11,6 +11,7 @@ interface HubContextType {
   setImpersonation: (ownerId: string, ownerName: string, role?: string) => void;
   exitImpersonation: () => void;
   isOwnerWithMembers: boolean;
+  pendingInvitationsCount: number;
   loading: boolean;
   refreshHubStatus: () => Promise<void>;
 }
