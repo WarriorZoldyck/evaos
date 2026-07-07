@@ -1,4 +1,5 @@
-import { Building2, Folder, Users, LogOut, ScrollText, MessageCircle, ShieldCheck } from "lucide-react";
+import { Building2, Folder, Users, LogOut, ScrollText, MessageCircle, ShieldCheck, ArrowLeft } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHub } from "@/contexts/HubContext";
