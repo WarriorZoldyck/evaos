@@ -112,6 +112,7 @@ export function HubProvider({ children }: { children: React.ReactNode }) {
         setImpersonation,
         exitImpersonation,
         isOwnerWithMembers,
+        pendingInvitationsCount,
         loading,
         refreshHubStatus,
       }}
