@@ -163,6 +163,8 @@ export function useTransactions() {
   }, [user, effectiveUserId, companyFilter]);
 
   useEffect(() => {
+    if (!user || !effectiveUserId) return;
+
     fetchAux();
 
     // Fetch ALL accounts (no company filter) for transfers
@@ -205,7 +207,7 @@ export function useTransactions() {
     };
 
     fetchAllAccounts();
-  }, [user, effectiveUserId, companyFilter]);
+  }, [user, effectiveUserId, companyFilter, fetchAux]);
 
   // Fetch transactions
   const fetchTransactions = useCallback(async () => {
