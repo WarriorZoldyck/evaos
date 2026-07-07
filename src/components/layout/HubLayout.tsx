@@ -65,17 +65,15 @@ function HubLayoutInner() {
           <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 bg-background/80 backdrop-blur-sm sticky top-0 z-40">
             <div className="flex items-center gap-3">
               <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
-              {!isHubMember && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1.5 h-8"
-                  onClick={() => navigate(-1)}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  <span className="hidden sm:inline">Voltar</span>
-                </Button>
-              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 h-8"
+                onClick={() => navigate("/dashboard")}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span className="hidden sm:inline">Minha conta</span>
+              </Button>
               <Badge variant="outline" className="text-[10px] font-semibold tracking-wide uppercase border-primary/30 text-primary">
                 Hub
               </Badge>
