@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { format } from "date-fns";
 import type { DashboardFilters } from "@/hooks/useDashboardData";
 import { getDateRangeExported } from "@/hooks/useDashboardData";
@@ -24,6 +25,7 @@ export interface CategoryGroup {
 
 export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -43,28 +45,28 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
 
   // Fetch categories and credit cards
   useEffect(() => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
 
     const fetchCategories = async () => {
       // Fetch ALL user categories (no company filter) to resolve cross-context references
-      const { data } = await supabase.from("categories").select("id, name, parent_id");
+      const { data } = await supabase.from("categories").select("id, name, parent_id").eq("user_id", effectiveUserId);
       if (data) setCategories(data);
     };
 
     const fetchCards = async () => {
       let query = supabase.from("credit_cards").select("id, bank_account_id");
-      query = applyCompanyFilter(query, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
+      query = applyCompanyFilter(query, { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       const { data } = await query;
       if (data) setCreditCards(data);
     };
 
     fetchCategories();
     fetchCards();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
 
   // Fetch transactions with pagination and transfer filter
   useEffect(() => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
 
     const fetchTx = async () => {
       setLoading(true);
@@ -81,7 +83,7 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
         query = query.eq("status", "Pago");
       }
 
-      query = applyCompanyFilter(query, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
+      query = applyCompanyFilter(query, { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
 
       // Account filter
       if (accountId) {
@@ -111,7 +113,7 @@ export function useCashFlowData(mode: CashFlowMode, filters: DashboardFilters) {
     };
 
     fetchTx();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, mode]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, mode]);
 
   // Resolve a category name/id to its display name
   const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { applyCompanyFilter } from "@/lib/companyFilter";
 import { itemGross, isCardPayment } from "@/lib/paymentKind";
 
@@ -79,6 +80,7 @@ function dateToPeriodKey(dateStr: string, granularity: DREGranularity): string {
 
 export function useDREData(filters: DREFilters) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -95,23 +97,23 @@ export function useDREData(filters: DREFilters) {
   }, [accountId, creditCards]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     const fetchCats = async () => {
-      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section, type");
+      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section, type").eq("user_id", effectiveUserId);
       if (data) setCategories(data as CategoryRecord[]);
     };
     const fetchCards = async () => {
       let q = supabase.from("credit_cards").select("id, bank_account_id");
-      q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
+      q = applyCompanyFilter(q, { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       const { data } = await q;
       if (data) setCreditCards(data);
     };
     fetchCats();
     fetchCards();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     const fetchTx = async () => {
       setLoading(true);
       let q = supabase
@@ -124,7 +126,7 @@ export function useDREData(filters: DREFilters) {
         .not("category", "ilike", "transferência%");
 
 
-      q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
+      q = applyCompanyFilter(q, { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       if (accountId) {
         if (linkedCardIds.length > 0) {
           q = q.or(`bank_account_id.eq.${accountId},credit_card_id.in.(${linkedCardIds.join(",")})`);
@@ -148,7 +150,7 @@ export function useDREData(filters: DREFilters) {
       setLoading(false);
     };
     fetchTx();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds]);
 
   const resolveName = useCallback(
     (value: string | null | undefined): { id: string; name: string } | null => {

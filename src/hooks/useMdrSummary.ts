@@ -3,6 +3,7 @@ import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { applyCompanyFilter } from "@/lib/companyFilter";
 
 export interface MdrTerminal {
@@ -131,6 +132,7 @@ function computeLine(tx: MdrTransaction, terminal: MdrTerminal | null): MdrLineC
 
 export function useMdrSummary(): MdrSummary {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
 
   const [terminals, setTerminals] = useState<MdrTerminal[]>([]);
@@ -139,8 +141,8 @@ export function useMdrSummary(): MdrSummary {
   const [selectedYm, setSelectedYm] = useState<string>(format(new Date(), "yyyy-MM"));
 
   useEffect(() => {
-    if (!user) return;
-    const ctx = { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
+    if (!user || !effectiveUserId) return;
+    const ctx = { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
     let cancelled = false;
 
     (async () => {
@@ -180,7 +182,7 @@ export function useMdrSummary(): MdrSummary {
     return () => {
       cancelled = true;
     };
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
 
   const termMap = useMemo(() => {
     const m = new Map<string, MdrTerminal>();

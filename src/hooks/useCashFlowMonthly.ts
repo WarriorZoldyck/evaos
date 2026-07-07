@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { applyCompanyFilter } from "@/lib/companyFilter";
 import { splitContextNeutralTransfers } from "@/lib/transferVisibility";
 import type { DRECategoryRow, DREGranularity } from "@/hooks/useDREData";
@@ -42,6 +43,7 @@ const isUuid = (v: string) =>
 
 export function useCashFlowMonthly(mode: CashFlowMode, filters: CashFlowMonthlyFilters) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -58,23 +60,23 @@ export function useCashFlowMonthly(mode: CashFlowMode, filters: CashFlowMonthlyF
   }, [accountId, creditCards]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     const fetchCats = async () => {
-      const { data } = await supabase.from("categories").select("id, name, parent_id");
+      const { data } = await supabase.from("categories").select("id, name, parent_id").eq("user_id", effectiveUserId);
       if (data) setCategories(data);
     };
     const fetchCards = async () => {
       let q = supabase.from("credit_cards").select("id, bank_account_id");
-      q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
+      q = applyCompanyFilter(q, { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
       const { data } = await q;
       if (data) setCreditCards(data);
     };
     fetchCats();
     fetchCards();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     const fetchTx = async () => {
       setLoading(true);
       const dateField = mode === "caixa" ? "payment_date" : "competence_date";
@@ -87,7 +89,7 @@ export function useCashFlowMonthly(mode: CashFlowMode, filters: CashFlowMonthlyF
 
       if (mode === "caixa") q = q.eq("status", "Pago");
 
-      q = applyCompanyFilter(q, { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
+      q = applyCompanyFilter(q, { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected });
 
       if (accountId) {
         if (linkedCardIds.length > 0) {
@@ -111,7 +113,7 @@ export function useCashFlowMonthly(mode: CashFlowMode, filters: CashFlowMonthlyF
       setLoading(false);
     };
     fetchTx();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, mode]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, mode]);
 
   const resolveName = useCallback(
     (value: string | null | undefined): { id: string; name: string } | null => {
