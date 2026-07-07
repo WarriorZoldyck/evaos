@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { HubProvider, useHub } from "@/contexts/HubContext";
+import { useHub } from "@/contexts/HubContext";
 import { CompanyProvider } from "@/contexts/CompanyContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
@@ -33,11 +33,7 @@ export default function AppLayout() {
     return <Navigate to="/" replace />;
   }
 
-  return (
-    <HubProvider>
-      <AppLayoutInner />
-    </HubProvider>
-  );
+  return <AppLayoutInner />;
 }
 
 function AppLayoutInner() {

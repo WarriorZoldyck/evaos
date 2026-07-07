@@ -52,11 +52,8 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       let query = supabase
         .from("companies")
         .select("id, name, cnpj")
+        .eq("user_id", effectiveUserId)
         .order("name");
-
-      if (impersonatingOwnerId) {
-        query = query.eq("user_id", impersonatingOwnerId);
-      }
 
       const { data, error } = await query;
 

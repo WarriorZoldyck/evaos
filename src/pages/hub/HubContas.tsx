@@ -20,7 +20,7 @@ const roleConfig: Record<string, { label: string; icon: typeof Shield; color: st
 };
 
 export default function HubContas() {
-  const { isHubMember, setImpersonation } = useHub();
+  const { isHubMember, setImpersonation, exitImpersonation } = useHub();
   const {
     ownerProfile,
     availableWorkspaces,
@@ -175,7 +175,13 @@ export default function HubContas() {
             </div>
           </div>
           <div className="mt-5">
-            <Button onClick={() => navigate("/dashboard")} className="w-full gap-2">
+            <Button
+              onClick={() => {
+                exitImpersonation();
+                navigate("/dashboard", { replace: true });
+              }}
+              className="w-full gap-2"
+            >
               <LogIn className="h-4 w-4" />
               Entrar na conta
             </Button>

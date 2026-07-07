@@ -1,6 +1,6 @@
 import { Navigate, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { HubProvider, useHub } from "@/contexts/HubContext";
+import { useHub } from "@/contexts/HubContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { HubSidebar } from "./HubSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -28,16 +28,12 @@ export default function HubLayout() {
     return <Navigate to="/" replace />;
   }
 
-  return (
-    <HubProvider>
-      <HubLayoutInner />
-    </HubProvider>
-  );
+  return <HubLayoutInner />;
 }
 
 function HubLayoutInner() {
   const navigate = useNavigate();
-  const { isHubMember, isOwnerWithMembers, pendingInvitationsCount } = useHub();
+  const { isHubMember, isOwnerWithMembers, pendingInvitationsCount, exitImpersonation } = useHub();
   const { hubAllowed, isLoading } = usePlanLimits();
 
   if (isLoading) {
@@ -69,7 +65,10 @@ function HubLayoutInner() {
                 variant="ghost"
                 size="sm"
                 className="gap-1.5 h-8"
-                onClick={() => navigate("/dashboard")}
+                onClick={() => {
+                  exitImpersonation();
+                  navigate("/dashboard", { replace: true });
+                }}
               >
                 <ArrowLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Minha conta</span>
