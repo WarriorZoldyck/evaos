@@ -45,7 +45,7 @@ export function useGoals() {
   const fetchGoals = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    let query = supabase.from("goals").select("*").order("created_at", { ascending: false });
+    let query = supabase.from("goals").select("*").eq("user_id", effectiveUserId).order("created_at", { ascending: false });
     if (isPersonal) query = query.is("company_id", null);
     else if (selectedCompanyId) query = query.eq("company_id", selectedCompanyId);
 
@@ -56,7 +56,7 @@ export function useGoals() {
       setGoals((data as Goal[]) || []);
     }
     setLoading(false);
-  }, [user, isPersonal, selectedCompanyId, toast]);
+  }, [user, effectiveUserId, isPersonal, selectedCompanyId, toast]);
 
   useEffect(() => { fetchGoals(); }, [fetchGoals]);
 

@@ -33,7 +33,7 @@ export function useCategories() {
     if (!user) return;
     setLoading(true);
 
-    let query = supabase.from("categories").select("*");
+    let query = supabase.from("categories").select("*").eq("user_id", effectiveUserId);
     if (isPersonal) {
       query = query.is("company_id", null);
     } else if (selectedCompanyId) {
@@ -47,7 +47,7 @@ export function useCategories() {
       setCategories((data as Category[]) || []);
     }
     setLoading(false);
-  }, [user, isPersonal, selectedCompanyId, toast]);
+  }, [user, effectiveUserId, isPersonal, selectedCompanyId, toast]);
 
   useEffect(() => {
     fetchCategories();
