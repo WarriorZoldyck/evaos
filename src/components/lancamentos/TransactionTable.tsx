@@ -273,19 +273,23 @@ function TransactionRow({
         </span>
       </div>
 
-      {/* Conciliado checkbox (manual) */}
-      <div
-        className="shrink-0 hidden sm:flex items-center"
-        onClick={(e) => e.stopPropagation()}
-        title={reconciled ? "Conciliado" : "Marcar como conciliado"}
+      {/* Conciliar button (manual) */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleToggleReconciled(!reconciled);
+        }}
+        title={reconciled ? "Conciliado (clique para desfazer)" : "Marcar como conciliado"}
+        className={`shrink-0 hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+          reconciled
+            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25"
+            : "bg-transparent text-muted-foreground border-border hover:bg-accent"
+        }`}
       >
-        <Checkbox
-          checked={reconciled}
-          onCheckedChange={handleToggleReconciled}
-          aria-label="Conciliado"
-          className={reconciled ? "border-emerald-500 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500" : ""}
-        />
-      </div>
+        <CheckCircle2 className="h-3 w-3" />
+        {reconciled ? "Conciliado" : "Conciliar"}
+      </button>
 
       {/* Status */}
       <Badge
