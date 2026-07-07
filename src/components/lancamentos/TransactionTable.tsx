@@ -316,20 +316,12 @@ function TransactionRow({
             <Eye className="mr-2 h-4 w-4" />
             Ver Detalhes
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              if (reconciled) {
-                toast({ title: "Lançamento conciliado", description: "Remova a conciliação para editar." });
-                return;
-              }
-              onEdit(t);
-            }}
-            disabled={reconciled}
-          >
-            <Edit className="mr-2 h-4 w-4" />
-            Editar
-          </DropdownMenuItem>
+          {!reconciled && (
+            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(t); }}>
+              <Edit className="mr-2 h-4 w-4" />
+              Editar
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => onDuplicate(t)}>
             <Copy className="mr-2 h-4 w-4" />
             Duplicar
@@ -340,21 +332,20 @@ function TransactionRow({
               Liquidar
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem
-            onClick={(e) => {
-              e.stopPropagation();
-              if (reconciled) {
-                toast({ title: "Não é possível excluir", description: "Lançamentos conciliados não podem ser excluídos. Remova a conciliação primeiro." , variant: "destructive"});
-                return;
-              }
-              onDelete(t);
-            }}
-            disabled={reconciled}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Excluir
-          </DropdownMenuItem>
+          {!reconciled && (
+            <DropdownMenuItem
+              onClick={() => onDelete(t)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Excluir
+            </DropdownMenuItem>
+          )}
+          {reconciled && (
+            <DropdownMenuItem disabled className="text-xs opacity-70">
+              Desconcilie este lançamento para editar ou excluir
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
