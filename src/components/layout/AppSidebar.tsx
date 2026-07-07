@@ -89,10 +89,28 @@ export function AppSidebar() {
   const visibleFinanceMenuItems = financeMenuItems.filter((i) => !(onlyPersonal && i.url === "/dre"));
   const { pendingCount } = useAIPendingTransactions();
   const { state } = useSidebar();
-  const { isHubMember, isOwnerWithMembers } = useHub();
+  const { isHubMember, isOwnerWithMembers, pendingInvitationsCount } = useHub();
   const { hubAllowed } = usePlanLimits();
-  const showHub = hubAllowed || isHubMember || isOwnerWithMembers;
+  const showHub = hubAllowed || isHubMember || isOwnerWithMembers || pendingInvitationsCount > 0;
   const collapsed = state === "collapsed";
+  const navigate = useNavigate();
+
+  // Notify once per session about pending EVA Hub invitations
+  useEffect(() => {
+    if (!user || pendingInvitationsCount <= 0) return;
+    const key = `eva-hub-pending-toast:${user.id}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    toast.info(
+      pendingInvitationsCount === 1
+        ? "Você tem 1 convite para acessar o EVA Hub"
+        : `Você tem ${pendingInvitationsCount} convites para acessar o EVA Hub`,
+      {
+        action: { label: "Ver convites", onClick: () => navigate("/eva-hub") },
+        duration: 8000,
+      }
+    );
+  }, [user, pendingInvitationsCount, navigate]);
 
   // Unified label + icon
   const selectedCount = (personalSelected ? 1 : 0) + selectedCompanyIds.length;
