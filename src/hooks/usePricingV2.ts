@@ -132,7 +132,7 @@ export function usePricingV2() {
       return parsed;
     }
     return null;
-  }, [user, toast, isPersonal, selectedCompanyId]);
+  }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
 
   // ─── Save config ───
   const saveConfig = async (hours: number, rooms: number, tax: number, daysPerWeek?: number | null, hoursPerDay?: number | null) => {
@@ -200,7 +200,7 @@ export function usePricingV2() {
         sort_order: d.sort_order ?? 0,
       }))
     );
-  }, [user, toast, isPersonal, selectedCompanyId]);
+  }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
 
   // ─── Add cost item ───
   const addCostItem = async (item: {
@@ -210,38 +210,37 @@ export function usePricingV2() {
     value: number;
     frequency: string;
   }) => {
-    if (!user || !config) {
-      // Auto-create config if missing
-      if (!config) {
-        const { data: newConfig, error: cfgErr } = await supabase
-          .from("pricing_v2_configurations")
-          .insert({ user_id: effectiveUserId, company_id: selectedCompanyId || null })
-          .select()
-          .single();
-        if (cfgErr || !newConfig) {
-          toast({ title: "Erro ao criar configuração", variant: "destructive" });
-          return false;
-        }
-        setConfig({
-          id: newConfig.id,
-          user_id: newConfig.user_id,
-          hours_per_month: newConfig.hours_per_month ?? 160,
-          num_rooms: newConfig.num_rooms ?? 1,
-          tax_rate: Number(newConfig.tax_rate) ?? 8.44,
-          days_per_week: newConfig.days_per_week != null ? Number(newConfig.days_per_week) : null,
-          hours_per_day: newConfig.hours_per_day != null ? Number(newConfig.hours_per_day) : null,
-          updated_at: newConfig.updated_at,
-        });
-        const { error } = await supabase.from("pricing_v2_cost_items").insert({
-          config_id: newConfig.id,
-          user_id: effectiveUserId,
-          company_id: selectedCompanyId || null,
-          ...item,
-        });
-        if (error) {
-          toast({ title: "Erro ao adicionar item", description: mapDatabaseError(error), variant: "destructive" });
-          return false;
-        }
+    if (!user) return false;
+
+    if (!config) {
+      const { data: newConfig, error: cfgErr } = await supabase
+        .from("pricing_v2_configurations")
+        .insert({ user_id: effectiveUserId, company_id: selectedCompanyId || null })
+        .select()
+        .single();
+      if (cfgErr || !newConfig) {
+        toast({ title: "Erro ao criar configuração", variant: "destructive" });
+        return false;
+      }
+      setConfig({
+        id: newConfig.id,
+        user_id: newConfig.user_id,
+        hours_per_month: newConfig.hours_per_month ?? 160,
+        num_rooms: newConfig.num_rooms ?? 1,
+        tax_rate: Number(newConfig.tax_rate) ?? 8.44,
+        days_per_week: newConfig.days_per_week != null ? Number(newConfig.days_per_week) : null,
+        hours_per_day: newConfig.hours_per_day != null ? Number(newConfig.hours_per_day) : null,
+        updated_at: newConfig.updated_at,
+      });
+      const { error } = await supabase.from("pricing_v2_cost_items").insert({
+        config_id: newConfig.id,
+        user_id: effectiveUserId,
+        company_id: selectedCompanyId || null,
+        ...item,
+      });
+      if (error) {
+        toast({ title: "Erro ao adicionar item", description: mapDatabaseError(error), variant: "destructive" });
+        return false;
       }
     } else {
       const { error } = await supabase.from("pricing_v2_cost_items").insert({
@@ -322,7 +321,7 @@ export function usePricingV2() {
           .map((i) => ({ ...i, value: Number(i.value) || 0 })),
       }))
     );
-  }, [user, toast, isPersonal, selectedCompanyId]);
+  }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
 
   const createProcedure = async (data: {
     name: string;

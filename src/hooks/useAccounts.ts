@@ -34,14 +34,14 @@ export function useAccounts() {
   );
 
   const fetchAll = useCallback(async () => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     setLoading(true);
 
     const [accRes, cardRes, walletRes, termRes] = await Promise.all([
-      companyFilter(supabase.from("bank_accounts").select("*")).order("name"),
-      companyFilter(supabase.from("credit_cards").select("*")).order("name"),
-      companyFilter(supabase.from("wallets").select("*")).order("name"),
-      companyFilter(supabase.from("card_terminals").select("*")).order("name"),
+      companyFilter(supabase.from("bank_accounts").select("*").eq("user_id", effectiveUserId)).order("name"),
+      companyFilter(supabase.from("credit_cards").select("*").eq("user_id", effectiveUserId)).order("name"),
+      companyFilter(supabase.from("wallets").select("*").eq("user_id", effectiveUserId)).order("name"),
+      companyFilter(supabase.from("card_terminals").select("*").eq("user_id", effectiveUserId)).order("name"),
     ]);
 
     if (accRes.data) setBankAccounts(accRes.data);
@@ -49,7 +49,7 @@ export function useAccounts() {
     if (walletRes.data) setWallets(walletRes.data);
     if (termRes.data) setCardTerminals(termRes.data);
     setLoading(false);
-  }, [user, companyFilter]);
+  }, [user, effectiveUserId, companyFilter]);
 
   useEffect(() => {
     fetchAll();

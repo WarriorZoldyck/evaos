@@ -331,8 +331,8 @@ export function TransactionFormModal({
   const [seriesUpdates, setSeriesUpdates] = useState<Array<{ id: string; amount: number; payment_date?: string }>>([]);
 
   const fetchFormCategories = useCallback(async () => {
-    if (!user) return;
-    let query = supabase.from("categories").select("*");
+    if (!user || !effectiveUserId) return;
+    let query = supabase.from("categories").select("*").eq("user_id", effectiveUserId);
     if (formCompanyId === null) {
       query = query.is("company_id", null);
     } else {
@@ -340,7 +340,7 @@ export function TransactionFormModal({
     }
     const { data } = await query.order("name");
     setFormCategories(data || []);
-  }, [user, formCompanyId]);
+  }, [user, effectiveUserId, formCompanyId]);
 
   useEffect(() => {
     if (open) fetchFormCategories();

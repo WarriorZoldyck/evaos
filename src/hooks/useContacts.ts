@@ -34,18 +34,18 @@ export function useContacts() {
   const [search, setSearch] = useState("");
 
   const fetchContacts = useCallback(async () => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     setLoading(true);
 
     const [supRes, cliRes] = await Promise.all([
-      supabase.from("suppliers").select("*").order("name"),
-      supabase.from("clients").select("*").order("name"),
+      supabase.from("suppliers").select("*").eq("user_id", effectiveUserId).order("name"),
+      supabase.from("clients").select("*").eq("user_id", effectiveUserId).order("name"),
     ]);
 
     if (supRes.data) setSuppliers(supRes.data);
     if (cliRes.data) setClients(cliRes.data);
     setLoading(false);
-  }, [user]);
+  }, [user, effectiveUserId]);
 
   useEffect(() => {
     fetchContacts();

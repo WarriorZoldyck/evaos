@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { addMonths, addDays, format, startOfDay } from "date-fns";
 
 export interface RecurringOccurrence {
@@ -129,17 +130,19 @@ function generateOccurrences(
 
 export function useRecurringTransactions(horizonDays: number = 90) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const [occurrences, setOccurrences] = useState<RecurringOccurrence[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchRecurring = useCallback(async () => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     setLoading(true);
 
     let query = supabase
       .from("recurring_transactions")
-      .select("id, description, amount, type, category, subcategory, frequency, start_date, end_date, day_of_month, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, payment_method, payment_date");
+      .select("id, description, amount, type, category, subcategory, frequency, start_date, end_date, day_of_month, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, payment_method, payment_date")
+      .eq("user_id", effectiveUserId);
 
     if (isPersonal) {
       query = query.is("company_id", null);
@@ -157,7 +160,7 @@ export function useRecurringTransactions(horizonDays: number = 90) {
       setOccurrences(all);
     }
     setLoading(false);
-  }, [user, selectedCompanyId, isPersonal, horizonDays]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, horizonDays]);
 
   useEffect(() => {
     fetchRecurring();

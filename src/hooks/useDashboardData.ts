@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useRecurringTransactions, type RecurringOccurrence } from "@/hooks/useRecurringTransactions";
 import { itemGross, isCardPayment } from "@/lib/paymentKind";
 import { splitContextNeutralTransfers } from "@/lib/transferVisibility";
@@ -144,6 +145,7 @@ import { applyCompanyFilter } from "@/lib/companyFilter";
 
 export function useDashboardData(filters: DashboardFilters) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const { occurrences: recurringOccurrences, loading: recurringLoading, refetch: refetchRecurring } = useRecurringTransactions(90);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -177,9 +179,9 @@ export function useDashboardData(filters: DashboardFilters) {
 
   // Fetch credit cards + categories + initial balances
   useEffect(() => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
 
-    const companyCtx = { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
+    const companyCtx = { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
 
     const fetchCards = async () => {
       let query = supabase
@@ -191,7 +193,7 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     const fetchCategories = async () => {
-      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section");
+      const { data } = await supabase.from("categories").select("id, name, parent_id, dre_section").eq("user_id", effectiveUserId);
       if (data) setCategoryRecords(data);
     };
 
@@ -255,12 +257,12 @@ export function useDashboardData(filters: DashboardFilters) {
     fetchCards();
     fetchCategories();
     fetchBalances();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, accountId, fetchTrigger]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, accountId, fetchTrigger]);
 
   // Fetch filtered transactions for the period
   useEffect(() => {
-    if (!user) return;
-    const companyCtx = { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
+    if (!user || !effectiveUserId) return;
+    const companyCtx = { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
 
     const fetchTransactions = async () => {
       setLoading(true);
@@ -321,13 +323,13 @@ export function useDashboardData(filters: DashboardFilters) {
 
     fetchTransactions();
     fetchCompetenceTransactions();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, fetchTrigger]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, fetchTrigger]);
 
 
   // Fetch transactions for projections (limited to 2 years back)
   useEffect(() => {
-    if (!user) return;
-    const companyCtx = { viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
+    if (!user || !effectiveUserId) return;
+    const companyCtx = { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
 
     const fetchAll = async () => {
       const twoYearsAgo = format(subYears(new Date(), 2), "yyyy-MM-dd");
@@ -349,7 +351,7 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
     fetchAll();
-  }, [user, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, accountId, linkedCardIds, fetchTrigger]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, accountId, linkedCardIds, fetchTrigger]);
 
   // Category name resolver
   const resolveCategoryName = useCallback(

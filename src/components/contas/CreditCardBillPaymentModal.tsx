@@ -224,10 +224,10 @@ export function CreditCardBillPaymentModal({
 
   // Fetch accounts
   useEffect(() => {
-    if (!open || !user) return;
+    if (!open || !user || !effectiveUserId) return;
 
     const fetchAccounts = async () => {
-      let query = supabase.from("bank_accounts").select("id, name");
+      let query = supabase.from("bank_accounts").select("id, name").eq("user_id", effectiveUserId);
       if (isPersonal) query = query.is("company_id", null);
       else if (selectedCompanyId) query = query.eq("company_id", selectedCompanyId);
       const { data } = await query.order("name");
@@ -235,7 +235,7 @@ export function CreditCardBillPaymentModal({
     };
 
     fetchAccounts();
-  }, [open, user, selectedCompanyId, isPersonal]);
+  }, [open, user, effectiveUserId, selectedCompanyId, isPersonal]);
 
   // Reset state when opening
   useEffect(() => {

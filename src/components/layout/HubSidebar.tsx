@@ -32,7 +32,7 @@ export function HubSidebar() {
   const { signOut, user } = useAuth();
   const navigate = useNavigate();
   const { state } = useSidebar();
-  const { isHubMember } = useHub();
+  const { isHubMember, exitImpersonation } = useHub();
   const collapsed = state === "collapsed";
   const hubMenuItems = isHubMember
     ? [...baseMenuItems, meuWhatsAppItem]
@@ -85,7 +85,10 @@ export function HubSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              onClick={() => navigate("/dashboard")}
+              onClick={() => {
+                exitImpersonation();
+                navigate("/dashboard", { replace: true });
+              }}
               tooltip="Minha conta"
               className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
             >

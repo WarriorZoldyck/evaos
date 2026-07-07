@@ -89,9 +89,9 @@ export function useAIPendingTransactions() {
   const queryClient = useQueryClient();
 
   const { data: pendingTransactions = [], isLoading } = useQuery({
-    queryKey: ["ai-pending-transactions", user?.id, selectedCompanyId],
+    queryKey: ["ai-pending-transactions", effectiveUserId, selectedCompanyId],
     queryFn: async () => {
-      if (!user?.id) return [];
+      if (!effectiveUserId) return [];
       let query = supabase
         .from("ai_pending_transactions")
         .select("*")
@@ -108,13 +108,13 @@ export function useAIPendingTransactions() {
       if (error) throw error;
       return data as AIPendingTransaction[];
     },
-    enabled: !!user?.id,
+    enabled: !!effectiveUserId,
   });
 
   const { data: pendingCount = 0 } = useQuery({
-    queryKey: ["ai-pending-count", user?.id],
+    queryKey: ["ai-pending-count", effectiveUserId],
     queryFn: async () => {
-      if (!user?.id) return 0;
+      if (!effectiveUserId) return 0;
       const { count, error } = await supabase
         .from("ai_pending_transactions")
         .select("id", { count: "exact", head: true })
@@ -123,7 +123,7 @@ export function useAIPendingTransactions() {
       if (error) return 0;
       return count || 0;
     },
-    enabled: !!user?.id,
+    enabled: !!effectiveUserId,
     refetchInterval: 30000,
   });
 
@@ -208,9 +208,9 @@ export function useAIPendingTransactions() {
 
   // --- Duplicate suspect query without company_id filter ---
   const { data: allSuspects = [] } = useQuery({
-    queryKey: ["ai-duplicate-suspects", user?.id],
+    queryKey: ["ai-duplicate-suspects", effectiveUserId],
     queryFn: async () => {
-      if (!user?.id) return [];
+      if (!effectiveUserId) return [];
       const { data, error } = await supabase
         .from("ai_pending_transactions")
         .select("*")
@@ -220,7 +220,7 @@ export function useAIPendingTransactions() {
       if (error) throw error;
       return data as AIPendingTransaction[];
     },
-    enabled: !!user?.id,
+    enabled: !!effectiveUserId,
   });
 
   // Group duplicate suspects into clusters by normalized fingerprint key

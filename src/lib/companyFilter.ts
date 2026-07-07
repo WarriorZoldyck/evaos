@@ -2,6 +2,7 @@
 // Other pages should use single-context filtering (selectedCompanyId/isPersonal) directly.
 
 export interface CompanyFilterContext {
+  effectiveUserId?: string | null;
   viewAll: boolean;
   selectedCompanyId: string | null;
   isPersonal: boolean;
@@ -10,7 +11,9 @@ export interface CompanyFilterContext {
 }
 
 export function applyCompanyFilter(query: any, ctx: CompanyFilterContext) {
-  if (ctx.viewAll) return query; // No company filter — show everything
+  let scopedQuery = ctx.effectiveUserId ? query.eq("user_id", ctx.effectiveUserId) : query;
+
+  if (ctx.viewAll) return scopedQuery; // No company filter — show everything for the active owner only
 
   // Multi-select mode
   if (ctx.selectedCompanyIds.length > 0 || ctx.personalSelected) {
@@ -19,11 +22,11 @@ export function applyCompanyFilter(query: any, ctx: CompanyFilterContext) {
     if (ctx.selectedCompanyIds.length > 0) {
       parts.push(`company_id.in.(${ctx.selectedCompanyIds.join(",")})`);
     }
-    return query.or(parts.join(","));
+    return scopedQuery.or(parts.join(","));
   }
 
   // Fallback to single-select
-  if (ctx.isPersonal) return query.is("company_id", null);
-  if (ctx.selectedCompanyId) return query.eq("company_id", ctx.selectedCompanyId);
-  return query;
+  if (ctx.isPersonal) return scopedQuery.is("company_id", null);
+  if (ctx.selectedCompanyId) return scopedQuery.eq("company_id", ctx.selectedCompanyId);
+  return scopedQuery;
 }

@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import type { Transaction, TransactionFilters, Category, CreditCard } from "@/hooks/useTransactions";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -32,6 +33,7 @@ export function ExportTransactionsButton({
   filters, allCategories, creditCards, bankAccounts, wallets, suppliers, clients,
 }: Props) {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -55,9 +57,9 @@ export function ExportTransactionsButton({
   };
 
   const fetchAll = async (): Promise<Transaction[]> => {
-    if (!user) return [];
+    if (!user || !effectiveUserId) return [];
 
-    let query = supabase.from("transactions").select("*");
+    let query = supabase.from("transactions").select("*").eq("user_id", effectiveUserId);
     if (isPersonal) query = query.is("company_id", null);
     else if (selectedCompanyId) query = query.eq("company_id", selectedCompanyId);
 
