@@ -85,12 +85,22 @@ export function HubSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
+              onClick={() => navigate("/dashboard")}
+              tooltip="Minha conta"
+              className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Minha conta</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton
               onClick={signOut}
-              tooltip="Sair"
+              tooltip="Sair do EVA"
               className="hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all duration-200"
             >
               <LogOut className="h-4 w-4" />
-              <span>Sair</span>
+              <span>Sair do EVA</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
