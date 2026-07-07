@@ -37,7 +37,7 @@ export default function HubLayout() {
 
 function HubLayoutInner() {
   const navigate = useNavigate();
-  const { isHubMember, isOwnerWithMembers } = useHub();
+  const { isHubMember, isOwnerWithMembers, pendingInvitationsCount } = useHub();
   const { hubAllowed, isLoading } = usePlanLimits();
 
   if (isLoading) {
@@ -48,7 +48,7 @@ function HubLayoutInner() {
     );
   }
 
-  if (!hubAllowed && !isHubMember && !isOwnerWithMembers) {
+  if (!hubAllowed && !isHubMember && !isOwnerWithMembers && pendingInvitationsCount === 0) {
     return (
       <UpgradeGateScreen
         title="EVA Hub é exclusivo do plano Família"
