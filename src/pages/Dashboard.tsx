@@ -123,13 +123,6 @@ export default function Dashboard() {
     () => dailySeries(allTransactions as any, dateRange.start, dateRange.end, (t: any) => t.type === "receita" ? Number(t.amount) : -Number(t.amount)),
     [allTransactions, dateRange],
   );
-  const marginSeries = useMemo(
-    () => entradasSeries.map((e, i) => {
-      const sv = saidasSeries[i]?.v || 0;
-      return { date: e.date, v: e.v > 0 ? ((e.v - sv) / e.v) * 100 : 0 };
-    }),
-    [entradasSeries, saidasSeries],
-  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -204,7 +197,6 @@ export default function Dashboard() {
         entradasSeries={entradasSeries}
         saidasSeries={saidasSeries}
         saldoSeries={saldoSeries}
-        marginSeries={marginSeries}
         onFaturamentoClick={() => setFaturamentoModalOpen(true)}
       />
 
