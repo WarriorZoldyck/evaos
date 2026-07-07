@@ -11,7 +11,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Building2, LogIn, Loader2, User, Shield, Edit3, Eye, LogOut } from "lucide-react";
+import { Building2, LogIn, Loader2, User, Shield, Edit3, Eye, LogOut, UserPlus } from "lucide-react";
 
 const roleConfig: Record<string, { label: string; icon: typeof Shield; color: string }> = {
   admin: { label: "Administrador", icon: Shield, color: "text-amber-500" },
@@ -21,13 +21,64 @@ const roleConfig: Record<string, { label: string; icon: typeof Shield; color: st
 
 export default function HubContas() {
   const { isHubMember, setImpersonation } = useHub();
-  const { ownerProfile, availableWorkspaces, loading } = useWorkspaceMembers();
+  const {
+    ownerProfile,
+    availableWorkspaces,
+    pendingInvitations,
+    acceptInvitation,
+    rejectInvitation,
+    loading,
+  } = useWorkspaceMembers();
   const navigate = useNavigate();
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (pendingInvitations.length > 0 && !isHubMember) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold font-display text-foreground">Convites recebidos</h1>
+          <p className="text-muted-foreground text-sm mt-1">Aceite o convite para acessar a conta compartilhada</p>
+        </div>
+
+        <div className="grid gap-3">
+          {pendingInvitations.map((inv) => {
+            const role = roleConfig[inv.role] || roleConfig.viewer;
+            const RoleIcon = role.icon;
+            return (
+              <Card key={inv.member_id} className="border-primary/30 bg-card/60 backdrop-blur-sm">
+                <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                      <UserPlus className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate">{inv.owner_name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <RoleIcon className={`h-3 w-3 ${role.color}`} />
+                        <span className="text-xs text-muted-foreground">Convidou você como {role.label}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => rejectInvitation(inv.member_id)}>
+                      Recusar
+                    </Button>
+                    <Button size="sm" onClick={() => acceptInvitation(inv.member_id)}>
+                      Aceitar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     );
   }
