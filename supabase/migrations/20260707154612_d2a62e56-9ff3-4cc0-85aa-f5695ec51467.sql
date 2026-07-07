@@ -1,0 +1,1 @@
+UPDATE public.workspace_members SET status = 'active', workspace_id = '8bed075f-0eb0-4c00-a2b2-8c89fc0cab33' WHERE id = '2da3412b-3f0e-4271-9ced-27c09da6a787';
