@@ -30,6 +30,7 @@ const meuWhatsAppItem = { title: "Meu WhatsApp", url: "/eva-hub/meu-whatsapp", i
 
 export function HubSidebar() {
   const { signOut, user } = useAuth();
+  const navigate = useNavigate();
   const { state } = useSidebar();
   const { isHubMember } = useHub();
   const collapsed = state === "collapsed";
