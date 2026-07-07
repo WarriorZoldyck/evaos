@@ -412,6 +412,20 @@ export function useTransactions() {
   };
 
   const deleteTransaction = async (id: string) => {
+    // Guard: reconciled transactions cannot be deleted
+    const { data: rec } = await supabase
+      .from("transactions")
+      .select("is_reconciled")
+      .eq("id", id)
+      .maybeSingle();
+    if (rec?.is_reconciled) {
+      toast({
+        title: "Não é possível excluir",
+        description: "Lançamentos conciliados não podem ser excluídos. Remova a conciliação primeiro.",
+        variant: "destructive",
+      });
+      return false;
+    }
     const { error } = await supabase.from("transactions").delete().eq("id", id);
     if (error) {
       toast({
@@ -428,7 +442,22 @@ export function useTransactions() {
 
   const deleteMultipleTransactions = async (ids: string[]) => {
     if (ids.length === 0) return false;
-    const { error } = await supabase.from("transactions").delete().in("id", ids);
+    // Guard: filter out reconciled transactions
+    const { data: recs } = await supabase
+      .from("transactions")
+      .select("id, is_reconciled")
+      .in("id", ids);
+    const reconciledIds = new Set((recs ?? []).filter((r) => r.is_reconciled).map((r) => r.id));
+    const deletable = ids.filter((id) => !reconciledIds.has(id));
+    if (deletable.length === 0) {
+      toast({
+        title: "Não é possível excluir",
+        description: "Todos os lançamentos selecionados estão conciliados.",
+        variant: "destructive",
+      });
+      return false;
+    }
+    const { error } = await supabase.from("transactions").delete().in("id", deletable);
     if (error) {
       toast({
         title: "Erro ao excluir lançamentos",
@@ -437,7 +466,14 @@ export function useTransactions() {
       });
       return false;
     }
-    toast({ title: `${ids.length} lançamento${ids.length > 1 ? "s" : ""} excluído${ids.length > 1 ? "s" : ""}!` });
+    if (reconciledIds.size > 0) {
+      toast({
+        title: `${deletable.length} excluído${deletable.length > 1 ? "s" : ""}`,
+        description: `${reconciledIds.size} conciliado${reconciledIds.size > 1 ? "s foram ignorados" : " foi ignorado"}.`,
+      });
+    } else {
+      toast({ title: `${deletable.length} lançamento${deletable.length > 1 ? "s" : ""} excluído${deletable.length > 1 ? "s" : ""}!` });
+    }
     fetchTransactions();
     return true;
   };
