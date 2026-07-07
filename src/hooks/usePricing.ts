@@ -96,7 +96,7 @@ export function usePricing() {
       return parsed;
     }
     return null;
-  }, [user, toast]);
+  }, [user, effectiveUserId, toast]);
 
   // ─── Save config ───
   const saveConfig = async (hours: number, margin: number, matrix?: MatrixValues) => {
@@ -148,6 +148,7 @@ export function usePricing() {
       const { data, error } = await supabase
         .from("transactions")
         .select("amount, category")
+        .eq("user_id", effectiveUserId)
         .eq("type", "despesa")
         .eq("status", "Pago")
         .gte("payment_date", twelveMonthsAgo.toISOString().split("T")[0]);
@@ -184,7 +185,7 @@ export function usePricing() {
         custoHora,
       });
     },
-    [user]
+    [user, effectiveUserId]
   );
 
   // ─── Fetch procedures with items ───
@@ -222,7 +223,7 @@ export function usePricing() {
     }));
 
     setProcedures(mapped);
-  }, [user, toast]);
+  }, [user, effectiveUserId, toast]);
 
   // ─── Create procedure ───
   const createProcedure = async (data: {

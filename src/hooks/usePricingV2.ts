@@ -132,7 +132,7 @@ export function usePricingV2() {
       return parsed;
     }
     return null;
-  }, [user, toast, isPersonal, selectedCompanyId]);
+  }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
 
   // ─── Save config ───
   const saveConfig = async (hours: number, rooms: number, tax: number, daysPerWeek?: number | null, hoursPerDay?: number | null) => {
@@ -200,7 +200,7 @@ export function usePricingV2() {
         sort_order: d.sort_order ?? 0,
       }))
     );
-  }, [user, toast, isPersonal, selectedCompanyId]);
+  }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
 
   // ─── Add cost item ───
   const addCostItem = async (item: {
@@ -210,7 +210,9 @@ export function usePricingV2() {
     value: number;
     frequency: string;
   }) => {
-    if (!user || !config) {
+    if (!user) return false;
+
+    if (!config) {
       // Auto-create config if missing
       if (!config) {
         const { data: newConfig, error: cfgErr } = await supabase
@@ -322,7 +324,7 @@ export function usePricingV2() {
           .map((i) => ({ ...i, value: Number(i.value) || 0 })),
       }))
     );
-  }, [user, toast, isPersonal, selectedCompanyId]);
+  }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
 
   const createProcedure = async (data: {
     name: string;

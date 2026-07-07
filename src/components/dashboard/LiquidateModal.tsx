@@ -109,7 +109,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
   const isBulk = bulkTransactionIds && bulkTransactionIds.length > 1;
 
   useEffect(() => {
-    if (!transaction || !user) return;
+    if (!transaction || !user || !effectiveUserId) return;
 
     setFinalAmount(String(transaction.amount));
     setPaymentDate(format(new Date(), "yyyy-MM-dd"));
@@ -127,7 +127,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
     setPendingInstallmentsCount(0);
     setPendingInstallments([]);
     const fetchAccounts = async () => {
-      let query = supabase.from("bank_accounts").select("id, name");
+      let query = supabase.from("bank_accounts").select("id, name").eq("user_id", effectiveUserId);
       if (isPersonal) {
         query = query.is("company_id", null);
       } else if (selectedCompanyId) {
@@ -144,6 +144,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
       supabase
         .from("transactions")
         .select("id, installment_number, amount, payment_date")
+        .eq("user_id", effectiveUserId)
         .eq("series_id", transaction.series_id)
         .eq("status", "Pendente")
         .neq("id", transaction.id)
@@ -153,7 +154,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
           setPendingInstallments(data || []);
         });
     }
-  }, [transaction, user, selectedCompanyId, isPersonal]);
+  }, [transaction, user, effectiveUserId, selectedCompanyId, isPersonal]);
 
   const originalAmount = transaction?.amount || 0;
   const finalAmountNum = Number(finalAmount) || 0;
