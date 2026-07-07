@@ -267,7 +267,7 @@ function TransactionRow({
         }`}
       >
         {t.status === "Pago" && <CheckCircle2 className="h-3 w-3" />}
-        {t.status === "Pago" ? "Conciliado" : "Pendente"}
+        {t.status === "Pago" ? "Pago" : "Pendente"}
       </Badge>
 
       {/* Actions */}
