@@ -171,6 +171,20 @@ function TransactionRow({
   const accountIcon = getAccountIcon(t);
   const contactName = getContactName(t, suppliers, clients);
   const peer = t.transfer_id ? transferPeerAccount?.get(t.id) : undefined;
+  const [reconciled, setReconciled] = useState<boolean>(!!t.is_reconciled);
+  const handleToggleReconciled = async (checked: boolean | "indeterminate") => {
+    const next = checked === true;
+    const prev = reconciled;
+    setReconciled(next);
+    const { error } = await supabase
+      .from("transactions")
+      .update({ is_reconciled: next })
+      .eq("id", t.id);
+    if (error) {
+      setReconciled(prev);
+      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+    }
+  };
 
   return (
     <div
