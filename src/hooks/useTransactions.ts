@@ -4,6 +4,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
@@ -80,6 +81,7 @@ const PAGE_SIZE = 20;
 
 export function useTransactions() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
 
@@ -137,17 +139,17 @@ export function useTransactions() {
 
   // Fetch auxiliary data (extracted so it can be called on demand)
   const fetchAux = useCallback(async () => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     const [accRes, cardRes, walletRes, supplierRes, clientRes, catRes, termRes, allCatRes] =
       await Promise.all([
-        companyFilter(supabase.from("bank_accounts").select("id, name, type")).order("name"),
-        companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, bank_account_id, parent_card_id, company_id")).order("name"),
-        companyFilter(supabase.from("wallets").select("id, name")).order("name"),
-        supabase.from("suppliers").select("id, name").order("name"),
-        supabase.from("clients").select("id, name").order("name"),
-        companyFilter(supabase.from("categories").select("id, name, parent_id, type")).order("name"),
-        companyFilter(supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation")).order("name"),
-        supabase.from("categories").select("id, name, parent_id, type").order("name"),
+        companyFilter(supabase.from("bank_accounts").select("id, name, type").eq("user_id", effectiveUserId)).order("name"),
+        companyFilter(supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, bank_account_id, parent_card_id, company_id").eq("user_id", effectiveUserId)).order("name"),
+        companyFilter(supabase.from("wallets").select("id, name").eq("user_id", effectiveUserId)).order("name"),
+        supabase.from("suppliers").select("id, name").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("clients").select("id, name").eq("user_id", effectiveUserId).order("name"),
+        companyFilter(supabase.from("categories").select("id, name, parent_id, type").eq("user_id", effectiveUserId)).order("name"),
+        companyFilter(supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation").eq("user_id", effectiveUserId)).order("name"),
+        supabase.from("categories").select("id, name, parent_id, type").eq("user_id", effectiveUserId).order("name"),
       ]);
 
     if (accRes.data) setBankAccounts(accRes.data);
@@ -158,7 +160,7 @@ export function useTransactions() {
     if (catRes.data) setCategories(catRes.data);
     if (allCatRes.data) setAllCategories(allCatRes.data);
     if (termRes.data) setCardTerminals(termRes.data as CardTerminalInfo[]);
-  }, [user, companyFilter]);
+  }, [user, effectiveUserId, companyFilter]);
 
   useEffect(() => {
     fetchAux();
@@ -166,11 +168,11 @@ export function useTransactions() {
     // Fetch ALL accounts (no company filter) for transfers
     const fetchAllAccounts = async () => {
       const [allAccRes, allWalletRes, allCardRes, companiesRes, allTermRes] = await Promise.all([
-        supabase.from("bank_accounts").select("id, name, company_id").order("name"),
-        supabase.from("wallets").select("id, name, company_id").order("name"),
-        supabase.from("credit_cards").select("id, name, last_four_digits, company_id, bank_account_id, parent_card_id").order("name"),
-        supabase.from("companies").select("id, name").order("name"),
-        supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation, company_id").order("name"),
+        supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("wallets").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("credit_cards").select("id, name, last_four_digits, company_id, bank_account_id, parent_card_id").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("companies").select("id, name").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation, company_id").eq("user_id", effectiveUserId).order("name"),
       ]);
 
       const companyMap = new Map<string, string>();
@@ -203,11 +205,11 @@ export function useTransactions() {
     };
 
     fetchAllAccounts();
-  }, [user, companyFilter]);
+  }, [user, effectiveUserId, companyFilter]);
 
   // Fetch transactions
   const fetchTransactions = useCallback(async () => {
-    if (!user) return;
+    if (!user || !effectiveUserId) return;
     setLoading(true);
 
     const selectedCardId = filters.accountId.startsWith("card:")
@@ -220,7 +222,8 @@ export function useTransactions() {
 
     let query = supabase
       .from("transactions")
-      .select("*", { count: "exact" });
+      .select("*", { count: "exact" })
+      .eq("user_id", effectiveUserId);
 
     query = companyFilter(query);
 
@@ -343,7 +346,7 @@ export function useTransactions() {
       setTotalCount(count || 0);
     }
     setLoading(false);
-  }, [user, companyFilter, filters, page, toast, allCategories, creditCards]);
+  }, [user, effectiveUserId, companyFilter, filters, page, toast, allCategories, creditCards]);
 
   useEffect(() => {
     fetchTransactions();
