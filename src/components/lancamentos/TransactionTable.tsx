@@ -316,7 +316,17 @@ function TransactionRow({
             <Eye className="mr-2 h-4 w-4" />
             Ver Detalhes
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(t); }}>
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation();
+              if (reconciled) {
+                toast({ title: "Lançamento conciliado", description: "Remova a conciliação para editar." });
+                return;
+              }
+              onEdit(t);
+            }}
+            disabled={reconciled}
+          >
             <Edit className="mr-2 h-4 w-4" />
             Editar
           </DropdownMenuItem>
@@ -324,14 +334,22 @@ function TransactionRow({
             <Copy className="mr-2 h-4 w-4" />
             Duplicar
           </DropdownMenuItem>
-          {t.status === "Pendente" && (
+          {t.status === "Pendente" && !reconciled && (
             <DropdownMenuItem onClick={() => onLiquidate(t)}>
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Liquidar
             </DropdownMenuItem>
           )}
           <DropdownMenuItem
-            onClick={() => onDelete(t)}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (reconciled) {
+                toast({ title: "Não é possível excluir", description: "Lançamentos conciliados não podem ser excluídos. Remova a conciliação primeiro." , variant: "destructive"});
+                return;
+              }
+              onDelete(t);
+            }}
+            disabled={reconciled}
             className="text-destructive focus:text-destructive"
           >
             <Trash2 className="mr-2 h-4 w-4" />
