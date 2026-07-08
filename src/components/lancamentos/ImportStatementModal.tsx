@@ -567,7 +567,9 @@ export function ImportStatementModal({
         });
         groupResults.flat().forEach(({ rowIdx, match }) => {
           if (match?.best) {
-            nextActions[rowIdx] = "vincular";
+            // "suggested" = valor+data batem mas nome é diferente — não linka
+            // automaticamente, deixa o usuário confirmar com um clique.
+            nextActions[rowIdx] = match.best.suggested ? "criar" : "vincular";
             nextTargets[rowIdx] = match.best.candidate.id;
           }
         });
