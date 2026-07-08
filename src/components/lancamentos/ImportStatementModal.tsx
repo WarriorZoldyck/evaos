@@ -225,7 +225,7 @@ export function ImportStatementModal({
   // line of the statement. They are potential errors/duplications: the statement is the source
   // of truth — if it's not there, it shouldn't exist in the system.
   const [orphans, setOrphans] = useState<
-    { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[]
+    { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string; category?: string | null; subcategory?: string | null; subcategory2?: string | null }[]
   >([]);
   const [orphansLoading, setOrphansLoading] = useState(false);
 
