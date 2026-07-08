@@ -602,27 +602,38 @@ export function ImportStatementModal({
   // The bank statement is the source of truth: any extra line in the system is a likely error.
   useEffect(() => {
     if (importType !== "cartao" || step !== "reconcile" || rows.length === 0 || matchLoading) {
+      if (importType !== "cartao") setSystemBill({ total: 0, count: 0, loading: false });
       return;
     }
     const cardIds = new Set<string>();
     let minDate = "9999-12-31";
     let maxDate = "0000-01-01";
+    let billDate = "";
     rows.forEach((r) => {
       if (!r.selected) return;
       const cardId = isMultiCard ? r.matched_card_id : targetCard;
       if (!cardId) return;
       cardIds.add(cardId);
+      if (!isMultiCard) {
+        creditCards
+          .filter((c) => c.parent_card_id === cardId)
+          .forEach((child) => cardIds.add(child.id));
+      }
       const d = r.purchase_date_original || r.date;
       if (d && d < minDate) minDate = d;
       if (d && d > maxDate) maxDate = d;
+      const due = r.statement_due_date || r.resolved_competence_date || r.date;
+      if (!billDate && due) billDate = due;
     });
     if (cardIds.size === 0 || minDate > maxDate) {
       setOrphans([]);
+      setSystemBill({ total: 0, count: 0, loading: false });
       return;
     }
 
     const matchedIds = new Set(Object.values(matchTargets).filter(Boolean));
     setOrphansLoading(true);
+    setSystemBill((prev) => ({ ...prev, loading: true }));
 
     // Janela apertada — só o escopo real de compras do extrato.
     const shift = (iso: string, days: number) => {
@@ -632,6 +643,11 @@ export function ImportStatementModal({
     };
     const wMin = shift(minDate, -3);
     const wMax = shift(maxDate, 3);
+    const billRef = billDate || maxDate;
+    const [billYear, billMonth] = billRef.split("-").map(Number);
+    const billStart = `${billYear}-${String(billMonth).padStart(2, "0")}-01`;
+    const billEndDate = new Date(billYear, billMonth, 0);
+    const billEnd = `${billEndDate.getFullYear()}-${String(billEndDate.getMonth() + 1).padStart(2, "0")}-${String(billEndDate.getDate()).padStart(2, "0")}`;
 
     // Valores das linhas do extrato — só listamos como orfão o que bate valor.
     const statementAmounts = rows
@@ -641,11 +657,26 @@ export function ImportStatementModal({
       statementAmounts.some((a) => Math.abs(Math.abs(v) - a) <= 0.05);
 
     Promise.all([
+      // Fatura real no sistema: mesmo agrupamento da tela de Lançamentos
+      (() => {
+        let q = supabase
+          .from("transactions")
+          .select("id, amount, payment_date, type, credit_card_id, payment_method, transfer_id")
+          .in("credit_card_id", Array.from(cardIds))
+          .gte("payment_date", billStart)
+          .lte("payment_date", billEnd)
+          .is("transfer_id", null);
+        if (isPersonal) q = q.is("company_id", null);
+        else if (selectedCompanyId) q = q.eq("company_id", selectedCompanyId);
+        return q.limit(2000);
+      })(),
       // Onda A: já vinculadas ao(s) cartão(ões) — sempre listadas
       supabase
         .from("transactions")
         .select("id, description, amount, competence_date, payment_date, purchase_date_original, status, category, subcategory, subcategory2, credit_card_id")
         .in("credit_card_id", Array.from(cardIds))
+        .gte("payment_date", billStart)
+        .lte("payment_date", billEnd)
         .or(
           `and(purchase_date_original.gte.${wMin},purchase_date_original.lte.${wMax}),and(purchase_date_original.is.null,competence_date.gte.${wMin},competence_date.lte.${wMax})`
         ),
@@ -660,8 +691,27 @@ export function ImportStatementModal({
           `and(purchase_date_original.gte.${wMin},purchase_date_original.lte.${wMax}),and(purchase_date_original.is.null,competence_date.gte.${wMin},competence_date.lte.${wMax})`
         )
         .limit(500),
-    ]).then(([a, b]) => {
+    ]).then(([bill, a, b]) => {
       setOrphansLoading(false);
+      const billRows = filterCreditCardBillScope(
+        (bill.data || []).map((t) => ({
+          id: t.id,
+          amount: Number(t.amount),
+          payment_date: t.payment_date,
+          type: t.type,
+          credit_card_id: t.credit_card_id,
+          payment_method: t.payment_method,
+          transfer_id: t.transfer_id,
+        })),
+        Array.from(cardIds),
+        billStart,
+        billEnd,
+      );
+      setSystemBill({
+        total: calculateCreditCardBillTotal(billRows),
+        count: billRows.length,
+        loading: false,
+      });
       // Onda A: descarta Pago fora do escopo real de compras (fatura anterior)
       const rowsA = (a.data || []).filter((t) => {
         if (t.status !== "Pago") return true;
@@ -687,8 +737,13 @@ export function ImportStatementModal({
           subcategory2: t.subcategory2,
         }));
       setOrphans(orphanList);
+    }).catch((err) => {
+      console.error("[ImportStatement] bill/orphan query error", err);
+      setOrphansLoading(false);
+      setSystemBill({ total: 0, count: 0, loading: false });
+      setOrphans([]);
     });
-  }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard]);
+  }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard, creditCards, isPersonal, selectedCompanyId]);
 
 
   // Trigger AI category suggestions once rows + categories are available.
