@@ -609,24 +609,31 @@ export function ImportStatementModal({
     const matchedIds = new Set(Object.values(matchTargets).filter(Boolean));
     setOrphansLoading(true);
 
-    // Amplia a janela: manuais raramente batem o competence_date exato.
+    // Janela apertada — só o mês da fatura. Manuais fora disso não são orfãos.
     const shift = (iso: string, days: number) => {
       const d = new Date(iso + "T00:00:00");
       d.setDate(d.getDate() + days);
       return d.toISOString().slice(0, 10);
     };
-    const wMin = shift(minDate, -30);
-    const wMax = shift(maxDate, 30);
+    const wMin = shift(minDate, -3);
+    const wMax = shift(maxDate, 3);
+
+    // Valores das linhas do extrato — só listamos como orfão o que bate valor.
+    const statementAmounts = rows
+      .filter((r) => r.selected)
+      .map((r) => Math.abs(r.amount));
+    const amountMatches = (v: number) =>
+      statementAmounts.some((a) => Math.abs(Math.abs(v) - a) <= 0.05);
 
     Promise.all([
-      // Onda A: já vinculadas ao(s) cartão(ões)
+      // Onda A: já vinculadas ao(s) cartão(ões) — sempre listadas
       supabase
         .from("transactions")
         .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2, credit_card_id")
         .in("credit_card_id", Array.from(cardIds))
         .gte("competence_date", wMin)
         .lte("competence_date", wMax),
-      // Onda B: despesas sem cartão na janela por competência OU pagamento
+      // Onda B: despesas SEM cartão na janela — filtradas por valor batendo
       supabase
         .from("transactions")
         .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2, credit_card_id")
@@ -638,9 +645,11 @@ export function ImportStatementModal({
         .limit(500),
     ]).then(([a, b]) => {
       setOrphansLoading(false);
-      const rows = [...(a.data || []), ...(b.data || [])];
+      const rowsA = a.data || [];
+      const rowsB = (b.data || []).filter((t) => amountMatches(Number(t.amount)));
+      const all = [...rowsA, ...rowsB];
       const seen = new Set<string>();
-      const orphanList = rows
+      const orphanList = all
         .filter((t) => !matchedIds.has(t.id))
         .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)))
         .map((t) => ({
