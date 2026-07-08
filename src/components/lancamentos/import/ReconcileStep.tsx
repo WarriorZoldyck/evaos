@@ -527,10 +527,13 @@ export function ReconcileStep({
               </h3>
             </header>
 
-            <Alert className="mb-2 py-2 px-3 bg-amber-500/5 border-amber-500/30">
-              <Info className="h-3.5 w-3.5 text-amber-600" />
+            <Alert className="mb-2 py-2 px-3 bg-sky-500/5 border-sky-500/30">
+              <Info className="h-3.5 w-3.5 text-sky-600" />
               <AlertDescription className="text-[11px] leading-snug ml-1">
-                Linhas novas do extrato (sem correspondente). Defina <strong>categoria</strong> (e subcategorias se quiser) antes de importar. Ao categorizar uma linha, lançamentos idênticos (mesma descrição e valor) são categorizados automaticamente.
+                Estas linhas estão no extrato mas <strong>não têm correspondente no sistema</strong>. Escolha o que fazer com cada uma:
+                <strong> lançar e categorizar</strong> (padrão) definindo categoria abaixo, ou <strong>ignorar</strong> se não deve ser importada.
+                Se for o mesmo lançamento já existente com data errada, use "É o mesmo" na seção <em>Só no sistema</em>.
+                Ao categorizar uma linha, lançamentos idênticos são preenchidos automaticamente.
               </AlertDescription>
             </Alert>
 
