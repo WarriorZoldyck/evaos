@@ -744,6 +744,24 @@ export function TransactionTable({
             {selectedIds.size} selecionado{selectedIds.size > 1 ? "s" : ""}
           </span>
           <div className="flex-1" />
+          {onReconcileMultiple && (() => {
+            const selectedTx = transactions.filter((t) => selectedIds.has(t.id));
+            const allReconciled = selectedTx.length > 0 && selectedTx.every((t) => t.is_reconciled);
+            return (
+              <Button
+                variant="outline"
+                size="sm"
+                className={`gap-1.5 ${allReconciled ? "" : "border-emerald-500/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"}`}
+                onClick={() => {
+                  onReconcileMultiple(Array.from(selectedIds), !allReconciled);
+                  clearSelection();
+                }}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                {allReconciled ? `Desconciliar ${selectedIds.size}` : `Conciliar ${selectedIds.size}`}
+              </Button>
+            );
+          })()}
           {onDeleteMultiple && (
             <Button
               variant="destructive"
