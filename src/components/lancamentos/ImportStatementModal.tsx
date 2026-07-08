@@ -192,7 +192,7 @@ export function ImportStatementModal({
 }: ImportStatementModalProps) {
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isPersonal } = useCompany();
   const { toast } = useToast();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -237,6 +237,11 @@ export function ImportStatementModal({
     { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string; category?: string | null; subcategory?: string | null; subcategory2?: string | null }[]
   >([]);
   const [orphansLoading, setOrphansLoading] = useState(false);
+  const [systemBill, setSystemBill] = useState<{ total: number; count: number; loading: boolean }>({
+    total: 0,
+    count: 0,
+    loading: false,
+  });
 
   // Per-row category override (with 3-level hierarchy). Pre-filled from suggestions when available.
   // `touched: true` means the user manually edited this row — never overwrite via propagation.
