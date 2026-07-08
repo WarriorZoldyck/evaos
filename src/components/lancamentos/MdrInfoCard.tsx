@@ -71,7 +71,7 @@ export function MdrInfoCard({
         // D+2 anticipation: single lump-sum payment
         const totalFee = Math.round(amount * (rate / 100) * 100) / 100;
         const totalNet = Math.round((amount - totalFee) * 100) / 100;
-        const settlementDate = addBusinessDays(paymentDate, settlementDays);
+        const settlementDate = addDays(paymentDate, settlementDays);
 
         return {
           type: "lump_sum" as const,

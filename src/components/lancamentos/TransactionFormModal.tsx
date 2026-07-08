@@ -571,11 +571,13 @@ export function TransactionFormModal({
       finalAmount = Math.round((data.amount - feeAmount) * 100) / 100;
       originalAmount = data.amount;
 
-      // Calculate settlement date (D+)
+      // Calculate settlement date (D+): dias úteis p/ débito, dias corridos p/ crédito
       const settlementDays = isDebit
         ? (selectedTerminal.settlement_days_debit ?? 1)
         : (selectedTerminal.settlement_days_credit ?? 2);
-      finalPaymentDate = addBusinessDays(data.competence_date, settlementDays);
+      finalPaymentDate = isDebit
+        ? addBusinessDays(data.competence_date, settlementDays)
+        : addDays(data.competence_date, settlementDays);
     }
 
     const baseData: TransactionInsert = {
@@ -641,7 +643,7 @@ export function TransactionFormModal({
           // D+2 anticipation: acquirer pays TOTAL net in a SINGLE lump sum on D+X
           const totalFee = Math.round(data.amount * (rate / 100) * 100) / 100;
           const totalNet = Math.round((data.amount - totalFee) * 100) / 100;
-          const payDate = addBusinessDays(data.competence_date, settlementDays);
+          const payDate = addDays(data.competence_date, settlementDays);
 
           success = await onSave({
             ...baseData,
