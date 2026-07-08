@@ -468,9 +468,10 @@ export function ReconcileStep({
               <Alert className="mb-2 py-2 px-3 bg-amber-500/5 border-amber-500/30">
                 <Info className="h-3.5 w-3.5 text-amber-600" />
                 <AlertDescription className="text-[11px] leading-snug ml-1">
-                  Casa pelo valor próximo (até R$ 0,05 de diferença). Pode ser desconto por pontualidade ou pequeno juros. Confirme manualmente se quiser absorver a diferença, ou use <strong>"Importar como novo"</strong> se forem compras distintas.
+                  Casa pelo valor próximo (até R$ 0,05 de diferença). Pode ser desconto por pontualidade ou pequeno juros. Confirme manualmente se quiser absorver a diferença, ou use <strong>"É outra compra — criar"</strong> se forem compras distintas.
                 </AlertDescription>
               </Alert>
+
               <div className="border border-amber-500/30 rounded-lg overflow-hidden divide-y">
                 {matchedToleranceRows.map(renderMatchRow)}
               </div>
