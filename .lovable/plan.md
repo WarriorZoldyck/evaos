@@ -1,27 +1,25 @@
 ## Plano de correção
 
-Vou ajustar a conciliação de cartão para parar de buscar lançamentos fora do período real do extrato importado.
+Vou corrigir a conciliação para nunca mostrar UUID de categoria/subcategoria para o usuário.
 
-### 1. Usar data de compra do extrato como escopo principal
-- Em cartão, o matching vai usar `purchase_date_original` / `date` como data da compra.
-- Não vai usar `resolved_competence_date` como data de matching, porque hoje ela pode virar a data de fechamento/competência da fatura e empurrar a busca para Julho.
+### 1. Resolver UUID para nome na tela de conciliação
+- Em `ReconcileStep`, criar um resolvedor usando a lista `categories` já recebida pela tela.
+- Se `category`, `subcategory` ou `subcategory2` vier como UUID, mostrar o `name` correspondente.
+- Se já vier como nome, manter o nome.
 
-### 2. Restringir a busca ao intervalo do extrato
-- A busca de candidatos no sistema será limitada ao menor e maior dia de compra presentes no extrato.
-- Para cartão, a janela será curta e controlada, não mais `±30 dias` nem expansão que puxa compras futuras.
-- Wave B, dos lançamentos sem `credit_card_id`, também ficará presa ao intervalo do extrato e aos valores existentes no extrato.
+### 2. Corrigir lançamentos já existentes exibidos como pares/orfãos
+- Aplicar o resolvedor em:
+  - lançamentos conciliados em “Igual — pode conciliar”;
+  - “Provável — confirmar”;
+  - “Só no sistema”.
+- Assim registros antigos que foram salvos com UUID aparecem com nomes legíveis.
 
-### 3. Corrigir “Só no sistema”
-- O painel “Só no sistema” só vai considerar transações dentro do período de compra do extrato.
-- Não deve aparecer compra de Julho se o extrato tem compras de Junho.
-- Também manterá o filtro por valor do extrato para evitar despejar lançamentos aleatórios.
+### 3. Evitar salvar UUID em novas importações
+- Antes de montar `TransactionInsert` no import, normalizar `rowCategories` para nomes.
+- Se alguma categoria selecionada/sugerida vier como ID, converter para nome antes de gravar em `transactions.category`, `subcategory`, `subcategory2`.
 
-### 4. Ajustar a lógica pura de matching
-- Em cartão, o candidato será comparado pela data real da compra quando existir (`purchase_date_original`/`competence_date` quando apropriado), e não pela data de pagamento da fatura.
-- Manter o uso de valor como filtro forte e descrição apenas como desempate/sugestão.
+### 4. Preservar hierarquia
+- Para categoria/subcategoria/sub-subcategoria, manter a cadeia correta pelo `parent_id` quando possível.
+- Não alterar dados antigos no banco agora; só corrigir exibição e novos inserts neste fluxo.
 
-### 5. Adicionar testes contra regressão
-- Caso de extrato de Junho não pode sugerir transação de Julho com mesmo valor.
-- Caso de lançamento manual em Junho sem cartão, com valor igual, deve aparecer como provável.
-
-Resultado esperado: ao importar o extrato Azul de Junho, o sistema cruza somente compras dentro do escopo desse extrato e deixa de mostrar lançamentos futuros de Julho ou totais absurdos.
+Resultado esperado: a tela deixa de mostrar IDs como `5d8a...` e passa a mostrar nomes como `Alimentação › Supermercado`, inclusive em lançamentos já existentes usados na conciliação.
