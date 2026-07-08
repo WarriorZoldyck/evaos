@@ -243,7 +243,6 @@ export function scoreCandidate(
         if (simCheck >= AUTO_LINK_MIN_SIMILARITY || contactCheck) {
           candidateDate = c.payment_date;
           dayDiff = payDiff;
-          usedBillFallback = true;
         } else {
           return null;
         }
