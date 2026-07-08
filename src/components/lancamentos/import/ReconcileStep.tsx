@@ -225,8 +225,8 @@ export function ReconcileStep({
         <div className="flex items-center gap-1 shrink-0">
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" title="Trocar correspondência">
-                <ArrowLeftRight className="h-3 w-3" /> Trocar
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" title="Escolher outro par de correspondência">
+                <ArrowLeftRight className="h-3 w-3" /> Outro par
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 p-2">
@@ -268,11 +268,11 @@ export function ReconcileStep({
                 className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
                 onClick={() => onActionChange(i, "ignorar")}
               >
-                <ShieldCheck className="h-3 w-3" /> Já existe — não importar
+                <ShieldCheck className="h-3 w-3" /> Manter só o do sistema
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[260px] text-xs">
-              Mantém o lançamento que já existe no sistema e <strong>descarta esta linha do extrato</strong>. Nada novo é criado.
+              Descarta esta linha do extrato. O lançamento que já existe no sistema é mantido — nada é criado nem excluído.
             </TooltipContent>
           </Tooltip>
 
@@ -284,7 +284,7 @@ export function ReconcileStep({
                 className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={() => onActionChange(i, "criar")}
               >
-                <X className="h-3 w-3" /> Importar como novo
+                <X className="h-3 w-3" /> É outra compra — criar
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[280px] text-xs">
@@ -297,6 +297,7 @@ export function ReconcileStep({
             </TooltipContent>
           </Tooltip>
         </div>
+
       </div>
     );
   };
