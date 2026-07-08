@@ -859,9 +859,28 @@ export function ImportStatementModal({
         ? (detectedCard?.company_id ?? creditCards.find((c) => c.id === targetCard)?.company_id ?? selectedCompanyId ?? null)
         : (selectedCompanyId || null);
 
-      const billingDate = importType === "cartao"
-        ? (r.statement_due_date || r.date)
-        : r.date;
+      // For cards, compute the correct bill month PER LINE using the card
+      // cycle (closing_day/due_day) applied to the actual purchase date. This
+      // avoids dumping every imported line into the same fatura when purchases
+      // straddle the closing day.
+      let billingDate: string;
+      if (importType === "cartao") {
+        const cardForLine = cardId ? creditCards.find((c) => c.id === cardId) : undefined;
+        // Use parent card cycle when a child card doesn't declare its own.
+        const parentForCycle = cardForLine?.parent_card_id
+          ? creditCards.find((c) => c.id === cardForLine.parent_card_id)
+          : cardForLine;
+        const closingDay = cardForLine?.closing_day ?? parentForCycle?.closing_day ?? null;
+        const dueDay = cardForLine?.due_day ?? parentForCycle?.due_day ?? null;
+        const purchaseISO = r.purchase_date_original || r.date;
+        if (closingDay && dueDay && purchaseISO) {
+          billingDate = getCreditCardDueDate(purchaseISO, closingDay, dueDay);
+        } else {
+          billingDate = r.statement_due_date || r.date;
+        }
+      } else {
+        billingDate = r.date;
+      }
 
       const competenceDate = importType === "cartao"
         ? (r.resolved_competence_date || r.statement_close_date || r.statement_due_date || r.date)
