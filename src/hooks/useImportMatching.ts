@@ -46,19 +46,20 @@ export function useImportMatching() {
         const minDate = shiftISO(dates[0], -window);
         const maxDate = shiftISO(dates[dates.length - 1], window);
 
-        // For cards, filter the DB query by competence_date (purchase date),
-        // not payment_date (bill due date). All purchases in a billing cycle
-        // share the same payment_date, so payment_date filtering is useless.
-        const dateColumn = isCard ? "purchase_date_original" : "payment_date";
-
         const selectCols = "id, description, amount, payment_date, competence_date, purchase_date_original, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id";
 
         let query = supabase
           .from("transactions")
           .select(selectCols)
-          .in("status", ["Pendente", "Pago"])
-          .gte(dateColumn, minDate)
-          .lte(dateColumn, maxDate);
+          .in("status", ["Pendente", "Pago"]);
+
+        if (isCard) {
+          query = query.or(
+            `and(purchase_date_original.gte.${minDate},purchase_date_original.lte.${maxDate}),and(purchase_date_original.is.null,competence_date.gte.${minDate},competence_date.lte.${maxDate})`
+          );
+        } else {
+          query = query.gte("payment_date", minDate).lte("payment_date", maxDate);
+        }
 
         if (creditCardId) {
           query = query.eq("credit_card_id", creditCardId);
