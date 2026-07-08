@@ -44,7 +44,10 @@ export interface ScoredCandidate {
    * - "tolerance" → EXACT_AMOUNT_TOLERANCE < |Δ| ≤ AMOUNT_TOLERANCE (cent-level diff)
    */
   tier: "exact" | "tolerance";
+  /** True when the candidate's contact_name shares a token or is ≥0.5 similar to the line description. */
+  contactMatched: boolean;
 }
+
 
 /** Tolerance window (days) for matching by date — debit accounts. */
 export const DATE_WINDOW_DAYS = 7;
