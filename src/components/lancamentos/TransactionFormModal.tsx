@@ -571,11 +571,13 @@ export function TransactionFormModal({
       finalAmount = Math.round((data.amount - feeAmount) * 100) / 100;
       originalAmount = data.amount;
 
-      // Calculate settlement date (D+)
+      // Calculate settlement date (D+): dias úteis p/ débito, dias corridos p/ crédito
       const settlementDays = isDebit
         ? (selectedTerminal.settlement_days_debit ?? 1)
         : (selectedTerminal.settlement_days_credit ?? 2);
-      finalPaymentDate = addBusinessDays(data.competence_date, settlementDays);
+      finalPaymentDate = isDebit
+        ? addBusinessDays(data.competence_date, settlementDays)
+        : addDays(data.competence_date, settlementDays);
     }
 
     const baseData: TransactionInsert = {
