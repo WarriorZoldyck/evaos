@@ -229,7 +229,15 @@ export function pickBestMatch(
   const top = scored[0];
   if (!top) return null;
   const strongTrio = top.tier === "exact" && top.dayDiff === 0 && top.contactMatched;
-  if (!strongTrio && top.similarity < AUTO_LINK_MIN_SIMILARITY) return null;
-  return top;
+  if (strongTrio || top.similarity >= AUTO_LINK_MIN_SIMILARITY) return top;
+
+  // Fallback "sugerido": valor exato + único candidato com esse valor na janela.
+  // Não linka automaticamente — o UI mostra como "provável, confirmar".
+  const exactValueMatches = scored.filter((s) => s.tier === "exact");
+  if (exactValueMatches.length === 1 && top.tier === "exact") {
+    return { ...top, suggested: true };
+  }
+  return null;
 }
+
 
