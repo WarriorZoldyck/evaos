@@ -330,9 +330,10 @@ export function ReconcileStep({
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Cada linha do extrato vira uma ação no seu sistema:{" "}
-            <strong>casar com lançamento existente</strong>, <strong>importar como novo</strong>{" "}
-            ou <strong>já existe — não importar</strong>. Revise antes de confirmar.
+            <strong>conciliar com lançamento existente</strong>, <strong>criar como nova compra</strong>{" "}
+            ou <strong>manter só o do sistema</strong>. Revise antes de confirmar.
           </p>
+
           <div className="flex flex-wrap gap-2 mt-2">
             <Button size="sm" variant="outline" onClick={conciliateAll} className="h-7 text-xs gap-1">
               <Check className="h-3 w-3" /> Casar automaticamente os pares sugeridos
