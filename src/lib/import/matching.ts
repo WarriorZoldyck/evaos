@@ -176,8 +176,11 @@ export function scoreCandidate(
   const bestSim = Math.max(similarity, contactSim);
 
   const contactMatched = !!c.contact_name && (
-    sharesToken(line.description, c.contact_name) || contactSim >= 0.5
+    sharesToken(line.description, c.contact_name) ||
+    sharesSubstringToken(line.description, c.contact_name) ||
+    contactSim >= 0.5
   );
+
 
   let score = 40;
   if (dayDiff === 0) score += 20;
