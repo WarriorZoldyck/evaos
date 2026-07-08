@@ -119,13 +119,5 @@ describe("pickBestMatch", () => {
     expect(r).toBeNull();
   });
 });
-      category: null,
-    };
-    const r = pickBestMatch(
-      { date: "2026-06-06", description: "ItalyanSorvetes", amount: 25, type: "despesa" },
-      [cand]
-    );
-    expect(r).toBeNull();
-  });
-});
+
 
