@@ -75,7 +75,7 @@ function resolveCategoryPath(
 ): RowCategoryValue {
   if (!name) return { category: "" };
   const norm = normalizeText(name);
-  const found = categories.find((c) => normalizeText(c.name) === norm);
+  const found = categories.find((c) => c.id === name || normalizeText(c.name) === norm);
   if (!found) return { category: name };
   // Walk up
   const byId = new Map(categories.map((c) => [c.id, c]));
@@ -92,6 +92,14 @@ function resolveCategoryPath(
     subcategory: chain[1]?.name,
     subcategory2: chain[2]?.name,
   };
+}
+
+function resolveCategoryName(
+  value: string | undefined | null,
+  categories: { id: string; name: string }[],
+): string | undefined {
+  if (!value) return undefined;
+  return categories.find((c) => c.id === value)?.name || value;
 }
 
 
@@ -814,6 +822,9 @@ export function ImportStatementModal({
 
       const realIdx = rows.indexOf(r);
       const rowCat = rowCategories[realIdx];
+      const categoryName = resolveCategoryName(rowCat?.category, categories) || catName;
+      const subcategoryName = resolveCategoryName(rowCat?.subcategory, categories) || null;
+      const subcategory2Name = resolveCategoryName(rowCat?.subcategory2, categories) || null;
 
       return {
         description: r.description,
@@ -824,9 +835,9 @@ export function ImportStatementModal({
         // Cartão de crédito: compras são projetadas (Pendente) até a fatura ser paga.
         // Débito/conta corrente: já saíram da conta, então ficam Pago.
         status: (importType === "cartao" ? "Pendente" : "Pago") as "Pendente" | "Pago",
-        category: rowCat?.category || catName,
-        subcategory: rowCat?.subcategory || null,
-        subcategory2: rowCat?.subcategory2 || null,
+        category: categoryName,
+        subcategory: subcategoryName,
+        subcategory2: subcategory2Name,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
