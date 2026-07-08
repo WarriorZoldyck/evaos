@@ -103,6 +103,24 @@ function sharesToken(a: string, b: string): boolean {
 }
 
 /**
+ * True when any token from `a` (len ≥ 5) appears as a substring inside the
+ * squashed (no-space) normalized form of `b`, or vice versa. Catches cases
+ * where the statement collapses words: "ItalyanSorvetes" vs contact
+ * "Italyan Sorvetes".
+ */
+function sharesSubstringToken(a: string, b: string): boolean {
+  const squashedA = normalize(a).replace(/\s+/g, "");
+  const squashedB = normalize(b).replace(/\s+/g, "");
+  if (!squashedA || !squashedB) return false;
+  const check = (tokensSet: Set<string>, squashed: string) => {
+    for (const t of tokensSet) if (t.length >= 5 && squashed.includes(t)) return true;
+    return false;
+  };
+  return check(tokens(a), squashedB) || check(tokens(b), squashedA);
+}
+
+
+/**
  * Jaccard-like similarity over normalized tokens (length ≥ 3).
  * Returns 0..1. Empty token sets return 0.
  */
