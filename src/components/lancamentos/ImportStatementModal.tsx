@@ -608,33 +608,53 @@ export function ImportStatementModal({
 
     const matchedIds = new Set(Object.values(matchTargets).filter(Boolean));
     setOrphansLoading(true);
-    supabase
-      .from("transactions")
-      .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2")
-      .in("credit_card_id", Array.from(cardIds))
-      .gte("competence_date", minDate)
-      .lte("competence_date", maxDate)
-      .then(({ data, error }) => {
-        setOrphansLoading(false);
-        if (error || !data) {
-          setOrphans([]);
-          return;
-        }
-        const orphanList = data
-          .filter((t) => !matchedIds.has(t.id))
-          .map((t) => ({
-            id: t.id,
-            description: t.description || "",
-            amount: Number(t.amount),
-            competence_date: t.competence_date,
-            payment_date: t.payment_date,
-            status: t.status,
-            category: t.category,
-            subcategory: t.subcategory,
-            subcategory2: t.subcategory2,
-          }));
-        setOrphans(orphanList);
-      });
+
+    // Amplia a janela: manuais raramente batem o competence_date exato.
+    const shift = (iso: string, days: number) => {
+      const d = new Date(iso + "T00:00:00");
+      d.setDate(d.getDate() + days);
+      return d.toISOString().slice(0, 10);
+    };
+    const wMin = shift(minDate, -30);
+    const wMax = shift(maxDate, 30);
+
+    Promise.all([
+      // Onda A: já vinculadas ao(s) cartão(ões)
+      supabase
+        .from("transactions")
+        .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2, credit_card_id")
+        .in("credit_card_id", Array.from(cardIds))
+        .gte("competence_date", wMin)
+        .lte("competence_date", wMax),
+      // Onda B: despesas sem cartão que podem pertencer a esta fatura
+      supabase
+        .from("transactions")
+        .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2, credit_card_id")
+        .is("credit_card_id", null)
+        .eq("type", "despesa")
+        .gte("payment_date", wMin)
+        .lte("payment_date", wMax)
+        .limit(500),
+    ]).then(([a, b]) => {
+      setOrphansLoading(false);
+      const rows = [...(a.data || []), ...(b.data || [])];
+      const seen = new Set<string>();
+      const orphanList = rows
+        .filter((t) => !matchedIds.has(t.id))
+        .filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)))
+        .map((t) => ({
+          id: t.id,
+          description: t.description || "",
+          amount: Number(t.amount),
+          competence_date: t.competence_date || t.payment_date,
+          payment_date: t.payment_date,
+          status: t.status,
+          category: t.category,
+          subcategory: t.subcategory,
+          subcategory2: t.subcategory2,
+        }));
+      setOrphans(orphanList);
+    });
   }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard]);
 
 
