@@ -474,6 +474,7 @@ export function TransactionTable({
   onDuplicate,
   onDelete,
   onDeleteMultiple,
+  onReconcileMultiple,
   onLiquidate,
   onViewDetails,
 }: TransactionTableProps) {
