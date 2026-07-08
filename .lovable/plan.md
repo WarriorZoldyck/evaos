@@ -1,25 +1,17 @@
-## Plano de correção
+Corrigir a conciliação de fatura para não puxar lançamentos que (a) não são do cartão e já estão pagos, ou (b) são de faturas anteriores já quitadas.
 
-Vou corrigir a conciliação para nunca mostrar UUID de categoria/subcategoria para o usuário.
+### 1. `src/hooks/useImportMatching.ts`
+- Onda B (despesas sem `credit_card_id`): adicionar `.eq("status", "Pendente")`. Pagos sem cartão nunca devem entrar como candidatos de uma nova fatura.
+- Onda A (já ligadas ao cartão): manter Pendente+Pago, mas em memória descartar candidatos `Pago` cuja `purchase_date_original` esteja fora de `[minDate, maxDate]` do extrato — são de fatura anterior.
 
-### 1. Resolver UUID para nome na tela de conciliação
-- Em `ReconcileStep`, criar um resolvedor usando a lista `categories` já recebida pela tela.
-- Se `category`, `subcategory` ou `subcategory2` vier como UUID, mostrar o `name` correspondente.
-- Se já vier como nome, manter o nome.
+### 2. `src/components/lancamentos/ImportStatementModal.tsx` (painel de órfãos)
+- Onda B da consulta de órfãos: `.eq("status", "Pendente")`.
+- Onda A: filtrar em memória removendo `status='Pago'` com `purchase_date_original` fora do escopo `[minDate, maxDate]`.
 
-### 2. Corrigir lançamentos já existentes exibidos como pares/orfãos
-- Aplicar o resolvedor em:
-  - lançamentos conciliados em “Igual — pode conciliar”;
-  - “Provável — confirmar”;
-  - “Só no sistema”.
-- Assim registros antigos que foram salvos com UUID aparecem com nomes legíveis.
+### 3. `src/lib/import/matching.test.ts`
+- Novo teste: candidato com `status='Pago'` e `purchase_date_original` em maio não é sugerido para uma linha de extrato em junho.
+- Novo teste: candidato sem cartão e `status='Pago'` não aparece como candidato Wave B (documenta a nova regra).
 
-### 3. Evitar salvar UUID em novas importações
-- Antes de montar `TransactionInsert` no import, normalizar `rowCategories` para nomes.
-- Se alguma categoria selecionada/sugerida vier como ID, converter para nome antes de gravar em `transactions.category`, `subcategory`, `subcategory2`.
-
-### 4. Preservar hierarquia
-- Para categoria/subcategoria/sub-subcategoria, manter a cadeia correta pelo `parent_id` quando possível.
-- Não alterar dados antigos no banco agora; só corrigir exibição e novos inserts neste fluxo.
-
-Resultado esperado: a tela deixa de mostrar IDs como `5d8a...` e passa a mostrar nomes como `Alimentação › Supermercado`, inclusive em lançamentos já existentes usados na conciliação.
+### Fora do escopo
+- Não altero dados existentes no banco.
+- Não mexo em Wave A para contas de débito (fluxo não-cartão continua igual).

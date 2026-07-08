@@ -137,7 +137,26 @@ describe("pickBestMatch", () => {
       { useCompetenceDate: true, dayWindow: 3 }
     );
     expect(r).toBeNull();
+  it("still scores a paid May candidate (scope filter lives in the hook)", () => {
+    const paidMay: CandidateTx = {
+      ...baseCand,
+      id: "may",
+      amount: 118,
+      payment_date: "2026-05-09",
+      competence_date: "2026-05-01",
+      purchase_date_original: "2026-05-01",
+      status: "Pago",
+    };
+    // scoreCandidate itself doesn't know about statement scope; the hook filters.
+    const r = scoreCandidate(
+      { date: "2026-05-02", description: "Chat GPT", amount: 118, type: "despesa" },
+      paidMay,
+      { useCompetenceDate: true, dayWindow: 3 }
+    );
+    expect(r).not.toBeNull();
   });
+});
+
 
   it("suggests a manual June card purchase with same value inside statement scope", () => {
     const juneManual: CandidateTx = {

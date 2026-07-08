@@ -86,7 +86,7 @@ export function useImportMatching() {
           const { data: wb, error: wbErr } = await supabase
             .from("transactions")
             .select(selectCols)
-            .in("status", ["Pendente", "Pago"])
+            .eq("status", "Pendente")
             .is("credit_card_id", null)
             .eq("type", "despesa")
             .or(
@@ -100,6 +100,19 @@ export function useImportMatching() {
             }
           }
         }
+
+        // Descarta candidatos Pago cuja purchase_date_original está fora do
+        // escopo do extrato — são de fatura anterior já quitada.
+        if (isCard) {
+          const sMin = dates[0];
+          const sMax = dates[dates.length - 1];
+          rawCandidates = rawCandidates.filter((c) => {
+            if (c.status !== "Pago") return true;
+            const d = c.purchase_date_original || c.competence_date || c.payment_date;
+            return d >= sMin && d <= sMax;
+          });
+        }
+
 
 
 

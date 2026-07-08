@@ -643,10 +643,11 @@ export function ImportStatementModal({
         .or(
           `and(purchase_date_original.gte.${wMin},purchase_date_original.lte.${wMax}),and(purchase_date_original.is.null,competence_date.gte.${wMin},competence_date.lte.${wMax})`
         ),
-      // Onda B: despesas SEM cartão na janela — filtradas por valor batendo
+      // Onda B: despesas SEM cartão na janela — só PENDENTES e valor batendo
       supabase
         .from("transactions")
         .select("id, description, amount, competence_date, payment_date, purchase_date_original, status, category, subcategory, subcategory2, credit_card_id")
+        .eq("status", "Pendente")
         .is("credit_card_id", null)
         .eq("type", "despesa")
         .or(
@@ -655,8 +656,14 @@ export function ImportStatementModal({
         .limit(500),
     ]).then(([a, b]) => {
       setOrphansLoading(false);
-      const rowsA = a.data || [];
+      // Onda A: descarta Pago fora do escopo real de compras (fatura anterior)
+      const rowsA = (a.data || []).filter((t) => {
+        if (t.status !== "Pago") return true;
+        const d = t.purchase_date_original || t.competence_date || t.payment_date;
+        return d && d >= minDate && d <= maxDate;
+      });
       const rowsB = (b.data || []).filter((t) => amountMatches(Number(t.amount)));
+
       const all = [...rowsA, ...rowsB];
       const seen = new Set<string>();
       const orphanList = all
