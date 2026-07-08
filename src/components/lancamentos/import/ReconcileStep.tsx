@@ -263,6 +263,11 @@ export function ReconcileStep({
             {fmtDate(cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
             {cand.contact_name ? ` · ${cand.contact_name}` : ""}
           </p>
+          <CategoryChain
+            category={cand.category}
+            subcategory={(cand as any).subcategory}
+            subcategory2={(cand as any).subcategory2}
+          />
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <Popover>
