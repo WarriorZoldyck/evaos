@@ -73,6 +73,8 @@ interface ReconcileStepProps {
   /** Transactions already in the system that DID NOT match any line of the statement. */
   orphans?: { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string; category?: string | null; subcategory?: string | null; subcategory2?: string | null }[];
   orphansLoading?: boolean;
+  /** Real card bill total/count from the same grouping used on /lancamentos. */
+  systemBill?: { total: number; count: number; loading: boolean } | null;
   /** Optional: when provided, shows a "Excluir" button on each orphan. */
   onDeleteOrphan?: (id: string) => void;
 }
@@ -139,6 +141,7 @@ export function ReconcileStep({
   mode = "debit",
   orphans = [],
   orphansLoading = false,
+  systemBill = null,
   onDeleteOrphan,
 }: ReconcileStepProps) {
   const isCardMode = mode === "card";
@@ -195,7 +198,8 @@ export function ReconcileStep({
     0
   );
   const orphansTotal = orphans.reduce((s, o) => s + Math.abs(o.amount), 0);
-  const systemTotal = matchedSystemTotal + orphansTotal;
+  const systemTotal = isCardMode && systemBill ? Math.abs(systemBill.total) : matchedSystemTotal;
+  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length;
   const totalsDelta = statementTotal - systemTotal;
   const totalsDivergent = Math.abs(totalsDelta) > 0.05;
   const coverageMatched = matchedExactRows.length + matchedToleranceRows.length;
@@ -421,9 +425,11 @@ export function ReconcileStep({
               <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Sistema</p>
-                  <p className="font-mono text-sm">{fmt(systemTotal)}</p>
+                  <p className="font-mono text-sm">
+                    {systemBill?.loading ? "carregando..." : fmt(-systemTotal)}
+                  </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {matchedExactRows.length + matchedToleranceRows.length} casados · {orphans.length} só no sistema
+                    {systemCount} lançamento{systemCount === 1 ? "" : "s"} na fatura do sistema
                   </p>
                 </div>
                 <div>
@@ -454,7 +460,7 @@ export function ReconcileStep({
                   )}
                   {orphans.length > 0 && (
                     <p>
-                      • {orphans.length} lançamento{orphans.length === 1 ? "" : "s"} só no sistema ({fmt(orphansTotal)})
+                      • {orphans.length} lançamento{orphans.length === 1 ? "" : "s"} só no sistema para revisão ({fmt(orphansTotal)})
                     </p>
                   )}
                 </div>
