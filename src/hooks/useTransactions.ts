@@ -579,6 +579,29 @@ export function useTransactions() {
     return true;
   };
 
+  const reconcileMultipleTransactions = async (ids: string[], reconciled: boolean) => {
+    if (ids.length === 0) return false;
+    const { error } = await supabase
+      .from("transactions")
+      .update({ is_reconciled: reconciled })
+      .in("id", ids);
+    if (error) {
+      toast({
+        title: reconciled ? "Erro ao conciliar" : "Erro ao desconciliar",
+        description: mapDatabaseError(error),
+        variant: "destructive",
+      });
+      return false;
+    }
+    toast({
+      title: reconciled
+        ? `${ids.length} lançamento${ids.length > 1 ? "s conciliados" : " conciliado"}!`
+        : `${ids.length} lançamento${ids.length > 1 ? "s desconciliados" : " desconciliado"}!`,
+    });
+    fetchTransactions();
+    return true;
+  };
+
   const groupedParentCardFilterActive = (() => {
     if (!filters.accountId.startsWith("card:")) return false;
     const selectedCardId = filters.accountId.split(":").slice(1).join(":");
