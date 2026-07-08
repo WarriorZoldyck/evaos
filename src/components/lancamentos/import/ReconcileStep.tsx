@@ -267,7 +267,11 @@ export function ReconcileStep({
           </p>
           <p className="font-medium text-sm break-words leading-snug" title={cand.description}>{cand.description}</p>
           <p className="text-xs text-muted-foreground">
-            {fmtDate(cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
+            <span title="Data da compra (competência)">Compra {fmtDate(cand.competence_date || cand.payment_date)}</span>
+            {cand.competence_date && cand.payment_date && cand.competence_date !== cand.payment_date && (
+              <span className="opacity-60"> · Pgto {fmtDate(cand.payment_date)}</span>
+            )}
+            {" · "}<span className="font-mono">{fmt(Number(cand.amount))}</span>
             {cand.contact_name ? ` · ${cand.contact_name}` : ""}
           </p>
           <CategoryChain
@@ -570,7 +574,11 @@ export function ReconcileStep({
                         </p>
                         <p className="font-medium text-sm break-words leading-snug" title={cand.description}>{cand.description}</p>
                         <p className="text-xs text-muted-foreground">
-                          {fmtDate(cand.competence_date || cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
+                          <span title="Data da compra (competência)">Compra {fmtDate(cand.competence_date || cand.payment_date)}</span>
+                          {cand.competence_date && cand.payment_date && cand.competence_date !== cand.payment_date && (
+                            <span className="opacity-60"> · Pgto {fmtDate(cand.payment_date)}</span>
+                          )}
+                          {" · "}<span className="font-mono">{fmt(Number(cand.amount))}</span>
                           {cand.contact_name ? ` · ${cand.contact_name}` : ""}
                         </p>
                         <CategoryChain
@@ -828,8 +836,11 @@ export function ReconcileStep({
                             <div className="min-w-0 flex-1">
                               <p className="font-medium break-words leading-snug">{o.description || "(sem descrição)"}</p>
                               <p className="text-[10px] text-muted-foreground">
-                                {fmtDate(o.competence_date)} ·{" "}
-                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
+                                <span title="Data da compra (competência)">Compra {fmtDate(o.competence_date)}</span>
+                                {o.payment_date && o.payment_date !== o.competence_date && (
+                                  <span className="opacity-60"> · Pgto {fmtDate(o.payment_date)}</span>
+                                )}
+                                {" · "}<Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
                               </p>
                               <CategoryChain
                                 category={o.category}

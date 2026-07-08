@@ -77,10 +77,9 @@ export function useImportMatching() {
 
         let rawCandidates = (data || []) as CandidateTx[];
 
-        // Wave B (cartão): também considerar lançamentos SEM credit_card_id
-        // (usuário digitou como despesa comum) que batem por valor. Ampliamos
-        // a janela em ±30 dias porque a data de pagamento manual raramente é
-        // igual à data da compra na fatura.
+        // Wave B (cartão): lançamentos SEM credit_card_id na janela ±30d.
+        // Filtra por competence_date OU payment_date — cobre quem digitou a
+        // data da compra e quem digitou só a data de pagamento da fatura.
         if (isCard) {
           const wbMin = shiftISO(minDate, -30);
           const wbMax = shiftISO(maxDate, 30);
@@ -90,8 +89,9 @@ export function useImportMatching() {
             .in("status", ["Pendente", "Pago"])
             .is("credit_card_id", null)
             .eq("type", "despesa")
-            .gte("payment_date", wbMin)
-            .lte("payment_date", wbMax)
+            .or(
+              `and(payment_date.gte.${wbMin},payment_date.lte.${wbMax}),and(competence_date.gte.${wbMin},competence_date.lte.${wbMax})`
+            )
             .limit(2000);
           if (!wbErr && wb) {
             const existingIds = new Set(rawCandidates.map((c) => c.id));
@@ -100,6 +100,7 @@ export function useImportMatching() {
             }
           }
         }
+
 
 
         // Amount filter applied in-memory using AMOUNT_TOLERANCE (covers ±0.02).
