@@ -139,7 +139,12 @@ export function TransactionDetailModal({
   const grossAmount = t.original_amount || t.amount;
   const feeAmount = Math.round(grossAmount * (mdrRate / 100) * 100) / 100;
   const netAmount = Math.round((grossAmount - feeAmount) * 100) / 100;
-  const settlementDate = mdrDays > 0 ? addBusinessDays(new Date(t.competence_date + "T00:00:00"), mdrDays) : null;
+  const isDebitPm = (t.payment_method || "") === "Cartão de Débito";
+  const settlementDate = mdrDays > 0
+    ? (isDebitPm
+        ? addBusinessDays(new Date(t.competence_date + "T00:00:00"), mdrDays)
+        : addDays(new Date(t.competence_date + "T00:00:00"), mdrDays))
+    : null;
 
   // Contact
   const supplierName = t.supplier_id ? suppliers.find((s) => s.id === t.supplier_id)?.name : null;
