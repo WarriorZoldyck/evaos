@@ -54,7 +54,7 @@ export function useImportMatching() {
         let query = supabase
           .from("transactions")
           .select(
-            "id, description, amount, payment_date, competence_date, type, status, category, contact_name, series_id, installment_number, installments_total, credit_card_id"
+            "id, description, amount, payment_date, competence_date, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id"
           )
           .in("status", ["Pendente", "Pago"])
           .gte(dateColumn, minDate)

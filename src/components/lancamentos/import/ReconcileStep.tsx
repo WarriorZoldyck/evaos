@@ -71,7 +71,7 @@ interface ReconcileStepProps {
   /** "debit" shows conciliation against pending entries. "card" only shows categorization. */
   mode?: "debit" | "card";
   /** Transactions already in the system that DID NOT match any line of the statement. */
-  orphans?: { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[];
+  orphans?: { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string; category?: string | null; subcategory?: string | null; subcategory2?: string | null }[];
   orphansLoading?: boolean;
   /** Optional: when provided, shows a "Excluir" button on each orphan. */
   onDeleteOrphan?: (id: string) => void;
@@ -93,6 +93,33 @@ const normalizeText = (s: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
+
+function CategoryChain({
+  category,
+  subcategory,
+  subcategory2,
+}: {
+  category?: string | null;
+  subcategory?: string | null;
+  subcategory2?: string | null;
+}) {
+  const parts = [category, subcategory, subcategory2].filter(Boolean) as string[];
+  if (parts.length === 0) {
+    return (
+      <p className="text-[10px] text-muted-foreground italic mt-0.5">sem categoria</p>
+    );
+  }
+  return (
+    <p className="text-[10px] text-muted-foreground mt-0.5 flex flex-wrap items-center gap-0.5">
+      {parts.map((p, idx) => (
+        <span key={idx} className="inline-flex items-center gap-0.5">
+          {idx > 0 && <span className="opacity-50">›</span>}
+          <span className={idx === 0 ? "font-medium text-foreground/70" : ""}>{p}</span>
+        </span>
+      ))}
+    </p>
+  );
+}
 
 export function ReconcileStep({
   rows,
@@ -236,6 +263,11 @@ export function ReconcileStep({
             {fmtDate(cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
             {cand.contact_name ? ` · ${cand.contact_name}` : ""}
           </p>
+          <CategoryChain
+            category={cand.category}
+            subcategory={(cand as any).subcategory}
+            subcategory2={(cand as any).subcategory2}
+          />
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <Popover>
@@ -483,9 +515,9 @@ export function ReconcileStep({
 
           <section>
             <header className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-amber-500" />
-                Criar no sistema
+              <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
+                <Sparkles className="h-4 w-4" />
+                Só no extrato — o que fazer?
                 <Badge variant="secondary" className="text-[10px]">{newRows.length}</Badge>
                 {suggestLoading && (
                   <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-normal">
@@ -495,10 +527,13 @@ export function ReconcileStep({
               </h3>
             </header>
 
-            <Alert className="mb-2 py-2 px-3 bg-amber-500/5 border-amber-500/30">
-              <Info className="h-3.5 w-3.5 text-amber-600" />
+            <Alert className="mb-2 py-2 px-3 bg-sky-500/5 border-sky-500/30">
+              <Info className="h-3.5 w-3.5 text-sky-600" />
               <AlertDescription className="text-[11px] leading-snug ml-1">
-                Linhas novas do extrato (sem correspondente). Defina <strong>categoria</strong> (e subcategorias se quiser) antes de importar. Ao categorizar uma linha, lançamentos idênticos (mesma descrição e valor) são categorizados automaticamente.
+                Estas linhas estão no extrato mas <strong>não têm correspondente no sistema</strong>. Escolha o que fazer com cada uma:
+                <strong> lançar e categorizar</strong> (padrão) definindo categoria abaixo, ou <strong>ignorar</strong> se não deve ser importada.
+                Se for o mesmo lançamento já existente com data errada, use "É o mesmo" na seção <em>Só no sistema</em>.
+                Ao categorizar uma linha, lançamentos idênticos são preenchidos automaticamente.
               </AlertDescription>
             </Alert>
 
@@ -683,39 +718,108 @@ export function ReconcileStep({
                 </AlertDescription>
               </Alert>
               {showOrphans && (
-                <div className="border border-destructive/30 rounded-lg bg-background max-h-72 overflow-auto divide-y">
+                <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
                   {orphans
                     .slice()
                     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-                    .map((o) => (
-                      <div key={o.id} className="flex items-start justify-between gap-2 px-2 py-1.5 text-xs">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium break-words leading-snug">{o.description || "(sem descrição)"}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {fmtDate(o.competence_date)} ·{" "}
-                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
-                          </p>
+                    .map((o) => {
+                      // Cruzar por valor: linhas "só no extrato" com o mesmo valor absoluto.
+                      const valueMatches = onlyStatementRows.filter(
+                        ({ r }) => Math.abs(Math.abs(r.amount) - Math.abs(o.amount)) <= 0.05
+                      );
+                      return (
+                        <div key={o.id} className="px-2 py-2 text-xs space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium break-words leading-snug">{o.description || "(sem descrição)"}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {fmtDate(o.competence_date)} ·{" "}
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
+                              </p>
+                              <CategoryChain
+                                category={o.category}
+                                subcategory={o.subcategory}
+                                subcategory2={o.subcategory2}
+                              />
+                            </div>
+                            <span className="font-mono text-xs whitespace-nowrap self-center">{fmt(Math.abs(o.amount))}</span>
+                            {onDeleteOrphan && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => onDeleteOrphan(o.id)}
+                                  >
+                                    <X className="h-3 w-3" /> Excluir
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="text-xs max-w-[240px]">
+                                  Remove o lançamento do sistema. Use quando for um ghost/duplicata. Esta ação não pode ser desfeita aqui.
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+
+                          {valueMatches.length > 0 && (
+                            <div className="ml-2 pl-2 border-l-2 border-amber-500/40 space-y-1 bg-amber-500/5 rounded-r py-1.5 pr-1.5">
+                              <p className="text-[10px] font-medium text-amber-700 flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                Mesmo valor no extrato — pode ser o mesmo lançamento com data errada
+                              </p>
+                              {valueMatches.map(({ r, i }) => {
+                                const daysOff = Math.round(
+                                  (new Date(r.date + "T00:00:00").getTime() -
+                                    new Date(o.competence_date + "T00:00:00").getTime()) /
+                                    86400000
+                                );
+                                return (
+                                  <div
+                                    key={i}
+                                    className="flex items-start justify-between gap-2 bg-background rounded px-2 py-1.5 border border-amber-500/20"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium break-words leading-snug" title={r.description}>
+                                        {r.description}
+                                      </p>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {fmtDate(r.date)} · <span className="font-mono">{fmt(r.amount)}</span>
+                                        {daysOff !== 0 && (
+                                          <span className="ml-1 text-amber-700">
+                                            ({daysOff > 0 ? "+" : ""}{daysOff}d vs sistema)
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 text-[11px] gap-1 border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10"
+                                            onClick={() => {
+                                              onTargetChange(i, o.id);
+                                              onActionChange(i, "vincular");
+                                            }}
+                                          >
+                                            <Link2 className="h-3 w-3" /> É o mesmo
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="max-w-[260px] text-xs">
+                                          Vincula esta linha do extrato ao lançamento existente. Útil quando o lançamento foi feito na data errada.
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                        <span className="font-mono text-xs whitespace-nowrap self-center">{fmt(Math.abs(o.amount))}</span>
-                        {onDeleteOrphan && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => onDeleteOrphan(o.id)}
-                              >
-                                <X className="h-3 w-3" /> Excluir
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="left" className="text-xs max-w-[240px]">
-                              Remove o lançamento do sistema. Use quando for um ghost/duplicata. Esta ação não pode ser desfeita aqui.
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               )}
             </section>

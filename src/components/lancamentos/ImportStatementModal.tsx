@@ -225,7 +225,7 @@ export function ImportStatementModal({
   // line of the statement. They are potential errors/duplications: the statement is the source
   // of truth — if it's not there, it shouldn't exist in the system.
   const [orphans, setOrphans] = useState<
-    { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[]
+    { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string; category?: string | null; subcategory?: string | null; subcategory2?: string | null }[]
   >([]);
   const [orphansLoading, setOrphansLoading] = useState(false);
 
@@ -608,7 +608,7 @@ export function ImportStatementModal({
     setOrphansLoading(true);
     supabase
       .from("transactions")
-      .select("id, description, amount, competence_date, payment_date, status")
+      .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2")
       .in("credit_card_id", Array.from(cardIds))
       .gte("competence_date", minDate)
       .lte("competence_date", maxDate)
@@ -627,6 +627,9 @@ export function ImportStatementModal({
             competence_date: t.competence_date,
             payment_date: t.payment_date,
             status: t.status,
+            category: t.category,
+            subcategory: t.subcategory,
+            subcategory2: t.subcategory2,
           }));
         setOrphans(orphanList);
       });
