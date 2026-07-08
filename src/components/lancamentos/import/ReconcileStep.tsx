@@ -167,7 +167,14 @@ export function ReconcileStep({
       matches[i]?.best &&
       matches[i]!.best!.tier === "tolerance"
   );
+  // Rows where matcher found a same-value candidate but text differs — user must confirm.
+  const suggestedRows = indexed.filter(({ i }) => {
+    const a = matchActions[i] || "criar";
+    return a === "criar" && matches[i]?.best?.suggested;
+  });
+  const suggestedIdxSet = new Set(suggestedRows.map(({ i }) => i));
   const newRows = indexed.filter(({ i }) => {
+    if (suggestedIdxSet.has(i)) return false;
     const a = matchActions[i] || "criar";
     return a === "criar" || (a === "vincular" && !matches[i]?.best);
   });
