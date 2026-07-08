@@ -71,7 +71,7 @@ interface ReconcileStepProps {
   /** "debit" shows conciliation against pending entries. "card" only shows categorization. */
   mode?: "debit" | "card";
   /** Transactions already in the system that DID NOT match any line of the statement. */
-  orphans?: { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string }[];
+  orphans?: { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string; category?: string | null; subcategory?: string | null; subcategory2?: string | null }[];
   orphansLoading?: boolean;
   /** Optional: when provided, shows a "Excluir" button on each orphan. */
   onDeleteOrphan?: (id: string) => void;
