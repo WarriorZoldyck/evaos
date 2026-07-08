@@ -211,12 +211,14 @@ describe("pickBestMatch", () => {
   });
 
   it("card-bill fallback: does NOT match when description is unrelated (avoids random value collisions)", () => {
+    // dayDiff via payment_date = 25 (2026-05-01 → 2026-05-26) → primary fails
+    // → fallback path exercised → similarity 0 + no contact → null.
     const paidUnrelated: CandidateTx = {
       ...baseCand,
       id: "paid-x",
       description: "Compra genérica no mercado",
       amount: 118,
-      payment_date: "2026-05-09",
+      payment_date: "2026-05-26",
       competence_date: null,
       purchase_date_original: null,
       status: "Pago",
