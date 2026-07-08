@@ -515,9 +515,9 @@ export function ReconcileStep({
 
           <section>
             <header className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-amber-500" />
-                Criar no sistema
+              <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
+                <Sparkles className="h-4 w-4" />
+                Só no extrato — o que fazer?
                 <Badge variant="secondary" className="text-[10px]">{newRows.length}</Badge>
                 {suggestLoading && (
                   <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-normal">
