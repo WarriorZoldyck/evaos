@@ -643,7 +643,7 @@ export function TransactionFormModal({
           // D+2 anticipation: acquirer pays TOTAL net in a SINGLE lump sum on D+X
           const totalFee = Math.round(data.amount * (rate / 100) * 100) / 100;
           const totalNet = Math.round((data.amount - totalFee) * 100) / 100;
-          const payDate = addBusinessDays(data.competence_date, settlementDays);
+          const payDate = addDays(data.competence_date, settlementDays);
 
           success = await onSave({
             ...baseData,
