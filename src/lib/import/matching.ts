@@ -56,6 +56,45 @@ export interface ScoredCandidate {
   suggested?: boolean;
 }
 
+export interface BillScopeTx {
+  id: string;
+  amount: number;
+  payment_date: string;
+  type: "receita" | "despesa";
+  credit_card_id?: string | null;
+  payment_method?: string | null;
+  transfer_id?: string | null;
+}
+
+
+/**
+ * The card bill shown in Lançamentos is defined by credit_card_id + payment_date
+ * month. Matching candidates/orphans must not be used to recalculate this total.
+ */
+export function filterCreditCardBillScope(
+  transactions: BillScopeTx[],
+  cardIds: string[],
+  startDate: string,
+  endDate: string,
+): BillScopeTx[] {
+  const cards = new Set(cardIds);
+  return transactions.filter((t) => {
+    if (!t.credit_card_id || !cards.has(t.credit_card_id)) return false;
+    if (t.payment_date < startDate || t.payment_date > endDate) return false;
+    if (t.transfer_id) return false;
+    if ((t.payment_method || "").toLowerCase() === "cartão de débito") return false;
+    return true;
+  });
+}
+
+export function calculateCreditCardBillTotal(transactions: Pick<BillScopeTx, "amount" | "type">[]): number {
+  const cents = transactions.reduce((sum, t) => {
+    const signed = t.type === "receita" ? -Math.abs(t.amount) : Math.abs(t.amount);
+    return sum + Math.round(signed * 100);
+  }, 0);
+  return cents / 100;
+}
+
 
 /** Tolerance window (days) for matching by date — debit accounts. */
 export const DATE_WINDOW_DAYS = 7;
