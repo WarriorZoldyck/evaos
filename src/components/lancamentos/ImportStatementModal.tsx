@@ -608,7 +608,7 @@ export function ImportStatementModal({
     setOrphansLoading(true);
     supabase
       .from("transactions")
-      .select("id, description, amount, competence_date, payment_date, status")
+      .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2")
       .in("credit_card_id", Array.from(cardIds))
       .gte("competence_date", minDate)
       .lte("competence_date", maxDate)
@@ -627,6 +627,9 @@ export function ImportStatementModal({
             competence_date: t.competence_date,
             payment_date: t.payment_date,
             status: t.status,
+            category: t.category,
+            subcategory: t.subcategory,
+            subcategory2: t.subcategory2,
           }));
         setOrphans(orphanList);
       });
