@@ -387,35 +387,12 @@ export function ImportStatementModal({
         };
       });
 
-      // Intra-statement dedup: collapse rows that differ only by whitespace/punctuation
-      // (some bank PDFs emit the same purchase twice with subtle spacing differences).
-      // Only collapse when date + amount + type + normalized description all match,
-      // and the row has no series_id (avoid touching legitimate installments).
-      const seen = new Map<string, number>();
-      const deduped: ParsedTransaction[] = [];
-      let dedupedCount = 0;
-      for (const r of parsed) {
-        const normDesc = (r.description || "")
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]/g, "");
-        const key = `${r.date}|${Math.abs(r.amount).toFixed(2)}|${r.type}|${normDesc}|${r.series_id || ""}|${r.installment_number || ""}`;
-        if (seen.has(key)) {
-          dedupedCount++;
-          continue;
-        }
-        seen.set(key, deduped.length);
-        deduped.push(r);
-      }
-      if (dedupedCount > 0) {
-        toast({
-          title: `${dedupedCount} linha(s) duplicada(s) removida(s) do extrato`,
-          description: "Encontramos lançamentos idênticos repetidos no arquivo.",
-        });
-      }
+      // NÃO deduplicar o extrato: ele é fonte da verdade.
+      // 2 compras iguais no mesmo dia (ex.: 2 sorvetes) são legítimas e precisam
+      // aparecer no sistema. Se houver duplicata real de parsing, o usuário
+      // desmarca a linha na tela de revisão.
+      setRows(parsed);
 
-      setRows(deduped);
 
       // Capture statement total reported by the bank (used to validate the import).
       const parsedStatementTotal = typeof result.statement_total === "number" && result.statement_total > 0
@@ -430,7 +407,7 @@ export function ImportStatementModal({
       setAmountRescaled(Boolean(result.amount_rescaled));
       setAcknowledgeDivergence(false);
 
-      const detectedCardIds = new Set(deduped.map((r) => r.matched_card_id).filter(Boolean));
+      const detectedCardIds = new Set(parsed.map((r) => r.matched_card_id).filter(Boolean));
       const resolvedDetectedCards = creditCards.filter((c) => detectedCardIds.has(c.id));
 
       if (detectedCardIds.size >= 1) {
