@@ -44,7 +44,10 @@ export interface ScoredCandidate {
    * - "tolerance" → EXACT_AMOUNT_TOLERANCE < |Δ| ≤ AMOUNT_TOLERANCE (cent-level diff)
    */
   tier: "exact" | "tolerance";
+  /** True when the candidate's contact_name shares a token or is ≥0.5 similar to the line description. */
+  contactMatched: boolean;
 }
+
 
 /** Tolerance window (days) for matching by date — debit accounts. */
 export const DATE_WINDOW_DAYS = 7;
@@ -98,6 +101,24 @@ function sharesToken(a: string, b: string): boolean {
   for (const t of ta) if (tb.has(t)) return true;
   return false;
 }
+
+/**
+ * True when any token from `a` (len ≥ 5) appears as a substring inside the
+ * squashed (no-space) normalized form of `b`, or vice versa. Catches cases
+ * where the statement collapses words: "ItalyanSorvetes" vs contact
+ * "Italyan Sorvetes".
+ */
+function sharesSubstringToken(a: string, b: string): boolean {
+  const squashedA = normalize(a).replace(/\s+/g, "");
+  const squashedB = normalize(b).replace(/\s+/g, "");
+  if (!squashedA || !squashedB) return false;
+  const check = (tokensSet: Set<string>, squashed: string) => {
+    for (const t of tokensSet) if (t.length >= 5 && squashed.includes(t)) return true;
+    return false;
+  };
+  return check(tokens(a), squashedB) || check(tokens(b), squashedA);
+}
+
 
 /**
  * Jaccard-like similarity over normalized tokens (length ≥ 3).
@@ -154,19 +175,27 @@ export function scoreCandidate(
     : 0;
   const bestSim = Math.max(similarity, contactSim);
 
+  const contactMatched = !!c.contact_name && (
+    sharesToken(line.description, c.contact_name) ||
+    sharesSubstringToken(line.description, c.contact_name) ||
+    contactSim >= 0.5
+  );
+
+
   let score = 40;
   if (dayDiff === 0) score += 20;
   else if (dayDiff <= 3) score += 10;
   else if (dayDiff <= 7) score += 5;
 
-  if (c.contact_name && sharesToken(line.description, c.contact_name)) score += 15;
+  if (contactMatched) score += 15;
+  if (contactSim >= 0.5) score += 10;
   if (sharesToken(line.description, c.description)) score += 10;
   score += Math.round(bestSim * 30);
 
   const amountDiff = Math.abs(c.amount - Math.abs(line.amount));
   const tier: "exact" | "tolerance" = amountDiff <= EXACT_AMOUNT_TOLERANCE ? "exact" : "tolerance";
 
-  return { candidate: c, score, dayDiff, similarity: bestSim, amountDiff, tier };
+  return { candidate: c, score, dayDiff, similarity: bestSim, amountDiff, tier, contactMatched };
 }
 
 
@@ -175,6 +204,11 @@ export function scoreCandidate(
  * Only returns a match when the description similarity passes
  * `AUTO_LINK_MIN_SIMILARITY` — otherwise returns null so the UI defaults
  * to "create new" instead of silently linking unrelated rows.
+ *
+ * Exception: when date+amount+contact all match strongly (same day, exact
+ * value, supplier name recognized), auto-link even if the free-text
+ * description is unrelated (e.g. statement "ItalyanSorvetes" vs system
+ * "Sorvete família" with contact "Italyan Sorvetes").
  */
 export function pickBestMatch(
   line: StatementLine,
@@ -187,6 +221,8 @@ export function pickBestMatch(
     .sort((a, b) => b.score - a.score || a.dayDiff - b.dayDiff);
   const top = scored[0];
   if (!top) return null;
-  if (top.similarity < AUTO_LINK_MIN_SIMILARITY) return null;
+  const strongTrio = top.tier === "exact" && top.dayDiff === 0 && top.contactMatched;
+  if (!strongTrio && top.similarity < AUTO_LINK_MIN_SIMILARITY) return null;
   return top;
 }
+

@@ -1,56 +1,53 @@
-Vamos aplicar o padrão desses sistemas (Mint/YNAB/Conta Azul/Omie/Nibo) na conciliação da fatura, em duas ondas para você validar cada uma.
+## Problema confirmado
 
-## Onda 1 — Linguagem e clareza (sem mexer em algoritmo)
+No extrato de junho tem **2 sorvetes em 06/06 (R$ 25 cada)** — as duas linhas aparecem no PDF:
 
-Arquivo: `src/components/lancamentos/import/ReconcileStep.tsx` e `ImportStatementModal.tsx`.
+```
+06/06 ItalyanSorvetes    25,00
+06/06 ItalyanSorvetes    25,00
+```
 
-1. **Renomear botões da linha casada:**
-   - "Trocar" → **"Outro par"** (só troca o candidato).
-   - "Já existe — não importar" → **"Manter só o do sistema"** (tooltip: "Descarta a linha do extrato. Nada é criado nem excluído.").
-   - "Importar como novo" → **"É outra compra — criar"** (tooltip: "Cria um lançamento novo. Pode gerar duplicata.").
+No sistema há **apenas 1 lançamento de sorvete em 06/06**. Então:
 
-2. **Renomear quadrante:** "Match perfeito" → **"Igual — pode conciliar"** com contador `12/14` de cobertura da fatura, para quebrar a confusão com o total divergente.
+1. A divergência de R$ 25 no card "Sistema × Extrato" está correta — falta 1 sorvete no sistema.
+2. O que está errado é que o matcher **não conseguiu ligar** nem o primeiro sorvete do extrato ao lançamento do sistema — porque o texto "ItalyanSorvetes" não bate com a descrição do lançamento no sistema (que provavelmente está com nome do fornecedor / categoria diferente). O gate `AUTO_LINK_MIN_SIMILARITY = 0.34` está bloqueando.
 
-3. **Novo card fixo no topo da etapa de conciliar — Sistema × Extrato:**
+Sua leitura está certa: quando **data + valor + fornecedor** batem, não faz sentido exigir similaridade textual da descrição livre.
 
-   ```text
-   ┌─ Fatura Junho/2026 ─────────────────────────────┐
-   │  Sistema:     R$ 1.245,80  (12 lançamentos)     │
-   │  Extrato:     R$ 1.270,80  (14 linhas)          │
-   │  Diferença:   R$ 25,00 ⚠                        │
-   │  Prováveis causas:                              │
-   │  • 2 linhas só no extrato: "IOF R$18" "AJ R$7"  │
-   │  • Nenhum órfão no sistema                       │
-   └─────────────────────────────────────────────────┘
-   ```
+## O que vou mudar (Onda 1.5 — cirúrgico, antes da Onda 2)
 
-   - **Sistema** = soma de TODOS os lançamentos do cartão no ciclo da fatura (query direta, não depende do matcher).
-   - **Extrato** = soma das linhas selecionadas.
-   - Se Δ ≠ 0, lista automaticamente as linhas "Só no extrato" + órfãos que somam algo próximo do Δ.
+Arquivo: `src/lib/import/matching.ts`
 
-## Onda 2 — Estado de divergência de valor (mexe em lógica)
+**1. Novo sinal "fornecedor casou" no `scoreCandidate`:**
+   - Já existe `contactSim` (similaridade com `candidate.contact_name`). Vou expô-lo separado no `ScoredCandidate` como `contactMatched: boolean` (true quando `contactSim ≥ 0.5` **ou** `sharesToken(line.description, contact_name)`).
 
-Arquivo: `src/lib/import/matching.ts` + `ReconcileStep.tsx`.
+**2. `pickBestMatch` — bypass do gate de similaridade quando o trio forte casa:**
+   - Auto-linkar mesmo com `similarity < 0.34` SE, no modo cartão:
+     - `tier === "exact"` (valor idêntico), **e**
+     - `dayDiff === 0` (mesmo dia), **e**
+     - `contactMatched === true` (fornecedor bateu por token/similaridade).
+   - Fora desse trio, mantém o gate atual (evita o bug Sabrina/Renato).
 
-4. **Novo quadrante "Divergência de valor" (substitui "Diferença de centavos"):**
-   - Só no modo cartão, criar `CARD_AMOUNT_TOLERANCE = 2.00` (cobre IOF, câmbio, ajuste de anuidade).
-   - Linhas com `EXACT_AMOUNT_TOLERANCE < |Δ| ≤ CARD_AMOUNT_TOLERANCE` viram tier `"divergent"` (não mais "tolerance").
-   - Renderização com radio group — uma escolha ativa por vez:
-     1. **Usar valor do extrato** (recomendado, atualiza o lançamento no sistema).
-     2. **Manter valor do sistema** (só marca conciliado).
-     3. **É outra compra — criar** (cria novo).
-     4. **Ignorar linha do extrato**.
-   - No import, a opção 1 dispara `update` no `amount` do lançamento existente antes de marcar conciliado.
+**3. Boost de score quando contato casa:**
+   - Hoje: `+15` se `sharesToken(desc, contact_name)`. Vou somar mais `+10` quando `contactSim ≥ 0.5` (nome do fornecedor aparece "quase igual" na linha do extrato, como "ItalyanSorvetes" vs contato "Italyan Sorvetes").
 
-5. **Auto-categorização por histórico** (linhas "Só no extrato"):
-   - Se descrição normalizada ≈ 3+ transações passadas com mesma categoria, aplicar sugestão e mover para subgrupo "Já categorizado (revise)".
-   - Se sem sugestão, bloquear import da linha até categoria ser definida.
+**4. Ampliar o pool de candidatos (opcional, mesmo arquivo):**
+   - Em `useImportMatching.ts` o filtro por valor já usa `AMOUNT_TOLERANCE`. Sem mudança aqui.
 
-## Fora de escopo (não mexer agora)
+## O que NÃO muda
 
-- Fluxo de débito continua como está — funciona bem.
-- Parser de PDF/OFX, dedup pós-import, regras de recorrência.
+- Continua exigindo mesmo tipo (receita/despesa), valor dentro da tolerância e data dentro da janela do cartão (5 dias). Sem risco de casar coisas distantes.
+- Guard de parcela (`V03/12` ≠ `V02/12`) permanece.
+- Onda 2 (quadrante "Divergência de valor") fica para depois desta correção.
 
-## Ordem de entrega
+## Resultado esperado no seu caso
 
-Faço Onda 1 primeiro, você valida com um caso real (fatura com R$ 25 de divergência), e depois libera Onda 2. Assim se algo na renomeação já resolver, evitamos mexer no algoritmo.
+- 1º sorvete do extrato (06/06, R$ 25, "ItalyanSorvetes") → casa automaticamente com o lançamento do sistema (mesma data, mesmo valor, fornecedor "Italyan Sorvetes" no contato).
+- 2º sorvete do extrato (06/06, R$ 25, "ItalyanSorvetes") → aparece em "Só no extrato" com sugestão de criar como nova compra (é a compra real que faltou lançar).
+- Card "Sistema × Extrato" continua mostrando os R$ 25 de diferença até você decidir criar o 2º sorvete.
+
+## Testes
+
+- Ajustar `matching.test.ts` para cobrir: (a) trio forte casa mesmo com descrição totalmente diferente; (b) trio forte não casa se o fornecedor não bater; (c) casos existentes continuam válidos.
+
+Aguardando seu OK para aplicar.
