@@ -970,6 +970,8 @@ export function ImportStatementModal({
     setAcknowledgeDivergence(false);
     setMatchActions({});
     setMatchTargets({});
+    setOrphans([]);
+    setSystemBill({ total: 0, count: 0, loading: false });
     setRowCategories({});
     setImportResult(null);
     setStep("preview");
@@ -1299,6 +1301,7 @@ export function ImportStatementModal({
               walletId={walletId}
               orphans={orphans}
               orphansLoading={orphansLoading}
+              systemBill={systemBill}
               onDeleteOrphan={async (id) => {
                 const ok = window.confirm("Excluir este lançamento do sistema? Esta ação não pode ser desfeita.");
                 if (!ok) return;
