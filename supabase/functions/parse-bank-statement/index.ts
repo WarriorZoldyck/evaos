@@ -167,8 +167,8 @@ INTERNATIONAL TRANSACTIONS — VERY IMPORTANT:
 - Emit one transaction per international purchase using the R$ amount.
 - ALSO emit a SEPARATE transaction for the "Repasse de IOF em R$" line — this is REAL money on the bill. Use the same date as the international purchase(s), description "IOF Internacional - <merchant>" (or just "IOF Internacional" if multiple), type "despesa". NEVER skip the IOF.
 
-DEDUPLICATION:
-- If the SAME purchase line appears twice (same date, amount, description — possibly with subtle whitespace differences), include it ONLY ONCE.
+PRESERVE DUPLICATES (bank statement is source of truth):
+- If the SAME purchase (same date, same amount, same description) appears N times in the statement, emit it N times. Two or more identical purchases on the same day are common (e.g. two ice creams for R$ 25 each at the same shop, two Uber rides, two supermarket runs). NEVER collapse repeated lines into one. The count of transactions you return MUST equal the count of visible purchase lines in the statement body.
 
 EXCLUDE (NOT real transactions):
 - Bill payments: "DEB AUTOM DE FATURA", "PAGAMENTO DE FATURA", "PAG FATURA"
