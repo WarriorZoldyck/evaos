@@ -41,7 +41,7 @@ export function useImportMatching() {
       setLoading(true);
       try {
         const isCard = !!creditCardId;
-        const window = isCard ? CARD_DATE_WINDOW_DAYS : DATE_WINDOW_DAYS;
+        const window = isCard ? Math.min(CARD_DATE_WINDOW_DAYS, 3) : DATE_WINDOW_DAYS;
         const dates = lines.map((l) => l.date).sort();
         const minDate = shiftISO(dates[0], -window);
         const maxDate = shiftISO(dates[dates.length - 1], window);
@@ -49,9 +49,9 @@ export function useImportMatching() {
         // For cards, filter the DB query by competence_date (purchase date),
         // not payment_date (bill due date). All purchases in a billing cycle
         // share the same payment_date, so payment_date filtering is useless.
-        const dateColumn = isCard ? "competence_date" : "payment_date";
+        const dateColumn = isCard ? "purchase_date_original" : "payment_date";
 
-        const selectCols = "id, description, amount, payment_date, competence_date, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id";
+        const selectCols = "id, description, amount, payment_date, competence_date, purchase_date_original, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id";
 
         let query = supabase
           .from("transactions")
@@ -77,12 +77,11 @@ export function useImportMatching() {
 
         let rawCandidates = (data || []) as CandidateTx[];
 
-        // Wave B (cartão): lançamentos SEM credit_card_id na janela ±30d.
-        // Filtra por competence_date OU payment_date — cobre quem digitou a
-        // data da compra e quem digitou só a data de pagamento da fatura.
+        // Wave B (cartão): lançamentos SEM credit_card_id somente dentro do
+        // escopo real de compras do extrato. Não expandir para fatura futura.
         if (isCard) {
-          const wbMin = shiftISO(minDate, -30);
-          const wbMax = shiftISO(maxDate, 30);
+          const wbMin = minDate;
+          const wbMax = maxDate;
           const { data: wb, error: wbErr } = await supabase
             .from("transactions")
             .select(selectCols)
@@ -90,7 +89,7 @@ export function useImportMatching() {
             .is("credit_card_id", null)
             .eq("type", "despesa")
             .or(
-              `and(payment_date.gte.${wbMin},payment_date.lte.${wbMax}),and(competence_date.gte.${wbMin},competence_date.lte.${wbMax})`
+              `and(purchase_date_original.gte.${wbMin},purchase_date_original.lte.${wbMax}),and(competence_date.gte.${wbMin},competence_date.lte.${wbMax})`
             )
             .limit(2000);
           if (!wbErr && wb) {
