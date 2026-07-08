@@ -224,7 +224,6 @@ export function scoreCandidate(
   const window = opts.dayWindow ?? DATE_WINDOW_DAYS;
   let candidateDate = primaryDate;
   let dayDiff = diffDays(line.date, candidateDate);
-  let usedBillFallback = false;
 
   if (dayDiff > window) {
     // Card-bill fallback: candidate has no purchase_date_original AND falls in the
