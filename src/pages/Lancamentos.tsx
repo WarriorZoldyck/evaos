@@ -38,7 +38,7 @@ export default function Lancamentos() {
     transactions, loading, totalCount, page, setPage, totalPages, exhaustiveActive,
     filters, setFilters,
     createTransaction, createMultipleTransactions, updateTransaction,
-    deleteTransaction, deleteMultipleTransactions, deleteSeriesTransactions, duplicateTransaction,
+    deleteTransaction, deleteMultipleTransactions, reconcileMultipleTransactions, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions, updateMultipleTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
     cardTerminals, allCardTerminals, allAccounts, allCategories,
@@ -319,6 +319,7 @@ export default function Lancamentos() {
             onDuplicate={duplicateTransaction}
             onDelete={handleDelete}
             onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
+            onReconcileMultiple={(ids, reconciled) => reconcileMultipleTransactions(ids, reconciled)}
             onLiquidate={(t) => {
               // If it's a credit card transaction, open bill payment flow positioned
               // on the cycle that contains this transaction. We use payment_date
