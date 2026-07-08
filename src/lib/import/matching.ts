@@ -48,6 +48,11 @@ export interface ScoredCandidate {
   tier: "exact" | "tolerance";
   /** True when the candidate's contact_name shares a token or is ≥0.5 similar to the line description. */
   contactMatched: boolean;
+  /**
+   * True when the candidate matched by value+date only (low text similarity, no trio).
+   * The UI should present it as a suggestion to confirm — not auto-link.
+   */
+  suggested?: boolean;
 }
 
 
@@ -55,10 +60,10 @@ export interface ScoredCandidate {
 export const DATE_WINDOW_DAYS = 7;
 /**
  * Tolerance window (days) for matching by date — credit cards.
- * Kept tight so we NEVER cross billing cycles. A purchase on the statement
- * must match a system transaction within the same cycle, not the previous month.
+ * Fatura mensal: nomes divergem muito, então ampliamos para pegar lançamentos
+ * feitos alguns dias antes/depois da compra real, sem cruzar ciclos.
  */
-export const CARD_DATE_WINDOW_DAYS = 5;
+export const CARD_DATE_WINDOW_DAYS = 15;
 /** Amount considered effectively identical — only float rounding. */
 export const EXACT_AMOUNT_TOLERANCE = 0.005;
 /** Currency tolerance — covers small differences like discounts/juros up to 5 centavos. */
@@ -224,7 +229,15 @@ export function pickBestMatch(
   const top = scored[0];
   if (!top) return null;
   const strongTrio = top.tier === "exact" && top.dayDiff === 0 && top.contactMatched;
-  if (!strongTrio && top.similarity < AUTO_LINK_MIN_SIMILARITY) return null;
-  return top;
+  if (strongTrio || top.similarity >= AUTO_LINK_MIN_SIMILARITY) return top;
+
+  // Fallback "sugerido": valor exato + único candidato com esse valor na janela.
+  // Não linka automaticamente — o UI mostra como "provável, confirmar".
+  const exactValueMatches = scored.filter((s) => s.tier === "exact");
+  if (exactValueMatches.length === 1 && top.tier === "exact") {
+    return { ...top, suggested: true };
+  }
+  return null;
 }
+
 

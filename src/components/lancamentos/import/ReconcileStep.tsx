@@ -167,7 +167,14 @@ export function ReconcileStep({
       matches[i]?.best &&
       matches[i]!.best!.tier === "tolerance"
   );
+  // Rows where matcher found a same-value candidate but text differs — user must confirm.
+  const suggestedRows = indexed.filter(({ i }) => {
+    const a = matchActions[i] || "criar";
+    return a === "criar" && matches[i]?.best?.suggested;
+  });
+  const suggestedIdxSet = new Set(suggestedRows.map(({ i }) => i));
   const newRows = indexed.filter(({ i }) => {
+    if (suggestedIdxSet.has(i)) return false;
     const a = matchActions[i] || "criar";
     return a === "criar" || (a === "vincular" && !matches[i]?.best);
   });
@@ -511,6 +518,94 @@ export function ReconcileStep({
             </section>
           )}
 
+
+          {/* PROVÁVEL — valor+data batem, mas nome diverge. Confirmar. */}
+          {suggestedRows.length > 0 && (
+            <section>
+              <header className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-amber-700">
+                  <Link2 className="h-4 w-4" />
+                  Provável — confirmar
+                  <Badge variant="secondary" className="text-[10px]">{suggestedRows.length}</Badge>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    — valor e data batem, mas o nome diverge
+                  </span>
+                </h3>
+              </header>
+              <Alert className="mb-2 py-2 px-3 bg-amber-500/5 border-amber-500/30">
+                <Info className="h-3.5 w-3.5 text-amber-600" />
+                <AlertDescription className="text-[11px] leading-snug ml-1">
+                  Achamos um lançamento no sistema com o mesmo valor e data próxima, mas com descrição diferente. Se for a mesma compra, clique em <strong>"É o mesmo"</strong> para vincular. Caso contrário, mantenha como <strong>criar novo</strong>.
+                </AlertDescription>
+              </Alert>
+              <div className="border border-amber-500/30 rounded-lg overflow-hidden divide-y bg-amber-500/[0.02]">
+                {suggestedRows.map(({ r, i }) => {
+                  const cand = matches[i]!.best!.candidate;
+                  const daysOff = Math.round(
+                    (new Date(r.date + "T00:00:00").getTime() -
+                      new Date((cand.competence_date || cand.payment_date) + "T00:00:00").getTime()) /
+                      86400000
+                  );
+                  return (
+                    <div key={i} className="grid grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)_auto] gap-4 items-start p-3 hover:bg-accent/30">
+                      <div className="min-w-0">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Extrato</p>
+                        <p className="font-medium text-sm break-words leading-snug" title={r.description}>{r.description}</p>
+                        <p className="text-xs text-muted-foreground">{fmtDate(r.date)} · <span className="font-mono">{fmt(r.amount)}</span></p>
+                      </div>
+                      <div className="flex flex-col items-center gap-0.5 shrink-0">
+                        <ArrowLeftRight className="h-4 w-4 text-amber-600" />
+                        {daysOff !== 0 && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-amber-500/50 text-amber-700 font-mono">
+                            {daysOff > 0 ? "+" : ""}{daysOff}d
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5 flex items-center gap-1">
+                          EVA
+                          <Badge variant={cand.status === "Pago" ? "default" : "secondary"} className="text-[9px] px-1 py-0 h-3.5">
+                            {cand.status}
+                          </Badge>
+                        </p>
+                        <p className="font-medium text-sm break-words leading-snug" title={cand.description}>{cand.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {fmtDate(cand.competence_date || cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
+                          {cand.contact_name ? ` · ${cand.contact_name}` : ""}
+                        </p>
+                        <CategoryChain
+                          category={cand.category}
+                          subcategory={(cand as any).subcategory}
+                          subcategory2={(cand as any).subcategory2}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1 border-emerald-500/60 text-emerald-700 hover:bg-emerald-500/10"
+                          onClick={() => {
+                            onTargetChange(i, cand.id);
+                            onActionChange(i, "vincular");
+                          }}
+                        >
+                          <Link2 className="h-3 w-3" /> É o mesmo
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs gap-1 text-muted-foreground"
+                          onClick={() => onActionChange(i, "ignorar")}
+                        >
+                          <X className="h-3 w-3" /> Ignorar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
 
           <section>

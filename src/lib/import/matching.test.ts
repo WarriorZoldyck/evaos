@@ -104,7 +104,20 @@ describe("pickBestMatch", () => {
       { date: "2026-06-06", description: "ItalyanSorvetes", amount: 25, type: "despesa" },
       [cand]
     );
+    // Novo comportamento: valor+data batem, único candidato → devolve como "sugerido"
+    expect(r).not.toBeNull();
+    expect(r!.suggested).toBe(true);
+  });
+
+  it("does NOT suggest when two candidates share the same amount (ambiguous)", () => {
+    const c1: CandidateTx = { ...baseCand, id: "a", amount: 25, payment_date: "2026-06-06", description: "X", contact_name: "A", category: null };
+    const c2: CandidateTx = { ...baseCand, id: "b", amount: 25, payment_date: "2026-06-07", description: "Y", contact_name: "B", category: null };
+    const r = pickBestMatch(
+      { date: "2026-06-06", description: "ItalyanSorvetes", amount: 25, type: "despesa" },
+      [c1, c2]
+    );
     expect(r).toBeNull();
   });
 });
+
 

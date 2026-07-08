@@ -505,7 +505,7 @@ export function ImportStatementModal({
         const nextTargets: Record<number, string> = {};
         rows.forEach((_, i) => {
           if (res[i]?.best) {
-            nextActions[i] = "vincular";
+            nextActions[i] = res[i].best!.suggested ? "criar" : "vincular";
             nextTargets[i] = res[i].best!.candidate.id;
           } else {
             nextActions[i] = "criar";
@@ -567,7 +567,9 @@ export function ImportStatementModal({
         });
         groupResults.flat().forEach(({ rowIdx, match }) => {
           if (match?.best) {
-            nextActions[rowIdx] = "vincular";
+            // "suggested" = valor+data batem mas nome é diferente — não linka
+            // automaticamente, deixa o usuário confirmar com um clique.
+            nextActions[rowIdx] = match.best.suggested ? "criar" : "vincular";
             nextTargets[rowIdx] = match.best.candidate.id;
           }
         });
