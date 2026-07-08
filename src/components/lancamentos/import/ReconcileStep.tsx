@@ -146,6 +146,21 @@ export function ReconcileStep({
   });
   const ignoredRows = indexed.filter(({ i }) => matchActions[i] === "ignorar");
 
+  // Sistema × Extrato totals (fatura-level, independent of matcher tier)
+  const statementTotal = indexed.reduce((s, { r }) => s + Math.abs(r.amount), 0);
+  const matchedSystemTotal = [...matchedExactRows, ...matchedToleranceRows].reduce(
+    (s, { i }) => s + Math.abs(Number(matches[i]!.best!.candidate.amount)),
+    0
+  );
+  const orphansTotal = orphans.reduce((s, o) => s + Math.abs(o.amount), 0);
+  const systemTotal = matchedSystemTotal + orphansTotal;
+  const totalsDelta = statementTotal - systemTotal;
+  const totalsDivergent = Math.abs(totalsDelta) > 0.05;
+  const coverageMatched = matchedExactRows.length + matchedToleranceRows.length;
+  const coverageTotal = indexed.length;
+  const onlyStatementRows = newRows; // linhas presentes só no extrato
+
+
 
   // Count of identical rows (same desc+amount+type) for the "×N" badge in "Criar no sistema".
   const duplicateCounts = useMemo(() => {
@@ -225,8 +240,8 @@ export function ReconcileStep({
         <div className="flex items-center gap-1 shrink-0">
           <Popover>
             <PopoverTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" title="Trocar correspondência">
-                <ArrowLeftRight className="h-3 w-3" /> Trocar
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" title="Escolher outro par de correspondência">
+                <ArrowLeftRight className="h-3 w-3" /> Outro par
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-80 p-2">
@@ -268,11 +283,11 @@ export function ReconcileStep({
                 className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
                 onClick={() => onActionChange(i, "ignorar")}
               >
-                <ShieldCheck className="h-3 w-3" /> Já existe — não importar
+                <ShieldCheck className="h-3 w-3" /> Manter só o do sistema
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[260px] text-xs">
-              Mantém o lançamento que já existe no sistema e <strong>descarta esta linha do extrato</strong>. Nada novo é criado.
+              Descarta esta linha do extrato. O lançamento que já existe no sistema é mantido — nada é criado nem excluído.
             </TooltipContent>
           </Tooltip>
 
@@ -284,7 +299,7 @@ export function ReconcileStep({
                 className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={() => onActionChange(i, "criar")}
               >
-                <X className="h-3 w-3" /> Importar como novo
+                <X className="h-3 w-3" /> É outra compra — criar
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-[280px] text-xs">
@@ -297,6 +312,7 @@ export function ReconcileStep({
             </TooltipContent>
           </Tooltip>
         </div>
+
       </div>
     );
   };
@@ -314,9 +330,10 @@ export function ReconcileStep({
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             Cada linha do extrato vira uma ação no seu sistema:{" "}
-            <strong>casar com lançamento existente</strong>, <strong>importar como novo</strong>{" "}
-            ou <strong>já existe — não importar</strong>. Revise antes de confirmar.
+            <strong>conciliar com lançamento existente</strong>, <strong>criar como nova compra</strong>{" "}
+            ou <strong>manter só o do sistema</strong>. Revise antes de confirmar.
           </p>
+
           <div className="flex flex-wrap gap-2 mt-2">
             <Button size="sm" variant="outline" onClick={conciliateAll} className="h-7 text-xs gap-1">
               <Check className="h-3 w-3" /> Casar automaticamente os pares sugeridos
@@ -328,27 +345,96 @@ export function ReconcileStep({
         </div>
 
         <div className="flex-1 overflow-auto space-y-4 pr-1">
+          {/* Sistema × Extrato — fatura-level summary (card mode) */}
+          {isCardMode && (
+            <div
+              className={`rounded-lg border p-3 ${
+                totalsDivergent
+                  ? "border-amber-500/40 bg-amber-500/5"
+                  : "border-emerald-500/40 bg-emerald-500/5"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  {totalsDivergent ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  ) : (
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  )}
+                  Sistema × Extrato
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  {coverageMatched}/{coverageTotal} linhas conciliadas
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Sistema</p>
+                  <p className="font-mono text-sm">{fmt(systemTotal)}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {matchedExactRows.length + matchedToleranceRows.length} casados · {orphans.length} só no sistema
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Extrato</p>
+                  <p className="font-mono text-sm">{fmt(statementTotal)}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {indexed.length} linhas selecionadas
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Diferença</p>
+                  <p className={`font-mono text-sm ${totalsDivergent ? "text-amber-700" : "text-emerald-700"}`}>
+                    {totalsDelta >= 0 ? "+" : ""}
+                    {fmt(totalsDelta)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {totalsDivergent ? "revise as prováveis causas" : "bate certinho"}
+                  </p>
+                </div>
+              </div>
+              {totalsDivergent && (onlyStatementRows.length > 0 || orphans.length > 0) && (
+                <div className="mt-2 text-[11px] text-muted-foreground border-t border-amber-500/20 pt-2 space-y-0.5">
+                  <p className="font-medium text-foreground">Prováveis causas da divergência:</p>
+                  {onlyStatementRows.length > 0 && (
+                    <p>
+                      • {onlyStatementRows.length} linha{onlyStatementRows.length === 1 ? "" : "s"} só no extrato ({fmt(onlyStatementRows.reduce((s, { r }) => s + Math.abs(r.amount), 0))})
+                    </p>
+                  )}
+                  {orphans.length > 0 && (
+                    <p>
+                      • {orphans.length} lançamento{orphans.length === 1 ? "" : "s"} só no sistema ({fmt(orphansTotal)})
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Matrix legend */}
           <Alert className="py-2 px-3 bg-muted/30 border-muted-foreground/20">
             <Info className="h-3.5 w-3.5" />
             <AlertDescription className="text-[11px] leading-snug ml-1">
-              Cada linha cai em um dos 4 cenários: <strong className="text-emerald-700">Match perfeito</strong> ·{" "}
-              <strong className="text-amber-700">Tolerância de centavos</strong> ·{" "}
+              Cada linha cai em um dos 4 cenários: <strong className="text-emerald-700">Igual — pode conciliar</strong> ·{" "}
+              <strong className="text-amber-700">Divergência de centavos</strong> ·{" "}
               <strong className="text-sky-700">Só no extrato</strong> ·{" "}
               <strong className="text-destructive">Só no sistema</strong>.
             </AlertDescription>
           </Alert>
 
-          {/* Q1 — MATCH PERFEITO */}
+          {/* Q1 — IGUAL, PODE CONCILIAR */}
           <section>
             <header className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold flex items-center gap-2 text-emerald-700">
                 <Check className="h-4 w-4" />
-                Match perfeito
+                Igual — pode conciliar
                 <Badge variant="secondary" className="text-[10px]">{matchedExactRows.length}</Badge>
-                <span className="text-[10px] text-muted-foreground font-normal">— valor idêntico, casa direto</span>
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  — valor idêntico, casa direto · cobertura {coverageMatched}/{coverageTotal}
+                </span>
               </h3>
             </header>
+
             {matchedExactRows.length === 0 ? (
               <p className="text-xs text-muted-foreground italic px-2 py-3 border rounded-lg bg-muted/20">
                 {indexed.some(({ i }) => matches[i]?.best && matches[i]!.best!.tier === "exact") ? (
@@ -383,9 +469,10 @@ export function ReconcileStep({
               <Alert className="mb-2 py-2 px-3 bg-amber-500/5 border-amber-500/30">
                 <Info className="h-3.5 w-3.5 text-amber-600" />
                 <AlertDescription className="text-[11px] leading-snug ml-1">
-                  Casa pelo valor próximo (até R$ 0,05 de diferença). Pode ser desconto por pontualidade ou pequeno juros. Confirme manualmente se quiser absorver a diferença, ou use <strong>"Importar como novo"</strong> se forem compras distintas.
+                  Casa pelo valor próximo (até R$ 0,05 de diferença). Pode ser desconto por pontualidade ou pequeno juros. Confirme manualmente se quiser absorver a diferença, ou use <strong>"É outra compra — criar"</strong> se forem compras distintas.
                 </AlertDescription>
               </Alert>
+
               <div className="border border-amber-500/30 rounded-lg overflow-hidden divide-y">
                 {matchedToleranceRows.map(renderMatchRow)}
               </div>

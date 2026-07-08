@@ -1,43 +1,56 @@
-## Problema
+Vamos aplicar o padrão desses sistemas (Mint/YNAB/Conta Azul/Omie/Nibo) na conciliação da fatura, em duas ondas para você validar cada uma.
 
-No lançamento por maquininha (cartão de crédito), a **prévia** dentro do modal mostra a data de recebimento correta (ex.: competência 20/06 + D+30 = **20/07**), mas depois que o lançamento é criado a data de pagamento salva vem diferente (ex.: **31/07**).
+## Onda 1 — Linguagem e clareza (sem mexer em algoritmo)
 
-## Causa
+Arquivo: `src/components/lancamentos/import/ReconcileStep.tsx` e `ImportStatementModal.tsx`.
 
-Existe uma inconsistência entre "dias corridos" e "dias úteis" na hora de calcular D+X:
+1. **Renomear botões da linha casada:**
+   - "Trocar" → **"Outro par"** (só troca o candidato).
+   - "Já existe — não importar" → **"Manter só o do sistema"** (tooltip: "Descarta a linha do extrato. Nada é criado nem excluído.").
+   - "Importar como novo" → **"É outra compra — criar"** (tooltip: "Cria um lançamento novo. Pode gerar duplicata.").
 
-- **Prévia dentro do formulário** (`TransactionFormModal.tsx` linha 1785-1787):
-  - Débito → `addBusinessDays` (dias úteis)
-  - Crédito → `addDays` (dias corridos) ← o que aparece na tela
-- **Ao salvar** (`TransactionFormModal.tsx` linhas 578 e 644, tanto o fluxo à vista quanto o D+30 antecipado de parcelado):
-  - Débito e Crédito → **ambos** `addBusinessDays` (dias úteis)
+2. **Renomear quadrante:** "Match perfeito" → **"Igual — pode conciliar"** com contador `12/14` de cobertura da fatura, para quebrar a confusão com o total divergente.
 
-Ou seja: para crédito, a prévia usa calendário mas o save usa dias úteis. D+30 em dias úteis "empurra" ~11 dias a mais (fins de semana), gerando exatamente o comportamento reportado (20/06 → 31/07).
+3. **Novo card fixo no topo da etapa de conciliar — Sistema × Extrato:**
 
-Os outros lugares que exibem a data de liquidação (`MdrInfoCard`, `TransactionDetailModal`) também usam `addBusinessDays` para crédito, então mostram a data "errada" (a mesma que foi salva), reforçando a confusão.
+   ```text
+   ┌─ Fatura Junho/2026 ─────────────────────────────┐
+   │  Sistema:     R$ 1.245,80  (12 lançamentos)     │
+   │  Extrato:     R$ 1.270,80  (14 linhas)          │
+   │  Diferença:   R$ 25,00 ⚠                        │
+   │  Prováveis causas:                              │
+   │  • 2 linhas só no extrato: "IOF R$18" "AJ R$7"  │
+   │  • Nenhum órfão no sistema                       │
+   └─────────────────────────────────────────────────┘
+   ```
 
-## Convenção adotada
+   - **Sistema** = soma de TODOS os lançamentos do cartão no ciclo da fatura (query direta, não depende do matcher).
+   - **Extrato** = soma das linhas selecionadas.
+   - Se Δ ≠ 0, lista automaticamente as linhas "Só no extrato" + órfãos que somam algo próximo do Δ.
 
-Padronizar para o comportamento que o usuário vê na prévia e que é o padrão de mercado no Brasil para maquininhas:
+## Onda 2 — Estado de divergência de valor (mexe em lógica)
 
-- **Cartão de Crédito** (à vista e parcelado antecipado) → **dias corridos** (`addDays`)
-- **Cartão de Débito** → **dias úteis** (`addBusinessDays`)
+Arquivo: `src/lib/import/matching.ts` + `ReconcileStep.tsx`.
 
-## Alterações
+4. **Novo quadrante "Divergência de valor" (substitui "Diferença de centavos"):**
+   - Só no modo cartão, criar `CARD_AMOUNT_TOLERANCE = 2.00` (cobre IOF, câmbio, ajuste de anuidade).
+   - Linhas com `EXACT_AMOUNT_TOLERANCE < |Δ| ≤ CARD_AMOUNT_TOLERANCE` viram tier `"divergent"` (não mais "tolerance").
+   - Renderização com radio group — uma escolha ativa por vez:
+     1. **Usar valor do extrato** (recomendado, atualiza o lançamento no sistema).
+     2. **Manter valor do sistema** (só marca conciliado).
+     3. **É outra compra — criar** (cria novo).
+     4. **Ignorar linha do extrato**.
+   - No import, a opção 1 dispara `update` no `amount` do lançamento existente antes de marcar conciliado.
 
-1. **`src/components/lancamentos/TransactionFormModal.tsx`**
-   - Linha 574-578 (fluxo genérico de terminal): calcular `finalPaymentDate` com `addDays` quando crédito e `addBusinessDays` quando débito.
-   - Linha 644 (crédito parcelado com antecipação/lump sum D+X): trocar `addBusinessDays` por `addDays`.
-   - Sem mudança no bloco da prévia (linhas 1785-1787), que já está no padrão correto.
+5. **Auto-categorização por histórico** (linhas "Só no extrato"):
+   - Se descrição normalizada ≈ 3+ transações passadas com mesma categoria, aplicar sugestão e mover para subgrupo "Já categorizado (revise)".
+   - Se sem sugestão, bloquear import da linha até categoria ser definida.
 
-2. **`src/components/lancamentos/MdrInfoCard.tsx`** (linhas 74 e 133)
-   - Usar `addDays` para crédito, manter `addBusinessDays` para débito, mantendo consistência com o novo padrão.
+## Fora de escopo (não mexer agora)
 
-3. **`src/components/lancamentos/TransactionDetailModal.tsx`** (linha 142)
-   - Mesma regra: `addDays` para crédito, `addBusinessDays` para débito. Detectar débito/crédito via `payment_method` da transação já carregada.
+- Fluxo de débito continua como está — funciona bem.
+- Parser de PDF/OFX, dedup pós-import, regras de recorrência.
 
-## Fora de escopo
+## Ordem de entrega
 
-- Não altero `addBusinessDays` em si — outros lugares (débito, cálculos que realmente precisam de dias úteis) continuam usando.
-- Não altero transações antigas já gravadas com a data errada. Se o usuário quiser reprocessar históricos, podemos fazer um script service-role em uma tarefa separada.
-- Regras de crédito parcelado sem antecipação (cada parcela em +1 mês) continuam iguais — já usam `addMonths` e não têm o bug.
+Faço Onda 1 primeiro, você valida com um caso real (fatura com R$ 25 de divergência), e depois libera Onda 2. Assim se algo na renomeação já resolver, evitamos mexer no algoritmo.
