@@ -118,6 +118,48 @@ describe("pickBestMatch", () => {
     );
     expect(r).toBeNull();
   });
+
+  it("does NOT suggest a July card transaction for a June statement purchase", () => {
+    const julyCand: CandidateTx = {
+      ...baseCand,
+      id: "jul",
+      amount: 153.9,
+      payment_date: "2026-07-10",
+      competence_date: "2026-07-10",
+      purchase_date_original: "2026-07-04",
+      description: "Compra futura",
+      contact_name: null,
+      category: null,
+    };
+    const r = pickBestMatch(
+      { date: "2026-06-12", description: "AZUL COMPRA", amount: 153.9, type: "despesa" },
+      [julyCand],
+      { useCompetenceDate: true, dayWindow: 3 }
+    );
+    expect(r).toBeNull();
+  });
+
+  it("suggests a manual June card purchase with same value inside statement scope", () => {
+    const juneManual: CandidateTx = {
+      ...baseCand,
+      id: "jun",
+      amount: 153.9,
+      payment_date: "2026-06-20",
+      competence_date: "2026-06-13",
+      purchase_date_original: null,
+      description: "Lançamento manual",
+      contact_name: null,
+      category: null,
+    };
+    const r = pickBestMatch(
+      { date: "2026-06-12", description: "AZUL COMPRA", amount: 153.9, type: "despesa" },
+      [juneManual],
+      { useCompetenceDate: true, dayWindow: 3 }
+    );
+    expect(r).not.toBeNull();
+    expect(r!.suggested).toBe(true);
+    expect(r!.candidate.id).toBe("jun");
+  });
 });
 
 
