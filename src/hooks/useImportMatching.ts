@@ -51,11 +51,11 @@ export function useImportMatching() {
         // share the same payment_date, so payment_date filtering is useless.
         const dateColumn = isCard ? "competence_date" : "payment_date";
 
+        const selectCols = "id, description, amount, payment_date, competence_date, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id";
+
         let query = supabase
           .from("transactions")
-          .select(
-            "id, description, amount, payment_date, competence_date, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id"
-          )
+          .select(selectCols)
           .in("status", ["Pendente", "Pago"])
           .gte(dateColumn, minDate)
           .lte(dateColumn, maxDate);
@@ -75,11 +75,34 @@ export function useImportMatching() {
           return {};
         }
 
+        let rawCandidates = (data || []) as CandidateTx[];
+
+        // Wave B (cartão): também considerar lançamentos SEM credit_card_id
+        // (usuário digitou como despesa comum) que batem por valor com alguma
+        // linha do extrato. Isso resolve o caso onde nada foi pré-vinculado.
+        if (isCard) {
+          const { data: wb, error: wbErr } = await supabase
+            .from("transactions")
+            .select(selectCols)
+            .in("status", ["Pendente", "Pago"])
+            .is("credit_card_id", null)
+            .gte("payment_date", minDate)
+            .lte("payment_date", maxDate)
+            .limit(1000);
+          if (!wbErr && wb) {
+            const existingIds = new Set(rawCandidates.map((c) => c.id));
+            for (const t of wb as CandidateTx[]) {
+              if (!existingIds.has(t.id)) rawCandidates.push(t);
+            }
+          }
+        }
+
         // Amount filter applied in-memory using AMOUNT_TOLERANCE (covers ±0.02).
         const lineAmounts = lines.map((l) => Math.abs(l.amount));
-        const candidates = ((data || []) as CandidateTx[]).filter((c) =>
+        const candidates = rawCandidates.filter((c) =>
           lineAmounts.some((a) => Math.abs(c.amount - a) <= AMOUNT_TOLERANCE),
         );
+
 
         const claimed = new Set<string>();
         const result: Record<number, RowMatch> = {};
