@@ -505,7 +505,7 @@ export function ImportStatementModal({
         const nextTargets: Record<number, string> = {};
         rows.forEach((_, i) => {
           if (res[i]?.best) {
-            nextActions[i] = "vincular";
+            nextActions[i] = res[i].best!.suggested ? "criar" : "vincular";
             nextTargets[i] = res[i].best!.candidate.id;
           } else {
             nextActions[i] = "criar";
