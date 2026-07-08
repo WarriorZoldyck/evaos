@@ -1,53 +1,32 @@
-## Problema confirmado
+## Achei a causa dos R$ 25
 
-No extrato de junho tem **2 sorvetes em 06/06 (R$ 25 cada)** — as duas linhas aparecem no PDF:
+O prompt do parser (`supabase/functions/parse-bank-statement/index.ts`, linhas 170-171) manda o Gemini **deduplicar linhas idênticas**:
 
 ```
-06/06 ItalyanSorvetes    25,00
-06/06 ItalyanSorvetes    25,00
+DEDUPLICATION:
+- If the SAME purchase line appears twice (same date, amount, description — possibly with subtle whitespace differences), include it ONLY ONCE.
 ```
 
-No sistema há **apenas 1 lançamento de sorvete em 06/06**. Então:
+Foi exatamente o que aconteceu com os 2 sorvetes de 06/06 (R$ 25 cada, mesma descrição "ItalyanSorvetes"): o modelo devolveu apenas 1. Por isso o total do extrato ficou em **R$ 8.825,02** (= 8.850,02 − 25) mesmo depois de removermos a dedup do frontend.
 
-1. A divergência de R$ 25 no card "Sistema × Extrato" está correta — falta 1 sorvete no sistema.
-2. O que está errado é que o matcher **não conseguiu ligar** nem o primeiro sorvete do extrato ao lançamento do sistema — porque o texto "ItalyanSorvetes" não bate com a descrição do lançamento no sistema (que provavelmente está com nome do fornecedor / categoria diferente). O gate `AUTO_LINK_MIN_SIMILARITY = 0.34` está bloqueando.
+Fizemos a mesma correção no `ImportStatementModal` na rodada anterior — faltou fazer no parser.
 
-Sua leitura está certa: quando **data + valor + fornecedor** batem, não faz sentido exigir similaridade textual da descrição livre.
+## Correção
 
-## O que vou mudar (Onda 1.5 — cirúrgico, antes da Onda 2)
+Arquivo: `supabase/functions/parse-bank-statement/index.ts`
 
-Arquivo: `src/lib/import/matching.ts`
+Trocar o bloco DEDUPLICATION por uma instrução explícita de **preservar duplicatas**:
 
-**1. Novo sinal "fornecedor casou" no `scoreCandidate`:**
-   - Já existe `contactSim` (similaridade com `candidate.contact_name`). Vou expô-lo separado no `ScoredCandidate` como `contactMatched: boolean` (true quando `contactSim ≥ 0.5` **ou** `sharesToken(line.description, contact_name)`).
+```
+PRESERVE DUPLICATES:
+- The bank statement is the source of truth. If the SAME purchase (same date, same amount, same description) appears N times, emit it N times. Two identical purchases on the same day are common (e.g. two ice creams for R$ 25 each at the same shop). NEVER collapse repeated lines into one.
+```
 
-**2. `pickBestMatch` — bypass do gate de similaridade quando o trio forte casa:**
-   - Auto-linkar mesmo com `similarity < 0.34` SE, no modo cartão:
-     - `tier === "exact"` (valor idêntico), **e**
-     - `dayDiff === 0` (mesmo dia), **e**
-     - `contactMatched === true` (fornecedor bateu por token/similaridade).
-   - Fora desse trio, mantém o gate atual (evita o bug Sabrina/Renato).
+Reforço complementar (mesmo arquivo, mesma system message): adicionar bullet no bloco "CRITICAL RULES" — "The count of transactions you return must match the count of visible purchase lines in the statement body."
 
-**3. Boost de score quando contato casa:**
-   - Hoje: `+15` se `sharesToken(desc, contact_name)`. Vou somar mais `+10` quando `contactSim ≥ 0.5` (nome do fornecedor aparece "quase igual" na linha do extrato, como "ItalyanSorvetes" vs contato "Italyan Sorvetes").
+## Escopo
 
-**4. Ampliar o pool de candidatos (opcional, mesmo arquivo):**
-   - Em `useImportMatching.ts` o filtro por valor já usa `AMOUNT_TOLERANCE`. Sem mudança aqui.
+- Só o prompt do parser. Nada de código de matching, UI ou dedup no cliente.
+- Depois da mudança, ao reimportar a fatura de junho: o total do extrato deve bater **R$ 8.850,02**, aparecem 59 linhas (58 atuais + o 2º sorvete que faltava — se seu resumo de 58 lançamentos já contava só 1 sorvete). E os 2 sorvetes ficam visíveis para conciliar/criar.
 
-## O que NÃO muda
-
-- Continua exigindo mesmo tipo (receita/despesa), valor dentro da tolerância e data dentro da janela do cartão (5 dias). Sem risco de casar coisas distantes.
-- Guard de parcela (`V03/12` ≠ `V02/12`) permanece.
-- Onda 2 (quadrante "Divergência de valor") fica para depois desta correção.
-
-## Resultado esperado no seu caso
-
-- 1º sorvete do extrato (06/06, R$ 25, "ItalyanSorvetes") → casa automaticamente com o lançamento do sistema (mesma data, mesmo valor, fornecedor "Italyan Sorvetes" no contato).
-- 2º sorvete do extrato (06/06, R$ 25, "ItalyanSorvetes") → aparece em "Só no extrato" com sugestão de criar como nova compra (é a compra real que faltou lançar).
-- Card "Sistema × Extrato" continua mostrando os R$ 25 de diferença até você decidir criar o 2º sorvete.
-
-## Testes
-
-- Ajustar `matching.test.ts` para cobrir: (a) trio forte casa mesmo com descrição totalmente diferente; (b) trio forte não casa se o fornecedor não bater; (c) casos existentes continuam válidos.
-
-Aguardando seu OK para aplicar.
+Aguardando OK.
