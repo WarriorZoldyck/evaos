@@ -649,13 +649,6 @@ export function ImportStatementModal({
     const billEndDate = new Date(billYear, billMonth, 0);
     const billEnd = `${billEndDate.getFullYear()}-${String(billEndDate.getMonth() + 1).padStart(2, "0")}-${String(billEndDate.getDate()).padStart(2, "0")}`;
 
-    // Valores das linhas do extrato — só listamos como orfão o que bate valor.
-    const statementAmounts = rows
-      .filter((r) => r.selected)
-      .map((r) => Math.abs(r.amount));
-    const amountMatches = (v: number) =>
-      statementAmounts.some((a) => Math.abs(Math.abs(v) - a) <= 0.05);
-
     Promise.all([
       // Fatura real no sistema: mesmo agrupamento da tela de Lançamentos
       (() => {
@@ -680,18 +673,7 @@ export function ImportStatementModal({
         .or(
           `and(purchase_date_original.gte.${wMin},purchase_date_original.lte.${wMax}),and(purchase_date_original.is.null,competence_date.gte.${wMin},competence_date.lte.${wMax})`
         ),
-      // Onda B: despesas SEM cartão na janela — só PENDENTES e valor batendo
-      supabase
-        .from("transactions")
-        .select("id, description, amount, competence_date, payment_date, purchase_date_original, status, category, subcategory, subcategory2, credit_card_id")
-        .eq("status", "Pendente")
-        .is("credit_card_id", null)
-        .eq("type", "despesa")
-        .or(
-          `and(purchase_date_original.gte.${wMin},purchase_date_original.lte.${wMax}),and(purchase_date_original.is.null,competence_date.gte.${wMin},competence_date.lte.${wMax})`
-        )
-        .limit(500),
-    ]).then(([bill, a, b]) => {
+    ]).then(([bill, a]) => {
       setOrphansLoading(false);
       const billRows = filterCreditCardBillScope(
         (bill.data || []).map((t) => ({
@@ -718,9 +700,7 @@ export function ImportStatementModal({
         const d = t.purchase_date_original || t.competence_date || t.payment_date;
         return d && d >= minDate && d <= maxDate;
       });
-      const rowsB = (b.data || []).filter((t) => amountMatches(Number(t.amount)));
-
-      const all = [...rowsA, ...rowsB];
+      const all = [...rowsA];
       const seen = new Set<string>();
       const orphanList = all
         .filter((t) => !matchedIds.has(t.id))
