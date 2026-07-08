@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { scoreCandidate, pickBestMatch, type CandidateTx } from "@/lib/import/matching";
+import {
+  calculateCreditCardBillTotal,
+  filterCreditCardBillScope,
+  pickBestMatch,
+  scoreCandidate,
+  type CandidateTx,
+} from "@/lib/import/matching";
 
 const baseCand: CandidateTx = {
   id: "c1",
@@ -137,6 +143,8 @@ describe("pickBestMatch", () => {
       { useCompetenceDate: true, dayWindow: 3 }
     );
     expect(r).toBeNull();
+  });
+
   it("still scores a paid May candidate (scope filter lives in the hook)", () => {
     const paidMay: CandidateTx = {
       ...baseCand,
@@ -155,8 +163,6 @@ describe("pickBestMatch", () => {
     );
     expect(r).not.toBeNull();
   });
-});
-
 
   it("suggests a manual June card purchase with same value inside statement scope", () => {
     const juneManual: CandidateTx = {
@@ -178,6 +184,29 @@ describe("pickBestMatch", () => {
     expect(r).not.toBeNull();
     expect(r!.suggested).toBe(true);
     expect(r!.candidate.id).toBe("jun");
+  });
+});
+
+describe("credit card bill scope", () => {
+  const txs = [
+    { id: "a", amount: 104.12, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul" },
+    { id: "b", amount: 124.15, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul" },
+    { id: "c", amount: 180, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul" },
+    { id: "d", amount: 180.65, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul" },
+    { id: "e", amount: 162.98, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul" },
+    { id: "f", amount: 159.64, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul" },
+    { id: "g", amount: 205.11, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul" },
+    { id: "jul", amount: 3000, payment_date: "2026-07-09", type: "despesa" as const, credit_card_id: "azul" },
+    { id: "bank", amount: 999, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: null },
+    { id: "debit", amount: 888, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul", payment_method: "Cartão de Débito" },
+    { id: "transfer", amount: 777, payment_date: "2026-06-09", type: "despesa" as const, credit_card_id: "azul", transfer_id: "tr1" },
+  ];
+
+  it("uses only the real card bill month for the system total", () => {
+    const scoped = filterCreditCardBillScope(txs, ["azul"], "2026-06-01", "2026-06-30");
+    expect(scoped.map((t) => t.id)).toEqual(["a", "b", "c", "d", "e", "f", "g"]);
+    expect(scoped).toHaveLength(7);
+    expect(calculateCreditCardBillTotal(scoped)).toBe(1116.65);
   });
 });
 
