@@ -78,17 +78,21 @@ export function useImportMatching() {
         let rawCandidates = (data || []) as CandidateTx[];
 
         // Wave B (cartão): também considerar lançamentos SEM credit_card_id
-        // (usuário digitou como despesa comum) que batem por valor com alguma
-        // linha do extrato. Isso resolve o caso onde nada foi pré-vinculado.
+        // (usuário digitou como despesa comum) que batem por valor. Ampliamos
+        // a janela em ±30 dias porque a data de pagamento manual raramente é
+        // igual à data da compra na fatura.
         if (isCard) {
+          const wbMin = shiftISO(minDate, -30);
+          const wbMax = shiftISO(maxDate, 30);
           const { data: wb, error: wbErr } = await supabase
             .from("transactions")
             .select(selectCols)
             .in("status", ["Pendente", "Pago"])
             .is("credit_card_id", null)
-            .gte("payment_date", minDate)
-            .lte("payment_date", maxDate)
-            .limit(1000);
+            .eq("type", "despesa")
+            .gte("payment_date", wbMin)
+            .lte("payment_date", wbMax)
+            .limit(2000);
           if (!wbErr && wb) {
             const existingIds = new Set(rawCandidates.map((c) => c.id));
             for (const t of wb as CandidateTx[]) {
@@ -96,6 +100,7 @@ export function useImportMatching() {
             }
           }
         }
+
 
         // Amount filter applied in-memory using AMOUNT_TOLERANCE (covers ±0.02).
         const lineAmounts = lines.map((l) => Math.abs(l.amount));
