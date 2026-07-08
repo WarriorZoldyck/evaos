@@ -23,6 +23,8 @@ export interface CandidateTx {
   type: "receita" | "despesa";
   status: string;
   category: string | null;
+  subcategory?: string | null;
+  subcategory2?: string | null;
   contact_name: string | null;
   series_id: string | null;
   installment_number: number | null;
