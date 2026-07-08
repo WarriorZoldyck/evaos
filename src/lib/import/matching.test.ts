@@ -185,6 +185,52 @@ describe("pickBestMatch", () => {
     expect(r!.suggested).toBe(true);
     expect(r!.candidate.id).toBe("jun");
   });
+
+  it("card-bill fallback: matches a paid prior-bill candidate without purchase_date_original when description matches", () => {
+    // Manual entry for maio: payment_date = due date of the bill (2026-05-09)
+    // and no purchase_date_original. The statement line is a purchase from
+    // 2026-05-01 that already existed in the system.
+    const paidNoPurchaseDate: CandidateTx = {
+      ...baseCand,
+      id: "paid-may",
+      description: "Chat GPT",
+      amount: 118,
+      payment_date: "2026-05-09",
+      competence_date: null,
+      purchase_date_original: null,
+      status: "Pago",
+      contact_name: null,
+    };
+    const r = pickBestMatch(
+      { date: "2026-05-01", description: "CHATGPT subscription", amount: 118, type: "despesa" },
+      [paidNoPurchaseDate],
+      { useCompetenceDate: true, dayWindow: 15, cardBillWindow: 45 }
+    );
+    expect(r).not.toBeNull();
+    expect(r!.candidate.id).toBe("paid-may");
+  });
+
+  it("card-bill fallback: does NOT match when description is unrelated (avoids random value collisions)", () => {
+    // dayDiff via payment_date = 25 (2026-05-01 → 2026-05-26) → primary fails
+    // → fallback path exercised → similarity 0 + no contact → null.
+    const paidUnrelated: CandidateTx = {
+      ...baseCand,
+      id: "paid-x",
+      description: "Compra genérica no mercado",
+      amount: 118,
+      payment_date: "2026-05-26",
+      competence_date: null,
+      purchase_date_original: null,
+      status: "Pago",
+      contact_name: null,
+    };
+    const r = pickBestMatch(
+      { date: "2026-05-01", description: "CHATGPT subscription", amount: 118, type: "despesa" },
+      [paidUnrelated],
+      { useCompetenceDate: true, dayWindow: 15, cardBillWindow: 45 }
+    );
+    expect(r).toBeNull();
+  });
 });
 
 describe("credit card bill scope", () => {

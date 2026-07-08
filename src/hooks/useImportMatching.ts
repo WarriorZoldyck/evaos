@@ -101,14 +101,41 @@ export function useImportMatching() {
           }
         }
 
+        // Wave C (cartão): TODOS os lançamentos do MESMO cartão numa janela
+        // larga de payment_date (±45 dias em torno das compras do extrato),
+        // independentemente de status/purchase_date_original. Isso captura
+        // faturas já pagas (fatura anterior) e lançamentos manuais que usam
+        // o vencimento da fatura como payment_date, sem purchase_date_original.
+        // O scoreCandidate depois filtra por similaridade para evitar colisões.
+        if (isCard && creditCardId) {
+          const wcMin = shiftISO(dates[0], -45);
+          const wcMax = shiftISO(dates[dates.length - 1], 45);
+          const { data: wc, error: wcErr } = await supabase
+            .from("transactions")
+            .select(selectCols)
+            .eq("credit_card_id", creditCardId)
+            .gte("payment_date", wcMin)
+            .lte("payment_date", wcMax)
+            .limit(2000);
+          if (!wcErr && wc) {
+            const existingIds = new Set(rawCandidates.map((c) => c.id));
+            for (const t of wc as CandidateTx[]) {
+              if (!existingIds.has(t.id)) rawCandidates.push(t);
+            }
+          }
+        }
+
         // Descarta candidatos Pago cuja purchase_date_original está fora do
         // escopo do extrato — são de fatura anterior já quitada.
+        // Exceção: se não tem purchase_date_original, deixamos passar — o
+        // scoreCandidate com cardBillWindow decide se é a mesma compra.
         if (isCard) {
           const sMin = dates[0];
           const sMax = dates[dates.length - 1];
           rawCandidates = rawCandidates.filter((c) => {
             if (c.status !== "Pago") return true;
-            const d = c.purchase_date_original || c.competence_date || c.payment_date;
+            if (!c.purchase_date_original) return true;
+            const d = c.purchase_date_original;
             return d >= sMin && d <= sMax;
           });
         }
@@ -131,7 +158,13 @@ export function useImportMatching() {
           .map((l, i) => ({ i, l }))
           .sort((a, b) => a.l.date.localeCompare(b.l.date));
 
-        const scoreOpts = { useCompetenceDate: isCard, dayWindow: window };
+        const scoreOpts = {
+          useCompetenceDate: isCard,
+          dayWindow: window,
+          // Fallback largo (dias) só para candidatos de cartão sem
+          // purchase_date_original — cobre fatura anterior/próxima paga.
+          cardBillWindow: isCard ? 45 : 0,
+        };
 
         for (const { i, l } of order) {
           const available = candidates.filter((c) => !claimed.has(c.id));

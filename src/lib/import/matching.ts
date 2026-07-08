@@ -186,6 +186,15 @@ export interface ScoreOptions {
   useCompetenceDate?: boolean;
   /** Override the day window (defaults to DATE_WINDOW_DAYS). */
   dayWindow?: number;
+  /**
+   * Wider fallback window (days) applied when the candidate has no
+   * purchase_date_original / competence_date AND we need to match against
+   * payment_date (which can be far from the actual purchase date, ex.: manual
+   * card entries that use the bill's due date as payment_date). Only accepted
+   * when the description similarity or contact match is meaningful — otherwise
+   * random value collisions inside the bill would auto-link.
+   */
+  cardBillWindow?: number;
   /** Optional installment number of the statement line (for strict matching). */
   lineInstallmentNumber?: number | null;
   /** Optional installment total of the statement line (for strict matching). */
@@ -209,12 +218,41 @@ export function scoreCandidate(
   if (lineT != null && c.installments_total != null && lineT !== c.installments_total) return null;
 
 
-  const candidateDate = opts.useCompetenceDate
+  const primaryDate = opts.useCompetenceDate
     ? (c.purchase_date_original || c.competence_date || c.payment_date)
     : c.payment_date;
   const window = opts.dayWindow ?? DATE_WINDOW_DAYS;
-  const dayDiff = diffDays(line.date, candidateDate);
-  if (dayDiff > window) return null;
+  let candidateDate = primaryDate;
+  let dayDiff = diffDays(line.date, candidateDate);
+
+  if (dayDiff > window) {
+    // Card-bill fallback: candidate has no purchase_date_original AND falls in the
+    // adjacent bill (payment_date within cardBillWindow). Accept only if there's
+    // meaningful text overlap to avoid random value collisions.
+    const billWindow = opts.cardBillWindow ?? 0;
+    const missingPurchaseDate = opts.useCompetenceDate && !c.purchase_date_original;
+    if (billWindow > 0 && missingPurchaseDate) {
+      const payDiff = diffDays(line.date, c.payment_date);
+      if (payDiff <= billWindow) {
+        const simCheck = descriptionSimilarity(line.description, c.description);
+        const contactCheck = c.contact_name
+          ? (sharesToken(line.description, c.contact_name) ||
+             sharesSubstringToken(line.description, c.contact_name) ||
+             descriptionSimilarity(line.description, c.contact_name) >= 0.5)
+          : false;
+        if (simCheck >= AUTO_LINK_MIN_SIMILARITY || contactCheck) {
+          candidateDate = c.payment_date;
+          dayDiff = payDiff;
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
 
   const similarity = descriptionSimilarity(line.description, c.description);
   const contactSim = c.contact_name
