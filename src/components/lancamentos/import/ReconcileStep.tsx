@@ -144,6 +144,14 @@ export function ReconcileStep({
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
+  const categoriesById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c.name])),
+    [categories],
+  );
+  const resolveCategoryLabel = (value?: string | null) => {
+    if (!value) return value;
+    return categoriesById.get(value) || value;
+  };
 
   // Build indexed list of selected rows
   const indexed = useMemo(
@@ -275,9 +283,9 @@ export function ReconcileStep({
             {cand.contact_name ? ` · ${cand.contact_name}` : ""}
           </p>
           <CategoryChain
-            category={cand.category}
-            subcategory={(cand as any).subcategory}
-            subcategory2={(cand as any).subcategory2}
+            category={resolveCategoryLabel(cand.category)}
+            subcategory={resolveCategoryLabel((cand as any).subcategory)}
+            subcategory2={resolveCategoryLabel((cand as any).subcategory2)}
           />
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -582,9 +590,9 @@ export function ReconcileStep({
                           {cand.contact_name ? ` · ${cand.contact_name}` : ""}
                         </p>
                         <CategoryChain
-                          category={cand.category}
-                          subcategory={(cand as any).subcategory}
-                          subcategory2={(cand as any).subcategory2}
+                          category={resolveCategoryLabel(cand.category)}
+                          subcategory={resolveCategoryLabel((cand as any).subcategory)}
+                          subcategory2={resolveCategoryLabel((cand as any).subcategory2)}
                         />
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -843,9 +851,9 @@ export function ReconcileStep({
                                 {" · "}<Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
                               </p>
                               <CategoryChain
-                                category={o.category}
-                                subcategory={o.subcategory}
-                                subcategory2={o.subcategory2}
+                                category={resolveCategoryLabel(o.category)}
+                                subcategory={resolveCategoryLabel(o.subcategory)}
+                                subcategory2={resolveCategoryLabel(o.subcategory2)}
                               />
                             </div>
                             <span className="font-mono text-xs whitespace-nowrap self-center">{fmt(Math.abs(o.amount))}</span>
