@@ -71,4 +71,40 @@ describe("pickBestMatch", () => {
     );
     expect(r!.candidate.id).toBe("c1"); // exact day match wins
   });
+
+  it("auto-links on strong trio (same day + exact value + contact) even with unrelated description", () => {
+    const cand: CandidateTx = {
+      ...baseCand,
+      id: "cs",
+      description: "Sorvete família",
+      amount: 25,
+      payment_date: "2026-06-06",
+      contact_name: "Italyan Sorvetes",
+      category: "Alimentação",
+    };
+    const r = pickBestMatch(
+      { date: "2026-06-06", description: "ItalyanSorvetes", amount: 25, type: "despesa" },
+      [cand]
+    );
+    expect(r).not.toBeNull();
+    expect(r!.candidate.id).toBe("cs");
+  });
+
+  it("does NOT auto-link when trio is incomplete (no contact match, low similarity)", () => {
+    const cand: CandidateTx = {
+      ...baseCand,
+      id: "cx",
+      description: "Compra genérica",
+      amount: 25,
+      payment_date: "2026-06-06",
+      contact_name: "Outra Loja",
+      category: null,
+    };
+    const r = pickBestMatch(
+      { date: "2026-06-06", description: "ItalyanSorvetes", amount: 25, type: "despesa" },
+      [cand]
+    );
+    expect(r).toBeNull();
+  });
 });
+
