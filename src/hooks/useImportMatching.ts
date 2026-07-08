@@ -158,7 +158,13 @@ export function useImportMatching() {
           .map((l, i) => ({ i, l }))
           .sort((a, b) => a.l.date.localeCompare(b.l.date));
 
-        const scoreOpts = { useCompetenceDate: isCard, dayWindow: window };
+        const scoreOpts = {
+          useCompetenceDate: isCard,
+          dayWindow: window,
+          // Fallback largo (dias) só para candidatos de cartão sem
+          // purchase_date_original — cobre fatura anterior/próxima paga.
+          cardBillWindow: isCard ? 45 : 0,
+        };
 
         for (const { i, l } of order) {
           const available = candidates.filter((c) => !claimed.has(c.id));
