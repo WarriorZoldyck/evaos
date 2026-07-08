@@ -94,6 +94,33 @@ const normalizeText = (s: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+function CategoryChain({
+  category,
+  subcategory,
+  subcategory2,
+}: {
+  category?: string | null;
+  subcategory?: string | null;
+  subcategory2?: string | null;
+}) {
+  const parts = [category, subcategory, subcategory2].filter(Boolean) as string[];
+  if (parts.length === 0) {
+    return (
+      <p className="text-[10px] text-muted-foreground italic mt-0.5">sem categoria</p>
+    );
+  }
+  return (
+    <p className="text-[10px] text-muted-foreground mt-0.5 flex flex-wrap items-center gap-0.5">
+      {parts.map((p, idx) => (
+        <span key={idx} className="inline-flex items-center gap-0.5">
+          {idx > 0 && <span className="opacity-50">›</span>}
+          <span className={idx === 0 ? "font-medium text-foreground/70" : ""}>{p}</span>
+        </span>
+      ))}
+    </p>
+  );
+}
+
 export function ReconcileStep({
   rows,
   matches,
