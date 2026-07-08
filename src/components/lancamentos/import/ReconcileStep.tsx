@@ -574,7 +574,11 @@ export function ReconcileStep({
                         </p>
                         <p className="font-medium text-sm break-words leading-snug" title={cand.description}>{cand.description}</p>
                         <p className="text-xs text-muted-foreground">
-                          {fmtDate(cand.competence_date || cand.payment_date)} · <span className="font-mono">{fmt(Number(cand.amount))}</span>
+                          <span title="Data da compra (competência)">Compra {fmtDate(cand.competence_date || cand.payment_date)}</span>
+                          {cand.competence_date && cand.payment_date && cand.competence_date !== cand.payment_date && (
+                            <span className="opacity-60"> · Pgto {fmtDate(cand.payment_date)}</span>
+                          )}
+                          {" · "}<span className="font-mono">{fmt(Number(cand.amount))}</span>
                           {cand.contact_name ? ` · ${cand.contact_name}` : ""}
                         </p>
                         <CategoryChain
