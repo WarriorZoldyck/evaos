@@ -20,6 +20,7 @@ export interface CandidateTx {
   amount: number;
   payment_date: string;
   competence_date?: string | null;
+  purchase_date_original?: string | null;
   type: "receita" | "despesa";
   status: string;
   category: string | null;
@@ -170,7 +171,7 @@ export function scoreCandidate(
 
 
   const candidateDate = opts.useCompetenceDate
-    ? (c.competence_date || c.payment_date)
+    ? (c.purchase_date_original || c.competence_date || c.payment_date)
     : c.payment_date;
   const window = opts.dayWindow ?? DATE_WINDOW_DAYS;
   const dayDiff = diffDays(line.date, candidateDate);
