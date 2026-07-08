@@ -543,9 +543,10 @@ export function ImportStatementModal({
         Array.from(groups.entries()).map(async ([cardId, indices], groupIdx) => {
           const lines = indices.map((i) => {
             const r = rows[i];
-            // For cards we match on competence_date (purchase date), since all
-            // purchases in a billing cycle share the same payment_date.
-            const matchDate = r.resolved_competence_date || r.purchase_date_original || r.date;
+            // For cards we match on the actual purchase date from the statement.
+            // resolved_competence_date can be the bill/closing month and must not
+            // expand June purchases into July.
+            const matchDate = r.purchase_date_original || r.date;
             return {
               date: matchDate,
               description: r.description,
@@ -597,7 +598,7 @@ export function ImportStatementModal({
       const cardId = isMultiCard ? r.matched_card_id : targetCard;
       if (!cardId) return;
       cardIds.add(cardId);
-      const d = r.resolved_competence_date || r.purchase_date_original || r.date;
+      const d = r.purchase_date_original || r.date;
       if (d && d < minDate) minDate = d;
       if (d && d > maxDate) maxDate = d;
     });
@@ -609,7 +610,7 @@ export function ImportStatementModal({
     const matchedIds = new Set(Object.values(matchTargets).filter(Boolean));
     setOrphansLoading(true);
 
-    // Janela apertada — só o mês da fatura. Manuais fora disso não são orfãos.
+    // Janela apertada — só o escopo real de compras do extrato.
     const shift = (iso: string, days: number) => {
       const d = new Date(iso + "T00:00:00");
       d.setDate(d.getDate() + days);
@@ -629,18 +630,19 @@ export function ImportStatementModal({
       // Onda A: já vinculadas ao(s) cartão(ões) — sempre listadas
       supabase
         .from("transactions")
-        .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2, credit_card_id")
+        .select("id, description, amount, competence_date, payment_date, purchase_date_original, status, category, subcategory, subcategory2, credit_card_id")
         .in("credit_card_id", Array.from(cardIds))
-        .gte("competence_date", wMin)
-        .lte("competence_date", wMax),
+        .or(
+          `and(purchase_date_original.gte.${wMin},purchase_date_original.lte.${wMax}),and(purchase_date_original.is.null,competence_date.gte.${wMin},competence_date.lte.${wMax})`
+        ),
       // Onda B: despesas SEM cartão na janela — filtradas por valor batendo
       supabase
         .from("transactions")
-        .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2, credit_card_id")
+        .select("id, description, amount, competence_date, payment_date, purchase_date_original, status, category, subcategory, subcategory2, credit_card_id")
         .is("credit_card_id", null)
         .eq("type", "despesa")
         .or(
-          `and(payment_date.gte.${wMin},payment_date.lte.${wMax}),and(competence_date.gte.${wMin},competence_date.lte.${wMax})`
+          `and(purchase_date_original.gte.${wMin},purchase_date_original.lte.${wMax}),and(purchase_date_original.is.null,competence_date.gte.${wMin},competence_date.lte.${wMax})`
         )
         .limit(500),
     ]).then(([a, b]) => {
@@ -656,7 +658,7 @@ export function ImportStatementModal({
           id: t.id,
           description: t.description || "",
           amount: Number(t.amount),
-          competence_date: t.competence_date || t.payment_date,
+          competence_date: t.purchase_date_original || t.competence_date || t.payment_date,
           payment_date: t.payment_date,
           status: t.status,
           category: t.category,
