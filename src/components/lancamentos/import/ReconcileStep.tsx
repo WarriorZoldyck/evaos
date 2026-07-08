@@ -344,27 +344,96 @@ export function ReconcileStep({
         </div>
 
         <div className="flex-1 overflow-auto space-y-4 pr-1">
+          {/* Sistema × Extrato — fatura-level summary (card mode) */}
+          {isCardMode && (
+            <div
+              className={`rounded-lg border p-3 ${
+                totalsDivergent
+                  ? "border-amber-500/40 bg-amber-500/5"
+                  : "border-emerald-500/40 bg-emerald-500/5"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  {totalsDivergent ? (
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  ) : (
+                    <Check className="h-4 w-4 text-emerald-600" />
+                  )}
+                  Sistema × Extrato
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  {coverageMatched}/{coverageTotal} linhas conciliadas
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Sistema</p>
+                  <p className="font-mono text-sm">{fmt(systemTotal)}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {matchedExactRows.length + matchedToleranceRows.length} casados · {orphans.length} só no sistema
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Extrato</p>
+                  <p className="font-mono text-sm">{fmt(statementTotal)}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {indexed.length} linhas selecionadas
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Diferença</p>
+                  <p className={`font-mono text-sm ${totalsDivergent ? "text-amber-700" : "text-emerald-700"}`}>
+                    {totalsDelta >= 0 ? "+" : ""}
+                    {fmt(totalsDelta)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {totalsDivergent ? "revise as prováveis causas" : "bate certinho"}
+                  </p>
+                </div>
+              </div>
+              {totalsDivergent && (onlyStatementRows.length > 0 || orphans.length > 0) && (
+                <div className="mt-2 text-[11px] text-muted-foreground border-t border-amber-500/20 pt-2 space-y-0.5">
+                  <p className="font-medium text-foreground">Prováveis causas da divergência:</p>
+                  {onlyStatementRows.length > 0 && (
+                    <p>
+                      • {onlyStatementRows.length} linha{onlyStatementRows.length === 1 ? "" : "s"} só no extrato ({fmt(onlyStatementRows.reduce((s, { r }) => s + Math.abs(r.amount), 0))})
+                    </p>
+                  )}
+                  {orphans.length > 0 && (
+                    <p>
+                      • {orphans.length} lançamento{orphans.length === 1 ? "" : "s"} só no sistema ({fmt(orphansTotal)})
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Matrix legend */}
           <Alert className="py-2 px-3 bg-muted/30 border-muted-foreground/20">
             <Info className="h-3.5 w-3.5" />
             <AlertDescription className="text-[11px] leading-snug ml-1">
-              Cada linha cai em um dos 4 cenários: <strong className="text-emerald-700">Match perfeito</strong> ·{" "}
-              <strong className="text-amber-700">Tolerância de centavos</strong> ·{" "}
+              Cada linha cai em um dos 4 cenários: <strong className="text-emerald-700">Igual — pode conciliar</strong> ·{" "}
+              <strong className="text-amber-700">Divergência de centavos</strong> ·{" "}
               <strong className="text-sky-700">Só no extrato</strong> ·{" "}
               <strong className="text-destructive">Só no sistema</strong>.
             </AlertDescription>
           </Alert>
 
-          {/* Q1 — MATCH PERFEITO */}
+          {/* Q1 — IGUAL, PODE CONCILIAR */}
           <section>
             <header className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold flex items-center gap-2 text-emerald-700">
                 <Check className="h-4 w-4" />
-                Match perfeito
+                Igual — pode conciliar
                 <Badge variant="secondary" className="text-[10px]">{matchedExactRows.length}</Badge>
-                <span className="text-[10px] text-muted-foreground font-normal">— valor idêntico, casa direto</span>
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  — valor idêntico, casa direto · cobertura {coverageMatched}/{coverageTotal}
+                </span>
               </h3>
             </header>
+
             {matchedExactRows.length === 0 ? (
               <p className="text-xs text-muted-foreground italic px-2 py-3 border rounded-lg bg-muted/20">
                 {indexed.some(({ i }) => matches[i]?.best && matches[i]!.best!.tier === "exact") ? (
