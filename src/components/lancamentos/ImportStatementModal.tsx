@@ -626,14 +626,15 @@ export function ImportStatementModal({
         .in("credit_card_id", Array.from(cardIds))
         .gte("competence_date", wMin)
         .lte("competence_date", wMax),
-      // Onda B: despesas sem cartão que podem pertencer a esta fatura
+      // Onda B: despesas sem cartão na janela por competência OU pagamento
       supabase
         .from("transactions")
         .select("id, description, amount, competence_date, payment_date, status, category, subcategory, subcategory2, credit_card_id")
         .is("credit_card_id", null)
         .eq("type", "despesa")
-        .gte("payment_date", wMin)
-        .lte("payment_date", wMax)
+        .or(
+          `and(payment_date.gte.${wMin},payment_date.lte.${wMax}),and(competence_date.gte.${wMin},competence_date.lte.${wMax})`
+        )
         .limit(500),
     ]).then(([a, b]) => {
       setOrphansLoading(false);
