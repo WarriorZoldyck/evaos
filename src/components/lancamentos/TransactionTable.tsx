@@ -357,10 +357,12 @@ function TransactionRow({
 
 interface CardGroupItem {
   cardId: string;
+  underlyingCardId?: string; // real credit_cards.id (without cycle suffix)
   cardName: string;
   transactions: Transaction[];
   totalAmount: number;
   pendingCount: number;
+  reconciledCount?: number;
   firstDate: string;
   cycleKey?: string;
   cycleLabel?: string;
