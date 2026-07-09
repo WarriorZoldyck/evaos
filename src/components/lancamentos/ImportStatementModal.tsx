@@ -310,13 +310,14 @@ export function ImportStatementModal({
       }));
 
       // Detect and group installments by pattern in description
-      const installmentRegex = /[\s\-–](\d{1,2})\s*[\/\\]\s*(\d{1,2})\s*$/;
+      // Aceita "NN/NN" no final mesmo grudado a letras (ex.: "HOTE02/02").
+      const installmentRegex = /(\d{1,2})\s*[\/\\]\s*(\d{1,2})\s*$/;
       const parcRegex = /(?:PARC(?:ELA)?|INST)\s*(\d{1,2})\s*(?:\/|DE|\\)\s*(\d{1,2})/i;
-      
+
       const groups: Record<string, { indices: number[]; total: number }> = {};
-      
+
       raw.forEach((t: any, idx: number) => {
-        let match = t.description.match(installmentRegex) || t.description.match(parcRegex);
+        let match = t.description.match(parcRegex) || t.description.match(installmentRegex);
         if (match) {
           const num = parseInt(match[1]);
           const total = parseInt(match[2]);
@@ -334,6 +335,11 @@ export function ImportStatementModal({
             raw[idx]._installment_number = num;
             raw[idx]._installments_total = total;
             raw[idx]._base_description = baseName;
+            // Propaga sempre — o matcher usa isso p/ discriminar parcelas
+            // mesmo quando só uma delas aparece no extrato desta fatura.
+            raw[idx].installment_number = num;
+            raw[idx].installments_total = total;
+            raw[idx].base_description = baseName;
           }
         }
       });
@@ -344,10 +350,7 @@ export function ImportStatementModal({
           const totalAmount = group.indices.reduce((sum, i) => sum + Math.abs(raw[i].amount), 0);
           group.indices.forEach((i) => {
             raw[i].series_id = sid;
-            raw[i].installment_number = raw[i]._installment_number;
-            raw[i].installments_total = raw[i]._installments_total;
             raw[i].original_amount = totalAmount;
-            raw[i].base_description = raw[i]._base_description;
           });
         }
       }
