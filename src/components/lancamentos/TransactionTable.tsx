@@ -1040,6 +1040,13 @@ export function TransactionTable({
                             group={{ cardName: childGroup.cardName, totalAmount: childGroup.totalAmount, pendingCount: childGroup.pendingCount }}
                             isOpen={isChildOpen}
                             txCount={childGroup.transactions.length}
+                            reconciledCount={childGroup.reconciledCount || 0}
+                            closed={childGroup.underlyingCardId && childGroup.cycleKey ? isCardCycleClosed(childGroup.underlyingCardId, childGroup.cycleKey) : null}
+                            onClose={childGroup.underlyingCardId && childGroup.cycleKey ? () => handleCloseCardCycle(childGroup.underlyingCardId!, childGroup.cycleKey!, childGroup.cycleLabel || childGroup.cycleKey!) : undefined}
+                            onReopen={() => {
+                              const c = childGroup.underlyingCardId && childGroup.cycleKey ? isCardCycleClosed(childGroup.underlyingCardId, childGroup.cycleKey) : null;
+                              if (c) handleReopenCycle(c.id);
+                            }}
                             onToggle={() => toggleCard(`child-${childGroup.cardId}`)}
                             indented
                             onLiquidate={() => {
