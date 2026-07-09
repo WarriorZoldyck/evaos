@@ -931,13 +931,29 @@ export function ImportStatementModal({
       createOk = await onImport(transactions);
     }
 
+    // Delete system transactions the user chose to replace with the statement line.
+    let replacedOk = 0;
+    if (replaceDeleteIds.size > 0) {
+      const ids = Array.from(replaceDeleteIds);
+      const { error: delErr } = await supabase.from("transactions").delete().in("id", ids);
+      if (delErr) {
+        console.error("[ImportStatement] replace-delete error", delErr);
+        toast({
+          title: "Aviso",
+          description: `Não foi possível excluir ${ids.length} lançamento(s) substituído(s): ${delErr.message}`,
+          variant: "destructive",
+        });
+      } else {
+        replacedOk = ids.length;
+      }
+    }
+
     setImporting(false);
 
     if (createOk) {
-      // If only links happened (no inserts), createMultipleTransactions wasn't
-      // called and the page list won't auto-refresh — fire the global event
-      // that Lancamentos.tsx listens to, so the UI updates immediately.
-      if (transactions.length === 0 && (linkOk > 0 || linkFail > 0)) {
+      // If only links/replacements happened (no inserts), the page list won't
+      // auto-refresh — fire the global event so the UI updates immediately.
+      if (transactions.length === 0 && (linkOk > 0 || linkFail > 0 || replacedOk > 0)) {
         window.dispatchEvent(new Event("transaction-created"));
       }
 
