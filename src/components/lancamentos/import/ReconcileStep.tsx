@@ -77,6 +77,12 @@ interface ReconcileStepProps {
   systemBill?: { total: number; count: number; loading: boolean } | null;
   /** Optional: when provided, shows a "Excluir" button on each orphan. */
   onDeleteOrphan?: (id: string) => void;
+  /** Set of system tx IDs already marked for replacement by "Manter só o do extrato". */
+  replaceDeleteIds?: Set<string>;
+  /** Called when the user chooses to discard the system tx and keep the statement line. */
+  onKeepStatementOnly?: (rowIdx: number) => void;
+  /** Called to undo a "Manter só o do extrato" choice for a given system tx ID. */
+  onUndoKeepStatementOnly?: (systemTxId: string) => void;
 }
 
 
