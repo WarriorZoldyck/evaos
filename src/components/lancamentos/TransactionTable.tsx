@@ -582,6 +582,18 @@ export function TransactionTable({
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectionMode = selectedIds.size > 0;
+  const { isCardCycleClosed, closeCycle, reopenCycle } = useClosedCycles();
+
+  const handleCloseCardCycle = async (cardId: string, cycleKey: string, label: string) => {
+    if (!confirm(`Fechar fatura ${label}? Nenhum lançamento poderá entrar ou sair até você reabrir.`)) return;
+    await closeCycle({ credit_card_id: cardId, cycle_key: cycleKey });
+  };
+
+  const handleReopenCycle = async (id: string) => {
+    if (!confirm("Reabrir este mês? Lançamentos poderão ser editados novamente.")) return;
+    await reopenCycle(id);
+  };
+
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
