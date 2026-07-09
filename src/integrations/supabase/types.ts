@@ -572,6 +572,57 @@ export type Database = {
           },
         ]
       }
+      closed_bill_cycles: {
+        Row: {
+          bank_account_id: string | null
+          closed_at: string
+          closed_by: string
+          created_at: string
+          credit_card_id: string | null
+          cycle_key: string
+          id: string
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          bank_account_id?: string | null
+          closed_at?: string
+          closed_by: string
+          created_at?: string
+          credit_card_id?: string | null
+          cycle_key: string
+          id?: string
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          bank_account_id?: string | null
+          closed_at?: string
+          closed_by?: string
+          created_at?: string
+          credit_card_id?: string | null
+          cycle_key?: string
+          id?: string
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "closed_bill_cycles_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "closed_bill_cycles_credit_card_id_fkey"
+            columns: ["credit_card_id"]
+            isOneToOne: false
+            referencedRelation: "credit_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           cnpj: string
@@ -2067,6 +2118,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      compute_cycle_key: { Args: { payment_date: string }; Returns: string }
       get_account_balance: {
         Args: { account_id_param: string }
         Returns: number
