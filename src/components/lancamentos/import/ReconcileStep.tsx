@@ -360,6 +360,29 @@ export function ReconcileStep({
             </TooltipContent>
           </Tooltip>
 
+          {onKeepStatementOnly && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs gap-1 text-sky-600 hover:text-sky-700 hover:bg-sky-500/10"
+                  onClick={() => onKeepStatementOnly(i)}
+                >
+                  <Sparkles className="h-3 w-3" /> Manter só o do extrato
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[280px] text-xs">
+                <div className="flex items-start gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Exclui</strong> o lançamento do sistema e cria um <strong>novo</strong> a partir da linha do extrato (com a mesma categoria). Use quando o do sistema estiver com dados errados (data, valor, descrição).
+                  </span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
