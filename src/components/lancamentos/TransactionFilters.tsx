@@ -139,6 +139,32 @@ export function TransactionFilters({
           </ToggleGroupItem>
         </ToggleGroup>
 
+        {/* Reconciliation toggle */}
+        <ToggleGroup
+          type="single"
+          value={filters.reconciled}
+          onValueChange={(value) => {
+            if (value)
+              onFiltersChange({
+                ...filters,
+                reconciled: value as Filters["reconciled"],
+              });
+          }}
+          className="shrink-0"
+        >
+          <ToggleGroupItem value="todos" className="text-xs px-3" title="Todos">
+            Todos
+          </ToggleGroupItem>
+          <ToggleGroupItem value="sim" className="text-xs px-3" title="Somente conciliados">
+            Conciliados
+          </ToggleGroupItem>
+          <ToggleGroupItem value="nao" className="text-xs px-3" title="Somente não conciliados">
+            Sem conciliação
+          </ToggleGroupItem>
+        </ToggleGroup>
+
+
+
         {/* Sort order */}
         <Button
           variant="outline"
