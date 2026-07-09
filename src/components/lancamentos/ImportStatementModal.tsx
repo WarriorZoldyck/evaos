@@ -975,6 +975,7 @@ export function ImportStatementModal({
     setAcknowledgeDivergence(false);
     setMatchActions({});
     setMatchTargets({});
+    setReplaceDeleteIds(new Set());
     setOrphans([]);
     setSystemBill({ total: 0, count: 0, loading: false });
     setRowCategories({});
