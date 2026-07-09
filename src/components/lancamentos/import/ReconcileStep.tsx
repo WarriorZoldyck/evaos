@@ -971,9 +971,13 @@ export function ReconcileStep({
                   return (
                     <div key={i} className="flex justify-between items-center p-2 text-xs">
                       <span className="truncate flex items-center gap-1.5">
-                        {hadMatch && (
+                        {hadMatch ? (
                           <Badge variant="outline" className="text-[9px] gap-0.5 border-emerald-500/40 text-emerald-700">
                             <ShieldCheck className="h-2.5 w-2.5" /> existente mantido
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[9px] gap-0.5 border-sky-500/40 text-sky-700">
+                            <ShieldCheck className="h-2.5 w-2.5" /> só do extrato mantido
                           </Badge>
                         )}
                         {fmtDate(r.date)} · {r.description}
