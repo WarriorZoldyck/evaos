@@ -715,12 +715,16 @@ export function ReconcileStep({
                       const subSubs = childrenOf(currentCat.subcategory);
                       const dupKey = `${r.type}|${Math.abs(r.amount)}|${normalizeText(r.description)}`;
                       const dupCount = duplicateCounts.get(dupKey) || 1;
+                      const replacingCandId = matches[i]?.best?.candidate?.id;
+                      const isReplacing = !!(
+                        replacingCandId && replaceDeleteIds?.has(replacingCandId)
+                      );
                       return (
-                        <tr key={i} className="border-b last:border-0 hover:bg-accent/30">
+                        <tr key={i} className={`border-b last:border-0 hover:bg-accent/30 ${isReplacing ? "bg-sky-500/5" : ""}`}>
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
                             <p className="break-words leading-snug" title={r.description}>{r.description}</p>
-                            <div className="flex items-center gap-1 mt-0.5">
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                               <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[9px]">
                                 {r.type === "receita" ? "Entrada" : "Saída"}
                               </Badge>
@@ -733,6 +737,21 @@ export function ReconcileStep({
                                     {dupCount} lançamentos idênticos. Categorize um e os outros serão preenchidos.
                                   </TooltipContent>
                                 </Tooltip>
+                              )}
+                              {isReplacing && (
+                                <Badge className="text-[9px] gap-0.5 bg-sky-600 hover:bg-sky-700 text-white border-0">
+                                  substituindo lançamento do sistema
+                                  {onUndoKeepStatementOnly && replacingCandId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onUndoKeepStatementOnly(replacingCandId)}
+                                      className="ml-1 underline decoration-dotted hover:no-underline"
+                                      title="Desfazer substituição"
+                                    >
+                                      desfazer
+                                    </button>
+                                  )}
+                                </Badge>
                               )}
                             </div>
                           </td>
