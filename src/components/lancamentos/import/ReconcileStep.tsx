@@ -149,6 +149,9 @@ export function ReconcileStep({
   orphansLoading = false,
   systemBill = null,
   onDeleteOrphan,
+  replaceDeleteIds,
+  onKeepStatementOnly,
+  onUndoKeepStatementOnly,
 }: ReconcileStepProps) {
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
