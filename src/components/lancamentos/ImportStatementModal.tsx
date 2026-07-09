@@ -229,6 +229,8 @@ export function ImportStatementModal({
   // Default is "criar" (legacy behavior). "vincular" is suggested when a match exists.
   const [matchActions, setMatchActions] = useState<Record<number, "vincular" | "criar" | "ignorar">>({});
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
+  // IDs of system transactions to delete on import (from "Manter só o do extrato").
+  const [replaceDeleteIds, setReplaceDeleteIds] = useState<Set<string>>(new Set());
   const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
 
   // Orphans = transactions already in the system, in the bill window, that DID NOT match any
