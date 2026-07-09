@@ -949,6 +949,13 @@ export function TransactionTable({
                     group={{ cardName: group.cardName, totalAmount: group.totalAmount, pendingCount: group.pendingCount }}
                     isOpen={isOpen}
                     txCount={group.transactions.length}
+                    reconciledCount={group.reconciledCount || 0}
+                    closed={group.underlyingCardId && group.cycleKey ? isCardCycleClosed(group.underlyingCardId, group.cycleKey) : null}
+                    onClose={group.underlyingCardId && group.cycleKey ? () => handleCloseCardCycle(group.underlyingCardId!, group.cycleKey!, group.cycleLabel || group.cycleKey!) : undefined}
+                    onReopen={() => {
+                      const c = group.underlyingCardId && group.cycleKey ? isCardCycleClosed(group.underlyingCardId, group.cycleKey) : null;
+                      if (c) handleReopenCycle(c.id);
+                    }}
                     onToggle={() => toggleCard(group.cardId)}
                     onLiquidate={() => {
                       const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
