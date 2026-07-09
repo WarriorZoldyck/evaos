@@ -229,6 +229,8 @@ export function ImportStatementModal({
   // Default is "criar" (legacy behavior). "vincular" is suggested when a match exists.
   const [matchActions, setMatchActions] = useState<Record<number, "vincular" | "criar" | "ignorar">>({});
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
+  // IDs of system transactions to delete on import (from "Manter só o do extrato").
+  const [replaceDeleteIds, setReplaceDeleteIds] = useState<Set<string>>(new Set());
   const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
 
   // Orphans = transactions already in the system, in the bill window, that DID NOT match any
@@ -929,13 +931,29 @@ export function ImportStatementModal({
       createOk = await onImport(transactions);
     }
 
+    // Delete system transactions the user chose to replace with the statement line.
+    let replacedOk = 0;
+    if (replaceDeleteIds.size > 0) {
+      const ids = Array.from(replaceDeleteIds);
+      const { error: delErr } = await supabase.from("transactions").delete().in("id", ids);
+      if (delErr) {
+        console.error("[ImportStatement] replace-delete error", delErr);
+        toast({
+          title: "Aviso",
+          description: `Não foi possível excluir ${ids.length} lançamento(s) substituído(s): ${delErr.message}`,
+          variant: "destructive",
+        });
+      } else {
+        replacedOk = ids.length;
+      }
+    }
+
     setImporting(false);
 
     if (createOk) {
-      // If only links happened (no inserts), createMultipleTransactions wasn't
-      // called and the page list won't auto-refresh — fire the global event
-      // that Lancamentos.tsx listens to, so the UI updates immediately.
-      if (transactions.length === 0 && (linkOk > 0 || linkFail > 0)) {
+      // If only links/replacements happened (no inserts), the page list won't
+      // auto-refresh — fire the global event so the UI updates immediately.
+      if (transactions.length === 0 && (linkOk > 0 || linkFail > 0 || replacedOk > 0)) {
         window.dispatchEvent(new Event("transaction-created"));
       }
 
@@ -973,6 +991,7 @@ export function ImportStatementModal({
     setAcknowledgeDivergence(false);
     setMatchActions({});
     setMatchTargets({});
+    setReplaceDeleteIds(new Set());
     setOrphans([]);
     setSystemBill({ total: 0, count: 0, loading: false });
     setRowCategories({});
@@ -1302,6 +1321,41 @@ export function ImportStatementModal({
               }
               bankAccountId={bankId}
               walletId={walletId}
+              replaceDeleteIds={replaceDeleteIds}
+              onKeepStatementOnly={(idx) => {
+                const cand = matches[idx]?.best?.candidate;
+                if (!cand) return;
+                setReplaceDeleteIds((prev) => {
+                  const next = new Set(prev);
+                  next.add(cand.id);
+                  return next;
+                });
+                // Move row to "criar" so it is imported from the statement.
+                setMatchActions((prev) => ({ ...prev, [idx]: "criar" }));
+                // Seed category from candidate so the new line inherits classification.
+                setRowCategories((prev) => {
+                  if (prev[idx]?.touched) return prev;
+                  const cat = (cand as any).category as string | undefined;
+                  if (!cat) return prev;
+                  return {
+                    ...prev,
+                    [idx]: {
+                      category: cat,
+                      subcategory: (cand as any).subcategory ?? undefined,
+                      subcategory2: (cand as any).subcategory2 ?? undefined,
+                      touched: false,
+                    },
+                  };
+                });
+              }}
+              onUndoKeepStatementOnly={(id) => {
+                setReplaceDeleteIds((prev) => {
+                  if (!prev.has(id)) return prev;
+                  const next = new Set(prev);
+                  next.delete(id);
+                  return next;
+                });
+              }}
               orphans={orphans}
               orphansLoading={orphansLoading}
               systemBill={systemBill}

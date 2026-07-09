@@ -77,6 +77,12 @@ interface ReconcileStepProps {
   systemBill?: { total: number; count: number; loading: boolean } | null;
   /** Optional: when provided, shows a "Excluir" button on each orphan. */
   onDeleteOrphan?: (id: string) => void;
+  /** Set of system tx IDs already marked for replacement by "Manter só o do extrato". */
+  replaceDeleteIds?: Set<string>;
+  /** Called when the user chooses to discard the system tx and keep the statement line. */
+  onKeepStatementOnly?: (rowIdx: number) => void;
+  /** Called to undo a "Manter só o do extrato" choice for a given system tx ID. */
+  onUndoKeepStatementOnly?: (systemTxId: string) => void;
 }
 
 
@@ -143,6 +149,9 @@ export function ReconcileStep({
   orphansLoading = false,
   systemBill = null,
   onDeleteOrphan,
+  replaceDeleteIds,
+  onKeepStatementOnly,
+  onUndoKeepStatementOnly,
 }: ReconcileStepProps) {
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
@@ -350,6 +359,29 @@ export function ReconcileStep({
               Descarta esta linha do extrato. O lançamento que já existe no sistema é mantido — nada é criado nem excluído.
             </TooltipContent>
           </Tooltip>
+
+          {onKeepStatementOnly && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs gap-1 text-sky-600 hover:text-sky-700 hover:bg-sky-500/10"
+                  onClick={() => onKeepStatementOnly(i)}
+                >
+                  <Sparkles className="h-3 w-3" /> Manter só o do extrato
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[280px] text-xs">
+                <div className="flex items-start gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Exclui</strong> o lançamento do sistema e cria um <strong>novo</strong> a partir da linha do extrato (com a mesma categoria). Use quando o do sistema estiver com dados errados (data, valor, descrição).
+                  </span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -683,12 +715,16 @@ export function ReconcileStep({
                       const subSubs = childrenOf(currentCat.subcategory);
                       const dupKey = `${r.type}|${Math.abs(r.amount)}|${normalizeText(r.description)}`;
                       const dupCount = duplicateCounts.get(dupKey) || 1;
+                      const replacingCandId = matches[i]?.best?.candidate?.id;
+                      const isReplacing = !!(
+                        replacingCandId && replaceDeleteIds?.has(replacingCandId)
+                      );
                       return (
-                        <tr key={i} className="border-b last:border-0 hover:bg-accent/30">
+                        <tr key={i} className={`border-b last:border-0 hover:bg-accent/30 ${isReplacing ? "bg-sky-500/5" : ""}`}>
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
                             <p className="break-words leading-snug" title={r.description}>{r.description}</p>
-                            <div className="flex items-center gap-1 mt-0.5">
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                               <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[9px]">
                                 {r.type === "receita" ? "Entrada" : "Saída"}
                               </Badge>
@@ -701,6 +737,21 @@ export function ReconcileStep({
                                     {dupCount} lançamentos idênticos. Categorize um e os outros serão preenchidos.
                                   </TooltipContent>
                                 </Tooltip>
+                              )}
+                              {isReplacing && (
+                                <Badge className="text-[9px] gap-0.5 bg-sky-600 hover:bg-sky-700 text-white border-0">
+                                  substituindo lançamento do sistema
+                                  {onUndoKeepStatementOnly && replacingCandId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onUndoKeepStatementOnly(replacingCandId)}
+                                      className="ml-1 underline decoration-dotted hover:no-underline"
+                                      title="Desfazer substituição"
+                                    >
+                                      desfazer
+                                    </button>
+                                  )}
+                                </Badge>
                               )}
                             </div>
                           </td>
