@@ -4,7 +4,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Edit, Copy, Trash2, CheckCircle2, MoreHorizontal, Loader2,
   Landmark, Wallet, CreditCard, HelpCircle, Eye, Repeat,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Lock, ShieldCheck, Link2, Unlock,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import {
 import type { Transaction, Category } from "@/hooks/useTransactions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useClosedCycles, type ClosedCycle } from "@/hooks/useClosedCycles";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CreditCardWithHierarchy {
   id: string;
@@ -357,10 +359,12 @@ function TransactionRow({
 
 interface CardGroupItem {
   cardId: string;
+  underlyingCardId?: string; // real credit_cards.id (without cycle suffix)
   cardName: string;
   transactions: Transaction[];
   totalAmount: number;
   pendingCount: number;
+  reconciledCount?: number;
   firstDate: string;
   cycleKey?: string;
   cycleLabel?: string;
@@ -390,6 +394,10 @@ function CardGroupHeader({
   onLiquidate,
   indented,
   txCount,
+  reconciledCount = 0,
+  closed = null,
+  onClose,
+  onReopen,
 }: {
   group: { cardName: string; totalAmount: number; pendingCount: number };
   isOpen: boolean;
@@ -397,10 +405,20 @@ function CardGroupHeader({
   onLiquidate: () => void;
   indented?: boolean;
   txCount: number;
+  reconciledCount?: number;
+  closed?: ClosedCycle | null;
+  onClose?: () => void;
+  onReopen?: () => void;
 }) {
+  const isPaid = group.pendingCount === 0 && txCount > 0;
+  const isFullyReconciled = reconciledCount > 0 && reconciledCount === txCount;
+  const isPartiallyReconciled = reconciledCount > 0 && reconciledCount < txCount;
+  const isClosed = !!closed;
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer ${indented ? "bg-muted/10 pl-10" : "bg-muted/20"}`}
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer ${
+        indented ? "bg-muted/10 pl-10" : "bg-muted/20"
+      } ${isClosed ? "bg-emerald-500/5 border-l-2 border-emerald-500/60" : ""}`}
       onClick={onToggle}
     >
       <div className="shrink-0 w-12 flex items-center justify-center">
@@ -412,7 +430,7 @@ function CardGroupHeader({
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-semibold text-foreground truncate">
             {group.cardName}
@@ -420,6 +438,57 @@ function CardGroupHeader({
           <Badge variant="secondary" className="text-[10px] shrink-0">
             {txCount} lançamento{txCount !== 1 ? "s" : ""}
           </Badge>
+
+          {isPaid && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+                    <CheckCircle2 className="h-2.5 w-2.5" /> Paga
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Todos os lançamentos desta fatura estão pagos.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {isFullyReconciled && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-sky-600 hover:bg-sky-700 text-white border-0">
+                    <Link2 className="h-2.5 w-2.5" /> Conciliada
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Todos os lançamentos foram conciliados com o extrato.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {!isFullyReconciled && isPartiallyReconciled && (
+            <Badge variant="outline" className="text-[10px] shrink-0 gap-0.5 border-amber-500/40 text-amber-700">
+              <Link2 className="h-2.5 w-2.5" /> {reconciledCount}/{txCount} conciliados
+            </Badge>
+          )}
+
+          {isClosed && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-emerald-700 hover:bg-emerald-800 text-white border-0">
+                    <Lock className="h-2.5 w-2.5" /> Mês conciliado
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs max-w-[240px]">
+                  Fechado em {new Date(closed!.closed_at).toLocaleDateString("pt-BR")}. Nenhum lançamento pode entrar ou sair até reabrir.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
       </div>
 
@@ -435,7 +504,7 @@ function CardGroupHeader({
         </span>
       </div>
 
-      {group.pendingCount > 0 && (
+      {group.pendingCount > 0 && !isClosed && (
         <Button
           variant="outline"
           size="sm"
@@ -448,6 +517,38 @@ function CardGroupHeader({
           <CheckCircle2 className="h-3 w-3" />
           Pagar Fatura
         </Button>
+      )}
+
+      {(onClose || onReopen) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" className="shrink-0 h-8 w-8 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            {!isClosed && onClose && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+              >
+                <Lock className="h-4 w-4 mr-2" /> Fechar mês (conciliar)
+              </DropdownMenuItem>
+            )}
+            {isClosed && onReopen && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReopen();
+                }}
+              >
+                <Unlock className="h-4 w-4 mr-2" /> Reabrir mês
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
@@ -481,6 +582,18 @@ export function TransactionTable({
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectionMode = selectedIds.size > 0;
+  const { isCardCycleClosed, closeCycle, reopenCycle } = useClosedCycles();
+
+  const handleCloseCardCycle = async (cardId: string, cycleKey: string, label: string) => {
+    if (!confirm(`Fechar fatura ${label}? Nenhum lançamento poderá entrar ou sair até você reabrir.`)) return;
+    await closeCycle({ credit_card_id: cardId, cycle_key: cycleKey });
+  };
+
+  const handleReopenCycle = async (id: string) => {
+    if (!confirm("Reabrir este mês? Lançamentos poderão ser editados novamente.")) return;
+    await reopenCycle(id);
+  };
+
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -559,10 +672,12 @@ export function TransactionTable({
         const label = format(dueDate, "MMM/yyyy", { locale: ptBR });
         return {
           cardId: `${cardId}::${cycleKey}`,
+          underlyingCardId: cardId,
           cardName: `${cardName} • Fatura ${label}`,
           transactions: ctxns,
           totalAmount: calcNetAmount(ctxns),
           pendingCount: ctxns.filter((tx) => tx.status === "Pendente").length,
+          reconciledCount: ctxns.filter((tx) => tx.is_reconciled).length,
           firstDate: ctxns[0].payment_date,
           cycleKey,
           cycleLabel: label,
@@ -834,6 +949,13 @@ export function TransactionTable({
                     group={{ cardName: group.cardName, totalAmount: group.totalAmount, pendingCount: group.pendingCount }}
                     isOpen={isOpen}
                     txCount={group.transactions.length}
+                    reconciledCount={group.reconciledCount || 0}
+                    closed={group.underlyingCardId && group.cycleKey ? isCardCycleClosed(group.underlyingCardId, group.cycleKey) : null}
+                    onClose={group.underlyingCardId && group.cycleKey ? () => handleCloseCardCycle(group.underlyingCardId!, group.cycleKey!, group.cycleLabel || group.cycleKey!) : undefined}
+                    onReopen={() => {
+                      const c = group.underlyingCardId && group.cycleKey ? isCardCycleClosed(group.underlyingCardId, group.cycleKey) : null;
+                      if (c) handleReopenCycle(c.id);
+                    }}
                     onToggle={() => toggleCard(group.cardId)}
                     onLiquidate={() => {
                       const firstPending = group.transactions.find((tx) => tx.status === "Pendente");
@@ -881,6 +1003,7 @@ export function TransactionTable({
                   group={{ cardName: hierarchy.parentCardName, totalAmount: hierarchy.totalAmount, pendingCount: hierarchy.pendingCount }}
                   isOpen={isParentOpen}
                   txCount={hierarchy.allTransactions.length}
+                  reconciledCount={hierarchy.allTransactions.filter((t) => t.is_reconciled).length}
                   onToggle={() => toggleCard(`parent-${hierarchy.parentCardId}`)}
                   onLiquidate={() => {
                     const firstPending = hierarchy.allTransactions.find((tx) => tx.status === "Pendente");
@@ -918,6 +1041,13 @@ export function TransactionTable({
                             group={{ cardName: childGroup.cardName, totalAmount: childGroup.totalAmount, pendingCount: childGroup.pendingCount }}
                             isOpen={isChildOpen}
                             txCount={childGroup.transactions.length}
+                            reconciledCount={childGroup.reconciledCount || 0}
+                            closed={childGroup.underlyingCardId && childGroup.cycleKey ? isCardCycleClosed(childGroup.underlyingCardId, childGroup.cycleKey) : null}
+                            onClose={childGroup.underlyingCardId && childGroup.cycleKey ? () => handleCloseCardCycle(childGroup.underlyingCardId!, childGroup.cycleKey!, childGroup.cycleLabel || childGroup.cycleKey!) : undefined}
+                            onReopen={() => {
+                              const c = childGroup.underlyingCardId && childGroup.cycleKey ? isCardCycleClosed(childGroup.underlyingCardId, childGroup.cycleKey) : null;
+                              if (c) handleReopenCycle(c.id);
+                            }}
                             onToggle={() => toggleCard(`child-${childGroup.cardId}`)}
                             indented
                             onLiquidate={() => {

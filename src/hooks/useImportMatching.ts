@@ -46,7 +46,7 @@ export function useImportMatching() {
         const minDate = shiftISO(dates[0], -window);
         const maxDate = shiftISO(dates[dates.length - 1], window);
 
-        const selectCols = "id, description, amount, payment_date, competence_date, purchase_date_original, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id";
+        const selectCols = "id, description, amount, payment_date, competence_date, purchase_date_original, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id, is_reconciled";
 
         let query = supabase
           .from("transactions")

@@ -14,6 +14,7 @@ export type TransactionInsert = TablesInsert<"transactions">;
 export interface TransactionFilters {
   type: "receita" | "despesa" | "todos";
   status: "Pago" | "Pendente" | "todos";
+  reconciled: "todos" | "sim" | "nao";
   search: string;
   categoryId: string;
   dateFrom: string;
@@ -94,6 +95,7 @@ export function useTransactions() {
     return {
       type: "todos",
       status: "todos",
+      reconciled: "todos",
       search: "",
       categoryId: "",
       dateFrom: format(startOfMonth(now), "yyyy-MM-dd"),
@@ -234,6 +236,11 @@ export function useTransactions() {
     }
     if (filters.status !== "todos") {
       query = query.eq("status", filters.status);
+    }
+    if (filters.reconciled === "sim") {
+      query = query.eq("is_reconciled", true);
+    } else if (filters.reconciled === "nao") {
+      query = query.or("is_reconciled.is.null,is_reconciled.eq.false");
     }
     if (filters.search.trim()) {
       query = query.or(`description.ilike.%${filters.search.trim()}%,contact_name.ilike.%${filters.search.trim()}%`);
