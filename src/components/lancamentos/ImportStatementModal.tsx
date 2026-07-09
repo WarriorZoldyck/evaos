@@ -1321,6 +1321,41 @@ export function ImportStatementModal({
               }
               bankAccountId={bankId}
               walletId={walletId}
+              replaceDeleteIds={replaceDeleteIds}
+              onKeepStatementOnly={(idx) => {
+                const cand = matches[idx]?.best?.candidate;
+                if (!cand) return;
+                setReplaceDeleteIds((prev) => {
+                  const next = new Set(prev);
+                  next.add(cand.id);
+                  return next;
+                });
+                // Move row to "criar" so it is imported from the statement.
+                setMatchActions((prev) => ({ ...prev, [idx]: "criar" }));
+                // Seed category from candidate so the new line inherits classification.
+                setRowCategories((prev) => {
+                  if (prev[idx]?.touched) return prev;
+                  const cat = (cand as any).category as string | undefined;
+                  if (!cat) return prev;
+                  return {
+                    ...prev,
+                    [idx]: {
+                      category: cat,
+                      subcategory: (cand as any).subcategory ?? undefined,
+                      subcategory2: (cand as any).subcategory2 ?? undefined,
+                      touched: false,
+                    },
+                  };
+                });
+              }}
+              onUndoKeepStatementOnly={(id) => {
+                setReplaceDeleteIds((prev) => {
+                  if (!prev.has(id)) return prev;
+                  const next = new Set(prev);
+                  next.delete(id);
+                  return next;
+                });
+              }}
               orphans={orphans}
               orphansLoading={orphansLoading}
               systemBill={systemBill}
