@@ -667,7 +667,7 @@ export function ReconcileStep({
                       <th className="p-2 text-left font-medium">Descrição</th>
                       <th className="p-2 text-right font-medium whitespace-nowrap">Valor</th>
                       <th className="p-2 text-left font-medium min-w-[200px]">Categoria</th>
-                      <th className="p-2 text-center font-medium w-16">Ignorar</th>
+                      <th className="p-2 text-center font-medium w-[190px]">Ação</th>
                     </tr>
                   </thead>
                   <tbody>
