@@ -394,6 +394,10 @@ function CardGroupHeader({
   onLiquidate,
   indented,
   txCount,
+  reconciledCount = 0,
+  closed = null,
+  onClose,
+  onReopen,
 }: {
   group: { cardName: string; totalAmount: number; pendingCount: number };
   isOpen: boolean;
@@ -401,10 +405,20 @@ function CardGroupHeader({
   onLiquidate: () => void;
   indented?: boolean;
   txCount: number;
+  reconciledCount?: number;
+  closed?: ClosedCycle | null;
+  onClose?: () => void;
+  onReopen?: () => void;
 }) {
+  const isPaid = group.pendingCount === 0 && txCount > 0;
+  const isFullyReconciled = reconciledCount > 0 && reconciledCount === txCount;
+  const isPartiallyReconciled = reconciledCount > 0 && reconciledCount < txCount;
+  const isClosed = !!closed;
   return (
     <div
-      className={`flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer ${indented ? "bg-muted/10 pl-10" : "bg-muted/20"}`}
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-accent/30 transition-colors cursor-pointer ${
+        indented ? "bg-muted/10 pl-10" : "bg-muted/20"
+      } ${isClosed ? "bg-emerald-500/5 border-l-2 border-emerald-500/60" : ""}`}
       onClick={onToggle}
     >
       <div className="shrink-0 w-12 flex items-center justify-center">
@@ -416,7 +430,7 @@ function CardGroupHeader({
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-semibold text-foreground truncate">
             {group.cardName}
@@ -424,6 +438,57 @@ function CardGroupHeader({
           <Badge variant="secondary" className="text-[10px] shrink-0">
             {txCount} lançamento{txCount !== 1 ? "s" : ""}
           </Badge>
+
+          {isPaid && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+                    <CheckCircle2 className="h-2.5 w-2.5" /> Paga
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Todos os lançamentos desta fatura estão pagos.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {isFullyReconciled && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-sky-600 hover:bg-sky-700 text-white border-0">
+                    <Link2 className="h-2.5 w-2.5" /> Conciliada
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Todos os lançamentos foram conciliados com o extrato.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {!isFullyReconciled && isPartiallyReconciled && (
+            <Badge variant="outline" className="text-[10px] shrink-0 gap-0.5 border-amber-500/40 text-amber-700">
+              <Link2 className="h-2.5 w-2.5" /> {reconciledCount}/{txCount} conciliados
+            </Badge>
+          )}
+
+          {isClosed && (
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-emerald-700 hover:bg-emerald-800 text-white border-0">
+                    <Lock className="h-2.5 w-2.5" /> Mês conciliado
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs max-w-[240px]">
+                  Fechado em {new Date(closed!.closed_at).toLocaleDateString("pt-BR")}. Nenhum lançamento pode entrar ou sair até reabrir.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
       </div>
 
@@ -439,7 +504,7 @@ function CardGroupHeader({
         </span>
       </div>
 
-      {group.pendingCount > 0 && (
+      {group.pendingCount > 0 && !isClosed && (
         <Button
           variant="outline"
           size="sm"
@@ -452,6 +517,38 @@ function CardGroupHeader({
           <CheckCircle2 className="h-3 w-3" />
           Pagar Fatura
         </Button>
+      )}
+
+      {(onClose || onReopen) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" className="shrink-0 h-8 w-8 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            {!isClosed && onClose && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+              >
+                <Lock className="h-4 w-4 mr-2" /> Fechar mês (conciliar)
+              </DropdownMenuItem>
+            )}
+            {isClosed && onReopen && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReopen();
+                }}
+              >
+                <Unlock className="h-4 w-4 mr-2" /> Reabrir mês
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
