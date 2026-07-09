@@ -561,10 +561,12 @@ export function TransactionTable({
         const label = format(dueDate, "MMM/yyyy", { locale: ptBR });
         return {
           cardId: `${cardId}::${cycleKey}`,
+          underlyingCardId: cardId,
           cardName: `${cardName} • Fatura ${label}`,
           transactions: ctxns,
           totalAmount: calcNetAmount(ctxns),
           pendingCount: ctxns.filter((tx) => tx.status === "Pendente").length,
+          reconciledCount: ctxns.filter((tx) => tx.is_reconciled).length,
           firstDate: ctxns[0].payment_date,
           cycleKey,
           cycleLabel: label,
