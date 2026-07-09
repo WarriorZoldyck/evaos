@@ -1003,6 +1003,7 @@ export function TransactionTable({
                   group={{ cardName: hierarchy.parentCardName, totalAmount: hierarchy.totalAmount, pendingCount: hierarchy.pendingCount }}
                   isOpen={isParentOpen}
                   txCount={hierarchy.allTransactions.length}
+                  reconciledCount={hierarchy.allTransactions.filter((t) => t.is_reconciled).length}
                   onToggle={() => toggleCard(`parent-${hierarchy.parentCardId}`)}
                   onLiquidate={() => {
                     const firstPending = hierarchy.allTransactions.find((tx) => tx.status === "Pendente");
