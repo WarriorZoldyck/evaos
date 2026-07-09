@@ -4,7 +4,7 @@ import { ptBR } from "date-fns/locale";
 import {
   Edit, Copy, Trash2, CheckCircle2, MoreHorizontal, Loader2,
   Landmark, Wallet, CreditCard, HelpCircle, Eye, Repeat,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, Lock, ShieldCheck, Link2, Unlock,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
