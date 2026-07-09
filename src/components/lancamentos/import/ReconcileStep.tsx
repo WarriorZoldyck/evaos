@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Popover,
@@ -667,7 +667,7 @@ export function ReconcileStep({
                       <th className="p-2 text-left font-medium">Descrição</th>
                       <th className="p-2 text-right font-medium whitespace-nowrap">Valor</th>
                       <th className="p-2 text-left font-medium min-w-[200px]">Categoria</th>
-                      <th className="p-2 text-center font-medium w-16">Ignorar</th>
+                      <th className="p-2 text-center font-medium w-[190px]">Ação</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -792,13 +792,17 @@ export function ReconcileStep({
                           <td className="p-2 text-center align-top">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Checkbox
-                                  checked={false}
-                                  onCheckedChange={() => onActionChange(i, "ignorar")}
-                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-[11px] gap-1 text-sky-700 hover:text-sky-800 hover:bg-sky-500/10"
+                                  onClick={() => onActionChange(i, "ignorar")}
+                                >
+                                  <ShieldCheck className="h-3 w-3" /> Manter só do extrato
+                                </Button>
                               </TooltipTrigger>
-                              <TooltipContent side="left" className="text-xs max-w-[240px]">
-                                Não importar esta linha. Ela vai para "Ignorados" e pode ser restaurada.
+                              <TooltipContent side="left" className="text-xs max-w-[260px]">
+                                Reconhece que essa linha existe só no extrato e <strong>não deve virar lançamento no sistema</strong>. Nada é criado, nada é excluído. Fica registrada em "Ignorados" e pode ser restaurada.
                               </TooltipContent>
                             </Tooltip>
                           </td>
@@ -967,9 +971,13 @@ export function ReconcileStep({
                   return (
                     <div key={i} className="flex justify-between items-center p-2 text-xs">
                       <span className="truncate flex items-center gap-1.5">
-                        {hadMatch && (
+                        {hadMatch ? (
                           <Badge variant="outline" className="text-[9px] gap-0.5 border-emerald-500/40 text-emerald-700">
                             <ShieldCheck className="h-2.5 w-2.5" /> existente mantido
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[9px] gap-0.5 border-sky-500/40 text-sky-700">
+                            <ShieldCheck className="h-2.5 w-2.5" /> só do extrato mantido
                           </Badge>
                         )}
                         {fmtDate(r.date)} · {r.description}

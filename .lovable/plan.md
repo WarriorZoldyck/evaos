@@ -1,66 +1,68 @@
-## Diagnóstico do caso `espclin@hotmail.com` (VISA Azul)
+## Objetivo
 
-### O que aconteceu na base
+A busca do "lado sistema" na conciliação já está correta. O problema é de **transparência**: a Sabrina não consegue ver, na hora da conciliação, se o que o sistema tem bate exatamente com o que ela recebeu no extrato. Este plano ataca só isso + o alerta de órfãos + os dois botões simétricos de "manter só" — **sem quebrar nada do que já funciona**.
 
-Fatura junho/2026 (`payment_date = 2026-06-09`) hoje tem **16 lançamentos / R$ 3.375,36**:
+## Diagnóstico rápido dos dados da Sabrina
 
-- **7 lançamentos antigos** criados manualmente em 19/06 (Empório MM, Frigorífico Goiás, Flores Paula, Gasolina, Decio L13, Campeão, Empório MM) — total **R$ 1.116,65**. Nenhum tem `purchase_date_original`.
-- **9 lançamentos novos** criados pela importação em 08/07 03:17 (Disney+, Google ADS, ChatGPT, FACEBK, Jordana, Anuidade, Itaú Avisa, IOF, Redução Anuidade) — total líquido **R$ 2.258,71**. Todos com `purchase_date_original` entre 2026-05-01 e 2026-05-29.
+- **Santander (Pago):** 15 receitas (R$ 15.130,00) − 22 despesas (R$ 6.517,47) = **R$ 8.612,53**
+- **Itaú PF (Pago):** 1 despesa (R$ 3.379,99) = **−R$ 3.379,99**
+- **Órfãos Pagos (sem conta):** 8 despesas (R$ 4.935,61) + 2 receitas (R$ 900,01) → inflando o consolidado
+- **Pendentes órfãos:** 98 despesas (R$ 24.868,85) → poluem relatórios
 
-Fatura maio/2026 (`payment_date = 2026-05-09`) tem 20 lançamentos, **todos `Pago`**, com `purchase_date_original = NULL` (foram entrados por WhatsApp/manual). Inclui itens como "Facebook / Google 3.454,54", "Chat GPT 118", "Nosso Mercadinho", "Barbearia", etc.
+## O que muda na tela de conciliação (UX de transparência)
 
-### Por que a conciliação não bateu
+1. **Cabeçalho de resumo (novo)** — 3 números no topo:
+   - `Total do extrato importado`
+   - `Total do sistema no período` (pagos + pendentes da conta/cartão dentro das datas)
+   - `Diferença` (verde se 0, vermelho caso contrário)
 
-Três falhas somadas produziram o desalinho entre extrato (R$ ~3.608,27) e sistema (R$ 3.375,36):
+2. **Três buckets explícitos** com contagem e soma:
+   - ✅ **Conciliados** (bateu extrato ↔ sistema)
+   - ➕ **Só no extrato**
+   - ⚠️ **Só no sistema**
 
-1. **Matching não achou nenhum candidato existente**
-   A query do `useImportMatching` filtra por `purchase_date_original BETWEEN min..max` (ou `competence_date` como fallback). Os 20 lançamentos da fatura maio estão como `Pago` com `purchase_date_original = NULL` e `competence_date` fora da janela do extrato (foram lançados via WhatsApp com competência ≠ compra). Resultado: todos os 9 lançamentos do extrato foram tratados como novos, mesmo quando a compra já existia no sistema em outro mês.
+3. **Ações simétricas por linha (novo — o pedido de agora):**
 
-2. **Todas as 9 linhas foram jogadas na fatura errada**
-   O importador atribui um único `payment_date` (2026-06-09) para o lote inteiro. Com `closing_day = 2`, compras de 2026-05-01 e 2026-05-02 (Google ADS, Anuidade, Itaú Avisa) pertencem à fatura **maio** (2026-05-09), não junho. Como a fatura maio já está `Pago`, essas compras acabaram inflando junho.
+   | Bucket | Ação existente | Ação nova |
+   |---|---|---|
+   | Só no sistema | ✅ *"Manter só do sistema"* (já funciona) | — |
+   | Só no extrato | ➕ *"Criar como novo lançamento"* (já funciona, exige conta destino) | ✅ **"Manter só do extrato"** (marca como aceito-sem-match: **não cria transação**, **não força vínculo**, sai da lista de pendências da conciliação e não volta a aparecer em importações futuras do mesmo arquivo) |
 
-3. **Fatura junho carregava 7 lançamentos manuais anteriores**
-   Esses 7 (Empório MM, Frigorífico Goiás, Flores Paula, Gasolina, Decio L13, Campeão, Empório MM) não aparecem no PDF importado. Eles continuam somando R$ 1.116,65 no total “Sistema”, mas nunca vão bater com nenhuma linha do extrato — são compras avulsas que ainda não têm correspondência no extrato ou são de ciclo diferente.
+   Ambos os "Manter só" são **decisões conscientes** do usuário — o sistema registra que aquela linha/lançamento foi revisada e aceita como está. Nada é criado nem apagado.
 
-Resumo aritmético do gap:
+4. **Aviso de escopo** discreto: "Mostrando lançamentos de *{conta}* entre *{data_ini}* e *{data_fim}*."
 
-```text
-Sistema junho após import = 1.116,65 (7 manuais)
-                          + 2.258,71 (9 importados)
-                          = 3.375,36
-Extrato PDF               = 3.608,27
-Diferença                 = 232,91
-```
+5. **Resumo final ao concluir**: *"Extrato R$ X · Sistema R$ Y · Diferença R$ Z"* + botão "Ver diferença".
 
-O “bateu” do usuário nunca poderia acontecer porque:
-- o sistema soma coisas que não estão no extrato (7 manuais de junho);
-- o extrato tem linhas que não viraram lançamentos novos (algumas conciliaram ou foram puladas);
-- lançamentos que **já existiam** em maio deveriam ter sido reconhecidos e não foram, por causa do filtro por `purchase_date_original`.
+## Como o "Manter só do extrato" funciona por baixo (sem quebrar nada)
 
-### Plano de correção
+- Reaproveita o mesmo mecanismo de "ignorar" que hoje o "Manter só do sistema" já usa (marca a linha como resolvida no estado local da conciliação e persiste o hash da linha do extrato em uma tabela leve `import_ignored_lines` — `user_id`, `bank_account_id`, `line_hash`, `reason`, `created_at`).
+- Na próxima importação do mesmo extrato, o `useImportMatching` consulta esses hashes e já traz a linha marcada como "ignorada anteriormente" (usuário pode reverter).
+- Fluxo de criação de transação existente **não é tocado** — o botão novo é uma alternativa ao "Criar como novo", não uma substituição.
 
-1. **Ampliar o escopo de candidatos do matching de cartão**
-   - Quando `isCard`, incluir também transações do cartão com `purchase_date_original IS NULL` cuja `payment_date` esteja na fatura atual OU na anterior/próxima do mesmo cartão.
-   - Aceitar candidatos `Pago` do mesmo cartão quando `payment_date` cai na fatura anterior imediatamente (evita duplicar quando o usuário importa a fatura recém-fechada e o lançamento já foi pago via WhatsApp).
+## Alerta global de órfãos (só avisar, não corrigir)
 
-2. **Roteirizar `payment_date` linha a linha, não por lote**
-   - Para cada linha do extrato, calcular a fatura correta a partir de `purchase_date_original` + `closing_day`/`due_day` do cartão, em vez de aplicar um único `payment_date` ao lote inteiro.
-   - Compras antes do fechamento vão para a fatura do mês; após o fechamento, para a fatura seguinte.
+1. **Card de alerta** no Dashboard e em Lançamentos quando existirem transações Pagas sem `bank_account_id`/`wallet_id`/`credit_card_id`/`transfer_id`:
+   > "Você tem **N lançamentos sem conta vinculada** (R$ X). Enquanto não corrigir, o saldo do sistema pode divergir do saldo real."
 
-3. **Alertar sobre lançamentos “sobrando” no sistema**
-   - Na etapa de conciliação, listar explicitamente os lançamentos do sistema que estão na fatura mas não têm correspondência no extrato (os 7 manuais de junho, no caso), com ação “ignorar / mover / excluir”.
-   - Mostrar a diferença numérica quebrada em: “só no extrato”, “só no sistema”, “casados”.
+2. **Tela "Lançamentos sem conta"** (`/lancamentos/sem-conta`):
+   - Lista órfãos com filtros (status, tipo, período).
+   - Por linha: **Vincular a conta/cartão/carteira**, **Excluir**, **Ignorar** (sai do alerta).
+   - Ações em lote.
 
-4. **Melhorar dedupe por assinatura**
-   - Fingerprint por `(cartão, valor, mês da compra, tokens da descrição)` para pegar casos onde `purchase_date_original` é nulo no candidato mas descrição/valor batem (ex.: “Chat GPT 118” manual vs “ΟΡΕΝΑΙ *CHATGPT 107”). Marcar como sugestão, não auto-linkar.
+3. **Saldo consolidado do dashboard**: soma apenas lançamentos com `bank_account_id` ou `wallet_id`. Órfãos ficam fora do saldo até serem corrigidos.
 
-5. **Testes cobrindo o caso real**
-   - Cenário: fatura maio `Pago` com 20 itens sem `purchase_date_original`; importar extrato equivalente não deve criar duplicatas em junho.
-   - Cenário: extrato com compras cruzando fechamento (01–02/05 vão para maio; 03/05–02/06 vão para junho) — as linhas devem cair na fatura correta, não todas em junho.
-   - Cenário: fatura destino com lançamentos manuais extras — total “Sistema” deve mostrar diferença clara e não “empatar” artificialmente.
+## O que NÃO muda
 
-### Resultado esperado
+- Nenhuma transação da Sabrina é alterada/apagada automaticamente.
+- Matching wave A/B/C continua igual.
+- Botões e fluxos atuais da conciliação continuam funcionando exatamente como hoje — as novidades são **aditivas**.
 
-- Nenhum importado pula para a fatura errada quando a data de compra pertence a outra fatura do mesmo cartão.
-- Compras já existentes (mesmo `Pago` e sem `purchase_date_original`) viram candidatos e não duplicam.
-- Quando o extrato não fecha com o sistema, a UI mostra claramente o que sobra de cada lado, com R$ e contagem, em vez de exibir um total agregado enganoso.
+## Detalhes técnicos
+
+- **Resumo + buckets**: calculado em `ReconcileStep.tsx` a partir de `statementLines`, `systemCandidates`, `matches`. Sem backend novo.
+- **"Manter só do extrato"**: novo botão em `ReconcileStep.tsx` no card de linha "Só no extrato", ao lado do "Criar como novo". Persistência em nova tabela `import_ignored_lines` (migration com GRANTs corretos e RLS por `user_id`).
+- **Alerta de órfãos**: componente `<OrphanTransactionsAlert />` + query agregada.
+- **Rota `/lancamentos/sem-conta`**: reaproveita `TransactionList` com filtro `orphan=true`.
+- **Saldo consolidado**: ajuste em `useDashboardData` para excluir órfãos do somatório global (cálculo por conta já ignora naturalmente).
+- **Flag opcional** `orphan_reviewed boolean default false` em `transactions` para o "Ignorar" do órfão.
