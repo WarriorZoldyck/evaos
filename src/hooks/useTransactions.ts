@@ -95,6 +95,7 @@ export function useTransactions() {
     return {
       type: "todos",
       status: "todos",
+      reconciled: "todos",
       search: "",
       categoryId: "",
       dateFrom: format(startOfMonth(now), "yyyy-MM-dd"),
