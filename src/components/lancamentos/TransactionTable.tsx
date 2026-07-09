@@ -18,6 +18,8 @@ import {
 import type { Transaction, Category } from "@/hooks/useTransactions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { useClosedCycles, type ClosedCycle } from "@/hooks/useClosedCycles";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface CreditCardWithHierarchy {
   id: string;
