@@ -792,13 +792,17 @@ export function ReconcileStep({
                           <td className="p-2 text-center align-top">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Checkbox
-                                  checked={false}
-                                  onCheckedChange={() => onActionChange(i, "ignorar")}
-                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 text-[11px] gap-1 text-sky-700 hover:text-sky-800 hover:bg-sky-500/10"
+                                  onClick={() => onActionChange(i, "ignorar")}
+                                >
+                                  <ShieldCheck className="h-3 w-3" /> Manter só do extrato
+                                </Button>
                               </TooltipTrigger>
-                              <TooltipContent side="left" className="text-xs max-w-[240px]">
-                                Não importar esta linha. Ela vai para "Ignorados" e pode ser restaurada.
+                              <TooltipContent side="left" className="text-xs max-w-[260px]">
+                                Reconhece que essa linha existe só no extrato e <strong>não deve virar lançamento no sistema</strong>. Nada é criado, nada é excluído. Fica registrada em "Ignorados" e pode ser restaurada.
                               </TooltipContent>
                             </Tooltip>
                           </td>
