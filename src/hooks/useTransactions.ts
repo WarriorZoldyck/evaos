@@ -14,6 +14,7 @@ export type TransactionInsert = TablesInsert<"transactions">;
 export interface TransactionFilters {
   type: "receita" | "despesa" | "todos";
   status: "Pago" | "Pendente" | "todos";
+  reconciled: "todos" | "sim" | "nao";
   search: string;
   categoryId: string;
   dateFrom: string;
