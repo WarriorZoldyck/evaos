@@ -1,43 +1,52 @@
-## Diagnóstico
+## Contexto
 
-Na tela: linha do extrato **"SALTO CORUMBA HOTE02/02" · 19/04/26 · R$ 343,75** foi cruzada com **"Compra no Salto Corumbá Hotel Camping Clube (1/2)"** em vez da (2/2).
+Dois pontos na tela de importação de extrato / conciliação de cartão:
 
-**Por qual data o sistema cruza?** Para cartão, ele usa a **data da compra original (`purchase_date_original`)** — não a competência nem o pagamento. Isso está correto: bate exatamente com a data que aparece no extrato da fatura (19/04/26). O problema não é a data.
+1. **Bug**: quando o usuário clica **"É o mesmo"** na seção "Provável — confirmar" (ou vincula manualmente) e finaliza a importação, os lançamentos não aparecem como conciliados na tela de Lançamentos.
+2. **Melhoria de UX**: no resumo "Sistema × Extrato" (topo da conciliação), hoje só mostramos **Sistema / Extrato / Diferença**. Adicionar de forma clara o **valor original do extrato**, o **valor já conciliado** e manter o **valor restante**, para o usuário entender por que o total vai reduzindo.
 
-**O problema é o parser de parcelas** em `src/components/lancamentos/ImportStatementModal.tsx` (linhas 312-353):
+## Investigação do bug (o que fazer antes de corrigir)
 
-1. **Regex exige separador** antes do "NN/NN":
-   ```
-   /[\s\-–](\d{1,2})\s*[\/\\]\s*(\d{1,2})\s*$/
-   ```
-   A string do extrato vem **grudada**: `"SALTO CORUMBA HOTE02/02"` — sem espaço/hífen entre `HOTE` e `02/02`. Regex não casa → `installment_number` da linha fica `null`.
+O código do commit (`ImportStatementModal.tsx` linhas ~817-850) já faz `update({ is_reconciled: true })` na transação vinculada. Ou seja, a marcação chega ao banco (confirmei no DB: existem barbearias com `is_reconciled=true`). O sintoma "não aparece como conciliado" tem 2 causas prováveis:
 
-2. **Só marca parcela quando há grupo de 2+ linhas no mesmo extrato** (`if (group.indices.length > 1)`). No caso a parcela 1/2 foi importada numa fatura anterior; nesta importação só a 2/2 aparece → grupo tem 1 índice → mesmo se o regex casasse, o `installment_number` não seria propagado para a linha final.
+a) **Cache de listagem não invalida** após o import. Precisamos garantir que o `queryClient.invalidateQueries` das listas de transações roda ao final do commit — incluindo as chaves usadas em `/lancamentos` e no card affected.
 
-Como `line.installment_number` fica `null`, o guard estrito em `scoreCandidate` (`matching.ts:217`) não dispara e ambos os candidatos 1/2 e 2/2 empatam (mesma data de compra, mesmo valor, mesma descrição, mesmo contato). O primeiro ordenado vence — a 1/2.
+b) **Duplicatas idênticas no sistema** (vi 10x "Barbearia" R$ 114,99 pendentes no mesmo cartão). O matcher pode ter vinculado 1 dessas 10 linhas, e a UI mostra as outras 9 (idênticas) ainda como não conciliadas — o usuário enxerga "não conciliou". Nesse caso a correção é **impedir/consolidar duplicatas óbvias** ou pelo menos avisar. Fora do escopo dessa correção — vira memória para o próximo ciclo.
 
-## Correção
+Ação: reproduzir localmente + inspecionar console/network no commit, confirmar (a) e corrigir invalidações.
 
-Editar `src/components/lancamentos/ImportStatementModal.tsx`:
+## Mudanças
 
-1. **Regex mais tolerante** — aceitar `NN/NN` no final da descrição mesmo grudado a letras (ex.: `HOTE02/02`, `LOJA3/10`):
-   ```ts
-   const installmentRegex = /(\d{1,2})\s*[\/\\]\s*(\d{1,2})\s*$/;
-   ```
-   Mantém `parcRegex` para variantes "PARC 2/2".
+### 1) Correção da conciliação após "É o mesmo"
 
-2. **Propagar `installment_number`/`installments_total` também quando o grupo tem 1 linha** (parcelas anteriores já importadas em faturas passadas). Move a atribuição de `installment_number`/`installments_total` para dentro do `forEach` inicial (junto com `_installment_number`), independente do agrupamento. O `series_id`/`original_amount` continua sendo criado só quando `group.length > 1` (isso segue a semântica atual).
+- Auditar `handleConfirm` em `src/components/lancamentos/ImportStatementModal.tsx` (linhas ~800-870):
+  - Confirmar que o `update` é bem-sucedido (log de erro claro se falhar) e mostrar contagem real de "conciliadas" no toast final.
+  - Ao terminar, invalidar todas as queries relevantes: `transactions`, `credit-card-bills`, `dashboard`, `useImportMatching` — hoje pode estar invalidando só uma parte.
+  - Se `matchTargets[idx]` for `undefined` mas o usuário clicou "É o mesmo", cair no branch `criar` silenciosamente é o pior caso — adicionar um `console.warn` + fallback.
+- Verificar em `TransactionTable.tsx` que o estado local `reconciled` (linha 179) inicializa de `t.is_reconciled` a cada refetch (não ficar "grudado" no valor antigo por causa de `useState` inicial).
 
-Com isso, a linha "HOTE02/02" passa a chegar em `useImportMatching` com `installment_number=2, installments_total=2`, o guard estrito em `matching.ts:217-218` descarta a (1/2) e casa corretamente na (2/2).
+### 2) Resumo aprimorado no cabeçalho "Sistema × Extrato"
 
-## O que NÃO muda
+Arquivo: `src/components/lancamentos/import/ReconcileStep.tsx` (bloco de resumo, linhas ~441-506).
 
-- Nenhuma mudança em `matching.ts` (o guard já existe e funciona).
-- Nenhuma mudança na data usada para casar (continua `purchase_date_original` → bate com extrato).
-- Sem migração de dados. Sem rollback desta importação necessário; após o fix o usuário reimporta o extrato e a linha vai casar com a (2/2).
+Adicionar 2 linhas de contexto acima ou ao lado da grid de 3 colunas atual:
 
-## Validação
+```text
+Extrato original:  R$ 1.234,56   (N linhas)
+Já conciliado:   − R$   400,00   (K linhas casadas)
+─────────────────────────────
+Restante a tratar: R$   834,56
+```
 
-- Testar com "SALTO CORUMBA HOTE02/02" → deve sugerir a (2/2).
-- Testar caso já coberto "PARC 2/12" e "Loja - 3/10" → seguem funcionando (regex antiga era subconjunto).
-- Rodar `bunx vitest run src/lib/import/matching.test.ts`.
+- **Extrato original** = soma de todas as linhas selecionadas do extrato (não muda conforme o usuário interage).
+- **Já conciliado** = soma das linhas onde `matchActions[i] === "vincular"` (exact + tolerance + confirmadas via "É o mesmo").
+- **Restante** = original − conciliado (é o que hoje aparece implicitamente na coluna "Extrato").
+
+Manter a grid atual "Sistema × Extrato × Diferença" como está (ela compara fatura inteira × extrato inteiro — outra leitura). O novo bloco fica **acima**, com visual mais leve (texto + valores), para não competir com o card colorido de divergência.
+
+Aplicar tanto para modo `card` quanto `debit` (hoje o resumo só aparece em card — estender para débito também faz sentido, é a mesma leitura).
+
+## Fora de escopo
+
+- Deduplicação automática das transações duplicadas ("Barbearia" 10×) — anotar para depois.
+- Redesenhar fluxo importar-extrato vs. conciliar-cartão (assunto do plano anterior sobre integração automática).
