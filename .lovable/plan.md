@@ -1,20 +1,23 @@
-## Alinhar cabeçalho da fatura do cartão com os lançamentos normais
+## Botão "Concluir" quando não há nada a importar
 
-Arquivo: `src/components/lancamentos/TransactionTable.tsx` — componente `CardBillGroupRow` (linhas ~421-560).
+### Contexto
 
-Hoje as badges (`59 lançamentos`, `Paga`, `Conciliada`, `38/55 conciliados`, `Mês conciliado`) ficam **coladas no nome do cartão**, à esquerda. O valor fica solto no meio, e o botão "Pagar Fatura" empurra o menu. Os lançamentos normais seguem outra ordem: **título · valor · pill Conciliado · badge Pago · menu**.
+No modal `ImportStatementModal.tsx` (passo de conciliação, footer no bloco `cartao`/`debito`), o único botão de ação é `Importar N lançamentos`. Ele fica **desabilitado** quando `toImport === 0` (ou seja, `counts.vincular + counts.criar === 0`). Isso acontece, por exemplo, quando o extrato bateu 100% com o sistema e o usuário marcou tudo como **"Manter só o do sistema"** (ignorar). O usuário só tem o `X` no canto para sair, e não fica claro se isso "salva" alguma coisa (na prática, ignorar não altera nada — mas visualmente confunde).
 
-### Mudanças
+### Mudança
 
-1. **Remover** as badges de dentro do bloco do título (deixar só `<CreditCard />` + nome do cartão + eventual truncate).
-2. **Reordenar** os elementos à direita, na mesma sequência dos lançamentos normais:
-   - Valor (mesma largura/alinhamento — `text-right shrink-0`, mesmo `text-sm font-semibold`).
-   - Pill de conciliação (`Conciliada` / `X/Y conciliados` / vazio), no mesmo estilo `rounded-full border px-2 py-0.5 text-[10px]` das linhas de transação — cor conforme estado (emerald/amber).
-   - Badge de status (`Paga` / `Pendente` — hoje só temos `Paga`; adicionar variante secundária discreta quando a fatura ainda tem pendências, para bater com o padrão).
-   - Badge `Mês conciliado` (quando fechado) — manter, logo após o status.
-   - Contador `Nx lançamentos` — mover para **antes do valor** como texto sutil (`text-[10px] text-muted-foreground`), sem visual de badge, pra não competir com as pills à direita.
-   - Botão `Pagar Fatura` (quando aplicável) e menu `⋯` no final, como já estão.
-3. Garantir `gap-2` consistente entre as pills/badges à direita e mesmo `shrink-0` para não quebrar layout no responsivo.
-4. Manter o comportamento de clique (row toggle) e os `stopPropagation` das ações.
+Arquivo: `src/components/lancamentos/ImportStatementModal.tsx` — footer do passo `reconcile` (linhas ~1598-1607, e o equivalente no bloco `débito` ~1471-1485).
 
-Sem mudança de lógica — só reestruturação visual do JSX para espelhar o padrão dos lançamentos.
+Quando `toImport === 0` (nada a criar nem vincular), **substituir** o botão `Importar` desabilitado por um botão `Concluir` habilitado que chama `handleClose()`. Comportamento:
+
+- **`toImport > 0`** → mantém `Importar N lançamentos` como está hoje (aplica vínculos + cria novos).
+- **`toImport === 0`** → renderiza `Concluir` (ícone `Check`, variant default) que fecha o modal. Copy: *"Nada a importar — concluir"* com tooltip curto explicando que todas as linhas foram tratadas como "manter só o do sistema" / "ignorar", então nada precisa ser salvo.
+- Manter o `X` do canto funcionando como cancelar (sem mudança).
+
+Aplicar a mesma lógica nos dois footers (cartão e débito) para consistência.
+
+### Fora do escopo
+
+- Não mexer em `handleImport`, matching, ou lógica de reconciliação.
+- Não mudar `X` do header.
+- Só troca visual/UX do CTA final.
