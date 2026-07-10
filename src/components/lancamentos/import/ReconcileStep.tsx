@@ -215,6 +215,20 @@ export function ReconcileStep({
   const coverageTotal = indexed.length;
   const onlyStatementRows = newRows; // linhas presentes só no extrato
 
+  // Progresso da conciliação (linhas do extrato):
+  // - Original = soma de todas as linhas selecionadas do extrato
+  // - Conciliado = soma das linhas com ação "vincular" (exact + tolerance + "É o mesmo")
+  // - Restante = original − conciliado (o que ainda precisa virar novo/ignorado)
+  const reconciledRowsTotal = indexed
+    .filter(({ i }) => (matchActions[i] || "criar") === "vincular")
+    .reduce((s, { r }) => s + Math.abs(r.amount), 0);
+  const reconciledRowsCount = indexed.filter(
+    ({ i }) => (matchActions[i] || "criar") === "vincular"
+  ).length;
+  const remainingTotal = Math.max(0, statementTotal - reconciledRowsTotal);
+  const remainingCount = Math.max(0, coverageTotal - reconciledRowsCount);
+
+
 
 
   // Count of identical rows (same desc+amount+type) for the "×N" badge in "Criar no sistema".
