@@ -957,9 +957,10 @@ export function ImportStatementModal({
     setImporting(false);
 
     if (createOk) {
-      // If only links/replacements happened (no inserts), the page list won't
-      // auto-refresh — fire the global event so the UI updates immediately.
-      if (transactions.length === 0 && (linkOk > 0 || linkFail > 0 || replacedOk > 0)) {
+      // Always fire the refresh event when any link/replace occurred — the parent's
+      // onImport() only invalidates queries for freshly created rows, so linked
+      // (is_reconciled) and replaced rows would otherwise show stale state.
+      if (linkOk > 0 || linkFail > 0 || replacedOk > 0) {
         window.dispatchEvent(new Event("transaction-created"));
       }
 
