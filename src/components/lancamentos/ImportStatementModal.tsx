@@ -814,8 +814,14 @@ export function ImportStatementModal({
       const realIdx = rows.indexOf(r);
       const action = matchActions[realIdx] || "criar";
       if (action === "ignorar") return;
-      if (action === "vincular" && matchTargets[realIdx]) {
-        rowsToLink.push({ row: r, txId: matchTargets[realIdx] });
+      if (action === "vincular") {
+        const txId = matchTargets[realIdx];
+        if (txId) {
+          rowsToLink.push({ row: r, txId });
+        } else {
+          console.warn("[ImportStatement] 'vincular' sem matchTarget — caindo em 'criar'", { realIdx, row: r });
+          rowsToCreate.push(r);
+        }
       } else {
         rowsToCreate.push(r);
       }
