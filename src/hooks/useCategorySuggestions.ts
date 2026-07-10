@@ -59,6 +59,10 @@ export function useCategorySuggestions() {
 
       try {
         // ---- Stage 1: history match ----
+        // We look up not just the top-level `category`, but the full triple
+        // (category, subcategory, subcategory2) so we can propose the deepest
+        // leaf the user has consistently classified. `resolveCategoryPath` in
+        // the caller expands a leaf name back into the 3-level path.
         const validCatNames = new Set(categories.map((c) => c.name));
         const sinceISO = (() => {
           const d = new Date();
@@ -68,20 +72,33 @@ export function useCategorySuggestions() {
 
         const { data: history } = await supabase
           .from("transactions")
-          .select("description, category, type")
+          .select("description, category, subcategory, subcategory2, type")
           .eq("user_id", effectiveUserId)
           .not("category", "is", null)
           .neq("category", "Sem Categoria")
           .gte("payment_date", sinceISO)
           .limit(2000);
 
-        // Build token index: token → array of {category, type}
-        const tokenIdx = new Map<string, { category: string; type: string }[]>();
-        (history || []).forEach((h) => {
+        // Build token index: token → array of {category, subcategory, subcategory2, type}
+        type HistEntry = {
+          category: string;
+          subcategory: string | null;
+          subcategory2: string | null;
+          type: string;
+        };
+        const tokenIdx = new Map<string, HistEntry[]>();
+        (history || []).forEach((h: any) => {
           if (!h.category || !validCatNames.has(h.category)) return;
+          const entry: HistEntry = {
+            category: h.category,
+            subcategory: h.subcategory && validCatNames.has(h.subcategory) ? h.subcategory : null,
+            subcategory2:
+              h.subcategory2 && validCatNames.has(h.subcategory2) ? h.subcategory2 : null,
+            type: h.type,
+          };
           tokenize(h.description || "").forEach((tok) => {
             const arr = tokenIdx.get(tok) || [];
-            arr.push({ category: h.category, type: h.type });
+            arr.push(entry);
             tokenIdx.set(tok, arr);
           });
         });
@@ -93,36 +110,51 @@ export function useCategorySuggestions() {
             unresolved.push(row);
             continue;
           }
-          // Score each category by token+type matches
-          const counts = new Map<string, number>();
+          // Score each triple by token+type matches
+          const tripleCounts = new Map<string, { entry: HistEntry; score: number }>();
           tokens.forEach((tok) => {
             const hits = tokenIdx.get(tok) || [];
             hits.forEach((h) => {
-              if (h.type === row.type) {
-                counts.set(h.category, (counts.get(h.category) || 0) + 1);
-              }
+              if (h.type !== row.type) return;
+              const key = `${h.category}||${h.subcategory ?? ""}||${h.subcategory2 ?? ""}`;
+              const cur = tripleCounts.get(key);
+              if (cur) cur.score += 1;
+              else tripleCounts.set(key, { entry: h, score: 1 });
             });
           });
-          if (counts.size === 0) {
+          if (tripleCounts.size === 0) {
             unresolved.push(row);
             continue;
           }
-          // Pick top category
-          let bestCat: string | null = null;
-          let bestScore = 0;
-          for (const [cat, score] of counts.entries()) {
-            if (score > bestScore) {
-              bestCat = cat;
-              bestScore = score;
+          // Pick top triple (deepest path wins tie-breaks)
+          let best: { entry: HistEntry; score: number } | null = null;
+          for (const cur of tripleCounts.values()) {
+            if (!best) { best = cur; continue; }
+            if (cur.score > best.score) { best = cur; continue; }
+            if (cur.score === best.score) {
+              const depthCur = (cur.entry.subcategory2 ? 3 : cur.entry.subcategory ? 2 : 1);
+              const depthBest = (best.entry.subcategory2 ? 3 : best.entry.subcategory ? 2 : 1);
+              if (depthCur > depthBest) best = cur;
             }
           }
-          // Require at least 2 token matches OR a single unique strong match
-          if (bestCat && bestScore >= 2) {
-            result[row.index] = { category: bestCat, source: "history", confidence: bestScore };
+          // Require at least 2 token matches on the winning triple
+          if (best && best.score >= 2) {
+            // Return the DEEPEST leaf name so resolveCategoryPath expands the
+            // full 3-level path on the caller side.
+            const leaf =
+              best.entry.subcategory2 || best.entry.subcategory || best.entry.category;
+            result[row.index] = {
+              category: leaf,
+              source: "history",
+              confidence: best.score,
+              subcategory: best.entry.subcategory ?? undefined,
+              subcategory2: best.entry.subcategory2 ?? undefined,
+            };
           } else {
             unresolved.push(row);
           }
         }
+
 
         // ---- Stage 2: AI fallback ----
         if (unresolved.length > 0) {
