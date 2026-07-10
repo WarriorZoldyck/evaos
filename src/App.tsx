@@ -38,6 +38,7 @@ import HubMeuWhatsApp from "@/pages/hub/HubMeuWhatsApp";
 import Planos from "@/pages/Planos";
 import MinhaAssinatura from "@/pages/MinhaAssinatura";
 import ConciliacaoBancaria from "@/pages/ConciliacaoBancaria";
+import OAuthConsent from "@/pages/OAuthConsent";
 import { GraduationCap } from "lucide-react";
 
 import { toast } from "sonner";
@@ -67,7 +68,7 @@ const App = () => {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/auth" element={<Auth />} />
-              <Route element={<AppLayout />}>
+              <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
                 <Route path="/planos" element={<Planos />} />
                 <Route path="/configuracoes/assinatura" element={<MinhaAssinatura />} />
                 <Route path="/dashboard" element={<Dashboard />} />
