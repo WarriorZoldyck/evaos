@@ -2123,6 +2123,18 @@ export type Database = {
         Args: { account_id_param: string }
         Returns: number
       }
+      get_account_prior_balance: {
+        Args: {
+          account_id_param: string
+          account_type_param: string
+          date_from: string
+        }
+        Returns: number
+      }
+      get_accounts_paid_delta: {
+        Args: { bank_ids: string[]; wallet_ids: string[] }
+        Returns: number
+      }
       get_public_tables: {
         Args: never
         Returns: {
