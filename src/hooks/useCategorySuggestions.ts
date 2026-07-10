@@ -6,7 +6,10 @@ export interface SuggestionSource {
   category: string;
   source: "history" | "ai";
   confidence?: number;
+  subcategory?: string;
+  subcategory2?: string;
 }
+
 
 interface NewRowInput {
   index: number;
