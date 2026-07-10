@@ -216,43 +216,26 @@ export function useDashboardData(filters: DashboardFilters) {
       setInitialBalances(bankSum + walletSum);
 
       // Calculate saldo atual (initial + all paid transactions)
+      // Uses a Postgres RPC so the sum is done server-side and is NOT capped
+      // by PostgREST's default 1000-row limit (which was truncating the
+      // balance for users with a lot of paid history).
       const bankIds = bankData?.map(b => b.id) || [];
       const walletIds = accountId ? [] : (walletData?.map(w => w.id) || []);
 
       let totalPaidDelta = 0;
-
-      if (bankIds.length > 0) {
-        const orParts: string[] = [];
-        orParts.push(`bank_account_id.in.(${bankIds.join(",")})`);
-        if (walletIds.length > 0) {
-          orParts.push(`wallet_id.in.(${walletIds.join(",")})`);
-        }
-        
-        let txQuery = supabase
-          .from("transactions")
-          .select("type, amount")
-          .eq("status", "Pago")
-          .or(orParts.join(","));
-
-        const { data: txData } = await txQuery;
-        if (txData) {
-          totalPaidDelta = txData.reduce((acc, t) => acc + (t.type === "receita" ? Number(t.amount) : -Number(t.amount)), 0);
-        }
-      } else if (walletIds.length > 0) {
-        let txQuery = supabase
-          .from("transactions")
-          .select("type, amount")
-          .eq("status", "Pago")
-          .in("wallet_id", walletIds);
-
-        const { data: txData } = await txQuery;
-        if (txData) {
-          totalPaidDelta = txData.reduce((acc, t) => acc + (t.type === "receita" ? Number(t.amount) : -Number(t.amount)), 0);
+      if (bankIds.length > 0 || walletIds.length > 0) {
+        const { data: deltaData, error: deltaErr } = await supabase.rpc(
+          "get_accounts_paid_delta",
+          { bank_ids: bankIds, wallet_ids: walletIds },
+        );
+        if (!deltaErr && deltaData !== null && deltaData !== undefined) {
+          totalPaidDelta = Number(deltaData) || 0;
         }
       }
 
       setSaldoAtual(bankSum + walletSum + totalPaidDelta);
     };
+
 
     fetchCards();
     fetchCategories();
