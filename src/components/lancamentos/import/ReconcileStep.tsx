@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Check,
   Link2,
+  Plus,
   Search,
   X,
   ArrowLeftRight,
@@ -12,6 +13,7 @@ import {
   ShieldCheck,
   AlertTriangle,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -646,17 +648,23 @@ export function ReconcileStep({
               <Alert className="mb-2 py-2 px-3 bg-amber-500/5 border-amber-500/30">
                 <Info className="h-3.5 w-3.5 text-amber-600" />
                 <AlertDescription className="text-[11px] leading-snug ml-1">
-                  Achamos um lançamento no sistema com o mesmo valor e data próxima, mas com descrição diferente. Se for a mesma compra, clique em <strong>"É o mesmo"</strong> para vincular. Caso contrário, mantenha como <strong>criar novo</strong>.
+                  <strong>Atenção à data de pagamento.</strong> Achamos um lançamento no sistema com o mesmo valor e data próxima, mas descrição diferente. Confira se as duas linhas são da <strong>mesma fatura</strong> — pode ser uma compra parecida de outro mês. Se for a mesma compra, clique em <strong>"É o mesmo"</strong>. Se for uma compra nova (mesmo que parecida), clique em <strong>"Criar novo"</strong>.
                 </AlertDescription>
               </Alert>
+
               <div className="border border-amber-500/30 rounded-lg overflow-hidden divide-y bg-amber-500/[0.02]">
                 {suggestedRows.map(({ r, i }) => {
                   const cand = matches[i]!.best!.candidate;
+                  const candDate = cand.competence_date || cand.payment_date;
                   const daysOff = Math.round(
                     (new Date(r.date + "T00:00:00").getTime() -
-                      new Date((cand.competence_date || cand.payment_date) + "T00:00:00").getTime()) /
+                      new Date(candDate + "T00:00:00").getTime()) /
                       86400000
                   );
+                  // "Different month" flag: helps the user spot that the system
+                  // candidate is likely from a previous/next bill cycle.
+                  const differentMonth =
+                    r.date.slice(0, 7) !== (candDate || "").slice(0, 7);
                   return (
                     <div key={i} className="grid grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)_auto] gap-4 items-start p-3 hover:bg-accent/30">
                       <div className="min-w-0">
@@ -669,6 +677,15 @@ export function ReconcileStep({
                         {daysOff !== 0 && (
                           <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-amber-500/50 text-amber-700 font-mono">
                             {daysOff > 0 ? "+" : ""}{daysOff}d
+                          </Badge>
+                        )}
+                        {differentMonth && (
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] px-1 py-0 h-4 border-amber-600 text-amber-800 bg-amber-500/10 gap-0.5"
+                            title="A data do extrato e a do sistema caem em meses diferentes — provavelmente faturas diferentes."
+                          >
+                            <AlertTriangle className="h-2.5 w-2.5" /> mês diferente
                           </Badge>
                         )}
                       </div>
@@ -694,7 +711,7 @@ export function ReconcileStep({
                           subcategory2={resolveCategoryLabel((cand as any).subcategory2)}
                         />
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
                         <Button
                           size="sm"
                           variant="outline"
@@ -708,6 +725,18 @@ export function ReconcileStep({
                         </Button>
                         <Button
                           size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1 border-sky-500/60 text-sky-700 hover:bg-sky-500/10"
+                          onClick={() => {
+                            onTargetChange(i, null);
+                            onActionChange(i, "criar");
+                          }}
+                          title="Criar como novo lançamento — a linha vai para a seção 'Só no extrato' para você categorizar."
+                        >
+                          <Plus className="h-3 w-3" /> Criar novo
+                        </Button>
+                        <Button
+                          size="sm"
                           variant="ghost"
                           className="h-7 text-xs gap-1 text-muted-foreground"
                           onClick={() => onActionChange(i, "ignorar")}
@@ -718,6 +747,7 @@ export function ReconcileStep({
                     </div>
                   );
                 })}
+
               </div>
             </section>
           )}

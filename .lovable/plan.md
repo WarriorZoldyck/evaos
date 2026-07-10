@@ -1,72 +1,58 @@
-## Diagnóstico do erro da Sabrina + plano de correção (sem separar cartão/conta agora)
+## Clareza na conciliação do cartão + sugestão completa de categoria/sub/sub-sub
 
-### O que a Sabrina relatou
+Foco em 3 melhorias, todas na tela de conciliação do extrato de cartão (`ReconcileStep.tsx` + `useCategorySuggestions.ts` + edge `suggest-categories`). Nada muda em conta débito, cria/edita transação ou matching.
 
-Nos prints/vídeos enviados:
+### 1. Aviso claro sobre data de pagamento na seção "Provável — confirmar"
 
-- **Saldo real da conta (extrato do banco):** R$ 4.569,48
-- **Saldo mostrado no EVA OS:** R$ 5.232,00
-- **Diferença:** ~R$ 662,52 (o sistema está **maior** que a realidade)
-- Um segundo caso: "Saldo do dia Cc + ContaMax principal R$ 2.519,47" vs card "SALDO ATUAL R$ 2.098" (diferença ~R$ 421)
+**Onde:** `ReconcileStep.tsx`, bloco `suggestedRows` (linhas ~634-722), no alerta amarelo (linha 649).
 
-### Causa raiz mais provável (encontrada no código)
+**Mudança:** trocar o texto do Alert para deixar explícito que **valor bate mas a data pode ser de outra fatura**, e que o usuário precisa conferir se a compra do extrato corresponde ao mesmo mês da compra do sistema. Texto proposto:
 
-No `useDashboardData.ts`, a função `fetchBalances` calcula o "Saldo Atual" assim:
+> **Atenção à data de pagamento.** Achamos um lançamento no sistema com valor igual e data próxima, mas descrição diferente. Confira se as duas linhas são da **mesma fatura** — pode ser uma compra parecida de outro mês. Se for a mesma compra, clique em **"É o mesmo"**; se for uma compra nova (mesmo que parecida), clique em **"Criar novo"**.
 
-```ts
-// linha ~231-240
-let txQuery = supabase
-  .from("transactions")
-  .select("type, amount")
-  .eq("status", "Pago")
-  .or(`bank_account_id.in.(${bankIds}),wallet_id.in.(${walletIds})`);
-const { data: txData } = await txQuery;
-totalPaidDelta = txData.reduce(...);
-```
+Além disso, quando `daysOff` cruzar o limite do mês (ex.: linha do extrato 01/05 vs. candidato 09/05 e vice-versa), mostrar um badge extra `⚠ mês diferente` ao lado do `+Nd` que já existe.
 
-**Não há `.limit()` nem `.range()` de paginação.** O Supabase aplica **limite silencioso de 1.000 linhas**. Se a Sabrina tem mais de 1.000 lançamentos pagos históricos naquelas contas (muito provável para uma clínica em operação há meses), a soma é **truncada** — o "Saldo Atual" fica errado para mais ou para menos dependendo de quais 1.000 entraram.
+### 2. Botão explícito "Criar novo" ao lado de "É o mesmo" / "Ignorar"
 
-Sintoma bate: valor não confere com o extrato, diferença arbitrária (~R$ 662, ~R$ 421), fica pior conforme a base cresce, e aparece de forma inconsistente entre contas (cada conta tem volume diferente de histórico).
+**Onde:** mesma seção, botões nas linhas ~697-717.
 
-Outros dois pontos secundários já mapeados no mesmo arquivo:
+**Hoje:** só existem "É o mesmo" e "Ignorar". "Criar novo" é o estado default implícito — invisível.
 
-- `AccountStatementModal.tsx` calcula `priorBalance` (saldo anterior do mês no extrato) também **sem paginação** (linhas ~180-215). Mesmo problema: extratos antigos truncam. Isso explica por que o "Saldo do dia" no extrato do sistema não bate com "SALDO ATUAL" do dashboard — os dois usam consultas diferentes, com truncamentos diferentes.
-- A RPC `get_account_balance` (usada em `ConciliacaoBancaria`) usa `LEFT JOIN` no Postgres, **sem** o limite de 1.000 — ou seja, se a conciliação bate mas o dashboard não, isso reforça a hipótese.
+**Mudança:** adicionar terceiro botão `Criar novo` (ícone `Plus`, cor sky/primária) que:
 
-### O que NÃO vou fazer agora
+- Chama `onActionChange(i, "criar")` explicitamente.
+- Limpa `targetChange(i, null)` (garante que não vincule).
+- Move visualmente a linha da seção "Provável" para "Só no extrato — o que fazer?", onde os seletores de categoria aparecem e o botão "Concluir/Importar" do rodapé já contabiliza a criação (a lógica de conclusão já responde a `counts.criar` — nenhuma mudança em `handleImport`).
 
-- **Não vou separar** o `ImportStatementModal` em cartão + conta. Reafirmo o plano anterior: o modal é altamente parametrizado (~30 pontos de ramificação) e acabou de estabilizar. Duplicar arquivos agora regride correções recentes e dobra a superfície de erro no meio da investigação. Adiamos para depois que o débito estiver estável.
+Efeito prático: o usuário clica "Criar novo" → linha vai pro bloco de novas → categoria auto-sugerida aparece → botão do rodapé "Importar N lançamentos" já reflete a nova linha, permitindo concluir imediatamente.
 
-### Correção proposta (cirúrgica, invisível para o usuário até funcionar melhor)
+### 3. Trazer categoria + subcategoria + sub-sub na sugestão automática
 
-**Arquivo 1: `src/hooks/useDashboardData.ts` (função `fetchBalances`, ~linhas 200-255)**
+**Diagnóstico:** o `useCategorySuggestions` só sugere `category` (nível 1). O import salva `subcategory` e `subcategory2` corretamente (`ImportStatementModal.tsx` linhas 905-919), mas eles nunca são pré-preenchidos porque o hook não os devolve.
 
-Substituir a soma no cliente por uma **RPC nova** `get_accounts_balance_bulk(bank_ids uuid[], wallet_ids uuid[])` que faz a soma direto no Postgres (sem limite de 1.000). A RPC retorna `{ paid_delta: numeric }`. Reutiliza a lógica já validada de `get_account_balance`, só que aceita arrays.
+**Mudança em `useCategorySuggestions.ts`:**
 
-Vantagens:
-- Elimina o teto de 1.000 linhas de vez.
-- Reduz payload de rede (não traz N linhas, só a soma).
-- Mais rápido.
+- Selecionar também `subcategory` e `subcategory2` no histórico (`select("description, category, subcategory, subcategory2, type")`).
+- Ampliar `SuggestionSource` para incluir `subcategory?: string` e `subcategory2?: string`.
+- No agrupamento por votos, contar a **tripla** `(category, subcategory, subcategory2)`. Quando houver empate, escolher a tripla com mais votos; se subcategoria/sub-sub ficarem em minoria, cair para nível 2 e depois nível 1 (nunca inventar um nível se o histórico não apoiar).
+- Validar que os nomes existem na árvore atual de categorias antes de aplicar (evita sugerir sub/sub-sub que o usuário renomeou/apagou).
 
-**Arquivo 2: `src/components/contas/AccountStatementModal.tsx` (~linhas 170-215)**
+**Mudança em `ReconcileStep.tsx` (efeito colateral):**
 
-Trocar as duas queries de `priorBalance` (direct + bill) por uma RPC `get_account_prior_balance(account_id uuid, account_type text, date_from date)` que devolve o delta acumulado até `date_from`. Sem limite de 1.000.
+- Quando aplicar sugestão inicial no `rowCategories[i]`, também aplicar `subcategory` e `subcategory2` do `SuggestionSource`.
+- O indicador visual "baseado no histórico / sugerido pela IA" (linhas 890-900) já cobre; nenhuma UI nova.
 
-**Migration nova:** cria as duas funções `SECURITY DEFINER` com `set search_path = public`, respeitando RLS por `auth.uid() = user_id` na cláusula `WHERE` interna.
+**Edge function `suggest-categories`:** manter apenas nível 1 por enquanto (LLM tem que aprender árvore inteira; risco/custo alto). A cobertura efetiva de sub/sub-sub vem do histórico, que é onde o usuário já classificou consistentemente. **Fora de escopo agora:** ensinar a IA a sugerir sub-níveis.
 
-### Verificação após o fix
+### Fora de escopo (não mexo agora)
 
-1. Rodar SQL de auditoria comparando, para a Sabrina, o "Saldo Atual" atual (via `useDashboardData` antigo) vs. o `initial_balance + SUM` completo. Confirmar que a diferença bate com os R$ 662,52 relatados.
-2. Após aplicar a RPC, o valor no dashboard deve bater com o extrato do banco.
-3. Não altero nenhum comportamento de importação, criação ou conciliação — só a **leitura** do saldo. Zero risco para dados existentes.
+- Separação cartão × débito em componentes distintos (já discutido, adiamos).
+- Alterar `handleImport`, criação de lançamentos ou matching.
+- Mudar a seção "Só no sistema" (orphans).
+- Sugestão de sub-categorias via IA (só via histórico por ora).
 
-### Passos
+### Verificação
 
-1. Escrever a migration com as duas RPCs + `GRANT EXECUTE` para `authenticated`.
-2. Substituir as chamadas em `useDashboardData.ts` e `AccountStatementModal.tsx`.
-3. Rodar uma query de auditoria (via `supabase--read_query`) na base da Sabrina para confirmar diferença antes e depois.
-4. Pedir para ela reabrir o dashboard e conferir se o Saldo Atual = extrato do banco.
-
-### Pergunta rápida antes de implementar
-
-Consigo o **e-mail (ou user_id)** da Sabrina para eu rodar a query de auditoria na base dela e confirmar que é exatamente o problema do teto de 1.000 antes de aplicar a migration? Assim eu meço o antes/depois e te dou a prova concreta.
+1. Rebuild + typecheck.
+2. Simular no preview: extrato com uma compra "Provável" — conferir texto do alerta, badge de mês diferente e comportamento do botão "Criar novo".
+3. Extrato com merchant recorrente (ex.: "Uber") já categorizado no histórico com sub e sub-sub — conferir que os 3 níveis vêm preenchidos ao mudar para "criar novo".
