@@ -733,8 +733,13 @@ export function ReconcileStep({
                           variant="outline"
                           className="h-7 text-xs gap-1 border-sky-500/60 text-sky-700 hover:bg-sky-500/10"
                           onClick={() => {
-                            onTargetChange(i, null);
+                            onTargetChange(i, null as any);
                             onActionChange(i, "criar");
+                            setDismissedSuggestions((prev) => {
+                              const next = new Set(prev);
+                              next.add(i);
+                              return next;
+                            });
                           }}
                           title="Criar como novo lançamento — a linha vai para a seção 'Só no extrato' para você categorizar."
                         >
