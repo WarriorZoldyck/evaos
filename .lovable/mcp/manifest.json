@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/functions/v1/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://rrrnnrjefyffllnrwhkz.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "eva-os-mcp",
+      "version": "0.1.0",
+      "title": "EVA OS"
+    },
+    "tools": [
+      {
+        "name": "list_transactions",
+        "title": "Listar lançamentos",
+        "description": "Lista lançamentos financeiros (receitas/despesas) do usuário autenticado no EVA OS. Aceita filtros de intervalo de data de pagamento, tipo e status. Ordenado por data desc.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "start_date": {
+              "type": "string",
+              "description": "Data inicial de payment_date (YYYY-MM-DD). Opcional."
+            },
+            "end_date": {
+              "type": "string",
+              "description": "Data final de payment_date (YYYY-MM-DD). Opcional."
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "receita",
+                "despesa"
+              ],
+              "description": "Filtrar por tipo."
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "Pago",
+                "Pendente"
+              ],
+              "description": "Filtrar por status."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Máx. de resultados (padrão 50)."
+            }
+          }
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "create_transaction",
+        "title": "Criar lançamento",
+        "description": "Cria um lançamento (receita ou despesa) no EVA OS para o usuário autenticado. Vincule a uma conta bancária, cartão ou carteira usando list_accounts para obter o ID.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Descrição do lançamento."
+            },
+            "amount": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Valor absoluto (positivo)."
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "receita",
+                "despesa"
+              ],
+              "description": "Tipo do lançamento."
+            },
+            "payment_date": {
+              "type": "string",
+              "description": "Data de pagamento (YYYY-MM-DD)."
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "Pago",
+                "Pendente"
+              ],
+              "description": "Status. Padrão: Pago."
+            },
+            "category": {
+              "type": "string",
+              "description": "Categoria (texto livre ou UUID de categoria)."
+            },
+            "contact_name": {
+              "type": "string",
+              "description": "Nome do contato/fornecedor/cliente."
+            },
+            "notes": {
+              "type": "string",
+              "description": "Observações."
+            },
+            "bank_account_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "ID da conta bancária."
+            },
+            "credit_card_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "ID do cartão de crédito."
+            },
+            "wallet_id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "ID da carteira."
+            }
+          },
+          "required": [
+            "description",
+            "amount",
+            "type",
+            "payment_date"
+          ]
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_accounts",
+        "title": "Listar contas",
+        "description": "Lista todas as contas do usuário: contas bancárias, cartões de crédito e carteiras. Retorna os IDs necessários para create_transaction.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_categories",
+        "title": "Listar categorias",
+        "description": "Lista todas as categorias do usuário (receitas e despesas) com hierarquia.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "financial_summary",
+        "title": "Resumo financeiro",
+        "description": "Retorna resumo financeiro do período: total de receitas, despesas, saldo, e breakdown por categoria. Considera apenas lançamentos com status Pago.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "start_date": {
+              "type": "string",
+              "description": "Data inicial do período (YYYY-MM-DD)."
+            },
+            "end_date": {
+              "type": "string",
+              "description": "Data final do período (YYYY-MM-DD)."
+            }
+          },
+          "required": [
+            "start_date",
+            "end_date"
+          ]
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
