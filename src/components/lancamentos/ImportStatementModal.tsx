@@ -1595,16 +1595,27 @@ export function ImportStatementModal({
                     </label>
                   </div>
                 )}
-                <Button
-                  onClick={handleImport}
-                  disabled={importing || toImport === 0 || blockedByDivergence}
-                  className="gap-2 mt-1"
-                >
-                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {importType === "cartao"
-                    ? `Importar ${toImport} lançamento${toImport === 1 ? "" : "s"} para a fatura`
-                    : `Importar ${toImport} lançamento${toImport === 1 ? "" : "s"}`}
-                </Button>
+                {toImport === 0 ? (
+                  <Button
+                    onClick={handleClose}
+                    className="gap-2 mt-1"
+                    title="Todas as linhas foram tratadas como 'manter só o do sistema' ou 'ignorar' — nada precisa ser salvo."
+                  >
+                    <Check className="h-4 w-4" />
+                    Nada a importar — concluir
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleImport}
+                    disabled={importing || blockedByDivergence}
+                    className="gap-2 mt-1"
+                  >
+                    {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    {importType === "cartao"
+                      ? `Importar ${toImport} lançamento${toImport === 1 ? "" : "s"} para a fatura`
+                      : `Importar ${toImport} lançamento${toImport === 1 ? "" : "s"}`}
+                  </Button>
+                )}
               </div>
             </DialogFooter>
           );
