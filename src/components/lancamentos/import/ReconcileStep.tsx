@@ -215,6 +215,20 @@ export function ReconcileStep({
   const coverageTotal = indexed.length;
   const onlyStatementRows = newRows; // linhas presentes só no extrato
 
+  // Progresso da conciliação (linhas do extrato):
+  // - Original = soma de todas as linhas selecionadas do extrato
+  // - Conciliado = soma das linhas com ação "vincular" (exact + tolerance + "É o mesmo")
+  // - Restante = original − conciliado (o que ainda precisa virar novo/ignorado)
+  const reconciledRowsTotal = indexed
+    .filter(({ i }) => (matchActions[i] || "criar") === "vincular")
+    .reduce((s, { r }) => s + Math.abs(r.amount), 0);
+  const reconciledRowsCount = indexed.filter(
+    ({ i }) => (matchActions[i] || "criar") === "vincular"
+  ).length;
+  const remainingTotal = Math.max(0, statementTotal - reconciledRowsTotal);
+  const remainingCount = Math.max(0, coverageTotal - reconciledRowsCount);
+
+
 
 
   // Count of identical rows (same desc+amount+type) for the "×N" badge in "Criar no sistema".
@@ -437,6 +451,48 @@ export function ReconcileStep({
         </div>
 
         <div className="flex-1 overflow-auto space-y-4 pr-1">
+          {/* Progresso da conciliação — linhas do extrato (ambos os modos) */}
+          {coverageTotal > 0 && (
+            <div className="rounded-lg border border-border/70 bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                  Progresso da conciliação
+                </p>
+                <span className="text-[10px] text-muted-foreground">
+                  {reconciledRowsCount}/{coverageTotal} linha{coverageTotal === 1 ? "" : "s"} conciliada{reconciledRowsCount === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Extrato original</p>
+                  <p className="font-mono text-sm">{fmt(statementTotal)}</p>
+                  <p className="text-[10px] text-muted-foreground">{coverageTotal} linha{coverageTotal === 1 ? "" : "s"} selecionada{coverageTotal === 1 ? "" : "s"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-emerald-700">Já conciliado</p>
+                  <p className="font-mono text-sm text-emerald-700">− {fmt(reconciledRowsTotal)}</p>
+                  <p className="text-[10px] text-muted-foreground">{reconciledRowsCount} vinculada{reconciledRowsCount === 1 ? "" : "s"} ao sistema</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Restante a tratar</p>
+                  <p className={`font-mono text-sm ${remainingTotal < 0.01 ? "text-emerald-700" : "text-foreground"}`}>
+                    {fmt(remainingTotal)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {remainingCount === 0 ? "tudo resolvido" : `${remainingCount} linha${remainingCount === 1 ? "" : "s"} pendente${remainingCount === 1 ? "" : "s"}`}
+                  </p>
+                </div>
+              </div>
+              {/* Barra de progresso */}
+              <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 transition-all"
+                  style={{ width: `${statementTotal > 0 ? Math.min(100, (reconciledRowsTotal / statementTotal) * 100) : 0}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Sistema × Extrato — fatura-level summary (card mode) */}
           {isCardMode && (
             <div

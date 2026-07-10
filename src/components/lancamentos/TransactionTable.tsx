@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -177,6 +177,10 @@ function TransactionRow({
   const contactName = getContactName(t, suppliers, clients);
   const peer = t.transfer_id ? transferPeerAccount?.get(t.id) : undefined;
   const [reconciled, setReconciled] = useState<boolean>(!!t.is_reconciled);
+  // Sync local state when the underlying prop changes (e.g. after import/refetch)
+  useEffect(() => {
+    setReconciled(!!t.is_reconciled);
+  }, [t.is_reconciled, t.id]);
   const handleToggleReconciled = async (checked: boolean | "indeterminate") => {
     const next = checked === true;
     const prev = reconciled;
