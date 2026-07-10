@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Check,
   Link2,
+  Plus,
   Search,
   X,
   ArrowLeftRight,
@@ -12,6 +13,7 @@ import {
   ShieldCheck,
   AlertTriangle,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
