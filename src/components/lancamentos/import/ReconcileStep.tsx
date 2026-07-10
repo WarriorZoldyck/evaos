@@ -646,9 +646,10 @@ export function ReconcileStep({
               <Alert className="mb-2 py-2 px-3 bg-amber-500/5 border-amber-500/30">
                 <Info className="h-3.5 w-3.5 text-amber-600" />
                 <AlertDescription className="text-[11px] leading-snug ml-1">
-                  Achamos um lançamento no sistema com o mesmo valor e data próxima, mas com descrição diferente. Se for a mesma compra, clique em <strong>"É o mesmo"</strong> para vincular. Caso contrário, mantenha como <strong>criar novo</strong>.
+                  <strong>Atenção à data de pagamento.</strong> Achamos um lançamento no sistema com o mesmo valor e data próxima, mas descrição diferente. Confira se as duas linhas são da <strong>mesma fatura</strong> — pode ser uma compra parecida de outro mês. Se for a mesma compra, clique em <strong>"É o mesmo"</strong>. Se for uma compra nova (mesmo que parecida), clique em <strong>"Criar novo"</strong>.
                 </AlertDescription>
               </Alert>
+
               <div className="border border-amber-500/30 rounded-lg overflow-hidden divide-y bg-amber-500/[0.02]">
                 {suggestedRows.map(({ r, i }) => {
                   const cand = matches[i]!.best!.candidate;
