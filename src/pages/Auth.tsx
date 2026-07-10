@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +10,17 @@ import { toast } from "sonner";
 import { Loader2, BarChart3, Wallet, Shield, Zap, Users } from "lucide-react";
 import evaLogo from "@/assets/eva-os-logo.jpeg";
 
+// Only same-origin relative paths are honored, to prevent open-redirect abuse.
+function safeNextPath(next: string | null): string {
+  if (!next) return "/dashboard";
+  if (!next.startsWith("/") || next.startsWith("//")) return "/dashboard";
+  return next;
+}
+
 export default function Auth() {
   const { user, loading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const nextPath = safeNextPath(searchParams.get("next"));
 
   if (loading) {
     return (
@@ -22,7 +31,7 @@ export default function Auth() {
   }
 
   if (user) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={nextPath} replace />;
   }
 
   return (
