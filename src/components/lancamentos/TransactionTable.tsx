@@ -434,68 +434,20 @@ function CardGroupHeader({
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
           <span className="text-sm font-semibold text-foreground truncate">
             {group.cardName}
           </span>
-          <Badge variant="secondary" className="text-[10px] shrink-0">
-            {txCount} lançamento{txCount !== 1 ? "s" : ""}
-          </Badge>
-
-          {isPaid && (
-            <TooltipProvider delayDuration={150}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
-                    <CheckCircle2 className="h-2.5 w-2.5" /> Paga
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  Todos os lançamentos desta fatura estão pagos.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-
-          {isFullyReconciled && (
-            <TooltipProvider delayDuration={150}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-sky-600 hover:bg-sky-700 text-white border-0">
-                    <Link2 className="h-2.5 w-2.5" /> Conciliada
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  Todos os lançamentos foram conciliados com o extrato.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-
-          {!isFullyReconciled && isPartiallyReconciled && (
-            <Badge variant="outline" className="text-[10px] shrink-0 gap-0.5 border-amber-500/40 text-amber-700">
-              <Link2 className="h-2.5 w-2.5" /> {reconciledCount}/{txCount} conciliados
-            </Badge>
-          )}
-
-          {isClosed && (
-            <TooltipProvider delayDuration={150}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge className="text-[10px] shrink-0 gap-0.5 bg-emerald-700 hover:bg-emerald-800 text-white border-0">
-                    <Lock className="h-2.5 w-2.5" /> Mês conciliado
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs max-w-[240px]">
-                  Fechado em {new Date(closed!.closed_at).toLocaleDateString("pt-BR")}. Nenhum lançamento pode entrar ou sair até reabrir.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
         </div>
       </div>
 
+      {/* Contador de lançamentos — sutil, à esquerda do valor */}
+      <span className="hidden md:inline text-[10px] text-muted-foreground shrink-0">
+        {txCount} lançamento{txCount !== 1 ? "s" : ""}
+      </span>
+
+      {/* Valor */}
       <div className="text-right shrink-0">
         <span className={`text-sm font-semibold ${
           group.totalAmount > 0
@@ -507,6 +459,66 @@ function CardGroupHeader({
           {group.totalAmount > 0 ? "- " : group.totalAmount < 0 ? "+ " : ""}{formatCurrency(Math.abs(group.totalAmount))}
         </span>
       </div>
+
+      {/* Pill de conciliação — mesmo estilo dos lançamentos normais */}
+      {isFullyReconciled ? (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="shrink-0 hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-700 dark:text-sky-400 border-sky-500/40">
+                <Link2 className="h-3 w-3" /> Conciliada
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Todos os lançamentos foram conciliados com o extrato.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : isPartiallyReconciled ? (
+        <span className="shrink-0 hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-transparent text-amber-700 dark:text-amber-400 border-amber-500/40">
+          <Link2 className="h-3 w-3" /> {reconciledCount}/{txCount}
+        </span>
+      ) : (
+        <span className="shrink-0 hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium bg-transparent text-muted-foreground border-border">
+          <Link2 className="h-3 w-3" /> Conciliar
+        </span>
+      )}
+
+      {/* Status da fatura */}
+      {isPaid ? (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge className="text-[10px] shrink-0 gap-0.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0 hidden sm:inline-flex">
+                <CheckCircle2 className="h-2.5 w-2.5" /> Paga
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Todos os lançamentos desta fatura estão pagos.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      ) : (
+        <Badge variant="secondary" className="text-[10px] shrink-0 hidden sm:inline-flex">
+          Pendente
+        </Badge>
+      )}
+
+      {/* Mês conciliado (fechado) */}
+      {isClosed && (
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge className="text-[10px] shrink-0 gap-0.5 bg-emerald-700 hover:bg-emerald-800 text-white border-0 hidden sm:inline-flex">
+                <Lock className="h-2.5 w-2.5" /> Mês conciliado
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs max-w-[240px]">
+              Fechado em {new Date(closed!.closed_at).toLocaleDateString("pt-BR")}. Nenhum lançamento pode entrar ou sair até reabrir.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       {group.pendingCount > 0 && !isClosed && (
         <Button
@@ -522,6 +534,7 @@ function CardGroupHeader({
           Pagar Fatura
         </Button>
       )}
+
 
       {(onClose || onReopen) && (
         <DropdownMenu>
