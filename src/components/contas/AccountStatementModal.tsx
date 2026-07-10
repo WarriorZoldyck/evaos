@@ -185,40 +185,21 @@ export function AccountStatementModal({
     }
 
     const fetchPrior = async () => {
-      // Direct (non-card) prior transactions
-      let directQ = supabase
-        .from("transactions")
-        .select("type, amount")
-        .eq("status", "Pago")
-        .is("credit_card_id", null)
-        .lt("payment_date", dateFrom);
-      if (accountType === "bank") directQ = directQ.eq("bank_account_id", accountId);
-      else directQ = directQ.eq("wallet_id", accountId);
-
-      // Prior card bill payments routed to this account (despesa adds to debit, receita subtracts)
-      let billQ = supabase
-        .from("transactions")
-        .select("type, amount")
-        .eq("status", "Pago")
-        .not("credit_card_id", "is", null)
-        .lt("payment_date", dateFrom);
-      if (accountType === "bank") billQ = billQ.eq("bank_account_id", accountId);
-      else billQ = billQ.eq("wallet_id", accountId);
-
-      const [{ data: dData }, { data: bData }] = await Promise.all([directQ, billQ]);
-      const sumDirect = (dData || []).reduce(
-        (acc, t: any) => acc + (t.type === "receita" ? t.amount : -t.amount),
-        0
-      );
-      const sumBill = (bData || []).reduce(
-        (acc, t: any) => acc + (t.type === "receita" ? t.amount : -t.amount),
-        0
-      );
-      setPriorBalance(initialBalance + sumDirect + sumBill);
+      // Uses an RPC so the sum runs server-side and isn't truncated by
+      // PostgREST's default 1000-row limit (which caused the extract's
+      // "Saldo anterior" to diverge from the real bank balance).
+      const { data, error } = await supabase.rpc("get_account_prior_balance", {
+        account_id_param: accountId,
+        account_type_param: accountType,
+        date_from: dateFrom,
+      });
+      const delta = !error && data !== null && data !== undefined ? Number(data) || 0 : 0;
+      setPriorBalance(initialBalance + delta);
     };
 
     fetchPrior();
   }, [open, accountId, accountType, dateFrom, initialBalance]);
+
 
   const rowsWithBalance = useMemo(() => {
     let running = accountType === "card" ? 0 : priorBalance;
