@@ -158,6 +158,10 @@ export function ReconcileStep({
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
+  // Rows for which the user explicitly clicked "Criar novo" in the "Provável"
+  // section — we drop the suggested match locally so the row moves to
+  // "Só no extrato" and can be categorized/imported.
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<number>>(new Set());
   const categoriesById = useMemo(
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
@@ -191,6 +195,7 @@ export function ReconcileStep({
   );
   // Rows where matcher found a same-value candidate but text differs — user must confirm.
   const suggestedRows = indexed.filter(({ i }) => {
+    if (dismissedSuggestions.has(i)) return false;
     const a = matchActions[i] || "criar";
     return a === "criar" && matches[i]?.best?.suggested;
   });
@@ -728,8 +733,13 @@ export function ReconcileStep({
                           variant="outline"
                           className="h-7 text-xs gap-1 border-sky-500/60 text-sky-700 hover:bg-sky-500/10"
                           onClick={() => {
-                            onTargetChange(i, null);
+                            onTargetChange(i, null as any);
                             onActionChange(i, "criar");
+                            setDismissedSuggestions((prev) => {
+                              const next = new Set(prev);
+                              next.add(i);
+                              return next;
+                            });
                           }}
                           title="Criar como novo lançamento — a linha vai para a seção 'Só no extrato' para você categorizar."
                         >
