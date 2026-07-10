@@ -195,6 +195,7 @@ export function ReconcileStep({
   );
   // Rows where matcher found a same-value candidate but text differs — user must confirm.
   const suggestedRows = indexed.filter(({ i }) => {
+    if (dismissedSuggestions.has(i)) return false;
     const a = matchActions[i] || "criar";
     return a === "criar" && matches[i]?.best?.suggested;
   });
