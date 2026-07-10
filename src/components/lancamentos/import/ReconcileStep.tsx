@@ -158,6 +158,10 @@ export function ReconcileStep({
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
+  // Rows for which the user explicitly clicked "Criar novo" in the "Provável"
+  // section — we drop the suggested match locally so the row moves to
+  // "Só no extrato" and can be categorized/imported.
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<number>>(new Set());
   const categoriesById = useMemo(
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
