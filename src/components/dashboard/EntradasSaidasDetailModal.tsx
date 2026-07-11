@@ -161,10 +161,10 @@ export function EntradasSaidasDetailModal({
     return "—";
   };
 
-  // Rows: paid transactions of the target type. Group by series_id (installments = 1 line).
+  // Rows: transactions of the target type filtered by status. Group by series_id (installments = 1 line).
   const lines = useMemo(() => {
     const paid = transactions.filter(
-      (t) => t.type === targetType && t.status === "Pago",
+      (t) => t.type === targetType && t.status === statusFilter,
     );
     type Group = { items: Tx[] };
     const groups = new Map<string, Group>();
