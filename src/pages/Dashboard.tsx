@@ -27,6 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useHeaderSlot } from "@/contexts/HeaderSlotContext";
+
 
 export default function Dashboard() {
   const { isPersonal, companies, selectedCompanyId } = useCompany();
