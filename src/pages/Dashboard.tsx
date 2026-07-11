@@ -201,6 +201,8 @@ export default function Dashboard() {
         saidasSeries={saidasSeries}
         saldoSeries={saldoSeries}
         onFaturamentoClick={() => setFaturamentoModalOpen(true)}
+        onEntradasClick={() => setEntradasModalOpen(true)}
+        onSaidasClick={() => setSaidasModalOpen(true)}
       />
 
       <FaturamentoDetailModal
@@ -213,6 +215,31 @@ export default function Dashboard() {
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
         categoryNameResolver={categoryNameResolver}
       />
+
+      <EntradasSaidasDetailModal
+        open={entradasModalOpen}
+        onOpenChange={setEntradasModalOpen}
+        mode="entradas"
+        transactions={transactions as any}
+        total={summary.entradas}
+        prevTotal={prevEntradas}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+      />
+
+      <EntradasSaidasDetailModal
+        open={saidasModalOpen}
+        onOpenChange={setSaidasModalOpen}
+        mode="saidas"
+        transactions={transactions as any}
+        total={summary.saidas}
+        prevTotal={prevSaidas}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+      />
+
 
 
       {/* MDR — taxas de maquininha no mês */}
