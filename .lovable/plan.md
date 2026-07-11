@@ -1,42 +1,49 @@
 ## Objetivo
 
-Mover o seletor de conta + `PeriodFilter` do Dashboard para **dentro do próprio header global** (o mesmo que hoje já tem o botão "Novo Lançamento" e o ThemeToggle), centralizados. Elimina a segunda barra sticky e a faixa quebrada, deixando **um único cabeçalho** fixo no topo — idêntico em altura e nível visual à página de Lançamentos.
+Ao clicar em um card do grid de categorias (à direita, em "Categorias — Receitas e Despesas"), abrir um modal detalhado — no mesmo estilo do modal de Entradas/Saídas — mostrando os lançamentos daquela categoria específica no período atual.
 
-## Arquitetura
+Hoje esses cards navegam para `/lancamentos?category=...&type=...`. Passaremos a abrir o modal e ficar no Dashboard.
 
-Criar um mecanismo simples de "slot" no header global para que qualquer página possa injetar controles próprios, sem que o `AppLayout` precise conhecer o estado interno de cada tela.
+## Mudanças
 
-### 1) Novo: `src/contexts/HeaderSlotContext.tsx`
-- Contexto React expondo `{ content, setContent }`.
-- Hook `useHeaderSlot(node)` que faz `setContent(node)` no mount e limpa no unmount.
-- Provider embrulha o `AppLayout`.
+### 1) `EntradasSaidasDetailModal.tsx`
+Extender para suportar recorte por categoria:
 
-### 2) `src/components/layout/AppLayout.tsx`
-Reorganizar o `<header>` em 3 zonas com `justify-between`:
-- **Esquerda:** `SidebarTrigger` + badge de impersonation (como hoje).
-- **Centro (novo):** renderiza `{headerSlot.content}` — centralizado com `flex-1 flex justify-center`.
-- **Direita:** botão "Novo Lançamento" + `ThemeToggle` (como hoje).
+- Nova prop opcional `categoryFilter?: { id: string; name: string; fill?: string }`.
+- Nova prop opcional `titleOverride?: string`.
+- Nova prop opcional `includeStatus?: "Pago" | "Pendente" | "Todos"` (default mantém o comportamento atual — `statusFilter` único). Para categorias, usaremos `"Todos"` para mostrar realizados + previstos daquela categoria no período.
+- Filtro `lines` passa a considerar `categoryFilter` (comparando por `t.category === categoryFilter.id || t.category === categoryFilter.name`).
+- Título dinâmico: `"{Categoria} · Entradas do período"` / `"...· Saídas do período"` (usa `titleOverride` se fornecido).
+- `goToLancamentos` inclui `category={name}` na query string quando `categoryFilter` estiver definido.
+- Nome do CSV inclui slug da categoria quando aplicável.
 
-Se o slot estiver vazio, a área central fica só como spacer (nada quebra em outras páginas).
+### 2) `CategoryDetailGrid.tsx`
+- Nova prop opcional `onCategoryClick?: (item: { id: string; name: string; fill: string; value: number }, mode: "receita" | "despesa") => void`.
+- No `<button>` de cada card, quando `onCategoryClick` estiver definido, chamar o handler em vez do `navigate(...)` atual. Sem handler, mantém o comportamento antigo (não quebra outros usos).
 
-### 3) `src/pages/Dashboard.tsx`
-- **Remover** o wrapper sticky com o título "Dashboard" + filtros.
-- Manter apenas um bloco de contexto discreto no corpo (ex.: subtítulo `Visão geral — IMPLANTES BR LTDA`) ou remover, já que "Dashboard" já é o item ativo no sidebar.
-- Chamar `useHeaderSlot(<DashboardHeaderControls />)` para injetar no header:
-  - `Select` "Todas as contas / ..." (versão compacta, `h-8 text-xs`).
-  - `PeriodFilter` (já compacto).
-  - Ambos em `flex items-center gap-3`.
+### 3) `CategoryBreakdownCard.tsx`
+- Nova prop opcional `onCategoryClick` (repassada para `CategoryDetailGrid`).
+- Manter as fatias do donut clicando para `/lancamentos` (comportamento atual) — ou também abrir o modal? **Escopo**: por ora, só o grid da direita, como você pediu ("cards do grid à direita"). Donuts continuam iguais.
 
-### 4) Ajustes finos de UX
-- Em telas estreitas (`< md`), esconder o botão "Novo Lançamento" já esconde o texto (`hidden sm:inline`); o slot central pode virar `flex-wrap` para não estourar. Se ainda assim ficar apertado, o `PeriodFilter` já colapsa naturalmente.
-- Header global mantém `h-14 sticky top-0 z-40` — já era fixo, então nada precisa mudar no scroll behavior conquistado no passo anterior.
+### 4) `Dashboard.tsx`
+- Novo estado `categoryModal: { open: boolean; mode: "receita" | "despesa"; category: { id, name, fill } | null }`.
+- Passar `onCategoryClick={(item, mode) => setCategoryModal({ open: true, mode, category: item })}` ao `CategoryBreakdownCard`.
+- Renderizar um `<EntradasSaidasDetailModal>` novo com:
+  - `mode` = `categoryModal.mode === "receita" ? "entradas" : "saidas"`
+  - `transactions` = `transactions` (mesmas usadas pelos outros modais — recorte por período/contexto já vem aplicado)
+  - `categoryFilter` = `categoryModal.category`
+  - `includeStatus="Todos"` (para mostrar pagos + pendentes da categoria)
+  - `total` = soma dos itens filtrados naquele modo/categoria (já calculamos via `summary` — reaproveitar `revenueCategories`/`expenseCategories` para pegar o `.value`)
+  - `prevTotal` = opcional; pode ser omitido (comparativo por categoria fica fora do escopo)
+  - `dateFrom`/`dateTo`/`bankAccounts`/`wallets`/`creditCards`/`categoryNameResolver` = mesmos props já usados pelos modais existentes
+  - `titleOverride` = `"{category.name} · {Receitas|Despesas} do período"`
 
 ## Verificação
-- Ao entrar no Dashboard: os filtros aparecem centralizados no header global; não há mais barra secundária.
-- Ao rolar: header único permanece fixo (é o mesmo comportamento do header em Lançamentos).
-- Em outras páginas (Lançamentos, Plano de Caixa, etc.): o slot central fica vazio, header inalterado.
+- Clicar em qualquer card do grid direito abre o modal com o header referente à categoria e apenas seus lançamentos.
+- Filtros internos (forma de pagamento, paginação, CSV, botão "Ver em Lançamentos") continuam funcionando; o botão "Ver em Lançamentos" leva com `category` já aplicado.
+- Nenhum outro fluxo (donuts, modais de entradas/saídas gerais) é alterado.
 
 ## Fora do escopo
-- Migrar filtros de outras páginas para o slot (podemos fazer depois se quiser padronizar).
-- Redesign do header global (cor, altura, tipografia).
-- Alterações nos cards, `FinancialHealthBar` ou demais seções do Dashboard.
+- Alterar comportamento das fatias do donut.
+- Comparativo período anterior por categoria dentro do modal.
+- Refatorar `EntradasSaidasDetailModal` além das props opcionais listadas.
