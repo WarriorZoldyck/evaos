@@ -349,6 +349,7 @@ export function EntradasSaidasDetailModal({
                 <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-background">
                   <tr className="border-b">
                     <th className="text-left py-2 pr-3">Contato</th>
+                    <th className="text-left py-2 pr-3 hidden md:table-cell">Conta</th>
                     <th className="text-left py-2 pr-3">Descrição</th>
                     <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
                     <th className="text-left py-2 pr-3 hidden lg:table-cell">Categoria</th>
@@ -363,6 +364,9 @@ export function EntradasSaidasDetailModal({
                     return (
                       <tr key={l.key} className="border-b last:border-0 hover:bg-muted/30">
                         <td className="py-2 pr-3 font-medium truncate max-w-[220px]">{label}</td>
+                        <td className="py-2 pr-3 hidden md:table-cell text-muted-foreground truncate max-w-[160px]">
+                          {resolveAccount(t)}
+                        </td>
                         <td className="py-2 pr-3">
                           <div className="flex items-center gap-2">
                             <span className="truncate max-w-[320px] text-muted-foreground">
