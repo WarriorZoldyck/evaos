@@ -1,49 +1,37 @@
 ## Objetivo
+No card "Categorias — Receitas e Despesas" do Dashboard, o grid da direita deve listar **todas** as categorias do contexto atual (Pessoal/Empresa já é aplicado no `useDashboardData`), com um filtro Receitas/Despesas controlado pelo usuário, e alguns ajustes de UX.
 
-Preencher o espaço vazio à direita dos dois gráficos de rosca (Receitas/Despesas) trazendo os cards de "Categorias" (que hoje aparecem logo abaixo) para o lado dos donuts, formando uma única linha visual coesa no dashboard.
+## Mudanças
 
-## Layout proposto
+### 1. `CategoryDetailGrid.tsx`
+- Novo prop `mode: "receita" | "despesa"` e `onModeChange`, além de `revenueCategories`/`expenseCategories` (ou receber ambos e o total correspondente). O grid decide qual lista renderizar com base em `mode`.
+- Header interno (quando `embedded`) com um toggle segmentado compacto "Receitas | Despesas" alinhado à direita.
+- **Remover o `.slice(0, 6)`** — renderiza todas as categorias, ordenadas desc por valor.
+- **Destaque do maior item**: primeiro card recebe borda `border-primary/40` e um badge sutil "Maior" (ou ícone), sem quebrar o layout.
+- **Bug de matching (sparkline + Δ%)**: hoje filtra `t.category === c.name`, mas `transactions.category` guarda UUID. Trocar para comparar por `c.id` com fallback ao nome (dados legados). Isso corrige `series` e `prevTotal`.
+- **Densidade responsiva**: manter `grid-cols-1 sm:grid-cols-2`, mas dentro do card do Dashboard o container externo já é `xl:grid-cols-[1fr_1.4fr]`, então em xl fica 2 colunas e abaixo colapsa para 1.
+- **Altura + scroll**: quando `embedded`, o grid vira flex column com `max-h` calculado para acompanhar a altura da coluna esquerda (dois donuts empilhados). Uso: wrapper com `h-full` + `overflow-y-auto` interno e `pr-1` para a barra.
 
-```text
-┌──────────────────────────────────────────────────────────────┐
-│ Categorias — Receitas e Despesas                             │
-│ ┌──────────────┐  ┌────────────────────────────────────────┐ │
-│ │ Receitas     │  │  [Alimentação] [ADMIN.]  [Implantes]   │ │
-│ │  (donut +    │  │  [SALÁRIOS]    [Impl.]   [PESSOAIS]    │ │
-│ │   legenda)   │  │  ... (top 6 despesas em grid 2–3 col)  │ │
-│ ├──────────────┤  │                                        │ │
-│ │ Despesas     │  │                                        │ │
-│ │  (donut +    │  │                                        │ │
-│ │   legenda)   │  │                                        │ │
-│ └──────────────┘  └────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
-```
-
-## Alterações
-
-### 1. `CategoryBreakdownCard.tsx`
-- Voltar os dois donuts para **empilhados** (coluna única) já que ocuparão apenas a metade esquerda do card em telas grandes.
-- Remover o `xl:grid-cols-2` interno; manter apenas o layout vertical com um separador horizontal entre Receitas e Despesas.
-- Aceitar via props os dados do grid de detalhes (categorias despesa, total, transações, ranges, loading) para renderizar `CategoryDetailGrid` ao lado direito.
-- Nova estrutura no `CardContent`:
-  - `grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6`
-  - Coluna esquerda: os dois donuts empilhados
-  - Coluna direita: `CategoryDetailGrid` (renderizado sem seu próprio `Card` wrapper)
-
-### 2. `CategoryDetailGrid.tsx`
-- Adicionar prop `embedded?: boolean`. Quando `true`, renderizar **sem** o `Card/CardHeader/CardContent` (apenas o grid interno), pois passará a viver dentro do `CategoryBreakdownCard`.
-- Ajustar o grid interno para `grid-cols-1 sm:grid-cols-2` (em vez de `lg:grid-cols-3`) porque o espaço disponível será mais estreito que a largura total.
-- Manter comportamento atual (top 6, sparkline, delta, navegação).
+### 2. `CategoryBreakdownCard.tsx`
+- Estado local `detailMode` (`"receita" | "despesa"`, default `"despesa"`).
+- Passa ambas as listas (`revenueCategories`, `expenseCategories`) + totais para o `CategoryDetailGrid` embedded, junto com `mode` e `onModeChange`.
+- Coluna direita ganha `h-full` para permitir que o grid ocupe a mesma altura da coluna esquerda (donuts empilhados).
 
 ### 3. `Dashboard.tsx`
-- Remover o bloco separado `<CategoryDetailGrid ... />` (linhas ~264-274).
-- Passar suas props para `<CategoryBreakdownCard>` para que ele orquestre a renderização embutida.
+- Sem mudança estrutural; continua passando `detailTransactions`, `currentStart/End`, `prevStart/End`.
 
-## Fora do escopo
-- Lógica de cálculo (top 6, sparkline, delta) permanece intacta.
-- Nenhuma mudança nas queries, hooks ou modelos de dados.
-- Sem alterações em `DashboardCreditCardsRow` ou outras seções.
+## Fora de escopo
+- Lógica de agregação em `useDashboardData` (contexto Pessoal/Empresa já é aplicado lá — nada a mudar).
+- Donuts da esquerda permanecem exatamente como estão.
+- Nenhuma mudança em queries, hooks, tipos do Supabase ou regras de negócio.
 
-## Comportamento responsivo
-- `< xl` (inclui o viewport atual de 880px): tudo continua empilhado verticalmente (donuts em cima, cards de categoria embaixo) — mesma experiência de hoje em telas médias/pequenas.
-- `≥ xl`: donuts à esquerda em coluna, cards de categoria preenchem o espaço à direita.
+## Detalhes técnicos
+- Toggle: componente `Tabs` do shadcn ou par de `Button` com `variant="ghost"`/`"secondary"`. Prefiro `Tabs` inline compacto para consistência.
+- Matching corrigido:
+  ```ts
+  const txsForCat = allTransactions.filter(
+    (t) => t.type === mode && (t.category === c.id || t.category === c.name)
+  );
+  ```
+- Ordenação: `[...categories].sort((a,b) => b.value - a.value)` (sem `slice`).
+- Scroll: `<div className="h-full flex flex-col min-h-0"><Toggle/><div className="flex-1 min-h-0 overflow-y-auto pr-1">{grid}</div></div>`.
