@@ -369,12 +369,35 @@ export default function Dashboard() {
         currentEnd={dateRange.end}
         prevStart={prevRange.start}
         prevEnd={prevRange.end}
+        onCategoryClick={(item, mode) =>
+          setCategoryModal({ open: true, mode, category: item })
+        }
       />
 
-
+      <EntradasSaidasDetailModal
+        open={categoryModal.open}
+        onOpenChange={(o) => setCategoryModal((s) => ({ ...s, open: o }))}
+        mode={categoryModal.mode === "receita" ? "entradas" : "saidas"}
+        transactions={transactions as any}
+        total={categoryModal.category?.value ?? 0}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
+        categoryFilter={categoryModal.category}
+        includeAllStatus
+        titleOverride={
+          categoryModal.category
+            ? `${categoryModal.category.name} · ${categoryModal.mode === "receita" ? "Receitas" : "Despesas"} do período`
+            : undefined
+        }
+      />
 
       {/* NEW: Cartões de Crédito (estilo carteira) */}
       <DashboardCreditCardsRow loading={loading} />
+
 
 
 
