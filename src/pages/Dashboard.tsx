@@ -263,6 +263,37 @@ export default function Dashboard() {
         creditCards={creditCards}
       />
 
+      <EntradasSaidasDetailModal
+        open={entradasPrevModalOpen}
+        onOpenChange={setEntradasPrevModalOpen}
+        mode="entradas"
+        statusFilter="Pendente"
+        transactions={transactions as any}
+        total={summary.entradaPrevista}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
+      />
+
+      <EntradasSaidasDetailModal
+        open={saidasPrevModalOpen}
+        onOpenChange={setSaidasPrevModalOpen}
+        mode="saidas"
+        statusFilter="Pendente"
+        transactions={transactions as any}
+        total={summary.saidaPrevista}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
+      />
+
+
 
 
       {/* MDR — taxas de maquininha no mês */}
