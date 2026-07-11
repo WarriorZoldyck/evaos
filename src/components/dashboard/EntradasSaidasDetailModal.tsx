@@ -195,7 +195,7 @@ export function EntradasSaidasDetailModal({
         };
       })
       .sort((a, b) => (b.first.payment_date ?? "").localeCompare(a.first.payment_date ?? ""));
-  }, [transactions, targetType]);
+  }, [transactions, targetType, statusFilter]);
 
   const availableKinds = useMemo(() => {
     const s = new Set<PaymentKind>();
