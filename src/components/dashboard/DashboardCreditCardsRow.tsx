@@ -165,7 +165,7 @@ export function DashboardCreditCardsRow({ loading }: Props) {
         creditCard={modalCard}
         initialReferenceDate={billModal?.refDate ?? null}
         onClose={() => setBillModal(null)}
-        onSuccess={() => setBillModal(null)}
+        onSuccess={() => { setBillModal(null); refetchTotals(); }}
       />
     </>
   );
