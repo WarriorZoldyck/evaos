@@ -107,6 +107,7 @@ interface Props {
   bankAccounts?: AccountRef[];
   wallets?: AccountRef[];
   creditCards?: AccountRef[];
+  statusFilter?: "Pago" | "Pendente";
 }
 
 export function EntradasSaidasDetailModal({
@@ -122,6 +123,7 @@ export function EntradasSaidasDetailModal({
   bankAccounts = [],
   wallets = [],
   creditCards = [],
+  statusFilter = "Pago",
 }: Props) {
   const navigate = useNavigate();
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
@@ -130,11 +132,14 @@ export function EntradasSaidasDetailModal({
   const PAGE_SIZE = 50;
 
   const isEntradas = mode === "entradas";
+  const isPrevisto = statusFilter === "Pendente";
   const targetType: "receita" | "despesa" = isEntradas ? "receita" : "despesa";
   const accentClass = isEntradas ? "text-success" : "text-destructive";
   const gradientClass = isEntradas ? "bg-gradient-success" : "bg-gradient-destructive";
   const Icon = isEntradas ? TrendingUp : TrendingDown;
-  const title = isEntradas ? "Entradas pagas no período" : "Saídas pagas no período";
+  const title = isPrevisto
+    ? (isEntradas ? "Entradas previstas no período" : "Saídas previstas no período")
+    : (isEntradas ? "Entradas pagas no período" : "Saídas pagas no período");
 
   const resolveCategory = (id: string) =>
     categoryNameResolver ? categoryNameResolver(id) : id || "Sem categoria";
