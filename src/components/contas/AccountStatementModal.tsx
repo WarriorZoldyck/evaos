@@ -242,11 +242,39 @@ export function AccountStatementModal({
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setRefMonth(subMonths(refMonth, 1))}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium capitalize min-w-[140px] text-center">{monthLabel}</span>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-8 min-w-[180px] justify-center gap-2 text-sm font-medium capitalize"
+              >
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {monthLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center">
+              <Calendar
+                mode="single"
+                selected={refMonth}
+                defaultMonth={refMonth}
+                onSelect={(d) => {
+                  if (d) {
+                    setRefMonth(startOfMonth(d));
+                    setCalendarOpen(false);
+                  }
+                }}
+                locale={ptBR}
+                captionLayout="dropdown"
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setRefMonth(addMonths(refMonth, 1))}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+
 
         {/* Prior balance */}
         {accountType !== "card" && (
