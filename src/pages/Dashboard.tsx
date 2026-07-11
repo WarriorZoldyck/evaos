@@ -13,6 +13,7 @@ import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
 import { FaturamentoDetailModal } from "@/components/dashboard/FaturamentoDetailModal";
 import { EntradasSaidasDetailModal } from "@/components/dashboard/EntradasSaidasDetailModal";
+import { SaldoAtualDetailModal } from "@/components/dashboard/SaldoAtualDetailModal";
 import { MdrDetailModal } from "@/components/dashboard/MdrDetailModal";
 import { useMdrSummary } from "@/hooks/useMdrSummary";
 import { Card, CardContent } from "@/components/ui/card";
