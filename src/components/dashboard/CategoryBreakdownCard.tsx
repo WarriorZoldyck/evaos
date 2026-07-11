@@ -1,10 +1,11 @@
+import { useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { getCategoryIcon } from "@/lib/dashboardInsights";
 import type { CategorySummary } from "@/hooks/useDashboardData";
-import { CategoryDetailGrid } from "@/components/dashboard/CategoryDetailGrid";
+import { CategoryDetailGrid, type CategoryDetailMode } from "@/components/dashboard/CategoryDetailGrid";
 
 interface DetailTx {
   amount: number | string;
@@ -152,6 +153,8 @@ export function CategoryBreakdownCard({
   prevStart,
   prevEnd,
 }: Props) {
+  const [detailMode, setDetailMode] = useState<CategoryDetailMode>("despesa");
+
   return (
     <Card className="shadow-premium">
       <CardHeader>
@@ -183,11 +186,15 @@ export function CategoryBreakdownCard({
           </div>
 
           {/* Right: category detail cards filling the empty space */}
-          <div>
+          <div className="h-full min-h-0">
             <CategoryDetailGrid
               embedded
-              categories={expenseCategories}
-              total={totalDespesas}
+              mode={detailMode}
+              onModeChange={setDetailMode}
+              revenueCategories={revenueCategories}
+              expenseCategories={expenseCategories}
+              totalReceitas={totalReceitas}
+              totalDespesas={totalDespesas}
               allTransactions={detailTransactions}
               currentStart={currentStart}
               currentEnd={currentEnd}
