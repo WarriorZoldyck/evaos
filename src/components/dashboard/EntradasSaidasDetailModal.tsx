@@ -277,7 +277,7 @@ export function EntradasSaidasDetailModal({
             {title}
           </DialogTitle>
           <DialogDescription>
-            {isEntradas ? "Receitas" : "Despesas"} com pagamento entre{" "}
+            {isEntradas ? "Receitas" : "Despesas"} {isPrevisto ? "com previsão de pagamento" : "com pagamento"} entre{" "}
             <span className="font-medium text-foreground">{formatDate(dateFrom)}</span> e{" "}
             <span className="font-medium text-foreground">{formatDate(dateTo)}</span>.{" "}
             <span className="text-muted-foreground">
