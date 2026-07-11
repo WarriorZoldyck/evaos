@@ -1,50 +1,43 @@
 ## O que fazer
 
-### 1) Cards "Entradas" e "Saídas" abrem modal de detalhe (igual Faturamento)
+### 1) Garantir que "Saldo Atual" do dashboard = soma dos saldos das contas
 
-Hoje, ao clicar em **Entradas** e **Saídas** no dashboard, o app apenas navega para `/lancamentos` com filtros. Vamos abrir um modal de detalhe no próprio dashboard (mesmo padrão do modal de Faturamento), mantendo o botão "Ver em Lançamentos" para o drill-down completo.
+Hoje o card já usa `get_accounts_paid_delta` (Σ initial_balance + Σ deltas Pagos de bank + wallet). A tela Contas passou a usar `get_account_prior_balance` por conta. Vamos alinhar as duas fontes para que a soma bata 1:1:
 
-**Novo componente:** `src/components/dashboard/EntradasSaidasDetailModal.tsx`
-- Reaproveita visual/layout do `FaturamentoDetailModal` (header com ícone, resumo em cards, filtros de forma de pagamento e status, tabela paginada, export CSV, botão "Ver em Lançamentos").
-- Prop `mode: "entradas" | "saidas"` controla:
-  - Título ("Entradas pagas no período" / "Saídas pagas no período")
-  - Ícone/gradiente (verde `TrendingUp` / vermelho `TrendingDown`)
-  - Filtro base: `type = receita` ou `type = despesa`, sempre `status = "Pago"` (o que compõe o valor do card)
-  - Fonte: `transactions` filtradas por `payment_date` (mesma base que soma o card no `useDashboardData`)
-- Agrupamento por `series_id` como no modal atual (parcelas viram 1 linha).
-- Sem seção de MDR quando `mode = "saidas"` (não se aplica).
-- Comparativo vs período anterior (usa `prevEntradas` / `prevSaidas` já disponíveis).
+- Em `useDashboardData.ts`, manter a lógica atual, mas garantir que `bank_ids` e `wallet_ids` passados ao RPC sejam exatamente os mesmos IDs listados em `useAccounts()` no contexto ativo (mesma filtragem por `company_id`/contexto).
+- Não incluir cartões de crédito no `Saldo Atual` (fatura não é caixa) — comportamento atual mantido.
+- Sanidade: se o usuário estiver no contexto Pessoal, somar só contas/carteiras Pessoais; mesmo critério que a página Contas usa.
 
-**Editar:** `src/pages/Dashboard.tsx`
-- Adicionar `entradasModalOpen` e `saidasModalOpen` no estado.
-- Passar `onEntradasClick` e `onSaidasClick` para `SummaryCards`.
-- Renderizar `<EntradasSaidasDetailModal ... />` para cada modo, passando `transactions`, `prevEntradas`/`prevSaidas`, `dateFrom`/`dateTo`, `categoryNameResolver`.
+### 2) Card "Saldo Atual" clicável → modal com contas e saldos
+
+**Novo componente:** `src/components/dashboard/SaldoAtualDetailModal.tsx`
+- Header: ícone `Wallet`, título "Saldo Atual por conta", subtítulo com o contexto ativo (Pessoal / Empresa X).
+- Duas seções colapsáveis:
+  - **Contas Bancárias** — lista `bankAccounts` do contexto com nome do banco, agência/número (se houver) e **Saldo Atual** (via `useAccountCurrentBalances(bankAccounts, 'bank')`).
+  - **Carteiras** — lista `wallets` com nome e **Saldo Atual** (via `useAccountCurrentBalances(wallets, 'wallet')`).
+- Rodapé: linha "Total" = soma de todos os saldos exibidos. Deve bater com o valor do card.
+- Cada linha é clicável (hover destacado) e navega para `/lancamentos` com filtro pré-aplicado da conta clicada:
+  - Bank → `?bank_account_id=<id>`
+  - Wallet → `?wallet_id=<id>`
+  - Já existe suporte a esses querystrings em `Lancamentos.tsx`/`TransactionFilters.tsx` (verificar; se faltar, adicionar leitura desses params e aplicar ao filtro inicial).
+- Botão secundário "Abrir extrato" por linha (opcional) que abre o `AccountStatementModal` existente — mantém a UX consistente com a página Contas.
 
 **Editar:** `src/components/dashboard/SummaryCards.tsx`
-- Adicionar props opcionais `onEntradasClick` e `onSaidasClick`.
-- Trocar `onClick` dos cards Entradas e Saídas para preferir esses handlers, mantendo o `go(...)` como fallback.
+- Adicionar prop `onSaldoClick?: () => void`.
+- No card "Saldo Atual", preferir `onSaldoClick` ao invés do `go(...)` atual, mantendo fallback.
 
-### 2) Saldo do dashboard casar com Contas e Cartões
+**Editar:** `src/pages/Dashboard.tsx`
+- Novo estado `saldoModalOpen`.
+- Passar `onSaldoClick={() => setSaldoModalOpen(true)}` para `SummaryCards`.
+- Renderizar `<SaldoAtualDetailModal open={saldoModalOpen} onClose={...} bankAccounts={...} wallets={...} />`.
 
-Diagnóstico: o dashboard já calcula `saldoAtual = Σ initial_balance + Σ deltas Pagos` via RPC `get_accounts_paid_delta` (correto e à prova do limite de 1000 linhas do PostgREST). A tela **Contas** mostra apenas `initial_balance` estático em cada linha — por isso os totais não batem. A correção é fazer a página Contas exibir o **saldo atual real** por conta/carteira, para que a soma bata com o card "Saldo Atual" do dashboard.
+### 3) Filtro por conta em Lançamentos (verificação)
 
-**Novo hook:** `src/hooks/useAccountCurrentBalances.ts`
-- Recebe `bankAccounts` e `wallets` do contexto atual.
-- Para cada conta, chama a função SQL existente `public.get_account_prior_balance(account_id, 'bank'|'wallet', date)` com `date = amanhã` para trazer todo o histórico Pago, e soma com `initial_balance`.
-- Retorna `Map<accountId, number>` + `loading`. Faz refetch quando o `effectiveUserId` ou a lista muda.
-- Alternativa (se performance for melhor): uma única chamada RPC nova que retorna `[{account_id, type, current_balance}]`. Fica como refino se necessário; a função `get_account_prior_balance` já existe e resolve por enquanto.
-
-**Editar:** `src/pages/Contas.tsx`
-- Usar o hook novo e trocar a exibição de `a.initial_balance` (linha ~222) por `currentBalances.get(a.id) ?? a.initial_balance` na coluna de saldo da tabela de contas bancárias.
-- Fazer o mesmo para as `VirtualWalletCard` (linha ~341): passar `balance={String(currentBalances.get(w.id) ?? w.initial_balance)}`.
-- Adicionar um pequeno rótulo "Saldo inicial: R$ X" abaixo do valor (tooltip ou linha secundária) para deixar claro que o inicial permanece registrado — resolve o entendimento do usuário de que "saldo inicial vai alterando".
-- Não mexer no fluxo de edição do `initial_balance` (continua sendo o campo cadastral).
-
-**Cartões de crédito:** o "saldo" de cartão é a fatura aberta, não um saldo positivo somável ao caixa. O card "Saldo Atual" do dashboard já ignora cartões (só bank + wallet). Vamos manter esse comportamento e, na tela Contas, garantir que o texto sobre cartões deixe claro que é "fatura atual do ciclo" (o `DashboardCreditCardsRow` já usa `useCreditCardCycleTotals`, sem alteração aqui).
+- Conferir se `Lancamentos.tsx` lê `bank_account_id` e `wallet_id` dos search params e aplica no `TransactionFilters`. Se não ler, adicionar leitura no mount e setar o filtro inicial. Sem mudanças de schema.
 
 ## Detalhes técnicos
 
-- **Fonte de verdade do saldo**: `initial_balance + Σ (receita − despesa) Pagos` por conta. Já implementado server-side em `get_accounts_paid_delta` (dashboard) e `get_account_prior_balance` (extrato). A tela Contas passa a consumir esse cálculo por linha em vez do valor cadastral.
-- **Modal Entradas/Saídas**: reaproveita `SaleLine`/agrupamento por `series_id` do `FaturamentoDetailModal`, mas com base em `payment_date` + `status = Pago` (dashboard totals) em vez de competência. Isso garante que o "Total" do modal bate exatamente com o valor do card.
-- **Sem mudanças de schema.** Nenhuma migração necessária.
-- **Sem mudanças em RLS**, `get_account_prior_balance` já é `SECURITY DEFINER` e escopa por `auth.uid()`.
+- **Fonte única de verdade**: `initial_balance + Σ (receita − despesa) Pagos`. Dashboard usa `get_accounts_paid_delta` (agregado); modal usa `get_account_prior_balance` (por conta). A soma no modal deve bater com o card — se houver divergência, é sinal de que os IDs do contexto diferem entre dashboard e página Contas; nesse caso, unificar a fonte de IDs (`useAccounts()` do contexto).
+- **Sem mudanças de schema, RLS ou migrações.**
+- **Sem alteração em cartões de crédito** — continuam fora do Saldo Atual.
+- **Reaproveita**: `useAccountCurrentBalances` (já criado), `AccountStatementModal` (opcional para "Abrir extrato").
