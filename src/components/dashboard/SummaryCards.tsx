@@ -42,6 +42,8 @@ interface SummaryCardsProps {
   onEntradasClick?: () => void;
   onSaidasClick?: () => void;
   onSaldoAtualClick?: () => void;
+  onEntradasPrevistasClick?: () => void;
+  onSaidasPrevistasClick?: () => void;
   internalTransfersTotal?: number;
 }
 
