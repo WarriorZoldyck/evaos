@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -12,6 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 type AccountType = "bank" | "wallet" | "card";
 
@@ -22,6 +25,7 @@ interface AccountStatementModalProps {
   accountType: AccountType;
   accountName: string;
   initialBalance?: number;
+  initialMonth?: Date;
 }
 
 interface StatementRow {
@@ -46,10 +50,18 @@ export function AccountStatementModal({
   accountType,
   accountName,
   initialBalance = 0,
+  initialMonth,
 }: AccountStatementModalProps) {
   const [rows, setRows] = useState<StatementRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [refMonth, setRefMonth] = useState(new Date());
+  const [refMonth, setRefMonth] = useState<Date>(initialMonth ?? new Date());
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  // Re-sync when reopened with a different initialMonth
+  useEffect(() => {
+    if (open && initialMonth) setRefMonth(startOfMonth(initialMonth));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialMonth?.getTime()]);
 
   const dateFrom = format(startOfMonth(refMonth), "yyyy-MM-dd");
   const dateTo = format(endOfMonth(refMonth), "yyyy-MM-dd");
@@ -230,11 +242,39 @@ export function AccountStatementModal({
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setRefMonth(subMonths(refMonth, 1))}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="text-sm font-medium capitalize min-w-[140px] text-center">{monthLabel}</span>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-8 min-w-[180px] justify-center gap-2 text-sm font-medium capitalize"
+              >
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {monthLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center">
+              <Calendar
+                mode="single"
+                selected={refMonth}
+                defaultMonth={refMonth}
+                onSelect={(d) => {
+                  if (d) {
+                    setRefMonth(startOfMonth(d));
+                    setCalendarOpen(false);
+                  }
+                }}
+                locale={ptBR}
+                captionLayout="dropdown"
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setRefMonth(addMonths(refMonth, 1))}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
+
 
         {/* Prior balance */}
         {accountType !== "card" && (
