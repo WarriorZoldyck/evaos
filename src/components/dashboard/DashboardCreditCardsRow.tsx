@@ -9,17 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CreditCard3D } from "@/components/contas/CreditCard3D";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
 import { useAccounts } from "@/hooks/useAccounts";
-
-interface Tx {
-  amount: number | string;
-  type: "receita" | "despesa";
-  status: "Pago" | "Pendente";
-  credit_card_id?: string | null;
-  payment_date?: string | null;
-}
+import { useCreditCardCycleTotals } from "@/hooks/useCreditCardCycleTotals";
 
 interface Props {
-  allTransactions: Tx[];
   loading: boolean;
 }
 
@@ -45,27 +37,16 @@ function cycleDateFromOffset(offset: CycleOffset): Date {
   return d;
 }
 
-export function DashboardCreditCardsRow({ allTransactions, loading }: Props) {
+export function DashboardCreditCardsRow({ loading }: Props) {
   const navigate = useNavigate();
   const { creditCards, bankAccounts } = useAccounts();
   const [flipped, setFlipped] = useState<Record<string, boolean>>({});
   const [cycleOffsetByCard, setCycleOffsetByCard] = useState<Record<string, CycleOffset>>({});
   const [billModal, setBillModal] = useState<{ cardId: string; refDate: Date } | null>(null);
 
-  // Aggregate by (cardId, YYYY-MM of payment_date). Sign: despesa +, receita -.
-  const usedByCardCycle = useMemo(() => {
-    const m = new Map<string, Map<string, number>>();
-    allTransactions.forEach((t) => {
-      if (!t.credit_card_id || !t.payment_date) return;
-      const cycleKey = t.payment_date.slice(0, 7); // YYYY-MM
-      const inner = m.get(t.credit_card_id) ?? new Map<string, number>();
-      const cur = inner.get(cycleKey) || 0;
-      const signed = t.type === "despesa" ? Number(t.amount) : -Number(t.amount);
-      inner.set(cycleKey, cur + signed);
-      m.set(t.credit_card_id, inner);
-    });
-    return m;
-  }, [allTransactions]);
+  const cardIds = useMemo(() => creditCards.map((c) => c.id), [creditCards]);
+  const { totals: usedByCardCycle, refetch: refetchTotals } = useCreditCardCycleTotals(cardIds);
+
 
   const modalCard = useMemo(() => {
     if (!billModal) return null;
