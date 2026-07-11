@@ -261,7 +261,7 @@ export function EntradasSaidasDetailModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${isEntradas ? "entradas" : "saidas"}-${dateFrom}_a_${dateTo}.csv`;
+    a.download = `${isEntradas ? "entradas" : "saidas"}${isPrevisto ? "-previstas" : ""}-${dateFrom}_a_${dateTo}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
