@@ -139,24 +139,26 @@ export function CategoryBreakdownCard({
           Categorias — Receitas e Despesas
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <Donut
-          title="Receitas"
-          data={revenueCategories}
-          total={totalReceitas}
-          type="receita"
-          emptyMessage="Nenhuma receita no período"
-          loading={loading}
-        />
-        <div className="h-px bg-border/60" />
-        <Donut
-          title="Despesas"
-          data={expenseCategories}
-          total={totalDespesas}
-          type="despesa"
-          emptyMessage="Nenhuma despesa no período"
-          loading={loading}
-        />
+      <CardContent>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <Donut
+            title="Receitas"
+            data={revenueCategories}
+            total={totalReceitas}
+            type="receita"
+            emptyMessage="Nenhuma receita no período"
+            loading={loading}
+          />
+          <div className="hidden xl:block w-px bg-border/60" />
+          <Donut
+            title="Despesas"
+            data={expenseCategories}
+            total={totalDespesas}
+            type="despesa"
+            emptyMessage="Nenhuma despesa no período"
+            loading={loading}
+          />
+        </div>
       </CardContent>
     </Card>
   );
