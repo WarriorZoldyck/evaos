@@ -212,6 +212,8 @@ export default function Dashboard() {
         onSaldoAtualClick={() => setSaldoModalOpen(true)}
         onEntradasPrevistasClick={() => setEntradasPrevModalOpen(true)}
         onSaidasPrevistasClick={() => setSaidasPrevModalOpen(true)}
+        bankAccountsCount={bankAccounts.length}
+        walletsCount={wallets.length}
       />
 
       <SaldoAtualDetailModal
