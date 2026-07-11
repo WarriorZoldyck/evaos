@@ -45,6 +45,8 @@ interface SummaryCardsProps {
   onEntradasPrevistasClick?: () => void;
   onSaidasPrevistasClick?: () => void;
   internalTransfersTotal?: number;
+  bankAccountsCount?: number;
+  walletsCount?: number;
 }
 
 
@@ -251,6 +253,8 @@ export function SummaryCards({
   onEntradasPrevistasClick,
   onSaidasPrevistasClick,
   internalTransfersTotal,
+  bankAccountsCount,
+  walletsCount,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
 
@@ -268,7 +272,7 @@ export function SummaryCards({
   return (
     <div className="space-y-4">
       {/* Main cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <SummaryCard
           title="Saldo Atual"
           value={saldoAtual}
@@ -278,6 +282,12 @@ export function SummaryCards({
           loading={loading}
           onClick={onSaldoAtualClick}
           accent="hsl(195, 100%, 50%)"
+          series={saldoSeries}
+          subtitle={
+            bankAccountsCount !== undefined || walletsCount !== undefined
+              ? `${bankAccountsCount ?? 0} conta(s) · ${walletsCount ?? 0} carteira(s)`
+              : undefined
+          }
           tooltip={"Soma do saldo inicial + lançamentos pagos de todas as contas e carteiras do contexto. Clique para ver o saldo por conta."}
         />
         <SummaryCard
