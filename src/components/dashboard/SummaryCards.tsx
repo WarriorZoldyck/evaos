@@ -253,6 +253,8 @@ export function SummaryCards({
   onEntradasPrevistasClick,
   onSaidasPrevistasClick,
   internalTransfersTotal,
+  bankAccountsCount,
+  walletsCount,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
 
