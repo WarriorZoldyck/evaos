@@ -25,6 +25,7 @@ interface AccountStatementModalProps {
   accountType: AccountType;
   accountName: string;
   initialBalance?: number;
+  initialMonth?: Date;
 }
 
 interface StatementRow {
