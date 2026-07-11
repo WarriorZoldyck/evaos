@@ -239,6 +239,9 @@ export default function Dashboard() {
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
         categoryNameResolver={categoryNameResolver}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
       />
 
       <EntradasSaidasDetailModal
@@ -251,6 +254,9 @@ export default function Dashboard() {
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
         categoryNameResolver={categoryNameResolver}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
       />
 
 
