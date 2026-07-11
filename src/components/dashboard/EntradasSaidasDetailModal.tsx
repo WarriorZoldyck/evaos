@@ -227,7 +227,7 @@ export function EntradasSaidasDetailModal({
     sp.set("dateFrom", dateFrom);
     sp.set("dateTo", dateTo);
     sp.set("type", targetType);
-    sp.set("status", "Pago");
+    sp.set("status", statusFilter);
     navigate(`/lancamentos?${sp.toString()}`);
   };
 
