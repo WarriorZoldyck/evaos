@@ -38,6 +38,8 @@ export default function Dashboard() {
   const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
   const [entradasModalOpen, setEntradasModalOpen] = useState(false);
   const [saidasModalOpen, setSaidasModalOpen] = useState(false);
+  const [entradasPrevModalOpen, setEntradasPrevModalOpen] = useState(false);
+  const [saidasPrevModalOpen, setSaidasPrevModalOpen] = useState(false);
   const [saldoModalOpen, setSaldoModalOpen] = useState(false);
   const [mdrModalOpen, setMdrModalOpen] = useState(false);
   const mdr = useMdrSummary();
