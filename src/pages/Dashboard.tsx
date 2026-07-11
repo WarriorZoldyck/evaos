@@ -208,6 +208,8 @@ export default function Dashboard() {
         onEntradasClick={() => setEntradasModalOpen(true)}
         onSaidasClick={() => setSaidasModalOpen(true)}
         onSaldoAtualClick={() => setSaldoModalOpen(true)}
+        onEntradasPrevistasClick={() => setEntradasPrevModalOpen(true)}
+        onSaidasPrevistasClick={() => setSaidasPrevModalOpen(true)}
       />
 
       <SaldoAtualDetailModal
