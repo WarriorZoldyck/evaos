@@ -1,37 +1,58 @@
+
 ## Objetivo
-No card "Categorias — Receitas e Despesas" do Dashboard, o grid da direita deve listar **todas** as categorias do contexto atual (Pessoal/Empresa já é aplicado no `useDashboardData`), com um filtro Receitas/Despesas controlado pelo usuário, e alguns ajustes de UX.
 
-## Mudanças
+Quando o usuário entra pela primeira vez, o contexto **Pessoal** já vem selecionado. A partir daí, qualquer alteração que ele fizer (trocar contexto, marcar/desmarcar empresas, ativar "Todas as contas") fica salva e é restaurada ao recarregar a página, navegar entre páginas ou aplicar filtros de data.
 
-### 1. `CategoryDetailGrid.tsx`
-- Novo prop `mode: "receita" | "despesa"` e `onModeChange`, além de `revenueCategories`/`expenseCategories` (ou receber ambos e o total correspondente). O grid decide qual lista renderizar com base em `mode`.
-- Header interno (quando `embedded`) com um toggle segmentado compacto "Receitas | Despesas" alinhado à direita.
-- **Remover o `.slice(0, 6)`** — renderiza todas as categorias, ordenadas desc por valor.
-- **Destaque do maior item**: primeiro card recebe borda `border-primary/40` e um badge sutil "Maior" (ou ícone), sem quebrar o layout.
-- **Bug de matching (sparkline + Δ%)**: hoje filtra `t.category === c.name`, mas `transactions.category` guarda UUID. Trocar para comparar por `c.id` com fallback ao nome (dados legados). Isso corrige `series` e `prevTotal`.
-- **Densidade responsiva**: manter `grid-cols-1 sm:grid-cols-2`, mas dentro do card do Dashboard o container externo já é `xl:grid-cols-[1fr_1.4fr]`, então em xl fica 2 colunas e abaixo colapsa para 1.
-- **Altura + scroll**: quando `embedded`, o grid vira flex column com `max-h` calculado para acompanhar a altura da coluna esquerda (dois donuts empilhados). Uso: wrapper com `h-full` + `overflow-y-auto` interno e `pr-1` para a barra.
+## Como funciona hoje
 
-### 2. `CategoryBreakdownCard.tsx`
-- Estado local `detailMode` (`"receita" | "despesa"`, default `"despesa"`).
-- Passa ambas as listas (`revenueCategories`, `expenseCategories`) + totais para o `CategoryDetailGrid` embedded, junto com `mode` e `onModeChange`.
-- Coluna direita ganha `h-full` para permitir que o grid ocupe a mesma altura da coluna esquerda (donuts empilhados).
+Em `src/contexts/CompanyContext.tsx`, o estado do seletor unificado vive só em memória:
 
-### 3. `Dashboard.tsx`
-- Sem mudança estrutural; continua passando `detailTransactions`, `currentStart/End`, `prevStart/End`.
+- `viewAll` inicia em `true` (mostra "Todas as contas")
+- `personalSelected` inicia em `true`
+- `selectedCompanyIds` inicia em `[]`
+- `selectedCompanyId` inicia em `null`
 
-## Fora de escopo
-- Lógica de agregação em `useDashboardData` (contexto Pessoal/Empresa já é aplicado lá — nada a mudar).
-- Donuts da esquerda permanecem exatamente como estão.
-- Nenhuma mudança em queries, hooks, tipos do Supabase ou regras de negócio.
+Sempre que o `effectiveUserId` muda (login, troca de impersonation), esses valores voltam ao default. Como nada é persistido, um F5 ou uma troca de página que recrie o provider zera a seleção.
 
-## Detalhes técnicos
-- Toggle: componente `Tabs` do shadcn ou par de `Button` com `variant="ghost"`/`"secondary"`. Prefiro `Tabs` inline compacto para consistência.
-- Matching corrigido:
-  ```ts
-  const txsForCat = allTransactions.filter(
-    (t) => t.type === mode && (t.category === c.id || t.category === c.name)
-  );
+## Mudanças propostas
+
+### 1. `src/contexts/CompanyContext.tsx` — persistir seleção por usuário
+
+- Definir uma chave por usuário: `eva:company-selection:{effectiveUserId}` no `localStorage`.
+- Formato salvo (JSON):
+  ```json
+  {
+    "viewAll": false,
+    "personalSelected": true,
+    "selectedCompanyIds": ["uuid-1", "uuid-2"],
+    "selectedCompanyId": "uuid-1"
+  }
   ```
-- Ordenação: `[...categories].sort((a,b) => b.value - a.value)` (sem `slice`).
-- Scroll: `<div className="h-full flex flex-col min-h-0"><Toggle/><div className="flex-1 min-h-0 overflow-y-auto pr-1">{grid}</div></div>`.
+- No `useEffect` que dispara com `effectiveUserId`:
+  1. Buscar empresas (como já faz).
+  2. Ler `localStorage[chave]`.
+     - **Se existir e for válido** (ids ainda existem em `companies` — filtrar os que sumiram): hidratar `viewAll`, `personalSelected`, `selectedCompanyIds`, `selectedCompanyId`.
+     - **Se não existir** (primeiro acesso desse usuário): aplicar default **Pessoal selecionado**, ou seja:
+       - `viewAll = false`
+       - `personalSelected = true`
+       - `selectedCompanyIds = []`
+       - `selectedCompanyId = null` (isPersonal = true)
+     - Persistir esse default imediatamente para virar o "estado salvo".
+- Adicionar um `useEffect` que, sempre que `viewAll`, `personalSelected`, `selectedCompanyIds` ou `selectedCompanyId` mudarem (e já houver `effectiveUserId`), grava o objeto atualizado no `localStorage`.
+- Cuidados:
+  - Envolver leitura/escrita em `try/catch` (modo privado, storage cheio).
+  - Validar ids contra a lista carregada de `companies` para não restaurar um id de empresa apagada.
+  - Não persistir enquanto `loading` ainda estiver `true` na primeira carga (evita sobrescrever o valor salvo com o default antes da hidratação).
+
+### 2. Comportamento esperado após a mudança
+
+- **Primeiro login:** contexto abre em Pessoal.
+- **Usuário troca para uma empresa / marca várias / ativa "Todas as contas":** seleção fica salva.
+- **F5, trocar de página, aplicar filtro de data no Dashboard:** o `CompanyProvider` continua vivo dentro do `AppLayout`, mas mesmo em recarga completa a hidratação a partir do `localStorage` devolve exatamente o último estado.
+- **Trocar de conta / impersonar outro dono no Hub:** carrega a seleção salva daquele `effectiveUserId`, ou cai no default Pessoal se for a primeira vez.
+- **Logout:** a chave permanece salva para o próximo login desse usuário (não precisa limpar).
+
+## Fora do escopo
+
+- Não mexer em `Dashboard.tsx`, filtros de data, hooks de dados, `applyCompanyFilter` ou qualquer outra página. A persistência é 100% dentro do `CompanyContext`, então todo o resto do app herda o comportamento automaticamente.
+- Não sincronizar entre abas nem salvar no Supabase — `localStorage` local basta para o caso descrito.
