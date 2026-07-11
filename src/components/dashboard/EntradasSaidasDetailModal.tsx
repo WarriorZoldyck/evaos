@@ -108,6 +108,12 @@ interface Props {
   wallets?: AccountRef[];
   creditCards?: AccountRef[];
   statusFilter?: "Pago" | "Pendente";
+  /** Quando fornecido, filtra os lançamentos por esta categoria (id ou nome). */
+  categoryFilter?: { id: string; name: string; fill?: string } | null;
+  /** Se true, ignora `statusFilter` e mostra Pago + Pendente. */
+  includeAllStatus?: boolean;
+  /** Sobrescreve o título padrão do modal. */
+  titleOverride?: string;
 }
 
 export function EntradasSaidasDetailModal({
@@ -124,7 +130,11 @@ export function EntradasSaidasDetailModal({
   wallets = [],
   creditCards = [],
   statusFilter = "Pago",
+  categoryFilter = null,
+  includeAllStatus = false,
+  titleOverride,
 }: Props) {
+
   const navigate = useNavigate();
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
   const [page, setPage] = useState(1);
