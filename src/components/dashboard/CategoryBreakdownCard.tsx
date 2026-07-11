@@ -173,6 +173,8 @@ export function CategoryBreakdownCard({
               prevStart={prevStart}
               prevEnd={prevEnd}
               loading={loading}
+              onCategoryClick={onCategoryClick}
+
             />
           </div>
         </div>
