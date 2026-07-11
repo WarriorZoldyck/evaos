@@ -205,6 +205,16 @@ export default function Dashboard() {
         onFaturamentoClick={() => setFaturamentoModalOpen(true)}
         onEntradasClick={() => setEntradasModalOpen(true)}
         onSaidasClick={() => setSaidasModalOpen(true)}
+        onSaldoAtualClick={() => setSaldoModalOpen(true)}
+      />
+
+      <SaldoAtualDetailModal
+        open={saldoModalOpen}
+        onOpenChange={setSaldoModalOpen}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        contextLabel={contextLabel}
+        saldoAtual={saldoAtual}
       />
 
       <FaturamentoDetailModal
