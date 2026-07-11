@@ -284,7 +284,9 @@ export function EntradasSaidasDetailModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${isEntradas ? "entradas" : "saidas"}${isPrevisto ? "-previstas" : ""}-${dateFrom}_a_${dateTo}.csv`;
+    const catSlug = categoryFilter ? `-${categoryFilter.name.toLowerCase().replace(/\s+/g, "_").replace(/[^\w-]/g, "")}` : "";
+    a.download = `${isEntradas ? "entradas" : "saidas"}${isPrevisto ? "-previstas" : ""}${catSlug}-${dateFrom}_a_${dateTo}.csv`;
+
     a.click();
     URL.revokeObjectURL(url);
   };
