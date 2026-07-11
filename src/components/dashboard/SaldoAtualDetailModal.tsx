@@ -59,7 +59,8 @@ export function SaldoAtualDetailModal({
     const sp = new URLSearchParams();
     sp.set("accountId", accountId);
     onOpenChange(false);
-    navigate(`/lancamentos?${sp.toString()}`);
+    // Defer navigation so Radix can finish unmounting the portal cleanly
+    setTimeout(() => navigate(`/lancamentos?${sp.toString()}`), 0);
   };
 
   const hasAny = bankAccounts.length > 0 || wallets.length > 0;
