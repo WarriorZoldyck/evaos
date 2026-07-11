@@ -228,7 +228,7 @@ export function EntradasSaidasDetailModal({
 
   const exportCsv = () => {
     const header = [
-      "pagamento", "competencia", "serie", "parcela", "contato", "descricao",
+      "pagamento", "competencia", "serie", "parcela", "contato", "conta", "descricao",
       "categoria", "forma", "status", "valor",
     ];
     const rows: string[][] = [header];
@@ -240,6 +240,7 @@ export function EntradasSaidasDetailModal({
           it.series_id ?? "",
           `${it.installment_number ?? 1}/${it.installments_total ?? 1}`,
           it.contact_name ?? "",
+          resolveAccount(it),
           it.description ?? "",
           resolveCategory(it.category),
           KIND_LABEL[classifyItem(it)],
