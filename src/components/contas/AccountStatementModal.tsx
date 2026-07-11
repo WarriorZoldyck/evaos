@@ -50,10 +50,18 @@ export function AccountStatementModal({
   accountType,
   accountName,
   initialBalance = 0,
+  initialMonth,
 }: AccountStatementModalProps) {
   const [rows, setRows] = useState<StatementRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [refMonth, setRefMonth] = useState(new Date());
+  const [refMonth, setRefMonth] = useState<Date>(initialMonth ?? new Date());
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  // Re-sync when reopened with a different initialMonth
+  useEffect(() => {
+    if (open && initialMonth) setRefMonth(startOfMonth(initialMonth));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialMonth?.getTime()]);
 
   const dateFrom = format(startOfMonth(refMonth), "yyyy-MM-dd");
   const dateTo = format(endOfMonth(refMonth), "yyyy-MM-dd");
