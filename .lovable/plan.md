@@ -1,45 +1,35 @@
-## Navegação de faturas + acesso direto ao pagamento no Dashboard
+## Corrigir barrinha de "Utilizado" nos cartões do Dashboard
 
-Além das setas ‹ › para alternar entre **fatura anterior / atual / próxima** em cada cartão do Dashboard, adicionar um atalho que abre a **fatura já filtrada no ciclo selecionado**, permitindo revisar e pagar sem sair do Dashboard.
+### Diagnóstico
 
-### UX
+O `DashboardCreditCardsRow` está agregando o valor do ciclo a partir de `allTransactions`, que vem de `useDashboardData` filtrado pelo período selecionado (`payment_date BETWEEN startStr AND endStr`). Consequência:
 
-- Em cada `CreditCard3D`, um mini-controle com setas + label do ciclo (ex.: `‹ Fatura atual · Nov/25 ›`).
-- Logo abaixo do valor de uso, um botão discreto **"Ver / Pagar fatura"** (ícone `Receipt` + texto). Clique abre o modal de fatura já posicionado no ciclo selecionado.
-- Setas e botão usam `e.stopPropagation()` para não disparar o flip 3D.
-- Estado do ciclo é por-cartão, default = "atual". Limite -1..+1.
+- Ao alternar para **Fatura anterior** ou **Próxima fatura**, o mês do ciclo cai fora do período do Dashboard → total zera (screenshot: `jun/26` mostra R$ 0,00 enquanto o modal mostra R$ 8.745,37).
+- Mesmo para o mês corrente, transações pendentes com `payment_date` fora da janela do Dashboard não entram.
 
-### Fluxo de "Ver / Pagar fatura"
+Antes da mudança de ciclos, o cálculo usava `status === "Pendente"` sem filtrar por data, o que também não é correto (misturava faturas de meses diferentes), mas por coincidência mostrava algum valor.
 
-Reaproveitar componentes já existentes — não criar tela nova:
+### Correção
 
-1. `CreditCardBillPaymentModal` (`src/components/contas/CreditCardBillPaymentModal.tsx`) já implementa listagem de itens da fatura de um cartão + fluxo de pagamento (parcial/total/sobra). Vamos abri-lo diretamente do Dashboard.
-2. O modal aceita/precisa saber qual **ciclo** exibir. Se hoje ele só mostra a fatura em aberto, adicionar props opcionais `initialCycleKey?: string` (formato `YYYY-MM`, mesmo formato usado por `compute_cycle_key` e `useClosedCycles`) e — se o modal já tiver navegação interna de mês — apenas pré-selecionar; caso contrário, filtrar as transações exibidas por `payment_date` dentro do mês do ciclo.
-3. Botão "Ver / Pagar fatura" no card chama um handler no `DashboardCreditCardsRow` que seta `{ cardId, cycleKey }` e abre o modal.
+Buscar os totais por ciclo diretamente do Supabase, independente do filtro de período do Dashboard, com um único query cobrindo os três meses (anterior, atual, próximo) para todos os cartões visíveis.
 
-### Lógica de ciclos (igual ao plano anterior)
+- Criar hook `useCreditCardCycleTotals(cardIds: string[])` em `src/hooks/useCreditCardCycleTotals.ts`:
+  - Calcula `startStr` = primeiro dia do mês anterior e `endStr` = último dia do mês seguinte (usando `date-fns`).
+  - Query única: `transactions.select("credit_card_id, payment_date, type, amount").in("credit_card_id", cardIds).gte("payment_date", startStr).lte("payment_date", endStr).is("transfer_id", null).or("payment_method.is.null,payment_method.neq.Cartão de Débito")` — mesmas blindagens que o modal (`CreditCardBillPaymentModal`) usa para não incluir transferências nem débito.
+  - Escopo por usuário: `.eq("user_id", effectiveUserId)`.
+  - Retorna `Map<cardId, Map<'YYYY-MM', number>>` já com sinal (despesa +, receita −), além de `loading` e `refetch`.
+  - Reexecuta quando `cardIds` (ordenados, join) mudar ou `effectiveUserId` mudar.
 
-- Ciclo de uma transação = mês do `payment_date`.
-- Valor exibido no cartão = soma `despesa − receita` das transações do cartão no mês do ciclo (sem filtrar por `status`, para faturas passadas/futuras aparecerem corretamente).
-- "Atual" = mês corrente; offset -1 = anterior; +1 = próxima.
+- `src/components/dashboard/DashboardCreditCardsRow.tsx`:
+  - Remover a agregação local baseada em `allTransactions`.
+  - Consumir o novo hook passando `creditCards.map(c => c.id)`.
+  - Continuar usando `Math.max(0, total)` para o `usedAmount` exibido.
+  - `allTransactions` deixa de ser usado no componente; pode remover o prop (e a passagem em `Dashboard.tsx`) ou mantê-lo por retrocompatibilidade — vou remover para não confundir.
 
-### Arquivos afetados
-
-- `src/components/dashboard/DashboardCreditCardsRow.tsx`
-  - Agregar transações por `(cardId, YYYY-MM do payment_date)`.
-  - Estado `cycleOffsetByCard: Record<string, -1|0|1>` e `billModal: { cardId, cycleKey } | null`.
-  - Passar props novos ao `CreditCard3D`: `cycleLabel`, `onPrevCycle`, `onNextCycle`, `canPrev`, `canNext`, `onOpenBill`.
-  - Renderizar `<CreditCardBillPaymentModal>` controlado pelo estado `billModal`, passando `initialCycleKey`.
-- `src/components/contas/CreditCard3D.tsx`
-  - Props novos (todos opcionais, retrocompatível): navegação de ciclo + `onOpenBill`.
-  - Bloco com setas + label do ciclo e botão "Ver / Pagar fatura" (ícone `Receipt`), com `stopPropagation`.
-- `src/components/contas/CreditCardBillPaymentModal.tsx`
-  - Aceitar `initialCycleKey?: string` e usar como filtro/seleção inicial do mês da fatura.
-  - Se já houver seletor de mês interno, apenas inicializar com esse valor; caso contrário, aplicar filtro `payment_date` no intervalo do mês.
-  - Sem mudanças na lógica de pagamento em si.
+- `src/pages/Dashboard.tsx`:
+  - Remover a prop `allTransactions` da chamada de `<DashboardCreditCardsRow />` (mantém `loading`).
 
 ### Fora de escopo
 
-- Não altera `useDashboardData`, `useClosedCycles`, cálculo de MDR, DRE ou projeções.
-- Não muda a página `/contas` nem os cards fora do Dashboard.
-- Fechamento/reabertura de ciclo continua exclusivo da tela de contas.
+- Sem alterações no modal de fatura, no `useDashboardData`, nem na lógica de ciclos/navegação já implementada.
+- Sem mudanças na regra de sinal ou nas blindagens de transferência/débito (mantidas iguais às do modal, para o valor bater com o "Total da Fatura" mostrado ao clicar em **Ver / Pagar fatura**).
