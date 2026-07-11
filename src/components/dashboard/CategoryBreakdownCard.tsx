@@ -122,8 +122,10 @@ export function CategoryBreakdownCard({
   currentEnd,
   prevStart,
   prevEnd,
+  onCategoryClick,
 }: Props) {
   const [detailMode, setDetailMode] = useState<CategoryDetailMode>("despesa");
+
 
   return (
     <Card className="shadow-premium">
