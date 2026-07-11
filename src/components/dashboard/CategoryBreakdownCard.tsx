@@ -25,7 +25,12 @@ interface Props {
   currentEnd: Date;
   prevStart: Date;
   prevEnd: Date;
+  onCategoryClick?: (
+    item: { id: string; name: string; fill: string; value: number },
+    mode: CategoryDetailMode,
+  ) => void;
 }
+
 
 
 function fmt(v: number) {
@@ -117,8 +122,10 @@ export function CategoryBreakdownCard({
   currentEnd,
   prevStart,
   prevEnd,
+  onCategoryClick,
 }: Props) {
   const [detailMode, setDetailMode] = useState<CategoryDetailMode>("despesa");
+
 
   return (
     <Card className="shadow-premium">
@@ -166,6 +173,8 @@ export function CategoryBreakdownCard({
               prevStart={prevStart}
               prevEnd={prevEnd}
               loading={loading}
+              onCategoryClick={onCategoryClick}
+
             />
           </div>
         </div>

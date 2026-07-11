@@ -108,6 +108,12 @@ interface Props {
   wallets?: AccountRef[];
   creditCards?: AccountRef[];
   statusFilter?: "Pago" | "Pendente";
+  /** Quando fornecido, filtra os lançamentos por esta categoria (id ou nome). */
+  categoryFilter?: { id: string; name: string; fill?: string } | null;
+  /** Se true, ignora `statusFilter` e mostra Pago + Pendente. */
+  includeAllStatus?: boolean;
+  /** Sobrescreve o título padrão do modal. */
+  titleOverride?: string;
 }
 
 export function EntradasSaidasDetailModal({
@@ -124,7 +130,11 @@ export function EntradasSaidasDetailModal({
   wallets = [],
   creditCards = [],
   statusFilter = "Pago",
+  categoryFilter = null,
+  includeAllStatus = false,
+  titleOverride,
 }: Props) {
+
   const navigate = useNavigate();
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
   const [page, setPage] = useState(1);
@@ -132,14 +142,18 @@ export function EntradasSaidasDetailModal({
   const PAGE_SIZE = 50;
 
   const isEntradas = mode === "entradas";
-  const isPrevisto = statusFilter === "Pendente";
+  const isPrevisto = statusFilter === "Pendente" && !includeAllStatus;
   const targetType: "receita" | "despesa" = isEntradas ? "receita" : "despesa";
   const accentClass = isEntradas ? "text-success" : "text-destructive";
   const gradientClass = isEntradas ? "bg-gradient-success" : "bg-gradient-destructive";
   const Icon = isEntradas ? TrendingUp : TrendingDown;
-  const title = isPrevisto
+  const defaultTitle = isPrevisto
     ? (isEntradas ? "Entradas previstas no período" : "Saídas previstas no período")
-    : (isEntradas ? "Entradas pagas no período" : "Saídas pagas no período");
+    : includeAllStatus
+      ? (isEntradas ? "Entradas do período" : "Saídas do período")
+      : (isEntradas ? "Entradas pagas no período" : "Saídas pagas no período");
+  const title = titleOverride ?? defaultTitle;
+
 
   const resolveCategory = (id: string) =>
     categoryNameResolver ? categoryNameResolver(id) : id || "Sem categoria";
@@ -163,9 +177,15 @@ export function EntradasSaidasDetailModal({
 
   // Rows: transactions of the target type filtered by status. Group by series_id (installments = 1 line).
   const lines = useMemo(() => {
-    const paid = transactions.filter(
-      (t) => t.type === targetType && t.status === statusFilter,
-    );
+    const paid = transactions.filter((t) => {
+      if (t.type !== targetType) return false;
+      if (!includeAllStatus && t.status !== statusFilter) return false;
+      if (categoryFilter) {
+        const cid = t.category ?? "";
+        if (cid !== categoryFilter.id && cid !== categoryFilter.name) return false;
+      }
+      return true;
+    });
     type Group = { items: Tx[] };
     const groups = new Map<string, Group>();
     paid.forEach((t) => {
@@ -195,7 +215,8 @@ export function EntradasSaidasDetailModal({
         };
       })
       .sort((a, b) => (b.first.payment_date ?? "").localeCompare(a.first.payment_date ?? ""));
-  }, [transactions, targetType, statusFilter]);
+  }, [transactions, targetType, statusFilter, includeAllStatus, categoryFilter]);
+
 
   const availableKinds = useMemo(() => {
     const s = new Set<PaymentKind>();
@@ -227,9 +248,11 @@ export function EntradasSaidasDetailModal({
     sp.set("dateFrom", dateFrom);
     sp.set("dateTo", dateTo);
     sp.set("type", targetType);
-    sp.set("status", statusFilter);
+    if (!includeAllStatus) sp.set("status", statusFilter);
+    if (categoryFilter) sp.set("category", categoryFilter.name);
     navigate(`/lancamentos?${sp.toString()}`);
   };
+
 
   const exportCsv = () => {
     const header = [
@@ -261,7 +284,9 @@ export function EntradasSaidasDetailModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${isEntradas ? "entradas" : "saidas"}${isPrevisto ? "-previstas" : ""}-${dateFrom}_a_${dateTo}.csv`;
+    const catSlug = categoryFilter ? `-${categoryFilter.name.toLowerCase().replace(/\s+/g, "_").replace(/[^\w-]/g, "")}` : "";
+    a.download = `${isEntradas ? "entradas" : "saidas"}${isPrevisto ? "-previstas" : ""}${catSlug}-${dateFrom}_a_${dateTo}.csv`;
+
     a.click();
     URL.revokeObjectURL(url);
   };
