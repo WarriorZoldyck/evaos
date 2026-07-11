@@ -45,6 +45,8 @@ interface SummaryCardsProps {
   onEntradasPrevistasClick?: () => void;
   onSaidasPrevistasClick?: () => void;
   internalTransfersTotal?: number;
+  bankAccountsCount?: number;
+  walletsCount?: number;
 }
 
 
