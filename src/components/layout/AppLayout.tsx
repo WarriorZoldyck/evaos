@@ -47,9 +47,10 @@ function AppLayoutInner() {
   return (
     <CompanyProvider>
       <SidebarProvider>
-        <div className="min-h-screen flex w-full">
+        <div className="h-screen flex w-full overflow-hidden">
           <AppSidebar />
-          <main className="flex-1 flex flex-col min-w-0">
+          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
              <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
               <div className="flex items-center gap-2">
                 <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
