@@ -215,6 +215,7 @@ export default function Dashboard() {
         wallets={wallets}
         contextLabel={contextLabel}
         saldoAtual={saldoAtual}
+        initialMonth={dateRange.start}
       />
 
       <FaturamentoDetailModal
