@@ -4,6 +4,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { getCategoryIcon } from "@/lib/dashboardInsights";
 import type { CategorySummary } from "@/hooks/useDashboardData";
+import { CategoryDetailGrid } from "@/components/dashboard/CategoryDetailGrid";
+
+interface DetailTx {
+  amount: number | string;
+  type: "receita" | "despesa";
+  status: "Pago" | "Pendente";
+  payment_date: string;
+  category: string;
+}
 
 interface Props {
   revenueCategories: CategorySummary[];
@@ -11,7 +20,13 @@ interface Props {
   totalReceitas: number;
   totalDespesas: number;
   loading: boolean;
+  detailTransactions: DetailTx[];
+  currentStart: Date;
+  currentEnd: Date;
+  prevStart: Date;
+  prevEnd: Date;
 }
+
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
