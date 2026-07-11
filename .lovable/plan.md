@@ -1,32 +1,27 @@
-# Plano: Extrato ao clicar no Saldo Atual + Filtro de calendário
+# Plano: coluna "Conta" nas modais Entradas/Saídas
 
-## 1) SaldoAtualDetailModal — abrir Extrato ao invés de navegar
-- Remover a navegação para `/lancamentos`.
-- Ao clicar em uma linha (conta ou carteira), abrir o `AccountStatementModal` já existente, passando:
-  - `accountId`, `accountType` (`bank` | `wallet`), `accountName`, `initialBalance`
-  - Novo prop `initialMonth` = data selecionada no Dashboard (período atual).
-- Estado local no modal: `statementTarget` com os dados da conta clicada.
-- Fechar o Saldo Atual ao abrir o Extrato (evita empilhar dois Dialogs Radix).
+## Alteração
+Adicionar a coluna **Conta** logo antes das demais colunas de contexto na tabela do `EntradasSaidasDetailModal` (usado tanto para Entradas quanto para Saídas).
 
-## 2) Dashboard — repassar a data selecionada
-- Passar `selectedDate` (ou `dateFrom` do filtro do Dashboard) para `SaldoAtualDetailModal` via novo prop `initialMonth`.
-- O modal repassa para o `AccountStatementModal`.
+## Detalhes
 
-## 3) AccountStatementModal — filtro de calendário
-- Manter as setas ‹ › atuais.
-- Adicionar entre elas um botão com o nome do mês que abre um `Popover` com o componente `Calendar` (shadcn, já usado no projeto).
-- Modo de seleção mensal: ao escolher qualquer dia, `setRefMonth(startOfMonth(day))`.
-- Locale `ptBR`, `captionLayout="dropdown"` para permitir troca rápida de mês/ano.
-- Aceitar novo prop opcional `initialMonth?: Date` para o estado inicial de `refMonth` (default: hoje).
+### `src/components/dashboard/EntradasSaidasDetailModal.tsx`
+- Novos props opcionais:
+  - `bankAccounts?: { id: string; name: string }[]`
+  - `wallets?: { id: string; name: string }[]`
+  - `creditCards?: { id: string; name: string }[]`
+- Função `resolveAccount(t)` que retorna:
+  - Nome do `bank_account_id`, `wallet_id` ou `credit_card_id` (com sufixo "· Cartão" para deixar claro), nessa ordem de prioridade.
+  - Fallback: `—`.
+- Nova coluna **Conta** entre "Contato" e "Descrição":
+  - Header: `<th>Conta</th>`
+  - Célula: `resolveAccount(l.first)` com `truncate max-w-[160px]` e cor `text-muted-foreground`.
+  - Visível em md+ (`hidden md:table-cell`) para não estourar em telas pequenas.
+- Adicionar `conta` também na exportação CSV (coluna extra após `contato`).
 
-## 4) Detalhes técnicos
-- Arquivos alterados:
-  - `src/components/dashboard/SaldoAtualDetailModal.tsx` — remover `useNavigate`, adicionar estado `statementTarget`, renderizar `<AccountStatementModal>` aninhado; novo prop `initialMonth`.
-  - `src/pages/Dashboard.tsx` — passar `initialMonth={selectedDateFromPeriodFilter}` para `SaldoAtualDetailModal`.
-  - `src/components/contas/AccountStatementModal.tsx` — novo prop `initialMonth`; substituir label do mês por `Popover`+`Calendar` mantendo as setas.
-- Sem mudanças em hooks de dados, RLS ou schema.
-- Sem alterações no `Lancamentos.tsx` (o parâmetro `accountId` de query string introduzido antes fica inerte; pode ser removido em passo futuro se desejado — fora do escopo).
+### `src/pages/Dashboard.tsx`
+- Passar `bankAccounts`, `wallets`, `creditCards` (já disponíveis via `useAccounts()`) para as duas instâncias do modal (Entradas e Saídas).
 
 ## Fora de escopo
-- Filtro por intervalo de datas customizado dentro do extrato (mantemos navegação mensal).
-- Alterações de cálculo de saldo.
+- Filtro por conta dentro do modal (só exibição/CSV).
+- Alterar `FaturamentoDetailModal` (usuário pediu apenas Entradas e Saídas).

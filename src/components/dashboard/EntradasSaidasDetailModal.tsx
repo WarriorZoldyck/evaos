@@ -89,6 +89,11 @@ function formatDate(iso: string | null | undefined): string {
   }
 }
 
+interface AccountRef {
+  id: string;
+  name: string;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -99,6 +104,9 @@ interface Props {
   dateFrom: string;
   dateTo: string;
   categoryNameResolver?: (id: string) => string;
+  bankAccounts?: AccountRef[];
+  wallets?: AccountRef[];
+  creditCards?: AccountRef[];
 }
 
 export function EntradasSaidasDetailModal({
@@ -111,6 +119,9 @@ export function EntradasSaidasDetailModal({
   dateFrom,
   dateTo,
   categoryNameResolver,
+  bankAccounts = [],
+  wallets = [],
+  creditCards = [],
 }: Props) {
   const navigate = useNavigate();
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
