@@ -89,6 +89,11 @@ function formatDate(iso: string | null | undefined): string {
   }
 }
 
+interface AccountRef {
+  id: string;
+  name: string;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -99,6 +104,9 @@ interface Props {
   dateFrom: string;
   dateTo: string;
   categoryNameResolver?: (id: string) => string;
+  bankAccounts?: AccountRef[];
+  wallets?: AccountRef[];
+  creditCards?: AccountRef[];
 }
 
 export function EntradasSaidasDetailModal({
@@ -111,6 +119,9 @@ export function EntradasSaidasDetailModal({
   dateFrom,
   dateTo,
   categoryNameResolver,
+  bankAccounts = [],
+  wallets = [],
+  creditCards = [],
 }: Props) {
   const navigate = useNavigate();
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
@@ -127,6 +138,23 @@ export function EntradasSaidasDetailModal({
 
   const resolveCategory = (id: string) =>
     categoryNameResolver ? categoryNameResolver(id) : id || "Sem categoria";
+
+  const accountMaps = useMemo(() => {
+    const bank = new Map(bankAccounts.map((a) => [a.id, a.name]));
+    const wall = new Map(wallets.map((a) => [a.id, a.name]));
+    const card = new Map(creditCards.map((a) => [a.id, a.name]));
+    return { bank, wall, card };
+  }, [bankAccounts, wallets, creditCards]);
+
+  const resolveAccount = (t: Tx): string => {
+    if (t.bank_account_id && accountMaps.bank.has(t.bank_account_id))
+      return accountMaps.bank.get(t.bank_account_id)!;
+    if (t.wallet_id && accountMaps.wall.has(t.wallet_id))
+      return accountMaps.wall.get(t.wallet_id)!;
+    if (t.credit_card_id && accountMaps.card.has(t.credit_card_id))
+      return `${accountMaps.card.get(t.credit_card_id)} · Cartão`;
+    return "—";
+  };
 
   // Rows: paid transactions of the target type. Group by series_id (installments = 1 line).
   const lines = useMemo(() => {
@@ -200,7 +228,7 @@ export function EntradasSaidasDetailModal({
 
   const exportCsv = () => {
     const header = [
-      "pagamento", "competencia", "serie", "parcela", "contato", "descricao",
+      "pagamento", "competencia", "serie", "parcela", "contato", "conta", "descricao",
       "categoria", "forma", "status", "valor",
     ];
     const rows: string[][] = [header];
@@ -212,6 +240,7 @@ export function EntradasSaidasDetailModal({
           it.series_id ?? "",
           `${it.installment_number ?? 1}/${it.installments_total ?? 1}`,
           it.contact_name ?? "",
+          resolveAccount(it),
           it.description ?? "",
           resolveCategory(it.category),
           KIND_LABEL[classifyItem(it)],
@@ -320,6 +349,7 @@ export function EntradasSaidasDetailModal({
                 <thead className="text-[11px] uppercase text-muted-foreground sticky top-0 bg-background">
                   <tr className="border-b">
                     <th className="text-left py-2 pr-3">Contato</th>
+                    <th className="text-left py-2 pr-3 hidden md:table-cell">Conta</th>
                     <th className="text-left py-2 pr-3">Descrição</th>
                     <th className="text-left py-2 pr-3 hidden md:table-cell">Pagamento</th>
                     <th className="text-left py-2 pr-3 hidden lg:table-cell">Categoria</th>
@@ -334,6 +364,9 @@ export function EntradasSaidasDetailModal({
                     return (
                       <tr key={l.key} className="border-b last:border-0 hover:bg-muted/30">
                         <td className="py-2 pr-3 font-medium truncate max-w-[220px]">{label}</td>
+                        <td className="py-2 pr-3 hidden md:table-cell text-muted-foreground truncate max-w-[160px]">
+                          {resolveAccount(t)}
+                        </td>
                         <td className="py-2 pr-3">
                           <div className="flex items-center gap-2">
                             <span className="truncate max-w-[320px] text-muted-foreground">
