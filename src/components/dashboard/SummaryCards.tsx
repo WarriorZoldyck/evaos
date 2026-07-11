@@ -39,6 +39,8 @@ interface SummaryCardsProps {
   saidasSeries?: SeriesPoint[];
   saldoSeries?: SeriesPoint[];
   onFaturamentoClick?: () => void;
+  onEntradasClick?: () => void;
+  onSaidasClick?: () => void;
   internalTransfersTotal?: number;
 }
 
@@ -240,6 +242,8 @@ export function SummaryCards({
   prevEntradaPrevista, prevSaidaPrevista, prevSaldoPrevisto,
   faturamentoSeries, entradasSeries, saidasSeries, saldoSeries,
   onFaturamentoClick,
+  onEntradasClick,
+  onSaidasClick,
   internalTransfersTotal,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
@@ -299,7 +303,7 @@ export function SummaryCards({
           trend="up"
           gradient="bg-gradient-success"
           loading={loading}
-          onClick={() => go({ type: "receita", status: "Pago" })}
+          onClick={onEntradasClick ?? (() => go({ type: "receita", status: "Pago" }))}
           delta={prevEntradas !== undefined ? pctChange(entradas, prevEntradas) : undefined}
           series={entradasSeries}
           accent="hsl(142, 71%, 45%)"
@@ -311,7 +315,7 @@ export function SummaryCards({
           trend="down"
           gradient="bg-gradient-destructive"
           loading={loading}
-          onClick={() => go({ type: "despesa", status: "Pago" })}
+          onClick={onSaidasClick ?? (() => go({ type: "despesa", status: "Pago" }))}
           delta={prevSaidas !== undefined ? pctChange(saidas, prevSaidas) : undefined}
           series={saidasSeries}
           accent="hsl(0, 72%, 55%)"
