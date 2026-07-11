@@ -57,9 +57,11 @@ export function CategoryDetailGrid({
   embedded = false,
   mode: modeProp,
   onModeChange,
+  onCategoryClick,
 }: Props) {
   const navigate = useNavigate();
   const mode: CategoryDetailMode = modeProp ?? "despesa";
+
 
   const categories = mode === "receita" ? revenueCategories : expenseCategories;
   const total = mode === "receita" ? totalReceitas : totalDespesas;
