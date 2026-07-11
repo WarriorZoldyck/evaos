@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHub } from "@/contexts/HubContext";
 import { CompanyProvider } from "@/contexts/CompanyContext";
+import { HeaderSlotProvider, useHeaderSlotContent } from "@/contexts/HeaderSlotContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -13,6 +14,7 @@ import { EvaChatButton } from "@/components/chat/EvaChatButton";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
 
 
 export default function AppLayout() {
