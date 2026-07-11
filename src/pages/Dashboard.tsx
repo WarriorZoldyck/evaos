@@ -131,42 +131,48 @@ export default function Dashboard() {
     [allTransactions, dateRange],
   );
 
+  const headerControls = useMemo(
+    () => (
+      <>
+        <Select
+          value={filters.accountId || "__all__"}
+          onValueChange={(v) =>
+            setFilters((f) => ({ ...f, accountId: v === "__all__" ? null : v }))
+          }
+        >
+          <SelectTrigger className="w-[180px] h-8 text-xs">
+            <SelectValue placeholder="Todas as contas" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todas as contas</SelectItem>
+            {bankAccounts.map((acc) => (
+              <SelectItem key={acc.id} value={acc.id}>
+                {acc.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <PeriodFilter
+          filters={filters}
+          onChange={(f) => setFilters((prev) => ({ ...prev, ...f }))}
+        />
+      </>
+    ),
+    [filters, bankAccounts],
+  );
+  useHeaderSlot(headerControls);
+
   return (
-    <>
-      {/* Header fixo (sticky) — cobre o padding do container de scroll */}
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 -mt-4 md:-mt-6 px-4 md:px-6 py-3 bg-background/95 backdrop-blur-md border-b border-border/60 mb-4 md:mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold font-display text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Visão geral — <span className="text-primary font-medium">{contextLabel}</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <Select
-              value={filters.accountId || "__all__"}
-              onValueChange={(v) =>
-                setFilters((f) => ({ ...f, accountId: v === "__all__" ? null : v }))
-              }
-            >
-              <SelectTrigger className="w-[180px] h-8 text-xs">
-                <SelectValue placeholder="Todas as contas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Todas as contas</SelectItem>
-                {bankAccounts.map((acc) => (
-                  <SelectItem key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <PeriodFilter filters={filters} onChange={(f) => setFilters((prev) => ({ ...prev, ...f }))} />
-          </div>
-        </div>
+    <div className="space-y-6 animate-fade-in">
+      {/* Contexto discreto (sem barra sticky duplicada — filtros vivem no header global) */}
+      <div className="flex items-baseline gap-2">
+        <h1 className="text-xl font-bold font-display text-foreground">Dashboard</h1>
+        <span className="text-muted-foreground text-sm">
+          — <span className="text-primary font-medium">{contextLabel}</span>
+        </span>
       </div>
 
-      <div className="space-y-6 animate-fade-in">
+
 
 
       {/* Saúde Financeira (cabeçalho) */}
