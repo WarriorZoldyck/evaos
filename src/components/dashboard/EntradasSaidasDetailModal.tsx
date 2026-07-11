@@ -139,6 +139,23 @@ export function EntradasSaidasDetailModal({
   const resolveCategory = (id: string) =>
     categoryNameResolver ? categoryNameResolver(id) : id || "Sem categoria";
 
+  const accountMaps = useMemo(() => {
+    const bank = new Map(bankAccounts.map((a) => [a.id, a.name]));
+    const wall = new Map(wallets.map((a) => [a.id, a.name]));
+    const card = new Map(creditCards.map((a) => [a.id, a.name]));
+    return { bank, wall, card };
+  }, [bankAccounts, wallets, creditCards]);
+
+  const resolveAccount = (t: Tx): string => {
+    if (t.bank_account_id && accountMaps.bank.has(t.bank_account_id))
+      return accountMaps.bank.get(t.bank_account_id)!;
+    if (t.wallet_id && accountMaps.wall.has(t.wallet_id))
+      return accountMaps.wall.get(t.wallet_id)!;
+    if (t.credit_card_id && accountMaps.card.has(t.credit_card_id))
+      return `${accountMaps.card.get(t.credit_card_id)} · Cartão`;
+    return "—";
+  };
+
   // Rows: paid transactions of the target type. Group by series_id (installments = 1 line).
   const lines = useMemo(() => {
     const paid = transactions.filter(
