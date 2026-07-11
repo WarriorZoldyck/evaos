@@ -392,6 +392,8 @@ export default function Dashboard() {
         daysInPeriod={performance.daysInPeriod}
         loading={loading}
       />
-    </div>
+      </div>
+    </>
   );
 }
+
