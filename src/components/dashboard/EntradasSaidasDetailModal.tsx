@@ -142,14 +142,18 @@ export function EntradasSaidasDetailModal({
   const PAGE_SIZE = 50;
 
   const isEntradas = mode === "entradas";
-  const isPrevisto = statusFilter === "Pendente";
+  const isPrevisto = statusFilter === "Pendente" && !includeAllStatus;
   const targetType: "receita" | "despesa" = isEntradas ? "receita" : "despesa";
   const accentClass = isEntradas ? "text-success" : "text-destructive";
   const gradientClass = isEntradas ? "bg-gradient-success" : "bg-gradient-destructive";
   const Icon = isEntradas ? TrendingUp : TrendingDown;
-  const title = isPrevisto
+  const defaultTitle = isPrevisto
     ? (isEntradas ? "Entradas previstas no período" : "Saídas previstas no período")
-    : (isEntradas ? "Entradas pagas no período" : "Saídas pagas no período");
+    : includeAllStatus
+      ? (isEntradas ? "Entradas do período" : "Saídas do período")
+      : (isEntradas ? "Entradas pagas no período" : "Saídas pagas no período");
+  const title = titleOverride ?? defaultTitle;
+
 
   const resolveCategory = (id: string) =>
     categoryNameResolver ? categoryNameResolver(id) : id || "Sem categoria";
