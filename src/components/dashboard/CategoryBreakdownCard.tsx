@@ -3,7 +3,6 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
-import { getCategoryIcon } from "@/lib/dashboardInsights";
 import type { CategorySummary } from "@/hooks/useDashboardData";
 import { CategoryDetailGrid, type CategoryDetailMode } from "@/components/dashboard/CategoryDetailGrid";
 
