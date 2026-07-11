@@ -252,26 +252,21 @@ export default function Dashboard() {
 
 
 
-      {/* Categorias — Receitas e Despesas (card unificado) */}
+      {/* Categorias — Receitas e Despesas + detalhes (card unificado) */}
       <CategoryBreakdownCard
         revenueCategories={categoryBreakdown.revenueCategories}
         expenseCategories={categoryBreakdown.expenseCategories}
         totalReceitas={summary.entradas}
         totalDespesas={summary.saidas}
         loading={loading}
-      />
-
-      {/* NEW: Categorias detalhadas (estilo da referência) */}
-      <CategoryDetailGrid
-        categories={categoryBreakdown.expenseCategories}
-        total={summary.saidas}
-        allTransactions={allTransactions as any}
+        detailTransactions={allTransactions as any}
         currentStart={dateRange.start}
         currentEnd={dateRange.end}
         prevStart={prevRange.start}
         prevEnd={prevRange.end}
-        loading={loading}
       />
+
+
 
       {/* NEW: Cartões de Crédito (estilo carteira) */}
       <DashboardCreditCardsRow loading={loading} />
