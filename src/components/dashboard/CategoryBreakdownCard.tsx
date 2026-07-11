@@ -3,7 +3,6 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
-import { getCategoryIcon } from "@/lib/dashboardInsights";
 import type { CategorySummary } from "@/hooks/useDashboardData";
 import { CategoryDetailGrid, type CategoryDetailMode } from "@/components/dashboard/CategoryDetailGrid";
 
@@ -69,72 +68,38 @@ function Donut({
           {emptyMessage}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-          {/* Donut */}
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={85}
-                  paddingAngle={3}
-                  dataKey="value"
-                  nameKey="name"
-                  strokeWidth={0}
-                  onClick={handleClick}
-                  className="cursor-pointer"
-                >
-                  {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--popover))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "10px",
-                    color: "hsl(var(--popover-foreground))",
-                    fontSize: 12,
-                  }}
-                  formatter={(value: number) => [fmt(value)]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Legend with icons */}
-          <div className="space-y-1.5 max-h-56 overflow-auto pr-1">
-            {data.map((c) => {
-              const Icon = getCategoryIcon(c.name);
-              const pct = total > 0 ? (c.value / total) * 100 : 0;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() =>
-                    navigate(`/lancamentos?category=${encodeURIComponent(c.name)}&type=${type}`)
-                  }
-                  className="w-full flex items-center gap-2 p-1.5 rounded-md hover:bg-muted/40 transition text-left"
-                >
-                  <div
-                    className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ background: `${c.fill}22`, color: c.fill }}
-                  >
-                    <Icon className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{c.name}</p>
-                    <p className="text-[10px] text-muted-foreground">{pct.toFixed(1)}%</p>
-                  </div>
-                  <span className="text-xs font-semibold font-display shrink-0">
-                    {fmt(c.value)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                innerRadius={55}
+                outerRadius={85}
+                paddingAngle={3}
+                dataKey="value"
+                nameKey="name"
+                strokeWidth={0}
+                onClick={handleClick}
+                className="cursor-pointer"
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "hsl(var(--popover))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "10px",
+                  color: "hsl(var(--popover-foreground))",
+                  fontSize: 12,
+                }}
+                formatter={(value: number) => [fmt(value)]}
+              />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
       )}
     </div>
