@@ -248,9 +248,11 @@ export function EntradasSaidasDetailModal({
     sp.set("dateFrom", dateFrom);
     sp.set("dateTo", dateTo);
     sp.set("type", targetType);
-    sp.set("status", statusFilter);
+    if (!includeAllStatus) sp.set("status", statusFilter);
+    if (categoryFilter) sp.set("category", categoryFilter.name);
     navigate(`/lancamentos?${sp.toString()}`);
   };
+
 
   const exportCsv = () => {
     const header = [
