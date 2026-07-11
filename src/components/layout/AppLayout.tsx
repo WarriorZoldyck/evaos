@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 
-
 export default function AppLayout() {
   const { user, loading } = useAuth();
 
@@ -42,57 +41,87 @@ function AppLayoutInner() {
   const location = useLocation();
   const isOnLancamentos = location.pathname === "/lancamentos";
   const [globalFormOpen, setGlobalFormOpen] = useState(false);
-  const { impersonatingOwnerId, impersonatingOwnerName, impersonatingRole, exitImpersonation } = useHub();
-
-  const roleLabel: Record<string, string> = { admin: "Admin", editor: "Editor", viewer: "Leitura" };
 
   return (
     <CompanyProvider>
-      <SidebarProvider>
-        <div className="h-screen flex w-full overflow-hidden">
-          <AppSidebar />
-          <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-             <header className="h-14 flex items-center justify-between border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
-              <div className="flex items-center gap-2">
-                <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
-                {impersonatingOwnerName && (
-                  <Badge variant="outline" className="gap-1 text-xs cursor-pointer hover:bg-destructive/10 border-primary/40 bg-primary/5" onClick={exitImpersonation} title="Sair da conta">
-                    👤 {impersonatingOwnerName}
-                    {impersonatingRole && (
-                      <span className="text-[10px] opacity-70 ml-0.5">• {roleLabel[impersonatingRole] || impersonatingRole}</span>
-                    )}
-                    <span className="ml-1">✕</span>
-                  </Badge>
-                )}
+      <HeaderSlotProvider>
+        <SidebarProvider>
+          <div className="h-screen flex w-full overflow-hidden">
+            <AppSidebar />
+            <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+              <AppHeader
+                isOnLancamentos={isOnLancamentos}
+                onOpenGlobalForm={() => setGlobalFormOpen(true)}
+              />
+              <SubscriptionBanner />
+              <div className="flex-1 overflow-auto p-4 md:p-6">
+                <Outlet />
               </div>
-              <div className="flex items-center gap-2">
-                {!isOnLancamentos && (
-                  <Button
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => setGlobalFormOpen(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Novo Lançamento</span>
-                  </Button>
-                )}
-                <ThemeToggle />
-              </div>
-            </header>
-            <SubscriptionBanner />
-            <div className="flex-1 overflow-auto p-4 md:p-6">
-              <Outlet />
-            </div>
-          </main>
-        </div>
-        <GlobalTransactionModal
-          open={globalFormOpen}
-          onClose={() => setGlobalFormOpen(false)}
-        />
-        <OnboardingGuide />
-        <EvaChatButton />
-      </SidebarProvider>
+            </main>
+          </div>
+          <GlobalTransactionModal
+            open={globalFormOpen}
+            onClose={() => setGlobalFormOpen(false)}
+          />
+          <OnboardingGuide />
+          <EvaChatButton />
+        </SidebarProvider>
+      </HeaderSlotProvider>
     </CompanyProvider>
+  );
+}
+
+function AppHeader({
+  isOnLancamentos,
+  onOpenGlobalForm,
+}: {
+  isOnLancamentos: boolean;
+  onOpenGlobalForm: () => void;
+}) {
+  const { impersonatingOwnerName, impersonatingRole, exitImpersonation } = useHub();
+  const slotContent = useHeaderSlotContent();
+  const roleLabel: Record<string, string> = { admin: "Admin", editor: "Editor", viewer: "Leitura" };
+
+  return (
+    <header className="h-14 flex items-center justify-between gap-3 border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
+      <div className="flex items-center gap-2 min-w-0 shrink-0">
+        <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
+        {impersonatingOwnerName && (
+          <Badge
+            variant="outline"
+            className="gap-1 text-xs cursor-pointer hover:bg-destructive/10 border-primary/40 bg-primary/5"
+            onClick={exitImpersonation}
+            title="Sair da conta"
+          >
+            👤 {impersonatingOwnerName}
+            {impersonatingRole && (
+              <span className="text-[10px] opacity-70 ml-0.5">
+                • {roleLabel[impersonatingRole] || impersonatingRole}
+              </span>
+            )}
+            <span className="ml-1">✕</span>
+          </Badge>
+        )}
+      </div>
+
+      {/* Centro: slot injetado pelas páginas (ex.: filtros do Dashboard) */}
+      <div className="flex-1 flex justify-center min-w-0 overflow-hidden">
+        {slotContent && (
+          <div className="flex items-center gap-2 flex-wrap justify-center">
+            {slotContent}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        {!isOnLancamentos && (
+          <Button size="sm" className="gap-1.5" onClick={onOpenGlobalForm}>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Novo Lançamento</span>
+          </Button>
+        )}
+        <ThemeToggle />
+      </div>
+    </header>
   );
 }
