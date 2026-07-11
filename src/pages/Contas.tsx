@@ -24,6 +24,7 @@ import {
 import { CreditCard, Plus, Pencil, Trash2, Landmark, Wallet, Smartphone, Receipt, FileText, Link } from "lucide-react";
 import { VirtualWalletCard } from "@/components/contas/VirtualWalletCard";
 import { useAccounts, type CardTerminal } from "@/hooks/useAccounts";
+import { useAccountCurrentBalances } from "@/hooks/useAccountCurrentBalances";
 import { useCompany } from "@/contexts/CompanyContext";
 import { AccountFormModal } from "@/components/contas/AccountFormModal";
 import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
@@ -55,6 +56,9 @@ export default function Contas() {
     createWallet, updateWallet, deleteWallet,
     createCardTerminal, updateCardTerminal, deleteCardTerminal,
   } = useAccounts();
+
+  const { balances: bankBalances } = useAccountCurrentBalances(bankAccounts, "bank");
+  const { balances: walletBalances } = useAccountCurrentBalances(wallets, "wallet");
 
   const [activeTab, setActiveTab] = useState<AccountTab>("bank");
   const [formOpen, setFormOpen] = useState(false);
@@ -208,7 +212,7 @@ export default function Contas() {
                       <TableHead>Tipo</TableHead>
                       <TableHead>Agência</TableHead>
                       <TableHead>Conta</TableHead>
-                      <TableHead className="text-right">Saldo Inicial</TableHead>
+                      <TableHead className="text-right">Saldo Atual</TableHead>
                       <TableHead className="w-24 text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -219,7 +223,16 @@ export default function Contas() {
                         <TableCell><Badge variant="outline">{a.type}</Badge></TableCell>
                         <TableCell className="text-muted-foreground">{a.agency_number || "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{a.account_number || "—"}</TableCell>
-                        <TableCell className="text-right font-mono">{formatCurrency(a.initial_balance)}</TableCell>
+                        <TableCell className="text-right font-mono">
+                          <div className="flex flex-col items-end">
+                            <span className={((bankBalances.get(a.id) ?? a.initial_balance) as number) < 0 ? "text-destructive" : ""}>
+                              {formatCurrency(bankBalances.get(a.id) ?? a.initial_balance)}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground font-sans">
+                              Inicial: {formatCurrency(a.initial_balance)}
+                            </span>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: a.id, type: "bank", name: a.name, initialBalance: a.initial_balance })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
@@ -338,7 +351,7 @@ export default function Contas() {
                     isFlipped={!!walletFlips.flipped[w.id]}
                     onFlip={() => walletFlips.toggle(w.id)}
                     walletName={w.name}
-                    balance={String(w.initial_balance)}
+                    balance={String(walletBalances.get(w.id) ?? w.initial_balance)}
                   />
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: w.id, type: "wallet", name: w.name, initialBalance: w.initial_balance })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
