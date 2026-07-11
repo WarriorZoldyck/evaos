@@ -12,6 +12,7 @@ import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransaction
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
 import { FaturamentoDetailModal } from "@/components/dashboard/FaturamentoDetailModal";
+import { EntradasSaidasDetailModal } from "@/components/dashboard/EntradasSaidasDetailModal";
 import { MdrDetailModal } from "@/components/dashboard/MdrDetailModal";
 import { useMdrSummary } from "@/hooks/useMdrSummary";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +35,8 @@ export default function Dashboard() {
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
   const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
+  const [entradasModalOpen, setEntradasModalOpen] = useState(false);
+  const [saidasModalOpen, setSaidasModalOpen] = useState(false);
   const [mdrModalOpen, setMdrModalOpen] = useState(false);
   const mdr = useMdrSummary();
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
@@ -198,6 +201,8 @@ export default function Dashboard() {
         saidasSeries={saidasSeries}
         saldoSeries={saldoSeries}
         onFaturamentoClick={() => setFaturamentoModalOpen(true)}
+        onEntradasClick={() => setEntradasModalOpen(true)}
+        onSaidasClick={() => setSaidasModalOpen(true)}
       />
 
       <FaturamentoDetailModal
@@ -210,6 +215,31 @@ export default function Dashboard() {
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
         categoryNameResolver={categoryNameResolver}
       />
+
+      <EntradasSaidasDetailModal
+        open={entradasModalOpen}
+        onOpenChange={setEntradasModalOpen}
+        mode="entradas"
+        transactions={transactions as any}
+        total={summary.entradas}
+        prevTotal={prevEntradas}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+      />
+
+      <EntradasSaidasDetailModal
+        open={saidasModalOpen}
+        onOpenChange={setSaidasModalOpen}
+        mode="saidas"
+        transactions={transactions as any}
+        total={summary.saidas}
+        prevTotal={prevSaidas}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+      />
+
 
 
       {/* MDR — taxas de maquininha no mês */}
