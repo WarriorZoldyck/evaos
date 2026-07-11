@@ -177,9 +177,15 @@ export function EntradasSaidasDetailModal({
 
   // Rows: transactions of the target type filtered by status. Group by series_id (installments = 1 line).
   const lines = useMemo(() => {
-    const paid = transactions.filter(
-      (t) => t.type === targetType && t.status === statusFilter,
-    );
+    const paid = transactions.filter((t) => {
+      if (t.type !== targetType) return false;
+      if (!includeAllStatus && t.status !== statusFilter) return false;
+      if (categoryFilter) {
+        const cid = t.category ?? "";
+        if (cid !== categoryFilter.id && cid !== categoryFilter.name) return false;
+      }
+      return true;
+    });
     type Group = { items: Tx[] };
     const groups = new Map<string, Group>();
     paid.forEach((t) => {
@@ -209,7 +215,8 @@ export function EntradasSaidasDetailModal({
         };
       })
       .sort((a, b) => (b.first.payment_date ?? "").localeCompare(a.first.payment_date ?? ""));
-  }, [transactions, targetType, statusFilter]);
+  }, [transactions, targetType, statusFilter, includeAllStatus, categoryFilter]);
+
 
   const availableKinds = useMemo(() => {
     const s = new Set<PaymentKind>();
