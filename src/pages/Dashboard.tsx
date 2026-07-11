@@ -44,6 +44,12 @@ export default function Dashboard() {
   const [saidasPrevModalOpen, setSaidasPrevModalOpen] = useState(false);
   const [saldoModalOpen, setSaldoModalOpen] = useState(false);
   const [mdrModalOpen, setMdrModalOpen] = useState(false);
+  const [categoryModal, setCategoryModal] = useState<{
+    open: boolean;
+    mode: "receita" | "despesa";
+    category: { id: string; name: string; fill: string; value: number } | null;
+  }>({ open: false, mode: "despesa", category: null });
+
   const mdr = useMdrSummary();
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
   const {
