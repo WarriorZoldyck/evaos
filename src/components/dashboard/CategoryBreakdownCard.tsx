@@ -25,7 +25,12 @@ interface Props {
   currentEnd: Date;
   prevStart: Date;
   prevEnd: Date;
+  onCategoryClick?: (
+    item: { id: string; name: string; fill: string; value: number },
+    mode: CategoryDetailMode,
+  ) => void;
 }
+
 
 
 function fmt(v: number) {
