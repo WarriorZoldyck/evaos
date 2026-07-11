@@ -1,27 +1,32 @@
-# Plano: modais para "Entradas previstas" e "Saídas previstas"
+# Plano: eliminar espaços em branco no dashboard + cabeçalho fixo
 
-Reaproveitar o `EntradasSaidasDetailModal` para exibir também previstas (Pendentes), removendo o `navigate` para `/lancamentos` desses dois cards.
+## 1) Grid dos cards principais
+- `SummaryCards.tsx`: trocar `xl:grid-cols-6` por `xl:grid-cols-5` no grid principal.
+  - Motivo: existem 5 cards (Saldo Atual, Faturamento, Entradas, Saídas, Saldo do Período). Em telas ≥1280px a grid criava uma 6ª coluna vazia à direita, gerando o vão em branco visível no print.
+- Manter os breakpoints menores: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`.
 
-## 1) `EntradasSaidasDetailModal` — suportar Pendentes
-- Novo prop opcional `statusFilter: "Pago" | "Pendente"` (default `"Pago"` para não quebrar chamadas existentes).
-- Trocar filtro interno de `t.status === "Pago"` por `t.status === statusFilter`.
-- Título/descrição dinâmicos:
-  - `Pago` → "Entradas/Saídas pagas no período" (comportamento atual).
-  - `Pendente` → "Entradas/Saídas previstas no período" + descrição "…com previsão de pagamento entre X e Y".
-- Fonte dos dados: continuar usando `transactions` (dashboard já traz pagos e pendentes do período; verificar rapidamente na implementação — se não, usar `allTransactions` filtrado por payment_date do período).
-- CSV: nome do arquivo passa a incluir `previstas` quando `statusFilter === "Pendente"`.
-- Botão "Ver todos os lançamentos do período" mantém o `status` correto na query string.
+## 2) Card "Saldo Atual" — preencher espaço vertical
+Diferente dos vizinhos, ele não tem delta nem sparkline, ficando visualmente "curto".
+- Adicionar `subtitle` informativo no `SummaryCard`:
+  - `"{N} conta(s) · {M} carteira(s)"` calculado via `bankAccounts.length` e `wallets.length` (novos props opcionais no `SummaryCards`, alimentados pelo Dashboard).
+- Adicionar `series={saldoSeries}` para ganhar a linha de sparkline na base — dá densidade equivalente aos demais cards sem inventar métrica nova (a série já representa o comportamento diário do saldo do período).
+  - Manter `delta` ausente para não confundir (Saldo Atual é ponto-no-tempo, não período vs. período).
 
-## 2) `SummaryCards.tsx`
-- Adicionar props opcionais: `onEntradasPrevistasClick?: () => void` e `onSaidasPrevistasClick?: () => void`.
-- Nos `ForecastCard`s trocar `onClick={() => go(...)}` por `onClick={onEntradasPrevistasClick ?? (() => go(...))}` (e equivalente para saídas). O card "Saldo previsto" permanece como está.
+## 3) Cabeçalho fixo (título + filtros)
+- No `Dashboard.tsx`, envolver o bloco `Header` (título + selector de conta + `PeriodFilter`) em um container:
+  - `sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background/90 backdrop-blur-md border-b border-border/60`
+  - Isso o mantém colado ao topo da área de conteúdo (dentro do `overflow-auto` do `AppLayout`), abaixo do header global (que já é sticky com `z-40`).
+- Reduzir levemente o `space-y-6` do container raiz para `space-y-4` no mobile e `md:space-y-6` para compensar o padding extra do sticky (opcional; só se surgir gap duplicado).
+- `FinancialHealthBar` **não** entra no sticky para não ocupar demais na rolagem — só cabeçalho (título + filtros).
 
-## 3) `Dashboard.tsx`
-- Novos estados: `entradasPrevModalOpen`, `saidasPrevModalOpen`.
-- Passar handlers `onEntradasPrevistasClick` e `onSaidasPrevistasClick` para `SummaryCards`.
-- Renderizar duas novas instâncias do `EntradasSaidasDetailModal` com `statusFilter="Pendente"`, `total={entradaPrevista}`/`{saidaPrevista}` (obter de `useDashboardData`), e `prevTotal` equivalente se disponível — caso contrário, omitir.
-- Reutilizar `bankAccounts`, `wallets`, `creditCards`, `categoryNameResolver` e o mesmo `dateRange`.
+## Detalhes técnicos
+- Arquivos alterados:
+  - `src/pages/Dashboard.tsx` — wrapper sticky no header; passa `bankAccountsCount` e `walletsCount` para `SummaryCards`.
+  - `src/components/dashboard/SummaryCards.tsx` — grid `xl:grid-cols-5`; novos props opcionais `bankAccountsCount`, `walletsCount`; card "Saldo Atual" recebe `subtitle` e `series`.
+- Semantic tokens apenas (`bg-background/90`, `border-border/60`) — sem cores hardcoded.
+- Sem mudanças em dados, hooks ou lógica.
 
 ## Fora de escopo
-- Card "Saldo previsto" — continua indo para `/lancamentos`.
-- Novo cálculo/agregação de previstas: usar valores já existentes em `useDashboardData`.
+- Redesign visual dos cards (formas, gradientes, ícones).
+- Alterações na linha de forecast (Entradas/Saídas/Saldo previstos) — já ocupa 3 colunas corretamente.
+- Sticky do `FinancialHealthBar` ou de outras seções.
