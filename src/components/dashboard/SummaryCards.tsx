@@ -245,6 +245,7 @@ export function SummaryCards({
   onFaturamentoClick,
   onEntradasClick,
   onSaidasClick,
+  onSaldoAtualClick,
   internalTransfersTotal,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
