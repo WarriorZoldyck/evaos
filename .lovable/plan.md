@@ -1,58 +1,45 @@
-## Clareza na conciliação do cartão + sugestão completa de categoria/sub/sub-sub
+## Navegação de faturas + acesso direto ao pagamento no Dashboard
 
-Foco em 3 melhorias, todas na tela de conciliação do extrato de cartão (`ReconcileStep.tsx` + `useCategorySuggestions.ts` + edge `suggest-categories`). Nada muda em conta débito, cria/edita transação ou matching.
+Além das setas ‹ › para alternar entre **fatura anterior / atual / próxima** em cada cartão do Dashboard, adicionar um atalho que abre a **fatura já filtrada no ciclo selecionado**, permitindo revisar e pagar sem sair do Dashboard.
 
-### 1. Aviso claro sobre data de pagamento na seção "Provável — confirmar"
+### UX
 
-**Onde:** `ReconcileStep.tsx`, bloco `suggestedRows` (linhas ~634-722), no alerta amarelo (linha 649).
+- Em cada `CreditCard3D`, um mini-controle com setas + label do ciclo (ex.: `‹ Fatura atual · Nov/25 ›`).
+- Logo abaixo do valor de uso, um botão discreto **"Ver / Pagar fatura"** (ícone `Receipt` + texto). Clique abre o modal de fatura já posicionado no ciclo selecionado.
+- Setas e botão usam `e.stopPropagation()` para não disparar o flip 3D.
+- Estado do ciclo é por-cartão, default = "atual". Limite -1..+1.
 
-**Mudança:** trocar o texto do Alert para deixar explícito que **valor bate mas a data pode ser de outra fatura**, e que o usuário precisa conferir se a compra do extrato corresponde ao mesmo mês da compra do sistema. Texto proposto:
+### Fluxo de "Ver / Pagar fatura"
 
-> **Atenção à data de pagamento.** Achamos um lançamento no sistema com valor igual e data próxima, mas descrição diferente. Confira se as duas linhas são da **mesma fatura** — pode ser uma compra parecida de outro mês. Se for a mesma compra, clique em **"É o mesmo"**; se for uma compra nova (mesmo que parecida), clique em **"Criar novo"**.
+Reaproveitar componentes já existentes — não criar tela nova:
 
-Além disso, quando `daysOff` cruzar o limite do mês (ex.: linha do extrato 01/05 vs. candidato 09/05 e vice-versa), mostrar um badge extra `⚠ mês diferente` ao lado do `+Nd` que já existe.
+1. `CreditCardBillPaymentModal` (`src/components/contas/CreditCardBillPaymentModal.tsx`) já implementa listagem de itens da fatura de um cartão + fluxo de pagamento (parcial/total/sobra). Vamos abri-lo diretamente do Dashboard.
+2. O modal aceita/precisa saber qual **ciclo** exibir. Se hoje ele só mostra a fatura em aberto, adicionar props opcionais `initialCycleKey?: string` (formato `YYYY-MM`, mesmo formato usado por `compute_cycle_key` e `useClosedCycles`) e — se o modal já tiver navegação interna de mês — apenas pré-selecionar; caso contrário, filtrar as transações exibidas por `payment_date` dentro do mês do ciclo.
+3. Botão "Ver / Pagar fatura" no card chama um handler no `DashboardCreditCardsRow` que seta `{ cardId, cycleKey }` e abre o modal.
 
-### 2. Botão explícito "Criar novo" ao lado de "É o mesmo" / "Ignorar"
+### Lógica de ciclos (igual ao plano anterior)
 
-**Onde:** mesma seção, botões nas linhas ~697-717.
+- Ciclo de uma transação = mês do `payment_date`.
+- Valor exibido no cartão = soma `despesa − receita` das transações do cartão no mês do ciclo (sem filtrar por `status`, para faturas passadas/futuras aparecerem corretamente).
+- "Atual" = mês corrente; offset -1 = anterior; +1 = próxima.
 
-**Hoje:** só existem "É o mesmo" e "Ignorar". "Criar novo" é o estado default implícito — invisível.
+### Arquivos afetados
 
-**Mudança:** adicionar terceiro botão `Criar novo` (ícone `Plus`, cor sky/primária) que:
+- `src/components/dashboard/DashboardCreditCardsRow.tsx`
+  - Agregar transações por `(cardId, YYYY-MM do payment_date)`.
+  - Estado `cycleOffsetByCard: Record<string, -1|0|1>` e `billModal: { cardId, cycleKey } | null`.
+  - Passar props novos ao `CreditCard3D`: `cycleLabel`, `onPrevCycle`, `onNextCycle`, `canPrev`, `canNext`, `onOpenBill`.
+  - Renderizar `<CreditCardBillPaymentModal>` controlado pelo estado `billModal`, passando `initialCycleKey`.
+- `src/components/contas/CreditCard3D.tsx`
+  - Props novos (todos opcionais, retrocompatível): navegação de ciclo + `onOpenBill`.
+  - Bloco com setas + label do ciclo e botão "Ver / Pagar fatura" (ícone `Receipt`), com `stopPropagation`.
+- `src/components/contas/CreditCardBillPaymentModal.tsx`
+  - Aceitar `initialCycleKey?: string` e usar como filtro/seleção inicial do mês da fatura.
+  - Se já houver seletor de mês interno, apenas inicializar com esse valor; caso contrário, aplicar filtro `payment_date` no intervalo do mês.
+  - Sem mudanças na lógica de pagamento em si.
 
-- Chama `onActionChange(i, "criar")` explicitamente.
-- Limpa `targetChange(i, null)` (garante que não vincule).
-- Move visualmente a linha da seção "Provável" para "Só no extrato — o que fazer?", onde os seletores de categoria aparecem e o botão "Concluir/Importar" do rodapé já contabiliza a criação (a lógica de conclusão já responde a `counts.criar` — nenhuma mudança em `handleImport`).
+### Fora de escopo
 
-Efeito prático: o usuário clica "Criar novo" → linha vai pro bloco de novas → categoria auto-sugerida aparece → botão do rodapé "Importar N lançamentos" já reflete a nova linha, permitindo concluir imediatamente.
-
-### 3. Trazer categoria + subcategoria + sub-sub na sugestão automática
-
-**Diagnóstico:** o `useCategorySuggestions` só sugere `category` (nível 1). O import salva `subcategory` e `subcategory2` corretamente (`ImportStatementModal.tsx` linhas 905-919), mas eles nunca são pré-preenchidos porque o hook não os devolve.
-
-**Mudança em `useCategorySuggestions.ts`:**
-
-- Selecionar também `subcategory` e `subcategory2` no histórico (`select("description, category, subcategory, subcategory2, type")`).
-- Ampliar `SuggestionSource` para incluir `subcategory?: string` e `subcategory2?: string`.
-- No agrupamento por votos, contar a **tripla** `(category, subcategory, subcategory2)`. Quando houver empate, escolher a tripla com mais votos; se subcategoria/sub-sub ficarem em minoria, cair para nível 2 e depois nível 1 (nunca inventar um nível se o histórico não apoiar).
-- Validar que os nomes existem na árvore atual de categorias antes de aplicar (evita sugerir sub/sub-sub que o usuário renomeou/apagou).
-
-**Mudança em `ReconcileStep.tsx` (efeito colateral):**
-
-- Quando aplicar sugestão inicial no `rowCategories[i]`, também aplicar `subcategory` e `subcategory2` do `SuggestionSource`.
-- O indicador visual "baseado no histórico / sugerido pela IA" (linhas 890-900) já cobre; nenhuma UI nova.
-
-**Edge function `suggest-categories`:** manter apenas nível 1 por enquanto (LLM tem que aprender árvore inteira; risco/custo alto). A cobertura efetiva de sub/sub-sub vem do histórico, que é onde o usuário já classificou consistentemente. **Fora de escopo agora:** ensinar a IA a sugerir sub-níveis.
-
-### Fora de escopo (não mexo agora)
-
-- Separação cartão × débito em componentes distintos (já discutido, adiamos).
-- Alterar `handleImport`, criação de lançamentos ou matching.
-- Mudar a seção "Só no sistema" (orphans).
-- Sugestão de sub-categorias via IA (só via histórico por ora).
-
-### Verificação
-
-1. Rebuild + typecheck.
-2. Simular no preview: extrato com uma compra "Provável" — conferir texto do alerta, badge de mês diferente e comportamento do botão "Criar novo".
-3. Extrato com merchant recorrente (ex.: "Uber") já categorizado no histórico com sub e sub-sub — conferir que os 3 níveis vêm preenchidos ao mudar para "criar novo".
+- Não altera `useDashboardData`, `useClosedCycles`, cálculo de MDR, DRE ou projeções.
+- Não muda a página `/contas` nem os cards fora do Dashboard.
+- Fechamento/reabertura de ciclo continua exclusivo da tela de contas.
