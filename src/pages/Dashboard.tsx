@@ -38,6 +38,8 @@ export default function Dashboard() {
   const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
   const [entradasModalOpen, setEntradasModalOpen] = useState(false);
   const [saidasModalOpen, setSaidasModalOpen] = useState(false);
+  const [entradasPrevModalOpen, setEntradasPrevModalOpen] = useState(false);
+  const [saidasPrevModalOpen, setSaidasPrevModalOpen] = useState(false);
   const [saldoModalOpen, setSaldoModalOpen] = useState(false);
   const [mdrModalOpen, setMdrModalOpen] = useState(false);
   const mdr = useMdrSummary();
@@ -206,6 +208,8 @@ export default function Dashboard() {
         onEntradasClick={() => setEntradasModalOpen(true)}
         onSaidasClick={() => setSaidasModalOpen(true)}
         onSaldoAtualClick={() => setSaldoModalOpen(true)}
+        onEntradasPrevistasClick={() => setEntradasPrevModalOpen(true)}
+        onSaidasPrevistasClick={() => setSaidasPrevModalOpen(true)}
       />
 
       <SaldoAtualDetailModal
@@ -258,6 +262,37 @@ export default function Dashboard() {
         wallets={wallets}
         creditCards={creditCards}
       />
+
+      <EntradasSaidasDetailModal
+        open={entradasPrevModalOpen}
+        onOpenChange={setEntradasPrevModalOpen}
+        mode="entradas"
+        statusFilter="Pendente"
+        transactions={transactions as any}
+        total={summary.entradaPrevista}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
+      />
+
+      <EntradasSaidasDetailModal
+        open={saidasPrevModalOpen}
+        onOpenChange={setSaidasPrevModalOpen}
+        mode="saidas"
+        statusFilter="Pendente"
+        transactions={transactions as any}
+        total={summary.saidaPrevista}
+        dateFrom={format(dateRange.start, "yyyy-MM-dd")}
+        dateTo={format(dateRange.end, "yyyy-MM-dd")}
+        categoryNameResolver={categoryNameResolver}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
+      />
+
 
 
 

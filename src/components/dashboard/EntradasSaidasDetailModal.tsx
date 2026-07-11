@@ -107,6 +107,7 @@ interface Props {
   bankAccounts?: AccountRef[];
   wallets?: AccountRef[];
   creditCards?: AccountRef[];
+  statusFilter?: "Pago" | "Pendente";
 }
 
 export function EntradasSaidasDetailModal({
@@ -122,6 +123,7 @@ export function EntradasSaidasDetailModal({
   bankAccounts = [],
   wallets = [],
   creditCards = [],
+  statusFilter = "Pago",
 }: Props) {
   const navigate = useNavigate();
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
@@ -130,11 +132,14 @@ export function EntradasSaidasDetailModal({
   const PAGE_SIZE = 50;
 
   const isEntradas = mode === "entradas";
+  const isPrevisto = statusFilter === "Pendente";
   const targetType: "receita" | "despesa" = isEntradas ? "receita" : "despesa";
   const accentClass = isEntradas ? "text-success" : "text-destructive";
   const gradientClass = isEntradas ? "bg-gradient-success" : "bg-gradient-destructive";
   const Icon = isEntradas ? TrendingUp : TrendingDown;
-  const title = isEntradas ? "Entradas pagas no período" : "Saídas pagas no período";
+  const title = isPrevisto
+    ? (isEntradas ? "Entradas previstas no período" : "Saídas previstas no período")
+    : (isEntradas ? "Entradas pagas no período" : "Saídas pagas no período");
 
   const resolveCategory = (id: string) =>
     categoryNameResolver ? categoryNameResolver(id) : id || "Sem categoria";
@@ -156,10 +161,10 @@ export function EntradasSaidasDetailModal({
     return "—";
   };
 
-  // Rows: paid transactions of the target type. Group by series_id (installments = 1 line).
+  // Rows: transactions of the target type filtered by status. Group by series_id (installments = 1 line).
   const lines = useMemo(() => {
     const paid = transactions.filter(
-      (t) => t.type === targetType && t.status === "Pago",
+      (t) => t.type === targetType && t.status === statusFilter,
     );
     type Group = { items: Tx[] };
     const groups = new Map<string, Group>();
@@ -190,7 +195,7 @@ export function EntradasSaidasDetailModal({
         };
       })
       .sort((a, b) => (b.first.payment_date ?? "").localeCompare(a.first.payment_date ?? ""));
-  }, [transactions, targetType]);
+  }, [transactions, targetType, statusFilter]);
 
   const availableKinds = useMemo(() => {
     const s = new Set<PaymentKind>();
@@ -222,7 +227,7 @@ export function EntradasSaidasDetailModal({
     sp.set("dateFrom", dateFrom);
     sp.set("dateTo", dateTo);
     sp.set("type", targetType);
-    sp.set("status", "Pago");
+    sp.set("status", statusFilter);
     navigate(`/lancamentos?${sp.toString()}`);
   };
 
@@ -256,7 +261,7 @@ export function EntradasSaidasDetailModal({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${isEntradas ? "entradas" : "saidas"}-${dateFrom}_a_${dateTo}.csv`;
+    a.download = `${isEntradas ? "entradas" : "saidas"}${isPrevisto ? "-previstas" : ""}-${dateFrom}_a_${dateTo}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -272,7 +277,7 @@ export function EntradasSaidasDetailModal({
             {title}
           </DialogTitle>
           <DialogDescription>
-            {isEntradas ? "Receitas" : "Despesas"} com pagamento entre{" "}
+            {isEntradas ? "Receitas" : "Despesas"} {isPrevisto ? "com previsão de pagamento" : "com pagamento"} entre{" "}
             <span className="font-medium text-foreground">{formatDate(dateFrom)}</span> e{" "}
             <span className="font-medium text-foreground">{formatDate(dateTo)}</span>.{" "}
             <span className="text-muted-foreground">

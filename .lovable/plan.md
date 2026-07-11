@@ -1,27 +1,27 @@
-# Plano: coluna "Conta" nas modais Entradas/Saídas
+# Plano: modais para "Entradas previstas" e "Saídas previstas"
 
-## Alteração
-Adicionar a coluna **Conta** logo antes das demais colunas de contexto na tabela do `EntradasSaidasDetailModal` (usado tanto para Entradas quanto para Saídas).
+Reaproveitar o `EntradasSaidasDetailModal` para exibir também previstas (Pendentes), removendo o `navigate` para `/lancamentos` desses dois cards.
 
-## Detalhes
+## 1) `EntradasSaidasDetailModal` — suportar Pendentes
+- Novo prop opcional `statusFilter: "Pago" | "Pendente"` (default `"Pago"` para não quebrar chamadas existentes).
+- Trocar filtro interno de `t.status === "Pago"` por `t.status === statusFilter`.
+- Título/descrição dinâmicos:
+  - `Pago` → "Entradas/Saídas pagas no período" (comportamento atual).
+  - `Pendente` → "Entradas/Saídas previstas no período" + descrição "…com previsão de pagamento entre X e Y".
+- Fonte dos dados: continuar usando `transactions` (dashboard já traz pagos e pendentes do período; verificar rapidamente na implementação — se não, usar `allTransactions` filtrado por payment_date do período).
+- CSV: nome do arquivo passa a incluir `previstas` quando `statusFilter === "Pendente"`.
+- Botão "Ver todos os lançamentos do período" mantém o `status` correto na query string.
 
-### `src/components/dashboard/EntradasSaidasDetailModal.tsx`
-- Novos props opcionais:
-  - `bankAccounts?: { id: string; name: string }[]`
-  - `wallets?: { id: string; name: string }[]`
-  - `creditCards?: { id: string; name: string }[]`
-- Função `resolveAccount(t)` que retorna:
-  - Nome do `bank_account_id`, `wallet_id` ou `credit_card_id` (com sufixo "· Cartão" para deixar claro), nessa ordem de prioridade.
-  - Fallback: `—`.
-- Nova coluna **Conta** entre "Contato" e "Descrição":
-  - Header: `<th>Conta</th>`
-  - Célula: `resolveAccount(l.first)` com `truncate max-w-[160px]` e cor `text-muted-foreground`.
-  - Visível em md+ (`hidden md:table-cell`) para não estourar em telas pequenas.
-- Adicionar `conta` também na exportação CSV (coluna extra após `contato`).
+## 2) `SummaryCards.tsx`
+- Adicionar props opcionais: `onEntradasPrevistasClick?: () => void` e `onSaidasPrevistasClick?: () => void`.
+- Nos `ForecastCard`s trocar `onClick={() => go(...)}` por `onClick={onEntradasPrevistasClick ?? (() => go(...))}` (e equivalente para saídas). O card "Saldo previsto" permanece como está.
 
-### `src/pages/Dashboard.tsx`
-- Passar `bankAccounts`, `wallets`, `creditCards` (já disponíveis via `useAccounts()`) para as duas instâncias do modal (Entradas e Saídas).
+## 3) `Dashboard.tsx`
+- Novos estados: `entradasPrevModalOpen`, `saidasPrevModalOpen`.
+- Passar handlers `onEntradasPrevistasClick` e `onSaidasPrevistasClick` para `SummaryCards`.
+- Renderizar duas novas instâncias do `EntradasSaidasDetailModal` com `statusFilter="Pendente"`, `total={entradaPrevista}`/`{saidaPrevista}` (obter de `useDashboardData`), e `prevTotal` equivalente se disponível — caso contrário, omitir.
+- Reutilizar `bankAccounts`, `wallets`, `creditCards`, `categoryNameResolver` e o mesmo `dateRange`.
 
 ## Fora de escopo
-- Filtro por conta dentro do modal (só exibição/CSV).
-- Alterar `FaturamentoDetailModal` (usuário pediu apenas Entradas e Saídas).
+- Card "Saldo previsto" — continua indo para `/lancamentos`.
+- Novo cálculo/agregação de previstas: usar valores já existentes em `useDashboardData`.

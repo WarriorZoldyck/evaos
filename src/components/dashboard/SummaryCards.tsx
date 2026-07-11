@@ -42,6 +42,8 @@ interface SummaryCardsProps {
   onEntradasClick?: () => void;
   onSaidasClick?: () => void;
   onSaldoAtualClick?: () => void;
+  onEntradasPrevistasClick?: () => void;
+  onSaidasPrevistasClick?: () => void;
   internalTransfersTotal?: number;
 }
 
@@ -246,6 +248,8 @@ export function SummaryCards({
   onEntradasClick,
   onSaidasClick,
   onSaldoAtualClick,
+  onEntradasPrevistasClick,
+  onSaidasPrevistasClick,
   internalTransfersTotal,
 }: SummaryCardsProps) {
   const navigate = useNavigate();
@@ -375,7 +379,7 @@ export function SummaryCards({
           icon={ArrowUpCircle}
           iconClassName="text-success"
           loading={loading}
-          onClick={() => go({ type: "receita", status: "Pendente" })}
+          onClick={onEntradasPrevistasClick ?? (() => go({ type: "receita", status: "Pendente" }))}
           delta={prevEntradaPrevista !== undefined ? pctChange(entradaPrevista, prevEntradaPrevista) : undefined}
         />
         <ForecastCard
@@ -384,7 +388,7 @@ export function SummaryCards({
           icon={ArrowDownCircle}
           iconClassName="text-destructive"
           loading={loading}
-          onClick={() => go({ type: "despesa", status: "Pendente" })}
+          onClick={onSaidasPrevistasClick ?? (() => go({ type: "despesa", status: "Pendente" }))}
           delta={prevSaidaPrevista !== undefined ? pctChange(saidaPrevista, prevSaidaPrevista) : undefined}
           invertDeltaColor
         />
