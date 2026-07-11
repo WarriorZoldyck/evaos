@@ -182,11 +182,19 @@ export function CategoryDetailGrid({
         return (
           <button
             key={it.id}
-            onClick={() =>
+            onClick={() => {
+              if (onCategoryClick) {
+                onCategoryClick(
+                  { id: it.id, name: it.name, fill: it.fill, value: it.value },
+                  mode,
+                );
+                return;
+              }
               navigate(
                 `/lancamentos?category=${encodeURIComponent(it.name)}&type=${mode}`,
-              )
-            }
+              );
+            }}
+
             className={`relative text-left rounded-xl border bg-card/50 hover:bg-card transition-all p-3 group ${
               isTop
                 ? "border-primary/40 shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]"
