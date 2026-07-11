@@ -24,7 +24,9 @@ interface Props {
   prevStart: Date;
   prevEnd: Date;
   loading: boolean;
+  embedded?: boolean;
 }
+
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
