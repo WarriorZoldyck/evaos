@@ -32,7 +32,12 @@ interface Props {
   embedded?: boolean;
   mode?: CategoryDetailMode;
   onModeChange?: (mode: CategoryDetailMode) => void;
+  onCategoryClick?: (
+    item: { id: string; name: string; fill: string; value: number },
+    mode: CategoryDetailMode,
+  ) => void;
 }
+
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
