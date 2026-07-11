@@ -1,4 +1,4 @@
-import { Link, RotateCcw } from "lucide-react";
+import { Link, RotateCcw, ChevronLeft, ChevronRight, Receipt } from "lucide-react";
 
 interface CreditCard3DProps {
   isFlipped: boolean;
@@ -11,6 +11,13 @@ interface CreditCard3DProps {
   bankAccountName?: string;
   usedAmount?: number;
   parentCardName?: string;
+  // Cycle navigation (optional — used on Dashboard)
+  cycleLabel?: string;
+  onPrevCycle?: () => void;
+  onNextCycle?: () => void;
+  canPrev?: boolean;
+  canNext?: boolean;
+  onOpenBill?: () => void;
 }
 
 export function CreditCard3D({
@@ -24,6 +31,12 @@ export function CreditCard3D({
   bankAccountName,
   usedAmount = 0,
   parentCardName,
+  cycleLabel,
+  onPrevCycle,
+  onNextCycle,
+  canPrev,
+  canNext,
+  onOpenBill,
 }: CreditCard3DProps) {
   const formatDisplayNumber = () => {
     const d = cardDigits.padEnd(4, "•");
@@ -38,6 +51,8 @@ export function CreditCard3D({
   const limit = Number(cardLimit) || 0;
   const available = limit - usedAmount;
   const usagePercent = limit > 0 ? Math.min((usedAmount / limit) * 100, 100) : 0;
+
+  const showCycleControls = !!cycleLabel && (!!onPrevCycle || !!onNextCycle);
 
   return (
     <>
@@ -206,7 +221,34 @@ export function CreditCard3D({
         </div>
       </div>
 
-      <div className="flex justify-center">
+      {/* Cycle navigator + open bill (only when props provided) */}
+      {showCycleControls && (
+        <div className="mt-2 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); if (canPrev !== false) onPrevCycle?.(); }}
+            disabled={canPrev === false}
+            className="h-6 w-6 rounded-md border border-border/60 flex items-center justify-center hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            aria-label="Fatura anterior"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <span className="text-[11px] font-medium text-muted-foreground min-w-[140px] text-center tabular-nums">
+            {cycleLabel}
+          </span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); if (canNext !== false) onNextCycle?.(); }}
+            disabled={canNext === false}
+            className="h-6 w-6 rounded-md border border-border/60 flex items-center justify-center hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            aria-label="Próxima fatura"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      <div className="mt-1 flex items-center justify-center gap-3">
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onFlip(); }}
@@ -215,6 +257,19 @@ export function CreditCard3D({
           <RotateCcw className="h-3 w-3" />
           {isFlipped ? "Ver frente" : "Ver verso"}
         </button>
+        {onOpenBill && (
+          <>
+            <span className="text-muted-foreground/40">•</span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOpenBill(); }}
+              className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+            >
+              <Receipt className="h-3 w-3" />
+              Ver / Pagar fatura
+            </button>
+          </>
+        )}
       </div>
     </>
   );
