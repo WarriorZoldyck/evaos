@@ -272,7 +272,9 @@ export function SummaryCards({
           trend={saldoAtual >= 0 ? "up" : "down"}
           gradient={saldoAtual >= 0 ? "bg-gradient-primary" : "bg-gradient-destructive"}
           loading={loading}
+          onClick={onSaldoAtualClick}
           accent="hsl(195, 100%, 50%)"
+          tooltip={"Soma do saldo inicial + lançamentos pagos de todas as contas e carteiras do contexto. Clique para ver o saldo por conta."}
         />
         <SummaryCard
           title="Faturamento"
