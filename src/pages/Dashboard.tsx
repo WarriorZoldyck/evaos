@@ -132,9 +132,9 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header (sticky) */}
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background/90 backdrop-blur-md border-b border-border/60">
+    <>
+      {/* Header fixo (sticky) — cobre o padding do container de scroll */}
+      <div className="sticky -top-4 md:-top-6 -mx-4 md:-mx-6 -mt-4 md:-mt-6 px-4 md:px-6 pt-4 md:pt-6 pb-3 z-30 bg-background/95 backdrop-blur-md border-b border-border/60 mb-4 md:mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold font-display text-foreground">Dashboard</h1>
@@ -165,6 +165,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <div className="space-y-6 animate-fade-in">
+
 
       {/* Saúde Financeira (cabeçalho) */}
       <FinancialHealthBar
@@ -389,6 +392,8 @@ export default function Dashboard() {
         daysInPeriod={performance.daysInPeriod}
         loading={loading}
       />
-    </div>
+      </div>
+    </>
   );
 }
+
