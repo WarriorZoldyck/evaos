@@ -274,10 +274,8 @@ export default function Dashboard() {
       />
 
       {/* NEW: Cartões de Crédito (estilo carteira) */}
-      <DashboardCreditCardsRow
-        allTransactions={allTransactions as any}
-        loading={loading}
-      />
+      <DashboardCreditCardsRow loading={loading} />
+
 
 
 
