@@ -12,6 +12,7 @@ import { UpcomingTransactions } from "@/components/dashboard/UpcomingTransaction
 import { PerformanceCard } from "@/components/dashboard/PerformanceCard";
 import { DashboardCreditCardsRow } from "@/components/dashboard/DashboardCreditCardsRow";
 import { FaturamentoDetailModal } from "@/components/dashboard/FaturamentoDetailModal";
+import { EntradasSaidasDetailModal } from "@/components/dashboard/EntradasSaidasDetailModal";
 import { MdrDetailModal } from "@/components/dashboard/MdrDetailModal";
 import { useMdrSummary } from "@/hooks/useMdrSummary";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,6 +35,8 @@ export default function Dashboard() {
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
   const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
+  const [entradasModalOpen, setEntradasModalOpen] = useState(false);
+  const [saidasModalOpen, setSaidasModalOpen] = useState(false);
   const [mdrModalOpen, setMdrModalOpen] = useState(false);
   const mdr = useMdrSummary();
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
