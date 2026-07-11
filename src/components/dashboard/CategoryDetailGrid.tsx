@@ -41,8 +41,10 @@ export function CategoryDetailGrid({
   prevStart,
   prevEnd,
   loading,
+  embedded = false,
 }: Props) {
   const navigate = useNavigate();
+
 
   const items = useMemo(() => {
     const top = [...categories].sort((a, b) => b.value - a.value).slice(0, 6);
