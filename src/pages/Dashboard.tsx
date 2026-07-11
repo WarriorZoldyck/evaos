@@ -133,34 +133,36 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold font-display text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Visão geral — <span className="text-primary font-medium">{contextLabel}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <Select
-            value={filters.accountId || "__all__"}
-            onValueChange={(v) =>
-              setFilters((f) => ({ ...f, accountId: v === "__all__" ? null : v }))
-            }
-          >
-            <SelectTrigger className="w-[180px] h-8 text-xs">
-              <SelectValue placeholder="Todas as contas" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Todas as contas</SelectItem>
-              {bankAccounts.map((acc) => (
-                <SelectItem key={acc.id} value={acc.id}>
-                  {acc.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <PeriodFilter filters={filters} onChange={(f) => setFilters((prev) => ({ ...prev, ...f }))} />
+      {/* Header (sticky) */}
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background/90 backdrop-blur-md border-b border-border/60">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold font-display text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Visão geral — <span className="text-primary font-medium">{contextLabel}</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Select
+              value={filters.accountId || "__all__"}
+              onValueChange={(v) =>
+                setFilters((f) => ({ ...f, accountId: v === "__all__" ? null : v }))
+              }
+            >
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectValue placeholder="Todas as contas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todas as contas</SelectItem>
+                {bankAccounts.map((acc) => (
+                  <SelectItem key={acc.id} value={acc.id}>
+                    {acc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <PeriodFilter filters={filters} onChange={(f) => setFilters((prev) => ({ ...prev, ...f }))} />
+          </div>
         </div>
       </div>
 
