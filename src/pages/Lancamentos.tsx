@@ -92,8 +92,9 @@ export default function Lancamentos() {
     const dateFromParam = searchParams.get("dateFrom");
     const dateToParam = searchParams.get("dateTo");
     const dateFieldParam = searchParams.get("dateField");
+    const accountIdParam = searchParams.get("accountId");
 
-    if (categoryParam || typeParam || statusParam || dateFromParam || dateToParam || dateFieldParam) {
+    if (categoryParam || typeParam || statusParam || dateFromParam || dateToParam || dateFieldParam || accountIdParam) {
       const isUncategorizedSentinel = categoryParam === "__sem_categoria__";
       const matchedCat = !isUncategorizedSentinel
         ? categories.find((c) => c.name === categoryParam && !c.parent_id)
@@ -110,6 +111,7 @@ export default function Lancamentos() {
         dateField: (dateFieldParam === "competence_date" || dateFieldParam === "payment_date")
           ? dateFieldParam
           : prev.dateField,
+        accountId: accountIdParam || prev.accountId,
       }));
       if (statusParam === "Pago") setActiveTab("realizado");
       else if (statusParam === "Pendente") setActiveTab("projetado");
