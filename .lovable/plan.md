@@ -1,35 +1,49 @@
-## Corrigir barrinha de "Utilizado" nos cartões do Dashboard
+## Objetivo
 
-### Diagnóstico
+Preencher o espaço vazio à direita dos dois gráficos de rosca (Receitas/Despesas) trazendo os cards de "Categorias" (que hoje aparecem logo abaixo) para o lado dos donuts, formando uma única linha visual coesa no dashboard.
 
-O `DashboardCreditCardsRow` está agregando o valor do ciclo a partir de `allTransactions`, que vem de `useDashboardData` filtrado pelo período selecionado (`payment_date BETWEEN startStr AND endStr`). Consequência:
+## Layout proposto
 
-- Ao alternar para **Fatura anterior** ou **Próxima fatura**, o mês do ciclo cai fora do período do Dashboard → total zera (screenshot: `jun/26` mostra R$ 0,00 enquanto o modal mostra R$ 8.745,37).
-- Mesmo para o mês corrente, transações pendentes com `payment_date` fora da janela do Dashboard não entram.
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Categorias — Receitas e Despesas                             │
+│ ┌──────────────┐  ┌────────────────────────────────────────┐ │
+│ │ Receitas     │  │  [Alimentação] [ADMIN.]  [Implantes]   │ │
+│ │  (donut +    │  │  [SALÁRIOS]    [Impl.]   [PESSOAIS]    │ │
+│ │   legenda)   │  │  ... (top 6 despesas em grid 2–3 col)  │ │
+│ ├──────────────┤  │                                        │ │
+│ │ Despesas     │  │                                        │ │
+│ │  (donut +    │  │                                        │ │
+│ │   legenda)   │  │                                        │ │
+│ └──────────────┘  └────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
 
-Antes da mudança de ciclos, o cálculo usava `status === "Pendente"` sem filtrar por data, o que também não é correto (misturava faturas de meses diferentes), mas por coincidência mostrava algum valor.
+## Alterações
 
-### Correção
+### 1. `CategoryBreakdownCard.tsx`
+- Voltar os dois donuts para **empilhados** (coluna única) já que ocuparão apenas a metade esquerda do card em telas grandes.
+- Remover o `xl:grid-cols-2` interno; manter apenas o layout vertical com um separador horizontal entre Receitas e Despesas.
+- Aceitar via props os dados do grid de detalhes (categorias despesa, total, transações, ranges, loading) para renderizar `CategoryDetailGrid` ao lado direito.
+- Nova estrutura no `CardContent`:
+  - `grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6`
+  - Coluna esquerda: os dois donuts empilhados
+  - Coluna direita: `CategoryDetailGrid` (renderizado sem seu próprio `Card` wrapper)
 
-Buscar os totais por ciclo diretamente do Supabase, independente do filtro de período do Dashboard, com um único query cobrindo os três meses (anterior, atual, próximo) para todos os cartões visíveis.
+### 2. `CategoryDetailGrid.tsx`
+- Adicionar prop `embedded?: boolean`. Quando `true`, renderizar **sem** o `Card/CardHeader/CardContent` (apenas o grid interno), pois passará a viver dentro do `CategoryBreakdownCard`.
+- Ajustar o grid interno para `grid-cols-1 sm:grid-cols-2` (em vez de `lg:grid-cols-3`) porque o espaço disponível será mais estreito que a largura total.
+- Manter comportamento atual (top 6, sparkline, delta, navegação).
 
-- Criar hook `useCreditCardCycleTotals(cardIds: string[])` em `src/hooks/useCreditCardCycleTotals.ts`:
-  - Calcula `startStr` = primeiro dia do mês anterior e `endStr` = último dia do mês seguinte (usando `date-fns`).
-  - Query única: `transactions.select("credit_card_id, payment_date, type, amount").in("credit_card_id", cardIds).gte("payment_date", startStr).lte("payment_date", endStr).is("transfer_id", null).or("payment_method.is.null,payment_method.neq.Cartão de Débito")` — mesmas blindagens que o modal (`CreditCardBillPaymentModal`) usa para não incluir transferências nem débito.
-  - Escopo por usuário: `.eq("user_id", effectiveUserId)`.
-  - Retorna `Map<cardId, Map<'YYYY-MM', number>>` já com sinal (despesa +, receita −), além de `loading` e `refetch`.
-  - Reexecuta quando `cardIds` (ordenados, join) mudar ou `effectiveUserId` mudar.
+### 3. `Dashboard.tsx`
+- Remover o bloco separado `<CategoryDetailGrid ... />` (linhas ~264-274).
+- Passar suas props para `<CategoryBreakdownCard>` para que ele orquestre a renderização embutida.
 
-- `src/components/dashboard/DashboardCreditCardsRow.tsx`:
-  - Remover a agregação local baseada em `allTransactions`.
-  - Consumir o novo hook passando `creditCards.map(c => c.id)`.
-  - Continuar usando `Math.max(0, total)` para o `usedAmount` exibido.
-  - `allTransactions` deixa de ser usado no componente; pode remover o prop (e a passagem em `Dashboard.tsx`) ou mantê-lo por retrocompatibilidade — vou remover para não confundir.
+## Fora do escopo
+- Lógica de cálculo (top 6, sparkline, delta) permanece intacta.
+- Nenhuma mudança nas queries, hooks ou modelos de dados.
+- Sem alterações em `DashboardCreditCardsRow` ou outras seções.
 
-- `src/pages/Dashboard.tsx`:
-  - Remover a prop `allTransactions` da chamada de `<DashboardCreditCardsRow />` (mantém `loading`).
-
-### Fora de escopo
-
-- Sem alterações no modal de fatura, no `useDashboardData`, nem na lógica de ciclos/navegação já implementada.
-- Sem mudanças na regra de sinal ou nas blindagens de transferência/débito (mantidas iguais às do modal, para o valor bater com o "Total da Fatura" mostrado ao clicar em **Ver / Pagar fatura**).
+## Comportamento responsivo
+- `< xl` (inclui o viewport atual de 880px): tudo continua empilhado verticalmente (donuts em cima, cards de categoria embaixo) — mesma experiência de hoje em telas médias/pequenas.
+- `≥ xl`: donuts à esquerda em coluna, cards de categoria preenchem o espaço à direita.

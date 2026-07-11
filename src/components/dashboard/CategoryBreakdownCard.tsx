@@ -4,6 +4,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { getCategoryIcon } from "@/lib/dashboardInsights";
 import type { CategorySummary } from "@/hooks/useDashboardData";
+import { CategoryDetailGrid } from "@/components/dashboard/CategoryDetailGrid";
+
+interface DetailTx {
+  amount: number | string;
+  type: "receita" | "despesa";
+  status: "Pago" | "Pendente";
+  payment_date: string;
+  category: string;
+}
 
 interface Props {
   revenueCategories: CategorySummary[];
@@ -11,7 +20,13 @@ interface Props {
   totalReceitas: number;
   totalDespesas: number;
   loading: boolean;
+  detailTransactions: DetailTx[];
+  currentStart: Date;
+  currentEnd: Date;
+  prevStart: Date;
+  prevEnd: Date;
 }
+
 
 function fmt(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -131,6 +146,11 @@ export function CategoryBreakdownCard({
   totalReceitas,
   totalDespesas,
   loading,
+  detailTransactions,
+  currentStart,
+  currentEnd,
+  prevStart,
+  prevEnd,
 }: Props) {
   return (
     <Card className="shadow-premium">
@@ -140,26 +160,45 @@ export function CategoryBreakdownCard({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-          <Donut
-            title="Receitas"
-            data={revenueCategories}
-            total={totalReceitas}
-            type="receita"
-            emptyMessage="Nenhuma receita no período"
-            loading={loading}
-          />
-          <div className="hidden xl:block w-px bg-border/60" />
-          <Donut
-            title="Despesas"
-            data={expenseCategories}
-            total={totalDespesas}
-            type="despesa"
-            emptyMessage="Nenhuma despesa no período"
-            loading={loading}
-          />
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-6">
+          {/* Left: donuts stacked */}
+          <div className="space-y-6">
+            <Donut
+              title="Receitas"
+              data={revenueCategories}
+              total={totalReceitas}
+              type="receita"
+              emptyMessage="Nenhuma receita no período"
+              loading={loading}
+            />
+            <div className="h-px bg-border/60" />
+            <Donut
+              title="Despesas"
+              data={expenseCategories}
+              total={totalDespesas}
+              type="despesa"
+              emptyMessage="Nenhuma despesa no período"
+              loading={loading}
+            />
+          </div>
+
+          {/* Right: category detail cards filling the empty space */}
+          <div>
+            <CategoryDetailGrid
+              embedded
+              categories={expenseCategories}
+              total={totalDespesas}
+              allTransactions={detailTransactions}
+              currentStart={currentStart}
+              currentEnd={currentEnd}
+              prevStart={prevStart}
+              prevEnd={prevEnd}
+              loading={loading}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>
   );
 }
+
