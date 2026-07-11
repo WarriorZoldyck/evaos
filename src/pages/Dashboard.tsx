@@ -32,12 +32,13 @@ export default function Dashboard() {
   const { isPersonal, companies, selectedCompanyId } = useCompany();
   const selectedCompany = companies.find((c) => c.id === selectedCompanyId);
   const contextLabel = isPersonal ? "Pessoal" : selectedCompany?.name;
-  const { bankAccounts } = useAccounts();
+  const { bankAccounts, wallets } = useAccounts();
 
   const [filters, setFilters] = useState<DashboardFilters>({ period: "month" });
   const [faturamentoModalOpen, setFaturamentoModalOpen] = useState(false);
   const [entradasModalOpen, setEntradasModalOpen] = useState(false);
   const [saidasModalOpen, setSaidasModalOpen] = useState(false);
+  const [saldoModalOpen, setSaldoModalOpen] = useState(false);
   const [mdrModalOpen, setMdrModalOpen] = useState(false);
   const mdr = useMdrSummary();
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
