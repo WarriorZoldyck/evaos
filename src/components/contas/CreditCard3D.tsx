@@ -143,11 +143,14 @@ export function CreditCard3D({
             className="absolute inset-0 rounded-2xl flex flex-col overflow-hidden"
             style={{
               backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
               transform: "rotateY(180deg)",
+              WebkitTransform: "rotateY(180deg)",
               background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)",
               boxShadow: "0 20px 60px -15px rgba(0,0,0,0.5), 0 0 40px -10px rgba(15,52,96,0.3)",
             }}
           >
+
             <div className="w-full h-8 mt-4 bg-black/70" />
 
             <div className="flex-1 px-5 py-2 flex flex-col justify-between">
