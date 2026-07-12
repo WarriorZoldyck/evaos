@@ -46,9 +46,7 @@ export function PaymentMethodFields({
   const showBankAccount =
     (!isCard && ["PIX", "Boleto", "Transferência", "Cheque", "Depósito", "Débito Automático"].includes(paymentMethod || "")) ||
     (!isReceita && paymentMethod === "Cartão de Débito");
-  const showWallet =
-    paymentMethod === "Dinheiro" ||
-    paymentMethod === "PIX";
+  const showWallet = paymentMethod === "Dinheiro";
 
   // Watch terminal selection for MDR
   const selectedTerminalId = form.watch("card_terminal_id");
