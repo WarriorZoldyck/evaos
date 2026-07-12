@@ -56,12 +56,14 @@ export function CreditCard3D({
 
   return (
     <>
-      <div className="flex justify-center" style={{ perspective: "1000px" }}>
+      <div className="flex justify-center w-full max-w-[340px] mx-auto" style={{ perspective: "1000px" }}>
         <div
-          className="relative w-[340px] h-[210px] cursor-pointer transition-transform duration-700"
+          className="relative w-full aspect-[340/210] cursor-pointer transition-transform duration-700"
           style={{
             transformStyle: "preserve-3d",
+            WebkitTransformStyle: "preserve-3d",
             transform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
+            WebkitTransform: isFlipped ? "rotateY(180deg)" : "rotateY(0deg)",
           }}
           onClick={(e) => { e.stopPropagation(); onFlip(); }}
         >
@@ -70,10 +72,14 @@ export function CreditCard3D({
             className="absolute inset-0 rounded-2xl p-6 flex flex-col justify-between overflow-hidden"
             style={{
               backfaceVisibility: "hidden",
+              WebkitBackfaceVisibility: "hidden",
+              transform: "translateZ(0)",
+              WebkitTransform: "translateZ(0)",
               background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)",
               boxShadow: "0 20px 60px -15px rgba(0,0,0,0.5), 0 0 40px -10px rgba(15,52,96,0.3)",
             }}
           >
+
             <div
               className="absolute top-0 right-0 w-40 h-40 opacity-10 rounded-full"
               style={{

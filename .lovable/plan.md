@@ -1,49 +1,36 @@
-## Objetivo
+## Problema
 
-Ao clicar em um card do grid de categorias (à direita, em "Categorias — Receitas e Despesas"), abrir um modal detalhado — no mesmo estilo do modal de Entradas/Saídas — mostrando os lançamentos daquela categoria específica no período atual.
+No mobile (Safari/Chrome iOS), o `CreditCard3D` no Dashboard renderiza a frente e o verso sobrepostos: aparecem simultaneamente o chip/bandeira/nome (frente) e a barra "Utilizado / Disponível / Fecha / Vence" (verso), com os dígitos "embaralhados" no meio. É o bug clássico de `backface-visibility` em WebKit quando o filho não recebe o prefixo `-webkit-` nem o `transform: translateZ(0)` para forçar sua própria camada 3D.
 
-Hoje esses cards navegam para `/lancamentos?category=...&type=...`. Passaremos a abrir o modal e ficar no Dashboard.
+Além disso, o card tem largura fixa `w-[340px]` e o carrossel usa `gap-6` + `px-2`. Em telas de ~360–380px isso corta a borda direita do card e agrava a sensação de "bugado".
 
-## Mudanças
+## Correções
 
-### 1) `EntradasSaidasDetailModal.tsx`
-Extender para suportar recorte por categoria:
+### 1) `src/components/contas/CreditCard3D.tsx` — corrigir 3D no Safari mobile
+- Nas duas faces (`FRONT` e `BACK`), adicionar no `style`:
+  - `WebkitBackfaceVisibility: "hidden"` (junto do `backfaceVisibility: "hidden"` já existente)
+  - `WebkitTransform` espelhando o `transform` (identidade na frente, `rotateY(180deg)` no verso)
+  - `transform: "translateZ(0)"` na frente para forçar camada própria
+- No wrapper que rotaciona, adicionar `WebkitTransformStyle: "preserve-3d"` e `WebkitTransform` espelhando o `transform` dinâmico.
+- Isso elimina a sobreposição de faces no iOS sem alterar a aparência no desktop.
 
-- Nova prop opcional `categoryFilter?: { id: string; name: string; fill?: string }`.
-- Nova prop opcional `titleOverride?: string`.
-- Nova prop opcional `includeStatus?: "Pago" | "Pendente" | "Todos"` (default mantém o comportamento atual — `statusFilter` único). Para categorias, usaremos `"Todos"` para mostrar realizados + previstos daquela categoria no período.
-- Filtro `lines` passa a considerar `categoryFilter` (comparando por `t.category === categoryFilter.id || t.category === categoryFilter.name`).
-- Título dinâmico: `"{Categoria} · Entradas do período"` / `"...· Saídas do período"` (usa `titleOverride` se fornecido).
-- `goToLancamentos` inclui `category={name}` na query string quando `categoryFilter` estiver definido.
-- Nome do CSV inclui slug da categoria quando aplicável.
+### 2) `src/components/contas/CreditCard3D.tsx` — largura responsiva
+- Trocar `w-[340px] h-[210px]` por algo que respeite o viewport:
+  - Wrapper externo: `w-full max-w-[340px] mx-auto`
+  - Card 3D interno: `w-full aspect-[340/210]` (mantém a proporção original)
+- Ajustar paddings internos para escalarem: manter `p-6` no ≥sm e usar `p-5` no mobile onde necessário (apenas se houver corte visível), sem mexer na tipografia.
 
-### 2) `CategoryDetailGrid.tsx`
-- Nova prop opcional `onCategoryClick?: (item: { id: string; name: string; fill: string; value: number }, mode: "receita" | "despesa") => void`.
-- No `<button>` de cada card, quando `onCategoryClick` estiver definido, chamar o handler em vez do `navigate(...)` atual. Sem handler, mantém o comportamento antigo (não quebra outros usos).
+### 3) `src/components/dashboard/DashboardCreditCardsRow.tsx` — carrossel no mobile
+- No container do scroll horizontal, reduzir `gap-6` para `gap-4` no mobile (`gap-4 sm:gap-6`) e garantir `min-w-0` no item.
+- Envolver cada `CreditCard3D` num wrapper `w-[300px] sm:w-[340px] shrink-0 snap-start` para que o card não estoure a viewport nem seja cortado pela borda.
+- Skeleton: aplicar a mesma largura responsiva (`w-[300px] sm:w-[340px]`) para consistência.
 
-### 3) `CategoryBreakdownCard.tsx`
-- Nova prop opcional `onCategoryClick` (repassada para `CategoryDetailGrid`).
-- Manter as fatias do donut clicando para `/lancamentos` (comportamento atual) — ou também abrir o modal? **Escopo**: por ora, só o grid da direita, como você pediu ("cards do grid à direita"). Donuts continuam iguais.
-
-### 4) `Dashboard.tsx`
-- Novo estado `categoryModal: { open: boolean; mode: "receita" | "despesa"; category: { id, name, fill } | null }`.
-- Passar `onCategoryClick={(item, mode) => setCategoryModal({ open: true, mode, category: item })}` ao `CategoryBreakdownCard`.
-- Renderizar um `<EntradasSaidasDetailModal>` novo com:
-  - `mode` = `categoryModal.mode === "receita" ? "entradas" : "saidas"`
-  - `transactions` = `transactions` (mesmas usadas pelos outros modais — recorte por período/contexto já vem aplicado)
-  - `categoryFilter` = `categoryModal.category`
-  - `includeStatus="Todos"` (para mostrar pagos + pendentes da categoria)
-  - `total` = soma dos itens filtrados naquele modo/categoria (já calculamos via `summary` — reaproveitar `revenueCategories`/`expenseCategories` para pegar o `.value`)
-  - `prevTotal` = opcional; pode ser omitido (comparativo por categoria fica fora do escopo)
-  - `dateFrom`/`dateTo`/`bankAccounts`/`wallets`/`creditCards`/`categoryNameResolver` = mesmos props já usados pelos modais existentes
-  - `titleOverride` = `"{category.name} · {Receitas|Despesas} do período"`
+## Fora de escopo
+- Não mexer no layout do verso (barra de uso, grid Disponível/Fecha/Vence), no header do card ("Cartões de Crédito / Ver todos") nem na navegação de ciclo.
+- Não alterar o `CreditCard3D` usado em outras telas além do necessário — as mudanças são retrocompatíveis (proporção e prefixos WebKit).
 
 ## Verificação
-- Clicar em qualquer card do grid direito abre o modal com o header referente à categoria e apenas seus lançamentos.
-- Filtros internos (forma de pagamento, paginação, CSV, botão "Ver em Lançamentos") continuam funcionando; o botão "Ver em Lançamentos" leva com `category` já aplicado.
-- Nenhum outro fluxo (donuts, modais de entradas/saídas gerais) é alterado.
-
-## Fora do escopo
-- Alterar comportamento das fatias do donut.
-- Comparativo período anterior por categoria dentro do modal.
-- Refatorar `EntradasSaidasDetailModal` além das props opcionais listadas.
+- Abrir `/dashboard` no viewport mobile (375×812) e conferir:
+  - Só a frente aparece quando `isFlipped=false`; só o verso quando `true`.
+  - O card cabe inteiro na tela, sem cortar a borda direita.
+  - A animação de flip continua suave no desktop.
