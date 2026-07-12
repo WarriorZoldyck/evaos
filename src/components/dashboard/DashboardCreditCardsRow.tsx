@@ -75,9 +75,10 @@ export function DashboardCreditCardsRow({ loading }: Props) {
         <CardContent>
           <div className="flex gap-4 overflow-hidden">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-[210px] w-[340px] shrink-0 rounded-2xl" />
+              <Skeleton key={i} className="h-[190px] w-[300px] sm:h-[210px] sm:w-[340px] shrink-0 rounded-2xl" />
             ))}
           </div>
+
         </CardContent>
       </Card>
     );
