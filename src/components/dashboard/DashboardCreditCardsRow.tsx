@@ -75,9 +75,10 @@ export function DashboardCreditCardsRow({ loading }: Props) {
         <CardContent>
           <div className="flex gap-4 overflow-hidden">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-[210px] w-[340px] shrink-0 rounded-2xl" />
+              <Skeleton key={i} className="h-[190px] w-[300px] sm:h-[210px] sm:w-[340px] shrink-0 rounded-2xl" />
             ))}
           </div>
+
         </CardContent>
       </Card>
     );
@@ -105,7 +106,7 @@ export function DashboardCreditCardsRow({ loading }: Props) {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-6 overflow-x-auto pb-3 -mx-2 px-2 snap-x snap-mandatory">
+          <div className="flex gap-4 sm:gap-6 overflow-x-auto pb-3 -mx-2 px-2 snap-x snap-mandatory">
             {creditCards.map((c) => {
               const bankName = bankAccounts.find((b) => b.id === c.bank_account_id)?.name;
               const parentName = (c as any).parent_card_id
@@ -120,7 +121,7 @@ export function DashboardCreditCardsRow({ loading }: Props) {
               const cycleLabel = `${OFFSET_LABEL[offset]} · ${monthLabel}`;
 
               return (
-                <div key={c.id} className="shrink-0 snap-start">
+                <div key={c.id} className="shrink-0 snap-start w-[300px] sm:w-[340px]">
                   <CreditCard3D
                     isFlipped={!!flipped[c.id]}
                     onFlip={() =>
