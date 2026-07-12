@@ -106,7 +106,7 @@ export function DashboardCreditCardsRow({ loading }: Props) {
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-6 overflow-x-auto pb-3 -mx-2 px-2 snap-x snap-mandatory">
+          <div className="flex gap-4 sm:gap-6 overflow-x-auto pb-3 -mx-2 px-2 snap-x snap-mandatory">
             {creditCards.map((c) => {
               const bankName = bankAccounts.find((b) => b.id === c.bank_account_id)?.name;
               const parentName = (c as any).parent_card_id
