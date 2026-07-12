@@ -121,7 +121,7 @@ export function DashboardCreditCardsRow({ loading }: Props) {
               const cycleLabel = `${OFFSET_LABEL[offset]} · ${monthLabel}`;
 
               return (
-                <div key={c.id} className="shrink-0 snap-start">
+                <div key={c.id} className="shrink-0 snap-start w-[300px] sm:w-[340px]">
                   <CreditCard3D
                     isFlipped={!!flipped[c.id]}
                     onFlip={() =>
