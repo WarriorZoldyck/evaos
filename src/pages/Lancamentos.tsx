@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
 import { Plus, CreditCard, Upload, Sparkles, X } from "lucide-react";
@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useTransactions, type Transaction } from "@/hooks/useTransactions";
-import { TransactionFilters } from "@/components/lancamentos/TransactionFilters";
+import { TransactionFilters, TransactionPeriodFilter } from "@/components/lancamentos/TransactionFilters";
+import { useHeaderSlot } from "@/contexts/HeaderSlotContext";
 import { TransactionTable } from "@/components/lancamentos/TransactionTable";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
@@ -185,6 +186,47 @@ export default function Lancamentos() {
     setShowFeatureBanner(false);
   };
 
+  // Global header controls (period filter + Exportar/Importar/Novo Lançamento)
+  const headerControls = useMemo(
+    () => (
+      <>
+        <TransactionPeriodFilter filters={filters} onFiltersChange={setFilters} />
+        <ExportTransactionsButton
+          filters={filters}
+          categories={categories}
+          allCategories={allCategories}
+          creditCards={creditCards}
+          bankAccounts={bankAccounts}
+          wallets={wallets}
+          suppliers={suppliers}
+          clients={clients}
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setImportOpen(true)}
+          className="gap-1.5 h-8"
+        >
+          <Upload className="h-3.5 w-3.5" />
+          <span className="text-xs">Importar Extrato</span>
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            setEditingTransaction(null);
+            setFormOpen(true);
+          }}
+          className="gap-1.5 h-8"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          <span className="text-xs">Novo Lançamento</span>
+        </Button>
+      </>
+    ),
+    [filters, setFilters, categories, allCategories, creditCards, bankAccounts, wallets, suppliers, clients],
+  );
+  useHeaderSlot(headerControls);
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* New feature announcement */}
@@ -224,59 +266,13 @@ export default function Lancamentos() {
         </div>
       )}
 
-      {/* Header */}
+      {/* Header (title + Pagar Fatura contextual) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-display text-foreground">Lançamentos</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {totalCount} lançamento{totalCount !== 1 ? "s" : ""}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ExportTransactionsButton
-            filters={filters}
-            categories={categories}
-            allCategories={allCategories}
-            creditCards={creditCards}
-            bankAccounts={bankAccounts}
-            wallets={wallets}
-            suppliers={suppliers}
-            clients={clients}
-          />
-          <Button
-            variant="outline"
-            onClick={() => setImportOpen(true)}
-            className="gap-2"
-          >
-            <Upload className="h-4 w-4" />
-            Importar Extrato
-          </Button>
-          <Button
-            onClick={() => {
-              setEditingTransaction(null);
-              setFormOpen(true);
-            }}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Novo Lançamento
-          </Button>
-        </div>
-      </div>
-
-      {/* Sticky Filters bar */}
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background border-b border-border/60 flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <TransactionFilters
-            filters={filters}
-            onFiltersChange={setFilters}
-            categories={categories}
-            bankAccounts={bankAccounts}
-            wallets={wallets}
-            creditCards={creditCards}
-            suppliers={suppliers}
-            clients={clients}
-          />
         </div>
         {filters.accountId.startsWith("card:") && (() => {
           const cardId = filters.accountId.split(":").slice(1).join(":");
@@ -293,6 +289,20 @@ export default function Lancamentos() {
           ) : null;
         })()}
       </div>
+
+      {/* Filters (period moved to global header via useHeaderSlot) */}
+      <TransactionFilters
+        filters={filters}
+        onFiltersChange={setFilters}
+        categories={categories}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
+        suppliers={suppliers}
+        clients={clients}
+        hidePeriod
+      />
+
 
 
       {/* Tabs + Table */}
