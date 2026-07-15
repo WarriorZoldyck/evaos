@@ -265,7 +265,7 @@ export default function Lancamentos() {
       </div>
 
       {/* Sticky Filters bar */}
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 glass-strong border-b border-border/60 flex items-start gap-3">
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background border-b border-border/60 flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <TransactionFilters
             filters={filters}
