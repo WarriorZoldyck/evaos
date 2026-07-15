@@ -223,7 +223,7 @@ export function PaymentMethodFields({
           name="wallet_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Carteira</FormLabel>
+              <FormLabel>Carteira *</FormLabel>
               <Select onValueChange={field.onChange} value={field.value || ""}>
                 <FormControl>
                   <SelectTrigger>
