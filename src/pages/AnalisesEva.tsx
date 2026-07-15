@@ -1179,6 +1179,8 @@ export default function AnalisesEva() {
         clients={clients}
         categories={txCategories}
         cardTerminals={cardTerminalInfos}
+        allAccounts={allAccounts}
+        allCardTerminals={allCardTerminals}
         companies={companies}
         fieldSettings={fieldSettings}
       />
