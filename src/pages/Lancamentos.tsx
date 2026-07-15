@@ -233,20 +233,6 @@ export default function Lancamentos() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {filters.accountId.startsWith("card:") && (() => {
-            const cardId = filters.accountId.split(":").slice(1).join(":");
-            const card = creditCards.find((c) => c.id === cardId);
-            return card ? (
-              <Button
-                variant="outline"
-                onClick={() => setBillPaymentCard({ card })}
-                className="gap-2"
-              >
-                <CreditCard className="h-4 w-4" />
-                Pagar Fatura
-              </Button>
-            ) : null;
-          })()}
           <ExportTransactionsButton
             filters={filters}
             categories={categories}
@@ -278,17 +264,36 @@ export default function Lancamentos() {
         </div>
       </div>
 
-      {/* Filters */}
-      <TransactionFilters
-        filters={filters}
-        onFiltersChange={setFilters}
-        categories={categories}
-        bankAccounts={bankAccounts}
-        wallets={wallets}
-        creditCards={creditCards}
-        suppliers={suppliers}
-        clients={clients}
-      />
+      {/* Sticky Filters bar */}
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 glass-strong border-b border-border/60 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <TransactionFilters
+            filters={filters}
+            onFiltersChange={setFilters}
+            categories={categories}
+            bankAccounts={bankAccounts}
+            wallets={wallets}
+            creditCards={creditCards}
+            suppliers={suppliers}
+            clients={clients}
+          />
+        </div>
+        {filters.accountId.startsWith("card:") && (() => {
+          const cardId = filters.accountId.split(":").slice(1).join(":");
+          const card = creditCards.find((c) => c.id === cardId);
+          return card ? (
+            <Button
+              variant="outline"
+              onClick={() => setBillPaymentCard({ card })}
+              className="gap-2 shrink-0"
+            >
+              <CreditCard className="h-4 w-4" />
+              Pagar Fatura
+            </Button>
+          ) : null;
+        })()}
+      </div>
+
 
       {/* Tabs + Table */}
       <Card>
