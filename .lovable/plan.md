@@ -1,27 +1,14 @@
-## Problema
+## Verificação
 
-No formulário de lançamento, ao escolher **PIX** como forma de pagamento, o sistema mostra o campo **Carteira** como opção (além de Conta Bancária). PIX sempre sai/entra de uma conta bancária — nunca de uma carteira física (dinheiro em espécie). Isso confundiu o usuário `gurimag77@gmail.com`, que precisou selecionar carteira ao fazer uma transferência PIX.
+Revisei `src/components/lancamentos/PaymentMethodFields.tsx` e o comportamento pedido **já está ativo** hoje:
 
-## Correção
+- `showBankAccount` só aparece para: `PIX`, `Boleto`, `Transferência`, `Cheque`, `Depósito`, `Débito Automático` (e Cartão de Débito em despesa). **Dinheiro não está nessa lista**, então o campo Conta Bancária **não aparece** quando o método é Dinheiro.
+- `showWallet` é `paymentMethod === "Dinheiro"` — só Dinheiro mostra Carteira.
 
-**Arquivo:** `src/components/lancamentos/PaymentMethodFields.tsx`
+Ou seja: ao escolher **Dinheiro**, o formulário exibe **apenas o campo Carteira**, nunca Conta Bancária. Isso já garante o que você pediu (evita duplicar, mantém o valor só na carteira).
 
-Ajustar a regra `showWallet` para exibir o campo Carteira **apenas** quando o método for `Dinheiro`:
+## Proposta
 
-```ts
-// antes
-const showWallet =
-  paymentMethod === "Dinheiro" ||
-  paymentMethod === "PIX";
+Nenhuma mudança de código necessária.
 
-// depois
-const showWallet = paymentMethod === "Dinheiro";
-```
-
-O campo Conta Bancária já é exibido para PIX (via `showBankAccount`), então o usuário continuará conseguindo selecionar a conta de origem/destino normalmente.
-
-## Fora de escopo
-
-- Não mexer em lançamentos PIX antigos já salvos com `wallet_id` — permanecem como estão.
-- Sem mudanças em outros métodos (Dinheiro continua permitindo carteira; Boleto, Transferência etc. continuam só com conta bancária).
-- Sem alterações no fluxo do WhatsApp/EVA nem no schema do banco.
+Se você estiver vendo Conta Bancária aparecer junto com Carteira ao selecionar Dinheiro em algum lugar específico (ex.: em uma tela de edição, ou vindo do WhatsApp/EVA), me diga onde reproduziu que eu investigo esse fluxo específico — porque no formulário padrão de Novo Lançamento a regra já está correta.
