@@ -1,30 +1,32 @@
-## Problema
+## Objetivo
 
-No **Análises EVA**, ao abrir um lançamento pendente para editar e trocar o **contexto** (Pessoal ↔ Empresa) dentro do modal, as listas de **Conta bancária / Carteira / Cartão / Maquininha** não são reabastecidas com as contas do novo contexto — elas continuam mostrando (ou vazias) apenas o que estava no contexto global ativo.
+Deixar a **barra de filtros de Lançamentos fixa no topo** enquanto a tabela rola, seguindo o padrão do Dashboard e as melhores práticas de UX para telas de listagem (Linear, Notion, Airtable): o usuário sempre enxerga e ajusta filtros sem precisar rolar de volta.
 
-## Causa
+## Decisão de UX
 
-O `TransactionFormModal` filtra contas dinamicamente pelo `formCompanyId` (o contexto escolhido dentro do modal) **apenas quando recebe as props `allAccounts` e `allCardTerminals`** (linhas 517–541). Sem elas, cai no fallback `bankAccounts` / `wallets` / `creditCards` / `cardTerminals`, que já vêm pré-filtrados pelo contexto global.
+Depois de olhar o padrão do app e do Dashboard:
 
-- Em `GlobalTransactionModal.tsx` essas props são passadas (via `useTransactions`) → funciona.
-- Em `src/pages/AnalisesEva.tsx` (linhas ~1131–1148) **não são passadas**, e as listas (`accounts`, `wallets`, `creditCards`, `cardTerminals`) vêm de `useAccounts()`, que filtra por `selectedCompanyId`/`isPersonal` global.
+- **Título + subtítulo ("Lançamentos / N lançamento(s)") e botões de ação (Exportar, Importar Extrato, Novo Lançamento) continuam no fluxo normal** e rolam junto com a página. São ações "one-shot" — usar sticky nelas só rouba altura útil na lista.
+- **A linha de filtros (busca, Tudo/Entradas/Saídas, Todos/Conciliados/Sem conciliação, Recentes, Categorias, Contas, "Todos...") + a linha de período (Tudo/Hoje/Semana/Mês/Ano + navegação de mês) grudam juntas no topo**, logo abaixo do header global do app (que já é sticky em `top-0`).
+- Quando "grudada", a barra ganha um fundo `glass-strong` + borda inferior sutil, igual ao header global, pra dar a leitura visual de "estou fixa aqui" e não ficar flutuando por cima do conteúdo.
+- O botão **"Pagar Fatura"** (que aparece só quando filtro = cartão específico) sai do bloco de título e passa a viver dentro da barra sticky, à direita — assim continua acessível enquanto o usuário rola a fatura.
+- No mobile, a barra continua fixa; os filtros já usam wrap horizontal (como está hoje), sem mudança de layout.
 
-Resultado: ao trocar o contexto no modal, as contas do outro contexto simplesmente não existem no array → o campo fica vazio / não puxa a conta certa.
+## Alteração técnica
 
-## Plano
+Editar apenas `src/pages/Lancamentos.tsx`:
 
-Editar apenas `src/pages/AnalisesEva.tsx`:
+1. Reorganizar o retorno em três blocos:
+   - **Bloco topo (rola)**: título + subtítulo + ações (Exportar / Importar / Novo Lançamento).
+   - **Bloco sticky**: `<div className="sticky top-14 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 glass-strong border-b border-border/60">` contendo `<TransactionFilters />` e o botão "Pagar Fatura" quando aplicável.
+   - **Bloco de conteúdo**: Card com Tabs + TransactionTable (como hoje).
 
-1. Trocar o consumo de `useAccounts()` por `useTransactions()` (mesmo hook usado pelo `GlobalTransactionModal`) para obter também `allAccounts` e `allCardTerminals` (listas cross-contexto).
-   - Alternativa mais cirúrgica, se preferirmos não puxar `useTransactions` inteiro: fazer duas queries diretas ao Supabase (`bank_accounts`, `wallets`, `credit_cards`, `card_terminals`) sem o filtro de contexto e montar os arrays `allAccounts` / `allCardTerminals` localmente. Vou usar a versão via `useTransactions` para reaproveitar o pattern existente.
-2. Passar as novas props ao `TransactionFormModal`:
-   ```tsx
-   allAccounts={allAccounts}
-   allCardTerminals={allCardTerminals}
-   ```
-3. Manter `bankAccounts`, `wallets`, `creditCards`, `cardTerminals` como estão (fallback / listagem visual da página fora do modal continua no contexto atual).
+2. `top-14` casa com a altura do header global (`h-14` em `AppLayout.tsx`). `z-30` fica abaixo do header (`z-40`) e acima do conteúdo/Card.
+
+3. Manter o padding lateral do container principal; a barra usa margem negativa + padding pra ocupar 100% da largura útil e a borda inferior estender de ponta a ponta.
 
 ## Fora de escopo
 
-- Sem mudanças no `TransactionFormModal`, no schema, ou na lógica de salvar (`handlePendingUpdate`).
-- Sem alteração no comportamento da listagem principal de Análises EVA (continua respeitando o contexto global).
+- Sem mudança nos filtros em si, no `TransactionFilters.tsx`, na tabela ou na lógica de dados.
+- Sem alteração no header global do app.
+- Sem mudar Análises EVA / outras páginas.
