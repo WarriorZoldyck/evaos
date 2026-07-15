@@ -225,59 +225,13 @@ export default function Lancamentos() {
         </div>
       )}
 
-      {/* Header */}
+      {/* Header (title + Pagar Fatura contextual) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-display text-foreground">Lançamentos</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {totalCount} lançamento{totalCount !== 1 ? "s" : ""}
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ExportTransactionsButton
-            filters={filters}
-            categories={categories}
-            allCategories={allCategories}
-            creditCards={creditCards}
-            bankAccounts={bankAccounts}
-            wallets={wallets}
-            suppliers={suppliers}
-            clients={clients}
-          />
-          <Button
-            variant="outline"
-            onClick={() => setImportOpen(true)}
-            className="gap-2"
-          >
-            <Upload className="h-4 w-4" />
-            Importar Extrato
-          </Button>
-          <Button
-            onClick={() => {
-              setEditingTransaction(null);
-              setFormOpen(true);
-            }}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Novo Lançamento
-          </Button>
-        </div>
-      </div>
-
-      {/* Sticky Filters bar */}
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background border-b border-border/60 flex items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <TransactionFilters
-            filters={filters}
-            onFiltersChange={setFilters}
-            categories={categories}
-            bankAccounts={bankAccounts}
-            wallets={wallets}
-            creditCards={creditCards}
-            suppliers={suppliers}
-            clients={clients}
-          />
         </div>
         {filters.accountId.startsWith("card:") && (() => {
           const cardId = filters.accountId.split(":").slice(1).join(":");
@@ -294,6 +248,20 @@ export default function Lancamentos() {
           ) : null;
         })()}
       </div>
+
+      {/* Filters (period moved to global header via useHeaderSlot) */}
+      <TransactionFilters
+        filters={filters}
+        onFiltersChange={setFilters}
+        categories={categories}
+        bankAccounts={bankAccounts}
+        wallets={wallets}
+        creditCards={creditCards}
+        suppliers={suppliers}
+        clients={clients}
+        hidePeriod
+      />
+
 
 
       {/* Tabs + Table */}
