@@ -48,28 +48,12 @@ function getDateRange(period: PeriodKey, ref: Date): { from: string; to: string 
   }
 }
 
-interface TransactionFiltersProps {
+interface TransactionPeriodFilterProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
-  categories: Category[];
-  bankAccounts?: { id: string; name: string }[];
-  wallets?: { id: string; name: string }[];
-  creditCards?: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null }[];
-  suppliers?: { id: string; name: string }[];
-  clients?: { id: string; name: string }[];
 }
 
-export function TransactionFilters({
-  filters,
-  onFiltersChange,
-  categories,
-  bankAccounts = [],
-  wallets = [],
-  creditCards = [],
-  suppliers = [],
-  clients = [],
-}: TransactionFiltersProps) {
-  const rootCategories = categories.filter((c) => !c.parent_id);
+export function TransactionPeriodFilter({ filters, onFiltersChange }: TransactionPeriodFilterProps) {
   const [activePeriod, setActivePeriod] = useState<PeriodKey>("month");
   const [navMonth, setNavMonth] = useState(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -98,6 +82,103 @@ export function TransactionFilters({
   };
 
   const monthLabel = format(navMonth, "MMM yyyy", { locale: ptBR });
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {periodOptions.map((opt) => (
+        <Button
+          key={opt.key}
+          variant={activePeriod === opt.key ? "default" : "outline"}
+          size="sm"
+          className="text-xs h-8"
+          onClick={() => handlePeriodClick(opt.key)}
+        >
+          {opt.label}
+        </Button>
+      ))}
+
+      <div className="flex items-center gap-0.5 ml-1">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => navigateMonth("prev")}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+
+        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant={activePeriod === "custom" ? "default" : "outline"}
+              size="sm"
+              className="text-xs h-8 min-w-[90px] capitalize"
+            >
+              {monthLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <Calendar
+              mode="range"
+              locale={ptBR}
+              className="pointer-events-auto"
+              selected={{
+                from: filters.dateFrom ? new Date(filters.dateFrom + "T00:00:00") : undefined,
+                to: filters.dateTo ? new Date(filters.dateTo + "T00:00:00") : undefined,
+              }}
+              onSelect={(range) => {
+                if (range?.from) {
+                  setActivePeriod("custom");
+                  onFiltersChange({
+                    ...filters,
+                    dateFrom: format(range.from, "yyyy-MM-dd"),
+                    dateTo: range.to ? format(range.to, "yyyy-MM-dd") : format(range.from, "yyyy-MM-dd"),
+                  });
+                  if (range.to) setCalendarOpen(false);
+                }
+              }}
+              numberOfMonths={2}
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => navigateMonth("next")}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+interface TransactionFiltersProps {
+  filters: Filters;
+  onFiltersChange: (filters: Filters) => void;
+  categories: Category[];
+  bankAccounts?: { id: string; name: string }[];
+  wallets?: { id: string; name: string }[];
+  creditCards?: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null }[];
+  suppliers?: { id: string; name: string }[];
+  clients?: { id: string; name: string }[];
+  hidePeriod?: boolean;
+}
+
+export function TransactionFilters({
+  filters,
+  onFiltersChange,
+  categories,
+  bankAccounts = [],
+  wallets = [],
+  creditCards = [],
+  suppliers = [],
+  clients = [],
+  hidePeriod = false,
+}: TransactionFiltersProps) {
+  const rootCategories = categories.filter((c) => !c.parent_id);
 
   return (
     <div className="space-y-3">
