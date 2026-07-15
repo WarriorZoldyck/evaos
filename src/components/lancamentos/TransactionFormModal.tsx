@@ -1317,31 +1317,25 @@ function MainFormContent({
     }
   }, [watchPaymentMethodMain, watchCardTerminalId, watchInstallment, form]);
 
+  // Auto status based on payment method (creation only, respects manual override)
+  const statusTouchedRef = useRef(false);
+  useEffect(() => {
+    // reset on modal open / edit switch
+    statusTouchedRef.current = false;
+  }, [editTransaction, open]);
+  useEffect(() => {
+    if (isEditing || statusTouchedRef.current || !watchPaymentMethodMain) return;
+    const paidMethods = ["Dinheiro", "PIX", "Transferência", "Débito Automático"];
+    const next = paidMethods.includes(watchPaymentMethodMain) ? "Pago" : "Pendente";
+    if (form.getValues("status") !== next) {
+      form.setValue("status", next as "Pago" | "Pendente");
+    }
+  }, [watchPaymentMethodMain, isEditing, form]);
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-        {/* Status */}
-        <FormField
-          control={form.control}
-          name="status"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Status</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="Pendente">Pendente</SelectItem>
-                  <SelectItem value="Pago">Pago</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+
 
         {/* Descrição */}
         <FormField
@@ -1899,6 +1893,35 @@ function MainFormContent({
             )}
           </div>
         )}
+
+        {/* Status */}
+        <FormField
+          control={form.control}
+          name="status"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Status</FormLabel>
+              <Select
+                onValueChange={(v) => {
+                  statusTouchedRef.current = true;
+                  field.onChange(v);
+                }}
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="Pendente">Pendente</SelectItem>
+                  <SelectItem value="Pago">Pago</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         {/* Observações */}
         {show("notes") && (
