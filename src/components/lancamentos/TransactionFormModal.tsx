@@ -140,37 +140,47 @@ const RECURRING_FREQUENCIES = [
   { value: "yearly", label: "Anual" },
 ] as const;
 
-const transactionSchema = z.object({
-  description: z.string().min(1, "Descrição obrigatória").max(200),
-  amount: z.coerce.number().positive("Valor deve ser positivo"),
-  payment_date: z.date({ required_error: "Data de pagamento obrigatória" }),
-  competence_date: z.date({ required_error: "Data de competência obrigatória" }),
-  status: z.enum(["Pendente", "Pago"]),
-  category: z.string().min(1, "Categoria obrigatória"),
-  subcategory: z.string().optional(),
-  subcategory2: z.string().optional(),
-  payment_method: z.string().optional(),
-  bank_account_id: z.string().optional(),
-  credit_card_id: z.string().optional(),
-  wallet_id: z.string().optional(),
-  card_terminal_id: z.string().optional(),
-  supplier_id: z.string().optional(),
-  client_id: z.string().optional(),
-  contact_name: z.string().max(100).optional(),
-  notes: z.string().max(500).optional(),
-  barcode: z.string().max(100).optional(),
-  attachment_url: z.string().url("URL inválida").max(500).or(z.literal("")).optional(),
-  is_installment: z.boolean().default(false),
-  installments_count: z.coerce.number().int().min(2).max(120).optional(),
-  interest_rate: z.coerce.number().min(0).max(100).default(0),
-  first_installment_amount: z.coerce.number().positive().optional(),
-  installment_interval_type: z.enum(["monthly", "custom_days"]).default("monthly"),
-  installment_custom_days: z.coerce.number().int().min(1).max(365).optional(),
-  is_recurring: z.boolean().default(false),
-  recurring_frequency: z.string().optional(),
-  recurring_custom_days: z.coerce.number().int().min(1).max(365).optional(),
-  recurring_end_date: z.date().optional(),
-});
+const transactionSchema = z
+  .object({
+    description: z.string().min(1, "Descrição obrigatória").max(200),
+    amount: z.coerce.number().positive("Valor deve ser positivo"),
+    payment_date: z.date({ required_error: "Data de pagamento obrigatória" }),
+    competence_date: z.date({ required_error: "Data de competência obrigatória" }),
+    status: z.enum(["Pendente", "Pago"]),
+    category: z.string().min(1, "Categoria obrigatória"),
+    subcategory: z.string().optional(),
+    subcategory2: z.string().optional(),
+    payment_method: z.string().optional(),
+    bank_account_id: z.string().optional(),
+    credit_card_id: z.string().optional(),
+    wallet_id: z.string().optional(),
+    card_terminal_id: z.string().optional(),
+    supplier_id: z.string().optional(),
+    client_id: z.string().optional(),
+    contact_name: z.string().max(100).optional(),
+    notes: z.string().max(500).optional(),
+    barcode: z.string().max(100).optional(),
+    attachment_url: z.string().url("URL inválida").max(500).or(z.literal("")).optional(),
+    is_installment: z.boolean().default(false),
+    installments_count: z.coerce.number().int().min(2).max(120).optional(),
+    interest_rate: z.coerce.number().min(0).max(100).default(0),
+    first_installment_amount: z.coerce.number().positive().optional(),
+    installment_interval_type: z.enum(["monthly", "custom_days"]).default("monthly"),
+    installment_custom_days: z.coerce.number().int().min(1).max(365).optional(),
+    is_recurring: z.boolean().default(false),
+    recurring_frequency: z.string().optional(),
+    recurring_custom_days: z.coerce.number().int().min(1).max(365).optional(),
+    recurring_end_date: z.date().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.payment_method === "Dinheiro" && !data.wallet_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["wallet_id"],
+        message: "Selecione uma carteira",
+      });
+    }
+  });
 
 type FormData = z.infer<typeof transactionSchema>;
 

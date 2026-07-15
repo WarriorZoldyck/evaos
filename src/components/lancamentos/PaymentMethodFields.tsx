@@ -101,6 +101,13 @@ export function PaymentMethodFields({
     }
   }, [paymentMethod, activeTab]);
 
+  // Auto-select first wallet when Dinheiro is chosen and none selected
+  useEffect(() => {
+    if (showWallet && !form.getValues("wallet_id") && wallets.length > 0) {
+      form.setValue("wallet_id", wallets[0].id, { shouldValidate: true });
+    }
+  }, [showWallet, wallets, form]);
+
   if (!paymentMethod) return null;
 
   return (
@@ -216,7 +223,7 @@ export function PaymentMethodFields({
           name="wallet_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Carteira</FormLabel>
+              <FormLabel>Carteira *</FormLabel>
               <Select onValueChange={field.onChange} value={field.value || ""}>
                 <FormControl>
                   <SelectTrigger>
