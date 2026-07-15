@@ -413,3 +413,6 @@ export function TransactionFilters({
       {!hidePeriod && (
         <TransactionPeriodFilter filters={filters} onFiltersChange={onFiltersChange} />
       )}
+    </div>
+  );
+}
