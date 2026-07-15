@@ -1,9 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
 import { useCategories } from "@/hooks/useCategories";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
 import { useContacts } from "@/hooks/useContacts";
 import { supabase } from "@/integrations/supabase/client";
@@ -478,6 +479,41 @@ export default function AnalisesEva() {
   const { suppliers, clients } = useContacts();
   const { companies } = useCompany();
   const { settings: fieldSettings } = useFormFieldSettings();
+  const effectiveUserId = useEffectiveUserId();
+
+  // Cross-context accounts/terminals so the modal can refilter when the user
+  // switches contexto (Pessoal ↔ Empresa) during edit of an AI pending item.
+  const [allAccounts, setAllAccounts] = useState<{
+    bankAccounts: { id: string; name: string; company_id: string | null; company_name: string }[];
+    wallets: { id: string; name: string; company_id: string | null; company_name: string }[];
+    creditCards: { id: string; name: string; last_four_digits: string | null; company_id: string | null; company_name: string; bank_account_id: string; parent_card_id: string | null }[];
+  }>({ bankAccounts: [], wallets: [], creditCards: [] });
+  const [allCardTerminals, setAllCardTerminals] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!effectiveUserId) return;
+    let cancelled = false;
+    (async () => {
+      const [accRes, walletRes, cardRes, termRes, companiesRes] = await Promise.all([
+        supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("wallets").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("credit_cards").select("id, name, last_four_digits, company_id, bank_account_id, parent_card_id").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation, company_id").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("companies").select("id, name").eq("user_id", effectiveUserId),
+      ]);
+      if (cancelled) return;
+      const companyMap = new Map<string, string>();
+      (companiesRes.data || []).forEach((c: any) => companyMap.set(c.id, c.name));
+      const getCompanyName = (cid: string | null) => (cid ? companyMap.get(cid) || "Empresa" : "Pessoal");
+      setAllAccounts({
+        bankAccounts: (accRes.data || []).map((a: any) => ({ ...a, company_name: getCompanyName(a.company_id) })),
+        wallets: (walletRes.data || []).map((w: any) => ({ ...w, company_name: getCompanyName(w.company_id) })),
+        creditCards: (cardRes.data || []).map((c: any) => ({ ...c, company_name: getCompanyName(c.company_id) })),
+      });
+      setAllCardTerminals((termRes.data || []) as any[]);
+    })();
+    return () => { cancelled = true; };
+  }, [effectiveUserId]);
 
   const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
   const [editingSeries, setEditingSeries] = useState<AIPendingTransaction[] | null>(null);
@@ -1143,6 +1179,8 @@ export default function AnalisesEva() {
         clients={clients}
         categories={txCategories}
         cardTerminals={cardTerminalInfos}
+        allAccounts={allAccounts}
+        allCardTerminals={allCardTerminals}
         companies={companies}
         fieldSettings={fieldSettings}
       />
