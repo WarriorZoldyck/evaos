@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useTransactions, type Transaction } from "@/hooks/useTransactions";
-import { TransactionFilters } from "@/components/lancamentos/TransactionFilters";
+import { TransactionFilters, TransactionPeriodFilter } from "@/components/lancamentos/TransactionFilters";
+import { useHeaderSlot } from "@/contexts/HeaderSlotContext";
 import { TransactionTable } from "@/components/lancamentos/TransactionTable";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
