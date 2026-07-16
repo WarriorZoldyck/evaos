@@ -203,11 +203,11 @@ export function TransactionFilters({
   const rootCategories = categories.filter((c) => !c.parent_id);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-stretch sm:items-center">
+    <div className="w-full">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Search */}
         {!hideSearch && (
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por descrição ou contato..."
@@ -271,7 +271,7 @@ export function TransactionFilters({
 
 
         {/* Sort order */}
-        <Button
+          <Button
           variant="outline"
           size="sm"
           className="shrink-0 gap-2 h-10"
@@ -302,7 +302,7 @@ export function TransactionFilters({
             })
           }
         >
-          <SelectTrigger className="w-full sm:w-[200px]">
+          <SelectTrigger className="w-[200px] max-w-full">
             <SelectValue placeholder="Categoria" />
           </SelectTrigger>
           <SelectContent>
@@ -327,7 +327,7 @@ export function TransactionFilters({
               })
             }
           >
-            <SelectTrigger className="w-full sm:w-[200px]">
+            <SelectTrigger className="w-[200px] max-w-full">
               <SelectValue placeholder="Conta / Carteira" />
             </SelectTrigger>
             <SelectContent>
@@ -365,7 +365,7 @@ export function TransactionFilters({
                 onFiltersChange({ ...filters, accountId: value })
               }
             >
-              <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectTrigger className="w-[180px] max-w-full">
                 <SelectValue placeholder="Sub-cartão" />
               </SelectTrigger>
               <SelectContent>
@@ -393,7 +393,7 @@ export function TransactionFilters({
               })
             }
           >
-            <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectTrigger className="w-[180px] max-w-full">
               <SelectValue placeholder="Fornecedor" />
             </SelectTrigger>
             <SelectContent>
@@ -418,7 +418,7 @@ export function TransactionFilters({
               })
             }
           >
-            <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectTrigger className="w-[180px] max-w-full">
               <SelectValue placeholder="Cliente" />
             </SelectTrigger>
             <SelectContent>
