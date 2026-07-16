@@ -155,6 +155,26 @@ export function TransactionPeriodFilter({ filters, onFiltersChange }: Transactio
   );
 }
 
+interface TransactionSearchInputProps {
+  filters: Filters;
+  onFiltersChange: (filters: Filters) => void;
+  className?: string;
+}
+
+export function TransactionSearchInput({ filters, onFiltersChange, className }: TransactionSearchInputProps) {
+  return (
+    <div className={`relative ${className ?? "w-64"}`}>
+      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <Input
+        placeholder="Buscar lançamento..."
+        value={filters.search}
+        onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
+        className="pl-8 h-8 text-xs"
+      />
+    </div>
+  );
+}
+
 interface TransactionFiltersProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
@@ -165,6 +185,7 @@ interface TransactionFiltersProps {
   suppliers?: { id: string; name: string }[];
   clients?: { id: string; name: string }[];
   hidePeriod?: boolean;
+  hideSearch?: boolean;
 }
 
 export function TransactionFilters({
@@ -177,24 +198,27 @@ export function TransactionFilters({
   suppliers = [],
   clients = [],
   hidePeriod = false,
+  hideSearch = false,
 }: TransactionFiltersProps) {
   const rootCategories = categories.filter((c) => !c.parent_id);
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-stretch sm:items-center">
         {/* Search */}
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por descrição ou contato..."
-            value={filters.search}
-            onChange={(e) =>
-              onFiltersChange({ ...filters, search: e.target.value })
-            }
-            className="pl-9"
-          />
-        </div>
+        {!hideSearch && (
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por descrição ou contato..."
+              value={filters.search}
+              onChange={(e) =>
+                onFiltersChange({ ...filters, search: e.target.value })
+              }
+              className="pl-9"
+            />
+          </div>
+        )}
 
         {/* Type toggle */}
         <ToggleGroup

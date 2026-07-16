@@ -3,7 +3,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHub } from "@/contexts/HubContext";
 import { CompanyProvider } from "@/contexts/CompanyContext";
-import { HeaderSlotProvider, useHeaderSlotContent } from "@/contexts/HeaderSlotContext";
+import { HeaderSlotProvider, useHeaderSlotContent, useHeaderLeftSlotContent } from "@/contexts/HeaderSlotContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -80,12 +80,14 @@ function AppHeader({
 }) {
   const { impersonatingOwnerName, impersonatingRole, exitImpersonation } = useHub();
   const slotContent = useHeaderSlotContent();
+  const leftSlotContent = useHeaderLeftSlotContent();
   const roleLabel: Record<string, string> = { admin: "Admin", editor: "Editor", viewer: "Leitura" };
 
   return (
     <header className="h-14 flex items-center justify-between gap-3 border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
       <div className="flex items-center gap-2 min-w-0 shrink-0">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
+        {leftSlotContent}
         {impersonatingOwnerName && (
           <Badge
             variant="outline"

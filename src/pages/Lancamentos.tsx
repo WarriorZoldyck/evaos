@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useTransactions, type Transaction } from "@/hooks/useTransactions";
-import { TransactionFilters, TransactionPeriodFilter } from "@/components/lancamentos/TransactionFilters";
-import { useHeaderSlot } from "@/contexts/HeaderSlotContext";
+import { TransactionFilters, TransactionPeriodFilter, TransactionSearchInput } from "@/components/lancamentos/TransactionFilters";
+import { useHeaderSlot, useHeaderLeftSlot } from "@/contexts/HeaderSlotContext";
 import { TransactionTable } from "@/components/lancamentos/TransactionTable";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
@@ -227,6 +227,12 @@ export default function Lancamentos() {
   );
   useHeaderSlot(headerControls);
 
+  const headerLeft = useMemo(
+    () => <TransactionSearchInput filters={filters} onFiltersChange={setFilters} />,
+    [filters, setFilters],
+  );
+  useHeaderLeftSlot(headerLeft);
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* New feature announcement */}
@@ -290,18 +296,21 @@ export default function Lancamentos() {
         })()}
       </div>
 
-      {/* Filters (period moved to global header via useHeaderSlot) */}
-      <TransactionFilters
-        filters={filters}
-        onFiltersChange={setFilters}
-        categories={categories}
-        bankAccounts={bankAccounts}
-        wallets={wallets}
-        creditCards={creditCards}
-        suppliers={suppliers}
-        clients={clients}
-        hidePeriod
-      />
+      {/* Filters sticky bar (period + search moved to global header) */}
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background border-b border-border/60">
+        <TransactionFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          categories={categories}
+          bankAccounts={bankAccounts}
+          wallets={wallets}
+          creditCards={creditCards}
+          suppliers={suppliers}
+          clients={clients}
+          hidePeriod
+          hideSearch
+        />
+      </div>
 
 
 
