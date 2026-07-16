@@ -198,6 +198,278 @@ interface TransactionFiltersProps {
   hideSearch?: boolean;
 }
 
+type EntityLevel = "root" | "categoria" | "fornecedor" | "cliente";
+
+interface UnifiedEntityFilterProps {
+  filters: Filters;
+  onFiltersChange: (filters: Filters) => void;
+  rootCategories: Category[];
+  suppliers: { id: string; name: string }[];
+  clients: { id: string; name: string }[];
+}
+
+function UnifiedEntityFilter({
+  filters,
+  onFiltersChange,
+  rootCategories,
+  suppliers,
+  clients,
+}: UnifiedEntityFilterProps) {
+  const [open, setOpen] = useState(false);
+  const [level, setLevel] = useState<EntityLevel>("root");
+  const [query, setQuery] = useState("");
+
+  const activeCount =
+    (filters.categoryId ? 1 : 0) +
+    (filters.supplierId ? 1 : 0) +
+    (filters.clientId ? 1 : 0);
+
+  const categoryLabel = useMemo(() => {
+    if (!filters.categoryId) return null;
+    if (filters.categoryId === "__sem_categoria__") return "Sem categoria";
+    return rootCategories.find((c) => c.id === filters.categoryId)?.name ?? null;
+  }, [filters.categoryId, rootCategories]);
+
+  const supplierLabel = useMemo(
+    () => (filters.supplierId ? suppliers.find((s) => s.id === filters.supplierId)?.name ?? null : null),
+    [filters.supplierId, suppliers],
+  );
+
+  const clientLabel = useMemo(
+    () => (filters.clientId ? clients.find((c) => c.id === filters.clientId)?.name ?? null : null),
+    [filters.clientId, clients],
+  );
+
+  const goRoot = () => {
+    setLevel("root");
+    setQuery("");
+  };
+
+  const enterLevel = (l: EntityLevel) => {
+    setLevel(l);
+    setQuery("");
+  };
+
+  const clearCategory = () => onFiltersChange({ ...filters, categoryId: "" });
+  const clearSupplier = () => onFiltersChange({ ...filters, supplierId: "" });
+  const clearClient = () => onFiltersChange({ ...filters, clientId: "" });
+
+  const filterList = <T extends { name: string }>(items: T[]) =>
+    query.trim()
+      ? items.filter((i) => i.name.toLowerCase().includes(query.trim().toLowerCase()))
+      : items;
+
+  const renderRow = (opts: {
+    icon: React.ReactNode;
+    label: string;
+    value: string | null;
+    onClear: () => void;
+    onOpen: () => void;
+  }) => (
+    <button
+      type="button"
+      onClick={opts.onOpen}
+      className="w-full flex items-center gap-2 px-2 py-2 rounded-md hover:bg-accent text-left"
+    >
+      <span className="text-muted-foreground shrink-0">{opts.icon}</span>
+      <span className="text-sm font-medium shrink-0">{opts.label}</span>
+      {opts.value ? (
+        <span className="ml-auto flex items-center gap-1 min-w-0">
+          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary truncate max-w-[140px]">
+            {opts.value}
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+              opts.onClear();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                opts.onClear();
+              }
+            }}
+            className="p-0.5 rounded hover:bg-muted"
+          >
+            <X className="h-3.5 w-3.5 text-muted-foreground" />
+          </span>
+        </span>
+      ) : (
+        <ChevronRightIcon className="h-4 w-4 ml-auto text-muted-foreground" />
+      )}
+    </button>
+  );
+
+  const renderOption = (opts: {
+    key: string;
+    label: string;
+    selected: boolean;
+    onSelect: () => void;
+    muted?: boolean;
+  }) => (
+    <button
+      key={opts.key}
+      type="button"
+      onClick={() => {
+        opts.onSelect();
+        goRoot();
+      }}
+      className={`w-full flex items-center gap-2 px-2 py-2 rounded-md hover:bg-accent text-left text-sm ${
+        opts.muted ? "text-muted-foreground italic" : ""
+      }`}
+    >
+      <span className="w-4 shrink-0">
+        {opts.selected ? <Check className="h-4 w-4 text-primary" /> : null}
+      </span>
+      <span className="truncate">{opts.label}</span>
+    </button>
+  );
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) goRoot();
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="shrink-0 h-10 gap-2">
+          <Filter className="h-4 w-4" />
+          <span className="text-xs">Filtrar por</span>
+          {activeCount > 0 && (
+            <span className="ml-0.5 inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+              {activeCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-2 bg-popover">
+        {level === "root" && (
+          <div className="space-y-0.5">
+            <div className="px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+              Filtrar por
+            </div>
+            {renderRow({
+              icon: <Tag className="h-4 w-4" />,
+              label: "Categoria",
+              value: categoryLabel,
+              onClear: clearCategory,
+              onOpen: () => enterLevel("categoria"),
+            })}
+            {suppliers.length > 0 &&
+              renderRow({
+                icon: <Building2 className="h-4 w-4" />,
+                label: "Fornecedor",
+                value: supplierLabel,
+                onClear: clearSupplier,
+                onOpen: () => enterLevel("fornecedor"),
+              })}
+            {clients.length > 0 &&
+              renderRow({
+                icon: <Users className="h-4 w-4" />,
+                label: "Cliente",
+                value: clientLabel,
+                onClear: clearClient,
+                onOpen: () => enterLevel("cliente"),
+              })}
+          </div>
+        )}
+
+        {level !== "root" && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" className="h-8 px-2 gap-1" onClick={goRoot}>
+                <ChevronLeft className="h-4 w-4" />
+                <span className="text-xs">Voltar</span>
+              </Button>
+              <span className="text-xs font-medium capitalize">{level}</span>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                autoFocus
+                placeholder={`Buscar ${level}...`}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pl-7 h-8 text-xs"
+              />
+            </div>
+            <div className="max-h-72 overflow-y-auto space-y-0.5">
+              {level === "categoria" && (
+                <>
+                  {renderOption({
+                    key: "todas",
+                    label: "Todas as categorias",
+                    selected: !filters.categoryId,
+                    onSelect: () => onFiltersChange({ ...filters, categoryId: "" }),
+                  })}
+                  {renderOption({
+                    key: "__sem_categoria__",
+                    label: "Sem categoria",
+                    selected: filters.categoryId === "__sem_categoria__",
+                    onSelect: () =>
+                      onFiltersChange({ ...filters, categoryId: "__sem_categoria__" }),
+                    muted: true,
+                  })}
+                  {filterList(rootCategories).map((cat) =>
+                    renderOption({
+                      key: cat.id,
+                      label: cat.name,
+                      selected: filters.categoryId === cat.id,
+                      onSelect: () => onFiltersChange({ ...filters, categoryId: cat.id }),
+                    }),
+                  )}
+                </>
+              )}
+              {level === "fornecedor" && (
+                <>
+                  {renderOption({
+                    key: "todos",
+                    label: "Todos os fornecedores",
+                    selected: !filters.supplierId,
+                    onSelect: () => onFiltersChange({ ...filters, supplierId: "" }),
+                  })}
+                  {filterList(suppliers).map((s) =>
+                    renderOption({
+                      key: s.id,
+                      label: s.name,
+                      selected: filters.supplierId === s.id,
+                      onSelect: () => onFiltersChange({ ...filters, supplierId: s.id }),
+                    }),
+                  )}
+                </>
+              )}
+              {level === "cliente" && (
+                <>
+                  {renderOption({
+                    key: "todos",
+                    label: "Todos os clientes",
+                    selected: !filters.clientId,
+                    onSelect: () => onFiltersChange({ ...filters, clientId: "" }),
+                  })}
+                  {filterList(clients).map((c) =>
+                    renderOption({
+                      key: c.id,
+                      label: c.name,
+                      selected: filters.clientId === c.id,
+                      onSelect: () => onFiltersChange({ ...filters, clientId: c.id }),
+                    }),
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+
+
 export function TransactionFilters({
   filters,
   onFiltersChange,
