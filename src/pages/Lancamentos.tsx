@@ -205,10 +205,11 @@ export default function Lancamentos() {
           variant="outline"
           size="sm"
           onClick={() => setImportOpen(true)}
-          className="gap-1.5 h-8"
+          className="gap-1.5 h-8 shrink-0"
         >
           <Upload className="h-3.5 w-3.5" />
-          <span className="text-xs">Importar Extrato</span>
+          <span className="hidden 2xl:inline text-xs">Importar Extrato</span>
+          <span className="hidden xl:inline 2xl:hidden text-xs">Importar</span>
         </Button>
         <Button
           size="sm"
@@ -216,10 +217,11 @@ export default function Lancamentos() {
             setEditingTransaction(null);
             setFormOpen(true);
           }}
-          className="gap-1.5 h-8"
+          className="gap-1.5 h-8 shrink-0"
         >
           <Plus className="h-3.5 w-3.5" />
-          <span className="text-xs">Novo Lançamento</span>
+          <span className="hidden 2xl:inline text-xs">Novo Lançamento</span>
+          <span className="hidden xl:inline 2xl:hidden text-xs">Novo</span>
         </Button>
       </>
     ),
@@ -228,7 +230,7 @@ export default function Lancamentos() {
   useHeaderSlot(headerControls);
 
   const headerLeft = useMemo(
-    () => <TransactionSearchInput filters={filters} onFiltersChange={setFilters} />,
+    () => <TransactionSearchInput filters={filters} onFiltersChange={setFilters} className="w-36 sm:w-48 lg:w-56 2xl:w-64 shrink-0" />,
     [filters, setFilters],
   );
   useHeaderLeftSlot(headerLeft);

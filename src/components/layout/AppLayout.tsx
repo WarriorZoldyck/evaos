@@ -84,8 +84,8 @@ function AppHeader({
   const roleLabel: Record<string, string> = { admin: "Admin", editor: "Editor", viewer: "Leitura" };
 
   return (
-    <header className="h-14 flex items-center justify-between gap-3 border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
-      <div className="flex items-center gap-2 min-w-0 shrink-0">
+    <header className="h-14 flex items-center justify-between gap-2 border-b border-border/60 px-4 shrink-0 glass-strong sticky top-0 z-40">
+      <div className="flex items-center gap-2 min-w-0 shrink">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground transition-colors h-9 w-9 md:h-8 md:w-8" />
         {leftSlotContent}
         {impersonatingOwnerName && (
@@ -107,9 +107,9 @@ function AppHeader({
       </div>
 
       {/* Centro: slot injetado pelas páginas (ex.: filtros do Dashboard) */}
-      <div className="flex-1 flex justify-center min-w-0 overflow-hidden">
+      <div className="flex-1 flex justify-start xl:justify-center min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {slotContent && (
-          <div className="flex items-center gap-2 flex-wrap justify-center">
+          <div className="flex items-center gap-2 flex-nowrap min-w-max">
             {slotContent}
           </div>
         )}
