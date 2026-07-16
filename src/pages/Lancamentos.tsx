@@ -234,10 +234,10 @@ export default function Lancamentos() {
   useHeaderLeftSlot(headerLeft);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="animate-fade-in pt-4 md:pt-6">
       {/* New feature announcement */}
       {showFeatureBanner && (
-        <div className="relative rounded-lg border border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4 pr-10">
+        <div className="relative mb-6 rounded-lg border border-primary/40 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4 pr-10">
           <button
             onClick={dismissFeatureBanner}
             className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
@@ -273,7 +273,7 @@ export default function Lancamentos() {
       )}
 
       {/* Header (title + Pagar Fatura contextual) */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-display text-foreground">Lançamentos</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -297,7 +297,7 @@ export default function Lancamentos() {
       </div>
 
       {/* Filters sticky bar (period + search moved to global header) */}
-      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background border-b border-border/60">
+      <div className="sticky top-0 z-50 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-card border-y border-border/70 shadow-premium">
         <TransactionFilters
           filters={filters}
           onFiltersChange={setFilters}
@@ -315,7 +315,7 @@ export default function Lancamentos() {
 
 
       {/* Tabs + Table */}
-      <Card>
+      <Card className="relative z-0 rounded-t-none border-t-0">
         <Tabs value={activeTab} onValueChange={handleTabChange}>
           <div className="border-b border-border px-4 pt-3">
             <TabsList>
