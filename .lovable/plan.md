@@ -1,33 +1,50 @@
 ## Objetivo
 
-Aproveitar o header global do app (padrão Dashboard) na página **Lançamentos**: mandar pra lá os filtros de **período** (Tudo/Hoje/Semana/Mês/Ano + navegação < Jul 2026 >) e as ações **Exportar**, **Importar Extrato** e **+ Novo Lançamento**. O restante da barra de filtros (busca, Tudo/Entradas/Saídas, Todos/Conciliados/Sem conciliação, Recentes, Categorias, Contas, "Todos...") desce pra dentro da página e rola junto com a lista (sem sticky).
+1. Mover a **barra de busca** para o cabeçalho global fixo, à esquerda (ao lado do ícone de recolher menu).
+2. Deixar a linha de filtros (Tudo/Entradas/Saídas, Todos/Conciliados/Sem conciliação, Recentes, Categoria, Conta, Fornecedor, Cliente) **fixa no topo** durante a rolagem — com fundo sólido, sem transparência.
 
-## Alterações
+## Mudanças
 
-### 1. `src/pages/Lancamentos.tsx`
-- Importar `useHeaderSlot` de `@/contexts/HeaderSlotContext`.
-- Montar um `headerControls` (memo) com, da esquerda pra direita:
-  - Bloco de período extraído do `TransactionFilters` — pílulas Tudo/Hoje/Semana/Mês/Ano + navegação com `<` / label do mês / `>`, ligadas ao mesmo `filters` (`period`, `dateFrom`, `dateTo`, mês atual).
-  - Botão **Exportar** (o `ExportTransactionsButton` já existente).
-  - Botão **Importar Extrato** (mesmo `onClick={() => setImportOpen(true)}`).
-  - Botão **+ Novo Lançamento** (mesmo `onClick` de abrir o modal).
-- Chamar `useHeaderSlot(headerControls)` — o `AppLayout` já renderiza esse slot dentro do header global sticky.
-- Remover a barra sticky adicionada na iteração anterior. Manter apenas:
-  - Título "Lançamentos / N lançamentos" no topo da página (sem os botões de ação).
-  - Botão **Pagar Fatura** (quando `filters.accountId` é um cartão) fica no bloco do título, à direita — não vai pro header global (é contextual).
-  - `<TransactionFilters />` em fluxo normal (sem `sticky`), sem os pills de período (ver item 2).
+### `src/contexts/HeaderSlotContext.tsx`
+- Adicionar segundo slot: `leftContent` / `setLeftContent` + hook `useHeaderLeftSlot(node)`.
+- Motivo: hoje só existe o slot central; precisamos de um slot à esquerda (perto do `SidebarTrigger`) para a busca.
 
-### 2. `src/components/lancamentos/TransactionFilters.tsx`
-- Extrair a linha de **período** (pílulas + navegação de mês) em um subcomponente exportado (`TransactionPeriodFilter`) reaproveitável, para o Lançamentos renderizar no header global.
-- Adicionar uma prop `hidePeriod?: boolean` no `TransactionFilters` para esconder a linha de período quando ela já estiver no header (default `false`, mantém compatibilidade com outros lugares que porventura usem).
-- Nenhuma mudança de lógica: os dois componentes leem/escrevem o mesmo `filters` via `onFiltersChange`.
+### `src/components/layout/AppLayout.tsx` (`AppHeader`)
+- Consumir `leftContent` via `useHeaderLeftSlotContent()` e renderizar imediatamente após o `SidebarTrigger`, dentro do bloco esquerdo existente.
+- Nenhuma outra mudança no cabeçalho (mantém `glass-strong sticky top-0 z-40`).
 
-### 3. Estilo dos controles no header global
-- Usar as classes já usadas no `Dashboard.tsx` (`h-8 text-xs`, botões `size="sm"`, gaps compactos) para o período e as ações caberem no header (altura `h-14`).
-- No mobile, permitir `flex-wrap` como já faz o header global (linha 110 do `AppLayout.tsx`).
+### `src/components/lancamentos/TransactionFilters.tsx`
+- Extrair a busca em um subcomponente exportado `TransactionSearchInput` (compacto: `w-64 h-8 text-sm`, ícone `Search` à esquerda) que lê/escreve `filters.search`.
+- Adicionar prop `hideSearch?: boolean` em `TransactionFilters`; quando `true`, omitir o bloco de busca da grid.
+- Nenhuma mudança de lógica/dados.
+
+### `src/pages/Lancamentos.tsx`
+- Importar `TransactionSearchInput` e `useHeaderLeftSlot`.
+- `useHeaderLeftSlot(<TransactionSearchInput filters={filters} onFiltersChange={setFilters} />)` (memoizado).
+- Passar `hideSearch` para `<TransactionFilters>`.
+- Envolver `<TransactionFilters>` em container **sticky opaco**:
+  ```tsx
+  <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background border-b border-border/60">
+    <TransactionFilters ... hidePeriod hideSearch />
+  </div>
+  ```
+  - `sticky top-0` gruda no topo do container de rolagem (`overflow-auto` de `AppLayout`), logo abaixo do cabeçalho global (que é fixo fora do scroll).
+  - `bg-background` sólido resolve o vazamento visual do conteúdo passando por trás.
+  - `-mx-4 md:-mx-6` + `px-4 md:px-6` estendem o fundo até as bordas do padding da página.
+  - `z-30` fica abaixo do cabeçalho global (`z-40`) e não conflita com popovers.
+- O bloco de título "Lançamentos / N lançamentos" e o banner de novidade continuam rolando normalmente. Tabs (Todos/Realizado/Projetado) e tabela permanecem inalterados.
+
+## Layout final do cabeçalho global (na página Lançamentos)
+
+```text
+[≡] [Buscar…]        [Tudo|Hoje|Sem|Mês|Ano] [‹ Jul 2026 ›] [Exportar] [Importar] [+ Novo]        [☀]
+```
+
+E ao rolar a página, logo abaixo do cabeçalho aparece a barra fixa opaca:
+
+```text
+[Tudo|Entradas|Saídas] [Todos|Conciliados|Sem conciliação] [↓ Recentes] [Categoria ▾] [Conta ▾] [Fornecedor ▾] [Cliente ▾]
+```
 
 ## Fora de escopo
-
-- Sem mudanças em dados/queries, no schema, ou em Análises EVA / outras páginas.
-- Sem mudanças no `AppLayout`.
-- O botão "Pagar Fatura" continua contextual dentro da página (não sobe pro header).
+Queries/hooks/schema, `Pagar Fatura`, banner de novidade, tabela, outras páginas.
