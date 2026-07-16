@@ -380,55 +380,6 @@ export function TransactionFilters({
         })()}
 
 
-        {suppliers.length > 0 && (
-          <Select
-            value={filters.supplierId || "todos"}
-            onValueChange={(value) =>
-              onFiltersChange({
-                ...filters,
-                supplierId: value === "todos" ? "" : value,
-              })
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[180px] h-10">
-              <SelectValue placeholder="Fornecedor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos fornecedores</SelectItem>
-              {suppliers.map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        {/* Client filter */}
-        {clients.length > 0 && (
-          <Select
-            value={filters.clientId || "todos"}
-            onValueChange={(value) =>
-              onFiltersChange({
-                ...filters,
-                clientId: value === "todos" ? "" : value,
-              })
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[180px] h-10">
-              <SelectValue placeholder="Cliente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos clientes</SelectItem>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
       </div>
 
       {!hidePeriod && (
