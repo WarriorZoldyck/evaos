@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, startOfWeek, endOfWeek, startOfDay, endOfDay, startOfYear, endOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Filter, ArrowUpCircle, ArrowDownCircle, CircleDot, CheckCircle2, XCircle, ListFilter } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, Filter, ChevronRight as ChevronRightIcon, X, Check, Tag, Users, Building2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
