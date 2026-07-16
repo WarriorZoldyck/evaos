@@ -230,53 +230,96 @@ export function TransactionFilters({
           </div>
         )}
 
-        {/* Type toggle */}
-        <ToggleGroup
-          type="single"
-          value={filters.type}
-          onValueChange={(value) => {
-            if (value)
-              onFiltersChange({
-                ...filters,
-                type: value as Filters["type"],
-              });
-          }}
-          className="shrink-0 h-10"
-        >
-          <ToggleGroupItem value="todos" className="text-xs px-3">
-            Tudo
-          </ToggleGroupItem>
-          <ToggleGroupItem value="receita" className="text-xs px-3">
-            Entradas
-          </ToggleGroupItem>
-          <ToggleGroupItem value="despesa" className="text-xs px-3">
-            Saídas
-          </ToggleGroupItem>
-        </ToggleGroup>
+        {/* Type filter (dropdown) */}
+        {(() => {
+          const typeLabels: Record<string, string> = {
+            todos: "Tudo",
+            receita: "Entradas",
+            despesa: "Saídas",
+          };
+          const active = filters.type && filters.type !== "todos";
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant={active ? "default" : "outline"}
+                  size="sm"
+                  className="shrink-0 h-10 gap-2"
+                >
+                  <Filter className="h-4 w-4" />
+                  <span className="text-xs">{typeLabels[filters.type] ?? "Tudo"}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48 bg-popover">
+                <DropdownMenuLabel>Tipo</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={filters.type}
+                  onValueChange={(value) =>
+                    onFiltersChange({ ...filters, type: value as Filters["type"] })
+                  }
+                >
+                  <DropdownMenuRadioItem value="todos">
+                    <CircleDot className="h-4 w-4 mr-2" /> Tudo
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="receita">
+                    <ArrowUpCircle className="h-4 w-4 mr-2 text-emerald-500" /> Entradas
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="despesa">
+                    <ArrowDownCircle className="h-4 w-4 mr-2 text-rose-500" /> Saídas
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        })()}
 
-        {/* Reconciliation toggle */}
-        <ToggleGroup
-          type="single"
-          value={filters.reconciled}
-          onValueChange={(value) => {
-            if (value)
-              onFiltersChange({
-                ...filters,
-                reconciled: value as Filters["reconciled"],
-              });
-          }}
-          className="shrink-0 h-10"
-        >
-          <ToggleGroupItem value="todos" className="text-xs px-3" title="Todos">
-            Todos
-          </ToggleGroupItem>
-          <ToggleGroupItem value="sim" className="text-xs px-3" title="Somente conciliados">
-            Conciliados
-          </ToggleGroupItem>
-          <ToggleGroupItem value="nao" className="text-xs px-3" title="Somente não conciliados">
-            Sem conciliação
-          </ToggleGroupItem>
-        </ToggleGroup>
+        {/* Extra filters (reconciliation) */}
+        {(() => {
+          const reconciledLabels: Record<string, string> = {
+            todos: "+ Filtros",
+            sim: "Conciliados",
+            nao: "Sem conciliação",
+          };
+          const active = filters.reconciled && filters.reconciled !== "todos";
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant={active ? "default" : "outline"}
+                  size="sm"
+                  className="shrink-0 h-10 gap-2"
+                >
+                  <ListFilter className="h-4 w-4" />
+                  <span className="text-xs">{reconciledLabels[filters.reconciled] ?? "+ Filtros"}</span>
+                  {active && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">1</Badge>
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52 bg-popover">
+                <DropdownMenuLabel>Conciliação</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuRadioGroup
+                  value={filters.reconciled}
+                  onValueChange={(value) =>
+                    onFiltersChange({ ...filters, reconciled: value as Filters["reconciled"] })
+                  }
+                >
+                  <DropdownMenuRadioItem value="todos">
+                    <CircleDot className="h-4 w-4 mr-2" /> Todos
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="sim">
+                    <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-500" /> Conciliados
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="nao">
+                    <XCircle className="h-4 w-4 mr-2 text-amber-500" /> Sem conciliação
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        })()}
 
 
 
