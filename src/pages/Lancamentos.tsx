@@ -296,18 +296,21 @@ export default function Lancamentos() {
         })()}
       </div>
 
-      {/* Filters (period moved to global header via useHeaderSlot) */}
-      <TransactionFilters
-        filters={filters}
-        onFiltersChange={setFilters}
-        categories={categories}
-        bankAccounts={bankAccounts}
-        wallets={wallets}
-        creditCards={creditCards}
-        suppliers={suppliers}
-        clients={clients}
-        hidePeriod
-      />
+      {/* Filters sticky bar (period + search moved to global header) */}
+      <div className="sticky top-0 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-3 bg-background border-b border-border/60">
+        <TransactionFilters
+          filters={filters}
+          onFiltersChange={setFilters}
+          categories={categories}
+          bankAccounts={bankAccounts}
+          wallets={wallets}
+          creditCards={creditCards}
+          suppliers={suppliers}
+          clients={clients}
+          hidePeriod
+          hideSearch
+        />
+      </div>
 
 
 
