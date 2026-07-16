@@ -316,17 +316,20 @@ export default function Lancamentos() {
 
 
 
-      {/* Tabs + Table */}
-      <Card className="relative z-0 rounded-t-none border-t-0">
+      {/* Tabs sticky bar (below filters) */}
+      <div className="sticky top-[64px] z-40 -mx-4 md:-mx-6 px-4 md:px-6 pt-3 bg-card border-b border-border/70">
         <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <div className="border-b border-border px-4 pt-3">
-            <TabsList>
-              <TabsTrigger value="todos">Todos</TabsTrigger>
-              <TabsTrigger value="realizado">Realizado</TabsTrigger>
-              <TabsTrigger value="projetado">Projetado</TabsTrigger>
-            </TabsList>
-          </div>
+          <TabsList>
+            <TabsTrigger value="todos">Todos</TabsTrigger>
+            <TabsTrigger value="realizado">Realizado</TabsTrigger>
+            <TabsTrigger value="projetado">Projetado</TabsTrigger>
+          </TabsList>
         </Tabs>
+      </div>
+
+      {/* Table */}
+      <Card className="relative z-0 rounded-t-none border-t-0">
+
         <CardContent className="pt-4">
            <TransactionTable
             transactions={transactions}

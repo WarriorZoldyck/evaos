@@ -1,44 +1,19 @@
 ## Objetivo
-Melhorar a usabilidade da barra de filtros de Lançamentos:
-1. Reverter "Tipo" (Tudo/Entradas/Saídas) e "Conciliação" (Todos/Conciliados/Sem conciliação) para os `ToggleGroup` inline como estavam antes dos dropdowns de funil.
-2. Unificar **Categorias, Fornecedores e Clientes** em um único filtro tipo "Google Ads": o usuário abre o filtro, escolhe o nível (Categoria / Fornecedor / Cliente) e o painel navega para as opções daquele nível.
+1. Fixar as tabs "Todos / Realizado / Projetado" também na rolagem (sticky), logo abaixo da barra de filtros já sticky.
+2. Aplicar o mesmo fundo cinza (estilo `TabsList`) nos toggle groups "Tudo / Entradas / Saídas" e "Todos / Conciliados / Sem conciliação", para indicar visualmente que são grupos de opções.
 
-## Arquivo alterado
-`src/components/lancamentos/TransactionFilters.tsx` (único arquivo — lógica de filtros e handlers já existentes permanecem).
+## Alterações
 
-### 1. Reverter Tipo e Conciliação
-- Remover os dois `DropdownMenu` de funil que criei.
-- Voltar aos `ToggleGroup` originais:
-  - Tipo: `Tudo | Entradas | Saídas` (com ícones `ArrowUp`/`ArrowDown`).
-  - Conciliação: `Todos | Conciliados | Sem conciliação`.
-- Manter `h-10` para alinhamento vertical consistente.
+### `src/pages/Lancamentos.tsx`
+- Retirar o `<Tabs>` de dentro do `<Card>` e colocá-lo em um wrapper próprio `sticky top-[Xpx] z-40` (ou usar o mesmo pattern do bar de filtros: `-mx-4 md:-mx-6 px-4 md:px-6`, `bg-card`, `border-b`), imediatamente após a barra sticky de filtros.
+- Ajustar o offset `top` para que essa barra fique colada abaixo da barra de filtros existente (medir a altura ~56–60px; usar `top-[56px]` ou similar).
+- Manter o `Card` do conteúdo abaixo (sem as tabs dentro), com `rounded-t-none border-t-0` para continuar visualmente conectado.
+- O `activeTab`/`handleTabChange` continua controlando o valor, apenas renderizado fora do Card.
 
-### 2. Filtro unificado "Entidades" (Categoria / Fornecedor / Cliente)
-Componente novo local (dentro do mesmo arquivo, para escopo mínimo):
-
-- Um único botão `Popover` rotulado **"Filtrar por"** com ícone `Tag` (ou `Filter`) + badge com contagem de filtros ativos entre os três.
-- Ao abrir, mostra uma **lista de níveis**:
-  ```
-  › Categoria       [valor atual, se houver]
-  › Fornecedor      [valor atual, se houver]
-  › Cliente         [valor atual, se houver]
-  ```
-- Ao clicar em um nível, o painel **navega** (substitui o conteúdo, com um botão "← Voltar" no topo) para a lista de opções daquele nível:
-  - **Categoria** → campo de busca + lista das `rootCategories` + "Todas" + "Sem categoria".
-  - **Fornecedor** → campo de busca + lista de `suppliers` + "Todos".
-  - **Cliente** → campo de busca + lista de `clients` + "Todos".
-- Selecionar uma opção aplica o filtro (chama `onFiltersChange`) e volta para a tela de níveis (não fecha o popover, para permitir combinar).
-- Cada nível mostra chip do valor selecionado com "×" para limpar rapidamente sem entrar no submenu.
-- Fechar popover confirma; estado é sempre o `filters` do pai (sem estado intermediário).
-
-Comportamento visual inspirado no Google Ads: nível → drilldown → lista com busca, com "Aplicar" implícito (seleção já aplica).
-
-### 3. Layout
-- Ordem final da barra (esquerda → direita):
-  `[Busca] [Tipo toggle] [Conciliação toggle] [Ordenação] [Filtrar por ▾] [Conta/Carteira]`
-- Remove os três `Select` separados (Categoria, Fornecedor, Cliente) — todos ficam dentro do "Filtrar por".
-- Mantém `flex-wrap` para responsividade; a barra fica bem mais curta.
+### `src/components/lancamentos/TransactionFilters.tsx`
+- Envolver o `ToggleGroup` de **Tipo** (Tudo / Entradas / Saídas) num container com as mesmas classes visuais que o `TabsList` do shadcn usa: `bg-muted rounded-md p-1` — e ajustar os `ToggleGroupItem` para `data-[state=on]:bg-background data-[state=on]:shadow-sm` (idêntico ao `TabsTrigger`), sem bordas externas.
+- Mesmo tratamento no `ToggleGroup` de **Conciliação** (Todos / Conciliados / Sem conciliação).
+- Não alterar lógica de filtros, nem os demais controles (Ordenação, "Filtrar por", Conta/Carteira).
 
 ## Fora de escopo
-- Lógica de filtragem, hooks (`useTransactions`), tabela, imports, layout global, Supabase.
-- Sub-cartões e o filtro Conta/Carteira permanecem como estão.
+- Layout do header global, filtros de período/busca, `UnifiedEntityFilter`, dados, hooks, tabela.

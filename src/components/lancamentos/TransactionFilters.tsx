@@ -510,13 +510,13 @@ export function TransactionFilters({
             if (!value) return;
             onFiltersChange({ ...filters, type: value as Filters["type"] });
           }}
-          className="h-10"
+          className="h-9 bg-muted rounded-md p-1 gap-0"
         >
-          <ToggleGroupItem value="todos" className="h-10 px-3 text-xs">Tudo</ToggleGroupItem>
-          <ToggleGroupItem value="receita" className="h-10 px-3 text-xs gap-1">
+          <ToggleGroupItem value="todos" className="h-7 px-3 text-xs rounded-sm data-[state=on]:bg-background data-[state=on]:shadow-sm">Tudo</ToggleGroupItem>
+          <ToggleGroupItem value="receita" className="h-7 px-3 text-xs gap-1 rounded-sm data-[state=on]:bg-background data-[state=on]:shadow-sm">
             <ArrowUp className="h-3.5 w-3.5" /> Entradas
           </ToggleGroupItem>
-          <ToggleGroupItem value="despesa" className="h-10 px-3 text-xs gap-1">
+          <ToggleGroupItem value="despesa" className="h-7 px-3 text-xs gap-1 rounded-sm data-[state=on]:bg-background data-[state=on]:shadow-sm">
             <ArrowDown className="h-3.5 w-3.5" /> Saídas
           </ToggleGroupItem>
         </ToggleGroup>
@@ -529,12 +529,13 @@ export function TransactionFilters({
             if (!value) return;
             onFiltersChange({ ...filters, reconciled: value as Filters["reconciled"] });
           }}
-          className="h-10"
+          className="h-9 bg-muted rounded-md p-1 gap-0"
         >
-          <ToggleGroupItem value="todos" className="h-10 px-3 text-xs">Todos</ToggleGroupItem>
-          <ToggleGroupItem value="sim" className="h-10 px-3 text-xs">Conciliados</ToggleGroupItem>
-          <ToggleGroupItem value="nao" className="h-10 px-3 text-xs">Sem conciliação</ToggleGroupItem>
+          <ToggleGroupItem value="todos" className="h-7 px-3 text-xs rounded-sm data-[state=on]:bg-background data-[state=on]:shadow-sm">Todos</ToggleGroupItem>
+          <ToggleGroupItem value="sim" className="h-7 px-3 text-xs rounded-sm data-[state=on]:bg-background data-[state=on]:shadow-sm">Conciliados</ToggleGroupItem>
+          <ToggleGroupItem value="nao" className="h-7 px-3 text-xs rounded-sm data-[state=on]:bg-background data-[state=on]:shadow-sm">Sem conciliação</ToggleGroupItem>
         </ToggleGroup>
+
 
 
 
