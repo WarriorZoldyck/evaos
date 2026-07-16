@@ -289,29 +289,15 @@ export function TransactionFilters({
           </span>
         </Button>
 
-        {/* Category */}
-        <Select
-          value={filters.categoryId || "todas"}
-          onValueChange={(value) =>
-            onFiltersChange({
-              ...filters,
-              categoryId: value === "todas" ? "" : value,
-            })
-          }
-        >
-          <SelectTrigger className="w-full sm:w-[200px] h-10">
-            <SelectValue placeholder="Categoria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todas as categorias</SelectItem>
-            <SelectItem value="__sem_categoria__">Sem categoria</SelectItem>
-            {rootCategories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
-                {cat.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Unified entity filter (Categoria / Fornecedor / Cliente) */}
+        <UnifiedEntityFilter
+          filters={filters}
+          onFiltersChange={onFiltersChange}
+          rootCategories={rootCategories}
+          suppliers={suppliers}
+          clients={clients}
+        />
+
 
         {/* Account / Wallet filter */}
         {(bankAccounts.length > 0 || wallets.length > 0 || creditCards.length > 0) && (
