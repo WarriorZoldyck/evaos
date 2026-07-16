@@ -17,8 +17,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useTransactions, type Transaction } from "@/hooks/useTransactions";
-import { TransactionFilters, TransactionPeriodFilter } from "@/components/lancamentos/TransactionFilters";
-import { useHeaderSlot } from "@/contexts/HeaderSlotContext";
+import { TransactionFilters, TransactionPeriodFilter, TransactionSearchInput } from "@/components/lancamentos/TransactionFilters";
+import { useHeaderSlot, useHeaderLeftSlot } from "@/contexts/HeaderSlotContext";
 import { TransactionTable } from "@/components/lancamentos/TransactionTable";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
@@ -226,6 +226,12 @@ export default function Lancamentos() {
     [filters, setFilters, categories, allCategories, creditCards, bankAccounts, wallets, suppliers, clients],
   );
   useHeaderSlot(headerControls);
+
+  const headerLeft = useMemo(
+    () => <TransactionSearchInput filters={filters} onFiltersChange={setFilters} />,
+    [filters, setFilters],
+  );
+  useHeaderLeftSlot(headerLeft);
 
   return (
     <div className="space-y-6 animate-fade-in">
