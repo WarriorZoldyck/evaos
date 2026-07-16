@@ -1,30 +1,44 @@
 ## Objetivo
-Resolver o layout quebrado da barra de filtros fixa em `/lancamentos` reduzindo a quantidade de controles visíveis, agrupando-os em dropdowns com ícone de funil.
+Melhorar a usabilidade da barra de filtros de Lançamentos:
+1. Reverter "Tipo" (Tudo/Entradas/Saídas) e "Conciliação" (Todos/Conciliados/Sem conciliação) para os `ToggleGroup` inline como estavam antes dos dropdowns de funil.
+2. Unificar **Categorias, Fornecedores e Clientes** em um único filtro tipo "Google Ads": o usuário abre o filtro, escolhe o nível (Categoria / Fornecedor / Cliente) e o painel navega para as opções daquele nível.
 
-## Mudanças
+## Arquivo alterado
+`src/components/lancamentos/TransactionFilters.tsx` (único arquivo — lógica de filtros e handlers já existentes permanecem).
 
-### 1. `src/components/lancamentos/TransactionFilters.tsx`
-- **Remover** os dois `ToggleGroup` inline atuais ("Tudo/Entradas/Saídas" e "Todos/Conciliados/Sem conciliação").
-- **Criar dois novos dropdowns** (usando `DropdownMenu` do shadcn) na mesma linha fixa:
-  - **Dropdown "Tipo"**: ícone `Filter` (funil) + label dinâmico ("Tudo", "Entradas" ou "Saídas"). Ao abrir, mostra as 3 opções como itens selecionáveis (`DropdownMenuRadioGroup`). Quando um filtro estiver ativo (≠ "Tudo"), o botão ganha destaque visual (ex.: `variant="default"` ou badge de cor) para indicar seleção.
-  - **Dropdown "+ Filtros"**: ícone `Filter` + texto "+ Filtros". Ao abrir, mostra as opções de conciliação ("Todos", "Conciliados", "Sem conciliação") como `DropdownMenuRadioGroup`. Também recebe destaque visual quando algo diferente do padrão estiver ativo, com badge numérico opcional indicando "1" filtro extra.
-- **Manter** ordenação, categorias, contas, fornecedores e clientes como estão (dropdowns já existentes).
-- **Redistribuir espaçamento**: como agora são 2 controles a menos, a linha cabe melhor; ajustar `gap` e larguras dos selects (`w-[160px]` a `w-[180px]`) para ocupar o espaço de forma equilibrada, mantendo `flex-wrap` como fallback em telas muito estreitas.
+### 1. Reverter Tipo e Conciliação
+- Remover os dois `DropdownMenu` de funil que criei.
+- Voltar aos `ToggleGroup` originais:
+  - Tipo: `Tudo | Entradas | Saídas` (com ícones `ArrowUp`/`ArrowDown`).
+  - Conciliação: `Todos | Conciliados | Sem conciliação`.
+- Manter `h-10` para alinhamento vertical consistente.
 
-### 2. `src/pages/Lancamentos.tsx`
-- Nenhuma mudança estrutural; a barra fixa permanece igual, apenas o conteúdo interno (TransactionFilters) fica mais compacto.
-- Reavaliar altura da barra fixa caso encolha (provavelmente uma única linha em telas médias).
+### 2. Filtro unificado "Entidades" (Categoria / Fornecedor / Cliente)
+Componente novo local (dentro do mesmo arquivo, para escopo mínimo):
 
-### 3. `src/components/layout/AppLayout.tsx`
-- Sem mudanças planejadas — o header global já foi ajustado na iteração anterior. Só validar visualmente que continua consistente.
+- Um único botão `Popover` rotulado **"Filtrar por"** com ícone `Tag` (ou `Filter`) + badge com contagem de filtros ativos entre os três.
+- Ao abrir, mostra uma **lista de níveis**:
+  ```
+  › Categoria       [valor atual, se houver]
+  › Fornecedor      [valor atual, se houver]
+  › Cliente         [valor atual, se houver]
+  ```
+- Ao clicar em um nível, o painel **navega** (substitui o conteúdo, com um botão "← Voltar" no topo) para a lista de opções daquele nível:
+  - **Categoria** → campo de busca + lista das `rootCategories` + "Todas" + "Sem categoria".
+  - **Fornecedor** → campo de busca + lista de `suppliers` + "Todos".
+  - **Cliente** → campo de busca + lista de `clients` + "Todos".
+- Selecionar uma opção aplica o filtro (chama `onFiltersChange`) e volta para a tela de níveis (não fecha o popover, para permitir combinar).
+- Cada nível mostra chip do valor selecionado com "×" para limpar rapidamente sem entrar no submenu.
+- Fechar popover confirma; estado é sempre o `filters` do pai (sem estado intermediário).
 
-## Fora do escopo
-- Lógica dos filtros (valores, estado, callbacks) — permanece intacta; muda apenas a UI que aciona os handlers existentes (`onTypeChange`, `onConciliationChange`).
-- Dados, tabela, import/export, Supabase.
+Comportamento visual inspirado no Google Ads: nível → drilldown → lista com busca, com "Aplicar" implícito (seleção já aplica).
 
-## Validação
-- Verificar via Playwright (viewport ~880px e ~1280px) que:
-  1. A barra fixa cabe em uma linha sem quebras estranhas.
-  2. Os dois dropdowns abrem e selecionam corretamente.
-  3. O estado ativo é visualmente indicado.
-  4. As transações não aparecem mais atrás da barra ao rolar.
+### 3. Layout
+- Ordem final da barra (esquerda → direita):
+  `[Busca] [Tipo toggle] [Conciliação toggle] [Ordenação] [Filtrar por ▾] [Conta/Carteira]`
+- Remove os três `Select` separados (Categoria, Fornecedor, Cliente) — todos ficam dentro do "Filtrar por".
+- Mantém `flex-wrap` para responsividade; a barra fica bem mais curta.
+
+## Fora de escopo
+- Lógica de filtragem, hooks (`useTransactions`), tabela, imports, layout global, Supabase.
+- Sub-cartões e o filtro Conta/Carteira permanecem como estão.
