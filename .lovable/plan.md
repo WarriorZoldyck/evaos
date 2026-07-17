@@ -1,57 +1,60 @@
 
-## O que ajustar
+## Diagnóstico
 
-### 1. Botões não aparecem no WhatsApp
-O WhatsApp descontinuou o `buttonsMessage` clássico do Baileys — por isso o `sendButtons` retorna 200 mas o app não renderiza nada (fica só a mensagem de texto/imagem).
+Nos logs da última interação (`01:02:11 BOLETO MATCH FOUND`), o match aconteceu e o pending foi criado — mas **nenhum** log de `Evolution sendMedia`, `sendList`, `sendButtons` ou erro do `renderBoletoCardPng` apareceu. O único envio ao WhatsApp foi o `sendText` do `respond()`, que hoje omite a mensagem de sugestão quando há match.
 
-Trocar para o caminho que ainda funciona hoje na Evolution API:
+Causa: o bloco `(async () => { ... })().catch(...)` é fire-and-forget. Assim que `respond()` retorna, o runtime da Supabase Edge encerra o isolate e mata a promise pendente — o PNG nunca é renderizado nem enviado. É o comportamento padrão do Deno Deploy; precisa de `EdgeRuntime.waitUntil()` para manter o worker vivo até a promise terminar.
 
-- Novo helper `sendEvolutionList(phone, title, description, buttonText, sections)` chamando `POST /message/sendList/{instance}` com uma seção "Baixa pendente" contendo 3 rows: `confirm_baixa`, `reject_baixa`, `open_edit`. WhatsApp renderiza como um menu clicável ("Selecionar opção").
-- Fallback automático se `sendList` também falhar (algumas contas comerciais bloqueiam): append no caption da imagem o texto:
-  ```
-  Responda com:
-  1 — Sim, dá baixa
-  2 — Não, é outro
-  3 — Editar no app
-  ```
-- Expandir o dispatcher `confirm_boleto_match` para reconhecer, além do que já existe, `1/2/3` e o `listResponseMessage.singleSelectReply.selectedRowId` (já forwardado pelo webhook mas passa a valer as ids `confirm_baixa|reject_baixa|open_edit`).
-- Remover a chamada atual a `sendEvolutionButtons` (fica só como dead code opcional) para não gastar request numa API que WhatsApp ignora.
+Somado a isso, o usuário quer que a mensagem de "encontrei um parecido" chegue **na mesma resposta** do lançamento — hoje ela é intencionalmente omitida do `respond()`.
 
-### 2. Card em tema claro, parecido com Análises EVA
-Redesenhar `supabase/functions/_shared/whatsapp-boleto-card.ts` para espelhar o card da tela (o print mostra que o card atual ficou "vazio" no meio — descrição some quando é curta, e o dark destoa do WhatsApp claro).
+## Ajustes em `supabase/functions/whatsapp-webhook/index.ts`
 
-Alterações no satori tree:
+1. **Reincluir a sugestão no `respond()` principal** quando há match, dentro de uma única mensagem:
+   ```
+   📋 Lançamento enviado para aprovação no app!
+   📝 …
+   💰 …
+   …
+   
+   ━━━━━━━━━━━━━━━━━━
+   📄 Encontrei um lançamento pendente parecido:
+   • <descrição>
+   • R$ <valor> · venc. <data>
+   
+   Responda:
+   1 — ✅ Sim, dá baixa
+   2 — ❌ Não, é outro
+   3 — ✏️ Editar no app
+   👉 <deep-link com ctx>
+   ```
+   Assim, mesmo se o envio da imagem falhar, o usuário sempre tem o texto + as 3 opções na mesma mensagem do lançamento. O `[SUGESTAO_BAIXA]` continua no `notes` do pending como hoje.
 
-- Fundo `#FFFFFF`, borda `1px solid #E2E8F0`, sombra leve, radius 20px.
-- Header: chip do tipo do lançamento (`Despesa` em vermelho suave / `Receita` em verde), à direita chip `PENDENTE • MATCH PROVÁVEL` em amarelo suave (fundo `#FEF3C7`, texto `#92400E`) — mesma paleta usada em `PendingCard`.
-- Título grande (`#0F172A`, 22px, bold): descrição.
-- Linha secundária cinza (`#64748B`) com ícone 👤 + fornecedor e 🏦 + conta (quando houver no payload).
-- Grid 2 colunas inferior com labels `VALOR` / `VENCIMENTO` iguais aos atuais, mas em `#64748B` e valores em `#0F172A` (valor em `#DC2626` para despesa, `#16A34A` para receita).
-- Rodapé com selo `EVA OS · Sugestão de baixa` em cinza pequeno.
-- Aumentar `renderBoletoCardPng` para receber `type` (`despesa`/`receita`) e `bank_account_name` opcional (o webhook já tem esses dados no `match`/`payload`).
+2. **Manter o isolate vivo** para o envio do PNG e da lista:
+   ```ts
+   const dispatch = (async () => { …renderBoletoCardPng + sendEvolutionImage + sendEvolutionList… })()
+     .catch(e => console.error("boleto card/list dispatch failed:", e));
+   // Deno Deploy: EdgeRuntime.waitUntil mantém o worker vivo após respond()
+   try { (globalThis as any).EdgeRuntime?.waitUntil?.(dispatch); } catch {}
+   ```
+   Fallback silencioso se `EdgeRuntime` não estiver disponível (local dev).
 
-Se `renderBoletoCardPng` retornar `null`, o fallback texto continua igual.
+3. **Instrumentação de log** dentro do dispatch:
+   - `console.log("boleto dispatch: rendering PNG…")`
+   - `console.log("boleto dispatch: PNG bytes =", png?.byteLength ?? null)`
+   - `console.log("boleto dispatch: sendMedia result =", sentImage)`
+   - `console.log("boleto dispatch: sendList result =", listOk)`
+   
+   Sem isso não temos como saber onde parou.
 
-### 3. Link não abre no contexto certo em Análises EVA
-Hoje `AnalisesEva.tsx` só olha `pendingTransactions` já filtradas pelo contexto ativo. Se o usuário estava em "Pessoal" e o boleto é de uma empresa, o `find` não acha nada e o modal nunca abre.
+4. **Caption da imagem** deixa de duplicar o bloco todo (o texto já foi no `respond`); vira algo curto tipo:
+   `📄 Sugestão de baixa — responda 1/2/3 na mensagem anterior.`
 
-Ajustes:
+5. **Nada muda** no card visual, no dispatcher `confirm_boleto_match`, no `ctx` do deep link, ou no `AnalisesEva.tsx`.
 
-- No webhook, ao montar o deep-link, acrescentar `&ctx=<company_id|personal>` (usa `match.company_id`, ou `personal` quando nulo).
-- Em `src/pages/AnalisesEva.tsx`, no `useEffect` de deep-link:
-  1. Ler `ctx` de `searchParams`.
-  2. Se `ctx === "personal"` → `setSelectedCompanyId(null)`; se for UUID → `setSelectedCompanyId(ctx)`.
-  3. Só após o contexto certo estar carregado (checar `pendingTransactions.find`), aplicar highlight / abrir modal.
-  4. Se o item ainda não aparecer após troca de contexto, fazer um `supabase.from("ai_pending_transactions").select("company_id").eq("id", pendingId).maybeSingle()` para inferir contexto automaticamente (caso `ctx` não venha).
-- Limpar `ctx` do URL junto com `pending` e `edit`.
+## Memória
+Atualizar `.lovable/memory/whatsapp/boleto-reconciliation.md`:
+- Sugestão passa a viajar dentro da mesma resposta do `respond()` (texto + numbered fallback + deep link).
+- Imagem e `sendList` são complementares, disparados via `EdgeRuntime.waitUntil` (obrigatório em edge functions Supabase — sem isso o isolate morre antes do envio).
+- Caption da imagem é mínima.
 
-### 4. Memória
-Atualizar `.lovable/memory/whatsapp/boleto-reconciliation.md` para refletir: `sendList` em vez de `sendButtons`, card claro, deep-link com `ctx`.
-
-## Arquivos tocados
-- `supabase/functions/whatsapp-webhook/index.ts` — novo `sendEvolutionList`, troca da chamada, dispatcher aceita `1/2/3` + `selectedRowId`, deep-link ganha `ctx`.
-- `supabase/functions/_shared/whatsapp-boleto-card.ts` — redesign claro, novos props `type` e `bank_account_name`.
-- `src/pages/AnalisesEva.tsx` — deep-link troca contexto antes de abrir.
-- `.lovable/memory/whatsapp/boleto-reconciliation.md`.
-
-Sem migrations, sem mudanças de schema.
+Sem migrations, sem alteração de UI.
