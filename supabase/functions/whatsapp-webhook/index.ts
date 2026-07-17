@@ -1391,6 +1391,100 @@ serve(async (req) => {
     const pendingAction = pendingActions?.[0];
 
     if (pendingAction) {
+      // === HANDLE "new_tx_actions" (Aprovar / Cancelar / Editar no app) ===
+      if (pendingAction.action_type === "new_tx_actions") {
+        console.log("=== PENDING ACTION: NEW TX ACTIONS ===");
+        const payload = pendingAction.payload as any;
+        const raw = (trimmedMsg || "").toLowerCase();
+        const isApprove = raw.startsWith("approve_tx") || /^(sim|s|aprovar|aprova|ok|confirma|confirmar|pode|1)\b/.test(raw);
+        const isCancel = raw.startsWith("cancel_tx") || /^(n[ãa]o|n|cancelar|cancela|excluir|remove|remover|deletar|2)\b/.test(raw);
+        const isEdit = raw.startsWith("open_edit_tx") || /^3\b/.test(raw) || /(editar|edita|abrir no app|abrir)/.test(raw);
+        const pendingTxId: string | null = payload?.pending_id || null;
+
+        if (isApprove && pendingTxId) {
+          const { data: p, error: pErr } = await supabase
+            .from("ai_pending_transactions")
+            .select("*")
+            .eq("id", pendingTxId)
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (pErr || !p) {
+            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+            return respond({ success: false, message: "❌ Não encontrei mais esse lançamento pendente. Talvez já tenha sido aprovado no app." }, 200);
+          }
+          if (p.status !== "pending") {
+            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+            return respond({ success: true, message: `ℹ️ Esse lançamento já está *${p.status}*. Nada para aprovar.` }, 200);
+          }
+          const { error: insErr } = await supabase.from("transactions").insert({
+            user_id: p.user_id,
+            description: p.description,
+            amount: p.amount,
+            type: p.type,
+            category: p.category || "",
+            subcategory: p.subcategory,
+            subcategory2: p.subcategory2,
+            competence_date: p.competence_date || new Date().toISOString().slice(0, 10),
+            payment_date: p.payment_date || new Date().toISOString().slice(0, 10),
+            status: (p.transaction_status || "Pago"),
+            bank_account_id: p.bank_account_id,
+            wallet_id: p.wallet_id,
+            credit_card_id: p.credit_card_id,
+            card_terminal_id: p.card_terminal_id,
+            company_id: p.company_id,
+            payment_method: p.payment_method,
+            supplier_id: p.supplier_id,
+            client_id: p.client_id,
+            contact_name: p.contact_name,
+            notes: (p.notes || "").replace(/\n*\[SUGESTAO_BAIXA\][\s\S]*?(?=\n\n|$)/g, "").trim() || null,
+            attachment_url: p.attachment_url,
+            barcode: p.barcode,
+            installments: p.installments,
+            installment_number: p.installment_number,
+            installments_total: p.installments_total,
+            series_id: p.series_id,
+            original_amount: p.original_amount,
+          });
+          if (insErr) {
+            console.error("new_tx_actions approve insert error:", insErr);
+            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+            return respond({ success: false, message: `❌ Não consegui aprovar: ${insErr.message}` }, 200);
+          }
+          await supabase
+            .from("ai_pending_transactions")
+            .update({ status: "approved", reviewed_at: new Date().toISOString() })
+            .eq("id", pendingTxId);
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({ success: true, message: "✅ Lançamento *aprovado* e registrado no sistema! 🙌" }, 200);
+        }
+
+        if (isCancel && pendingTxId) {
+          const { error: delErr } = await supabase
+            .from("ai_pending_transactions")
+            .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+            .eq("id", pendingTxId)
+            .eq("user_id", userId);
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          if (delErr) {
+            return respond({ success: false, message: `❌ Não consegui cancelar: ${delErr.message}` }, 200);
+          }
+          return respond({ success: true, message: "🗑️ Lançamento *cancelado*. Não vai aparecer no sistema. 👍" }, 200);
+        }
+
+        if (isEdit && pendingTxId) {
+          const ctxParam = payload?.ctx || null;
+          const link = buildAnalisesEvaLink(pendingTxId, true, ctxParam);
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({ success: true, message: `✏️ Abre aí: ${link}\n\nO formulário já vai abrir pronto para você ajustar antes de aprovar.` }, 200);
+        }
+
+        // Não bateu — mantém ação viva, devolve menu por texto
+        return respond({
+          success: true,
+          message: "Sobre o lançamento que acabei de criar, me responde:\n\n• *1* — ✅ Aprovar\n• *2* — ❌ Cancelar\n• *3* — ✏️ Editar no app",
+        }, 200);
+      }
+
       // === HANDLE "confirm_boleto_match" (Sim/Não/Editar) ===
       if (pendingAction.action_type === "confirm_boleto_match") {
         console.log("=== PENDING ACTION: CONFIRM BOLETO MATCH ===");
@@ -4126,6 +4220,72 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
 
+      // --- Ações rápidas em TODO lançamento novo (Aprovar / Cancelar / Editar) ---
+      // Só registramos quando NÃO há match de boleto (que já tem seu próprio menu).
+      let newTxActionsTail = "";
+      if (!boletoMatch && pendingId && phone) {
+        try {
+          const ctxParam = companyId || "personal";
+          const editLink = buildAnalisesEvaLink(pendingId, true, ctxParam);
+          const showApprove = (status || "Pago") === "Pago"; // aprovar sempre faz sentido; se já vier Pendente, ainda pode aprovar
+          await supabase.from("whatsapp_pending_actions").insert({
+            user_id: userId,
+            action_type: "new_tx_actions",
+            payload: {
+              pending_id: pendingId,
+              ctx: ctxParam,
+              transaction_status: status,
+            },
+            suggested_category_name: "",
+            category_type: "",
+            context_company_id: companyId,
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          });
+          newTxActionsTail =
+            `\n\n━━━━━━━━━━━━━━━━━━\n` +
+            `O que fazer com este lançamento?\n` +
+            `*1* — ✅ Aprovar (registra no sistema)\n` +
+            `*2* — ❌ Cancelar (descarta)\n` +
+            `*3* — ✏️ Editar no app\n\n` +
+            `👉 Abrir no app: ${editLink}`;
+
+          const dispatchNewTx = (async () => {
+            const rows = [
+              { id: "approve_tx", title: "✅ Aprovar", description: "Registra o lançamento no sistema" },
+              { id: "cancel_tx", title: "❌ Cancelar", description: "Descarta este lançamento" },
+              { id: "open_edit_tx", title: "✏️ Editar no app", description: "Abre o formulário em Análises EVA" },
+            ];
+            const listOk = await sendEvolutionList(
+              phone,
+              "Ações do lançamento",
+              "Escolha uma opção para o lançamento que acabei de criar.",
+              `Ou responda 1, 2 ou 3 · Editar: ${editLink}`,
+              "Escolher opção",
+              "Novo lançamento",
+              rows,
+            );
+            console.log("new_tx dispatch: sendList result =", listOk);
+            if (!listOk) {
+              const btnOk = await sendEvolutionButtons(
+                phone,
+                "Ações do lançamento",
+                "Escolha uma opção para o lançamento que acabei de criar.",
+                `Ou responda 1, 2 ou 3 · Editar: ${editLink}`,
+                rows.map(r => ({ id: r.id, text: r.title })),
+              );
+              console.log("new_tx dispatch: sendButtons fallback result =", btnOk);
+            }
+          })().catch((e) => console.error("new_tx list dispatch failed:", e));
+          try {
+            (globalThis as any).EdgeRuntime?.waitUntil?.(dispatchNewTx);
+          } catch (e) {
+            console.warn("EdgeRuntime.waitUntil unavailable:", e);
+          }
+        } catch (e) {
+          console.error("Failed to register new_tx_actions:", e);
+        }
+      }
+
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(aiParsed.amount || 0);
       const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
@@ -4141,7 +4301,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       return respond({
         success: true,
         intent: "lancamento",
-        message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}${boletoMatch ? "" : `\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`}${boletoSuggestionTail || ""}`,
+        message: `📋 Lançamento criado!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}${newTxActionsTail}${boletoSuggestionTail || ""}`,
+
         transaction: {
           description: aiParsed.description,
           amount: aiParsed.amount,
