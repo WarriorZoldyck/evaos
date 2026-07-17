@@ -332,7 +332,57 @@ async function sendEvolutionButtons(
   } catch (err) {
     console.error("Evolution sendButtons exception:", err);
     return false;
+}
+
+// --- Evolution API helper: send WhatsApp list message (still supported by modern WhatsApp) ---
+// rows: [{ id, title, description? }] — user pick returns as listResponseMessage.singleSelectReply.selectedRowId
+async function sendEvolutionList(
+  phone: string,
+  title: string,
+  description: string,
+  footer: string,
+  buttonText: string,
+  sectionTitle: string,
+  rows: Array<{ id: string; title: string; description?: string }>,
+): Promise<boolean> {
+  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
+  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
+  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
+  if (!evoUrl || !evoKey || !evoInstance) return false;
+  try {
+    const url = `${evoUrl}/message/sendList/${encodeURIComponent(evoInstance)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "apikey": evoKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        number: phone,
+        title,
+        description,
+        footerText: footer,
+        buttonText,
+        sections: [
+          {
+            title: sectionTitle,
+            rows: rows.map((r) => ({
+              title: r.title,
+              description: r.description || "",
+              rowId: r.id,
+            })),
+          },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("Evolution sendList error:", res.status, errBody);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Evolution sendList exception:", err);
+    return false;
   }
+}
 }
 
 // --- Evolution API helper: get base64 image from media message ---
