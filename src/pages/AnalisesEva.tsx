@@ -962,6 +962,7 @@ export default function AnalisesEva() {
           isReconciling={reconcilingId === g.item.id}
           categoryName={getCategoryName(g.item.category)}
           accountName={getAccountName(g.item)}
+          highlighted={highlightedId === g.item.id}
         />
       );
     });
