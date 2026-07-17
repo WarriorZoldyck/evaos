@@ -3943,6 +3943,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // to the pending entry so the user can resolve it in Análises EVA.
       let boletoSuggestionBlock: string | null = null;
       let boletoSuggestionMessage: string | null = null;
+      let boletoSuggestionTail: string | null = null;
       let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
         try {
