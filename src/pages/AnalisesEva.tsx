@@ -163,7 +163,7 @@ function PendingCard({
   const SourceIcon = sourceIcon;
 
   return (
-    <Card className="border-l-4 transition-all hover:shadow-md" style={{ borderLeftColor: isReceita ? "hsl(var(--chart-2))" : "hsl(var(--chart-1))" }}>
+    <Card id={`pending-card-${item.id}`} className={`border-l-4 transition-all hover:shadow-md ${highlighted ? "ring-2 ring-primary shadow-lg" : ""}`} style={{ borderLeftColor: isReceita ? "hsl(var(--chart-2))" : "hsl(var(--chart-1))" }}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 space-y-2">
