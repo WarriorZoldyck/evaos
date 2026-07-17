@@ -59,8 +59,27 @@ function normalizeBoletoText(s: string | null | undefined): string {
     .trim();
 }
 
+// Remove common Brazilian legal-entity / generic tokens so that
+// "JJGC INDUSTRIA E COM.DE MATERIAIS DENTARIOS S.A" and
+// "JJGC Industria C M D SA" collapse to a comparable core.
+const LEGAL_ENTITY_STOP = new Set([
+  "sa","s","a","ltda","me","epp","eireli","mei","cia","cnpj",
+  "industria","industrias","ind","comercio","com","de","da","do","das","dos",
+  "materiais","material","produtos","servicos","servico","e",
+]);
+function normalizeSupplierCore(s: string | null | undefined): string {
+  return normalizeBoletoText(s)
+    .split(" ")
+    .filter((t) => t.length >= 2 && !LEGAL_ENTITY_STOP.has(t))
+    .join(" ");
+}
+
 function tokenSet(s: string | null | undefined): Set<string> {
   return new Set(normalizeBoletoText(s).split(" ").filter((t) => t.length >= 3));
+}
+
+function supplierTokenSet(s: string | null | undefined): Set<string> {
+  return new Set(normalizeSupplierCore(s).split(" ").filter((t) => t.length >= 2));
 }
 
 function jaccardSimilarity(a: string | null | undefined, b: string | null | undefined): number {
@@ -72,14 +91,33 @@ function jaccardSimilarity(a: string | null | undefined, b: string | null | unde
   return union === 0 ? 0 : inter / union;
 }
 
+function supplierJaccard(a: string | null | undefined, b: string | null | undefined): number {
+  const A = supplierTokenSet(a), B = supplierTokenSet(b);
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+  const union = A.size + B.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+// Tolerant: aceita até R$5 ou 3% de diferença (juros/multa de um dia
+// costumam entrar nesse envelope).
 function amountMatches(a: number, b: number): boolean {
-  return Math.abs(a - b) <= Math.max(0.02, b * 0.005);
+  return Math.abs(a - b) <= Math.max(5, b * 0.03);
+}
+
+function daysBetween(a: string | null, b: string | null): number {
+  if (!a || !b) return Infinity;
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (isNaN(ta) || isNaN(tb)) return Infinity;
+  return Math.abs(ta - tb) / 86400000;
 }
 
 /**
  * Looks for an existing Pendente expense that the user is now paying.
- * Returns the best candidate when at least 2/3 criteria match
- * (supplier, amount, description).
+ * Score (0-4): supplier + amount + description + date-proximity.
+ * Returns best candidate with score >= 2.
  */
 async function findMatchingPendingBoleto(
   supabase: any,
@@ -90,13 +128,14 @@ async function findMatchingPendingBoleto(
     supplierName: string | null;
     amount: number;
     description: string;
+    paymentDate?: string | null;
   }
 ): Promise<{ tx: any; supplierName: string | null; score: number } | null> {
   if (!params.amount || params.amount <= 0) return null;
 
   const today = new Date();
-  const from = new Date(today); from.setDate(from.getDate() - 180);
-  const to = new Date(today); to.setDate(to.getDate() + 30);
+  const from = new Date(today); from.setDate(from.getDate() - 365);
+  const to = new Date(today); to.setDate(to.getDate() + 60);
   const fromStr = from.toISOString().slice(0, 10);
   const toStr = to.toISOString().slice(0, 10);
 
@@ -108,7 +147,7 @@ async function findMatchingPendingBoleto(
     .eq("status", "Pendente")
     .gte("payment_date", fromStr)
     .lte("payment_date", toStr)
-    .limit(50);
+    .limit(100);
 
   if (params.companyId) q = q.eq("company_id", params.companyId);
   else q = q.is("company_id", null);
@@ -128,28 +167,43 @@ async function findMatchingPendingBoleto(
   }
 
   let best: { tx: any; supplierName: string | null; score: number } | null = null;
+  const near: any[] = [];
 
   for (const c of candidates) {
     const candSupplierName: string | null = c.supplier_id ? (supplierMap[c.supplier_id] || null) : (c.contact_name || null);
+    const candSupplierCore = normalizeSupplierCore(candSupplierName);
+    const askSupplierCore = normalizeSupplierCore(params.supplierName);
     const supplierMatch =
       (!!params.supplierId && params.supplierId === c.supplier_id) ||
-      jaccardSimilarity(params.supplierName, candSupplierName) >= 0.5 ||
-      (!!params.supplierName && !!candSupplierName &&
-        normalizeBoletoText(candSupplierName).includes(normalizeBoletoText(params.supplierName)));
+      supplierJaccard(params.supplierName, candSupplierName) >= 0.4 ||
+      (!!askSupplierCore && !!candSupplierCore &&
+        (candSupplierCore.includes(askSupplierCore) || askSupplierCore.includes(candSupplierCore)));
     const amountMatch = amountMatches(Number(c.amount), params.amount);
     const descMatch =
-      jaccardSimilarity(params.description, c.description) >= 0.4 ||
-      jaccardSimilarity(params.description, c.notes) >= 0.4;
+      jaccardSimilarity(params.description, c.description) >= 0.35 ||
+      jaccardSimilarity(params.description, c.notes) >= 0.35;
+    const dayDist = daysBetween(c.payment_date, params.paymentDate || new Date().toISOString().slice(0, 10));
+    const dateMatch = dayDist <= 10;
 
-    const score = (supplierMatch ? 1 : 0) + (amountMatch ? 1 : 0) + (descMatch ? 1 : 0);
+    const score = (supplierMatch ? 1 : 0) + (amountMatch ? 1 : 0) + (descMatch ? 1 : 0) + (dateMatch ? 1 : 0);
 
-    // Never propose very different amounts as the same boleto.
-    if (Math.abs(Number(c.amount) - params.amount) > Math.max(2, params.amount * 0.1)) continue;
-    if (score < 2) continue;
+    // Hard filter: descarta apenas se valor divergir MUITO.
+    const bigDiff = Math.abs(Number(c.amount) - params.amount) > Math.max(20, params.amount * 0.15);
+    if (bigDiff) continue;
 
-    if (!best || score > best.score) {
-      best = { tx: c, supplierName: candSupplierName, score };
+    if (score >= 2) {
+      if (!best || score > best.score) {
+        best = { tx: c, supplierName: candSupplierName, score };
+      }
+    } else if (score === 1) {
+      near.push({ id: c.id, supplierMatch, amountMatch, descMatch, dateMatch, amount: c.amount });
     }
+  }
+
+  if (!best && near.length > 0) {
+    console.log("boleto match — nenhum candidato ≥2, quase-match:", JSON.stringify(near.slice(0, 5)));
+  } else if (best) {
+    console.log("boleto match FOUND:", { id: best.tx.id, score: best.score, supplier: best.supplierName });
   }
 
   return best;
