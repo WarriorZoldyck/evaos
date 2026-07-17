@@ -4054,7 +4054,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
           // Fire-and-forget: gera PNG + envia imagem, depois lista de opções. Não bloqueia o respond().
           (async () => {
-            const bankName = payload_bank_name_for_card(boletoMatch, contextAccounts, contextWallets);
+            const bankName =
+              (bankAccountId && contextAccounts.find((a: any) => a.id === bankAccountId)?.name) ||
+              (walletId && contextWallets.find((w: any) => w.id === walletId)?.name) ||
+              null;
             const cardData: BoletoCardData = {
               descricao: boletoMatch.tx.description || "",
               fornecedor: boletoMatch.supplierName,
