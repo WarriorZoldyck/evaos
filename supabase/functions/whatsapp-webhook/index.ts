@@ -4052,6 +4052,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           const ctxParam = boletoMatch.tx.company_id || "personal";
           const deepLink = buildAnalisesEvaLink(pendingId, false, ctxParam);
           const editLink = buildAnalisesEvaLink(pendingId, true, ctxParam);
+          boletoSuggestionTail =
+            `\n\n━━━━━━━━━━━━━━━━━━\n${boletoSuggestionMessage}\n\n👉 Abrir no app: ${deepLink}`;
+
 
           // PNG + list dispatch. Precisa de EdgeRuntime.waitUntil — sem isso o
           // isolate morre quando respond() retorna e nada chega ao WhatsApp.
