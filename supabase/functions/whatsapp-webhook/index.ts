@@ -332,6 +332,7 @@ async function sendEvolutionButtons(
     console.error("Evolution sendButtons exception:", err);
     return false;
   }
+}
 
 // --- Evolution API helper: get base64 image from media message ---
 async function getImageBase64(remoteJid: string, messageId: string): Promise<string | null> {
