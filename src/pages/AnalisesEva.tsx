@@ -479,7 +479,7 @@ export default function AnalisesEva() {
   const { categories } = useCategories();
   const { bankAccounts: accounts, creditCards, wallets, cardTerminals } = useAccounts();
   const { suppliers, clients } = useContacts();
-  const { companies } = useCompany();
+  const { companies, selectedCompanyId, setSelectedCompanyId } = useCompany();
   const { settings: fieldSettings } = useFormFieldSettings();
   const effectiveUserId = useEffectiveUserId();
 
