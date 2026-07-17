@@ -1396,9 +1396,9 @@ serve(async (req) => {
         console.log("=== PENDING ACTION: CONFIRM BOLETO MATCH ===");
         const payload = pendingAction.payload as any;
         const raw = (trimmedMsg || "").toLowerCase();
-        const isConfirm = raw.startsWith("confirm_baixa") || /^(sim|s|isso|é ess[ae]|confirma|pode|ok)\b/.test(raw);
-        const isReject = raw.startsWith("reject_baixa") || /^(n[ãa]o|n|outro|nova|nao é)/.test(raw);
-        const isEdit = raw.startsWith("open_edit") || /(editar|edita|abrir no app|abrir)/.test(raw);
+        const isConfirm = raw.startsWith("confirm_baixa") || /^(sim|s|isso|é ess[ae]|confirma|pode|ok|1)\b/.test(raw);
+        const isReject = raw.startsWith("reject_baixa") || /^(n[ãa]o|n|outro|nova|nao é|2)\b/.test(raw);
+        const isEdit = raw.startsWith("open_edit") || /^3\b/.test(raw) || /(editar|edita|abrir no app|abrir)/.test(raw);
 
         if (isConfirm) {
           // Dar baixa direto: UPDATE transactions + mark pending approved
