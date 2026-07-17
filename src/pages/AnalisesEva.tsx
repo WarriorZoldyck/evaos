@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
