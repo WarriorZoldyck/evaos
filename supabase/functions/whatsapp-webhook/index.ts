@@ -4048,35 +4048,60 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
           });
 
-          const deepLink = buildAnalisesEvaLink(pendingId);
-          const editLink = buildAnalisesEvaLink(pendingId, true);
+          const ctxParam = boletoMatch.tx.company_id || "personal";
+          const deepLink = buildAnalisesEvaLink(pendingId, false, ctxParam);
+          const editLink = buildAnalisesEvaLink(pendingId, true, ctxParam);
 
-          // Fire-and-forget: gera PNG + envia imagem, depois botões. Não bloqueia o respond().
+          // Fire-and-forget: gera PNG + envia imagem, depois lista de opções. Não bloqueia o respond().
           (async () => {
+            const bankName = payload_bank_name_for_card(boletoMatch, contextAccounts, contextWallets);
             const cardData: BoletoCardData = {
               descricao: boletoMatch.tx.description || "",
               fornecedor: boletoMatch.supplierName,
               valor: Number(boletoMatch.tx.amount) || 0,
               vencimento: boletoMatch.tx.payment_date,
               matchScore: boletoMatch.score,
+              type: (boletoMatch.tx.type as "despesa" | "receita") || "despesa",
+              bankAccountName: bankName,
             };
             const png = await renderBoletoCardPng(cardData);
-            const caption = `${boletoSuggestionMessage}\n\n👉 Abrir no app: ${deepLink}`;
+            const numberedFallback =
+              `\n\nResponda com:\n1 — ✅ Sim, dá baixa\n2 — ❌ Não, é outro\n3 — ✏️ Editar no app`;
+            const caption = `${boletoSuggestionMessage}\n\n👉 Abrir no app: ${deepLink}${numberedFallback}`;
             let sentImage = false;
             if (png) sentImage = await sendEvolutionImage(phone, png, caption);
             if (!sentImage) await sendEvolutionReply(phone, caption);
-            await sendEvolutionButtons(
+
+            // WhatsApp descontinuou buttonsMessage clássico do Baileys.
+            // sendList ainda é renderizado como menu clicável em contas comerciais.
+            const listOk = await sendEvolutionList(
               phone,
               "Confirmar baixa do pendente?",
               "Escolha o que fazer com o lançamento que já existe no sistema.",
               `Ou edite no app: ${editLink}`,
+              "Escolher opção",
+              "Baixa pendente",
               [
-                { id: "confirm_baixa", text: "✅ Sim, é esse" },
-                { id: "reject_baixa", text: "❌ Não, é outro" },
-                { id: "open_edit", text: "✏️ Editar no app" },
+                { id: "confirm_baixa", title: "✅ Sim, é esse", description: "Marca como Pago agora" },
+                { id: "reject_baixa", title: "❌ Não, é outro", description: "Mantém como lançamento novo" },
+                { id: "open_edit", title: "✏️ Editar no app", description: "Abre o formulário em Análises EVA" },
               ],
             );
-          })().catch((e) => console.error("boleto card/buttons dispatch failed:", e));
+            if (!listOk) {
+              // Última tentativa: tenta a API antiga de botões (algumas instâncias ainda respeitam)
+              await sendEvolutionButtons(
+                phone,
+                "Confirmar baixa do pendente?",
+                "Escolha o que fazer com o lançamento que já existe no sistema.",
+                `Ou responda 1, 2 ou 3 · Editar: ${editLink}`,
+                [
+                  { id: "confirm_baixa", text: "✅ Sim, é esse" },
+                  { id: "reject_baixa", text: "❌ Não, é outro" },
+                  { id: "open_edit", text: "✏️ Editar no app" },
+                ],
+              );
+            }
+          })().catch((e) => console.error("boleto card/list dispatch failed:", e));
         } catch (e) {
           console.error("Failed to register confirm_boleto_match action:", e);
         }
