@@ -242,9 +242,10 @@ async function sendEvolutionReply(phone: string, text: string) {
 
 // --- App URL for deep links back into Análises EVA ---
 const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://eva.tec.br").replace(/\/$/, "");
-function buildAnalisesEvaLink(pendingId: string, edit = false): string {
+function buildAnalisesEvaLink(pendingId: string, edit = false, ctx?: string | null): string {
   const q = new URLSearchParams({ pending: pendingId });
   if (edit) q.set("edit", "1");
+  if (ctx) q.set("ctx", ctx);
   return `${APP_BASE_URL}/analises-eva?${q.toString()}`;
 }
 
