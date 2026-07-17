@@ -4052,8 +4052,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           const deepLink = buildAnalisesEvaLink(pendingId, false, ctxParam);
           const editLink = buildAnalisesEvaLink(pendingId, true, ctxParam);
 
-          // Fire-and-forget: gera PNG + envia imagem, depois lista de opções. Não bloqueia o respond().
-          (async () => {
+          // PNG + list dispatch. Precisa de EdgeRuntime.waitUntil — sem isso o
+          // isolate morre quando respond() retorna e nada chega ao WhatsApp.
+          const dispatch = (async () => {
             const bankName =
               (bankAccountId && contextAccounts.find((a: any) => a.id === bankAccountId)?.name) ||
               (walletId && contextWallets.find((w: any) => w.id === walletId)?.name) ||
@@ -4067,13 +4068,17 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               type: (boletoMatch.tx.type as "despesa" | "receita") || "despesa",
               bankAccountName: bankName,
             };
+            console.log("boleto dispatch: rendering PNG…");
             const png = await renderBoletoCardPng(cardData);
-            const numberedFallback =
-              `\n\nResponda com:\n1 — ✅ Sim, dá baixa\n2 — ❌ Não, é outro\n3 — ✏️ Editar no app`;
-            const caption = `${boletoSuggestionMessage}\n\n👉 Abrir no app: ${deepLink}${numberedFallback}`;
+            console.log("boleto dispatch: PNG bytes =", png?.byteLength ?? null);
+            const caption = `📄 Sugestão de baixa — responda *1*, *2* ou *3* na mensagem anterior.\n👉 ${deepLink}`;
             let sentImage = false;
             if (png) sentImage = await sendEvolutionImage(phone, png, caption);
-            if (!sentImage) await sendEvolutionReply(phone, caption);
+            console.log("boleto dispatch: sendMedia result =", sentImage);
+            if (!sentImage) {
+              // Sem imagem, não reenvia texto (o respond() principal já carrega tudo).
+              console.log("boleto dispatch: image failed, skipping duplicate text");
+            }
 
             // WhatsApp descontinuou buttonsMessage clássico do Baileys.
             // sendList ainda é renderizado como menu clicável em contas comerciais.
@@ -4090,9 +4095,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 { id: "open_edit", title: "✏️ Editar no app", description: "Abre o formulário em Análises EVA" },
               ],
             );
+            console.log("boleto dispatch: sendList result =", listOk);
             if (!listOk) {
-              // Última tentativa: tenta a API antiga de botões (algumas instâncias ainda respeitam)
-              await sendEvolutionButtons(
+              const btnOk = await sendEvolutionButtons(
                 phone,
                 "Confirmar baixa do pendente?",
                 "Escolha o que fazer com o lançamento que já existe no sistema.",
@@ -4103,8 +4108,14 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                   { id: "open_edit", text: "✏️ Editar no app" },
                 ],
               );
+              console.log("boleto dispatch: sendButtons fallback result =", btnOk);
             }
           })().catch((e) => console.error("boleto card/list dispatch failed:", e));
+          try {
+            (globalThis as any).EdgeRuntime?.waitUntil?.(dispatch);
+          } catch (e) {
+            console.warn("EdgeRuntime.waitUntil unavailable:", e);
+          }
         } catch (e) {
           console.error("Failed to register confirm_boleto_match action:", e);
         }
