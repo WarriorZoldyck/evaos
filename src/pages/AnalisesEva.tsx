@@ -479,7 +479,7 @@ export default function AnalisesEva() {
   const { categories } = useCategories();
   const { bankAccounts: accounts, creditCards, wallets, cardTerminals } = useAccounts();
   const { suppliers, clients } = useContacts();
-  const { companies } = useCompany();
+  const { companies, selectedCompanyId, setSelectedCompanyId } = useCompany();
   const { settings: fieldSettings } = useFormFieldSettings();
   const effectiveUserId = useEffectiveUserId();
 
@@ -526,29 +526,58 @@ export default function AnalisesEva() {
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkAppliedRef = useRef<string | null>(null);
 
-  // Deep-link support (WhatsApp → app): ?pending=<uuid>&edit=1
+  // Deep-link support (WhatsApp → app): ?pending=<uuid>&edit=1&ctx=<company_id|personal>
   useEffect(() => {
     const pendingId = searchParams.get("pending");
     const shouldEdit = searchParams.get("edit") === "1";
+    const ctx = searchParams.get("ctx");
     if (!pendingId || pendingId === deepLinkAppliedRef.current) return;
+
+    // Step 1: switch to the correct company context if provided and different.
+    if (ctx) {
+      const targetCompanyId = ctx === "personal" ? null : ctx;
+      if (targetCompanyId !== selectedCompanyId) {
+        setSelectedCompanyId(targetCompanyId);
+        // wait for pendingTransactions to refetch under the new context
+        return;
+      }
+    }
+
+    // Step 2: find the target in the current (post-switch) list.
     const target = pendingTransactions.find((p) => p.id === pendingId);
-    if (!target) return;
+    if (!target) {
+      // If ctx wasn't provided, try to infer from the DB and switch context.
+      if (!ctx) {
+        supabase
+          .from("ai_pending_transactions")
+          .select("company_id")
+          .eq("id", pendingId)
+          .maybeSingle()
+          .then(({ data }) => {
+            if (!data) return;
+            const targetCompanyId = data.company_id ?? null;
+            if (targetCompanyId !== selectedCompanyId) {
+              setSelectedCompanyId(targetCompanyId);
+            }
+          });
+      }
+      return;
+    }
+
     deepLinkAppliedRef.current = pendingId;
     setHighlightedId(pendingId);
-    // scroll after paint
     setTimeout(() => {
       const el = document.getElementById(`pending-card-${pendingId}`);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 100);
     if (shouldEdit) setEditingItem(target);
-    // clean the params so a refresh doesn't reopen the modal
     const next = new URLSearchParams(searchParams);
     next.delete("pending");
     next.delete("edit");
+    next.delete("ctx");
     setSearchParams(next, { replace: true });
-    // remove highlight after a while
     setTimeout(() => setHighlightedId((cur) => (cur === pendingId ? null : cur)), 4000);
-  }, [pendingTransactions, searchParams, setSearchParams]);
+  }, [pendingTransactions, searchParams, setSearchParams, selectedCompanyId, setSelectedCompanyId]);
 
   // Called by cards. If item belongs to a multi-installment series still fully
   // pending, ask user whether to edit the whole thing or just this parcela.

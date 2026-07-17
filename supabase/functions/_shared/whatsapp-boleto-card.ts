@@ -1,6 +1,6 @@
 // Renders a "sugestão de baixa" card as PNG for WhatsApp using satori + resvg-wasm.
-// Both are pure WASM/JS and run on Deno Deploy. Any failure returns null so the
-// caller can fall back to plain text.
+// Light theme to match Análises EVA card. Returns null on failure so the caller
+// can fall back to plain text.
 
 import satori from "npm:satori@0.10.13";
 import { Resvg, initWasm } from "npm:@resvg/resvg-wasm@2.6.2";
@@ -53,6 +53,8 @@ export interface BoletoCardData {
   valor: number;
   vencimento: string | null;
   matchScore: number;
+  type?: "despesa" | "receita";
+  bankAccountName?: string | null;
 }
 
 /**
@@ -65,8 +67,12 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
 
     const scoreLabel =
       data.matchScore >= 3 ? "Match forte" : data.matchScore >= 2 ? "Match provável" : "Possível match";
+    const isReceita = data.type === "receita";
+    const typeLabel = isReceita ? "Receita" : "Despesa";
+    const typeBg = isReceita ? "#DCFCE7" : "#FEE2E2";
+    const typeFg = isReceita ? "#166534" : "#991B1B";
+    const valorColor = isReceita ? "#16A34A" : "#DC2626";
 
-    // satori tree — flexbox, tailwind-ish inline styles.
     const tree: any = {
       type: "div",
       props: {
@@ -75,15 +81,15 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
           flexDirection: "column",
           width: "800px",
           height: "500px",
-          background: "linear-gradient(135deg, #0B1120 0%, #0F1B33 100%)",
+          background: "#FFFFFF",
           padding: "36px 40px",
           fontFamily: "Inter",
-          color: "#E6F1FF",
-          border: "2px solid #48CAE4",
+          color: "#0F172A",
+          border: "1px solid #E2E8F0",
           borderRadius: "24px",
         },
         children: [
-          // header
+          // Header: type chip + status chip
           {
             type: "div",
             props: {
@@ -96,49 +102,18 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
                 {
                   type: "div",
                   props: {
-                    style: { display: "flex", alignItems: "center", gap: "12px" },
-                    children: [
-                      {
-                        type: "div",
-                        props: {
-                          style: {
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "44px",
-                            height: "44px",
-                            borderRadius: "12px",
-                            background: "#48CAE4",
-                            color: "#0B1120",
-                            fontWeight: 700,
-                            fontSize: "22px",
-                          },
-                          children: "E",
-                        },
-                      },
-                      {
-                        type: "div",
-                        props: {
-                          style: { display: "flex", flexDirection: "column" },
-                          children: [
-                            {
-                              type: "div",
-                              props: {
-                                style: { fontSize: "20px", fontWeight: 700, letterSpacing: "0.5px" },
-                                children: "EVA OS",
-                              },
-                            },
-                            {
-                              type: "div",
-                              props: {
-                                style: { fontSize: "13px", color: "#7CC7DC" },
-                                children: "Sugestão de baixa",
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "6px 14px",
+                      borderRadius: "999px",
+                      background: typeBg,
+                      color: typeFg,
+                      fontSize: "13px",
+                      fontWeight: 700,
+                      letterSpacing: "0.5px",
+                    },
+                    children: typeLabel.toUpperCase(),
                   },
                 },
                 {
@@ -149,8 +124,8 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
                       alignItems: "center",
                       padding: "6px 14px",
                       borderRadius: "999px",
-                      background: "rgba(250, 204, 21, 0.15)",
-                      color: "#FACC15",
+                      background: "#FEF3C7",
+                      color: "#92400E",
                       fontSize: "13px",
                       fontWeight: 700,
                       letterSpacing: "0.5px",
@@ -161,33 +136,51 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
               ],
             },
           },
-          // divider spacer
-          { type: "div", props: { style: { height: "28px" }, children: "" } },
+          // spacer
+          { type: "div", props: { style: { height: "24px" }, children: "" } },
           // descrição
           {
             type: "div",
             props: {
               style: {
-                fontSize: "22px",
+                fontSize: "26px",
                 fontWeight: 700,
                 lineHeight: 1.25,
-                color: "#FFFFFF",
-                maxHeight: "84px",
+                color: "#0F172A",
+                maxHeight: "80px",
                 overflow: "hidden",
               },
               children: data.descricao || "Lançamento pendente",
             },
           },
-          // fornecedor
+          // fornecedor + banco
           {
             type: "div",
             props: {
               style: {
-                marginTop: "8px",
+                marginTop: "10px",
+                display: "flex",
+                flexDirection: "column",
                 fontSize: "15px",
-                color: "#94B8D9",
+                color: "#64748B",
+                gap: "4px",
               },
-              children: data.fornecedor ? `👤 ${data.fornecedor}` : " ",
+              children: [
+                {
+                  type: "div",
+                  props: {
+                    style: { display: "flex" },
+                    children: data.fornecedor ? `👤 ${data.fornecedor}` : " ",
+                  },
+                },
+                {
+                  type: "div",
+                  props: {
+                    style: { display: "flex" },
+                    children: data.bankAccountName ? `🏦 ${data.bankAccountName}` : " ",
+                  },
+                },
+              ],
             },
           },
           // spacer
@@ -200,7 +193,7 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
                 display: "flex",
                 alignItems: "flex-end",
                 justifyContent: "space-between",
-                borderTop: "1px solid rgba(72, 202, 228, 0.25)",
+                borderTop: "1px solid #E2E8F0",
                 paddingTop: "20px",
               },
               children: [
@@ -212,7 +205,7 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
                       {
                         type: "div",
                         props: {
-                          style: { fontSize: "13px", color: "#7CC7DC", letterSpacing: "0.5px" },
+                          style: { fontSize: "12px", color: "#64748B", letterSpacing: "0.5px", fontWeight: 700 },
                           children: "VALOR",
                         },
                       },
@@ -220,11 +213,11 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
                         type: "div",
                         props: {
                           style: {
-                            fontSize: "42px",
+                            fontSize: "40px",
                             fontWeight: 700,
-                            color: "#48CAE4",
+                            color: valorColor,
                             lineHeight: 1,
-                            marginTop: "4px",
+                            marginTop: "6px",
                           },
                           children: fmtBRL(data.valor),
                         },
@@ -240,7 +233,7 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
                       {
                         type: "div",
                         props: {
-                          style: { fontSize: "13px", color: "#7CC7DC", letterSpacing: "0.5px" },
+                          style: { fontSize: "12px", color: "#64748B", letterSpacing: "0.5px", fontWeight: 700 },
                           children: "VENCIMENTO",
                         },
                       },
@@ -250,11 +243,57 @@ export async function renderBoletoCardPng(data: BoletoCardData): Promise<Uint8Ar
                           style: {
                             fontSize: "26px",
                             fontWeight: 700,
-                            color: "#FFFFFF",
-                            marginTop: "4px",
+                            color: "#0F172A",
+                            marginTop: "6px",
                           },
                           children: fmtDateBR(data.vencimento),
                         },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+          // footer selo
+          {
+            type: "div",
+            props: {
+              style: {
+                marginTop: "16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: "12px",
+                color: "#94A3B8",
+              },
+              children: [
+                {
+                  type: "div",
+                  props: {
+                    style: { display: "flex", alignItems: "center", gap: "8px" },
+                    children: [
+                      {
+                        type: "div",
+                        props: {
+                          style: {
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "22px",
+                            height: "22px",
+                            borderRadius: "6px",
+                            background: "#0B1120",
+                            color: "#48CAE4",
+                            fontWeight: 700,
+                            fontSize: "13px",
+                          },
+                          children: "E",
+                        },
+                      },
+                      {
+                        type: "div",
+                        props: { style: { display: "flex" }, children: "EVA OS · Sugestão de baixa" },
                       },
                     ],
                   },
