@@ -520,7 +520,34 @@ export default function AnalisesEva() {
   const [editingSeries, setEditingSeries] = useState<AIPendingTransaction[] | null>(null);
   const [seriesChoice, setSeriesChoice] = useState<{ item: AIPendingTransaction; series: AIPendingTransaction[] } | null>(null);
   const [reconcilingId, setReconcilingId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkAppliedRef = useRef<string | null>(null);
+
+  // Deep-link support (WhatsApp → app): ?pending=<uuid>&edit=1
+  useEffect(() => {
+    const pendingId = searchParams.get("pending");
+    const shouldEdit = searchParams.get("edit") === "1";
+    if (!pendingId || pendingId === deepLinkAppliedRef.current) return;
+    const target = pendingTransactions.find((p) => p.id === pendingId);
+    if (!target) return;
+    deepLinkAppliedRef.current = pendingId;
+    setHighlightedId(pendingId);
+    // scroll after paint
+    setTimeout(() => {
+      const el = document.getElementById(`pending-card-${pendingId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    if (shouldEdit) setEditingItem(target);
+    // clean the params so a refresh doesn't reopen the modal
+    const next = new URLSearchParams(searchParams);
+    next.delete("pending");
+    next.delete("edit");
+    setSearchParams(next, { replace: true });
+    // remove highlight after a while
+    setTimeout(() => setHighlightedId((cur) => (cur === pendingId ? null : cur)), 4000);
+  }, [pendingTransactions, searchParams, setSearchParams]);
 
   // Called by cards. If item belongs to a multi-installment series still fully
   // pending, ask user whether to edit the whole thing or just this parcela.
