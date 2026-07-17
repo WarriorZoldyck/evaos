@@ -116,7 +116,7 @@ function pendingToTransaction(item: AIPendingTransaction): Transaction {
 function PendingCard({
   item, onApprove, onReject, onEdit, onReconcile,
   isApproving, isRejecting, isReconciling = false,
-  categoryName, accountName, compact = false,
+  categoryName, accountName, compact = false, highlighted = false,
 }: {
   item: AIPendingTransaction;
   onApprove: () => void;
@@ -129,6 +129,7 @@ function PendingCard({
   categoryName: string;
   accountName: string;
   compact?: boolean;
+  highlighted?: boolean;
 }) {
   const isReceita = item.type === "receita";
   const signedAttachmentUrl = useSignedAttachmentUrl(item.attachment_url);
