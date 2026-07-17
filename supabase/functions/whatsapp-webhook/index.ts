@@ -734,7 +734,16 @@ serve(async (req) => {
       msgContent = { ...msgContent, ...ephemeralInner };
       delete msgContent.ephemeralMessage;
     }
-    const message = msgContent?.conversation
+    // Detect WhatsApp reply-button responses (Evolution shapes vary by version)
+    const buttonReplyId: string | null =
+      msgContent?.buttonsResponseMessage?.selectedButtonId
+      || msgContent?.templateButtonReplyMessage?.selectedId
+      || msgContent?.interactiveResponseMessage?.body?.text
+      || msgContent?.buttonsResponseMessage?.selectedDisplayText
+      || null;
+
+    const message = buttonReplyId
+      || msgContent?.conversation
       || msgContent?.extendedTextMessage?.text
       || msgContent?.imageMessage?.caption
       || msgContent?.documentMessage?.caption
