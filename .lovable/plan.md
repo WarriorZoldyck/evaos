@@ -1,60 +1,48 @@
 
-## Diagnóstico
+## Objetivo
 
-Nos logs da última interação (`01:02:11 BOLETO MATCH FOUND`), o match aconteceu e o pending foi criado — mas **nenhum** log de `Evolution sendMedia`, `sendList`, `sendButtons` ou erro do `renderBoletoCardPng` apareceu. O único envio ao WhatsApp foi o `sendText` do `respond()`, que hoje omite a mensagem de sugestão quando há match.
+Após qualquer novo lançamento criado via WhatsApp, a **primeira mensagem de retorno** já traz as ações interativas:
 
-Causa: o bloco `(async () => { ... })().catch(...)` é fire-and-forget. Assim que `respond()` retorna, o runtime da Supabase Edge encerra o isolate e mata a promise pendente — o PNG nunca é renderizado nem enviado. É o comportamento padrão do Deno Deploy; precisa de `EdgeRuntime.waitUntil()` para manter o worker vivo até a promise terminar.
+1. ✅ **Aprovar** — confirma o lançamento (status = `Pago`)
+2. ❌ **Cancelar** — exclui o lançamento recém-criado
+3. ✏️ **Editar no app** — deep-link para Análises EVA no card correto (mantido, já existe)
 
-Somado a isso, o usuário quer que a mensagem de "encontrei um parecido" chegue **na mesma resposta** do lançamento — hoje ela é intencionalmente omitida do `respond()`.
+Aparece em **todo lançamento novo**, independente de haver match com boleto pendente. Quando houver match, as opções de "dar baixa em pendente" continuam aparecendo abaixo (fluxo atual preservado).
 
-## Ajustes em `supabase/functions/whatsapp-webhook/index.ts`
+## Formato
 
-1. **Reincluir a sugestão no `respond()` principal** quando há match, dentro de uma única mensagem:
-   ```
-   📋 Lançamento enviado para aprovação no app!
-   📝 …
-   💰 …
-   …
-   
-   ━━━━━━━━━━━━━━━━━━
-   📄 Encontrei um lançamento pendente parecido:
-   • <descrição>
-   • R$ <valor> · venc. <data>
-   
-   Responda:
-   1 — ✅ Sim, dá baixa
-   2 — ❌ Não, é outro
-   3 — ✏️ Editar no app
-   👉 <deep-link com ctx>
-   ```
-   Assim, mesmo se o envio da imagem falhar, o usuário sempre tem o texto + as 3 opções na mesma mensagem do lançamento. O `[SUGESTAO_BAIXA]` continua no `notes` do pending como hoje.
+- **Lista clicável Evolution** (`sendList`) — mesmo helper `sendEvolutionList` já usado no fluxo de boleto.
+- **Fallback numerado** no corpo da própria mensagem (`1 — Aprovar`, `2 — Cancelar`, `3 — Editar no app`) para quando o WhatsApp do usuário não renderizar a lista.
+- **Envio dentro de `EdgeRuntime.waitUntil(...)`** (mesmo padrão do fluxo de boleto) para garantir que o isolate não morra antes do `sendList`.
 
-2. **Manter o isolate vivo** para o envio do PNG e da lista:
-   ```ts
-   const dispatch = (async () => { …renderBoletoCardPng + sendEvolutionImage + sendEvolutionList… })()
-     .catch(e => console.error("boleto card/list dispatch failed:", e));
-   // Deno Deploy: EdgeRuntime.waitUntil mantém o worker vivo após respond()
-   try { (globalThis as any).EdgeRuntime?.waitUntil?.(dispatch); } catch {}
-   ```
-   Fallback silencioso se `EdgeRuntime` não estiver disponível (local dev).
+## Mudanças
 
-3. **Instrumentação de log** dentro do dispatch:
-   - `console.log("boleto dispatch: rendering PNG…")`
-   - `console.log("boleto dispatch: PNG bytes =", png?.byteLength ?? null)`
-   - `console.log("boleto dispatch: sendMedia result =", sentImage)`
-   - `console.log("boleto dispatch: sendList result =", listOk)`
-   
-   Sem isso não temos como saber onde parou.
+### `supabase/functions/whatsapp-webhook/index.ts`
 
-4. **Caption da imagem** deixa de duplicar o bloco todo (o texto já foi no `respond`); vira algo curto tipo:
-   `📄 Sugestão de baixa — responda 1/2/3 na mensagem anterior.`
+1. **Após criar transação** (no ponto onde hoje monta `respond()` com "Lançamento enviado para aprovação"):
+   - Adicionar bloco `newTxActionsTail` com o texto numerado `1/2/3` + deep-link `?ctx=...&highlight=<id>&action=edit`.
+   - Concatenar `newTxActionsTail` na mensagem principal do `respond()`, **antes** do `boletoSuggestionTail` (quando existir).
+2. **Dispatch da lista clicável** dentro do bloco `EdgeRuntime.waitUntil(...)` existente (ou criar um novo quando não houver match de boleto):
+   - `sendEvolutionList` com título "Ações do lançamento" e 3 rows: `approve_tx`, `cancel_tx`, `open_edit_tx` (payload inclui `transaction_id`).
+   - Persistir em `whatsapp_pending_actions` (TTL 10 min, padrão atual) com `type='new_tx_actions'` + `payload={ transaction_id, user_id, context }` para resolver a resposta.
+3. **Dispatcher de resposta** (onde hoje trata `confirm_baixa` / `reject_baixa` / `open_edit`):
+   - `approve_tx` / texto `1` → `UPDATE transactions SET status='Pago' WHERE id=... AND user_id=...`; confirma com "✅ Lançamento aprovado".
+   - `cancel_tx` / texto `2` → `DELETE FROM transactions WHERE id=... AND user_id=...` (respeitando `enforce_closed_bill_cycle`); confirma "🗑️ Lançamento cancelado".
+   - `open_edit_tx` / texto `3` → responde com o deep-link (mesmo do tail).
+   - Resposta numerada só é interpretada como ação se houver um `whatsapp_pending_actions` do tipo `new_tx_actions` ativo para o número — evita colisão com o `1/2/3` do fluxo de boleto (que já grava seu próprio pending action separado).
+4. **Regra de exibição**: aparece em todo `INSERT` novo. Se o lançamento já foi criado como `Pago` (fluxo direto), a lista mostra apenas **Cancelar** + **Editar** (omite Aprovar) — pequena condicional no builder da lista.
 
-5. **Nada muda** no card visual, no dispatcher `confirm_boleto_match`, no `ctx` do deep link, ou no `AnalisesEva.tsx`.
+### Sem mudanças no frontend
 
-## Memória
-Atualizar `.lovable/memory/whatsapp/boleto-reconciliation.md`:
-- Sugestão passa a viajar dentro da mesma resposta do `respond()` (texto + numbered fallback + deep link).
-- Imagem e `sendList` são complementares, disparados via `EdgeRuntime.waitUntil` (obrigatório em edge functions Supabase — sem isso o isolate morre antes do envio).
-- Caption da imagem é mínima.
+O deep-link `?ctx=...&highlight=...&action=edit` já é tratado em `src/pages/AnalisesEva.tsx`.
 
-Sem migrations, sem alteração de UI.
+### Memória
+
+- Atualizar `.lovable/memory/whatsapp/boleto-reconciliation.md` (ou criar `mem://whatsapp/new-tx-actions`) descrevendo o novo `pending_action.type = 'new_tx_actions'` e o mapping dos IDs da lista.
+- Adicionar entrada correspondente em `mem://index.md`.
+
+## Fora do escopo
+
+- Nenhuma mudança visual no card PNG.
+- Nenhuma mudança no fluxo de match de boleto existente (permanece somando suas próprias opções quando aplicável).
+- Nenhuma mudança em `AnalisesEva.tsx` (deep-link já funciona).
