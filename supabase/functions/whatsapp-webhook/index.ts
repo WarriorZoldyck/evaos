@@ -3890,6 +3890,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // to the pending entry so the user can resolve it in Análises EVA.
       let boletoSuggestionBlock: string | null = null;
       let boletoSuggestionMessage: string | null = null;
+      let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
         try {
           const supplierName = supplierId
@@ -3902,8 +3903,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             supplierName,
             amount: Math.abs(aiParsed.amount || 0),
             description: aiParsed.description || "",
+            paymentDate,
           });
           if (match) {
+            boletoMatch = match;
             console.log("=== BOLETO MATCH FOUND (suggestion) ===", { txId: match.tx.id, score: match.score });
             boletoSuggestionBlock =
               `\n\n[SUGESTAO_BAIXA]\n` +
@@ -3918,7 +3921,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               `📄 Encontrei um lançamento *pendente* parecido no sistema:\n` +
               `• ${match.tx.description}${supplierLine}\n` +
               `• ${fmt(match.tx.amount)} • venc. ${formatDate(match.tx.payment_date)}\n\n` +
-              `Coloquei a sugestão em *Análises EVA* — confirme lá se é o mesmo pagamento para dar baixa sem duplicar. 👍`;
+              `Responda pelos botões abaixo — *Sim* dá baixa direto, sem duplicar. 👍`;
           }
         } catch (e) {
           console.error("Boleto reconciliation skipped due to error:", e);
@@ -3930,7 +3933,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
       const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
-      const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
+      const { data: insertedPending, error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
         source: "whatsapp",
         status: mainStatus,
@@ -3956,7 +3959,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         attachment_url: attachmentUrl,
         original_message: originalUserText || null,
         ai_response_message: aiParsed.friendly_message || null,
-      });
+      }).select("id").single();
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
@@ -3966,6 +3969,66 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           message: "❌ Não consegui criar o lançamento. Tente novamente.",
         }, 500);
       }
+
+      const pendingId: string | null = insertedPending?.id || null;
+
+      // --- Sugestão de baixa: cria whatsapp_pending_actions e envia card + botões ---
+      if (boletoMatch && pendingId && phone) {
+        try {
+          await supabase.from("whatsapp_pending_actions").insert({
+            user_id: userId,
+            action_type: "confirm_boleto_match",
+            payload: {
+              pending_id: pendingId,
+              transaction_id: boletoMatch.tx.id,
+              amount: Number(boletoMatch.tx.amount),
+              description: boletoMatch.tx.description || "",
+              payment_date: paymentDate,
+              bank_account_id: bankAccountId,
+              wallet_id: walletId,
+              payment_method: paymentMethod,
+              attachment_url: attachmentUrl,
+            },
+            suggested_category_name: "",
+            category_type: "",
+            context_company_id: companyId,
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          });
+
+          const deepLink = buildAnalisesEvaLink(pendingId);
+          const editLink = buildAnalisesEvaLink(pendingId, true);
+
+          // Fire-and-forget: gera PNG + envia imagem, depois botões. Não bloqueia o respond().
+          (async () => {
+            const cardData: BoletoCardData = {
+              descricao: boletoMatch.tx.description || "",
+              fornecedor: boletoMatch.supplierName,
+              valor: Number(boletoMatch.tx.amount) || 0,
+              vencimento: boletoMatch.tx.payment_date,
+              matchScore: boletoMatch.score,
+            };
+            const png = await renderBoletoCardPng(cardData);
+            const caption = `${boletoSuggestionMessage}\n\n👉 Abrir no app: ${deepLink}`;
+            let sentImage = false;
+            if (png) sentImage = await sendEvolutionImage(phone, png, caption);
+            if (!sentImage) await sendEvolutionReply(phone, caption);
+            await sendEvolutionButtons(
+              phone,
+              "Confirmar baixa do pendente?",
+              "Escolha o que fazer com o lançamento que já existe no sistema.",
+              `Ou edite no app: ${editLink}`,
+              [
+                { id: "confirm_baixa", text: "✅ Sim, é esse" },
+                { id: "reject_baixa", text: "❌ Não, é outro" },
+                { id: "open_edit", text: "✏️ Editar no app" },
+              ],
+            );
+          })().catch((e) => console.error("boleto card/buttons dispatch failed:", e));
+        } catch (e) {
+          console.error("Failed to register confirm_boleto_match action:", e);
+        }
+      }
+
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(aiParsed.amount || 0);
