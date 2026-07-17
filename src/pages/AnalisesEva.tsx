@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions, AIPendingTransaction } from "@/hooks/useAIPendingTransactions";
@@ -115,7 +116,7 @@ function pendingToTransaction(item: AIPendingTransaction): Transaction {
 function PendingCard({
   item, onApprove, onReject, onEdit, onReconcile,
   isApproving, isRejecting, isReconciling = false,
-  categoryName, accountName, compact = false,
+  categoryName, accountName, compact = false, highlighted = false,
 }: {
   item: AIPendingTransaction;
   onApprove: () => void;
@@ -128,6 +129,7 @@ function PendingCard({
   categoryName: string;
   accountName: string;
   compact?: boolean;
+  highlighted?: boolean;
 }) {
   const isReceita = item.type === "receita";
   const signedAttachmentUrl = useSignedAttachmentUrl(item.attachment_url);
@@ -161,7 +163,7 @@ function PendingCard({
   const SourceIcon = sourceIcon;
 
   return (
-    <Card className="border-l-4 transition-all hover:shadow-md" style={{ borderLeftColor: isReceita ? "hsl(var(--chart-2))" : "hsl(var(--chart-1))" }}>
+    <Card id={`pending-card-${item.id}`} className={`border-l-4 transition-all hover:shadow-md ${highlighted ? "ring-2 ring-primary shadow-lg" : ""}`} style={{ borderLeftColor: isReceita ? "hsl(var(--chart-2))" : "hsl(var(--chart-1))" }}>
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 space-y-2">
@@ -519,7 +521,34 @@ export default function AnalisesEva() {
   const [editingSeries, setEditingSeries] = useState<AIPendingTransaction[] | null>(null);
   const [seriesChoice, setSeriesChoice] = useState<{ item: AIPendingTransaction; series: AIPendingTransaction[] } | null>(null);
   const [reconcilingId, setReconcilingId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkAppliedRef = useRef<string | null>(null);
+
+  // Deep-link support (WhatsApp → app): ?pending=<uuid>&edit=1
+  useEffect(() => {
+    const pendingId = searchParams.get("pending");
+    const shouldEdit = searchParams.get("edit") === "1";
+    if (!pendingId || pendingId === deepLinkAppliedRef.current) return;
+    const target = pendingTransactions.find((p) => p.id === pendingId);
+    if (!target) return;
+    deepLinkAppliedRef.current = pendingId;
+    setHighlightedId(pendingId);
+    // scroll after paint
+    setTimeout(() => {
+      const el = document.getElementById(`pending-card-${pendingId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+    if (shouldEdit) setEditingItem(target);
+    // clean the params so a refresh doesn't reopen the modal
+    const next = new URLSearchParams(searchParams);
+    next.delete("pending");
+    next.delete("edit");
+    setSearchParams(next, { replace: true });
+    // remove highlight after a while
+    setTimeout(() => setHighlightedId((cur) => (cur === pendingId ? null : cur)), 4000);
+  }, [pendingTransactions, searchParams, setSearchParams]);
 
   // Called by cards. If item belongs to a multi-installment series still fully
   // pending, ask user whether to edit the whole thing or just this parcela.
@@ -933,6 +962,7 @@ export default function AnalisesEva() {
           isReconciling={reconcilingId === g.item.id}
           categoryName={getCategoryName(g.item.category)}
           accountName={getAccountName(g.item)}
+          highlighted={highlightedId === g.item.id}
         />
       );
     });

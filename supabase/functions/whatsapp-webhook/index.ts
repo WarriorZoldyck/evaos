@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
+import { renderBoletoCardPng, type BoletoCardData } from "../_shared/whatsapp-boleto-card.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,8 +60,27 @@ function normalizeBoletoText(s: string | null | undefined): string {
     .trim();
 }
 
+// Remove common Brazilian legal-entity / generic tokens so that
+// "JJGC INDUSTRIA E COM.DE MATERIAIS DENTARIOS S.A" and
+// "JJGC Industria C M D SA" collapse to a comparable core.
+const LEGAL_ENTITY_STOP = new Set([
+  "sa","s","a","ltda","me","epp","eireli","mei","cia","cnpj",
+  "industria","industrias","ind","comercio","com","de","da","do","das","dos",
+  "materiais","material","produtos","servicos","servico","e",
+]);
+function normalizeSupplierCore(s: string | null | undefined): string {
+  return normalizeBoletoText(s)
+    .split(" ")
+    .filter((t) => t.length >= 2 && !LEGAL_ENTITY_STOP.has(t))
+    .join(" ");
+}
+
 function tokenSet(s: string | null | undefined): Set<string> {
   return new Set(normalizeBoletoText(s).split(" ").filter((t) => t.length >= 3));
+}
+
+function supplierTokenSet(s: string | null | undefined): Set<string> {
+  return new Set(normalizeSupplierCore(s).split(" ").filter((t) => t.length >= 2));
 }
 
 function jaccardSimilarity(a: string | null | undefined, b: string | null | undefined): number {
@@ -72,14 +92,33 @@ function jaccardSimilarity(a: string | null | undefined, b: string | null | unde
   return union === 0 ? 0 : inter / union;
 }
 
+function supplierJaccard(a: string | null | undefined, b: string | null | undefined): number {
+  const A = supplierTokenSet(a), B = supplierTokenSet(b);
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+  const union = A.size + B.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+// Tolerant: aceita até R$5 ou 3% de diferença (juros/multa de um dia
+// costumam entrar nesse envelope).
 function amountMatches(a: number, b: number): boolean {
-  return Math.abs(a - b) <= Math.max(0.02, b * 0.005);
+  return Math.abs(a - b) <= Math.max(5, b * 0.03);
+}
+
+function daysBetween(a: string | null, b: string | null): number {
+  if (!a || !b) return Infinity;
+  const ta = Date.parse(a);
+  const tb = Date.parse(b);
+  if (isNaN(ta) || isNaN(tb)) return Infinity;
+  return Math.abs(ta - tb) / 86400000;
 }
 
 /**
  * Looks for an existing Pendente expense that the user is now paying.
- * Returns the best candidate when at least 2/3 criteria match
- * (supplier, amount, description).
+ * Score (0-4): supplier + amount + description + date-proximity.
+ * Returns best candidate with score >= 2.
  */
 async function findMatchingPendingBoleto(
   supabase: any,
@@ -90,13 +129,14 @@ async function findMatchingPendingBoleto(
     supplierName: string | null;
     amount: number;
     description: string;
+    paymentDate?: string | null;
   }
 ): Promise<{ tx: any; supplierName: string | null; score: number } | null> {
   if (!params.amount || params.amount <= 0) return null;
 
   const today = new Date();
-  const from = new Date(today); from.setDate(from.getDate() - 180);
-  const to = new Date(today); to.setDate(to.getDate() + 30);
+  const from = new Date(today); from.setDate(from.getDate() - 365);
+  const to = new Date(today); to.setDate(to.getDate() + 60);
   const fromStr = from.toISOString().slice(0, 10);
   const toStr = to.toISOString().slice(0, 10);
 
@@ -108,7 +148,7 @@ async function findMatchingPendingBoleto(
     .eq("status", "Pendente")
     .gte("payment_date", fromStr)
     .lte("payment_date", toStr)
-    .limit(50);
+    .limit(100);
 
   if (params.companyId) q = q.eq("company_id", params.companyId);
   else q = q.is("company_id", null);
@@ -128,28 +168,43 @@ async function findMatchingPendingBoleto(
   }
 
   let best: { tx: any; supplierName: string | null; score: number } | null = null;
+  const near: any[] = [];
 
   for (const c of candidates) {
     const candSupplierName: string | null = c.supplier_id ? (supplierMap[c.supplier_id] || null) : (c.contact_name || null);
+    const candSupplierCore = normalizeSupplierCore(candSupplierName);
+    const askSupplierCore = normalizeSupplierCore(params.supplierName);
     const supplierMatch =
       (!!params.supplierId && params.supplierId === c.supplier_id) ||
-      jaccardSimilarity(params.supplierName, candSupplierName) >= 0.5 ||
-      (!!params.supplierName && !!candSupplierName &&
-        normalizeBoletoText(candSupplierName).includes(normalizeBoletoText(params.supplierName)));
+      supplierJaccard(params.supplierName, candSupplierName) >= 0.4 ||
+      (!!askSupplierCore && !!candSupplierCore &&
+        (candSupplierCore.includes(askSupplierCore) || askSupplierCore.includes(candSupplierCore)));
     const amountMatch = amountMatches(Number(c.amount), params.amount);
     const descMatch =
-      jaccardSimilarity(params.description, c.description) >= 0.4 ||
-      jaccardSimilarity(params.description, c.notes) >= 0.4;
+      jaccardSimilarity(params.description, c.description) >= 0.35 ||
+      jaccardSimilarity(params.description, c.notes) >= 0.35;
+    const dayDist = daysBetween(c.payment_date, params.paymentDate || new Date().toISOString().slice(0, 10));
+    const dateMatch = dayDist <= 10;
 
-    const score = (supplierMatch ? 1 : 0) + (amountMatch ? 1 : 0) + (descMatch ? 1 : 0);
+    const score = (supplierMatch ? 1 : 0) + (amountMatch ? 1 : 0) + (descMatch ? 1 : 0) + (dateMatch ? 1 : 0);
 
-    // Never propose very different amounts as the same boleto.
-    if (Math.abs(Number(c.amount) - params.amount) > Math.max(2, params.amount * 0.1)) continue;
-    if (score < 2) continue;
+    // Hard filter: descarta apenas se valor divergir MUITO.
+    const bigDiff = Math.abs(Number(c.amount) - params.amount) > Math.max(20, params.amount * 0.15);
+    if (bigDiff) continue;
 
-    if (!best || score > best.score) {
-      best = { tx: c, supplierName: candSupplierName, score };
+    if (score >= 2) {
+      if (!best || score > best.score) {
+        best = { tx: c, supplierName: candSupplierName, score };
+      }
+    } else if (score === 1) {
+      near.push({ id: c.id, supplierMatch, amountMatch, descMatch, dateMatch, amount: c.amount });
     }
+  }
+
+  if (!best && near.length > 0) {
+    console.log("boleto match — nenhum candidato ≥2, quase-match:", JSON.stringify(near.slice(0, 5)));
+  } else if (best) {
+    console.log("boleto match FOUND:", { id: best.tx.id, score: best.score, supplier: best.supplierName });
   }
 
   return best;
@@ -182,6 +237,100 @@ async function sendEvolutionReply(phone: string, text: string) {
     }
   } catch (err) {
     console.error("Evolution sendText exception:", err);
+  }
+}
+
+// --- App URL for deep links back into Análises EVA ---
+const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://eva.tec.br").replace(/\/$/, "");
+function buildAnalisesEvaLink(pendingId: string, edit = false): string {
+  const q = new URLSearchParams({ pending: pendingId });
+  if (edit) q.set("edit", "1");
+  return `${APP_BASE_URL}/analises-eva?${q.toString()}`;
+}
+
+// --- Evolution API helper: send image (base64) with caption ---
+async function sendEvolutionImage(phone: string, base64Png: Uint8Array, caption: string): Promise<boolean> {
+  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
+  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
+  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
+  if (!evoUrl || !evoKey || !evoInstance) return false;
+  try {
+    // Uint8Array -> base64 (chunked to avoid stack overflow)
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < base64Png.length; i += chunk) {
+      binary += String.fromCharCode(...base64Png.subarray(i, i + chunk));
+    }
+    const b64 = btoa(binary);
+
+    const url = `${evoUrl}/message/sendMedia/${encodeURIComponent(evoInstance)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "apikey": evoKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        number: phone,
+        mediatype: "image",
+        mimetype: "image/png",
+        media: b64,
+        fileName: "sugestao-baixa.png",
+        caption,
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("Evolution sendMedia error:", res.status, errBody);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Evolution sendMedia exception:", err);
+    return false;
+  }
+}
+
+// --- Evolution API helper: send WhatsApp reply-buttons ---
+// buttons: [{ id, text }] — Evolution encaminha a resposta com selectedButtonId
+async function sendEvolutionButtons(
+  phone: string,
+  title: string,
+  description: string,
+  footer: string,
+  buttons: Array<{ id: string; text: string }>,
+): Promise<boolean> {
+  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
+  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
+  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
+  if (!evoUrl || !evoKey || !evoInstance) return false;
+  try {
+    const url = `${evoUrl}/message/sendButtons/${encodeURIComponent(evoInstance)}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "apikey": evoKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        number: phone,
+        title,
+        description,
+        footer,
+        buttons: buttons.slice(0, 3).map((b, i) => ({
+          buttonId: b.id,
+          buttonText: { displayText: b.text },
+          type: 1,
+          // some Evolution builds expect `id` / `text` at top level too
+          id: b.id,
+          text: b.text,
+          index: i,
+        })),
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error("Evolution sendButtons error:", res.status, errBody);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Evolution sendButtons exception:", err);
+    return false;
   }
 }
 
@@ -586,7 +735,16 @@ serve(async (req) => {
       msgContent = { ...msgContent, ...ephemeralInner };
       delete msgContent.ephemeralMessage;
     }
-    const message = msgContent?.conversation
+    // Detect WhatsApp reply-button responses (Evolution shapes vary by version)
+    const buttonReplyId: string | null =
+      msgContent?.buttonsResponseMessage?.selectedButtonId
+      || msgContent?.templateButtonReplyMessage?.selectedId
+      || msgContent?.interactiveResponseMessage?.body?.text
+      || msgContent?.buttonsResponseMessage?.selectedDisplayText
+      || null;
+
+    const message = buttonReplyId
+      || msgContent?.conversation
       || msgContent?.extendedTextMessage?.text
       || msgContent?.imageMessage?.caption
       || msgContent?.documentMessage?.caption
@@ -1181,8 +1339,95 @@ serve(async (req) => {
     const pendingAction = pendingActions?.[0];
 
     if (pendingAction) {
+      // === HANDLE "confirm_boleto_match" (Sim/Não/Editar) ===
+      if (pendingAction.action_type === "confirm_boleto_match") {
+        console.log("=== PENDING ACTION: CONFIRM BOLETO MATCH ===");
+        const payload = pendingAction.payload as any;
+        const raw = (trimmedMsg || "").toLowerCase();
+        const isConfirm = raw.startsWith("confirm_baixa") || /^(sim|s|isso|é ess[ae]|confirma|pode|ok)\b/.test(raw);
+        const isReject = raw.startsWith("reject_baixa") || /^(n[ãa]o|n|outro|nova|nao é)/.test(raw);
+        const isEdit = raw.startsWith("open_edit") || /(editar|edita|abrir no app|abrir)/.test(raw);
+
+        if (isConfirm) {
+          // Dar baixa direto: UPDATE transactions + mark pending approved
+          const updates: Record<string, unknown> = {
+            status: "Pago",
+            payment_date: payload.payment_date || new Date().toISOString().slice(0, 10),
+          };
+          if (payload.bank_account_id) updates.bank_account_id = payload.bank_account_id;
+          if (payload.wallet_id) updates.wallet_id = payload.wallet_id;
+          if (payload.payment_method) updates.payment_method = payload.payment_method;
+          if (payload.attachment_url) updates.attachment_url = payload.attachment_url;
+
+          const { error: updErr } = await supabase
+            .from("transactions")
+            .update(updates)
+            .eq("id", payload.transaction_id)
+            .eq("user_id", userId);
+
+          if (updErr) {
+            console.error("confirm_boleto_match update error:", updErr);
+            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+            return respond({
+              success: false,
+              message: `❌ Não consegui dar baixa: ${updErr.message}. Tenta pelo app em Análises EVA.`,
+            }, 200);
+          }
+          if (payload.pending_id) {
+            await supabase
+              .from("ai_pending_transactions")
+              .update({ status: "approved", reviewed_at: new Date().toISOString() })
+              .eq("id", payload.pending_id);
+          }
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({
+            success: true,
+            message: "✅ Baixa feita! O pendente virou *Pago* e o saldo já foi atualizado. 🙌",
+          }, 200);
+        }
+
+        if (isReject) {
+          // Remove o bloco [SUGESTAO_BAIXA] das notes do pending para virar lançamento normal
+          if (payload.pending_id) {
+            const { data: cur } = await supabase
+              .from("ai_pending_transactions")
+              .select("notes")
+              .eq("id", payload.pending_id)
+              .maybeSingle();
+            const cleaned = (cur?.notes || "").replace(/\n*\[SUGESTAO_BAIXA\][\s\S]*?(?=\n\n|$)/g, "").trim() || null;
+            await supabase
+              .from("ai_pending_transactions")
+              .update({ notes: cleaned })
+              .eq("id", payload.pending_id);
+          }
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({
+            success: true,
+            message: "Beleza! Mantive como um lançamento novo em *Análises EVA* para você aprovar quando quiser. 👍",
+          }, 200);
+        }
+
+        if (isEdit) {
+          const link = payload.pending_id
+            ? buildAnalisesEvaLink(payload.pending_id, true)
+            : `${APP_BASE_URL}/analises-eva`;
+          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
+          return respond({
+            success: true,
+            message: `✏️ Abre aí: ${link}\n\nJá deixei o formulário pronto para você ajustar antes de dar baixa.`,
+          }, 200);
+        }
+
+        // Não bateu com nenhum padrão — mantém a ação viva e devolve o menu por texto
+        return respond({
+          success: true,
+          message: "Sobre o pendente que te mostrei, me responde:\n\n• *Sim* — para dar baixa direto\n• *Não* — para deixar como lançamento novo\n• *Editar* — para abrir no app antes de aprovar",
+        }, 200);
+      }
+
       // === HANDLE "choose_account" pending action ===
       if (pendingAction.action_type === "choose_account") {
+        console.log("=== PENDING ACTION: CHOOSE ACCOUNT ===");
         console.log("=== PENDING ACTION: CHOOSE ACCOUNT ===");
         const payload = pendingAction.payload as any;
         const companyId = pendingAction.context_company_id;
@@ -3646,6 +3891,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // to the pending entry so the user can resolve it in Análises EVA.
       let boletoSuggestionBlock: string | null = null;
       let boletoSuggestionMessage: string | null = null;
+      let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
         try {
           const supplierName = supplierId
@@ -3658,8 +3904,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             supplierName,
             amount: Math.abs(aiParsed.amount || 0),
             description: aiParsed.description || "",
+            paymentDate,
           });
           if (match) {
+            boletoMatch = match;
             console.log("=== BOLETO MATCH FOUND (suggestion) ===", { txId: match.tx.id, score: match.score });
             boletoSuggestionBlock =
               `\n\n[SUGESTAO_BAIXA]\n` +
@@ -3674,7 +3922,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               `📄 Encontrei um lançamento *pendente* parecido no sistema:\n` +
               `• ${match.tx.description}${supplierLine}\n` +
               `• ${fmt(match.tx.amount)} • venc. ${formatDate(match.tx.payment_date)}\n\n` +
-              `Coloquei a sugestão em *Análises EVA* — confirme lá se é o mesmo pagamento para dar baixa sem duplicar. 👍`;
+              `Responda pelos botões abaixo — *Sim* dá baixa direto, sem duplicar. 👍`;
           }
         } catch (e) {
           console.error("Boleto reconciliation skipped due to error:", e);
@@ -3686,7 +3934,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
       const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
-      const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
+      const { data: insertedPending, error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
         source: "whatsapp",
         status: mainStatus,
@@ -3712,7 +3960,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         attachment_url: attachmentUrl,
         original_message: originalUserText || null,
         ai_response_message: aiParsed.friendly_message || null,
-      });
+      }).select("id").single();
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
@@ -3722,6 +3970,66 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           message: "❌ Não consegui criar o lançamento. Tente novamente.",
         }, 500);
       }
+
+      const pendingId: string | null = insertedPending?.id || null;
+
+      // --- Sugestão de baixa: cria whatsapp_pending_actions e envia card + botões ---
+      if (boletoMatch && pendingId && phone) {
+        try {
+          await supabase.from("whatsapp_pending_actions").insert({
+            user_id: userId,
+            action_type: "confirm_boleto_match",
+            payload: {
+              pending_id: pendingId,
+              transaction_id: boletoMatch.tx.id,
+              amount: Number(boletoMatch.tx.amount),
+              description: boletoMatch.tx.description || "",
+              payment_date: paymentDate,
+              bank_account_id: bankAccountId,
+              wallet_id: walletId,
+              payment_method: paymentMethod,
+              attachment_url: attachmentUrl,
+            },
+            suggested_category_name: "",
+            category_type: "",
+            context_company_id: companyId,
+            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          });
+
+          const deepLink = buildAnalisesEvaLink(pendingId);
+          const editLink = buildAnalisesEvaLink(pendingId, true);
+
+          // Fire-and-forget: gera PNG + envia imagem, depois botões. Não bloqueia o respond().
+          (async () => {
+            const cardData: BoletoCardData = {
+              descricao: boletoMatch.tx.description || "",
+              fornecedor: boletoMatch.supplierName,
+              valor: Number(boletoMatch.tx.amount) || 0,
+              vencimento: boletoMatch.tx.payment_date,
+              matchScore: boletoMatch.score,
+            };
+            const png = await renderBoletoCardPng(cardData);
+            const caption = `${boletoSuggestionMessage}\n\n👉 Abrir no app: ${deepLink}`;
+            let sentImage = false;
+            if (png) sentImage = await sendEvolutionImage(phone, png, caption);
+            if (!sentImage) await sendEvolutionReply(phone, caption);
+            await sendEvolutionButtons(
+              phone,
+              "Confirmar baixa do pendente?",
+              "Escolha o que fazer com o lançamento que já existe no sistema.",
+              `Ou edite no app: ${editLink}`,
+              [
+                { id: "confirm_baixa", text: "✅ Sim, é esse" },
+                { id: "reject_baixa", text: "❌ Não, é outro" },
+                { id: "open_edit", text: "✏️ Editar no app" },
+              ],
+            );
+          })().catch((e) => console.error("boleto card/buttons dispatch failed:", e));
+        } catch (e) {
+          console.error("Failed to register confirm_boleto_match action:", e);
+        }
+      }
+
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(aiParsed.amount || 0);
@@ -3738,7 +4046,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       return respond({
         success: true,
         intent: "lancamento",
-        message: (boletoSuggestionMessage ? boletoSuggestionMessage + `\n\n— — —\n` : "") + `📋 Lançamento enviado para aprovação no app!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+        message: (boletoMatch ? "" : (boletoSuggestionMessage ? boletoSuggestionMessage + `\n\n— — —\n` : "")) + `📋 Lançamento enviado para aprovação no app!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}${boletoMatch ? "" : `\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`}`,
         transaction: {
           description: aiParsed.description,
           amount: aiParsed.amount,
