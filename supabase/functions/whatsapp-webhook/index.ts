@@ -786,10 +786,11 @@ serve(async (req) => {
       msgContent = { ...msgContent, ...ephemeralInner };
       delete msgContent.ephemeralMessage;
     }
-    // Detect WhatsApp reply-button responses (Evolution shapes vary by version)
+    // Detect WhatsApp reply-button / list responses (Evolution shapes vary by version)
     const buttonReplyId: string | null =
       msgContent?.buttonsResponseMessage?.selectedButtonId
       || msgContent?.templateButtonReplyMessage?.selectedId
+      || msgContent?.listResponseMessage?.singleSelectReply?.selectedRowId
       || msgContent?.interactiveResponseMessage?.body?.text
       || msgContent?.buttonsResponseMessage?.selectedDisplayText
       || null;
