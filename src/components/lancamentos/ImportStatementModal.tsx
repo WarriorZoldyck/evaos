@@ -289,6 +289,20 @@ export function ImportStatementModal({
     const isBankStatementFile = ["ofx", "qfx", "csv", "txt"].includes(ext);
 
     try {
+      // Preflight: valida sessão antes de subir o PDF
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) {
+        toast({
+          title: "Sessão expirada",
+          description: "Faça login novamente para importar o extrato.",
+          variant: "destructive",
+        });
+        setParsing(false);
+        try { await supabase.auth.signOut(); } catch {}
+        window.location.href = "/auth";
+        return;
+      }
+
       const formData = new FormData();
       formData.append("file", file);
 
@@ -304,14 +318,41 @@ export function ImportStatementModal({
       const { data: result, error: fnError } = (await Promise.race([invokePromise, timeoutPromise])) as any;
 
       if (fnError || !result) {
+        // Detecta 401 / sessão inválida vindo da edge function
+        let status: number | undefined;
+        let bodyMsg: string | undefined;
+        try {
+          status = fnError?.context?.status;
+          if (fnError?.context && typeof fnError.context.json === "function") {
+            const body = await fnError.context.json();
+            bodyMsg = body?.error || body?.message;
+          }
+        } catch {}
+        const rawMsg = `${fnError?.message || ""} ${bodyMsg || ""}`.toLowerCase();
+        const isAuthError = status === 401 || /unauthorized|session|jwt/.test(rawMsg);
+
+        if (isAuthError) {
+          toast({
+            title: "Sessão expirada",
+            description: "Faça login novamente para importar o extrato.",
+            variant: "destructive",
+          });
+          setParsing(false);
+          try { await supabase.auth.signOut(); } catch {}
+          window.location.href = "/auth";
+          return;
+        }
+
         toast({
           title: "Erro ao processar arquivo",
-          description: fnError?.message || "Não foi possível processar o arquivo. Tente novamente.",
+          description: bodyMsg || fnError?.message || "Não foi possível processar o arquivo. Tente novamente.",
           variant: "destructive",
         });
         setParsing(false);
         return;
       }
+
+
 
 
       const raw = (result.transactions || []).map((t: any) => ({
