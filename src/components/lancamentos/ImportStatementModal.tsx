@@ -1273,6 +1273,26 @@ export function ImportStatementModal({
 
             </div>
 
+            {/* Alert when statement mentions a card that user hasn't registered yet */}
+            {importType === "cartao" && unmatchedDigits.length > 0 && (
+              <Alert className="border-amber-500/50 bg-amber-500/10">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className="text-sm">
+                    Não encontramos o cartão terminado em <strong>{unmatchedDigits.join(", ")}</strong> nas suas contas. Deseja criá-lo agora?
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setCreateCardDigits(unmatchedDigits[0]); setCreateCardOpen(true); }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Criar cartão
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Auto-detection feedback */}
             {detectedCards.length > 0 && (
               <div className="text-xs font-medium flex flex-col gap-1 text-primary">
