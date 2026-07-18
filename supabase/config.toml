@@ -16,6 +16,7 @@ project_id = "rrrnnrjefyffllnrwhkz"
   [functions.parse-bank-statement]
     verify_jwt = false
   [functions.pluggy-webhook]
+
     verify_jwt = false
   [functions.purge-deleted-accounts]
     verify_jwt = false
