@@ -49,6 +49,10 @@ export function CreditCardFormModal({
   bankAccounts,
   allCreditCards,
   onSave,
+  defaultValues,
+  showContextSelector,
+  companies,
+  defaultCompanyId,
 }: CreditCardFormModalProps) {
   const [saving, setSaving] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -62,6 +66,7 @@ export function CreditCardFormModal({
   const [cardLimit, setCardLimit] = useState("0");
   const [cardBankId, setCardBankId] = useState("");
   const [cardParentId, setCardParentId] = useState("");
+  const [cardCompanyId, setCardCompanyId] = useState<string>("__personal__");
 
   useEffect(() => {
     if (!open) return;
@@ -75,16 +80,19 @@ export function CreditCardFormModal({
       setCardLimit(String(editData.limit || 0));
       setCardBankId(editData.bank_account_id || "");
       setCardParentId(editData.parent_card_id || "");
+      setCardCompanyId(editData.company_id || "__personal__");
     } else {
-      setCardName("");
-      setCardDigits("");
-      setCardClosing("1");
-      setCardDue("10");
-      setCardLimit("0");
-      setCardBankId("");
-      setCardParentId("");
+      setCardName(defaultValues?.name || "");
+      setCardDigits(defaultValues?.last_four_digits || "");
+      setCardClosing(String(defaultValues?.closing_day ?? 1));
+      setCardDue(String(defaultValues?.due_day ?? 10));
+      setCardLimit(String(defaultValues?.limit ?? 0));
+      setCardBankId(defaultValues?.bank_account_id || "");
+      setCardParentId(defaultValues?.parent_card_id || "");
+      setCardCompanyId(defaultCompanyId ?? defaultValues?.company_id ?? "__personal__");
     }
-  }, [open, editData]);
+  }, [open, editData, defaultValues, defaultCompanyId]);
+
 
   // Fetch used amount for existing cards
   useEffect(() => {
