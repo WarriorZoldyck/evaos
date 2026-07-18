@@ -284,7 +284,6 @@ async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
   const content = result.choices?.[0]?.message?.content || "";
   const finishReason = result.choices?.[0]?.finish_reason || "unknown";
   console.log(`AI response: finish_reason=${finishReason}, content_length=${content.length}`);
-  // Extract JSON from the response (handle markdown code blocks)
   let jsonStr = content.trim();
   const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
@@ -294,21 +293,21 @@ async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
 }
 
 function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[] {
-
-
   let parsed: any;
   try {
     parsed = JSON.parse(jsonStr);
   } catch {
-    // Try to salvage truncated JSON array by finding last complete object
+    // Salvage truncated JSON — close open array/object heuristically.
     const lastBrace = jsonStr.lastIndexOf("}");
     if (lastBrace > 0) {
-      const salvaged = jsonStr.slice(0, lastBrace + 1) + "]";
-      try {
-        parsed = JSON.parse(salvaged);
-        console.warn(`Salvaged truncated JSON: recovered up to position ${lastBrace}`);
-      } catch {
-        console.error("Failed to salvage truncated JSON");
+      // Try to close as { meta, txs: [ ... ] } first, then as bare array.
+      const candidates = [
+        jsonStr.slice(0, lastBrace + 1) + "]}",
+        jsonStr.slice(0, lastBrace + 1) + "]",
+        jsonStr.slice(0, lastBrace + 1) + "}",
+      ];
+      for (const c of candidates) {
+        try { parsed = JSON.parse(c); console.warn(`Salvaged truncated JSON via candidate len=${c.length}`); break; } catch { /* try next */ }
       }
     }
     if (!parsed) {
@@ -318,20 +317,45 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
   }
 
   try {
-    // Support both: plain array or { transactions: [...] }
+    // Detect shape:
+    // 1) NEW compact: { meta: {...}, txs: [...] }
+    // 2) Legacy: array of full-shaped tx objects
+    // 3) Legacy: { transactions: [...] }
     let txArray: any[];
+    let meta: any = null;
+
     if (Array.isArray(parsed)) {
       txArray = parsed;
-    } else if (parsed.transactions && Array.isArray(parsed.transactions)) {
+    } else if (parsed && Array.isArray(parsed.txs)) {
+      meta = parsed.meta || null;
+      txArray = parsed.txs;
+    } else if (parsed && Array.isArray(parsed.transactions)) {
       txArray = parsed.transactions;
     } else {
-      throw new Error("Expected array of transactions");
+      throw new Error("Expected { meta, txs } or array of transactions");
     }
-    
-    // Log per-card breakdown
+
+    const metaDue: string | undefined = meta?.due && /^\d{4}-\d{2}-\d{2}$/.test(meta.due) ? meta.due : undefined;
+    const metaClose: string | undefined = meta?.close && /^\d{4}-\d{2}-\d{2}$/.test(meta.close) ? meta.close : undefined;
+    let metaTotal: number | undefined;
+    if (meta?.total !== undefined && meta?.total !== null && meta?.total !== "") {
+      const n = Number(String(meta.total).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
+      if (Number.isFinite(n) && n > 0) metaTotal = n;
+    }
+    const metaCards: Record<string, string> = {};
+    if (meta?.cards && typeof meta.cards === "object") {
+      for (const [k, v] of Object.entries(meta.cards)) {
+        const digits = String(k).replace(/\D/g, "").slice(-4);
+        if (digits.length === 4 && typeof v === "string" && v.trim()) {
+          metaCards[digits] = String(v).trim();
+        }
+      }
+    }
+
+    // Per-card breakdown
     const cardBreakdown: Record<string, number> = {};
     txArray.forEach((t: any) => {
-      const digits = t.card_digits ? String(t.card_digits) : "unknown";
+      const digits = (t.c || t.card_digits) ? String(t.c || t.card_digits) : "unknown";
       cardBreakdown[digits] = (cardBreakdown[digits] || 0) + 1;
     });
     console.log(`Parsed ${txArray.length} transactions. Cards breakdown:`, JSON.stringify(cardBreakdown));
@@ -341,41 +365,39 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
     }
 
     return txArray.map((t: any) => {
+      // Compact fields (d/desc/a/t/c) take precedence, fall back to legacy field names.
+      const rawCard = t.c ?? t.card_digits;
       let detectedDigits: string | undefined;
-      if (t.card_digits) {
-        const digits = String(t.card_digits).replace(/\D/g, "");
-        if (digits.length >= 4) {
-          detectedDigits = digits.slice(-4);
-        }
+      if (rawCard) {
+        const digits = String(rawCard).replace(/\D/g, "");
+        if (digits.length >= 4) detectedDigits = digits.slice(-4);
       }
 
-      const statementDueDate = t.statement_due_date
-        ? String(t.statement_due_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
-        : undefined;
+      const rawTypeStr = String(t.t ?? t.type ?? "d").toLowerCase();
+      const isReceita = rawTypeStr === "r" || rawTypeStr === "receita";
 
-      const statementCloseDate = t.statement_close_date
-        ? String(t.statement_close_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
-        : undefined;
+      const rawDate = t.d ? String(t.d).trim() : (t.raw_date ? String(t.raw_date).trim() : undefined);
+      const dateField = String(t.date || rawDate || "");
 
-      const statementTotalRaw = t.statement_total;
-      let statementTotal: number | undefined;
-      if (statementTotalRaw !== undefined && statementTotalRaw !== null && statementTotalRaw !== "") {
-        const n = Number(String(statementTotalRaw).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
+      // Fallbacks for legacy per-tx statement fields (if AI ignored meta).
+      const statementDueDate = metaDue ?? (t.statement_due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_due_date)) ? String(t.statement_due_date) : undefined);
+      const statementCloseDate = metaClose ?? (t.statement_close_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_close_date)) ? String(t.statement_close_date) : undefined);
+      let statementTotal = metaTotal;
+      if (statementTotal === undefined && t.statement_total !== undefined && t.statement_total !== null && t.statement_total !== "") {
+        const n = Number(String(t.statement_total).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
         if (Number.isFinite(n) && n > 0) statementTotal = n;
       }
+      const cardholderName = (detectedDigits && metaCards[detectedDigits])
+        || (t.cardholder_name ? String(t.cardholder_name).trim() : undefined);
 
-      const cardholderName = t.cardholder_name ? String(t.cardholder_name).trim() : undefined;
-
-      // Use raw_date if available, fallback to date field
-      const rawDate = t.raw_date ? String(t.raw_date).trim() : undefined;
-      // If AI returned a full YYYY-MM-DD date, use it as fallback
-      const dateField = String(t.date || t.raw_date || "");
+      const amount = Math.abs(Number(t.a ?? t.amount) || 0);
+      const description = String(t.desc ?? t.description ?? "Sem descrição");
 
       return {
         date: dateField,
-        description: String(t.description || "Sem descrição"),
-        amount: Math.abs(Number(t.amount) || 0),
-        type: t.type === "receita" ? "receita" as const : "despesa" as const,
+        description,
+        amount,
+        type: isReceita ? "receita" as const : "despesa" as const,
         ...(detectedDigits ? { detected_card_digits: detectedDigits } : {}),
         ...(cardholderName ? { cardholder_name: cardholderName } : {}),
         ...(statementDueDate ? { statement_due_date: statementDueDate } : {}),
@@ -389,6 +411,7 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
     throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
   }
 }
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
