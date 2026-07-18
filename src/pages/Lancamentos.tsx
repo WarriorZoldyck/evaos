@@ -540,8 +540,12 @@ export default function Lancamentos() {
         bankAccounts={bankAccounts}
         wallets={wallets}
         creditCards={allAccounts.creditCards}
+        allBankAccounts={allAccounts.bankAccounts}
+        companies={companies}
         categories={categories}
+        refetchAccounts={refetchAccounts}
       />
+
     </div>
   );
 }
