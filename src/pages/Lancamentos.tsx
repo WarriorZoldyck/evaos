@@ -42,7 +42,7 @@ export default function Lancamentos() {
     deleteTransaction, deleteMultipleTransactions, reconcileMultipleTransactions, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions, updateMultipleTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
-    cardTerminals, allCardTerminals, allAccounts, allCategories,
+    cardTerminals, allCardTerminals, allAccounts, allCategories, refetchAccounts,
   } = useTransactions();
 
   const [formOpen, setFormOpen] = useState(false);
