@@ -141,7 +141,7 @@ export function CreditCardFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const success = await onSave({
+    const payload: CreditCardForm = {
       name: cardName.trim(),
       bank_account_id: cardBankId,
       closing_day: Number(cardClosing) || 1,
@@ -149,10 +149,22 @@ export function CreditCardFormModal({
       limit: Number(cardLimit) || 0,
       last_four_digits: cardDigits.trim() || undefined,
       parent_card_id: cardParentId && cardParentId !== "none" ? cardParentId : undefined,
-    });
+    };
+    if (showContextSelector) {
+      payload.company_id = cardCompanyId === "__personal__" ? null : cardCompanyId;
+    }
+    const success = await onSave(payload);
     setSaving(false);
     if (success) onClose();
   };
+
+  // Filter bank accounts by selected context (when context selector is enabled)
+  const visibleBankAccounts = showContextSelector
+    ? bankAccounts.filter((a) => {
+        const target = cardCompanyId === "__personal__" ? null : cardCompanyId;
+        return (a.company_id ?? null) === target;
+      })
+    : bankAccounts;
 
   const parentCardName = cardParentId && cardParentId !== "none"
     ? allCreditCards.find((c) => c.id === cardParentId)?.name
