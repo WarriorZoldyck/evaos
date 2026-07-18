@@ -164,52 +164,50 @@ export function useTransactions() {
     if (termRes.data) setCardTerminals(termRes.data as CardTerminalInfo[]);
   }, [user, effectiveUserId, companyFilter]);
 
+  // Fetch ALL accounts (no company filter) for transfers
+  const fetchAllAccounts = useCallback(async () => {
+    if (!effectiveUserId) return;
+    const [allAccRes, allWalletRes, allCardRes, companiesRes, allTermRes] = await Promise.all([
+      supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
+      supabase.from("wallets").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
+      supabase.from("credit_cards").select("id, name, last_four_digits, company_id, bank_account_id, parent_card_id").eq("user_id", effectiveUserId).order("name"),
+      supabase.from("companies").select("id, name").eq("user_id", effectiveUserId).order("name"),
+      supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation, company_id").eq("user_id", effectiveUserId).order("name"),
+    ]);
+
+    const companyMap = new Map<string, string>();
+    if (companiesRes.data) {
+      companiesRes.data.forEach((c) => companyMap.set(c.id, c.name));
+    }
+
+    const getCompanyName = (companyId: string | null) =>
+      companyId ? companyMap.get(companyId) || "Empresa" : "Pessoal";
+
+    setAllAccounts({
+      bankAccounts: (allAccRes.data || []).map((a) => ({
+        ...a,
+        company_name: getCompanyName(a.company_id),
+      })),
+      wallets: (allWalletRes.data || []).map((w) => ({
+        ...w,
+        company_name: getCompanyName(w.company_id),
+      })),
+      creditCards: (allCardRes.data || []).map((c) => ({
+        ...c,
+        company_name: getCompanyName(c.company_id),
+      })),
+    });
+
+    if (allTermRes.data) {
+      setAllCardTerminals(allTermRes.data as (CardTerminalInfo & { company_id: string | null })[]);
+    }
+  }, [effectiveUserId]);
+
   useEffect(() => {
     if (!user || !effectiveUserId) return;
-
     fetchAux();
-
-    // Fetch ALL accounts (no company filter) for transfers
-    const fetchAllAccounts = async () => {
-      const [allAccRes, allWalletRes, allCardRes, companiesRes, allTermRes] = await Promise.all([
-        supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
-        supabase.from("wallets").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
-        supabase.from("credit_cards").select("id, name, last_four_digits, company_id, bank_account_id, parent_card_id").eq("user_id", effectiveUserId).order("name"),
-        supabase.from("companies").select("id, name").eq("user_id", effectiveUserId).order("name"),
-        supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation, company_id").eq("user_id", effectiveUserId).order("name"),
-      ]);
-
-      const companyMap = new Map<string, string>();
-      if (companiesRes.data) {
-        companiesRes.data.forEach((c) => companyMap.set(c.id, c.name));
-      }
-
-      const getCompanyName = (companyId: string | null) =>
-        companyId ? companyMap.get(companyId) || "Empresa" : "Pessoal";
-
-      setAllAccounts({
-        bankAccounts: (allAccRes.data || []).map((a) => ({
-          ...a,
-          company_name: getCompanyName(a.company_id),
-        })),
-        wallets: (allWalletRes.data || []).map((w) => ({
-          ...w,
-          company_name: getCompanyName(w.company_id),
-        })),
-        creditCards: (allCardRes.data || []).map((c) => ({
-          ...c,
-          company_name: getCompanyName(c.company_id),
-        })),
-      });
-
-      // Store all terminals with company_id for context filtering
-      if (allTermRes.data) {
-        setAllCardTerminals(allTermRes.data as (CardTerminalInfo & { company_id: string | null })[]);
-      }
-    };
-
     fetchAllAccounts();
-  }, [user, effectiveUserId, companyFilter, fetchAux]);
+  }, [user, effectiveUserId, companyFilter, fetchAux, fetchAllAccounts]);
 
   // Fetch transactions
   const fetchTransactions = useCallback(async () => {
