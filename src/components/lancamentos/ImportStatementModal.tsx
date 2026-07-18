@@ -193,6 +193,9 @@ export function ImportStatementModal({
   wallets,
   creditCards,
   categories,
+  allBankAccounts,
+  companies,
+  refetchAccounts,
 }: ImportStatementModalProps) {
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
