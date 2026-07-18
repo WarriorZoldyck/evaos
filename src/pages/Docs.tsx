@@ -4,6 +4,7 @@ import {
   CreditCard, FolderTree, Users, Settings, BookOpen, Lightbulb,
   Building2, User, MessageSquare, Code, Send, AlertTriangle,
   CheckCircle2, Repeat, Wallet, ChevronDown, Copy, Check, Terminal,
+  Sparkles, Landmark, Network, Filter, Search,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -26,6 +27,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: "overview", title: "Visão Geral", icon: Lightbulb },
       { id: "contexts", title: "Contextos", icon: Building2 },
+      { id: "whats-new", title: "Novidades", icon: Sparkles },
     ],
   },
   {
@@ -40,7 +42,9 @@ const navGroups: NavGroup[] = [
     label: "Operações",
     items: [
       { id: "transactions", title: "Lançamentos", icon: ArrowLeftRight },
+      { id: "filters", title: "Filtros & Busca", icon: Filter },
       { id: "credit-card-bill", title: "Fatura de Cartão", icon: CreditCard },
+      { id: "account-statement", title: "Extrato da Conta", icon: Landmark },
     ],
   },
   {
@@ -52,9 +56,17 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: "Inteligência",
+    items: [
+      { id: "analises-eva", title: "Análises EVA", icon: Sparkles },
+      { id: "eva-hub", title: "EVA Hub", icon: Network },
+    ],
+  },
+  {
     label: "Ferramentas",
     items: [
       { id: "pricing", title: "Precificação", icon: Calculator },
+      { id: "integrations", title: "Integrações Bancárias", icon: Landmark },
       { id: "settings", title: "Configurações", icon: Settings },
     ],
   },
@@ -114,7 +126,6 @@ export default function Docs() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
-  /* Intersection Observer for scroll spy */
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -154,8 +165,6 @@ export default function Docs() {
     []
   );
 
-  /* ---- Sidebar (desktop) or dropdown (mobile) ---- */
-
   const SidebarNav = () => (
     <nav className="space-y-5">
       {navGroups.map((group) => (
@@ -190,7 +199,6 @@ export default function Docs() {
     </nav>
   );
 
-  /* Mobile select */
   const MobileNav = () => {
     const current = navGroups.flatMap((g) => g.items).find((i) => i.id === activeId);
     const [open, setOpen] = useState(false);
@@ -238,8 +246,6 @@ export default function Docs() {
     );
   };
 
-  /* ---- Section helper ---- */
-
   const Section = ({ id, title, icon: Icon, badge, children }: {
     id: string; title: string; icon: React.ElementType; badge?: string; children: React.ReactNode;
   }) => (
@@ -258,27 +264,21 @@ export default function Docs() {
     </section>
   );
 
-  /* ================================================================ */
-  /*  RENDER                                                           */
-  /* ================================================================ */
-
   return (
     <div className="animate-fade-in">
-      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold font-display text-foreground flex items-center gap-2">
           <BookOpen className="h-6 w-6 text-primary" />
           Documentação
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Aprenda como utilizar todas as funcionalidades do EVA OS.
+          Aprenda como utilizar todas as funcionalidades do EVA OS. Última revisão: julho/2026.
         </p>
       </div>
 
       {isMobile && <MobileNav />}
 
       <div className="flex gap-8">
-        {/* Sidebar — desktop only */}
         {!isMobile && (
           <aside className="w-56 shrink-0 sticky top-0 self-start">
             <ScrollArea className="h-[calc(100vh-10rem)]">
@@ -287,64 +287,89 @@ export default function Docs() {
           </aside>
         )}
 
-        {/* Content */}
         <div ref={scrollContainerRef} className="flex-1 min-w-0 max-w-3xl overflow-y-auto h-[calc(100vh-10rem)] pr-2">
           {/* ---- Visão Geral ---- */}
           <Section id="overview" title="Visão Geral do EVA OS" icon={Lightbulb}>
             <p>
-              O <strong className="text-foreground">EVA OS</strong> é um sistema de gestão financeira completo para controle de receitas, despesas,
-              contas bancárias, cartões de crédito, carteiras, fornecedores e clientes.
+              O <strong className="text-foreground">EVA OS</strong> é um sistema completo de gestão financeira para pessoas físicas e empresas.
+              Controla receitas, despesas, contas bancárias, cartões de crédito, carteiras, maquininhas, fornecedores e clientes — com integração nativa
+              ao WhatsApp via IA (EVA) e conexão automática com bancos.
             </p>
             <p>Principais recursos:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong className="text-foreground">Dashboard</strong> — visão geral do período com cards de resumo, gráficos por categoria e projeção de saldo</li>
-              <li><strong className="text-foreground">Lançamentos</strong> — CRUD completo de receitas e despesas, com parcelamento, recorrências e transferências</li>
-              <li><strong className="text-foreground">Plano de Caixa</strong> — fluxo de caixa por período com entradas e saídas</li>
-              <li><strong className="text-foreground">DRE</strong> — Demonstrativo de Resultados por competência</li>
-              <li><strong className="text-foreground">Precificação</strong> — cálculo de preço por procedimento/serviço com custos e margem</li>
-              <li><strong className="text-foreground">WhatsApp (EVA)</strong> — assistente financeira via WhatsApp com IA</li>
+              <li><strong className="text-foreground">Dashboard interativo</strong> — cards clicáveis (Entradas, Saídas, Previstas, Saldo Atual, Faturamento) com drill-down e detalhamento por categoria</li>
+              <li><strong className="text-foreground">Lançamentos</strong> — CRUD completo com parcelamento, recorrências, transferências internas e importação de extrato</li>
+              <li><strong className="text-foreground">Análises EVA</strong> — staging para lançamentos criados via IA, com aprovação individual/lote</li>
+              <li><strong className="text-foreground">Plano de Caixa</strong> — fluxo de caixa mensal com projeção</li>
+              <li><strong className="text-foreground">DRE</strong> — Demonstrativo de Resultado por competência</li>
+              <li><strong className="text-foreground">Precificação</strong> — cálculo de preço sugerido por procedimento com custos fixos e margem</li>
+              <li><strong className="text-foreground">Integrações bancárias</strong> — Pluggy (Open Finance), Itaú, Asaas</li>
+              <li><strong className="text-foreground">WhatsApp (EVA)</strong> — assistente com IA para criar/consultar lançamentos por texto, áudio, foto ou PDF</li>
+              <li><strong className="text-foreground">EVA Hub</strong> — workspaces multi-usuário com papéis e auditoria</li>
             </ul>
           </Section>
 
           {/* ---- Contextos ---- */}
           <Section id="contexts" title="Contextos: Pessoal vs Empresas" icon={Building2}>
-            <p>O EVA OS permite separar suas finanças pessoais das finanças de cada empresa cadastrada.</p>
+            <p>O EVA OS separa suas finanças pessoais das finanças de cada empresa cadastrada. Todos os dados (contas, categorias, lançamentos, relatórios) são filtrados pelo contexto ativo.</p>
             <p>Use o <strong className="text-foreground">seletor de contexto</strong> na barra lateral para alternar entre:</p>
             <ul className="list-disc pl-5 space-y-1">
               <li><User className="inline h-3.5 w-3.5 mr-1" /><strong className="text-foreground">Pessoal</strong> — finanças individuais, sem CNPJ vinculado</li>
-              <li><Building2 className="inline h-3.5 w-3.5 mr-1" /><strong className="text-foreground">Empresa</strong> — finanças separadas por CNPJ. Cadastre empresas em Configurações</li>
+              <li><Building2 className="inline h-3.5 w-3.5 mr-1" /><strong className="text-foreground">Empresa</strong> — finanças por CNPJ. Cadastre empresas em Configurações</li>
             </ul>
-            <p className="text-xs text-muted-foreground/70 mt-2">Todos os dados (contas, categorias, lançamentos) são filtrados pelo contexto ativo.</p>
+            <p className="text-xs text-muted-foreground/70 mt-2">
+              Transferências internas entre contas do mesmo contexto (ex.: Pró-labore de Empresa → Pessoal) são detectadas automaticamente e <strong className="text-foreground">excluídas do faturamento e do DRE</strong> para evitar duplicidade.
+            </p>
+          </Section>
+
+          {/* ---- Novidades ---- */}
+          <Section id="whats-new" title="Novidades Recentes" icon={Sparkles} badge="Atualizado">
+            <p>Últimos ajustes lançados neste ciclo:</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong className="text-foreground">Dashboard drill-down</strong> — todos os cards de resumo (Entradas, Saídas, Entradas/Saídas Previstas, Saldo Atual) e os cards do grid de categorias abrem modal detalhado com filtros, exportação CSV e a coluna Conta.</li>
+              <li><strong className="text-foreground">Saldo Atual por conta</strong> — clique no card "Saldo Atual" para ver saldo de cada conta/carteira; clique numa conta para ir ao extrato dela no mês selecionado.</li>
+              <li><strong className="text-foreground">Calendário no extrato</strong> — popover com seleção de mês/ano além das setas de navegação.</li>
+              <li><strong className="text-foreground">Cabeçalho fixo</strong> — filtros de período e busca do Dashboard e de Lançamentos ficam ancorados no header global durante a rolagem.</li>
+              <li><strong className="text-foreground">Filtro unificado</strong> em Lançamentos — dropdown "Filtrar por" com drilldown Categoria → Fornecedor → Cliente.</li>
+              <li><strong className="text-foreground">EVA reconhece boletos pagos</strong> — quando você marca um boleto como pago pelo WhatsApp, EVA sugere baixar o pendente equivalente com botões 1/2/3 (Sim/Não/Editar) e envia um card visual.</li>
+              <li><strong className="text-foreground">Ações rápidas no WhatsApp</strong> — todo novo lançamento vem com 1 ✅ Aprovar / 2 ❌ Cancelar / 3 ✏️ Editar direto na primeira resposta.</li>
+              <li><strong className="text-foreground">PIX/Transferência</strong> só aceitam Conta Bancária; <strong className="text-foreground">Carteira</strong> apenas em Dinheiro (com auto-seleção da primeira carteira).</li>
+              <li><strong className="text-foreground">Status inteligente</strong> — Dinheiro, PIX, Transferência e Débito Automático já vêm como "Pago" por padrão.</li>
+            </ul>
           </Section>
 
           {/* ---- Contas ---- */}
           <Section id="accounts" title="Contas, Carteiras e Cartões" icon={CreditCard} badge="Cadastro">
             <p>Em <strong className="text-foreground">Contas & Cartões</strong> você gerencia:</p>
             <ul className="list-disc pl-5 space-y-2">
-              <li><strong className="text-foreground">Contas Bancárias</strong> — Corrente ou Poupança, com saldo inicial. É a conta de saída ao liquidar lançamentos.</li>
-              <li><strong className="text-foreground">Carteiras (Wallets)</strong> — Para controlar dinheiro em espécie ou contas informais.</li>
-              <li><strong className="text-foreground">Cartões de Crédito</strong> — Vinculados a uma conta bancária. Defina dia de fechamento e vencimento para cálculo automático do ciclo de fatura.</li>
-              <li><strong className="text-foreground">Maquininhas</strong> — Terminais de cartão com taxas de débito/crédito e prazo de recebimento.</li>
+              <li><strong className="text-foreground">Contas Bancárias</strong> — Corrente ou Poupança, com saldo inicial. A coluna <strong className="text-foreground">Saldo Atual</strong> soma saldo inicial + todas as movimentações Pagas.</li>
+              <li><strong className="text-foreground">Carteiras (Wallets)</strong> — Dinheiro em espécie. Renderizadas em 3D estilo "carteira de couro".</li>
+              <li><strong className="text-foreground">Cartões de Crédito</strong> — Vinculados a uma conta. Defina dia de fechamento/vencimento para cálculo automático do ciclo. Cartões pai/filho (adicional) são agrupados.</li>
+              <li><strong className="text-foreground">Maquininhas</strong> — Terminais com taxa de débito/crédito, MDR e prazo de recebimento (D+X).</li>
             </ul>
+            <p className="text-xs text-muted-foreground/70">Contas excluídas ficam em soft-delete por 30 dias antes da purga definitiva.</p>
           </Section>
 
           {/* ---- Categorias ---- */}
           <Section id="categories" title="Categorias e Subcategorias" icon={FolderTree} badge="Cadastro">
-            <p>Organize suas finanças com categorias hierárquicas de até <strong className="text-foreground">3 níveis</strong> (categoria → subcategoria → sub-subcategoria).</p>
-            <p>Cada categoria pode ser do tipo:</p>
+            <p>Categorias hierárquicas de até <strong className="text-foreground">3 níveis</strong> (categoria → subcategoria → sub-subcategoria), com drag & drop para reordenar.</p>
+            <p>Cada categoria pode ser:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong className="text-foreground">Receita</strong> — aparece apenas em lançamentos de receita</li>
-              <li><strong className="text-foreground">Despesa</strong> — apenas em despesas</li>
-              <li><strong className="text-foreground">Ambos</strong> — disponível em receitas e despesas</li>
+              <li><strong className="text-foreground">Receita</strong> — só aparece em lançamentos de receita</li>
+              <li><strong className="text-foreground">Despesa</strong> — só em despesas</li>
+              <li><strong className="text-foreground">Ambos</strong> — disponível nos dois tipos</li>
             </ul>
-            <p className="mt-2">As categorias alimentam o <strong className="text-foreground">DRE</strong> e os gráficos do <strong className="text-foreground">Dashboard</strong>.</p>
+            <p className="mt-2">
+              Categorias são mapeadas para <strong className="text-foreground">Centros de Custos</strong> (usados no DRE) e alimentam os gráficos de rosca e o grid de detalhamento do Dashboard.
+              Usuários novos recebem um conjunto padrão automaticamente via trigger.
+            </p>
           </Section>
 
           {/* ---- Contatos ---- */}
           <Section id="contacts" title="Fornecedores e Clientes" icon={Users} badge="Cadastro">
             <p>
-              Cadastre fornecedores e clientes com nome e CPF/CNPJ. Eles podem ser vinculados a lançamentos
-              para rastreabilidade. Útil para filtrar e gerar relatórios por contato.
+              Cadastre fornecedores e clientes com nome, CPF/CNPJ, e-mail e telefone. Podem ser criados <strong className="text-foreground">inline</strong> direto no formulário de lançamento
+              e são usados para filtrar, agrupar e gerar relatórios.
             </p>
           </Section>
 
@@ -352,94 +377,175 @@ export default function Docs() {
           <Section id="transactions" title="Lançamentos" icon={ArrowLeftRight} badge="Principal">
             <p>Tela central do sistema. Cada lançamento é uma <strong className="text-foreground">receita</strong> ou <strong className="text-foreground">despesa</strong> com:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Descrição, valor, data de pagamento e competência</li>
-              <li>Categoria e subcategorias (até 3 níveis)</li>
-              <li>Conta/carteira/cartão vinculado</li>
+              <li>Descrição, valor, data de pagamento e competência (podem divergir)</li>
+              <li>Categoria com até 3 níveis</li>
+              <li>Conta bancária, carteira, cartão de crédito ou maquininha</li>
               <li>Fornecedor ou cliente</li>
-              <li>Status: <Badge variant="secondary" className="text-[10px]">Pendente</Badge> ou <Badge className="text-[10px]">Liquidado</Badge></li>
+              <li>Anexo (comprovante em PDF/imagem)</li>
+              <li>Status <Badge variant="secondary" className="text-[10px]">Pendente</Badge> ou <Badge className="text-[10px]">Pago</Badge></li>
             </ul>
+            <div className="p-3 rounded-lg border bg-primary/5 mt-2 text-xs">
+              <p className="font-medium text-foreground mb-1">Regras de forma de pagamento</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li><strong className="text-foreground">Dinheiro</strong> → apenas Carteira (primeira auto-selecionada; obrigatório)</li>
+                <li><strong className="text-foreground">PIX / Transferência</strong> → apenas Conta Bancária</li>
+                <li><strong className="text-foreground">Débito automático</strong> → status vem como Pago por padrão</li>
+                <li>Formas acima já criam o lançamento como <strong className="text-foreground">Pago</strong>; boleto/crédito vêm como Pendente</li>
+              </ul>
+            </div>
             <Separator className="my-3" />
             <p className="font-medium text-foreground flex items-center gap-1"><Repeat className="h-3.5 w-3.5" /> Parcelamentos</p>
             <p>
-              Ao parcelar, defina o número de parcelas, taxa de juros e opcionalmente um <strong className="text-foreground">valor de entrada</strong>
-              (1ª parcela maior, restante distribuído igualmente).
+              Defina número de parcelas, taxa de juros (Sistema Francês — Price), intervalo customizável em dias e opcionalmente uma <strong className="text-foreground">entrada</strong>.
+              A tabela de preview é <strong className="text-foreground">editável</strong> parcela a parcela, e o resíduo do arredondamento vai para a última parcela.
+              A competência permanece fixa; a data de pagamento incrementa por parcela.
             </p>
             <Separator className="my-3" />
             <p className="font-medium text-foreground">Recorrências</p>
-            <p>Crie lançamentos recorrentes (mensal, semanal, anual) que se repetem automaticamente. Cada ocorrência pode ser editada individualmente.</p>
+            <p>Recorrências mensais/semanais/anuais são materializadas virtualmente para os próximos 90 dias. Cada ocorrência pode ser editada individualmente ou em série.</p>
             <Separator className="my-3" />
-            <p className="font-medium text-foreground flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Liquidação</p>
-            <p>Ao liquidar, informe o valor efetivamente pago. Se diferir do previsto, o sistema oferece opções:</p>
+            <p className="font-medium text-foreground flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Liquidação inteligente</p>
+            <p>Ao liquidar, informe o valor efetivamente pago. Se divergir, o sistema oferece:</p>
             <ul className="list-disc pl-5 space-y-1">
               <li><strong className="text-foreground">Descartar</strong> a diferença</li>
               <li><strong className="text-foreground">Criar pendente</strong> com o saldo restante</li>
               <li><strong className="text-foreground">Aplicar juros/multa</strong> sobre o saldo</li>
-              <li><strong className="text-foreground">Redistribuir</strong> entre parcelas restantes (se for série)</li>
+              <li><strong className="text-foreground">Redistribuir</strong> entre as parcelas restantes (séries)</li>
             </ul>
+            <Separator className="my-3" />
+            <p className="font-medium text-foreground">Transferências internas</p>
+            <p>Crie um par receita/despesa vinculado por <code className="font-mono bg-muted px-1 rounded text-xs">transfer_id</code>. Quando origem e destino pertencem ao mesmo contexto, são <strong className="text-foreground">excluídas do faturamento e do DRE</strong> automaticamente (via trigger de banco).</p>
+          </Section>
+
+          {/* ---- Filtros ---- */}
+          <Section id="filters" title="Filtros & Busca" icon={Filter}>
+            <p>A tela de Lançamentos concentra o poder de filtragem em um cabeçalho fixo no topo, dividido em três camadas:</p>
+            <ol className="list-decimal pl-5 space-y-1">
+              <li><strong className="text-foreground">Header global (fixo):</strong> período (Tudo/Hoje/Semana/Mês/Ano + setas de navegação), input de busca <Search className="inline h-3 w-3" />, botões Exportar, Importar Extrato e Novo Lançamento.</li>
+              <li><strong className="text-foreground">Barra de filtros (fixa):</strong> toggles Tudo/Entradas/Saídas, Todos/Conciliados/Sem conciliação, filtro <strong className="text-foreground">Recentes</strong>, filtro unificado <strong className="text-foreground">Filtrar por</strong> (drilldown Categoria → Fornecedor → Cliente) e seletor de Contas.</li>
+              <li><strong className="text-foreground">Tabs (fixas):</strong> Todos / Realizado / Projetado — decidem se recorrências virtuais e pendentes futuros aparecem.</li>
+            </ol>
+            <p className="text-xs text-muted-foreground/70">Todos os filtros são preservados na URL e restaurados ao voltar para a tela.</p>
           </Section>
 
           {/* ---- Fatura ---- */}
           <Section id="credit-card-bill" title="Pagamento de Fatura de Cartão" icon={CreditCard} badge="Fluxo">
-            <p>O sistema calcula automaticamente o <strong className="text-foreground">ciclo de fatura</strong> com base no dia de fechamento e vencimento do cartão.</p>
-            <p><strong className="text-foreground">Fluxo de pagamento:</strong></p>
+            <p>O ciclo de fatura é calculado automaticamente com base no dia de fechamento e vencimento configurados no cartão.</p>
+            <p><strong className="text-foreground">Fluxo:</strong></p>
             <ol className="list-decimal pl-5 space-y-1">
-              <li>Filtre por cartão em Lançamentos ou acesse pela tela de Contas</li>
-              <li>Revise os lançamentos da fatura do mês</li>
-              <li>Informe o valor do pagamento (integral, parcial ou excedente)</li>
-              <li>Para pagamento parcial, escolha o que fazer com o saldo:
+              <li>Filtre por cartão em Lançamentos, ou acesse pela tela de Contas</li>
+              <li>Clique em <strong className="text-foreground">Pagar Fatura</strong> — o sistema já calcula o total do ciclo</li>
+              <li>A fatura desconta <strong className="text-foreground">estornos</strong> (receitas no mesmo cartão) do total de despesas</li>
+              <li>Informe o valor: integral, parcial ou excedente</li>
+              <li>Para pagamento parcial, escolha o destino do saldo:
                 <ul className="list-disc pl-5 mt-1 space-y-0.5">
                   <li>Rolar para próxima fatura (sem juros)</li>
                   <li>Rolar com juros (rotativo)</li>
                   <li>Criar lançamento avulso</li>
                 </ul>
               </li>
+              <li>Após pagar, o ciclo é <strong className="text-foreground">fechado</strong> — bloqueia edição das transações do período.</li>
             </ol>
+          </Section>
+
+          {/* ---- Extrato ---- */}
+          <Section id="account-statement" title="Extrato da Conta" icon={Landmark}>
+            <p>Cada conta bancária/carteira tem uma tela de extrato com <strong className="text-foreground">saldo progressivo</strong> linha a linha (do mais antigo ao mais recente).</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Navegação por mês via setas <strong className="text-foreground">ou</strong> calendário com dropdown de mês/ano</li>
+              <li>Lançamentos pendentes ficam ocultos por padrão (só Pagos afetam saldo)</li>
+              <li>Atalho para editar/excluir cada linha</li>
+              <li>Abre já no mês selecionado no Dashboard quando acessado via clique no card "Saldo Atual"</li>
+            </ul>
           </Section>
 
           {/* ---- Dashboard ---- */}
           <Section id="dashboard" title="Dashboard" icon={LayoutDashboard}>
-            <p>Visão consolidada do período selecionado:</p>
+            <p>Visão consolidada do período selecionado. Todos os elementos são clicáveis e abrem modais de detalhamento — sem sair da tela.</p>
+            <p><strong className="text-foreground">Cards de resumo (5 colunas):</strong></p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong className="text-foreground">Cards de resumo</strong> — Receitas, Despesas, Resultado e Saldo</li>
-              <li><strong className="text-foreground">Gráficos por categoria</strong> — Receita e despesa em pizza/barras</li>
-              <li><strong className="text-foreground">Projeção de saldo</strong> — Gráfico de linha com saldo acumulado</li>
-              <li><strong className="text-foreground">Próximos lançamentos</strong> — Transações pendentes mais próximas</li>
+              <li><strong className="text-foreground">Entradas</strong> → modal com todas as receitas Pagas do período (filtro por forma, exportação CSV, coluna Conta)</li>
+              <li><strong className="text-foreground">Saídas</strong> → mesmo modelo para despesas Pagas</li>
+              <li><strong className="text-foreground">Entradas Previstas</strong> → receitas Pendentes do período</li>
+              <li><strong className="text-foreground">Saídas Previstas</strong> → despesas Pendentes do período</li>
+              <li><strong className="text-foreground">Saldo Atual</strong> → soma dos saldos reais de todas as contas/carteiras + sparkline. Clique abre modal com saldo por conta; clique na conta leva ao extrato dela.</li>
             </ul>
-            <p className="mt-2">Clique em qualquer card ou fatia de gráfico para navegar direto aos lançamentos filtrados (drill-down).</p>
+            <p><strong className="text-foreground">Faturamento</strong> — card separado que soma receitas brutas (bruto do cartão via <code className="font-mono bg-muted px-1 rounded text-xs">original_amount</code>) excluindo transferências internas. Clique abre detalhamento por transação com MDR.</p>
+            <p><strong className="text-foreground">Gráficos por categoria</strong> — dois donuts (receita e despesa) sem legenda interna. O grid à direita mostra o breakdown detalhado; cada card do grid é clicável e abre o mesmo modal filtrado pela categoria.</p>
+            <p><strong className="text-foreground">Projeção de saldo</strong> — linha com evolução acumulada do caixa.</p>
+            <p className="text-xs text-muted-foreground/70">O cabeçalho (título + seletor de conta + filtro de período) fica fixo no topo enquanto você rola.</p>
           </Section>
 
           {/* ---- Plano de Caixa ---- */}
           <Section id="cashflow" title="Plano de Caixa" icon={BarChart3}>
             <p>
-              Relatório de fluxo de caixa por período. Mostra entradas e saídas agrupadas por mês/semana,
-              com totais acumulados para visualizar a evolução do caixa ao longo do tempo.
+              Fluxo de caixa por período agrupado por mês (ou semana), com entradas, saídas e saldo acumulado.
+              Inclui projeção de recorrências e pendentes futuros nas colunas seguintes.
             </p>
           </Section>
 
           {/* ---- DRE ---- */}
           <Section id="dre" title="DRE — Demonstrativo de Resultado" icon={FileText}>
             <p>
-              Relatório de resultado por <strong className="text-foreground">competência</strong> (não por data de pagamento).
-              Agrupa receitas e despesas por categoria, mostrando o resultado líquido.
+              Relatório por <strong className="text-foreground">competência</strong> (não por data de pagamento), agrupando receitas e despesas por categoria/centro de custo.
+              Duas visões disponíveis: <strong className="text-foreground">Gerencial</strong> (mais operacional) e <strong className="text-foreground">Contábil</strong> (formato tradicional com CMV, Deduções, Lucro Bruto/Líquido).
             </p>
+            <p>Seções colapsáveis por categoria — clique para expandir subcategorias. Transferências internas são automaticamente excluídas.</p>
+          </Section>
+
+          {/* ---- Análises EVA ---- */}
+          <Section id="analises-eva" title="Análises EVA" icon={Sparkles} badge="IA">
             <p>
-              As seções de Receitas e Despesas são <strong className="text-foreground">colapsáveis</strong>. Clique em uma categoria
-              para expandir suas subcategorias.
+              Toda vez que a EVA (WhatsApp ou chat in-app) cria um lançamento a partir de mensagem, foto, PDF ou áudio, ele é depositado em <strong className="text-foreground">Análises EVA</strong> como sugestão pendente, não direto em Lançamentos.
             </p>
+            <p>Nessa tela você pode:</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong className="text-foreground">Aprovar</strong> individual ou em lote — vira lançamento real</li>
+              <li><strong className="text-foreground">Editar</strong> antes de aprovar (categoria, conta, valor, contexto) — trocar o contexto recarrega as listas de contas/cartões corretas</li>
+              <li><strong className="text-foreground">Rejeitar</strong> — descarta a sugestão</li>
+              <li><strong className="text-foreground">Detectar baixa de pendente</strong> — quando EVA identifica que a mensagem é o pagamento de um boleto já cadastrado, o card exibe um selo "Possível baixa de pendente" com botão de reconciliação</li>
+            </ul>
+            <p className="text-xs text-muted-foreground/70">Duplicatas são detectadas via fingerprint SHA-256 (descrição + valor + data + fornecedor).</p>
+          </Section>
+
+          {/* ---- EVA Hub ---- */}
+          <Section id="eva-hub" title="EVA Hub — Multi-usuário" icon={Network}>
+            <p>Workspace compartilhado para contadores, sócios ou equipes gerenciarem múltiplos clientes/empresas.</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong className="text-foreground">Membros</strong> — convites por e-mail com papéis Owner, Admin, Editor, Viewer</li>
+              <li><strong className="text-foreground">Impersonation</strong> — o Owner pode atuar como qualquer membro para dar suporte</li>
+              <li><strong className="text-foreground">Auditoria</strong> — log completo de ações (30 dias)</li>
+              <li><strong className="text-foreground">Permissões granulares</strong> — por membro e por workspace</li>
+              <li><strong className="text-foreground">WhatsApp de hub</strong> — cada membro registra seu número; mensagens são roteadas ao contexto certo</li>
+            </ul>
           </Section>
 
           {/* ---- Precificação ---- */}
           <Section id="pricing" title="Precificação de Serviços" icon={Calculator}>
-            <p>Calcule o preço ideal de cada procedimento/serviço baseado em:</p>
+            <p>Calcule o preço ideal de cada procedimento/serviço com base em:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Custos fixos mensais (extraídos das despesas)</li>
-              <li>Horas trabalhadas por mês</li>
+              <li>Custos fixos mensais (extraídos automaticamente das despesas)</li>
+              <li>Horas trabalhadas/mês</li>
               <li>Tempo de execução do procedimento</li>
-              <li>Materiais e insumos específicos</li>
+              <li>Materiais e insumos específicos (com importação em CSV)</li>
               <li>Margem de lucro desejada</li>
             </ul>
             <p className="mt-2">
-              O sistema calcula o <strong className="text-foreground">preço mínimo</strong> (custo) e o <strong className="text-foreground">preço sugerido</strong> (com margem).
+              O sistema calcula <strong className="text-foreground">preço mínimo</strong> (break-even), <strong className="text-foreground">preço sugerido</strong> (com margem) e permite comparar procedimentos entre si.
+            </p>
+          </Section>
+
+          {/* ---- Integrações bancárias ---- */}
+          <Section id="integrations" title="Integrações Bancárias" icon={Landmark} badge="Automação">
+            <p>Conecte suas contas para sincronizar extratos automaticamente:</p>
+            <ul className="list-disc pl-5 space-y-2">
+              <li><strong className="text-foreground">Pluggy (Open Finance)</strong> — conecta qualquer banco suportado via widget. Sincronização automática por webhook. Recomendado.</li>
+              <li><strong className="text-foreground">Itaú</strong> — integração direta, usada quando o cliente já tem convênio.</li>
+              <li><strong className="text-foreground">Asaas</strong> — para quem usa Asaas como conta digital/subadquirente. Requer API Key de produção.</li>
+            </ul>
+            <p className="text-xs text-muted-foreground/70">
+              Ao conectar, você pode vincular a uma conta existente ou criar uma nova. Transações importadas passam pelo motor de <strong className="text-foreground">conciliação bancária</strong> —
+              casamento automático com lançamentos já cadastrados (via valor + data + descrição) e fluxo manual para os restantes.
             </p>
           </Section>
 
@@ -447,11 +553,13 @@ export default function Docs() {
           <Section id="settings" title="Configurações" icon={Settings}>
             <p>Em Configurações você pode:</p>
             <ul className="list-disc pl-5 space-y-1">
-              <li>Gerenciar empresas (adicionar/editar CNPJ)</li>
+              <li>Gerenciar empresas (adicionar/editar CNPJ, razão social, logo)</li>
               <li>Personalizar campos visíveis no formulário de lançamento</li>
-              <li>Alterar tema (claro/escuro)</li>
-              <li>Gerenciar perfil e dados da conta</li>
-              <li>Cadastrar seu número de WhatsApp para integração com a EVA</li>
+              <li>Alternar tema claro/escuro</li>
+              <li>Editar perfil, senha e dados da assinatura</li>
+              <li>Cadastrar/atualizar o número de WhatsApp para integração com a EVA</li>
+              <li>Gerenciar integrações bancárias conectadas</li>
+              <li>Excluir a conta (soft-delete de 30 dias)</li>
             </ul>
           </Section>
 
@@ -459,19 +567,17 @@ export default function Docs() {
           {/*  API WhatsApp (EVA)                                               */}
           {/* ================================================================ */}
           <Section id="whatsapp-api" title="API WhatsApp (EVA)" icon={MessageSquare} badge="API">
-            {/* Visão geral */}
             <p>
-              A <strong className="text-foreground">EVA</strong> é uma assistente financeira inteligente integrada ao WhatsApp.
-              Ela permite criar lançamentos, consultar saldos, gastos e receitas — tudo por mensagens de texto ou fotos de notas fiscais.
+              A <strong className="text-foreground">EVA</strong> é a assistente financeira do EVA OS no WhatsApp.
+              Cria e consulta lançamentos por texto, áudio, foto de nota fiscal, PDF de boleto ou código de barras — em linguagem natural, em português.
             </p>
             <p>
-              A comunicação é feita via um <strong className="text-foreground">webhook</strong> (Edge Function) que recebe mensagens do WhatsApp
-              através de integrações como <strong className="text-foreground">n8n + uazapi</strong> ou qualquer plataforma que envie HTTP POST.
+              A comunicação é feita via <strong className="text-foreground">webhook</strong> (Edge Function do Supabase) integrado à <strong className="text-foreground">Evolution API</strong>.
+              Cada usuário conecta seu número em Configurações → WhatsApp.
             </p>
 
             <Separator className="my-4" />
 
-            {/* Endpoint */}
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
               <Code className="h-4 w-4" /> Endpoint
             </h3>
@@ -480,240 +586,103 @@ export default function Docs() {
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mt-5 mb-2">
               <AlertTriangle className="h-4 w-4" /> Autenticação
             </h3>
-            <p>O webhook é protegido pelo header <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">x-webhook-secret</code>.</p>
-            <CodeBlock title="Header obrigatório">{`x-webhook-secret: <WHATSAPP_WEBHOOK_SECRET>`}</CodeBlock>
+            <p>Header <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">apikey</code> obrigatório (padrão Evolution API).</p>
+            <CodeBlock title="Header obrigatório">{`apikey: <EVOLUTION_API_KEY>`}</CodeBlock>
             <p className="text-xs text-muted-foreground/70">
-              O secret é configurado como variável de ambiente na Edge Function. Requisições sem esse header retornam <code className="font-mono">401 Unauthorized</code>.
+              Requisições sem esse header retornam <code className="font-mono">401 Unauthorized</code>.
             </p>
 
             <Separator className="my-4" />
 
-            {/* Payload */}
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
-              <Send className="h-4 w-4" /> Payload da Requisição
+              <Sparkles className="h-4 w-4" /> Recursos suportados
             </h3>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 pr-4 font-semibold text-foreground">Campo</th>
-                    <th className="text-left py-2 pr-4 font-semibold text-foreground">Tipo</th>
-                    <th className="text-left py-2 pr-4 font-semibold text-foreground">Obrigatório</th>
-                    <th className="text-left py-2 font-semibold text-foreground">Descrição</th>
-                  </tr>
-                </thead>
-                <tbody className="font-mono">
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">phone</td>
-                    <td className="py-2 pr-4 text-muted-foreground">string</td>
-                    <td className="py-2 pr-4"><Badge className="text-[9px]">Sim</Badge></td>
-                    <td className="py-2 font-sans">Número do WhatsApp do usuário (deve estar cadastrado no perfil)</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">message</td>
-                    <td className="py-2 pr-4 text-muted-foreground">string</td>
-                    <td className="py-2 pr-4"><Badge variant="secondary" className="text-[9px]">Condicional</Badge></td>
-                    <td className="py-2 font-sans">Texto da mensagem (obrigatório se não houver imagem)</td>
-                  </tr>
-                  <tr className="border-b border-border/50">
-                    <td className="py-2 pr-4">image_base64</td>
-                    <td className="py-2 pr-4 text-muted-foreground">string</td>
-                    <td className="py-2 pr-4"><Badge variant="outline" className="text-[9px]">Não</Badge></td>
-                    <td className="py-2 font-sans">Imagem em base64 (ex: foto de nota fiscal)</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 pr-4">image_url</td>
-                    <td className="py-2 pr-4 text-muted-foreground">string</td>
-                    <td className="py-2 pr-4"><Badge variant="outline" className="text-[9px]">Não</Badge></td>
-                    <td className="py-2 font-sans">URL pública de imagem (alternativa ao base64)</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong className="text-foreground">Texto</strong> — "Gastei 45 no mercado hoje"</li>
+              <li><strong className="text-foreground">Áudio</strong> — transcrito automaticamente</li>
+              <li><strong className="text-foreground">Imagem</strong> — foto de nota fiscal, cupom, comprovante PIX</li>
+              <li><strong className="text-foreground">PDF</strong> — boletos e faturas</li>
+              <li><strong className="text-foreground">Código de barras</strong> — linha digitável extraída automaticamente</li>
+              <li><strong className="text-foreground">Parcelamentos</strong> — "12x de 150 no cartão"</li>
+              <li><strong className="text-foreground">Detecção de contexto</strong> — menção ao nome/CNPJ da empresa alterna o contexto</li>
+              <li><strong className="text-foreground">Memória de 30 dias</strong> — a EVA lembra do histórico recente com sumarização</li>
+            </ul>
 
             <Separator className="my-4" />
 
-            {/* cURL pronto */}
+            {/* Reconciliação de boleto */}
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
-              <Terminal className="h-4 w-4" /> cURL Pronto para Uso
+              <CheckCircle2 className="h-4 w-4" /> Reconciliação Automática de Boletos
             </h3>
-            <p>Copie e cole no terminal ou use no HTTP Request do n8n. Substitua <code className="bg-muted px-1 rounded text-xs font-mono">SEU_SECRET_AQUI</code> pelo seu webhook secret e <code className="bg-muted px-1 rounded text-xs font-mono">5511999999999</code> pelo número cadastrado.</p>
-
-            <p className="mt-3 font-medium text-foreground flex items-center gap-2">
-              <User className="h-3.5 w-3.5" /> Contexto Pessoal
+            <p>
+              Quando você marca um boleto como pago pelo WhatsApp e existe um <strong className="text-foreground">Pendente equivalente</strong> no sistema
+              (mesmo fornecedor, valor próximo, data em ±10 dias), a EVA:
             </p>
-            <p className="text-xs text-muted-foreground/70 mb-1">
-              Quando não especifica contexto na mensagem, a IA assume <strong className="text-foreground">Pessoal</strong> automaticamente.
-              O lançamento é criado com <code className="bg-muted px-1 rounded text-xs font-mono">company_id: null</code>.
-            </p>
+            <ol className="list-decimal pl-5 space-y-1">
+              <li>Cria o novo lançamento normalmente em Análises EVA</li>
+              <li>Envia um <strong className="text-foreground">card visual (PNG)</strong> com o Pendente encontrado</li>
+              <li>Oferece opções: <strong className="text-foreground">1</strong> Sim (dar baixa) / <strong className="text-foreground">2</strong> Não / <strong className="text-foreground">3</strong> Editar no app</li>
+              <li>Ao confirmar, o Pendente é atualizado para "Pago" com a conta, forma e comprovante da mensagem</li>
+            </ol>
 
-            <CodeBlock title="Lançamento Pessoal (despesa)">{`curl -X POST \\
-  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
-  -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
-  -d '{
-    "phone": "5511999999999",
-    "message": "Gastei 50 reais no almoço"
-  }'`}</CodeBlock>
+            <Separator className="my-4" />
 
-            <CodeBlock title="Lançamento Pessoal (receita)">{`curl -X POST \\
-  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
-  -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
-  -d '{
-    "phone": "5511999999999",
-    "message": "Recebi 3000 de freelance hoje"
-  }'`}</CodeBlock>
-
-            <CodeBlock title="Consulta de saldo Pessoal">{`curl -X POST \\
-  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
-  -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
-  -d '{
-    "phone": "5511999999999",
-    "message": "Qual meu saldo pessoal?"
-  }'`}</CodeBlock>
-
-            <Separator className="my-3" />
-
-            <p className="font-medium text-foreground flex items-center gap-2">
-              <Building2 className="h-3.5 w-3.5" /> Contexto Empresa
-            </p>
-            <p className="text-xs text-muted-foreground/70 mb-1">
-              Para direcionar ao contexto de uma empresa, <strong className="text-foreground">mencione o nome da empresa na mensagem</strong>.
-              A IA identifica automaticamente e cria o lançamento com o <code className="bg-muted px-1 rounded text-xs font-mono">company_id</code> correto.
-              As categorias e contas usadas serão as do contexto da empresa.
-            </p>
-
-            <CodeBlock title="Lançamento na Empresa">{`curl -X POST \\
-  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
-  -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
-  -d '{
-    "phone": "5511999999999",
-    "message": "Paguei 200 de luz da Minha Empresa"
-  }'`}</CodeBlock>
-
-            <CodeBlock title="Consulta de saldo da Empresa">{`curl -X POST \\
-  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
-  -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
-  -d '{
-    "phone": "5511999999999",
-    "message": "Qual o saldo da Minha Empresa?"
-  }'`}</CodeBlock>
-
-            <CodeBlock title="Resumo mensal da Empresa">{`curl -X POST \\
-  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
-  -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
-  -d '{
-    "phone": "5511999999999",
-    "message": "Resumo do mês da Minha Empresa"
-  }'`}</CodeBlock>
-
-            <Separator className="my-3" />
-
-            <p className="font-medium text-foreground flex items-center gap-2">
-              📸 Imagem / Nota Fiscal
-            </p>
-
-            <CodeBlock title="Enviar imagem de nota fiscal">{`curl -X POST \\
-  https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/whatsapp-webhook \\
-  -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: SEU_SECRET_AQUI" \\
-  -d '{
-    "phone": "5511999999999",
-    "message": "Registrar essa nota",
-    "image_url": "https://exemplo.com/nota-fiscal.jpg"
-  }'`}</CodeBlock>
-
-            <div className="p-3 rounded-lg border bg-primary/5 mt-3">
-              <p className="text-xs font-medium text-foreground mb-1">💡 Como a IA escolhe o contexto?</p>
-              <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
-                <li>Sem menção a empresa → <strong className="text-foreground">Pessoal</strong> (company_id = null)</li>
-                <li>Menciona nome da empresa → <strong className="text-foreground">Empresa correspondente</strong> (company_id preenchido)</li>
-                <li>A IA usa as categorias e contas bancárias <strong className="text-foreground">do contexto escolhido</strong></li>
-                <li>No n8n, não precisa enviar nenhum campo extra — basta o <code className="bg-muted px-1 rounded text-xs font-mono">phone</code> e <code className="bg-muted px-1 rounded text-xs font-mono">message</code></li>
-              </ul>
-            </div>
+            {/* Ações rápidas */}
+            <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
+              <Sparkles className="h-4 w-4" /> Ações rápidas em cada novo lançamento
+            </h3>
+            <p>Todo lançamento novo criado via WhatsApp já vem acompanhado, na primeira mensagem de retorno, das ações:</p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong className="text-foreground">1 ✅ Aprovar</strong> — insere o lançamento em Transações</li>
+              <li><strong className="text-foreground">2 ❌ Cancelar</strong> — descarta a sugestão</li>
+              <li><strong className="text-foreground">3 ✏️ Editar no app</strong> — abre deep link para Análises EVA no card correto (já no contexto certo)</li>
+            </ul>
+            <p className="text-xs text-muted-foreground/70">Aparecem como lista clicável Evolution + fallback numerado (1/2/3) no corpo da mensagem.</p>
 
             <Separator className="my-4" />
 
             {/* Intenções */}
-            <h3 className="text-base font-semibold text-foreground mb-2">Intenções Suportadas</h3>
+            <h3 className="text-base font-semibold text-foreground mb-2">Intenções suportadas</h3>
             <p>A IA classifica cada mensagem em uma de três intenções:</p>
 
-            {/* lancamento */}
             <div className="mt-4 p-4 rounded-lg border bg-card">
               <p className="font-semibold text-foreground flex items-center gap-2">
                 <Badge className="text-[10px]">lancamento</Badge> Criar Lançamento
               </p>
               <p className="mt-1">
-                A EVA extrai automaticamente: descrição, valor, tipo (receita/despesa), categoria, subcategoria e data.
-                O lançamento é criado com status <code className="bg-muted px-1 rounded text-xs font-mono">Pago</code>.
+                Extrai descrição, valor, tipo (receita/despesa), categoria, subcategoria, forma de pagamento, conta e data.
+                Vai para Análises EVA aguardando aprovação (via chat ou app).
               </p>
-              <CodeBlock title="Exemplo de request">{`{
-  "phone": "5511999999999",
-  "message": "Gastei 45 reais no mercado hoje"
-}`}</CodeBlock>
-              <CodeBlock title="Resposta">{`{
-  "success": true,
-  "intent": "lancamento",
-  "message": "✅ Lançamento criado!\\n\\n📝 Mercado\\n💰 R$ 45,00\\n📁 Despesa / Alimentação\\n📅 2026-02-23",
-  "transaction": {
-    "description": "Mercado",
-    "amount": 45.00,
-    "type": "despesa",
-    "category": "Alimentação",
-    "date": "2026-02-23"
-  }
-}`}</CodeBlock>
+              <CodeBlock title="Exemplo">{`Gastei 45 reais no mercado hoje com PIX do Nubank`}</CodeBlock>
             </div>
 
-            {/* consulta */}
             <div className="mt-4 p-4 rounded-lg border bg-card">
               <p className="font-semibold text-foreground flex items-center gap-2">
                 <Badge variant="secondary" className="text-[10px]">consulta</Badge> Consultar Dados
               </p>
-              <p className="mt-1">Tipos de consulta suportados:</p>
+              <p className="mt-1">Tipos de consulta:</p>
               <ul className="list-disc pl-5 space-y-1 mt-2">
-                <li><code className="bg-muted px-1 rounded text-xs font-mono">saldo</code> — saldo de todas as contas e carteiras</li>
-                <li><code className="bg-muted px-1 rounded text-xs font-mono">resumo_mes</code> — receitas, despesas, saldo e top categorias</li>
-                <li><code className="bg-muted px-1 rounded text-xs font-mono">gastos_mes</code> — total de despesas do mês</li>
-                <li><code className="bg-muted px-1 rounded text-xs font-mono">receitas_mes</code> — total de receitas do mês</li>
-                <li><code className="bg-muted px-1 rounded text-xs font-mono">pendentes</code> — até 10 contas pendentes</li>
+                <li><code className="bg-muted px-1 rounded text-xs font-mono">saldo</code> — saldo consolidado de todas as contas e carteiras</li>
+                <li><code className="bg-muted px-1 rounded text-xs font-mono">resumo_mes</code> — receitas, despesas, resultado e top categorias</li>
+                <li><code className="bg-muted px-1 rounded text-xs font-mono">gastos_mes / receitas_mes</code> — totais do mês</li>
+                <li><code className="bg-muted px-1 rounded text-xs font-mono">pendentes</code> — até 10 contas pendentes próximas</li>
                 <li><code className="bg-muted px-1 rounded text-xs font-mono">gastos_categoria</code> — gastos filtrados por categoria</li>
+                <li><code className="bg-muted px-1 rounded text-xs font-mono">listar_lancamentos</code> — busca histórica (até 365 dias) com filtros de fornecedor/categoria</li>
               </ul>
-              <CodeBlock title="Exemplo de request">{`{
-  "phone": "5511999999999",
-  "message": "Qual meu saldo?"
-}`}</CodeBlock>
-              <CodeBlock title="Resposta">{`{
-  "success": true,
-  "intent": "consulta",
-  "message": "💰 Saldo total: R$ 3.250,00\\n\\n  • Nubank: R$ 2.000,00\\n  • Carteira: R$ 1.250,00",
-  "transaction": null
-}`}</CodeBlock>
+              <CodeBlock title="Exemplos">{`Qual meu saldo pessoal?
+Quanto gastei com alimentação em janeiro?
+Lista os últimos 5 pagamentos para "Sabesp"`}</CodeBlock>
             </div>
 
-            {/* conversa */}
             <div className="mt-4 p-4 rounded-lg border bg-card">
               <p className="font-semibold text-foreground flex items-center gap-2">
                 <Badge variant="outline" className="text-[10px]">conversa</Badge> Conversa Geral
               </p>
-              <p className="mt-1">Para mensagens que não são lançamentos nem consultas, a EVA responde de forma conversacional.</p>
-              <CodeBlock title="Resposta">{`{
-  "success": true,
-  "intent": "conversa",
-  "message": "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas!",
-  "transaction": null
-}`}</CodeBlock>
+              <p className="mt-1">Mensagens fora de escopo recebem resposta conversacional (ex.: "oi", "obrigado").</p>
             </div>
 
             <Separator className="my-4" />
 
-            {/* Códigos de erro */}
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4" /> Códigos de Erro
             </h3>
@@ -728,19 +697,19 @@ export default function Docs() {
                 <tbody>
                   <tr className="border-b border-border/50">
                     <td className="py-2 pr-4 font-mono font-semibold text-destructive">401</td>
-                    <td className="py-2">Header <code className="font-mono bg-muted px-1 rounded">x-webhook-secret</code> ausente ou inválido</td>
+                    <td className="py-2">Header <code className="font-mono bg-muted px-1 rounded">apikey</code> ausente ou inválido</td>
                   </tr>
                   <tr className="border-b border-border/50">
                     <td className="py-2 pr-4 font-mono font-semibold text-destructive">400</td>
-                    <td className="py-2">Payload inválido — <code className="font-mono bg-muted px-1 rounded">phone</code> e <code className="font-mono bg-muted px-1 rounded">message</code>/<code className="font-mono bg-muted px-1 rounded">image</code> são obrigatórios</td>
+                    <td className="py-2">Payload inválido (evento Evolution malformado)</td>
                   </tr>
                   <tr className="border-b border-border/50">
                     <td className="py-2 pr-4 font-mono font-semibold text-destructive">404</td>
-                    <td className="py-2">Número de WhatsApp não cadastrado no perfil do usuário</td>
+                    <td className="py-2">Número não cadastrado em nenhum perfil ou membro do hub</td>
                   </tr>
                   <tr>
-                    <td className="py-2 pr-4 font-mono font-semibold text-destructive">500</td>
-                    <td className="py-2">Erro interno (falha na IA, no banco de dados ou configuração)</td>
+                    <td className="py-2 pr-4 font-mono font-semibold text-destructive">402</td>
+                    <td className="py-2">Créditos do Lovable AI Gateway esgotados</td>
                   </tr>
                 </tbody>
               </table>
@@ -748,34 +717,27 @@ export default function Docs() {
 
             <Separator className="my-4" />
 
-            {/* Configuração */}
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2 mb-2">
               <Settings className="h-4 w-4" /> Configuração
             </h3>
             <ol className="list-decimal pl-5 space-y-2">
               <li>
-                <strong className="text-foreground">Cadastre seu número:</strong> Vá em{" "}
-                <strong className="text-foreground">Configurações → WhatsApp</strong> e salve seu número no formato internacional (ex: <code className="bg-muted px-1 rounded text-xs font-mono">5511999999999</code>).
+                <strong className="text-foreground">Cadastre seu número:</strong> Configurações → WhatsApp — no formato internacional
+                (ex.: <code className="bg-muted px-1 rounded text-xs font-mono">5511999999999</code>). Membros do EVA Hub cadastram em HubMeuWhatsApp.
               </li>
               <li>
-                <strong className="text-foreground">Configure o n8n ou automação:</strong> Crie um fluxo que receba mensagens do WhatsApp (via uazapi, Z-API, etc.)
-                e envie um POST para o endpoint acima com os campos <code className="bg-muted px-1 rounded text-xs font-mono">phone</code> e <code className="bg-muted px-1 rounded text-xs font-mono">message</code>.
+                <strong className="text-foreground">Aponte o webhook</strong> da sua instância Evolution para o endpoint acima.
               </li>
               <li>
-                <strong className="text-foreground">Defina o secret:</strong> Configure a variável de ambiente <code className="bg-muted px-1 rounded text-xs font-mono">WHATSAPP_WEBHOOK_SECRET</code> na Edge Function
-                e use o mesmo valor no header <code className="bg-muted px-1 rounded text-xs font-mono">x-webhook-secret</code> do seu fluxo.
-              </li>
-              <li>
-                <strong className="text-foreground">Teste:</strong> Envie uma mensagem pelo WhatsApp e verifique se o lançamento aparece no EVA OS.
+                <strong className="text-foreground">Envie qualquer mensagem</strong> pelo WhatsApp — a EVA responderá em segundos.
               </li>
             </ol>
             <p className="mt-3 text-xs text-muted-foreground/70">
-              A EVA utiliza IA (Gemini 2.5 Flash) para interpretar mensagens em linguagem natural e extrair dados financeiros automaticamente.
-              Também suporta análise de imagens de notas fiscais e cupons.
+              A EVA usa o <strong className="text-foreground">Lovable AI Gateway</strong> (Gemini 2.5 Flash como default) para interpretar mensagens em linguagem natural
+              e processar mídias (imagens, PDFs, áudios). Todo anexo é persistido no bucket privado <code className="font-mono bg-muted px-1 rounded">whatsapp-attachments</code>.
             </p>
           </Section>
 
-          {/* Spacer */}
           <div className="h-20" />
         </div>
       </div>
