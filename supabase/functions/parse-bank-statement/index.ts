@@ -121,43 +121,50 @@ function parseCSV(content: string): ParsedTransaction[] {
 
 const SYSTEM_PROMPT = `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
 
-Return ONLY a valid JSON array of transaction objects. Each object must have:
-- "raw_date": string — the date EXACTLY as printed on the statement line, in "DD/MM" format. Do NOT convert or guess the year.
-- "description": string with the transaction description
-- "amount": number (always positive), in REAIS with TWO DECIMAL PLACES. Brazilian statements use "." as thousand separator and "," as decimal separator. You MUST convert: "R$ 8.850,02" → 8850.02 (NEVER 885002, NEVER 8850). "R$ 49,90" → 49.90. "R$ 1.234.567,89" → 1234567.89. "R$ 100,00" → 100.00 (NEVER 10000). The decimal part after the comma MUST be preserved as ".XX" in the output. If you cannot see decimal places, the value is wrong — re-read the line.
-- "type": "despesa" for purchases/expenses, "receita" ONLY for actual refunds/chargebacks (estornos)
-- "card_digits": last 4 digits of the card this transaction belongs to (string), or null
-- "cardholder_name": full name of the cardholder of this transaction (from the section header), or null
-- "statement_due_date": "YYYY-MM-DD", repeated on every object, or null
-- "statement_close_date": "YYYY-MM-DD", repeated on every object, or null
-- "statement_total": total value of THIS statement (R$ total da fatura / "Valor total a pagar" / "Total da fatura atual"), repeated on every object, or null. Must be a plain decimal number in reais with a DOT as decimal separator (e.g. 8850.02), NEVER use thousand separators or comma (8.850,02 is WRONG, send 8850.02). If the bill says "R$ 8.850,02" you MUST send 8850.02.
+Return ONLY a valid JSON object (no markdown, no wrapping text) with this COMPACT shape:
 
-CRITICAL RULES:
-- Statements often have MULTIPLE cards/cardholders (titular + adicionais). Each section starts with a header like "NOME (final 1234)". Tag every transaction with its card_digits AND cardholder_name.
+{
+  "meta": {
+    "due":   "YYYY-MM-DD" | null,   // statement due date (vencimento)
+    "close": "YYYY-MM-DD" | null,   // statement close date (fechamento)
+    "total": 8850.02 | null,        // total value of the bill in reais, decimal with DOT
+    "cards": { "1234": "NOME TITULAR", "5678": "NOME ADICIONAL" }  // last 4 digits -> cardholder full name
+  },
+  "txs": [
+    { "d": "DD/MM", "desc": "…", "a": 49.90, "t": "d", "c": "1234" }
+  ]
+}
+
+Field rules for each tx:
+- "d": date EXACTLY as printed on the line, "DD/MM". Never convert or guess the year.
+- "desc": transaction description (installment info like "3/6" stays inside desc).
+- "a": positive number in REAIS with TWO DECIMAL places. Brazilian statements use "." as thousand separator and "," as decimal separator. Convert: "R$ 8.850,02" → 8850.02 (NEVER 885002, NEVER 8850). "R$ 49,90" → 49.90. "R$ 100,00" → 100.00 (NEVER 10000). If you cannot see decimal places, re-read the line — the value is wrong.
+- "t": "d" for despesa/purchase/expense, "r" ONLY for real refunds/chargebacks (ESTORNO, DEVOLUCAO).
+- "c": last 4 digits of the card this tx belongs to (string), or null.
+
+CRITICAL:
+- Emit "meta" ONCE. Never repeat statement dates/total/cardholder on each tx.
+- Statements often have MULTIPLE cards (titular + adicionais). Each section header shows the name and final 4 digits — put every mapping in meta.cards and tag every tx with its "c".
 - Brazilian statements use DD/MM, NEVER MM/DD.
-- DO NOT resolve the year for raw_date. The system resolves it deterministically.
-- Amount must always be positive.
-- For installments, the printed date is the ORIGINAL purchase date. Keep it as raw_date.
+- Amounts are always positive; sign is expressed via "t".
+- meta.total MUST be a decimal number with DOT (8850.02), never with thousand separators or comma.
 
-INTERNATIONAL TRANSACTIONS — VERY IMPORTANT:
-- "Lançamentos internacionais" sections list purchases in USD/EUR with the converted R$ value. ALWAYS use the printed transaction date (the "DATA" of the line), NOT the closing date.
-- Emit one transaction per international purchase using the R$ amount.
-- ALSO emit a SEPARATE transaction for the "Repasse de IOF em R$" line — this is REAL money on the bill. Use the same date as the international purchase(s), description "IOF Internacional - <merchant>" (or just "IOF Internacional" if multiple), type "despesa". NEVER skip the IOF.
+INTERNATIONAL TRANSACTIONS:
+- "Lançamentos internacionais" sections list purchases in USD/EUR with the converted R$ value. Use the printed transaction date ("DATA" of the line), NOT the closing date.
+- Emit one tx per international purchase using the R$ amount.
+- ALSO emit a SEPARATE tx for the "Repasse de IOF em R$" line — real money on the bill. Same date as the international purchase(s), desc "IOF Internacional - <merchant>" (or "IOF Internacional" if multiple), t="d". NEVER skip the IOF.
 
 PRESERVE DUPLICATES (bank statement is source of truth):
-- If the SAME purchase (same date, same amount, same description) appears N times in the statement, emit it N times. Two or more identical purchases on the same day are common (e.g. two ice creams for R$ 25 each at the same shop, two Uber rides, two supermarket runs). NEVER collapse repeated lines into one. The count of transactions you return MUST equal the count of visible purchase lines in the statement body.
+- If the SAME purchase (same date, amount, description) appears N times, emit it N times. Two identical purchases on the same day are common. NEVER collapse repeated lines.
 
 EXCLUDE (NOT real transactions):
 - Bill payments: "DEB AUTOM DE FATURA", "PAGAMENTO DE FATURA", "PAG FATURA"
 - Summary/header lines: "Total da fatura anterior", "Pagamento efetuado em ...", "Saldo financiado", "Lançamentos atuais"
-- Section totals: "Lançamentos no cartão (final XXXX) VALOR", "Total transações inter. em R$", "Total lançamentos inter. em R$"
+- Section totals, "Total transações inter. em R$", "Total lançamentos inter. em R$"
 - Opening/closing balances, "ANUIDADE" R$ 0,00
-- "Compras parceladas - próximas faturas" — this is FUTURE bills, SKIP entirely.
+- "Compras parceladas - próximas faturas" (future bills) — SKIP entirely.
 
-Only classify as "receita" real refunds/chargebacks ("ESTORNO", "DEVOLUCAO").
-
-- Installment info ("3/6") goes inside description.
-- Return ONLY the JSON array, no markdown, no wrapping object.`;
+Return ONLY the JSON object, no markdown fences, no prose.`;
 
 async function callAIGateway(
   apiKey: string,
@@ -192,7 +199,7 @@ async function callAIGateway(
               },
               {
                 type: "text",
-                text: "Extract all transactions from this statement. Each transaction must include raw_date (DD/MM as printed), card_digits, statement_due_date, and statement_close_date. Return only the JSON array.",
+                text: "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
               },
             ],
           },
@@ -221,7 +228,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
   const base64 = btoa(binary);
 
   const attempts: Array<{ model: string; maxTokens: number; timeoutMs: number }> = [
-    { model: "google/gemini-2.5-flash", maxTokens: 16000, timeoutMs: 90_000 },
+    { model: "google/gemini-3-flash-preview", maxTokens: 24000, timeoutMs: 70_000 },
     { model: "google/gemini-2.5-pro", maxTokens: 32000, timeoutMs: 90_000 },
   ];
 
@@ -230,11 +237,12 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
     const { model, maxTokens, timeoutMs } = attempts[i];
     console.log(`Calling AI Gateway model=${model} max_tokens=${maxTokens} timeout=${timeoutMs}ms`);
     let response: Response;
+    const startedAt = Date.now();
     try {
       response = await callAIGateway(apiKey, base64, model, maxTokens, timeoutMs);
     } catch (err) {
       const aborted = err instanceof DOMException && err.name === "AbortError";
-      console.error(`AI Gateway ${model} ${aborted ? "timed out" : "failed"}:`, err);
+      console.error(`AI Gateway ${model} ${aborted ? "timed out" : "failed"} after ${Date.now() - startedAt}ms:`, err);
       lastError = aborted
         ? new Error(`O modelo demorou demais para processar o extrato (${model}).`)
         : err;
@@ -257,10 +265,10 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
 
     try {
       const parsed = await parseAIResponse(await response.json());
-      if (parsed.length > 0 || i === attempts.length - 1) {
-        return parsed;
-      }
-      console.warn(`Model ${model} returned 0 transactions — trying next model.`);
+      console.log(`Model ${model} produced ${parsed.length} transactions in ${Date.now() - startedAt}ms`);
+      if (parsed.length > 0) return parsed;
+      if (i === attempts.length - 1) return parsed;
+      console.warn(`Model ${model} returned 0 transactions — trying fallback.`);
     } catch (err) {
       console.error(`Failed to parse ${model} response:`, err);
       lastError = err;
@@ -271,11 +279,11 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
   throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
 }
 
+
 async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
   const content = result.choices?.[0]?.message?.content || "";
   const finishReason = result.choices?.[0]?.finish_reason || "unknown";
   console.log(`AI response: finish_reason=${finishReason}, content_length=${content.length}`);
-  // Extract JSON from the response (handle markdown code blocks)
   let jsonStr = content.trim();
   const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
@@ -285,21 +293,21 @@ async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
 }
 
 function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[] {
-
-
   let parsed: any;
   try {
     parsed = JSON.parse(jsonStr);
   } catch {
-    // Try to salvage truncated JSON array by finding last complete object
+    // Salvage truncated JSON — close open array/object heuristically.
     const lastBrace = jsonStr.lastIndexOf("}");
     if (lastBrace > 0) {
-      const salvaged = jsonStr.slice(0, lastBrace + 1) + "]";
-      try {
-        parsed = JSON.parse(salvaged);
-        console.warn(`Salvaged truncated JSON: recovered up to position ${lastBrace}`);
-      } catch {
-        console.error("Failed to salvage truncated JSON");
+      // Try to close as { meta, txs: [ ... ] } first, then as bare array.
+      const candidates = [
+        jsonStr.slice(0, lastBrace + 1) + "]}",
+        jsonStr.slice(0, lastBrace + 1) + "]",
+        jsonStr.slice(0, lastBrace + 1) + "}",
+      ];
+      for (const c of candidates) {
+        try { parsed = JSON.parse(c); console.warn(`Salvaged truncated JSON via candidate len=${c.length}`); break; } catch { /* try next */ }
       }
     }
     if (!parsed) {
@@ -309,20 +317,45 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
   }
 
   try {
-    // Support both: plain array or { transactions: [...] }
+    // Detect shape:
+    // 1) NEW compact: { meta: {...}, txs: [...] }
+    // 2) Legacy: array of full-shaped tx objects
+    // 3) Legacy: { transactions: [...] }
     let txArray: any[];
+    let meta: any = null;
+
     if (Array.isArray(parsed)) {
       txArray = parsed;
-    } else if (parsed.transactions && Array.isArray(parsed.transactions)) {
+    } else if (parsed && Array.isArray(parsed.txs)) {
+      meta = parsed.meta || null;
+      txArray = parsed.txs;
+    } else if (parsed && Array.isArray(parsed.transactions)) {
       txArray = parsed.transactions;
     } else {
-      throw new Error("Expected array of transactions");
+      throw new Error("Expected { meta, txs } or array of transactions");
     }
-    
-    // Log per-card breakdown
+
+    const metaDue: string | undefined = meta?.due && /^\d{4}-\d{2}-\d{2}$/.test(meta.due) ? meta.due : undefined;
+    const metaClose: string | undefined = meta?.close && /^\d{4}-\d{2}-\d{2}$/.test(meta.close) ? meta.close : undefined;
+    let metaTotal: number | undefined;
+    if (meta?.total !== undefined && meta?.total !== null && meta?.total !== "") {
+      const n = Number(String(meta.total).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
+      if (Number.isFinite(n) && n > 0) metaTotal = n;
+    }
+    const metaCards: Record<string, string> = {};
+    if (meta?.cards && typeof meta.cards === "object") {
+      for (const [k, v] of Object.entries(meta.cards)) {
+        const digits = String(k).replace(/\D/g, "").slice(-4);
+        if (digits.length === 4 && typeof v === "string" && v.trim()) {
+          metaCards[digits] = String(v).trim();
+        }
+      }
+    }
+
+    // Per-card breakdown
     const cardBreakdown: Record<string, number> = {};
     txArray.forEach((t: any) => {
-      const digits = t.card_digits ? String(t.card_digits) : "unknown";
+      const digits = (t.c || t.card_digits) ? String(t.c || t.card_digits) : "unknown";
       cardBreakdown[digits] = (cardBreakdown[digits] || 0) + 1;
     });
     console.log(`Parsed ${txArray.length} transactions. Cards breakdown:`, JSON.stringify(cardBreakdown));
@@ -332,41 +365,39 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
     }
 
     return txArray.map((t: any) => {
+      // Compact fields (d/desc/a/t/c) take precedence, fall back to legacy field names.
+      const rawCard = t.c ?? t.card_digits;
       let detectedDigits: string | undefined;
-      if (t.card_digits) {
-        const digits = String(t.card_digits).replace(/\D/g, "");
-        if (digits.length >= 4) {
-          detectedDigits = digits.slice(-4);
-        }
+      if (rawCard) {
+        const digits = String(rawCard).replace(/\D/g, "");
+        if (digits.length >= 4) detectedDigits = digits.slice(-4);
       }
 
-      const statementDueDate = t.statement_due_date
-        ? String(t.statement_due_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
-        : undefined;
+      const rawTypeStr = String(t.t ?? t.type ?? "d").toLowerCase();
+      const isReceita = rawTypeStr === "r" || rawTypeStr === "receita";
 
-      const statementCloseDate = t.statement_close_date
-        ? String(t.statement_close_date).match(/^\d{4}-\d{2}-\d{2}$/)?.[0]
-        : undefined;
+      const rawDate = t.d ? String(t.d).trim() : (t.raw_date ? String(t.raw_date).trim() : undefined);
+      const dateField = String(t.date || rawDate || "");
 
-      const statementTotalRaw = t.statement_total;
-      let statementTotal: number | undefined;
-      if (statementTotalRaw !== undefined && statementTotalRaw !== null && statementTotalRaw !== "") {
-        const n = Number(String(statementTotalRaw).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
+      // Fallbacks for legacy per-tx statement fields (if AI ignored meta).
+      const statementDueDate = metaDue ?? (t.statement_due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_due_date)) ? String(t.statement_due_date) : undefined);
+      const statementCloseDate = metaClose ?? (t.statement_close_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_close_date)) ? String(t.statement_close_date) : undefined);
+      let statementTotal = metaTotal;
+      if (statementTotal === undefined && t.statement_total !== undefined && t.statement_total !== null && t.statement_total !== "") {
+        const n = Number(String(t.statement_total).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
         if (Number.isFinite(n) && n > 0) statementTotal = n;
       }
+      const cardholderName = (detectedDigits && metaCards[detectedDigits])
+        || (t.cardholder_name ? String(t.cardholder_name).trim() : undefined);
 
-      const cardholderName = t.cardholder_name ? String(t.cardholder_name).trim() : undefined;
-
-      // Use raw_date if available, fallback to date field
-      const rawDate = t.raw_date ? String(t.raw_date).trim() : undefined;
-      // If AI returned a full YYYY-MM-DD date, use it as fallback
-      const dateField = String(t.date || t.raw_date || "");
+      const amount = Math.abs(Number(t.a ?? t.amount) || 0);
+      const description = String(t.desc ?? t.description ?? "Sem descrição");
 
       return {
         date: dateField,
-        description: String(t.description || "Sem descrição"),
-        amount: Math.abs(Number(t.amount) || 0),
-        type: t.type === "receita" ? "receita" as const : "despesa" as const,
+        description,
+        amount,
+        type: isReceita ? "receita" as const : "despesa" as const,
         ...(detectedDigits ? { detected_card_digits: detectedDigits } : {}),
         ...(cardholderName ? { cardholder_name: cardholderName } : {}),
         ...(statementDueDate ? { statement_due_date: statementDueDate } : {}),
@@ -380,6 +411,7 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
     throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
   }
 }
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
