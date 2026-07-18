@@ -292,19 +292,27 @@ export function ImportStatementModal({
       const formData = new FormData();
       formData.append("file", file);
 
-      const { data: result, error: fnError } = await supabase.functions.invoke('parse-bank-statement', {
+      const invokePromise = supabase.functions.invoke('parse-bank-statement', {
         body: formData,
       });
+      const timeoutPromise = new Promise<{ data: null; error: Error }>((resolve) =>
+        setTimeout(
+          () => resolve({ data: null, error: new Error("O processamento demorou mais de 2 minutos. Tente novamente ou use um arquivo OFX/CSV.") }),
+          120_000,
+        ),
+      );
+      const { data: result, error: fnError } = (await Promise.race([invokePromise, timeoutPromise])) as any;
 
-      if (fnError) {
+      if (fnError || !result) {
         toast({
           title: "Erro ao processar arquivo",
-          description: "Não foi possível processar o arquivo. Tente novamente.",
+          description: fnError?.message || "Não foi possível processar o arquivo. Tente novamente.",
           variant: "destructive",
         });
         setParsing(false);
         return;
       }
+
 
       const raw = (result.transactions || []).map((t: any) => ({
         ...t,
