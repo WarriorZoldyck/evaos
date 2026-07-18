@@ -29,6 +29,9 @@ import { calculateCreditCardBillTotal, filterCreditCardBillScope } from "@/lib/i
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { ReconcileStep } from "./import/ReconcileStep";
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
+import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle, Plus } from "lucide-react";
 
 interface ParsedTransaction {
   date: string;
