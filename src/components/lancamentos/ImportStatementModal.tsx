@@ -113,6 +113,9 @@ interface ImportStatementModalProps {
   wallets: { id: string; name: string }[];
   creditCards: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null; bank_account_id?: string; company_id?: string | null; company_name?: string; closing_day?: number | null; due_day?: number | null }[];
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+  allBankAccounts?: { id: string; name: string; company_id: string | null; company_name?: string }[];
+  companies?: { id: string; name: string }[];
+  refetchAccounts?: () => Promise<void> | void;
 }
 
 /** Detects descriptions that look like a credit-card BILL PAYMENT (not a card purchase). */
