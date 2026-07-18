@@ -1227,37 +1227,49 @@ export function ImportStatementModal({
               {importType === "cartao" && !isMultiCard && (
                 <div className="flex-1 min-w-[200px]">
                   <label className="text-xs text-muted-foreground mb-1 block">Cartão *</label>
-                  <Select value={targetCard} onValueChange={setTargetCard}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o cartão" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {creditCards
-                        .filter(c => !c.parent_card_id)
-                        .map((parent) => {
-                          const children = creditCards.filter(c => c.parent_card_id === parent.id);
-                          return [
-                            <SelectItem key={parent.id} value={parent.id}>
-                              💳 {parent.name}{parent.last_four_digits ? ` (****${parent.last_four_digits})` : ""}
-                            </SelectItem>,
-                            ...children.map(child => (
-                              <SelectItem key={child.id} value={child.id} className="pl-8">
-                                ↳ {child.name}{child.last_four_digits ? ` (****${child.last_four_digits})` : ""}
-                              </SelectItem>
-                            ))
-                          ];
-                        })}
-                      {creditCards
-                        .filter(c => c.parent_card_id && !creditCards.some(p => p.id === c.parent_card_id))
-                        .map(c => (
-                          <SelectItem key={c.id} value={c.id}>
-                            💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={targetCard} onValueChange={setTargetCard}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Selecione o cartão" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {creditCards
+                          .filter(c => !c.parent_card_id)
+                          .map((parent) => {
+                            const children = creditCards.filter(c => c.parent_card_id === parent.id);
+                            return [
+                              <SelectItem key={parent.id} value={parent.id}>
+                                💳 {parent.name}{parent.last_four_digits ? ` (****${parent.last_four_digits})` : ""}
+                              </SelectItem>,
+                              ...children.map(child => (
+                                <SelectItem key={child.id} value={child.id} className="pl-8">
+                                  ↳ {child.name}{child.last_four_digits ? ` (****${child.last_four_digits})` : ""}
+                                </SelectItem>
+                              ))
+                            ];
+                          })}
+                        {creditCards
+                          .filter(c => c.parent_card_id && !creditCards.some(p => p.id === c.parent_card_id))
+                          .map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                              💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setCreateCardDigits(unmatchedDigits[0] || ""); setCreateCardOpen(true); }}
+                      title="Criar novo cartão"
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Novo
+                    </Button>
+                  </div>
                 </div>
               )}
+
 
             </div>
 
