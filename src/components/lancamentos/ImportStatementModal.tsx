@@ -290,6 +290,20 @@ export function ImportStatementModal({
   }, [rows]);
   const isSingleAutoCard = detectedCards.length === 1;
 
+  // Detect digits present in extract that DON'T match any existing card
+  const unmatchedDigits = useMemo(() => {
+    if (importType !== "cartao") return [] as string[];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const d = r.detected_card_digits;
+      if (!d) continue;
+      const matches = creditCards.some((c) => c.last_four_digits === d);
+      if (!matches) seen.add(d);
+    }
+    return Array.from(seen);
+  }, [rows, creditCards, importType]);
+
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
