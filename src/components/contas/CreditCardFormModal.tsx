@@ -194,6 +194,22 @@ export function CreditCardFormModal({
           {/* Form fields based on side */}
           {!isFlipped ? (
             <div className="space-y-3">
+              {showContextSelector && (
+                <div className="space-y-2">
+                  <Label>Contexto *</Label>
+                  <Select value={cardCompanyId} onValueChange={(v) => { setCardCompanyId(v); setCardBankId(""); }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o contexto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__personal__">Pessoal</SelectItem>
+                      {(companies || []).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Nome do Cartão *</Label>
                 <Input
