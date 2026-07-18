@@ -376,7 +376,7 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
       };
     }).filter((t: ParsedTransaction) => t.amount > 0 && (t.date || t.raw_statement_date));
   } catch (e) {
-    console.error("Failed to parse AI response:", content);
+    console.error("Failed to parse AI response:", jsonStr.slice(0, 500));
     throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
   }
 }
