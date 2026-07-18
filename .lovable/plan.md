@@ -1,38 +1,62 @@
-## Problema
+# Integrar Claude Sonnet 4.5 na importação de extratos
 
-Os logs do AI Gateway mostram que cada importação está:
-1. Chamando `google/gemini-2.5-flash` → ~50s e **estoura os 16k tokens** de saída (`finish_reason=length`, resposta truncada).
-2. Como veio truncada, cai no fallback `google/gemini-2.5-pro` → mais 60-90s.
-3. Total: >2 minutos, e mesmo assim a fatura pode voltar incompleta.
+## Objetivo
+Trocar o modelo principal do parser de extratos (`parse-bank-statement`) de Gemini pra **Claude Sonnet 4.5** da Anthropic, mantendo Gemini como fallback automático se o Claude falhar/estourar timeout.
 
-A raiz é o schema JSON verboso: cada transação repete `statement_due_date`, `statement_close_date`, `statement_total`, `cardholder_name`, `card_digits`. Uma fatura de 80-120 lançamentos satura o output.
+## O que você precisa fazer (uma vez)
 
-## Plano
+1. Criar conta em **console.anthropic.com** (se ainda não tem).
+2. Adicionar créditos (mínimo US$ 5 pra testar — cada extrato completo custa ~US$ 0,05-0,15).
+3. Gerar uma API Key em **Settings → API Keys**.
+4. Colar a chave quando eu pedir (vou abrir o formulário seguro).
 
-Edições em `supabase/functions/parse-bank-statement/index.ts`:
+**Custo esperado por extrato:** ~R$ 0,25 a R$ 0,75 (bem mais caro que Gemini, que era ~R$ 0,02, mas com qualidade superior em faturas complexas).
 
-1. **Trocar o modelo padrão** de `google/gemini-2.5-flash` para `google/gemini-3-flash-preview` (default da plataforma, mais rápido e melhor em documentos multimodais). Manter `google/gemini-2.5-pro` só como último fallback.
+## O que eu vou implementar
 
-2. **Compactar o schema de saída** para reduzir drasticamente os tokens:
-   - Retornar um objeto `{ meta: {...}, txs: [...] }` em vez de array plano.
-   - `meta` contém UMA vez: `due_date`, `close_date`, `total`, e um mapa `cards: { "1234": "Nome Titular", ... }`.
-   - Cada `tx` fica enxuta: `{ d: "DD/MM", desc: "...", a: 49.9, t: "d"|"r", c: "1234" }` (nomes curtos, `t` = tipo em uma letra, `c` = card digits).
-   - Depois de parsear, o código expande cada tx aplicando `meta` — o resto do pipeline continua igual.
+### 1. Novo secret `ANTHROPIC_API_KEY`
+Pedir via `add_secret` (não fica exposto no código, só na edge function).
 
-3. **Aumentar `max_tokens` da primeira tentativa** para `24000` (agora o schema compacto cabe com folga, mas garante margem para faturas grandes).
+### 2. Refatorar `supabase/functions/parse-bank-statement/index.ts`
 
-4. **Reduzir o timeout da 1ª tentativa** para `70s` (com schema compacto o flash termina bem antes) e só disparar o fallback pro `2.5-pro` se o flash falhar/timeout — não mais quando o flash retorna zero (esse caso ficou raro com o schema novo).
+Adicionar função `callClaudeDirect()` que chama `https://api.anthropic.com/v1/messages` com:
+- Modelo: `claude-sonnet-4-5-20250929`
+- PDF como `document` block (base64)
+- Mesmo `SYSTEM_PROMPT` compacto que já temos
+- `max_tokens: 16000`, timeout 90s
+- Header `anthropic-version: 2023-06-01`
 
-5. **Manter a lógica de salvamento de JSON truncado** já existente, adaptada ao novo formato.
+Reordenar a cascata de tentativas:
+```
+1º) Claude Sonnet 4.5      (Anthropic direto)      — 90s
+2º) Gemini 3 Flash Preview (Lovable AI Gateway)    — 70s  [fallback rápido]
+3º) Gemini 2.5 Pro         (Lovable AI Gateway)    — 90s  [último recurso]
+```
 
-### Detalhes técnicos
+Adicionar adapter que converte o response do Claude (`content[0].text`) pro mesmo formato que o `parseTxJson` já espera — sem tocar em nada downstream.
 
-- `SYSTEM_PROMPT` é reescrito para pedir o objeto compacto e explicar que `meta` não deve ser repetida por linha.
-- `parseAIResponse` / `parseTxJson` passam a aceitar `{ meta, txs }` e expandem para o `ParsedTransaction[]` atual (nenhuma outra parte do sistema muda).
-- Os campos exportados (`detected_card_digits`, `cardholder_name`, `statement_due_date`, etc.) continuam iguais na saída HTTP → sem impacto no frontend nem no `ImportStatementModal`.
+### 3. Logs e observabilidade
+Cada tentativa loga: modelo usado, tempo, tokens de saída, motivo de fallback (se houve). Assim conseguimos medir se o Claude está realmente entregando qualidade superior antes de considerar torná-lo obrigatório.
 
-## Ganho esperado
+### 4. Tratamento de erro específico do Claude
+- 401 → chave inválida, log claro e pula pro fallback
+- 429 → rate limit, pula pro fallback
+- 529 → Anthropic overloaded, pula pro fallback
+- Créditos zerados na Anthropic → log e pula pro fallback (usuário continua conseguindo importar via Gemini)
 
-- Resposta cai de ~16k para ~4-6k tokens numa fatura típica → tempo da 1ª chamada de ~50s para ~15-25s.
-- Sem truncamento → fallback deixa de disparar na maioria dos casos.
-- Importações típicas devem ficar em **20-30s** em vez de 2+ minutos.
+## O que NÃO vou mexer
+
+- `ImportStatementModal.tsx` (client)
+- Lógica de matching, criação de cartão, reconciliação
+- Outras edge functions que usam Lovable AI (eva-chat, whatsapp-webhook, suggest-categories, etc.) — continuam no Gemini
+- Fluxo de `CreditCardFormModal` inline
+
+## Riscos e trade-offs (transparência)
+
+- **Latência:** Claude Sonnet 4.5 pra PDFs grandes leva 40-80s típico. Não vai ser dramaticamente mais rápido que Gemini — a diferença real é **qualidade da extração**, especialmente em faturas multi-cartão, IOF internacional, e descrições truncadas.
+- **Custo sai da sua conta Anthropic**, não dos créditos Lovable. Se você importar 100 extratos/mês, gasta ~US$ 10-15.
+- **Se a Anthropic ficar fora**, o fallback pro Gemini garante que ninguém fica travado.
+- Depois de rodar por 1-2 semanas conseguimos comparar acurácia real Claude vs Gemini e decidir se vale manter Claude como principal ou usar só em casos específicos.
+
+## Próximo passo depois do plano aprovado
+Abro o formulário seguro pra você colar a `ANTHROPIC_API_KEY` e sigo direto com a implementação.
