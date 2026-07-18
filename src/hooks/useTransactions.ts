@@ -660,5 +660,6 @@ export function useTransactions() {
     cardTerminals,
     allCardTerminals,
     allAccounts,
+    refetchAccounts: async () => { await Promise.all([fetchAux(), fetchAllAccounts()]); },
   };
 }
