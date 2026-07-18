@@ -26,15 +26,20 @@ interface CreditCardForm {
   limit: number;
   last_four_digits?: string;
   parent_card_id?: string;
+  company_id?: string | null;
 }
 
 interface CreditCardFormModalProps {
   open: boolean;
   onClose: () => void;
   editData?: any;
-  bankAccounts: Array<{ id: string; name: string }>;
+  bankAccounts: Array<{ id: string; name: string; company_id?: string | null }>;
   allCreditCards: Array<{ id: string; name: string; parent_card_id?: string | null; closing_day: number; due_day: number; bank_account_id: string }>;
   onSave: (data: CreditCardForm) => Promise<boolean>;
+  defaultValues?: Partial<CreditCardForm>;
+  showContextSelector?: boolean;
+  companies?: Array<{ id: string; name: string }>;
+  defaultCompanyId?: string | null;
 }
 
 export function CreditCardFormModal({
@@ -44,6 +49,10 @@ export function CreditCardFormModal({
   bankAccounts,
   allCreditCards,
   onSave,
+  defaultValues,
+  showContextSelector,
+  companies,
+  defaultCompanyId,
 }: CreditCardFormModalProps) {
   const [saving, setSaving] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -57,6 +66,7 @@ export function CreditCardFormModal({
   const [cardLimit, setCardLimit] = useState("0");
   const [cardBankId, setCardBankId] = useState("");
   const [cardParentId, setCardParentId] = useState("");
+  const [cardCompanyId, setCardCompanyId] = useState<string>("__personal__");
 
   useEffect(() => {
     if (!open) return;
@@ -70,16 +80,19 @@ export function CreditCardFormModal({
       setCardLimit(String(editData.limit || 0));
       setCardBankId(editData.bank_account_id || "");
       setCardParentId(editData.parent_card_id || "");
+      setCardCompanyId(editData.company_id || "__personal__");
     } else {
-      setCardName("");
-      setCardDigits("");
-      setCardClosing("1");
-      setCardDue("10");
-      setCardLimit("0");
-      setCardBankId("");
-      setCardParentId("");
+      setCardName(defaultValues?.name || "");
+      setCardDigits(defaultValues?.last_four_digits || "");
+      setCardClosing(String(defaultValues?.closing_day ?? 1));
+      setCardDue(String(defaultValues?.due_day ?? 10));
+      setCardLimit(String(defaultValues?.limit ?? 0));
+      setCardBankId(defaultValues?.bank_account_id || "");
+      setCardParentId(defaultValues?.parent_card_id || "");
+      setCardCompanyId(defaultCompanyId ?? defaultValues?.company_id ?? "__personal__");
     }
-  }, [open, editData]);
+  }, [open, editData, defaultValues, defaultCompanyId]);
+
 
   // Fetch used amount for existing cards
   useEffect(() => {
@@ -128,7 +141,7 @@ export function CreditCardFormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const success = await onSave({
+    const payload: CreditCardForm = {
       name: cardName.trim(),
       bank_account_id: cardBankId,
       closing_day: Number(cardClosing) || 1,
@@ -136,10 +149,22 @@ export function CreditCardFormModal({
       limit: Number(cardLimit) || 0,
       last_four_digits: cardDigits.trim() || undefined,
       parent_card_id: cardParentId && cardParentId !== "none" ? cardParentId : undefined,
-    });
+    };
+    if (showContextSelector) {
+      payload.company_id = cardCompanyId === "__personal__" ? null : cardCompanyId;
+    }
+    const success = await onSave(payload);
     setSaving(false);
     if (success) onClose();
   };
+
+  // Filter bank accounts by selected context (when context selector is enabled)
+  const visibleBankAccounts = showContextSelector
+    ? bankAccounts.filter((a) => {
+        const target = cardCompanyId === "__personal__" ? null : cardCompanyId;
+        return (a.company_id ?? null) === target;
+      })
+    : bankAccounts;
 
   const parentCardName = cardParentId && cardParentId !== "none"
     ? allCreditCards.find((c) => c.id === cardParentId)?.name
@@ -169,6 +194,22 @@ export function CreditCardFormModal({
           {/* Form fields based on side */}
           {!isFlipped ? (
             <div className="space-y-3">
+              {showContextSelector && (
+                <div className="space-y-2">
+                  <Label>Contexto *</Label>
+                  <Select value={cardCompanyId} onValueChange={(v) => { setCardCompanyId(v); setCardBankId(""); }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o contexto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__personal__">Pessoal</SelectItem>
+                      {(companies || []).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Nome do Cartão *</Label>
                 <Input
@@ -247,7 +288,7 @@ export function CreditCardFormModal({
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {bankAccounts.map((a) => (
+                    {visibleBankAccounts.map((a) => (
                       <SelectItem key={a.id} value={a.id}>
                         {a.name}
                       </SelectItem>

@@ -29,6 +29,9 @@ import { calculateCreditCardBillTotal, filterCreditCardBillScope } from "@/lib/i
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { ReconcileStep } from "./import/ReconcileStep";
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
+import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle, Plus } from "lucide-react";
 
 interface ParsedTransaction {
   date: string;
@@ -113,6 +116,9 @@ interface ImportStatementModalProps {
   wallets: { id: string; name: string }[];
   creditCards: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null; bank_account_id?: string; company_id?: string | null; company_name?: string; closing_day?: number | null; due_day?: number | null }[];
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+  allBankAccounts?: { id: string; name: string; company_id: string | null; company_name?: string }[];
+  companies?: { id: string; name: string }[];
+  refetchAccounts?: () => Promise<void> | void;
 }
 
 /** Detects descriptions that look like a credit-card BILL PAYMENT (not a card purchase). */
@@ -190,6 +196,9 @@ export function ImportStatementModal({
   wallets,
   creditCards,
   categories,
+  allBankAccounts,
+  companies,
+  refetchAccounts,
 }: ImportStatementModalProps) {
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
@@ -211,6 +220,11 @@ export function ImportStatementModal({
   const [amountRescaled, setAmountRescaled] = useState<boolean>(false);
   // When divergence > R$ 1,00, user must explicitly acknowledge to import.
   const [acknowledgeDivergence, setAcknowledgeDivergence] = useState(false);
+
+  // Create-new-card flow (nested modal)
+  const [createCardOpen, setCreateCardOpen] = useState(false);
+  const [createCardDigits, setCreateCardDigits] = useState<string>("");
+
   
 
   // Wizard step
@@ -275,6 +289,20 @@ export function ImportStatementModal({
     return summary;
   }, [rows]);
   const isSingleAutoCard = detectedCards.length === 1;
+
+  // Detect digits present in extract that DON'T match any existing card
+  const unmatchedDigits = useMemo(() => {
+    if (importType !== "cartao") return [] as string[];
+    const seen = new Set<string>();
+    for (const r of rows) {
+      const d = r.detected_card_digits;
+      if (!d) continue;
+      const matches = creditCards.some((c) => c.last_four_digits === d);
+      if (!matches) seen.add(d);
+    }
+    return Array.from(seen);
+  }, [rows, creditCards, importType]);
+
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1199,39 +1227,71 @@ export function ImportStatementModal({
               {importType === "cartao" && !isMultiCard && (
                 <div className="flex-1 min-w-[200px]">
                   <label className="text-xs text-muted-foreground mb-1 block">Cartão *</label>
-                  <Select value={targetCard} onValueChange={setTargetCard}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o cartão" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {creditCards
-                        .filter(c => !c.parent_card_id)
-                        .map((parent) => {
-                          const children = creditCards.filter(c => c.parent_card_id === parent.id);
-                          return [
-                            <SelectItem key={parent.id} value={parent.id}>
-                              💳 {parent.name}{parent.last_four_digits ? ` (****${parent.last_four_digits})` : ""}
-                            </SelectItem>,
-                            ...children.map(child => (
-                              <SelectItem key={child.id} value={child.id} className="pl-8">
-                                ↳ {child.name}{child.last_four_digits ? ` (****${child.last_four_digits})` : ""}
-                              </SelectItem>
-                            ))
-                          ];
-                        })}
-                      {creditCards
-                        .filter(c => c.parent_card_id && !creditCards.some(p => p.id === c.parent_card_id))
-                        .map(c => (
-                          <SelectItem key={c.id} value={c.id}>
-                            💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={targetCard} onValueChange={setTargetCard}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Selecione o cartão" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {creditCards
+                          .filter(c => !c.parent_card_id)
+                          .map((parent) => {
+                            const children = creditCards.filter(c => c.parent_card_id === parent.id);
+                            return [
+                              <SelectItem key={parent.id} value={parent.id}>
+                                💳 {parent.name}{parent.last_four_digits ? ` (****${parent.last_four_digits})` : ""}
+                              </SelectItem>,
+                              ...children.map(child => (
+                                <SelectItem key={child.id} value={child.id} className="pl-8">
+                                  ↳ {child.name}{child.last_four_digits ? ` (****${child.last_four_digits})` : ""}
+                                </SelectItem>
+                              ))
+                            ];
+                          })}
+                        {creditCards
+                          .filter(c => c.parent_card_id && !creditCards.some(p => p.id === c.parent_card_id))
+                          .map(c => (
+                            <SelectItem key={c.id} value={c.id}>
+                              💳 {c.name}{c.last_four_digits ? ` (****${c.last_four_digits})` : ""}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => { setCreateCardDigits(unmatchedDigits[0] || ""); setCreateCardOpen(true); }}
+                      title="Criar novo cartão"
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Novo
+                    </Button>
+                  </div>
                 </div>
               )}
 
+
             </div>
+
+            {/* Alert when statement mentions a card that user hasn't registered yet */}
+            {importType === "cartao" && unmatchedDigits.length > 0 && (
+              <Alert className="border-amber-500/50 bg-amber-500/10">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className="text-sm">
+                    Não encontramos o cartão terminado em <strong>{unmatchedDigits.join(", ")}</strong> nas suas contas. Deseja criá-lo agora?
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { setCreateCardDigits(unmatchedDigits[0]); setCreateCardOpen(true); }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" /> Criar cartão
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Auto-detection feedback */}
             {detectedCards.length > 0 && (
@@ -1681,6 +1741,55 @@ export function ImportStatementModal({
           </DialogFooter>
         )}
       </DialogContent>
+
+      {/* Nested modal: create new credit card from within import */}
+      <CreditCardFormModal
+        open={createCardOpen}
+        onClose={() => setCreateCardOpen(false)}
+        bankAccounts={(allBankAccounts || bankAccounts.map((a) => ({ id: a.id, name: a.name, company_id: null }))) as any}
+        allCreditCards={creditCards.map((c) => ({
+          id: c.id,
+          name: c.name,
+          parent_card_id: c.parent_card_id ?? null,
+          closing_day: c.closing_day ?? 1,
+          due_day: c.due_day ?? 10,
+          bank_account_id: c.bank_account_id ?? "",
+        }))}
+        defaultValues={{
+          name: createCardDigits ? `Cartão ****${createCardDigits}` : "",
+          last_four_digits: createCardDigits || undefined,
+        }}
+        showContextSelector
+        companies={companies || []}
+        defaultCompanyId={isPersonal ? null : selectedCompanyId}
+        onSave={async (data) => {
+          if (!effectiveUserId) return false;
+          const { error, data: inserted } = await supabase
+            .from("credit_cards")
+            .insert({
+              name: data.name,
+              bank_account_id: data.bank_account_id,
+              closing_day: data.closing_day,
+              due_day: data.due_day,
+              limit: data.limit,
+              last_four_digits: data.last_four_digits || null,
+              parent_card_id: data.parent_card_id || null,
+              user_id: effectiveUserId,
+              company_id: data.company_id ?? null,
+            })
+            .select("id")
+            .single();
+          if (error) {
+            toast({ title: "Erro ao criar cartão", description: error.message, variant: "destructive" });
+            return false;
+          }
+          toast({ title: "Cartão criado!", description: "Você já pode usá-lo na importação." });
+          if (refetchAccounts) await refetchAccounts();
+          if (inserted?.id) setTargetCard(inserted.id);
+          return true;
+        }}
+      />
     </Dialog>
   );
 }
+
