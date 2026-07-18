@@ -26,15 +26,20 @@ interface CreditCardForm {
   limit: number;
   last_four_digits?: string;
   parent_card_id?: string;
+  company_id?: string | null;
 }
 
 interface CreditCardFormModalProps {
   open: boolean;
   onClose: () => void;
   editData?: any;
-  bankAccounts: Array<{ id: string; name: string }>;
+  bankAccounts: Array<{ id: string; name: string; company_id?: string | null }>;
   allCreditCards: Array<{ id: string; name: string; parent_card_id?: string | null; closing_day: number; due_day: number; bank_account_id: string }>;
   onSave: (data: CreditCardForm) => Promise<boolean>;
+  defaultValues?: Partial<CreditCardForm>;
+  showContextSelector?: boolean;
+  companies?: Array<{ id: string; name: string }>;
+  defaultCompanyId?: string | null;
 }
 
 export function CreditCardFormModal({
