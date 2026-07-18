@@ -1741,6 +1741,55 @@ export function ImportStatementModal({
           </DialogFooter>
         )}
       </DialogContent>
+
+      {/* Nested modal: create new credit card from within import */}
+      <CreditCardFormModal
+        open={createCardOpen}
+        onClose={() => setCreateCardOpen(false)}
+        bankAccounts={(allBankAccounts || bankAccounts.map((a) => ({ id: a.id, name: a.name, company_id: null }))) as any}
+        allCreditCards={creditCards.map((c) => ({
+          id: c.id,
+          name: c.name,
+          parent_card_id: c.parent_card_id ?? null,
+          closing_day: c.closing_day ?? 1,
+          due_day: c.due_day ?? 10,
+          bank_account_id: c.bank_account_id ?? "",
+        }))}
+        defaultValues={{
+          name: createCardDigits ? `Cartão ****${createCardDigits}` : "",
+          last_four_digits: createCardDigits || undefined,
+        }}
+        showContextSelector
+        companies={companies || []}
+        defaultCompanyId={isPersonal ? null : selectedCompanyId}
+        onSave={async (data) => {
+          if (!effectiveUserId) return false;
+          const { error, data: inserted } = await supabase
+            .from("credit_cards")
+            .insert({
+              name: data.name,
+              bank_account_id: data.bank_account_id,
+              closing_day: data.closing_day,
+              due_day: data.due_day,
+              limit: data.limit,
+              last_four_digits: data.last_four_digits || null,
+              parent_card_id: data.parent_card_id || null,
+              user_id: effectiveUserId,
+              company_id: data.company_id ?? null,
+            })
+            .select("id")
+            .single();
+          if (error) {
+            toast({ title: "Erro ao criar cartão", description: error.message, variant: "destructive" });
+            return false;
+          }
+          toast({ title: "Cartão criado!", description: "Você já pode usá-lo na importação." });
+          if (refetchAccounts) await refetchAccounts();
+          if (inserted?.id) setTargetCard(inserted.id);
+          return true;
+        }}
+      />
     </Dialog>
   );
 }
+
