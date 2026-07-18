@@ -120,13 +120,10 @@ function parseCSV(content: string): ParsedTransaction[] {
 }
 
 const SYSTEM_PROMPT = `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
-        {
-          role: "system",
-          content: `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
 
 Return ONLY a valid JSON array of transaction objects. Each object must have:
 - "raw_date": string — the date EXACTLY as printed on the statement line, in "DD/MM" format. Do NOT convert or guess the year.
-- "description": string with the transaction description  
+- "description": string with the transaction description
 - "amount": number (always positive), in REAIS with TWO DECIMAL PLACES. Brazilian statements use "." as thousand separator and "," as decimal separator. You MUST convert: "R$ 8.850,02" → 8850.02 (NEVER 885002, NEVER 8850). "R$ 49,90" → 49.90. "R$ 1.234.567,89" → 1234567.89. "R$ 100,00" → 100.00 (NEVER 10000). The decimal part after the comma MUST be preserved as ".XX" in the output. If you cannot see decimal places, the value is wrong — re-read the line.
 - "type": "despesa" for purchases/expenses, "receita" ONLY for actual refunds/chargebacks (estornos)
 - "card_digits": last 4 digits of the card this transaction belongs to (string), or null
@@ -160,29 +157,134 @@ EXCLUDE (NOT real transactions):
 Only classify as "receita" real refunds/chargebacks ("ESTORNO", "DEVOLUCAO").
 
 - Installment info ("3/6") goes inside description.
-- Return ONLY the JSON array, no markdown, no wrapping object.`
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "file",
-              file: {
-                filename: "statement.pdf",
-                file_data: `data:application/pdf;base64,${base64}`,
+- Return ONLY the JSON array, no markdown, no wrapping object.`;
+
+async function callAIGateway(
+  apiKey: string,
+  base64: string,
+  model: string,
+  maxTokens: number,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              {
+                type: "file",
+                file: {
+                  filename: "statement.pdf",
+                  file_data: `data:application/pdf;base64,${base64}`,
+                },
               },
-            },
-            {
-              type: "text",
-              text: "Extract all transactions from this statement. Each transaction must include raw_date (DD/MM as printed), card_digits, statement_due_date, and statement_close_date. Return only the JSON array."
-            }
-          ],
-        },
-      ],
-      temperature: 0,
-      max_tokens: 65000,
-    }),
-  });
+              {
+                type: "text",
+                text: "Extract all transactions from this statement. Each transaction must include raw_date (DD/MM as printed), card_digits, statement_due_date, and statement_close_date. Return only the JSON array.",
+              },
+            ],
+          },
+        ],
+        temperature: 0,
+        max_tokens: maxTokens,
+      }),
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[]> {
+  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!apiKey) {
+    throw new Error("LOVABLE_API_KEY not configured");
+  }
+
+  // Convert PDF bytes to base64 (chunked to avoid stack overflow)
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < fileBytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...fileBytes.subarray(i, i + chunkSize));
+  }
+  const base64 = btoa(binary);
+
+  const attempts: Array<{ model: string; maxTokens: number; timeoutMs: number }> = [
+    { model: "google/gemini-2.5-flash", maxTokens: 16000, timeoutMs: 90_000 },
+    { model: "google/gemini-2.5-pro", maxTokens: 32000, timeoutMs: 90_000 },
+  ];
+
+  let lastError: unknown = null;
+  for (let i = 0; i < attempts.length; i++) {
+    const { model, maxTokens, timeoutMs } = attempts[i];
+    console.log(`Calling AI Gateway model=${model} max_tokens=${maxTokens} timeout=${timeoutMs}ms`);
+    let response: Response;
+    try {
+      response = await callAIGateway(apiKey, base64, model, maxTokens, timeoutMs);
+    } catch (err) {
+      const aborted = err instanceof DOMException && err.name === "AbortError";
+      console.error(`AI Gateway ${model} ${aborted ? "timed out" : "failed"}:`, err);
+      lastError = aborted
+        ? new Error(`O modelo demorou demais para processar o extrato (${model}).`)
+        : err;
+      continue;
+    }
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`AI Gateway ${model} error ${response.status}:`, errText.slice(0, 500));
+      if (response.status === 429 || response.status === 402) {
+        throw new Error(
+          response.status === 402
+            ? "Créditos de IA esgotados. Adicione créditos ou tente novamente mais tarde."
+            : "Muitas requisições. Aguarde alguns segundos e tente novamente.",
+        );
+      }
+      lastError = new Error(`AI processing failed: ${response.status}`);
+      continue;
+    }
+
+    try {
+      const parsed = await parseAIResponse(await response.json());
+      if (parsed.length > 0 || i === attempts.length - 1) {
+        return parsed;
+      }
+      console.warn(`Model ${model} returned 0 transactions — trying next model.`);
+    } catch (err) {
+      console.error(`Failed to parse ${model} response:`, err);
+      lastError = err;
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
+}
+
+async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
+  const content = result.choices?.[0]?.message?.content || "";
+  const finishReason = result.choices?.[0]?.finish_reason || "unknown";
+  console.log(`AI response: finish_reason=${finishReason}, content_length=${content.length}`);
+  // Extract JSON from the response (handle markdown code blocks)
+  let jsonStr = content.trim();
+  const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (jsonMatch) {
+    jsonStr = jsonMatch[1].trim();
+  }
+  return parseTxJson(jsonStr, finishReason);
+}
+
+function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[] {
 
   if (!response.ok) {
     const errText = await response.text();
