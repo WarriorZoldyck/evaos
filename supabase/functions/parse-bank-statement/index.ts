@@ -119,29 +119,7 @@ function parseCSV(content: string): ParsedTransaction[] {
   return transactions;
 }
 
-async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[]> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey) {
-    throw new Error("LOVABLE_API_KEY not configured");
-  }
-
-  // Convert PDF bytes to base64 for the AI (chunk to avoid stack overflow)
-  let binary = "";
-  const chunkSize = 8192;
-  for (let i = 0; i < fileBytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...fileBytes.subarray(i, i + chunkSize));
-  }
-  const base64 = btoa(binary);
-
-  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
-      messages: [
+const SYSTEM_PROMPT = `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
         {
           role: "system",
           content: `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
