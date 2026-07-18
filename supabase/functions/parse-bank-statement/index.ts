@@ -286,22 +286,6 @@ async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
 
 function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[] {
 
-  if (!response.ok) {
-    const errText = await response.text();
-    console.error("AI Gateway error:", errText);
-    throw new Error(`AI processing failed: ${response.status}`);
-  }
-
-  const result = await response.json();
-  const content = result.choices?.[0]?.message?.content || "";
-  const finishReason = result.choices?.[0]?.finish_reason || "unknown";
-  console.log(`AI response: finish_reason=${finishReason}, content_length=${content.length}`);
-  // Extract JSON from the response (handle markdown code blocks)
-  let jsonStr = content.trim();
-  const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    jsonStr = jsonMatch[1].trim();
-  }
 
   let parsed: any;
   try {
