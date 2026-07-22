@@ -1248,7 +1248,7 @@ export function ReconcileStep({
                     });
                     setCreatingCat(false);
                     if (!res) return;
-                    const row = rowCategories[createCatState.rowIdx] || {};
+                    const row = rowCategories[createCatState.rowIdx] || { category: "" };
                     if (createCatState.level === "category") {
                       onCategoryChange(createCatState.rowIdx, { ...row, category: res.name, subcategory: undefined, subcategory2: undefined });
                     } else if (createCatState.level === "subcategory") {
@@ -1280,7 +1280,7 @@ export function ReconcileStep({
                   toast({ title: "Não foi possível criar a categoria", variant: "destructive" });
                   return;
                 }
-                const row = rowCategories[createCatState.rowIdx] || {};
+                const row = rowCategories[createCatState.rowIdx] || { category: "" };
                 if (createCatState.level === "category") {
                   onCategoryChange(createCatState.rowIdx, { ...row, category: res.name, subcategory: undefined, subcategory2: undefined });
                 } else if (createCatState.level === "subcategory") {
