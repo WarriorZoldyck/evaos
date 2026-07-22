@@ -1215,6 +1215,90 @@ export function ReconcileStep({
           />
         )}
       </div>
+
+      <Dialog open={!!createCatState} onOpenChange={(o) => !o && setCreateCatState(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {createCatState?.level === "category" && "Nova categoria"}
+              {createCatState?.level === "subcategory" && `Nova subcategoria em "${createCatState.parentName}"`}
+              {createCatState?.level === "subcategory2" && `Nova sub-subcategoria em "${createCatState.parentName}"`}
+            </DialogTitle>
+            <DialogDescription>
+              Cadastre uma categoria sem sair da importação. Ela ficará disponível para os próximos lançamentos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Nome</Label>
+            <Input
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              placeholder="Ex: Alimentação"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newCatName.trim() && !creatingCat) {
+                  e.preventDefault();
+                  (async () => {
+                    if (!createCatState || !onCreateCategory) return;
+                    setCreatingCat(true);
+                    const res = await onCreateCategory({
+                      name: newCatName.trim(),
+                      parentName: createCatState.parentName,
+                      type: createCatState.type,
+                    });
+                    setCreatingCat(false);
+                    if (!res) return;
+                    const row = rowCategories[createCatState.rowIdx] || {};
+                    if (createCatState.level === "category") {
+                      onCategoryChange(createCatState.rowIdx, { ...row, category: res.name, subcategory: undefined, subcategory2: undefined });
+                    } else if (createCatState.level === "subcategory") {
+                      onCategoryChange(createCatState.rowIdx, { ...row, subcategory: res.name, subcategory2: undefined });
+                    } else {
+                      onCategoryChange(createCatState.rowIdx, { ...row, subcategory2: res.name });
+                    }
+                    setCreateCatState(null);
+                    setNewCatName("");
+                  })();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateCatState(null)} disabled={creatingCat}>Cancelar</Button>
+            <Button
+              disabled={!newCatName.trim() || creatingCat}
+              onClick={async () => {
+                if (!createCatState || !onCreateCategory) return;
+                setCreatingCat(true);
+                const res = await onCreateCategory({
+                  name: newCatName.trim(),
+                  parentName: createCatState.parentName,
+                  type: createCatState.type,
+                });
+                setCreatingCat(false);
+                if (!res) {
+                  toast({ title: "Não foi possível criar a categoria", variant: "destructive" });
+                  return;
+                }
+                const row = rowCategories[createCatState.rowIdx] || {};
+                if (createCatState.level === "category") {
+                  onCategoryChange(createCatState.rowIdx, { ...row, category: res.name, subcategory: undefined, subcategory2: undefined });
+                } else if (createCatState.level === "subcategory") {
+                  onCategoryChange(createCatState.rowIdx, { ...row, subcategory: res.name, subcategory2: undefined });
+                } else {
+                  onCategoryChange(createCatState.rowIdx, { ...row, subcategory2: res.name });
+                }
+                setCreateCatState(null);
+                setNewCatName("");
+              }}
+            >
+              {creatingCat && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
+
