@@ -265,7 +265,14 @@ export function ImportStatementModal({
   const [rowCategories, setRowCategories] = useState<Record<number, RowCategoryValue>>({});
   const { suggest, suggestions, loading: suggestLoading, reset: resetSuggestions } = useCategorySuggestions();
 
-  const rootCategories = categories.filter((c) => !c.parent_id);
+  // Locally created categories from inside the reconcile step (dedup by id when merging).
+  const [extraCategories, setExtraCategories] = useState<{ id: string; name: string; parent_id: string | null; type: string | null }[]>([]);
+  const mergedCategories = useMemo(() => {
+    const ids = new Set(categories.map((c) => c.id));
+    return [...categories, ...extraCategories.filter((c) => !ids.has(c.id))];
+  }, [categories, extraCategories]);
+  const rootCategories = mergedCategories.filter((c) => !c.parent_id);
+
 
 
   // Derive detected cards summary (use real card IDs, not collapsed to parent)
