@@ -1502,7 +1502,7 @@ export function ImportStatementModal({
                   // Resolve parent by name (root or first-level match) if provided
                   let parent_id: string | null = null;
                   if (parentName) {
-                    const p = categories.find((c) => c.name === parentName);
+                    const p = mergedCategories.find((c) => c.name === parentName);
                     if (p) parent_id = p.id;
                   }
                   const { data, error } = await supabase
