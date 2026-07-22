@@ -37,6 +37,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ManualMatchModal } from "@/components/conciliacao/ManualMatchModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import type { RowMatch } from "@/hooks/useImportMatching";
 import type { SuggestionSource } from "@/hooks/useCategorySuggestions";
 
