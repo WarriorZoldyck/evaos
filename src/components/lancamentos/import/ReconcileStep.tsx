@@ -85,7 +85,10 @@ interface ReconcileStepProps {
   onKeepStatementOnly?: (rowIdx: number) => void;
   /** Called to undo a "Manter só o do extrato" choice for a given system tx ID. */
   onUndoKeepStatementOnly?: (systemTxId: string) => void;
+  /** Create a category inline. Returns the new record's name (so caller can set it in rowCategories). */
+  onCreateCategory?: (params: { name: string; parentName?: string; type?: "receita" | "despesa" }) => Promise<{ id: string; name: string } | null>;
 }
+
 
 
 const fmt = (n: number) =>
