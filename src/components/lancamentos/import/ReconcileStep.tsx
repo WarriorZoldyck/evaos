@@ -157,7 +157,9 @@ export function ReconcileStep({
   replaceDeleteIds,
   onKeepStatementOnly,
   onUndoKeepStatementOnly,
+  onCreateCategory,
 }: ReconcileStepProps) {
+
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
