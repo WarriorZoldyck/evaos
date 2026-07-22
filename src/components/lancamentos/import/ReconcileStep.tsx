@@ -37,6 +37,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ManualMatchModal } from "@/components/conciliacao/ManualMatchModal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import type { RowMatch } from "@/hooks/useImportMatching";
 import type { SuggestionSource } from "@/hooks/useCategorySuggestions";
 
@@ -85,7 +89,10 @@ interface ReconcileStepProps {
   onKeepStatementOnly?: (rowIdx: number) => void;
   /** Called to undo a "Manter só o do extrato" choice for a given system tx ID. */
   onUndoKeepStatementOnly?: (systemTxId: string) => void;
+  /** Create a category inline. Returns the new record's name (so caller can set it in rowCategories). */
+  onCreateCategory?: (params: { name: string; parentName?: string; type?: "receita" | "despesa" }) => Promise<{ id: string; name: string } | null>;
 }
+
 
 
 const fmt = (n: number) =>
@@ -154,7 +161,9 @@ export function ReconcileStep({
   replaceDeleteIds,
   onKeepStatementOnly,
   onUndoKeepStatementOnly,
+  onCreateCategory,
 }: ReconcileStepProps) {
+
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
@@ -162,10 +171,18 @@ export function ReconcileStep({
   // section — we drop the suggested match locally so the row moves to
   // "Só no extrato" and can be categorized/imported.
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<number>>(new Set());
+  const { toast } = useToast();
+  const [createCatState, setCreateCatState] = useState<
+    | { rowIdx: number; level: "category" | "subcategory" | "subcategory2"; parentName?: string; type?: "receita" | "despesa" }
+    | null
+  >(null);
+  const [newCatName, setNewCatName] = useState("");
+  const [creatingCat, setCreatingCat] = useState(false);
   const categoriesById = useMemo(
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
   );
+
   const resolveCategoryLabel = (value?: string | null) => {
     if (!value) return value;
     return categoriesById.get(value) || value;
@@ -856,13 +873,18 @@ export function ReconcileStep({
                             <div className="flex flex-col gap-1">
                               <Select
                                 value={currentCat.category || "__none__"}
-                                onValueChange={(v) =>
+                                onValueChange={(v) => {
+                                  if (v === "__create__") {
+                                    setCreateCatState({ rowIdx: i, level: "category", type: r.type });
+                                    setNewCatName("");
+                                    return;
+                                  }
                                   onCategoryChange(i, {
                                     category: v === "__none__" ? "" : v,
                                     subcategory: undefined,
                                     subcategory2: undefined,
-                                  })
-                                }
+                                  });
+                                }}
                               >
                                 <SelectTrigger className="h-7 text-xs">
                                   <SelectValue placeholder="Categoria" />
@@ -874,19 +896,29 @@ export function ReconcileStep({
                                       {c.name}
                                     </SelectItem>
                                   ))}
+                                  {onCreateCategory && (
+                                    <SelectItem value="__create__" className="text-primary font-medium">
+                                      <span className="flex items-center gap-1.5"><Plus className="h-3 w-3" /> Criar nova</span>
+                                    </SelectItem>
+                                  )}
                                 </SelectContent>
                               </Select>
 
-                              {subs.length > 0 && (
+                              {(subs.length > 0 || (onCreateCategory && currentCat.category)) && (
                                 <Select
                                   value={currentCat.subcategory || "__none__"}
-                                  onValueChange={(v) =>
+                                  onValueChange={(v) => {
+                                    if (v === "__create__") {
+                                      setCreateCatState({ rowIdx: i, level: "subcategory", parentName: currentCat.category });
+                                      setNewCatName("");
+                                      return;
+                                    }
                                     onCategoryChange(i, {
                                       category: currentCat.category,
                                       subcategory: v === "__none__" ? undefined : v,
                                       subcategory2: undefined,
-                                    })
-                                  }
+                                    });
+                                  }}
                                 >
                                   <SelectTrigger className="h-7 text-xs">
                                     <SelectValue placeholder="Subcategoria" />
@@ -898,20 +930,30 @@ export function ReconcileStep({
                                         {c.name}
                                       </SelectItem>
                                     ))}
+                                    {onCreateCategory && currentCat.category && (
+                                      <SelectItem value="__create__" className="text-primary font-medium">
+                                        <span className="flex items-center gap-1.5"><Plus className="h-3 w-3" /> Criar subcategoria</span>
+                                      </SelectItem>
+                                    )}
                                   </SelectContent>
                                 </Select>
                               )}
 
-                              {subSubs.length > 0 && (
+                              {(subSubs.length > 0 || (onCreateCategory && currentCat.subcategory)) && (
                                 <Select
                                   value={currentCat.subcategory2 || "__none__"}
-                                  onValueChange={(v) =>
+                                  onValueChange={(v) => {
+                                    if (v === "__create__") {
+                                      setCreateCatState({ rowIdx: i, level: "subcategory2", parentName: currentCat.subcategory });
+                                      setNewCatName("");
+                                      return;
+                                    }
                                     onCategoryChange(i, {
                                       category: currentCat.category,
                                       subcategory: currentCat.subcategory,
                                       subcategory2: v === "__none__" ? undefined : v,
-                                    })
-                                  }
+                                    });
+                                  }}
                                 >
                                   <SelectTrigger className="h-7 text-xs">
                                     <SelectValue placeholder="Sub-subcategoria" />
@@ -923,9 +965,15 @@ export function ReconcileStep({
                                         {c.name}
                                       </SelectItem>
                                     ))}
+                                    {onCreateCategory && currentCat.subcategory && (
+                                      <SelectItem value="__create__" className="text-primary font-medium">
+                                        <span className="flex items-center gap-1.5"><Plus className="h-3 w-3" /> Criar sub-subcategoria</span>
+                                      </SelectItem>
+                                    )}
                                   </SelectContent>
                                 </Select>
                               )}
+
 
                               {sug && !currentCat.touched && currentCat.category === sug.category && (
                                 <span
@@ -1167,6 +1215,90 @@ export function ReconcileStep({
           />
         )}
       </div>
+
+      <Dialog open={!!createCatState} onOpenChange={(o) => !o && setCreateCatState(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {createCatState?.level === "category" && "Nova categoria"}
+              {createCatState?.level === "subcategory" && `Nova subcategoria em "${createCatState.parentName}"`}
+              {createCatState?.level === "subcategory2" && `Nova sub-subcategoria em "${createCatState.parentName}"`}
+            </DialogTitle>
+            <DialogDescription>
+              Cadastre uma categoria sem sair da importação. Ela ficará disponível para os próximos lançamentos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Nome</Label>
+            <Input
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              placeholder="Ex: Alimentação"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newCatName.trim() && !creatingCat) {
+                  e.preventDefault();
+                  (async () => {
+                    if (!createCatState || !onCreateCategory) return;
+                    setCreatingCat(true);
+                    const res = await onCreateCategory({
+                      name: newCatName.trim(),
+                      parentName: createCatState.parentName,
+                      type: createCatState.type,
+                    });
+                    setCreatingCat(false);
+                    if (!res) return;
+                    const row = rowCategories[createCatState.rowIdx] || { category: "" };
+                    if (createCatState.level === "category") {
+                      onCategoryChange(createCatState.rowIdx, { ...row, category: res.name, subcategory: undefined, subcategory2: undefined });
+                    } else if (createCatState.level === "subcategory") {
+                      onCategoryChange(createCatState.rowIdx, { ...row, subcategory: res.name, subcategory2: undefined });
+                    } else {
+                      onCategoryChange(createCatState.rowIdx, { ...row, subcategory2: res.name });
+                    }
+                    setCreateCatState(null);
+                    setNewCatName("");
+                  })();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateCatState(null)} disabled={creatingCat}>Cancelar</Button>
+            <Button
+              disabled={!newCatName.trim() || creatingCat}
+              onClick={async () => {
+                if (!createCatState || !onCreateCategory) return;
+                setCreatingCat(true);
+                const res = await onCreateCategory({
+                  name: newCatName.trim(),
+                  parentName: createCatState.parentName,
+                  type: createCatState.type,
+                });
+                setCreatingCat(false);
+                if (!res) {
+                  toast({ title: "Não foi possível criar a categoria", variant: "destructive" });
+                  return;
+                }
+                const row = rowCategories[createCatState.rowIdx] || { category: "" };
+                if (createCatState.level === "category") {
+                  onCategoryChange(createCatState.rowIdx, { ...row, category: res.name, subcategory: undefined, subcategory2: undefined });
+                } else if (createCatState.level === "subcategory") {
+                  onCategoryChange(createCatState.rowIdx, { ...row, subcategory: res.name, subcategory2: undefined });
+                } else {
+                  onCategoryChange(createCatState.rowIdx, { ...row, subcategory2: res.name });
+                }
+                setCreateCatState(null);
+                setNewCatName("");
+              }}
+            >
+              {creatingCat && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }
+

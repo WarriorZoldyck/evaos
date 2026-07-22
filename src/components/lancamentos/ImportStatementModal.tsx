@@ -265,7 +265,14 @@ export function ImportStatementModal({
   const [rowCategories, setRowCategories] = useState<Record<number, RowCategoryValue>>({});
   const { suggest, suggestions, loading: suggestLoading, reset: resetSuggestions } = useCategorySuggestions();
 
-  const rootCategories = categories.filter((c) => !c.parent_id);
+  // Locally created categories from inside the reconcile step (dedup by id when merging).
+  const [extraCategories, setExtraCategories] = useState<{ id: string; name: string; parent_id: string | null; type: string | null }[]>([]);
+  const mergedCategories = useMemo(() => {
+    const ids = new Set(categories.map((c) => c.id));
+    return [...categories, ...extraCategories.filter((c) => !ids.has(c.id))];
+  }, [categories, extraCategories]);
+  const rootCategories = mergedCategories.filter((c) => !c.parent_id);
+
 
 
   // Derive detected cards summary (use real card IDs, not collapsed to parent)
@@ -1487,7 +1494,41 @@ export function ImportStatementModal({
                 toast({ title: "Lançamento excluído" });
               }}
 
-              categories={categories}
+              categories={mergedCategories}
+              onCreateCategory={async ({ name, parentName, type }) => {
+                try {
+                  const trimmed = name.trim();
+                  if (!trimmed) return null;
+                  // Resolve parent by name (root or first-level match) if provided
+                  let parent_id: string | null = null;
+                  if (parentName) {
+                    const p = mergedCategories.find((c) => c.name === parentName);
+                    if (p) parent_id = p.id;
+                  }
+                  const { data, error } = await supabase
+                    .from("categories")
+                    .insert({
+                      name: trimmed,
+                      parent_id,
+                      type: parent_id ? "ambos" : (type || "ambos"),
+                      user_id: effectiveUserId,
+                      company_id: selectedCompanyId || null,
+                    })
+                    .select("id, name, parent_id, type")
+                    .single();
+                  if (error || !data) {
+                    toast({ title: "Erro ao criar categoria", description: error?.message, variant: "destructive" });
+                    return null;
+                  }
+                  // Locally augment the categories list so the new item shows up immediately
+                  setExtraCategories((prev) => [...prev, { id: data.id, name: data.name, parent_id: data.parent_id, type: data.type }]);
+                  toast({ title: "Categoria criada" });
+                  return { id: data.id, name: data.name };
+                } catch (e: any) {
+                  toast({ title: "Erro ao criar categoria", description: e?.message, variant: "destructive" });
+                  return null;
+                }
+              }}
               rowCategories={rowCategories}
               suggestions={suggestions}
               suggestLoading={suggestLoading}
