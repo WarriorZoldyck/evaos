@@ -171,10 +171,18 @@ export function ReconcileStep({
   // section — we drop the suggested match locally so the row moves to
   // "Só no extrato" and can be categorized/imported.
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<number>>(new Set());
+  const { toast } = useToast();
+  const [createCatState, setCreateCatState] = useState<
+    | { rowIdx: number; level: "category" | "subcategory" | "subcategory2"; parentName?: string; type?: "receita" | "despesa" }
+    | null
+  >(null);
+  const [newCatName, setNewCatName] = useState("");
+  const [creatingCat, setCreatingCat] = useState(false);
   const categoriesById = useMemo(
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
   );
+
   const resolveCategoryLabel = (value?: string | null) => {
     if (!value) return value;
     return categoriesById.get(value) || value;
