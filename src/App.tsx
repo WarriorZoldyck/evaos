@@ -27,6 +27,7 @@ import Integracoes from "@/pages/Integracoes";
 import PrecificacaoV2 from "@/pages/PrecificacaoV2";
 import LandingPage from "@/pages/LandingPage";
 import Metas from "@/pages/Metas";
+import MetaDetalhe from "@/pages/MetaDetalhe";
 import AnalisesEva from "@/pages/AnalisesEva";
 import CentrosDeCustos from "@/pages/CentrosDeCustos";
 import HubContas from "@/pages/hub/HubContas";
@@ -89,6 +90,7 @@ const App = () => {
                 <Route path="/integracoes" element={<Integracoes />} />
                 <Route path="/eva-kids" element={<ComingSoon title="EVA Kids" description="Educação financeira para crianças. Em breve!" icon={GraduationCap} />} />
                 <Route path="/metas" element={<Metas />} />
+                <Route path="/metas/:id" element={<MetaDetalhe />} />
                 <Route path="/precificacao-v2" element={<PrecificacaoV2 />} />
               </Route>
               <Route element={<HubLayout />}>
