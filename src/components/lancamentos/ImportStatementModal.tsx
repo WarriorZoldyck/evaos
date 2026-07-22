@@ -1494,7 +1494,7 @@ export function ImportStatementModal({
                 toast({ title: "Lançamento excluído" });
               }}
 
-              categories={categories}
+              categories={mergedCategories}
               onCreateCategory={async ({ name, parentName, type }) => {
                 try {
                   const trimmed = name.trim();
