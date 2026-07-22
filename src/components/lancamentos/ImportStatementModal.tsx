@@ -1488,6 +1488,40 @@ export function ImportStatementModal({
               }}
 
               categories={categories}
+              onCreateCategory={async ({ name, parentName, type }) => {
+                try {
+                  const trimmed = name.trim();
+                  if (!trimmed) return null;
+                  // Resolve parent by name (root or first-level match) if provided
+                  let parent_id: string | null = null;
+                  if (parentName) {
+                    const p = categories.find((c) => c.name === parentName);
+                    if (p) parent_id = p.id;
+                  }
+                  const { data, error } = await supabase
+                    .from("categories")
+                    .insert({
+                      name: trimmed,
+                      parent_id,
+                      type: parent_id ? "ambos" : (type || "ambos"),
+                      user_id: effectiveUserId,
+                      company_id: selectedCompanyId || null,
+                    })
+                    .select("id, name, parent_id, type")
+                    .single();
+                  if (error || !data) {
+                    toast({ title: "Erro ao criar categoria", description: error?.message, variant: "destructive" });
+                    return null;
+                  }
+                  // Locally augment the categories list so the new item shows up immediately
+                  categories.push({ id: data.id, name: data.name, parent_id: data.parent_id, type: data.type });
+                  toast({ title: "Categoria criada" });
+                  return { id: data.id, name: data.name };
+                } catch (e: any) {
+                  toast({ title: "Erro ao criar categoria", description: e?.message, variant: "destructive" });
+                  return null;
+                }
+              }}
               rowCategories={rowCategories}
               suggestions={suggestions}
               suggestLoading={suggestLoading}
