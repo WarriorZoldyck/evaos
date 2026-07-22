@@ -1521,7 +1521,7 @@ export function ImportStatementModal({
                     return null;
                   }
                   // Locally augment the categories list so the new item shows up immediately
-                  categories.push({ id: data.id, name: data.name, parent_id: data.parent_id, type: data.type });
+                  setExtraCategories((prev) => [...prev, { id: data.id, name: data.name, parent_id: data.parent_id, type: data.type }]);
                   toast({ title: "Categoria criada" });
                   return { id: data.id, name: data.name };
                 } catch (e: any) {
