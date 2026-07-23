@@ -1,61 +1,47 @@
 
-# Redesign de Metas — mais próximo do Mercado Pago
+## Diagnóstico
 
-Escopo focado em dois pontos escolhidos: **Lista de metas (Cofrinhos)** e **Tela de detalhe**. Paleta verde aplicada **apenas dentro do módulo `/metas`** — o resto do app segue com o cyan EVA.
+Verifiquei os dados do usuário `espclin@hotmail.com` (id `b049592f-...`): ele tem **2.010 lançamentos já categorizados** (655 só de cartão). Ou seja, o histórico existe — mas nada dele é aproveitado na hora de importar o próximo extrato.
 
-## 1. Paleta verde local (escopo Metas)
+O motivo está em `src/hooks/useCategorySuggestions.ts` (Estágio 1 — "history match"):
 
-Introduzir tokens semânticos locais no `src/index.css`, aplicados só via classe container `.metas-scope`:
-
-```css
-.metas-scope {
-  --primary: 152 60% 42%;         /* verde MP ~#2BAE66 */
-  --primary-foreground: 0 0% 100%;
-  --primary-glow: 152 70% 55%;
-  --ring: 152 60% 42%;
-}
+```ts
+const validCatNames = new Set(categories.map((c) => c.name));
+...
+if (!h.category || !validCatNames.has(h.category)) return;
 ```
 
-Aplicar `className="metas-scope"` no wrapper das páginas `Metas.tsx` e `MetaDetalhe.tsx`. Nenhum hardcode de cor — tudo continua usando `text-primary`, `bg-primary/10`, etc.
+O código assume que `transactions.category / subcategory / subcategory2` guardam **nomes** de categoria. Mas hoje, para esse usuário (e para o fluxo novo), esses campos guardam **UUIDs** (a consulta mostrou `category: 100944ed-16c4-...`, `subcategory: 8b96b5b7-...`, etc.).
 
-## 2. Lista de metas (`src/pages/Metas.tsx`)
+Consequências:
+- O filtro `validCatNames.has(h.category)` **descarta 100% do histórico** → o índice de tokens fica vazio → nenhuma linha é resolvida por histórico.
+- Todas as ~135 linhas caem no Estágio 2 (IA). Com esse volume, a IA frequentemente devolve pouco ou nada em tempo hábil, e o resultado é o que aparece no print: tudo "Sem categoria".
+- Mesmo quando havia um lançamento equivalente no sistema (seed via `matches` no `ImportStatementModal`), o candidato traz `category` em UUID e o `resolveCategoryPath` (que resolve por nome) devolve só o próprio UUID como "category" solto, sem preencher sub/sub2 corretamente em alguns caminhos.
 
-Reformatar para se aproximar da tela "Meus cofres":
+## Correção
 
-- **Header enxuto:** título "Cofrinhos" + subtítulo curto, sem botão grande. Botão "Nova meta" vira ícone `+` circular no canto direito.
-- **Card de saldo total:** fundo sólido verde-escuro suave (`bg-primary/10` sobre superfície), valor grande em fonte mono, label "Total guardado" acima em caps pequeno, linha secundária "X cofrinhos ativos". Sem gradiente diagonal.
-- **Seção "Meus cofrinhos":** título pequeno em muted, e cada meta como linha em `GoalListItem` com:
-  - ícone de boia dentro de círculo verde-claro (sem anel de progresso ao redor — o progresso vai virar uma **barra fina** abaixo do nome, estilo MP);
-  - nome em peso médio, valor guardado grande à direita, meta e % em linha secundária;
-  - separadores sutis (`divide-y divide-border`) em vez de cards individuais com borda — visual de extrato.
-- **Empty state:** manter sugestões, mas em lista vertical com o mesmo padrão (ícone circular + texto), não em grid de cards.
+Trabalhar só no frontend (nenhuma mudança de dados). Dois arquivos:
 
-## 3. Tela de detalhe (`src/pages/MetaDetalhe.tsx`)
+### 1. `src/hooks/useCategorySuggestions.ts`
+- Construir dois lookups a partir de `categories`: `byId` (UUID→objeto) e `byName` (nome→objeto).
+- Normalizador `toName(v)`: se `v` for UUID conhecido, devolve o nome; se for nome válido, devolve como está; senão `null`.
+- Ao ler o histórico, converter `h.category / h.subcategory / h.subcategory2` via `toName` **antes** de indexar. Descartar apenas quando `toName(h.category)` for nulo.
+- Manter o resto do algoritmo igual (tokenização, score por trio, escolha do leaf mais profundo). O retorno continua sendo o **nome do leaf**, para o `resolveCategoryPath` do caller expandir os 3 níveis.
 
-Aproximar da referência com boia + ações:
+### 2. `src/components/lancamentos/ImportStatementModal.tsx` (seed a partir de `matches`)
+- No `useEffect` que semeia `rowCategories` a partir de `matches` (linhas ~851-875), normalizar `cand.category / subcategory / subcategory2` de UUID para nome antes de chamar `resolveCategoryPath` — assim a hierarquia (categoria → sub → sub-sub) é reconstruída corretamente e depois convertida de volta para UUID no submit por `resolveCategoryName`.
 
-- **Topbar:** back arrow à esquerda + nome da meta centralizado + ícone de menu (⋮) à direita abrindo `DropdownMenu` com Editar / Excluir. Remove o botão de lixeira solto.
-- **Bloco herói:** boia radar grande centralizada (mantém `GoalRadarLarge`, mas com traço mais fino e ícone maior), abaixo o valor em fonte mono bem grande, e "de R$ X · Y%" em muted. Badge "Meta atingida" só quando 100%.
-- **Ações em pílula:** trocar os 3 quadrados por 3 botões arredondados horizontais estilo MP:
-  - `Reservar` (primary sólido verde), `Retirar` (outline), `Configurar` (ghost com ícone).
-  - Layout: `flex gap-2 justify-center`, cada botão com ícone acima do label em telas estreitas OU ícone+label inline em telas largas.
-- **Seção "Guarde automaticamente":** título menor, dois cards empilhados (não grid) em mobile — cada card com ilustração/ícone à esquerda, título + descrição no meio, chevron à direita. Badge "Ativo" verde-claro quando configurado.
-- **Movimentações:** lista estilo extrato: sem cards individuais, apenas `divide-y`, ícone menor (h-6), data agrupada por dia com header sticky leve ("Hoje", "Ontem", "12 de nov").
+Não mexer no Estágio 2 (IA) nem no edge function — ele já opera por nome.
 
-## 4. Componentes ajustados
+## Detalhes técnicos
 
-- `src/components/metas/GoalListItem.tsx` — remover SVG circular de progresso, adicionar barra horizontal fina (`h-1 rounded-full bg-muted` com fill `bg-primary`), reorganizar tipografia.
-- `src/components/metas/GoalRadarLarge.tsx` — traço mais fino (strokeWidth 4), boia maior e mais central, remover fundo circular pesado.
-- Novo helper `formatRelativeDate` inline para agrupar movimentações por "Hoje/Ontem/data".
+- Nada de mudança em schema, migração ou edge function.
+- `resolveCategoryPath(name, categories)` já existe em `ImportStatementModal.tsx` e faz o walk pelo `parent_id`. Vamos reutilizá-lo.
+- Preservar o gate atual "≥ 2 token matches" para não regredir precisão.
+- Continuar respeitando `next[idx]?.touched` para nunca sobrescrever escolha manual do usuário.
 
-## 5. Detalhes técnicos
+## Verificação após aplicar
 
-- Sem mudanças em `useGoals`, schema ou modais existentes (`GoalFormModal`, `GoalAmountModal`, `GoalHistoryModal`).
-- Sem mudanças de rota — `/metas` e `/metas/:id` já existem.
-- Paleta verde escopada evita afetar dashboards, sidebar, gráficos e outros módulos.
-- Mantém acessibilidade: contraste verde primary vs foreground validado em light/dark.
-
-## Fora de escopo (para próxima iteração, se pedido)
-
-- Redesign dos cards de auto-reserva no estilo promocional MP com ilustrações.
-- Nova tela de movimentações completa (`GoalHistoryModal`).
+1. Reimportar o extrato do print (135 linhas). Esperado: linhas recorrentes ("PAO DE QUEIJO", "HIPER MORAES", "DROGASTORE FILIAL", etc.) que já foram categorizadas em faturas anteriores aparecerem já com categoria preenchida (badge/estilo de sugestão), sem exigir toque manual.
+2. Contador no rodapé "0 conciliar · 135 criar" deve continuar correto — o fix é só de categoria, não altera matching.
+3. Onde não há histórico, o Estágio 2 (IA) continua tentando preencher — comportamento inalterado.
