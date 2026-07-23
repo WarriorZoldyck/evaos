@@ -7,9 +7,25 @@ interface SuggestItem {
   amount: number;
 }
 
+// Hierarchical category tree the client sends: each node knows its full path
+// (["Supérfulo", "Perfume"]) so the AI can pick a leaf and we return category
+// + subcategory + subcategory2 to the modal.
+interface CategoryNode {
+  name: string;
+  path: string[]; // full path from root to this node
+  type?: string | null;
+}
+
 interface RequestBody {
   items: SuggestItem[];
-  categories: { name: string; type?: string | null }[];
+  categories: CategoryNode[] | { name: string; type?: string | null }[];
+}
+
+interface Suggestion {
+  index: number;
+  category: string | null;
+  subcategory?: string | null;
+  subcategory2?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -32,10 +48,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Cap inputs to avoid token blow-ups; we also batch items so each model call stays manageable.
     const items = body.items.slice(0, 200);
-    const categories = body.categories.slice(0, 120);
-    const categoryNames = categories.map((c) => c.name);
+    const rawCategories = body.categories.slice(0, 300);
+
+    // Normalize to CategoryNode with a path. Legacy callers may pass a flat list
+    // — treat those as 1-level paths.
+    const categories: CategoryNode[] = rawCategories.map((c: any) =>
+      Array.isArray(c.path) && c.path.length > 0
+        ? { name: c.name, path: c.path.map(String), type: c.type ?? null }
+        : { name: c.name, path: [c.name], type: c.type ?? null },
+    );
 
     const normalize = (s: string) =>
       s
@@ -46,36 +68,41 @@ Deno.serve(async (req) => {
         .replace(/\s+/g, " ")
         .trim();
 
-    const normalizedIndex = new Map<string, string>();
-    for (const name of categoryNames) normalizedIndex.set(normalize(name), name);
+    // Index every path by its "A > B > C" string for exact and normalized lookup.
+    const pathToNode = new Map<string, CategoryNode>();
+    const normPathToNode = new Map<string, CategoryNode>();
+    for (const c of categories) {
+      const key = c.path.join(" > ");
+      pathToNode.set(key, c);
+      normPathToNode.set(normalize(key), c);
+    }
 
-    const systemPrompt = `Você é o EVA, especialista em classificar transações financeiras em categorias do plano de contas do usuário.
+    const systemPrompt = `Você é o EVA, especialista em classificar transações financeiras no plano de contas hierárquico do usuário.
 
 REGRAS:
 - Responda APENAS com JSON puro, sem markdown, sem texto extra.
-- Para cada item recebido, escolha a categoria MAIS PROVÁVEL da lista fornecida (sempre escolha uma; nunca use null).
-- A categoria DEVE ser exatamente uma string da lista (preserve acentos e maiúsculas).
-- Adicione um campo "confidence" com "high", "medium" ou "low":
-  * high: a descrição casa claramente com a categoria (ex.: "NETFLIX" → Streaming).
+- Escolha a categoria MAIS ESPECÍFICA possível (prefira caminhos mais profundos quando fizer sentido).
+- Use exatamente uma das strings de caminho fornecidas (preserve acentos e maiúsculas). Exemplo de caminho: "Supérfulo > Perfume".
+- Adicione "confidence": "high" | "medium" | "low".
+  * high: descrição casa claramente (ex.: "NETFLIX" → Streaming).
   * medium: casamento razoável por semelhança de merchant/segmento.
-  * low: chute — você não tem certeza, mas é a melhor opção da lista.
-- TODO item recebido DEVE estar no array de resposta.
-- Considere tipo (receita/despesa), valor e descrição.
+  * low: chute — você não tem certeza.
+- TODO item recebido DEVE aparecer no array de resposta.
 
-FORMATO DE SAÍDA:
-{"suggestions": [{"index": 0, "category": "Alimentação", "confidence": "high"}, {"index": 1, "category": "Outros", "confidence": "low"}]}`;
+FORMATO:
+{"suggestions": [{"index": 0, "path": "Alimentação > Restaurante", "confidence": "high"}, {"index": 1, "path": "Outros", "confidence": "low"}]}`;
 
     const chunkSize = 25;
-    const batches: typeof items[] = [];
+    const batches: SuggestItem[][] = [];
     for (let i = 0; i < items.length; i += chunkSize) {
       batches.push(items.slice(i, i + chunkSize));
     }
 
-    const allSuggestions: { index: number; category: string | null }[] = [];
+    const pathList = categories.map((c) => c.path.join(" > "));
 
-    for (const batch of batches) {
-      const userPrompt = `Categorias disponíveis:
-${categoryNames.map((n) => `- ${n}`).join("\n")}
+    const runBatch = async (batch: SuggestItem[]): Promise<Suggestion[] | { status: number }> => {
+      const userPrompt = `Caminhos de categoria disponíveis (escolha um exatamente):
+${pathList.map((p) => `- ${p}`).join("\n")}
 
 Itens para categorizar:
 ${batch
@@ -85,7 +112,7 @@ ${batch
   )
   .join("\n")}
 
-Retorne o JSON com a sugestão de categoria + confidence para CADA índice listado.`;
+Retorne JSON com {index, path, confidence} para CADA índice.`;
 
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -106,25 +133,15 @@ Retorne o JSON com a sugestão de categoria + confidence para CADA índice lista
       if (!aiResponse.ok) {
         const errText = await aiResponse.text();
         console.error("[suggest-categories] gateway error", aiResponse.status, errText);
-        if (aiResponse.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "rate_limit", message: "Limite de requisições atingido. Tente novamente em instantes." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-        if (aiResponse.status === 402) {
-          return new Response(
-            JSON.stringify({ error: "credits_exhausted", message: "Créditos de IA esgotados. Adicione créditos no workspace." }),
-            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-        continue;
+        return { status: aiResponse.status };
       }
 
       const data = await aiResponse.json();
       const content = data?.choices?.[0]?.message?.content ?? "{}";
 
-      let parsed: { suggestions?: { index: number; category: string | null; confidence?: string }[] } = {};
+      let parsed: {
+        suggestions?: { index: number; path?: string; category?: string; confidence?: string }[];
+      } = {};
       try {
         parsed = JSON.parse(content);
       } catch {
@@ -138,23 +155,61 @@ Retorne o JSON com a sugestão de categoria + confidence para CADA índice lista
         }
       }
 
+      const out: Suggestion[] = [];
       for (const s of parsed.suggestions || []) {
         if (typeof s.index !== "number") continue;
-        // Drop low-confidence suggestions — user reviews "Sem categoria" manually
         const conf = (s.confidence || "").toLowerCase();
         if (conf === "low") {
-          allSuggestions.push({ index: s.index, category: null });
+          out.push({ index: s.index, category: null });
           continue;
         }
-        let mapped: string | null = null;
-        if (s.category) {
-          const exact = categoryNames.includes(s.category) ? s.category : null;
-          mapped = exact ?? normalizedIndex.get(normalize(s.category)) ?? null;
+        const raw = s.path || s.category || "";
+        if (!raw) {
+          out.push({ index: s.index, category: null });
+          continue;
         }
-        allSuggestions.push({ index: s.index, category: mapped });
+        const node =
+          pathToNode.get(raw) ??
+          normPathToNode.get(normalize(raw)) ??
+          // Fallback: treat as leaf name and match any path ending with it
+          categories.find(
+            (c) => normalize(c.path[c.path.length - 1]) === normalize(raw),
+          ) ??
+          null;
+        if (!node) {
+          out.push({ index: s.index, category: null });
+          continue;
+        }
+        out.push({
+          index: s.index,
+          category: node.path[0] ?? null,
+          subcategory: node.path[1] ?? null,
+          subcategory2: node.path[2] ?? null,
+        });
+      }
+      return out;
+    };
+
+    // Run all batches in parallel — 6× faster on large statements.
+    const results = await Promise.all(batches.map(runBatch));
+
+    for (const r of results) {
+      if (Array.isArray(r)) continue;
+      if (r.status === 429) {
+        return new Response(
+          JSON.stringify({ error: "rate_limit", message: "Limite de requisições atingido. Tente novamente em instantes." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      if (r.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "credits_exhausted", message: "Créditos de IA esgotados. Adicione créditos no workspace." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
       }
     }
 
+    const allSuggestions: Suggestion[] = results.flatMap((r) => (Array.isArray(r) ? r : []));
 
     return new Response(JSON.stringify({ suggestions: allSuggestions }), {
       status: 200,

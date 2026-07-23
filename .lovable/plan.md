@@ -1,46 +1,74 @@
-## Objetivo
 
-Aumentar a taxa de auto-categorização no import de extrato, combinando duas melhorias no pipeline atual (`useCategorySuggestions` + `suggest-categories`).
+## Problema
 
-## Diagnóstico (confirmado com dados)
+No print da importação:
+- **SPAY / AMAZONA / LE BOMBOM**: só a categoria pai vem preenchida ("sugerido pela IA"). Subcategoria e sub-sub ficam vazias.
+- **IBERIA**: vem com 3 níveis (esse casou com um lançamento existente via `matches`, não pela sugestão).
+- Categorização demora bastante em extratos grandes (135 linhas).
 
-Último import do usuário `espclin@hotmail.com` (contexto Eva, 115 lançamentos): apenas 4 vieram categorizados — exatamente os 4 merchants já categorizados manualmente no import anterior (SPAY POLIMPORT, IBERIA, AMAZONA WESTERN, PEDRO VITOR). O aprendizado funciona; só cobriu pouco porque:
+Duas causas independentes.
 
-1. O Estágio 1 (histórico) exige **≥ 2 tokens de 4+ letras** em comum. Merchants como "NETFLIX", "MAGALU", "DROGASIL", "AMAZON MARKETPLACE CC" têm 1 único token útil.
-2. O Estágio 2 (IA) hoje devolve categoria só quando o modelo tem alta confiança; em descrições curtas/abreviadas de cartão ele retorna `null` com frequência.
+## Causa 1 — IA só devolve categoria pai
 
-## Mudanças
+`supabase/functions/suggest-categories/index.ts` manda a lista achatada de nomes de categorias e pede só `{index, category, confidence}`. Ao receber "Supérfulo" no SPAY, nada guia a IA para Perfume, e o hook nem tem como preencher subcategoria.
 
-### 1) `src/hooks/useCategorySuggestions.ts` — gate de 1 token longo
+## Causa 2 — Stage 1 (histórico) não está casando SPAY/AMAZONA
 
-- Manter a regra atual de "≥ 2 tokens" como padrão.
-- Adicionar exceção: se o melhor triplo pontuou **1 token** mas esse token tem **≥ 6 letras**, aceitar o match (`best.score >= 2 || (best.score === 1 && longToken)`).
-- Ao pontuar, marcar se o token vencedor era longo (tracking já dentro do loop de `tripleCounts`).
-- Não mexer na janela de 6 meses nem no limite de 2000 registros.
+IBERIA veio de `matches` (lançamento gêmeo já existente no sistema com Férias/Aéreo/Iberia). SPAY/AMAZONA têm histórico equivalente no DB (payment_date 2026-01-15, dentro da janela de 12m), com tokens compatíveis, mas o print mostra "sugerido pela IA" — sinal de que Stage 1 devolveu vazio para eles. Suspeitas prováveis, em ordem:
+1. `effectiveUserId` diferente do dono do histórico (impersonation do EVA Hub).
+2. Race: hook dispara antes de `categories` estar completo — mas o gate `categories.length === 0` já cobre.
+3. Regressão sutil no índice de tokens.
 
-Efeito: "NETFLIX", "PRUDENTIAL", "AMAZON", "DROGASIL", "MAGALU", "SHOPEE" passam a casar a partir de 1 lançamento categorizado no passado.
+Precisa de log para eliminar a #1 antes de fingir que resolveu.
 
-### 2) `supabase/functions/suggest-categories/index.ts` — sugerir sempre com nível de confiança
+## Causa 3 — Lentidão
 
-- Ajustar o prompt: em vez de "use null quando nada fizer sentido", exigir sempre uma categoria + campo `confidence: "high" | "medium" | "low"`.
-- Aceitar apenas sugestões `high`/`medium` no cliente; `low` continua caindo em "Sem categoria" para revisão manual.
-- Manter validação de match exato/normalizado contra a árvore existente (não inventar categoria nova).
-- Trocar modelo de `google/gemini-2.5-pro` para `google/gemini-3.6-flash` (mais barato e rápido, suficiente para classificação).
+`suggest-categories` roda batches de 25 em série (`for … await`). 135 itens = 6 chamadas encadeadas ao Gemini. Simples de paralelizar.
 
-Efeito: cobertura maior sem contaminar a base com chutes ruins — o usuário ainda revisa antes de salvar.
+## Plano
 
-### 3) Nenhuma mudança em `ImportStatementModal.tsx`
+### 1. Edge function `supabase/functions/suggest-categories/index.ts`
 
-O modal já aplica `SuggestionSource` via `resolveCategoryPath` e expande hierarquia. Continua funcionando com o novo formato.
+- Enviar para a IA a hierarquia completa (category → subcategory → subcategory2), não a lista achatada.
+- Pedir resposta com `{index, category, subcategory?, subcategory2?, confidence}`. Manter regra de descartar `low`.
+- No servidor, validar que subcategory pertence à category escolhida (senão descarta subcategory). Idem para subcategory2.
+- Rodar os batches em paralelo via `Promise.all` (mantendo chunk de 25). Um `Promise.all` de 6 chamadas ao Gemini resolve num único round-trip agregado.
 
-## Validação
+### 2. Hook `src/hooks/useCategorySuggestions.ts`
 
-- Rebuild automático do Vite.
-- Pedir ao usuário para reimportar o mesmo PDF (ou um novo extrato) no contexto Eva e checar quantas linhas vêm pré-categorizadas.
-- Consulta rápida no banco após o import para medir a taxa (`count(*) filter (where category <> 'Sem Categoria')`).
+- Aceitar `subcategory`/`subcategory2` na resposta da IA e propagar no `SuggestionSource`.
+- Adicionar `console.log` temporário resumindo: `{effectiveUserId, historyCount, resolvedByHistory, resolvedByAI}` para diagnosticar a Causa 2 no próximo teste do usuário.
 
-## Fora de escopo
+### 3. Seed no modal `src/components/lancamentos/ImportStatementModal.tsx`
 
-- Ampliar janela de histórico além de 6 meses.
-- Persistir "aprendizado" em tabela dedicada — o histórico de `transactions` já cumpre esse papel.
-- Mudar o modelo do Estágio 2 para outro provider.
+Ajustar o seed do Stage 2 (linha ~841) para usar `subcategory`/`subcategory2` vindos da IA quando presentes, em vez de só passar o leaf para `resolveCategoryPath`:
+
+```text
+if (v.subcategory || v.subcategory2) {
+  // usar caminho fornecido pela IA (validado no servidor)
+  next[idx] = { category: v.category, subcategory: v.subcategory, subcategory2: v.subcategory2, touched: false }
+} else {
+  // caminho antigo — walk-up pelo leaf
+  next[idx] = { ...resolveCategoryPath(v.category, categories), touched: false }
+}
+```
+
+### 4. Diagnóstico do Stage 1
+
+Depois do usuário rodar mais uma importação com o log temporário:
+- Se `historyCount === 0`, é impersonation/`effectiveUserId` — corrige buscando por `user_id in (effectiveUserId, auth.uid())`.
+- Se `historyCount > 0` mas `resolvedByHistory === 0`, é bug no índice de tokens — inspecionar o payload real.
+
+Só então remover o log.
+
+## Não muda
+
+- Janela de 12 meses (já corrigido).
+- Threshold de 1 token longo ≥6 letras (já corrigido).
+- Modelo Gemini Flash usado hoje.
+
+## Resultado esperado
+
+- SPAY / AMAZONA / LE BOMBOM chegam com pai + filho preenchidos quando existir subcategoria adequada.
+- Tempo de categorização de ~6× mais rápido em extratos grandes (batches paralelos).
+- Log identifica se o Stage 1 está sofrendo com impersonation antes de assumir causa errada.
