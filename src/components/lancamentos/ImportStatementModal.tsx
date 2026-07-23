@@ -838,7 +838,18 @@ export function ImportStatementModal({
         Object.entries(res).forEach(([k, v]) => {
           const idx = Number(k);
           if (!next[idx] || !next[idx].category) {
-            next[idx] = { ...resolveCategoryPath(v.category, categories), touched: false };
+            // Prefer explicit hierarchy from the suggestion (Stage 2 AI now returns
+            // full path). Fall back to walk-up from the leaf name.
+            if (v.subcategory || v.subcategory2) {
+              next[idx] = {
+                category: v.category,
+                subcategory: v.subcategory ?? undefined,
+                subcategory2: v.subcategory2 ?? undefined,
+                touched: false,
+              };
+            } else {
+              next[idx] = { ...resolveCategoryPath(v.category, categories), touched: false };
+            }
           }
         });
         return next;
