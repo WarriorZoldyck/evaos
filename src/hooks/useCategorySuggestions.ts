@@ -193,7 +193,8 @@ export function useCategorySuggestions() {
           ...((pendingRes.data as any[]) || []),
         ];
 
-        // Build three indexes over the same samples.
+        // Build indexes over the same samples.
+        const byNormDesc = new Map<string, HistEntry[]>();
         const byMerchantKey = new Map<string, HistEntry[]>();
         const byMerchantPrefix = new Map<string, HistEntry[]>();
         const byToken = new Map<string, HistEntry[]>();
@@ -209,6 +210,12 @@ export function useCategorySuggestions() {
             payment_date: h.payment_date || "1970-01-01",
           };
           const desc = h.description || "";
+          const norm = normalizeDescription(desc);
+          if (norm) {
+            const arrN = byNormDesc.get(norm) || [];
+            arrN.push(entry);
+            byNormDesc.set(norm, arrN);
+          }
           const mk = buildMerchantKey(desc);
           if (mk) {
             const arrK = byMerchantKey.get(mk.key) || [];
@@ -237,6 +244,42 @@ export function useCategorySuggestions() {
             subcategory2: entry.subcategory2 ?? undefined,
           };
         };
+
+        // Prefer the deepest + most recent entry among a candidate list.
+        const pickDeepestRecent = (entries: HistEntry[]): HistEntry | null => {
+          if (entries.length === 0) return null;
+          let best = entries[0];
+          const depth = (e: HistEntry) => (e.subcategory2 ? 3 : e.subcategory ? 2 : 1);
+          for (const e of entries.slice(1)) {
+            const dE = depth(e);
+            const dB = depth(best);
+            if (dE > dB) { best = e; continue; }
+            if (dE === dB && e.payment_date > best.payment_date) best = e;
+          }
+          return best;
+        };
+
+        for (const row of rows) {
+          // Layer 0: exact / prefix match on normalized description
+          const normRow = normalizeDescription(row.description);
+          if (normRow) {
+            const direct = (byNormDesc.get(normRow) || []).filter((e) => e.type === row.type);
+            let hit = pickDeepestRecent(direct);
+            if (!hit) {
+              // fallback: any historical normDesc that startsWith the current normRow, or vice-versa
+              const candidates: HistEntry[] = [];
+              for (const [k, arr] of byNormDesc.entries()) {
+                if (k === normRow) continue;
+                if (k.startsWith(normRow) || normRow.startsWith(k)) {
+                  for (const e of arr) if (e.type === row.type) candidates.push(e);
+                }
+              }
+              hit = pickDeepestRecent(candidates);
+            }
+            if (hit) { applyEntry(row, hit, 4); continue; }
+          }
+
+
 
         for (const row of rows) {
           const mk = buildMerchantKey(row.description);
