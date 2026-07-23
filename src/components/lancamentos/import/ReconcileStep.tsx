@@ -871,109 +871,13 @@ export function ReconcileStep({
                           <td className="p-2 text-right font-mono whitespace-nowrap align-top">{fmt(r.amount)}</td>
                           <td className="p-2 align-top">
                             <div className="flex flex-col gap-1">
-                              <Select
-                                value={currentCat.category || "__none__"}
-                                onValueChange={(v) => {
-                                  if (v === "__create__") {
-                                    setCreateCatState({ rowIdx: i, level: "category", type: r.type });
-                                    setNewCatName("");
-                                    return;
-                                  }
-                                  onCategoryChange(i, {
-                                    category: v === "__none__" ? "" : v,
-                                    subcategory: undefined,
-                                    subcategory2: undefined,
-                                  });
-                                }}
-                              >
-                                <SelectTrigger className="h-7 text-xs">
-                                  <SelectValue placeholder="Categoria" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="__none__">Sem categoria</SelectItem>
-                                  {rootCats.map((c) => (
-                                    <SelectItem key={c.id} value={c.name}>
-                                      {c.name}
-                                    </SelectItem>
-                                  ))}
-                                  {onCreateCategory && (
-                                    <SelectItem value="__create__" className="text-primary font-medium">
-                                      <span className="flex items-center gap-1.5"><Plus className="h-3 w-3" /> Criar nova</span>
-                                    </SelectItem>
-                                  )}
-                                </SelectContent>
-                              </Select>
-
-                              {(subs.length > 0 || (onCreateCategory && currentCat.category)) && (
-                                <Select
-                                  value={currentCat.subcategory || "__none__"}
-                                  onValueChange={(v) => {
-                                    if (v === "__create__") {
-                                      setCreateCatState({ rowIdx: i, level: "subcategory", parentName: currentCat.category });
-                                      setNewCatName("");
-                                      return;
-                                    }
-                                    onCategoryChange(i, {
-                                      category: currentCat.category,
-                                      subcategory: v === "__none__" ? undefined : v,
-                                      subcategory2: undefined,
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger className="h-7 text-xs">
-                                    <SelectValue placeholder="Subcategoria" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__none__">— Subcategoria —</SelectItem>
-                                    {subs.map((c) => (
-                                      <SelectItem key={c.id} value={c.name}>
-                                        {c.name}
-                                      </SelectItem>
-                                    ))}
-                                    {onCreateCategory && currentCat.category && (
-                                      <SelectItem value="__create__" className="text-primary font-medium">
-                                        <span className="flex items-center gap-1.5"><Plus className="h-3 w-3" /> Criar subcategoria</span>
-                                      </SelectItem>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              )}
-
-                              {(subSubs.length > 0 || (onCreateCategory && currentCat.subcategory)) && (
-                                <Select
-                                  value={currentCat.subcategory2 || "__none__"}
-                                  onValueChange={(v) => {
-                                    if (v === "__create__") {
-                                      setCreateCatState({ rowIdx: i, level: "subcategory2", parentName: currentCat.subcategory });
-                                      setNewCatName("");
-                                      return;
-                                    }
-                                    onCategoryChange(i, {
-                                      category: currentCat.category,
-                                      subcategory: currentCat.subcategory,
-                                      subcategory2: v === "__none__" ? undefined : v,
-                                    });
-                                  }}
-                                >
-                                  <SelectTrigger className="h-7 text-xs">
-                                    <SelectValue placeholder="Sub-subcategoria" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="__none__">— Sub-sub —</SelectItem>
-                                    {subSubs.map((c) => (
-                                      <SelectItem key={c.id} value={c.name}>
-                                        {c.name}
-                                      </SelectItem>
-                                    ))}
-                                    {onCreateCategory && currentCat.subcategory && (
-                                      <SelectItem value="__create__" className="text-primary font-medium">
-                                        <span className="flex items-center gap-1.5"><Plus className="h-3 w-3" /> Criar sub-subcategoria</span>
-                                      </SelectItem>
-                                    )}
-                                  </SelectContent>
-                                </Select>
-                              )}
-
+                              <CategoryPathCombobox
+                                categories={categories}
+                                value={currentCat}
+                                type={r.type}
+                                onChange={(v) => onCategoryChange(i, v)}
+                                onCreateCategory={onCreateCategory}
+                              />
 
                               {sug && !currentCat.touched && currentCat.category === sug.category && (
                                 <span
