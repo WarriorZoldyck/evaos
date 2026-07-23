@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Check, ChevronRight, ChevronsUpDown, CornerDownLeft, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,11 +43,11 @@ interface CategoryPathComboboxProps {
 }
 
 interface PathNode {
-  path: string[]; // full path names root → leaf
+  path: string[];
   category: string;
   subcategory?: string;
   subcategory2?: string;
-  searchable: string; // normalized concatenation for cmdk
+  searchable: string;
 }
 
 function typeAllows(catType: string | null, rowType: "receita" | "despesa") {
@@ -74,6 +74,7 @@ export function CategoryPathCombobox({
 }: CategoryPathComboboxProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [navPath, setNavPath] = useState<string[]>([]);
   const [creatingName, setCreatingName] = useState("");
   const [creatingParent, setCreatingParent] = useState<{
     parentName?: string;
@@ -81,35 +82,33 @@ export function CategoryPathCombobox({
   } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const paths = useMemo<PathNode[]>(() => {
-    const byParent = new Map<string | null, CategoryFlat[]>();
+  // Build parent → children map and flattened paths (used only for search)
+  const { byParent, roots, paths } = useMemo(() => {
+    const map = new Map<string | null, CategoryFlat[]>();
     for (const c of categories) {
-      const key = c.parent_id;
-      const arr = byParent.get(key) || [];
+      const arr = map.get(c.parent_id) || [];
       arr.push(c);
-      byParent.set(key, arr);
+      map.set(c.parent_id, arr);
     }
-    const out: PathNode[] = [];
-    const roots = (byParent.get(null) || []).filter((c) => typeAllows(c.type, type));
-    for (const root of roots) {
-      const rootNode: PathNode = {
+    const rootList = (map.get(null) || []).filter((c) => typeAllows(c.type, type));
+    const flat: PathNode[] = [];
+    for (const root of rootList) {
+      flat.push({
         path: [root.name],
         category: root.name,
         searchable: normalize(root.name),
-      };
-      out.push(rootNode);
-      const subs = byParent.get(root.id) || [];
+      });
+      const subs = map.get(root.id) || [];
       for (const sub of subs) {
-        const subNode: PathNode = {
+        flat.push({
           path: [root.name, sub.name],
           category: root.name,
           subcategory: sub.name,
           searchable: normalize(`${root.name} ${sub.name}`),
-        };
-        out.push(subNode);
-        const subsubs = byParent.get(sub.id) || [];
+        });
+        const subsubs = map.get(sub.id) || [];
         for (const ss of subsubs) {
-          out.push({
+          flat.push({
             path: [root.name, sub.name, ss.name],
             category: root.name,
             subcategory: sub.name,
@@ -119,20 +118,55 @@ export function CategoryPathCombobox({
         }
       }
     }
-    return out;
+    return { byParent: map, roots: rootList, paths: flat };
   }, [categories, type]);
+
+  // Resolve current level's items based on navPath (names)
+  const currentLevel = useMemo(() => {
+    let parents = roots;
+    let parentNode: CategoryFlat | null = null;
+    for (const name of navPath) {
+      const match = parents.find((p) => p.name === name);
+      if (!match) return { items: [] as CategoryFlat[], parentNode: null };
+      parentNode = match;
+      parents = (byParent.get(match.id) || []).filter((c) => typeAllows(c.type, type));
+    }
+    return { items: parents, parentNode };
+  }, [navPath, roots, byParent, type]);
+
+  // When opening, position navigation on the selected value's parent level
+  useEffect(() => {
+    if (!open) return;
+    if (value?.category) {
+      const initial: string[] = [value.category];
+      if (value.subcategory) initial.push(value.subcategory);
+      // Show the deepest level whose children are the siblings of the leaf.
+      // If leaf is subcategory2 → nav = [category, subcategory]
+      // If leaf is subcategory → nav = [category]
+      // If leaf is category → nav = []
+      const navInit = value.subcategory2
+        ? [value.category, value.subcategory!]
+        : value.subcategory
+        ? [value.category]
+        : [];
+      setNavPath(navInit);
+    } else {
+      setNavPath([]);
+    }
+    setQuery("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const selectedLabel = (() => {
     if (!value?.category) return null;
-    const parts = [value.category, value.subcategory, value.subcategory2].filter(Boolean) as string[];
-    return parts;
+    return [value.category, value.subcategory, value.subcategory2].filter(Boolean) as string[];
   })();
 
-  const handleSelect = (node: PathNode) => {
+  const commitPath = (pathNames: string[]) => {
     onChange({
-      category: node.category,
-      subcategory: node.subcategory,
-      subcategory2: node.subcategory2,
+      category: pathNames[0] || "",
+      subcategory: pathNames[1],
+      subcategory2: pathNames[2],
       touched: true,
     });
     setOpen(false);
@@ -161,24 +195,28 @@ export function CategoryPathCombobox({
     setBusy(false);
     if (!created) return;
 
-    // Auto-select the newly created node at the deepest available level
-    if (!creatingParent.parentName) {
-      onChange({ category: created.name, subcategory: undefined, subcategory2: undefined, touched: true });
-    } else if (value?.category && creatingParent.parentName === value.category) {
-      onChange({ category: value.category, subcategory: created.name, subcategory2: undefined, touched: true });
-    } else if (value?.subcategory && creatingParent.parentName === value.subcategory) {
-      onChange({
-        category: value.category,
-        subcategory: value.subcategory,
-        subcategory2: created.name,
-        touched: true,
-      });
+    const parentName = creatingParent.parentName;
+    if (!parentName) {
+      commitPath([created.name]);
+    } else {
+      // Determine level of parent to build full path
+      // Look up parent in categories
+      const parentCat = categories.find((c) => c.name === parentName);
+      if (parentCat?.parent_id == null) {
+        commitPath([parentName, created.name]);
+      } else {
+        const grand = categories.find((c) => c.id === parentCat.parent_id);
+        commitPath([grand?.name || "", parentName, created.name]);
+      }
     }
     setCreatingParent(null);
     setCreatingName("");
-    setQuery("");
-    setOpen(false);
   };
+
+  const isSearching = query.trim().length > 0;
+  const currentParentName = navPath[navPath.length - 1];
+  const currentDepth = navPath.length; // 0=root, 1=sub, 2=subsub
+  const createLabel = currentDepth === 0 ? "categoria" : currentDepth === 1 ? "subcategoria" : "sub-subcategoria";
 
   return (
     <Popover
@@ -189,6 +227,7 @@ export function CategoryPathCombobox({
           setCreatingParent(null);
           setCreatingName("");
           setQuery("");
+          setNavPath([]);
         }
       }}
     >
@@ -231,7 +270,6 @@ export function CategoryPathCombobox({
         align="start"
         sideOffset={4}
         onOpenAutoFocus={(e) => {
-          // let cmdk focus its input
           e.preventDefault();
         }}
       >
@@ -276,7 +314,6 @@ export function CategoryPathCombobox({
         ) : (
           <Command
             filter={(itemValue, search) => {
-              // itemValue is our normalized searchable string
               const n = normalize(search);
               return itemValue.includes(n) ? 1 : 0;
             }}
@@ -287,6 +324,54 @@ export function CategoryPathCombobox({
               onValueChange={setQuery}
               className="h-9"
             />
+            {!isSearching && navPath.length > 0 && (
+              <div className="flex items-center gap-1 border-b px-2 py-1.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0"
+                  onClick={() => setNavPath((p) => p.slice(0, -1))}
+                  aria-label="Voltar"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                </Button>
+                <div className="flex items-center gap-1 text-xs min-w-0 flex-1">
+                  <button
+                    type="button"
+                    className="text-muted-foreground hover:text-foreground truncate"
+                    onClick={() => setNavPath([])}
+                  >
+                    Todas
+                  </button>
+                  {navPath.map((name, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 min-w-0">
+                      <ChevronRight className="h-3 w-3 opacity-40 shrink-0" />
+                      <button
+                        type="button"
+                        className={cn(
+                          "truncate",
+                          i === navPath.length - 1
+                            ? "font-medium text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                        onClick={() => setNavPath((p) => p.slice(0, i + 1))}
+                      >
+                        {name}
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[10px] gap-1"
+                  onClick={() => commitPath(navPath)}
+                  title="Usar este nível como categoria"
+                >
+                  <CornerDownLeft className="h-3 w-3" /> usar
+                </Button>
+              </div>
+            )}
             <CommandList className="max-h-[280px]">
               <CommandEmpty>
                 <div className="py-4 px-3 text-center space-y-2">
@@ -296,9 +381,12 @@ export function CategoryPathCombobox({
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs gap-1"
-                      onClick={() => openCreate(undefined, "categoria", query)}
+                      onClick={() => openCreate(currentParentName, createLabel, query)}
                     >
                       <Plus className="h-3 w-3" /> Criar “{query || "nova"}”
+                      {currentParentName && (
+                        <span className="text-muted-foreground"> em “{currentParentName}”</span>
+                      )}
                     </Button>
                   )}
                 </div>
@@ -311,40 +399,88 @@ export function CategoryPathCombobox({
                 >
                   <X className="h-3 w-3 mr-2" /> Sem categoria
                 </CommandItem>
-                {paths.map((node, idx) => {
-                  const isSelected =
-                    value?.category === node.category &&
-                    (value?.subcategory ?? undefined) === (node.subcategory ?? undefined) &&
-                    (value?.subcategory2 ?? undefined) === (node.subcategory2 ?? undefined);
-                  return (
-                    <CommandItem
-                      key={`${node.path.join("|")}-${idx}`}
-                      value={node.searchable}
-                      onSelect={() => handleSelect(node)}
-                      className="text-xs"
-                    >
-                      <Check
-                        className={cn("h-3 w-3 mr-2 shrink-0", isSelected ? "opacity-100" : "opacity-0")}
-                      />
-                      <span className="flex items-center gap-1 min-w-0 flex-wrap">
-                        {node.path.map((p, i) => (
-                          <span key={i} className="inline-flex items-center gap-1">
-                            {i > 0 && <span className="opacity-40">›</span>}
-                            <span
-                              className={cn(
-                                i === node.path.length - 1
-                                  ? "font-medium text-foreground"
-                                  : "text-muted-foreground",
-                              )}
-                            >
-                              {p}
-                            </span>
+
+                {isSearching
+                  ? paths.map((node, idx) => {
+                      const isSelected =
+                        value?.category === node.category &&
+                        (value?.subcategory ?? undefined) === (node.subcategory ?? undefined) &&
+                        (value?.subcategory2 ?? undefined) === (node.subcategory2 ?? undefined);
+                      return (
+                        <CommandItem
+                          key={`${node.path.join("|")}-${idx}`}
+                          value={node.searchable}
+                          onSelect={() => commitPath(node.path)}
+                          className="text-xs"
+                        >
+                          <Check
+                            className={cn("h-3 w-3 mr-2 shrink-0", isSelected ? "opacity-100" : "opacity-0")}
+                          />
+                          <span className="flex items-center gap-1 min-w-0 flex-wrap">
+                            {node.path.map((p, i) => (
+                              <span key={i} className="inline-flex items-center gap-1">
+                                {i > 0 && <span className="opacity-40">›</span>}
+                                <span
+                                  className={cn(
+                                    i === node.path.length - 1
+                                      ? "font-medium text-foreground"
+                                      : "text-muted-foreground",
+                                  )}
+                                >
+                                  {p}
+                                </span>
+                              </span>
+                            ))}
                           </span>
-                        ))}
-                      </span>
-                    </CommandItem>
-                  );
-                })}
+                        </CommandItem>
+                      );
+                    })
+                  : currentLevel.items.map((item) => {
+                      const children = (byParent.get(item.id) || []).filter((c) => typeAllows(c.type, type));
+                      const hasChildren = children.length > 0 && navPath.length < 2;
+                      const fullPath = [...navPath, item.name];
+                      const isSelected =
+                        value?.category === fullPath[0] &&
+                        (value?.subcategory ?? undefined) === (fullPath[1] ?? undefined) &&
+                        (value?.subcategory2 ?? undefined) === (fullPath[2] ?? undefined);
+                      return (
+                        <CommandItem
+                          key={item.id}
+                          value={normalize(item.name)}
+                          onSelect={() => {
+                            if (hasChildren) {
+                              setNavPath(fullPath);
+                            } else {
+                              commitPath(fullPath);
+                            }
+                          }}
+                          className="text-xs"
+                        >
+                          <Check
+                            className={cn("h-3 w-3 mr-2 shrink-0", isSelected ? "opacity-100" : "opacity-0")}
+                          />
+                          <span className="flex-1 truncate font-medium text-foreground">{item.name}</span>
+                          {hasChildren && (
+                            <button
+                              type="button"
+                              className="ml-1 text-[10px] text-muted-foreground hover:text-foreground px-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                commitPath(fullPath);
+                              }}
+                              title="Escolher este nível"
+                            >
+                              usar
+                            </button>
+                          )}
+                          {hasChildren ? (
+                            <ChevronRight className="h-3.5 w-3.5 opacity-50 ml-1 shrink-0" />
+                          ) : (
+                            <span className="w-3.5 ml-1" />
+                          )}
+                        </CommandItem>
+                      );
+                    })}
               </CommandGroup>
             </CommandList>
             {onCreateCategory && (
@@ -353,30 +489,11 @@ export function CategoryPathCombobox({
                   size="sm"
                   variant="ghost"
                   className="h-7 text-xs gap-1"
-                  onClick={() => openCreate(undefined, "categoria")}
+                  onClick={() => openCreate(currentParentName, createLabel)}
                 >
-                  <Plus className="h-3 w-3" /> Nova categoria
+                  <Plus className="h-3 w-3" />{" "}
+                  {currentParentName ? `Nova ${createLabel} em “${currentParentName}”` : "Nova categoria"}
                 </Button>
-                {value?.category && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => openCreate(value.category, "subcategoria")}
-                  >
-                    <Plus className="h-3 w-3" /> Sub em “{value.category}”
-                  </Button>
-                )}
-                {value?.subcategory && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 text-xs gap-1"
-                    onClick={() => openCreate(value.subcategory, "sub-subcategoria")}
-                  >
-                    <Plus className="h-3 w-3" /> Sub-sub em “{value.subcategory}”
-                  </Button>
-                )}
               </div>
             )}
           </Command>
