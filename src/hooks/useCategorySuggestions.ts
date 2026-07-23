@@ -337,63 +337,10 @@ export function useCategorySuggestions() {
           unresolved.push(row);
         }
 
-        // ---- Stage 2: AI fallback for the rest ----
-        if (unresolved.length > 0) {
-          try {
-            const byIdCat = new Map(categories.map((c) => [c.id, c] as const));
-            const pathOf = (c: { id: string; name: string; parent_id: string | null }): string[] => {
-              const chain: string[] = [c.name];
-              let cur = c;
-              const seen = new Set<string>([c.id]);
-              while (cur.parent_id) {
-                const parent = byIdCat.get(cur.parent_id);
-                if (!parent || seen.has(parent.id)) break;
-                chain.unshift(parent.name);
-                seen.add(parent.id);
-                cur = parent;
-              }
-              return chain;
-            };
-            const catPayload = categories.map((c) => ({
-              name: c.name,
-              path: pathOf(c),
-              type: c.type,
-            }));
+        // AI fallback intentionally disabled — history-only matching is safer
+        // and more predictable. Unresolved rows stay as "Sem categoria" for
+        // the user to adjust manually.
 
-            const { data, error } = await supabase.functions.invoke("suggest-categories", {
-              body: {
-                items: unresolved.map((r) => ({
-                  index: r.index,
-                  description: r.description,
-                  type: r.type,
-                  amount: r.amount,
-                })),
-                categories: catPayload,
-              },
-            });
-            if (error) {
-              console.error("[useCategorySuggestions] AI error", error);
-            } else if (data?.suggestions) {
-              for (const s of data.suggestions as {
-                index: number;
-                category: string | null;
-                subcategory?: string | null;
-                subcategory2?: string | null;
-              }[]) {
-                if (s.category) {
-                  result[s.index] = {
-                    category: s.category,
-                    subcategory: s.subcategory ?? undefined,
-                    subcategory2: s.subcategory2 ?? undefined,
-                    source: "ai",
-                  };
-                }
-              }
-            }
-          } catch (e) {
-            console.error("[useCategorySuggestions] AI fetch failed", e);
-          }
-        }
 
         setSuggestions(result);
         return result;
