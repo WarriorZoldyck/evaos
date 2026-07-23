@@ -174,8 +174,6 @@ export function useCategorySuggestions() {
 
 
         // ---- Stage 2: AI fallback ----
-        const resolvedByHistory = Object.keys(result).length;
-        let resolvedByAI = 0;
         if (unresolved.length > 0) {
           try {
             // Build hierarchical paths so the AI can pick the deepest node.
@@ -226,7 +224,6 @@ export function useCategorySuggestions() {
                     subcategory2: s.subcategory2 ?? undefined,
                     source: "ai",
                   };
-                  resolvedByAI += 1;
                 }
               }
             }
