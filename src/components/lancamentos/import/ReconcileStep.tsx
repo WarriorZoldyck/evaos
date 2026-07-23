@@ -450,7 +450,7 @@ export function ReconcileStep({
 
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="flex flex-col gap-4 flex-1 overflow-hidden">
+      <div className="relative flex flex-col gap-4 flex-1 overflow-hidden">
         {/* Header summary */}
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
           <div className="flex items-center gap-2 text-sm font-medium text-primary">
@@ -1213,6 +1213,32 @@ export function ReconcileStep({
             onClose={() => setManualForRow(null)}
             onConfirm={(txId) => handleManualPick(manualForRow, txId)}
           />
+        )}
+
+        {suggestLoading && (
+          <div
+            className="absolute inset-0 z-30 flex items-center justify-center backdrop-blur-md bg-background/50"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-primary/30 bg-card/80 px-6 py-5 shadow-xl backdrop-blur-xl max-w-sm text-center">
+              <div className="relative">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <Sparkles className="h-4 w-4 text-primary absolute -right-1 -top-1 animate-pulse" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium">
+                  EVA está categorizando {rows.length} lançamento{rows.length === 1 ? "" : "s"}…
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Isso pode levar alguns segundos em extratos grandes.
+                </p>
+              </div>
+              <div className="h-1 w-48 overflow-hidden rounded-full bg-muted">
+                <div className="h-full w-1/3 rounded-full bg-primary animate-[shimmer_1.4s_ease-in-out_infinite]" />
+              </div>
+            </div>
+          </div>
         )}
       </div>
 
