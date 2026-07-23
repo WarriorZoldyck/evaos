@@ -76,9 +76,10 @@ export function useCategorySuggestions() {
         };
         const sinceISO = (() => {
           const d = new Date();
-          d.setMonth(d.getMonth() - 6);
+          d.setMonth(d.getMonth() - 12);
           return d.toISOString().slice(0, 10);
         })();
+
 
         const { data: history } = await supabase
           .from("transactions")
