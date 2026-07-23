@@ -279,11 +279,9 @@ export function useCategorySuggestions() {
             if (hit) { applyEntry(row, hit, 4); continue; }
           }
 
-
-
-        for (const row of rows) {
           const mk = buildMerchantKey(row.description);
           const tokens = significantTokens(row.description);
+
 
           // Layer 1: exact merchant key
           if (mk) {
