@@ -1,57 +1,49 @@
 
-## Diagnóstico
+## Problema
 
-Na Stage 2 do import (`ReconcileStep.tsx`, linhas ~870-960) cada linha tem **3 selects lado a lado** (Categoria / Subcategoria / Subcategoria²) usando `Select` do shadcn (Radix). Problemas reais que o screenshot mostra:
+Na importação de extrato, "LE BOMBOM 02/03" foi sugerido como `Supérfulo > Doces`, mesmo o próprio usuário já tendo lançado antes "LE BOMBOM 02/03" como `Vestuário > Roupas > Vitória` (confirmado em `transactions`). O Stage 1 atual (merchant key + prefix + tokens com voto ≥60%) deveria ter pegado, mas na prática está deixando escapar e caindo na IA, que erra.
 
-- O `SelectContent` do Radix é portalado no `<body>`, mas dentro de um `Dialog` com `max-h-[90vh]` + lista de dropdown longa, o painel abre sobre as próximas linhas, cortando visualmente as opções e sem indicação clara de que rola.
-- Não há busca. Com 20-50 categorias, o usuário precisa scrollar dentro de um popover pequeno pra achar uma. Em resoluções médias, o painel cabe uns 6 itens e o resto some.
-- Ter 3 campos por linha ocupa muito espaço horizontal — os selects ficam estreitos, o texto da categoria trunca, e abrir subcategoria depende de já ter escolhido categoria (fluxo de 3 cliques).
-- Quando o usuário rola a lista do modal com o dropdown aberto, o portal não acompanha e some/desalinha.
+A abordagem pedida pelo usuário é a mais confiável e direta: **se a mesma descrição já existe no histórico, copie exatamente a categoria usada da última vez, sem passar por heurística nem IA.**
 
-## Solução
+## Solução: Layer 0 — Match por descrição normalizada
 
-Substituir os 3 selects por **um único combobox hierárquico com busca**, no mesmo espírito do `UnifiedEntityFilter` que você aprovou. Um clique → popover com input de busca no topo → lista de caminhos completos (`Alimentação › Restaurante › Almoço`) navegável e pesquisável.
+Nova primeira camada em `src/hooks/useCategorySuggestions.ts`, antes das Layers 1/2/3 e antes do fallback de IA.
 
-### Novo componente: `CategoryPathCombobox`
+### Regra de normalização (agressiva, focada em recuperar a "cara" do lançamento)
 
-Arquivo novo: `src/components/lancamentos/CategoryPathCombobox.tsx`.
+Aplicada tanto na descrição da linha importada quanto em cada descrição do histórico:
 
-- Baseado em `Popover` + `Command` (`CommandInput` / `CommandList` / `CommandItem` / `CommandEmpty`) do shadcn — mesmo stack do `UnifiedEntityFilter`.
-- Recebe `categories` (flat com `parent_id`) e `type` (receita/despesa) para filtrar.
-- Monta internamente todos os caminhos possíveis (raiz, raiz›sub, raiz›sub›sub²) filtrando pelo `type`.
-- Trigger: botão do tamanho de um input (`h-8`), mostra o caminho selecionado com separadores `›` e placeholder "Selecionar categoria". Ícone de chevron.
-- Popover: `align="start"` `sideOffset={4}` `className="w-[360px] p-0"`, `PopoverContent` já é portalado — não sofre com clipping do modal.
-- Command:
-  - `CommandInput` com `placeholder="Buscar categoria…"` — fuzzy match por texto do caminho inteiro (o `Command` do shadcn já faz isso).
-  - `CommandList` com `className="max-h-[280px]"` — scroll interno explícito.
-  - `CommandEmpty`: "Nenhuma categoria. [+ Criar nova]" — se `onCreateCategory` existir, botão inline pra criar no nome digitado (usa o texto do input como sugestão).
-  - `CommandItem` por caminho: mostra o caminho hierárquico completo, com a folha em negrito e ancestrais em `text-muted-foreground`. Ao selecionar, chama `onChange({ category, subcategory, subcategory2 })` e fecha o popover.
-  - Item fixo no rodapé: "**+ Criar nova categoria**" que abre um pequeno inline form (input + botão) dentro do próprio popover para criar na raiz — reaproveita `onCreateCategory` já existente.
-- Um botão pequeno "Limpar" no rodapé zera pra "Sem categoria".
+1. `toLowerCase` + remover acentos.
+2. Remover marcador de parcela no fim: `\b\d+\s*\/\s*\d+\b` (`"le bombom 02/03"` → `"le bombom"`).
+3. Remover prefixos de adquirente: `mp *`, `cb*`, `pag*`, `pp*`, `pic*`.
+4. Colapsar espaços e trim.
+5. **Não** filtrar stopwords nem exigir tamanho mínimo — queremos identidade da descrição, não fingerprint.
 
-### Integração no `ReconcileStep`
+Chave resultante para o histórico: `normDesc`. A mesma normalização é aplicada na linha da importação.
 
-- Trecho linhas ~870-960: substituir o bloco dos 3 `<Select>` por **um** `<CategoryPathCombobox ... />`.
-- Remove a lógica de derivar `subs` / `subSubs` inline por linha — o combobox faz isso.
-- `createCatState` continua sendo usado como fallback: o combobox chama `onCreateCategory` diretamente quando disponível; sem ele, cai no diálogo antigo (para compatibilidade).
-- Nas colunas do grid da linha (linha ~830 aproximadamente), o slot que hoje comporta 3 selects vira 1 campo — dá pra reduzir a largura da coluna e o texto da descrição respira mais.
+### Lookup
 
-### Nada mais muda
+- Construir `Map<normDesc, HistEntry[]>` sobre a mesma base de amostras já carregada (`transactions` 24m + `ai_pending_transactions` aprovadas), filtrando por `type` compatível.
+- Para cada linha a categorizar:
+  1. Calcular `normDesc` da descrição.
+  2. Buscar no mapa.
+  3. Se houver ≥1 entrada com `type` batendo:
+     - Preferir a mais recente (`payment_date` desc).
+     - Empate: preferir a de maior profundidade (com `subcategory2` > `subcategory` > só `category`).
+  4. Aplicar como sugestão com `source: "history"` e `confidence: 4` (novo topo, acima do merchant key exato = 3).
+- Se não achar por igualdade exata, tentar também **`startsWith`** do `normDesc` do histórico contra o `normDesc` da linha (cobre "LE BOMBOM" no histórico casando "LE BOMBOM 02/03" na importação e vice-versa, já que o `02/03` foi removido — mas mantém segurança para casos onde só a raiz existe).
+- Só se Layer 0 falhar, cair para Layers 1/2/3 atuais e depois IA.
 
-- `useCategorySuggestions` e o overlay de loading não são tocados.
-- Preview/lógica de conciliação, ações "Vincular/Criar/Ignorar", orphans, tudo intacto.
-- `CategorySelectWithCreate.tsx` fica no repositório (é usado no `TransactionFormModal`); mudança é local ao fluxo de import.
+### UI / rótulo
 
-## Detalhes técnicos
+Manter o badge existente "baseado no histórico". Como Layer 0 é um match direto, ele já se encaixa em `source: "history"` sem mudanças de UI.
 
-- Filtro por `type`: uma categoria participa dos caminhos se `type === row.type` ou `type === 'ambos'` ou `type === null`. Subcategorias herdam via `parent_id`.
-- Construção dos paths: DFS a partir das raízes, gera `{ path: string[], leafId, leafName, categoryName, subcategoryName?, subcategory2Name? }` — memoizado por `[categories, type]`.
-- Match visual da sugestão da IA: quando `rowCategories[i].touched` for `false` e houver `suggestions[i]`, o trigger mostra um pequeno badge `Sparkles` do lado (mantém o padrão atual).
-- Sem dependência nova: `Command` já está instalado (é usado no `UnifiedEntityFilter`).
+## Arquivo alterado
+
+- `src/hooks/useCategorySuggestions.ts` — adicionar função `normalizeDescription`, construir o índice `byNormDesc` junto dos outros índices, e inserir o novo "Layer 0" no início do loop de `rows`.
+
+Nenhuma alteração em edge functions, schema ou UI de importação.
 
 ## Verificação
 
-- Abrir import de cartão com >30 categorias, abrir o combobox numa linha do meio da lista, rolar o modal — o popover deve permanecer ancorado corretamente ou fechar (comportamento nativo do Radix Popover é aceitável).
-- Digitar "resta" deve filtrar para "Alimentação › Restaurante".
-- Selecionar limpa "Sem categoria" e fecha.
-- Botão "+ Criar nova" no rodapé cria raiz e já a seleciona.
+Após implementar, testar com o extrato do usuário `espclin@hotmail.com` que trouxe `LE BOMBOM 02/03`, `DROGASIL 3066 03/03`, `AMAZONA WESTERN 10/10`: todos que têm igual (ou raiz igual) já lançados no histórico devem vir com a categoria idêntica à última vez, sem passar pela IA.
