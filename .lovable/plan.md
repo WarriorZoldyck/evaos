@@ -1,23 +1,36 @@
+
+## Problema
+
+O `CategoryPathCombobox` está listando de uma vez **todos os caminhos possíveis** (categoria, sub, sub-sub) — o resultado é uma lista longa e poluída, com muitas linhas repetindo o mesmo pai. O usuário quer voltar à experiência anterior: mostrar só o nível atual e ir abrindo os filhos conforme clica, como um menu em cascata (bonito e funcional).
+
 ## Objetivo
-Remover completamente a sugestão via IA na importação de extrato. Manter **apenas** o cruzamento com o histórico do próprio usuário (Layer 0 — descrição normalizada) + os matches determinísticos por merchant key/prefix/tokens que também vêm do histórico. Se não houver match no histórico, a linha fica **"Sem categoria"** para o usuário ajustar manualmente.
 
-## Mudanças
+Manter o combobox único (unificado, com portal, criação inline — nada disso muda), mas mudar a **forma de renderizar as opções**:
 
-### 1. `src/hooks/useCategorySuggestions.ts`
-- Remover a chamada à edge function `suggest-categories` (Stage 2 / IA).
-- Remover a flag/label "sugerido pela IA" do retorno — todo match passa a ser "baseado no histórico" (ou nada).
-- Manter Layer 0 (descrição normalizada idêntica) e as camadas determinísticas de merchant key / prefix / token overlap com consenso ≥60%, todas alimentadas por `transactions` (24m/5k) + `ai_pending_transactions` aprovadas.
-- Linhas sem match → `categoryId: null` / "Sem categoria".
-- Ajustar `suggestLoading` para refletir só a fase de histórico (bem mais rápida).
+- Estado **navegação** (padrão, sem busca): mostrar só o nível atual.
+  - Nível 0: lista das categorias raiz.
+  - Ao clicar numa categoria com filhos: entra no nível 1 (subcategorias daquela categoria) com um cabeçalho de breadcrumb + botão "voltar".
+  - Idem para nível 2.
+  - Cada item com filhos tem um chevron `›` à direita indicando drill-down.
+  - Cada item pode ser **selecionado** clicando na área do label (ou num pequeno "Usar este nível" quando houver filhos), para permitir escolher só a categoria pai sem descer.
+- Estado **busca** (usuário digitou no input): aí sim mostrar a lista achatada de caminhos completos (como está hoje), para encontrar rapidamente por texto. Volta pra navegação quando a busca é limpa.
 
-### 2. `src/components/lancamentos/import/ReconcileStep.tsx`
-- Remover a badge/texto "✨ sugerido pela IA" — só permanece o rótulo "📖 baseado no histórico" quando houver match.
-- Overlay de carregamento continua igual, só muda o texto para algo como "EVA está cruzando com seu histórico…".
+## Comportamento
 
-### 3. `supabase/functions/suggest-categories/index.ts`
-- Não vamos deletar a função (evita quebrar deploys/histórico), mas ela deixa de ser chamada. Opcional: adicionar um comentário no topo marcando como deprecated.
+- "Sem categoria" e o rodapé de criação (`+ Nova categoria`, `+ Sub em "X"`, `+ Sub-sub em "Y"`) continuam disponíveis em todos os níveis; o botão de "Sub em" usa o contexto do nível atual em que o usuário está navegando (não só o `value` selecionado).
+- Ao selecionar um item folha, fecha o popover como hoje.
+- Ao selecionar um item que tem filhos: por padrão **entra no nível** (drill-down). Um botão/atalho separado permite escolhê-lo como valor final sem descer.
+- Ao reabrir o popover, se já houver `value`, iniciar a navegação já posicionada no nível do valor selecionado (ex.: valor = `Alimentação > Restaurante` → abrir mostrando as subs de `Alimentação` com `Restaurante` marcado).
+- Tipo (`receita`/`despesa`) continua filtrando raízes como hoje.
 
-## Resultado esperado
-- `LE BOMBOM 03/03` → casa com `LE BOMBOM` no histórico → `Vestuário › Roupas › Vitória`.
-- Descrições sem histórico compatível → `Sem categoria`, sem "chutes" da IA.
-- Importação fica mais rápida (sem round-trip pra Gemini) e mais previsível.
+## Arquivos afetados
+
+- `src/components/lancamentos/CategoryPathCombobox.tsx` — única alteração. Refatorar a renderização interna do `Command`:
+  - Novo estado `navPath: string[]` (nomes do caminho atual, vazio = raiz).
+  - Derivar `currentChildren` a partir do mapa `byParent` já existente.
+  - Renderizar cabeçalho com breadcrumb + botão `← Voltar` quando `navPath.length > 0`.
+  - Quando `query` está vazio: renderizar `currentChildren`.
+  - Quando `query` tem texto: renderizar `paths` achatado (comportamento atual) para busca global.
+  - Manter `CommandInput`, `CommandEmpty`, criação inline e "Sem categoria".
+
+Nenhuma mudança em outros componentes, hooks, ou lógica de sugestão/histórico.
