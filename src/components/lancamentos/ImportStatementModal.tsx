@@ -853,26 +853,41 @@ export function ImportStatementModal({
   // priority — overrides history/AI suggestions for untouched rows).
   useEffect(() => {
     if (Object.keys(matches).length === 0) return;
+    if (categories.length === 0) return;
+    const byId = new Map(categories.map((c) => [c.id, c] as const));
+    const byName = new Map(categories.map((c) => [c.name, c] as const));
+    const toName = (v: string | null | undefined): string | null => {
+      if (!v) return null;
+      const hit = byId.get(v);
+      if (hit) return hit.name;
+      if (byName.has(v)) return v;
+      return null;
+    };
     setRowCategories((prev) => {
       const next = { ...prev };
       let changed = false;
       Object.entries(matches).forEach(([k, m]) => {
         const idx = Number(k);
         const cand = m?.best?.candidate as any;
-        if (!cand?.category) return;
+        const catName = toName(cand?.category);
+        if (!catName) return;
         if (next[idx]?.touched) return;
-        if (next[idx]?.category === cand.category) return;
-        next[idx] = {
-          category: cand.category,
-          subcategory: cand.subcategory ?? undefined,
-          subcategory2: cand.subcategory2 ?? undefined,
-          touched: false,
-        };
+        // Prefer the deepest leaf so resolveCategoryPath rebuilds the 3-level path.
+        const leafName =
+          toName(cand?.subcategory2) || toName(cand?.subcategory) || catName;
+        const resolved = resolveCategoryPath(leafName, categories);
+        const same =
+          next[idx]?.category === resolved.category &&
+          next[idx]?.subcategory === resolved.subcategory &&
+          next[idx]?.subcategory2 === resolved.subcategory2;
+        if (same) return;
+        next[idx] = { ...resolved, touched: false };
         changed = true;
       });
       return changed ? next : prev;
     });
-  }, [matches]);
+  }, [matches, categories]);
+
 
 
 
