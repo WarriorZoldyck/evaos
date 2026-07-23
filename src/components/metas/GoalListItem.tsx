@@ -18,41 +18,39 @@ export function GoalListItem({ goal, onClick }: GoalListItemProps) {
   return (
     <button
       onClick={() => onClick(goal)}
-      className="w-full flex items-center gap-4 p-4 rounded-2xl bg-card hover:bg-accent/50 border border-border transition-colors text-left group"
+      className="w-full flex items-center gap-4 py-4 px-1 text-left group hover:bg-accent/40 transition-colors rounded-lg"
     >
       <div className={`
-        relative h-14 w-14 shrink-0 rounded-full flex items-center justify-center
+        h-12 w-12 shrink-0 rounded-full flex items-center justify-center
         ${isCompleted ? "bg-success/15" : "bg-primary/10"}
       `}>
-        <LifeBuoy className={`h-7 w-7 ${isCompleted ? "text-success" : "text-primary"}`} />
-        <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 56 56">
-          <circle cx="28" cy="28" r="25" fill="none" stroke="hsl(var(--border))" strokeWidth="2.5" />
-          <circle
-            cx="28" cy="28" r="25"
-            fill="none"
-            stroke={isCompleted ? "hsl(var(--success))" : "hsl(var(--primary))"}
-            strokeWidth="2.5"
-            strokeDasharray={`${(progress / 100) * 157} 157`}
-            strokeLinecap="round"
-            className="transition-all duration-700"
+        <LifeBuoy className={`h-6 w-6 ${isCompleted ? "text-success" : "text-primary"}`} strokeWidth={1.75} />
+      </div>
+
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="font-medium text-foreground truncate">{goal.name}</p>
+          <p className="font-semibold font-mono text-foreground whitespace-nowrap text-sm">
+            {formatCurrency(goal.current_amount)}
+          </p>
+        </div>
+        <div className="h-1 rounded-full bg-muted overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-700 ${isCompleted ? "bg-success" : "bg-primary"}`}
+            style={{ width: `${progress}%` }}
           />
-        </svg>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground truncate">
+            Meta {formatCurrency(goal.target_amount)}
+          </p>
+          <p className="text-xs text-muted-foreground font-medium tabular-nums">
+            {progress.toFixed(0)}%
+          </p>
+        </div>
       </div>
 
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-foreground truncate">{goal.name}</p>
-        <p className="text-xs text-muted-foreground truncate">
-          Meta: {formatCurrency(goal.target_amount)} · {progress.toFixed(0)}%
-        </p>
-      </div>
-
-      <div className="text-right shrink-0">
-        <p className="font-bold font-mono text-foreground whitespace-nowrap">
-          {formatCurrency(goal.current_amount)}
-        </p>
-      </div>
-
-      <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+      <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
     </button>
   );
 }

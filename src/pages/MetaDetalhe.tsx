@@ -8,8 +8,11 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  ArrowLeft, Plus, Minus, Settings, Trash2, CalendarDays,
-  ArrowUpCircle, ArrowDownCircle, Zap, TrendingDown, ChevronRight, Check,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  ArrowLeft, Plus, Minus, Settings, Trash2, CalendarDays, MoreVertical,
+  ArrowUpCircle, ArrowDownCircle, Zap, TrendingDown, ChevronRight, Check, Pencil,
 } from "lucide-react";
 import { useGoals, type GoalMovement } from "@/hooks/useGoals";
 import { GoalRadarLarge } from "@/components/metas/GoalRadarLarge";
@@ -24,6 +27,17 @@ const formatDateLong = (d: string) => {
   const date = new Date(d + "T00:00:00");
   const months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
   return `${date.getDate()}/${months[date.getMonth()]}/${date.getFullYear()}`;
+};
+
+const groupKey = (iso: string) => {
+  const d = new Date(iso);
+  const today = new Date();
+  const yest = new Date(); yest.setDate(today.getDate() - 1);
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, today)) return "Hoje";
+  if (sameDay(d, yest)) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
 };
 
 export default function MetaDetalhe() {
@@ -65,11 +79,22 @@ export default function MetaDetalhe() {
     ? Math.ceil((new Date(goal.deadline + "T00:00:00").getTime() - Date.now()) / 86400000)
     : null;
 
+  const grouped = useMemo(() => {
+    const map = new Map<string, GoalMovement[]>();
+    for (const m of movements.slice(0, 5)) {
+      const k = groupKey(m.created_at);
+      const arr = map.get(k) ?? [];
+      arr.push(m);
+      map.set(k, arr);
+    }
+    return Array.from(map.entries());
+  }, [movements]);
+
   if (loading && !goal) {
     return (
-      <div className="space-y-6 max-w-2xl mx-auto">
+      <div className="metas-scope space-y-6 max-w-2xl mx-auto">
         <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-52 w-52 mx-auto rounded-full" />
+        <Skeleton className="h-56 w-56 mx-auto rounded-full" />
         <Skeleton className="h-24 w-full rounded-2xl" />
       </div>
     );
@@ -77,10 +102,10 @@ export default function MetaDetalhe() {
 
   if (!goal) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center max-w-2xl mx-auto">
-        <p className="text-muted-foreground">Meta não encontrada.</p>
+      <div className="metas-scope flex flex-col items-center justify-center py-20 text-center max-w-2xl mx-auto">
+        <p className="text-muted-foreground">Cofrinho não encontrado.</p>
         <Button variant="outline" className="mt-4" onClick={() => navigate("/metas")}>
-          <ArrowLeft className="h-4 w-4 mr-2" /> Voltar para Metas
+          <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
         </Button>
       </div>
     );
@@ -94,179 +119,205 @@ export default function MetaDetalhe() {
   const hasByEvent = goal.auto_reserve_enabled && (goal.auto_reserve_per_expense > 0 || goal.auto_reserve_per_sale > 0);
 
   return (
-    <div className="space-y-6 animate-fade-in max-w-2xl mx-auto pb-8">
-      {/* Nav */}
-      <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/metas")} className="gap-2 -ml-2">
-          <ArrowLeft className="h-4 w-4" /> Metas
+    <div className="metas-scope space-y-8 animate-fade-in max-w-2xl mx-auto pb-8">
+      {/* Topbar */}
+      <div className="flex items-center justify-between gap-2">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/metas")} aria-label="Voltar">
+          <ArrowLeft className="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setDeleteOpen(true)} className="text-destructive hover:text-destructive">
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <h1 className="flex-1 text-center font-semibold text-foreground truncate">{goal.name}</h1>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" aria-label="Mais opções">
+              <MoreVertical className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setConfigOpen(true)}>
+              <Pencil className="h-4 w-4 mr-2" /> Editar
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => setDeleteOpen(true)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Excluir
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Título + prazo */}
-      <div className="text-center space-y-1">
-        <h1 className="text-3xl font-bold font-display text-foreground">{goal.name}</h1>
-        {goal.deadline ? (
-          <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5" />
-            {isCompleted
-              ? "Meta atingida"
-              : daysLeft !== null && daysLeft < 0
-                ? `Prazo expirado em ${formatDateLong(goal.deadline)}`
-                : `O prazo acaba em ${formatDateLong(goal.deadline)}`}
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">Sem prazo definido</p>
-        )}
-      </div>
-
-      {/* Radar + saldo */}
-      <div className="space-y-3">
+      {/* Herói */}
+      <div className="space-y-5">
         <GoalRadarLarge progress={progress} isCompleted={isCompleted} />
-        <div className="text-center space-y-1">
-          <p className="text-4xl font-bold font-mono text-foreground">{formatCurrency(goal.current_amount)}</p>
-          <p className="text-sm text-muted-foreground">
-            {progress.toFixed(0)}% de {formatCurrency(goal.target_amount)}
+        <div className="text-center space-y-1.5">
+          <p className="text-5xl font-bold font-mono text-foreground tracking-tight">
+            {formatCurrency(goal.current_amount)}
           </p>
+          <p className="text-sm text-muted-foreground">
+            de {formatCurrency(goal.target_amount)} · {progress.toFixed(0)}%
+          </p>
+          {goal.deadline && !isCompleted && (
+            <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5 pt-1">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {daysLeft !== null && daysLeft < 0
+                ? `Prazo expirado em ${formatDateLong(goal.deadline)}`
+                : `Prazo: ${formatDateLong(goal.deadline)}`}
+            </p>
+          )}
           {isCompleted && (
-            <Badge className="bg-success text-success-foreground border-0 gap-1 mt-1">
-              <Check className="h-3 w-3" /> Meta atingida!
-            </Badge>
+            <div className="pt-1">
+              <Badge className="bg-success text-success-foreground border-0 gap-1">
+                <Check className="h-3 w-3" /> Meta atingida!
+              </Badge>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Ações */}
-      <div className="grid grid-cols-3 gap-3">
-        <button
+      {/* Ações em pílula */}
+      <div className="flex items-center justify-center gap-2 sm:gap-3">
+        <Button
           onClick={() => setAmountType("reserve")}
-          className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors"
+          size="lg"
+          className="rounded-full flex-1 sm:flex-none sm:px-8 gap-2"
         >
-          <Plus className="h-6 w-6 text-primary" />
-          <span className="text-sm font-medium text-primary">Reservar</span>
-        </button>
-        <button
+          <Plus className="h-4 w-4" /> Reservar
+        </Button>
+        <Button
           onClick={() => canWithdraw && setAmountType("withdraw")}
           disabled={!canWithdraw}
-          className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-muted hover:bg-muted/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="outline"
+          size="lg"
+          className="rounded-full flex-1 sm:flex-none sm:px-8 gap-2"
         >
-          <Minus className="h-6 w-6 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">Retirar</span>
-        </button>
-        <button
+          <Minus className="h-4 w-4" /> Retirar
+        </Button>
+        <Button
           onClick={() => setConfigOpen(true)}
-          className="flex flex-col items-center justify-center gap-2 py-5 rounded-2xl bg-primary/10 hover:bg-primary/15 transition-colors"
+          variant="ghost"
+          size="lg"
+          className="rounded-full gap-2"
         >
-          <Settings className="h-6 w-6 text-primary" />
-          <span className="text-sm font-medium text-primary">Configurar</span>
-        </button>
+          <Settings className="h-4 w-4" />
+          <span className="hidden sm:inline">Configurar</span>
+        </Button>
       </div>
 
       {/* Auto reserve */}
       <div className="space-y-3">
-        <h2 className="text-lg font-bold text-foreground">Guarde dinheiro automaticamente</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+          Guarde automaticamente
+        </h2>
+        <div className="divide-y divide-border rounded-2xl border border-border overflow-hidden bg-card">
           <button
             onClick={() => setConfigOpen(true)}
-            className="text-left p-4 rounded-2xl bg-card border border-border hover:border-primary/50 transition-colors"
+            className="w-full flex items-center gap-4 p-4 text-left hover:bg-accent/40 transition-colors"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Zap className="h-5 w-5 text-primary" />
+            <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Zap className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="font-medium text-foreground text-sm">Por frequência</p>
+                {hasFrequency && (
+                  <Badge className="bg-success/15 text-success hover:bg-success/15 border-0 text-[10px] px-1.5 h-4">
+                    Ativo
+                  </Badge>
+                )}
               </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground truncate">
+                {hasFrequency
+                  ? `${freqLabel} · ${formatCurrency(goal.auto_reserve_amount)}`
+                  : "Semanal, quinzenal ou mensal"}
+              </p>
             </div>
-            <div className="flex items-center gap-2 mb-1">
-              <p className="font-semibold text-foreground">Por frequência</p>
-              {hasFrequency ? (
-                <Badge className="bg-success/15 text-success hover:bg-success/15 border-0 text-[10px] px-1.5">Ativo</Badge>
-              ) : (
-                <Badge className="bg-primary/10 text-primary hover:bg-primary/10 border-0 text-[10px] px-1.5">Recomendado</Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {hasFrequency
-                ? `${freqLabel} · ${formatCurrency(goal.auto_reserve_amount)}`
-                : "Semanal, quinzenal ou mensal."}
-            </p>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
 
           <button
             onClick={() => setConfigOpen(true)}
-            className="text-left p-4 rounded-2xl bg-card border border-border hover:border-primary/50 transition-colors"
+            className="w-full flex items-center gap-4 p-4 text-left hover:bg-accent/40 transition-colors"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <TrendingDown className="h-5 w-5 text-primary" />
+            <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <TrendingDown className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="font-medium text-foreground text-sm">Por gasto ou venda</p>
+                {hasByEvent && (
+                  <Badge className="bg-success/15 text-success hover:bg-success/15 border-0 text-[10px] px-1.5 h-4">
+                    Ativo
+                  </Badge>
+                )}
               </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground truncate">
+                {hasByEvent
+                  ? [
+                      goal.auto_reserve_per_expense > 0 && `${formatCurrency(goal.auto_reserve_per_expense)}/gasto`,
+                      goal.auto_reserve_per_sale > 0 && `${formatCurrency(goal.auto_reserve_per_sale)}/venda`,
+                    ].filter(Boolean).join(" · ")
+                  : "Cada transação te aproxima do objetivo"}
+              </p>
             </div>
-            <div className="flex items-center gap-2 mb-1">
-              <p className="font-semibold text-foreground">Por gasto/venda</p>
-              {hasByEvent ? (
-                <Badge className="bg-success/15 text-success hover:bg-success/15 border-0 text-[10px] px-1.5">Ativo</Badge>
-              ) : (
-                <Badge className="bg-primary/10 text-primary hover:bg-primary/10 border-0 text-[10px] px-1.5">Recomendado</Badge>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {hasByEvent
-                ? [
-                    goal.auto_reserve_per_expense > 0 && `${formatCurrency(goal.auto_reserve_per_expense)} por gasto`,
-                    goal.auto_reserve_per_sale > 0 && `${formatCurrency(goal.auto_reserve_per_sale)} por venda`,
-                  ].filter(Boolean).join(" · ")
-                : "Cada gasto ou venda aproxima do objetivo."}
-            </p>
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           </button>
         </div>
       </div>
 
       {/* Movimentações */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-foreground">Movimentações</h2>
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Movimentações
+          </h2>
           {movements.length > 5 && (
             <button
               onClick={() => setHistoryOpen(true)}
-              className="text-sm text-primary hover:underline font-medium"
+              className="text-xs text-primary hover:underline font-medium"
             >
-              Ver todas →
+              Ver todas
             </button>
           )}
         </div>
 
         {movLoading ? (
           <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
           </div>
         ) : movements.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-8">
-            Nenhuma movimentação ainda. Comece reservando um valor.
+            Nenhuma movimentação ainda.
           </p>
         ) : (
-          <div className="space-y-2">
-            {movements.slice(0, 5).map((m) => (
-              <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl bg-card border border-border">
-                {m.type === "reserve" ? (
-                  <ArrowUpCircle className="h-8 w-8 text-success shrink-0" />
-                ) : (
-                  <ArrowDownCircle className="h-8 w-8 text-destructive shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate text-foreground">
-                    {m.description || (m.type === "reserve" ? "Dinheiro reservado" : "Dinheiro retirado")}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {new Date(m.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
-                    {" · "}
-                    {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-                <p className={`text-sm font-mono font-semibold whitespace-nowrap ${m.type === "reserve" ? "text-success" : "text-destructive"}`}>
-                  {m.type === "reserve" ? "+" : "-"}{formatCurrency(m.amount)}
+          <div className="space-y-4">
+            {grouped.map(([label, items]) => (
+              <div key={label}>
+                <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1 px-1">
+                  {label}
                 </p>
+                <div className="divide-y divide-border">
+                  {items.map((m) => (
+                    <div key={m.id} className="flex items-center gap-3 py-3 px-1">
+                      {m.type === "reserve" ? (
+                        <ArrowUpCircle className="h-6 w-6 text-success shrink-0" />
+                      ) : (
+                        <ArrowDownCircle className="h-6 w-6 text-destructive shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate text-foreground">
+                          {m.description || (m.type === "reserve" ? "Dinheiro reservado" : "Dinheiro retirado")}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          {new Date(m.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                      <p className={`text-sm font-mono font-semibold whitespace-nowrap ${m.type === "reserve" ? "text-success" : "text-destructive"}`}>
+                        {m.type === "reserve" ? "+" : "-"}{formatCurrency(m.amount)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -300,7 +351,7 @@ export default function MetaDetalhe() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Excluir meta "{goal.name}"?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir cofrinho "{goal.name}"?</AlertDialogTitle>
             <AlertDialogDescription>
               Esta ação não pode ser desfeita. Todo o histórico de movimentações será perdido.
             </AlertDialogDescription>

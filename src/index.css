@@ -230,3 +230,21 @@ input[type="number"]::-webkit-outer-spin-button {
       0 0 0 1px hsl(var(--border) / 0.3);
   }
 }
+
+/* Metas module — palette scoped to /metas routes (Mercado Pago green) */
+.metas-scope {
+  --primary: 152 60% 42%;
+  --primary-foreground: 0 0% 100%;
+  --primary-glow: 152 70% 55%;
+  --ring: 152 60% 42%;
+  --accent: 152 50% 94%;
+  --accent-foreground: 152 60% 20%;
+}
+.dark .metas-scope {
+  --primary: 152 55% 48%;
+  --primary-foreground: 152 40% 8%;
+  --primary-glow: 152 65% 60%;
+  --ring: 152 55% 48%;
+  --accent: 152 30% 16%;
+  --accent-foreground: 152 40% 88%;
+}
