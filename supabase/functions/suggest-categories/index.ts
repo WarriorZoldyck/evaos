@@ -53,13 +53,17 @@ Deno.serve(async (req) => {
 
 REGRAS:
 - Responda APENAS com JSON puro, sem markdown, sem texto extra.
-- Para cada item recebido, escolha a categoria mais provável da lista fornecida.
+- Para cada item recebido, escolha a categoria MAIS PROVÁVEL da lista fornecida (sempre escolha uma; nunca use null).
 - A categoria DEVE ser exatamente uma string da lista (preserve acentos e maiúsculas).
-- TODO item recebido DEVE estar no array de resposta. Use null somente se realmente nenhuma categoria fizer sentido.
+- Adicione um campo "confidence" com "high", "medium" ou "low":
+  * high: a descrição casa claramente com a categoria (ex.: "NETFLIX" → Streaming).
+  * medium: casamento razoável por semelhança de merchant/segmento.
+  * low: chute — você não tem certeza, mas é a melhor opção da lista.
+- TODO item recebido DEVE estar no array de resposta.
 - Considere tipo (receita/despesa), valor e descrição.
 
 FORMATO DE SAÍDA:
-{"suggestions": [{"index": 0, "category": "Alimentação"}, {"index": 1, "category": null}]}`;
+{"suggestions": [{"index": 0, "category": "Alimentação", "confidence": "high"}, {"index": 1, "category": "Outros", "confidence": "low"}]}`;
 
     const chunkSize = 25;
     const batches: typeof items[] = [];
@@ -81,7 +85,7 @@ ${batch
   )
   .join("\n")}
 
-Retorne o JSON com a sugestão de categoria para CADA índice listado.`;
+Retorne o JSON com a sugestão de categoria + confidence para CADA índice listado.`;
 
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -90,7 +94,7 @@ Retorne o JSON com a sugestão de categoria para CADA índice listado.`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
+          model: "google/gemini-3.6-flash",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
@@ -114,14 +118,13 @@ Retorne o JSON com a sugestão de categoria para CADA índice listado.`;
             { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
-        // For partial failures, continue with the suggestions we already have
         continue;
       }
 
       const data = await aiResponse.json();
       const content = data?.choices?.[0]?.message?.content ?? "{}";
 
-      let parsed: { suggestions?: { index: number; category: string | null }[] } = {};
+      let parsed: { suggestions?: { index: number; category: string | null; confidence?: string }[] } = {};
       try {
         parsed = JSON.parse(content);
       } catch {
@@ -137,6 +140,12 @@ Retorne o JSON com a sugestão de categoria para CADA índice listado.`;
 
       for (const s of parsed.suggestions || []) {
         if (typeof s.index !== "number") continue;
+        // Drop low-confidence suggestions — user reviews "Sem categoria" manually
+        const conf = (s.confidence || "").toLowerCase();
+        if (conf === "low") {
+          allSuggestions.push({ index: s.index, category: null });
+          continue;
+        }
         let mapped: string | null = null;
         if (s.category) {
           const exact = categoryNames.includes(s.category) ? s.category : null;
@@ -145,6 +154,7 @@ Retorne o JSON com a sugestão de categoria para CADA índice listado.`;
         allSuggestions.push({ index: s.index, category: mapped });
       }
     }
+
 
     return new Response(JSON.stringify({ suggestions: allSuggestions }), {
       status: 200,
