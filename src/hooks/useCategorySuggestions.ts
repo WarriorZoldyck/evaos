@@ -62,11 +62,18 @@ export function useCategorySuggestions() {
 
       try {
         // ---- Stage 1: history match ----
-        // We look up not just the top-level `category`, but the full triple
-        // (category, subcategory, subcategory2) so we can propose the deepest
-        // leaf the user has consistently classified. `resolveCategoryPath` in
-        // the caller expands a leaf name back into the 3-level path.
-        const validCatNames = new Set(categories.map((c) => c.name));
+        // transactions.category / subcategory / subcategory2 may store either
+        // category UUIDs (new writes) or names (legacy). Normalize to names
+        // via the categories lookup before indexing.
+        const byId = new Map(categories.map((c) => [c.id, c] as const));
+        const byName = new Map(categories.map((c) => [c.name, c] as const));
+        const toName = (v: string | null | undefined): string | null => {
+          if (!v) return null;
+          const hit = byId.get(v);
+          if (hit) return hit.name;
+          if (byName.has(v)) return v;
+          return null;
+        };
         const sinceISO = (() => {
           const d = new Date();
           d.setMonth(d.getMonth() - 6);
@@ -91,12 +98,12 @@ export function useCategorySuggestions() {
         };
         const tokenIdx = new Map<string, HistEntry[]>();
         (history || []).forEach((h: any) => {
-          if (!h.category || !validCatNames.has(h.category)) return;
+          const catName = toName(h.category);
+          if (!catName) return;
           const entry: HistEntry = {
-            category: h.category,
-            subcategory: h.subcategory && validCatNames.has(h.subcategory) ? h.subcategory : null,
-            subcategory2:
-              h.subcategory2 && validCatNames.has(h.subcategory2) ? h.subcategory2 : null,
+            category: catName,
+            subcategory: toName(h.subcategory),
+            subcategory2: toName(h.subcategory2),
             type: h.type,
           };
           tokenize(h.description || "").forEach((tok) => {
@@ -105,6 +112,7 @@ export function useCategorySuggestions() {
             tokenIdx.set(tok, arr);
           });
         });
+
 
         const unresolved: NewRowInput[] = [];
         for (const row of rows) {
