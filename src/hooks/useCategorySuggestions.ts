@@ -235,15 +235,6 @@ export function useCategorySuggestions() {
           }
         }
 
-        // Temporary diagnostic log — remove once we confirm Stage 1 hit rate.
-        console.log("[useCategorySuggestions] summary", {
-          effectiveUserId,
-          historyCount: (history || []).length,
-          rowsIn: rows.length,
-          resolvedByHistory,
-          resolvedByAI,
-          unresolvedCount: unresolved.length - resolvedByAI,
-        });
 
         setSuggestions(result);
         return result;
