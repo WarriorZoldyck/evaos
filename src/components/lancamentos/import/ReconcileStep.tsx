@@ -1130,11 +1130,12 @@ export function ReconcileStep({
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-medium">
-                  EVA está categorizando {rows.length} lançamento{rows.length === 1 ? "" : "s"}…
+                  EVA está cruzando com seu histórico…
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Isso pode levar alguns segundos em extratos grandes.
+                  Buscando categorias já usadas em lançamentos anteriores.
                 </p>
+
               </div>
               <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">
                 <div className="h-full w-full rounded-full bg-gradient-to-r from-transparent via-primary to-transparent bg-[length:200%_100%] animate-shimmer" />
