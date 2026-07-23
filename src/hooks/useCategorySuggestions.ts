@@ -121,16 +121,21 @@ export function useCategorySuggestions() {
             unresolved.push(row);
             continue;
           }
-          // Score each triple by token+type matches
-          const tripleCounts = new Map<string, { entry: HistEntry; score: number }>();
+          // Score each triple by token+type matches; track if any winning token was long (>=6)
+          const tripleCounts = new Map<string, { entry: HistEntry; score: number; longHit: boolean }>();
           tokens.forEach((tok) => {
             const hits = tokenIdx.get(tok) || [];
+            const isLong = tok.length >= 6;
             hits.forEach((h) => {
               if (h.type !== row.type) return;
               const key = `${h.category}||${h.subcategory ?? ""}||${h.subcategory2 ?? ""}`;
               const cur = tripleCounts.get(key);
-              if (cur) cur.score += 1;
-              else tripleCounts.set(key, { entry: h, score: 1 });
+              if (cur) {
+                cur.score += 1;
+                if (isLong) cur.longHit = true;
+              } else {
+                tripleCounts.set(key, { entry: h, score: 1, longHit: isLong });
+              }
             });
           });
           if (tripleCounts.size === 0) {
@@ -138,7 +143,7 @@ export function useCategorySuggestions() {
             continue;
           }
           // Pick top triple (deepest path wins tie-breaks)
-          let best: { entry: HistEntry; score: number } | null = null;
+          let best: { entry: HistEntry; score: number; longHit: boolean } | null = null;
           for (const cur of tripleCounts.values()) {
             if (!best) { best = cur; continue; }
             if (cur.score > best.score) { best = cur; continue; }
@@ -148,10 +153,9 @@ export function useCategorySuggestions() {
               if (depthCur > depthBest) best = cur;
             }
           }
-          // Require at least 2 token matches on the winning triple
-          if (best && best.score >= 2) {
-            // Return the DEEPEST leaf name so resolveCategoryPath expands the
-            // full 3-level path on the caller side.
+          // Accept: ≥2 token matches OR exactly 1 match if that token is long (≥6 letters)
+          const accept = !!best && (best.score >= 2 || (best.score === 1 && best.longHit));
+          if (accept && best) {
             const leaf =
               best.entry.subcategory2 || best.entry.subcategory || best.entry.category;
             result[row.index] = {
@@ -165,6 +169,7 @@ export function useCategorySuggestions() {
             unresolved.push(row);
           }
         }
+
 
 
         // ---- Stage 2: AI fallback ----
