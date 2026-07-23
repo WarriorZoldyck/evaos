@@ -883,15 +883,12 @@ export function ReconcileStep({
                               {sug && !currentCat.touched && currentCat.category === sug.category && (
                                 <span
                                   className="text-[10px] text-muted-foreground flex items-center gap-1"
-                                  title={sug.source === "history" ? "Baseado em lançamentos anteriores seus" : "Sugerido pela IA"}
+                                  title="Baseado em lançamentos anteriores seus"
                                 >
-                                  {sug.source === "history" ? (
-                                    <><BookOpen className="h-2.5 w-2.5" /> baseado no histórico</>
-                                  ) : (
-                                    <><Sparkles className="h-2.5 w-2.5 text-amber-500" /> sugerido pela IA</>
-                                  )}
+                                  <BookOpen className="h-2.5 w-2.5" /> baseado no histórico
                                 </span>
                               )}
+
                             </div>
                           </td>
                           <td className="p-2 text-center align-top">
