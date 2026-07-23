@@ -1,58 +1,61 @@
 
-# Redesign da página de Metas — inspirado nos Cofrinhos do MP
+# Redesign de Metas — mais próximo do Mercado Pago
 
-As referências mostram três padrões fortes que podemos adaptar sem quebrar a lógica atual (schema `goals` + `goal_movements` permanece igual):
+Escopo focado em dois pontos escolhidos: **Lista de metas (Cofrinhos)** e **Tela de detalhe**. Paleta verde aplicada **apenas dentro do módulo `/metas`** — o resto do app segue com o cyan EVA.
 
-## 1. Lista principal (`/metas`) — visão "Cofrinhos"
+## 1. Paleta verde local (escopo Metas)
 
-Substituir os cards atuais (ícone + progress bar horizontal) por uma **lista limpa estilo MP**:
+Introduzir tokens semânticos locais no `src/index.css`, aplicados só via classe container `.metas-scope`:
 
-- Header da página com saldo consolidado: **"R$ X,XX"** (soma de `current_amount` de todas as metas do contexto ativo) + subtítulo tipo "Guardado em N metas".
-- Cada meta vira uma linha clicável com:
-  - Ícone LifeBuoy dentro de círculo suave (mantém identidade EVA)
-  - Nome + subtítulo "Meta: R$ X.XXX"
-  - Valor atual à direita
-  - Chevron para abrir o detalhe
-- Botão "Nova meta" flutuante no topo.
+```css
+.metas-scope {
+  --primary: 152 60% 42%;         /* verde MP ~#2BAE66 */
+  --primary-foreground: 0 0% 100%;
+  --primary-glow: 152 70% 55%;
+  --ring: 152 60% 42%;
+}
+```
 
-Isso libera espaço vertical e fica muito mais escaneável no mobile (viewport atual 384px).
+Aplicar `className="metas-scope"` no wrapper das páginas `Metas.tsx` e `MetaDetalhe.tsx`. Nenhum hardcode de cor — tudo continua usando `text-primary`, `bg-primary/10`, etc.
 
-## 2. Página de detalhe da meta — nova rota `/metas/:id`
+## 2. Lista de metas (`src/pages/Metas.tsx`)
 
-Hoje tudo acontece em modais empilhados. Vamos criar uma tela dedicada (como o MP faz ao tocar num cofrinho):
+Reformatar para se aproximar da tela "Meus cofres":
 
-- Topo: nome da meta + prazo ("O prazo acaba em DD/mmm/AAAA" ou "Prazo atingido").
-- **Boia grande centralizada** (reaproveita o SVG radar do `GoalCard` atual, ampliado) com o valor **R$ X** logo abaixo e a % da meta.
-- **3 botões grandes lado a lado**: Reservar / Retirar / Configurar (mesmo layout dos três quadrados azul-claro da referência).
-- Bloco **"Guarde dinheiro automaticamente"** com 2 cards:
-  - **Por frequência** — abre modal com semanal/quinzenal/mensal + valor fixo (mapeia `auto_reserve_frequency` + `auto_reserve_amount`).
-  - **Por gasto/venda** — abre modal com "R$ X por gasto" e "R$ X por venda" (mapeia `auto_reserve_per_expense` / `auto_reserve_per_sale`).
-  - Cada card mostra badge **"Ativo"** (verde) quando configurado, senão **"Recomendado"** (azul suave).
-- **Movimentações** (últimas 5) reaproveitando `fetchMovements`, com link "Ver todas" que abre o `GoalHistoryModal` existente.
+- **Header enxuto:** título "Cofrinhos" + subtítulo curto, sem botão grande. Botão "Nova meta" vira ícone `+` circular no canto direito.
+- **Card de saldo total:** fundo sólido verde-escuro suave (`bg-primary/10` sobre superfície), valor grande em fonte mono, label "Total guardado" acima em caps pequeno, linha secundária "X cofrinhos ativos". Sem gradiente diagonal.
+- **Seção "Meus cofrinhos":** título pequeno em muted, e cada meta como linha em `GoalListItem` com:
+  - ícone de boia dentro de círculo verde-claro (sem anel de progresso ao redor — o progresso vai virar uma **barra fina** abaixo do nome, estilo MP);
+  - nome em peso médio, valor guardado grande à direita, meta e % em linha secundária;
+  - separadores sutis (`divide-y divide-border`) em vez de cards individuais com borda — visual de extrato.
+- **Empty state:** manter sugestões, mas em lista vertical com o mesmo padrão (ícone circular + texto), não em grid de cards.
 
-## 3. Melhorias funcionais aproveitando o redesign
+## 3. Tela de detalhe (`src/pages/MetaDetalhe.tsx`)
 
-- **Estado vazio mais rico** na lista: bloco "Opções para você ganhar mais" com 2–3 cards de sugestão (Reserva de emergência 6× despesas mensais, Meta de viagem, Troca de equipamento) que pré-preenchem o formulário ao clicar.
-- **Card promocional dispensável** no detalhe (estilo balão "Aproveite…") sugerindo ativar auto-reserva quando a meta ainda não tem — dismissível via localStorage.
-- Botão **"Retirar"** fica desabilitado (visualmente "apagado" como na ref) quando `current_amount === 0`.
-- Prazo vencido sem meta atingida mostra badge âmbar "Prazo expirado" em vez de dias restantes negativos.
+Aproximar da referência com boia + ações:
 
-## Detalhes técnicos
+- **Topbar:** back arrow à esquerda + nome da meta centralizado + ícone de menu (⋮) à direita abrindo `DropdownMenu` com Editar / Excluir. Remove o botão de lixeira solto.
+- **Bloco herói:** boia radar grande centralizada (mantém `GoalRadarLarge`, mas com traço mais fino e ícone maior), abaixo o valor em fonte mono bem grande, e "de R$ X · Y%" em muted. Badge "Meta atingida" só quando 100%.
+- **Ações em pílula:** trocar os 3 quadrados por 3 botões arredondados horizontais estilo MP:
+  - `Reservar` (primary sólido verde), `Retirar` (outline), `Configurar` (ghost com ícone).
+  - Layout: `flex gap-2 justify-center`, cada botão com ícone acima do label em telas estreitas OU ícone+label inline em telas largas.
+- **Seção "Guarde automaticamente":** título menor, dois cards empilhados (não grid) em mobile — cada card com ilustração/ícone à esquerda, título + descrição no meio, chevron à direita. Badge "Ativo" verde-claro quando configurado.
+- **Movimentações:** lista estilo extrato: sem cards individuais, apenas `divide-y`, ícone menor (h-6), data agrupada por dia com header sticky leve ("Hoje", "Ontem", "12 de nov").
 
-**Arquivos a modificar:**
-- `src/pages/Metas.tsx` — nova listagem tipo "Cofrinhos" + header com saldo total.
-- `src/components/metas/GoalCard.tsx` — reescrever para a linha compacta (ou renomear para `GoalListItem.tsx`).
-- `src/App.tsx` — adicionar rota `/metas/:id` (dentro do `AppLayout`).
+## 4. Componentes ajustados
 
-**Arquivos a criar:**
-- `src/pages/MetaDetalhe.tsx` — página de detalhe descrita acima.
-- `src/components/metas/GoalRadarLarge.tsx` — versão grande do anel radar (SVG reaproveitado).
-- `src/components/metas/AutoReserveCard.tsx` — cards "Por frequência" / "Por gasto".
-- `src/components/metas/AutoReserveFrequencyModal.tsx` e `AutoReserveByEventModal.tsx` — divide o `GoalFormModal` atual, que hoje mistura tudo.
+- `src/components/metas/GoalListItem.tsx` — remover SVG circular de progresso, adicionar barra horizontal fina (`h-1 rounded-full bg-muted` com fill `bg-primary`), reorganizar tipografia.
+- `src/components/metas/GoalRadarLarge.tsx` — traço mais fino (strokeWidth 4), boia maior e mais central, remover fundo circular pesado.
+- Novo helper `formatRelativeDate` inline para agrupar movimentações por "Hoje/Ontem/data".
 
-**Sem alterações em:**
-- `src/hooks/useGoals.ts` (schema e handlers permanecem).
-- Tabela `goals` / `goal_movements` — nenhuma migration.
-- `GoalAmountModal.tsx` / `GoalHistoryModal.tsx` — reaproveitados como estão.
+## 5. Detalhes técnicos
 
-**Design tokens:** manter paleta EVA (cyan `#48CAE4` no lugar do roxo MP, `bg-card` glass, `text-foreground`). Nada de hardcoded colors.
+- Sem mudanças em `useGoals`, schema ou modais existentes (`GoalFormModal`, `GoalAmountModal`, `GoalHistoryModal`).
+- Sem mudanças de rota — `/metas` e `/metas/:id` já existem.
+- Paleta verde escopada evita afetar dashboards, sidebar, gráficos e outros módulos.
+- Mantém acessibilidade: contraste verde primary vs foreground validado em light/dark.
+
+## Fora de escopo (para próxima iteração, se pedido)
+
+- Redesign dos cards de auto-reserva no estilo promocional MP com ilustrações.
+- Nova tela de movimentações completa (`GoalHistoryModal`).
