@@ -68,6 +68,21 @@ function buildMerchantKey(description: string): { key: string; prefix: string } 
   return { key, prefix: prefix.length >= 4 ? prefix : key };
 }
 
+// Layer 0 normalization: preserve identity of the description.
+// Strips only installment markers, acquirer prefixes and punctuation.
+function normalizeDescription(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b\d+\s*\/\s*\d+\b/g, " ")
+    .replace(/\b[a-z]{1,4}\s*\*+\s*/g, " ")
+    .replace(/\*+/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ---- History entry / voting ----
 
 type HistEntry = {
