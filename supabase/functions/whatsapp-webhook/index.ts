@@ -9,6 +9,18 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
 
+const EVA_MAINTENANCE_FALLBACK = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
+
+function isMaintenanceFallbackMessage(content: string | null | undefined): boolean {
+  const normalized = (content || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return normalized.includes("eva esta em manutencao")
+    || normalized.includes("manutencao no momento")
+    || normalized.includes("voltaremos ao normal");
+}
+
 // Confirmation/cancellation patterns
 const CONFIRM_PATTERNS = /^(sim|s|pode|pode criar|cria|ok|pode sim|sim pode|confirma|confirmar|yes|y|bora|manda|vai|faz|positivo|com certeza|claro)$/i;
 const CANCEL_PATTERNS = /^(não|nao|n|cancela|cancelar|cancel|no|deixa|esquece|nope|negativo|não precisa|nao precisa)$/i;
@@ -851,7 +863,7 @@ serve(async (req) => {
       if (phone) {
         await sendEvolutionReply(
           phone,
-          "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!"
+          EVA_MAINTENANCE_FALLBACK
         );
       }
       return new Response(
@@ -1251,11 +1263,13 @@ serve(async (req) => {
       .order("created_at", { ascending: true })
       .limit(500);
 
-    const allMessagesWithTs = (chatHistory || []).map((m: any) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-      created_at: m.created_at as string,
-    }));
+    const allMessagesWithTs = (chatHistory || [])
+      .filter((m: any) => !isMaintenanceFallbackMessage(m.content))
+      .map((m: any) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        created_at: m.created_at as string,
+      }));
 
     // Session cutoff: if the last stored message is older than 60 min, treat the
     // current incoming message as a NEW session — do not feed the old exchange
@@ -2575,7 +2589,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       } else if (aiResponse.status === 429) {
         friendly = "⏳ Estou recebendo muitas mensagens agora. Tente novamente em alguns segundos.";
       } else if (aiResponse.status === 402 || aiResponse.status === 403) {
-        friendly = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
+        friendly = EVA_MAINTENANCE_FALLBACK;
       }
 
       return respond({
@@ -2720,6 +2734,15 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           message: extracted && extracted.length > 0
             ? extracted
             : "Desculpe, não consegui processar sua mensagem agora. Pode tentar novamente?",
+          transaction: null,
+        }, 200);
+      }
+
+      if (isMaintenanceFallbackMessage(cleanText)) {
+        return respond({
+          success: true,
+          intent: "conversa",
+          message: "Já estou de volta por aqui. Pode me enviar novamente que eu processo agora. 😊",
           transaction: null,
         }, 200);
       }
