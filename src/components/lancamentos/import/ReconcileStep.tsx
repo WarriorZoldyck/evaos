@@ -1234,8 +1234,8 @@ export function ReconcileStep({
                   Isso pode levar alguns segundos em extratos grandes.
                 </p>
               </div>
-              <div className="h-1 w-48 overflow-hidden rounded-full bg-muted">
-                <div className="h-full w-1/3 rounded-full bg-primary animate-[shimmer_1.4s_ease-in-out_infinite]" />
+              <div className="h-1.5 w-48 overflow-hidden rounded-full bg-muted">
+                <div className="h-full w-full rounded-full bg-gradient-to-r from-transparent via-primary to-transparent bg-[length:200%_100%] animate-shimmer" />
               </div>
             </div>
           </div>
