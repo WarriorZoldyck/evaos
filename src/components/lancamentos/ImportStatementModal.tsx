@@ -848,6 +848,33 @@ export function ImportStatementModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length, categories.length]);
 
+  // Seed rowCategories from matched candidates: when a statement line matches
+  // an existing transaction in the system, inherit its category (highest
+  // priority — overrides history/AI suggestions for untouched rows).
+  useEffect(() => {
+    if (Object.keys(matches).length === 0) return;
+    setRowCategories((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      Object.entries(matches).forEach(([k, m]) => {
+        const idx = Number(k);
+        const cand = m?.best?.candidate as any;
+        if (!cand?.category) return;
+        if (next[idx]?.touched) return;
+        if (next[idx]?.category === cand.category) return;
+        next[idx] = {
+          category: cand.category,
+          subcategory: cand.subcategory ?? undefined,
+          subcategory2: cand.subcategory2 ?? undefined,
+          touched: false,
+        };
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [matches]);
+
+
 
   const toggleRow = (idx: number) => {
     setRows((prev) =>
