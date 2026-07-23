@@ -10,7 +10,6 @@ export interface SuggestionSource {
   subcategory2?: string;
 }
 
-
 interface NewRowInput {
   index: number;
   description: string;
@@ -18,27 +17,103 @@ interface NewRowInput {
   amount: number;
 }
 
+// ---- Text normalization / merchant fingerprinting ----
+
+const STOPWORDS = new Set([
+  "pagamento", "compra", "debito", "credito", "transf", "transferencia",
+  "pix", "tef", "boleto", "fatura", "parc", "parcela", "parcelado",
+  "mensal", "anual", "taxa", "tarifa", "saque", "deposito", "iof",
+  "estorno", "reembolso", "cobranca", "cobrança", "recebimento",
+  "compras", "pagto", "pgto", "cred", "deb",
+  // months
+  "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez",
+  "janeiro", "fevereiro", "marco", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+]);
+
 function normalize(s: string): string {
   return s
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^a-z0-9\s*]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function tokenize(s: string): string[] {
+function stripNoise(s: string): string {
   return normalize(s)
+    // strip trailing installment markers like "11/12"
+    .replace(/\b\d+\s*\/\s*\d+\b/g, " ")
+    // strip long numeric sequences (auth codes, doc numbers)
+    .replace(/\b\d{4,}\b/g, " ")
+    // strip acquirer prefixes like "mp *", "cb*", "pag*", "pp*"
+    .replace(/\b[a-z]{1,4}\s*\*+\s*/g, " ")
+    .replace(/\*+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function significantTokens(s: string): string[] {
+  return stripNoise(s)
     .split(" ")
-    .filter((t) => t.length >= 4);
+    .filter((t) => t.length >= 4 && !STOPWORDS.has(t) && !/^\d+$/.test(t));
+}
+
+function buildMerchantKey(description: string): { key: string; prefix: string } | null {
+  const toks = significantTokens(description);
+  if (toks.length === 0) return null;
+  const key = toks.slice(0, 2).join("");
+  const prefix = key.slice(0, 6);
+  return { key, prefix: prefix.length >= 4 ? prefix : key };
+}
+
+// ---- History entry / voting ----
+
+type HistEntry = {
+  category: string;
+  subcategory: string | null;
+  subcategory2: string | null;
+  type: string;
+  payment_date: string;
+};
+
+function pickBest(entries: HistEntry[]): HistEntry | null {
+  if (entries.length === 0) return null;
+  const counts = new Map<string, { entry: HistEntry; count: number; latest: string }>();
+  for (const e of entries) {
+    const k = `${e.category}||${e.subcategory ?? ""}||${e.subcategory2 ?? ""}`;
+    const cur = counts.get(k);
+    if (cur) {
+      cur.count += 1;
+      if (e.payment_date > cur.latest) cur.latest = e.payment_date;
+    } else {
+      counts.set(k, { entry: e, count: 1, latest: e.payment_date });
+    }
+  }
+  let best: { entry: HistEntry; count: number; latest: string } | null = null;
+  for (const c of counts.values()) {
+    if (!best) { best = c; continue; }
+    if (c.count > best.count) { best = c; continue; }
+    if (c.count === best.count) {
+      const dCur = c.entry.subcategory2 ? 3 : c.entry.subcategory ? 2 : 1;
+      const dBest = best.entry.subcategory2 ? 3 : best.entry.subcategory ? 2 : 1;
+      if (dCur > dBest) { best = c; continue; }
+      if (dCur === dBest && c.latest > best.latest) best = c;
+    }
+  }
+  if (!best) return null;
+  // require ≥60% consensus among the matched samples
+  if (best.count / entries.length < 0.6) return null;
+  return best.entry;
 }
 
 /**
  * Hybrid category suggestions:
- *  - First, look up similar past transactions of the same user. If multiple
- *    historical hits agree on a category, use it (deterministic, free).
- *  - Then call the AI edge function for the remaining items.
+ *  - Stage 1: learn from user's own history — merchant-key exact/prefix match,
+ *    then token overlap. Uses both `transactions` (24mo) and approved
+ *    `ai_pending_transactions` as samples.
+ *  - Stage 2: AI edge function for whatever Stage 1 couldn't resolve.
  */
 export function useCategorySuggestions() {
   const effectiveUserId = useEffectiveUserId();
@@ -61,10 +136,7 @@ export function useCategorySuggestions() {
       const result: Record<number, SuggestionSource> = {};
 
       try {
-        // ---- Stage 1: history match ----
-        // transactions.category / subcategory / subcategory2 may store either
-        // category UUIDs (new writes) or names (legacy). Normalize to names
-        // via the categories lookup before indexing.
+        // Normalize category storage: transactions may hold UUIDs OR names.
         const byId = new Map(categories.map((c) => [c.id, c] as const));
         const byName = new Map(categories.map((c) => [c.name, c] as const));
         const toName = (v: string | null | undefined): string | null => {
@@ -74,109 +146,144 @@ export function useCategorySuggestions() {
           if (byName.has(v)) return v;
           return null;
         };
+
         const sinceISO = (() => {
           const d = new Date();
-          d.setMonth(d.getMonth() - 12);
+          d.setMonth(d.getMonth() - 24);
           return d.toISOString().slice(0, 10);
         })();
 
+        // ---- Stage 1: load samples in parallel ----
+        const [txRes, pendingRes] = await Promise.all([
+          supabase
+            .from("transactions")
+            .select("description, category, subcategory, subcategory2, type, payment_date")
+            .eq("user_id", effectiveUserId)
+            .not("category", "is", null)
+            .neq("category", "Sem Categoria")
+            .gte("payment_date", sinceISO)
+            .order("payment_date", { ascending: false })
+            .limit(5000),
+          supabase
+            .from("ai_pending_transactions")
+            .select("description, category, subcategory, subcategory2, type, payment_date")
+            .eq("user_id", effectiveUserId)
+            .eq("status", "approved")
+            .not("category", "is", null)
+            .limit(2000),
+        ]);
 
-        const { data: history } = await supabase
-          .from("transactions")
-          .select("description, category, subcategory, subcategory2, type")
-          .eq("user_id", effectiveUserId)
-          .not("category", "is", null)
-          .neq("category", "Sem Categoria")
-          .gte("payment_date", sinceISO)
-          .limit(2000);
+        const rawSamples: any[] = [
+          ...((txRes.data as any[]) || []),
+          ...((pendingRes.data as any[]) || []),
+        ];
 
-        // Build token index: token → array of {category, subcategory, subcategory2, type}
-        type HistEntry = {
-          category: string;
-          subcategory: string | null;
-          subcategory2: string | null;
-          type: string;
-        };
-        const tokenIdx = new Map<string, HistEntry[]>();
-        (history || []).forEach((h: any) => {
+        // Build three indexes over the same samples.
+        const byMerchantKey = new Map<string, HistEntry[]>();
+        const byMerchantPrefix = new Map<string, HistEntry[]>();
+        const byToken = new Map<string, HistEntry[]>();
+
+        for (const h of rawSamples) {
           const catName = toName(h.category);
-          if (!catName) return;
+          if (!catName) continue;
           const entry: HistEntry = {
             category: catName,
             subcategory: toName(h.subcategory),
             subcategory2: toName(h.subcategory2),
             type: h.type,
+            payment_date: h.payment_date || "1970-01-01",
           };
-          tokenize(h.description || "").forEach((tok) => {
-            const arr = tokenIdx.get(tok) || [];
+          const desc = h.description || "";
+          const mk = buildMerchantKey(desc);
+          if (mk) {
+            const arrK = byMerchantKey.get(mk.key) || [];
+            arrK.push(entry);
+            byMerchantKey.set(mk.key, arrK);
+            const arrP = byMerchantPrefix.get(mk.prefix) || [];
+            arrP.push(entry);
+            byMerchantPrefix.set(mk.prefix, arrP);
+          }
+          for (const tok of significantTokens(desc)) {
+            const arr = byToken.get(tok) || [];
             arr.push(entry);
-            tokenIdx.set(tok, arr);
-          });
-        });
-
-
-        const unresolved: NewRowInput[] = [];
-        for (const row of rows) {
-          const tokens = tokenize(row.description);
-          if (tokens.length === 0) {
-            unresolved.push(row);
-            continue;
-          }
-          // Score each triple by token+type matches; track if any winning token was long (>=6)
-          const tripleCounts = new Map<string, { entry: HistEntry; score: number; longHit: boolean }>();
-          tokens.forEach((tok) => {
-            const hits = tokenIdx.get(tok) || [];
-            const isLong = tok.length >= 6;
-            hits.forEach((h) => {
-              if (h.type !== row.type) return;
-              const key = `${h.category}||${h.subcategory ?? ""}||${h.subcategory2 ?? ""}`;
-              const cur = tripleCounts.get(key);
-              if (cur) {
-                cur.score += 1;
-                if (isLong) cur.longHit = true;
-              } else {
-                tripleCounts.set(key, { entry: h, score: 1, longHit: isLong });
-              }
-            });
-          });
-          if (tripleCounts.size === 0) {
-            unresolved.push(row);
-            continue;
-          }
-          // Pick top triple (deepest path wins tie-breaks)
-          let best: { entry: HistEntry; score: number; longHit: boolean } | null = null;
-          for (const cur of tripleCounts.values()) {
-            if (!best) { best = cur; continue; }
-            if (cur.score > best.score) { best = cur; continue; }
-            if (cur.score === best.score) {
-              const depthCur = (cur.entry.subcategory2 ? 3 : cur.entry.subcategory ? 2 : 1);
-              const depthBest = (best.entry.subcategory2 ? 3 : best.entry.subcategory ? 2 : 1);
-              if (depthCur > depthBest) best = cur;
-            }
-          }
-          // Accept: ≥2 token matches OR exactly 1 match if that token is long (≥6 letters)
-          const accept = !!best && (best.score >= 2 || (best.score === 1 && best.longHit));
-          if (accept && best) {
-            const leaf =
-              best.entry.subcategory2 || best.entry.subcategory || best.entry.category;
-            result[row.index] = {
-              category: leaf,
-              source: "history",
-              confidence: best.score,
-              subcategory: best.entry.subcategory ?? undefined,
-              subcategory2: best.entry.subcategory2 ?? undefined,
-            };
-          } else {
-            unresolved.push(row);
+            byToken.set(tok, arr);
           }
         }
 
+        const unresolved: NewRowInput[] = [];
 
+        const applyEntry = (row: NewRowInput, entry: HistEntry, confidence: number) => {
+          const leaf = entry.subcategory2 || entry.subcategory || entry.category;
+          result[row.index] = {
+            category: leaf,
+            source: "history",
+            confidence,
+            subcategory: entry.subcategory ?? undefined,
+            subcategory2: entry.subcategory2 ?? undefined,
+          };
+        };
 
-        // ---- Stage 2: AI fallback ----
+        for (const row of rows) {
+          const mk = buildMerchantKey(row.description);
+          const tokens = significantTokens(row.description);
+
+          // Layer 1: exact merchant key
+          if (mk) {
+            const hits = (byMerchantKey.get(mk.key) || []).filter((e) => e.type === row.type);
+            const best = pickBest(hits);
+            if (best) { applyEntry(row, best, 3); continue; }
+          }
+          // Layer 2: merchant prefix
+          if (mk) {
+            const hits = (byMerchantPrefix.get(mk.prefix) || []).filter((e) => e.type === row.type);
+            const best = pickBest(hits);
+            if (best) { applyEntry(row, best, 2); continue; }
+          }
+          // Layer 3: token overlap
+          if (tokens.length > 0) {
+            const tripleCounts = new Map<string, { entry: HistEntry; score: number; longHit: boolean; latest: string }>();
+            for (const tok of tokens) {
+              const isLong = tok.length >= 7;
+              const hits = byToken.get(tok) || [];
+              for (const h of hits) {
+                if (h.type !== row.type) continue;
+                const k = `${h.category}||${h.subcategory ?? ""}||${h.subcategory2 ?? ""}`;
+                const cur = tripleCounts.get(k);
+                if (cur) {
+                  cur.score += 1;
+                  if (isLong) cur.longHit = true;
+                  if (h.payment_date > cur.latest) cur.latest = h.payment_date;
+                } else {
+                  tripleCounts.set(k, { entry: h, score: 1, longHit: isLong, latest: h.payment_date });
+                }
+              }
+            }
+            if (tripleCounts.size > 0) {
+              let best: { entry: HistEntry; score: number; longHit: boolean; latest: string } | null = null;
+              for (const c of tripleCounts.values()) {
+                if (!best) { best = c; continue; }
+                if (c.score > best.score) { best = c; continue; }
+                if (c.score === best.score) {
+                  const dCur = c.entry.subcategory2 ? 3 : c.entry.subcategory ? 2 : 1;
+                  const dBest = best.entry.subcategory2 ? 3 : best.entry.subcategory ? 2 : 1;
+                  if (dCur > dBest) { best = c; continue; }
+                  if (dCur === dBest && c.latest > best.latest) best = c;
+                }
+              }
+              const accept = !!best && (best.score >= 2 || (best.score === 1 && best.longHit));
+              if (accept && best) {
+                applyEntry(row, best.entry, best.score);
+                continue;
+              }
+            }
+          }
+
+          unresolved.push(row);
+        }
+
+        // ---- Stage 2: AI fallback for the rest ----
         if (unresolved.length > 0) {
           try {
-            // Build hierarchical paths so the AI can pick the deepest node.
             const byIdCat = new Map(categories.map((c) => [c.id, c] as const));
             const pathOf = (c: { id: string; name: string; parent_id: string | null }): string[] => {
               const chain: string[] = [c.name];
@@ -231,7 +338,6 @@ export function useCategorySuggestions() {
             console.error("[useCategorySuggestions] AI fetch failed", e);
           }
         }
-
 
         setSuggestions(result);
         return result;
