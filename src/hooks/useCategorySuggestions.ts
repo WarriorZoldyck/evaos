@@ -174,8 +174,31 @@ export function useCategorySuggestions() {
 
 
         // ---- Stage 2: AI fallback ----
+        const resolvedByHistory = Object.keys(result).length;
+        let resolvedByAI = 0;
         if (unresolved.length > 0) {
           try {
+            // Build hierarchical paths so the AI can pick the deepest node.
+            const byIdCat = new Map(categories.map((c) => [c.id, c] as const));
+            const pathOf = (c: { id: string; name: string; parent_id: string | null }): string[] => {
+              const chain: string[] = [c.name];
+              let cur = c;
+              const seen = new Set<string>([c.id]);
+              while (cur.parent_id) {
+                const parent = byIdCat.get(cur.parent_id);
+                if (!parent || seen.has(parent.id)) break;
+                chain.unshift(parent.name);
+                seen.add(parent.id);
+                cur = parent;
+              }
+              return chain;
+            };
+            const catPayload = categories.map((c) => ({
+              name: c.name,
+              path: pathOf(c),
+              type: c.type,
+            }));
+
             const { data, error } = await supabase.functions.invoke("suggest-categories", {
               body: {
                 items: unresolved.map((r) => ({
@@ -184,15 +207,26 @@ export function useCategorySuggestions() {
                   type: r.type,
                   amount: r.amount,
                 })),
-                categories: categories.map((c) => ({ name: c.name, type: c.type })),
+                categories: catPayload,
               },
             });
             if (error) {
               console.error("[useCategorySuggestions] AI error", error);
             } else if (data?.suggestions) {
-              for (const s of data.suggestions as { index: number; category: string | null }[]) {
+              for (const s of data.suggestions as {
+                index: number;
+                category: string | null;
+                subcategory?: string | null;
+                subcategory2?: string | null;
+              }[]) {
                 if (s.category) {
-                  result[s.index] = { category: s.category, source: "ai" };
+                  result[s.index] = {
+                    category: s.category,
+                    subcategory: s.subcategory ?? undefined,
+                    subcategory2: s.subcategory2 ?? undefined,
+                    source: "ai",
+                  };
+                  resolvedByAI += 1;
                 }
               }
             }
@@ -200,6 +234,16 @@ export function useCategorySuggestions() {
             console.error("[useCategorySuggestions] AI fetch failed", e);
           }
         }
+
+        // Temporary diagnostic log — remove once we confirm Stage 1 hit rate.
+        console.log("[useCategorySuggestions] summary", {
+          effectiveUserId,
+          historyCount: (history || []).length,
+          rowsIn: rows.length,
+          resolvedByHistory,
+          resolvedByAI,
+          unresolvedCount: unresolved.length - resolvedByAI,
+        });
 
         setSuggestions(result);
         return result;
