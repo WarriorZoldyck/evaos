@@ -81,12 +81,13 @@ Deno.serve(async (req) => {
 
 REGRAS:
 - Responda APENAS com JSON puro, sem markdown, sem texto extra.
-- Escolha a categoria MAIS ESPECÍFICA possível (prefira caminhos mais profundos quando fizer sentido).
-- Use exatamente uma das strings de caminho fornecidas (preserve acentos e maiúsculas). Exemplo de caminho: "Supérfulo > Perfume".
+- Escolha SEMPRE o caminho MAIS PROFUNDO que fizer sentido. Se existir "Supérfulo > Perfume", NÃO devolva apenas "Supérfulo".
+- Use exatamente uma das strings de caminho fornecidas (preserve acentos e maiúsculas). Exemplo: "Supérfulo > Perfume".
 - Adicione "confidence": "high" | "medium" | "low".
-  * high: descrição casa claramente (ex.: "NETFLIX" → Streaming).
-  * medium: casamento razoável por semelhança de merchant/segmento.
-  * low: chute — você não tem certeza.
+  * high: merchant reconhecível casa claramente (ex.: "NETFLIX" → Streaming; "IBERIA LINEA" → Férias > Aéreo > Iberia).
+  * medium: merchant/segmento razoavelmente identificável (ex.: "SPAY" cosméticos → Supérfulo > Perfume).
+  * low: descrição genérica ou ambígua (ex.: "PAGAMENTO", "TRANSF", "DEBITO"). NÃO invente correspondência fraca — devolva low e será descartado.
+- Se nenhum caminho for adequado, devolva confidence=low.
 - TODO item recebido DEVE aparecer no array de resposta.
 
 FORMATO:

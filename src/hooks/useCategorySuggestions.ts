@@ -174,8 +174,6 @@ export function useCategorySuggestions() {
 
 
         // ---- Stage 2: AI fallback ----
-        const resolvedByHistory = Object.keys(result).length;
-        let resolvedByAI = 0;
         if (unresolved.length > 0) {
           try {
             // Build hierarchical paths so the AI can pick the deepest node.
@@ -226,7 +224,6 @@ export function useCategorySuggestions() {
                     subcategory2: s.subcategory2 ?? undefined,
                     source: "ai",
                   };
-                  resolvedByAI += 1;
                 }
               }
             }
@@ -235,15 +232,6 @@ export function useCategorySuggestions() {
           }
         }
 
-        // Temporary diagnostic log — remove once we confirm Stage 1 hit rate.
-        console.log("[useCategorySuggestions] summary", {
-          effectiveUserId,
-          historyCount: (history || []).length,
-          rowsIn: rows.length,
-          resolvedByHistory,
-          resolvedByAI,
-          unresolvedCount: unresolved.length - resolvedByAI,
-        });
 
         setSuggestions(result);
         return result;

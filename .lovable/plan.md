@@ -1,74 +1,56 @@
 
-## Problema
+## O que o usuário relatou
 
-No print da importação:
-- **SPAY / AMAZONA / LE BOMBOM**: só a categoria pai vem preenchida ("sugerido pela IA"). Subcategoria e sub-sub ficam vazias.
-- **IBERIA**: vem com 3 níveis (esse casou com um lançamento existente via `matches`, não pela sugestão).
-- Categorização demora bastante em extratos grandes (135 linhas).
+- Na importação ao vivo e no preview: parte dos itens veio categorizada (algumas corretas), outras erradas, outras vazias.
+- Falta feedback visual enquanto a IA está trabalhando — o usuário fica sem saber se ainda está processando.
 
-Duas causas independentes.
+## Escopo desta rodada
 
-## Causa 1 — IA só devolve categoria pai
+Foco em **UX de carregamento**. A precisão da IA fica como um ajuste menor de prompt no mesmo passe (sem mudar arquitetura), já que a infra de paths hierárquicos + Promise.all da rodada anterior está de pé.
 
-`supabase/functions/suggest-categories/index.ts` manda a lista achatada de nomes de categorias e pede só `{index, category, confidence}`. Ao receber "Supérfulo" no SPAY, nada guia a IA para Perfume, e o hook nem tem como preencher subcategoria.
+## 1. Overlay glassmorphism no Stage 2 (Conciliar & Categorizar)
 
-## Causa 2 — Stage 1 (histórico) não está casando SPAY/AMAZONA
+Arquivo: `src/components/lancamentos/ImportStatementModal.tsx` + `src/components/lancamentos/import/ReconcileStep.tsx`.
 
-IBERIA veio de `matches` (lançamento gêmeo já existente no sistema com Férias/Aéreo/Iberia). SPAY/AMAZONA têm histórico equivalente no DB (payment_date 2026-01-15, dentro da janela de 12m), com tokens compatíveis, mas o print mostra "sugerido pela IA" — sinal de que Stage 1 devolveu vazio para eles. Suspeitas prováveis, em ordem:
-1. `effectiveUserId` diferente do dono do histórico (impersonation do EVA Hub).
-2. Race: hook dispara antes de `categories` estar completo — mas o gate `categories.length === 0` já cobre.
-3. Regressão sutil no índice de tokens.
+- Já temos `loading` exposto pelo `useCategorySuggestions()`. Propagar como prop `categorizing: boolean` para o `ReconcileStep`.
+- No `ReconcileStep`, renderizar overlay absoluto sobre a lista de linhas enquanto `categorizing === true`:
+  - `absolute inset-0 z-20 backdrop-blur-md bg-background/40` (glassmorphism usando tokens semânticos).
+  - Centralizado: spinner (`Loader2` animado do lucide, cor `text-primary`) + texto "EVA está categorizando 135 lançamentos…" (contagem dinâmica) + barra de progresso indeterminada (`Progress` do shadcn sem valor, ou um `<div>` com animação `animate-pulse`).
+  - Segundo texto menor: "Isso pode levar alguns segundos em extratos grandes."
+- Bloquear interação com os selects enquanto rola (o overlay cobre; `pointer-events-auto` no overlay basta).
+- O rodapé do modal (Voltar / Importar) fica fora do overlay para o usuário poder cancelar.
 
-Precisa de log para eliminar a #1 antes de fingir que resolveu.
+## 2. Barra de progresso real (opcional dentro desta rodada)
 
-## Causa 3 — Lentidão
+`useCategorySuggestions` hoje só expõe boolean. Trocar por:
 
-`suggest-categories` roda batches de 25 em série (`for … await`). 135 itens = 6 chamadas encadeadas ao Gemini. Simples de paralelizar.
-
-## Plano
-
-### 1. Edge function `supabase/functions/suggest-categories/index.ts`
-
-- Enviar para a IA a hierarquia completa (category → subcategory → subcategory2), não a lista achatada.
-- Pedir resposta com `{index, category, subcategory?, subcategory2?, confidence}`. Manter regra de descartar `low`.
-- No servidor, validar que subcategory pertence à category escolhida (senão descarta subcategory). Idem para subcategory2.
-- Rodar os batches em paralelo via `Promise.all` (mantendo chunk de 25). Um `Promise.all` de 6 chamadas ao Gemini resolve num único round-trip agregado.
-
-### 2. Hook `src/hooks/useCategorySuggestions.ts`
-
-- Aceitar `subcategory`/`subcategory2` na resposta da IA e propagar no `SuggestionSource`.
-- Adicionar `console.log` temporário resumindo: `{effectiveUserId, historyCount, resolvedByHistory, resolvedByAI}` para diagnosticar a Causa 2 no próximo teste do usuário.
-
-### 3. Seed no modal `src/components/lancamentos/ImportStatementModal.tsx`
-
-Ajustar o seed do Stage 2 (linha ~841) para usar `subcategory`/`subcategory2` vindos da IA quando presentes, em vez de só passar o leaf para `resolveCategoryPath`:
-
-```text
-if (v.subcategory || v.subcategory2) {
-  // usar caminho fornecido pela IA (validado no servidor)
-  next[idx] = { category: v.category, subcategory: v.subcategory, subcategory2: v.subcategory2, touched: false }
-} else {
-  // caminho antigo — walk-up pelo leaf
-  next[idx] = { ...resolveCategoryPath(v.category, categories), touched: false }
-}
+```ts
+{ suggest, suggestions, loading, progress: { done, total }, reset }
 ```
 
-### 4. Diagnóstico do Stage 1
+- Stage 1 (histórico) é síncrono → conta como `done += resolvedByHistory` de uma vez.
+- Stage 2: como os batches rodam em `Promise.all`, incrementar `done` no `.then()` de cada batch (mudar `Promise.all(batches.map(runBatch))` para versão que reporta progresso via callback). Callback passado do hook para a função.
+- `ReconcileStep` mostra `done/total` na barra.
 
-Depois do usuário rodar mais uma importação com o log temporário:
-- Se `historyCount === 0`, é impersonation/`effectiveUserId` — corrige buscando por `user_id in (effectiveUserId, auth.uid())`.
-- Se `historyCount > 0` mas `resolvedByHistory === 0`, é bug no índice de tokens — inspecionar o payload real.
+Se ficar complexo, na v1 do overlay entra só spinner + texto; a barra determinística fica pra rodada seguinte.
 
-Só então remover o log.
+## 3. Ajuste no prompt da IA (`suggest-categories`)
 
-## Não muda
+Sem mexer em arquitetura, endurecer regras que estavam causando erro:
 
-- Janela de 12 meses (já corrigido).
-- Threshold de 1 token longo ≥6 letras (já corrigido).
-- Modelo Gemini Flash usado hoje.
+- Reforçar no `systemPrompt`: "Se nenhum caminho for claramente aplicável, retorne confidence=low (será descartado). NÃO invente correspondências fracas."
+- Adicionar exemplos negativos: "IBERIA LINEA → Férias > Aéreo > Iberia (high). SPAY → Supérfulo > Perfume (medium). Descrição genérica tipo 'PAGAMENTO' → low."
+- Manter Gemini Flash + Promise.all já implementados.
 
-## Resultado esperado
+## 4. Remover log de diagnóstico
 
-- SPAY / AMAZONA / LE BOMBOM chegam com pai + filho preenchidos quando existir subcategoria adequada.
-- Tempo de categorização de ~6× mais rápido em extratos grandes (batches paralelos).
-- Log identifica se o Stage 1 está sofrendo com impersonation antes de assumir causa errada.
+O `console.log("[useCategorySuggestions] summary", …)` cumpriu o papel. Remover.
+
+## O que NÃO muda
+
+- Janela de 12 meses, gate de 1 token longo, Promise.all, modelo Gemini Flash — tudo permanece.
+- Estrutura do Stage 1 (matching por histórico) permanece.
+
+## Pergunta antes de implementar
+
+O overlay com **spinner + texto** já resolve pro seu fluxo, ou você quer que eu já entregue com a **barra determinística** mostrando `X de Y categorizados`? A segunda opção exige refatorar `useCategorySuggestions` pra reportar progresso e adiciona ~30 min de trabalho.
