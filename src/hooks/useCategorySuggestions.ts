@@ -175,11 +175,12 @@ export function useCategorySuggestions() {
 
       try {
         // Normalize category storage: transactions may hold UUIDs OR names.
-        // IMPORTANT: history samples can reference category names that are NOT
-        // currently in the user's category tree (renamed / different casing /
-        // legacy). We must NOT discard those — the modal's resolveCategoryPath
-        // will map them by normalized name later. Only strictly empty or
-        // "Sem Categoria" values are treated as missing.
+        // IMPORTANT: history samples can reference categories from a DIFFERENT
+        // context (Pessoal vs Empresa) than the one currently active. The
+        // `categories` param is context-scoped, so we must ALSO load the full
+        // set of the user's categories (all contexts) to resolve UUIDs into
+        // human names. Otherwise UUIDs leak into the UI and history matches
+        // are silently dropped.
         const byId = new Map(categories.map((c) => [c.id, c] as const));
         const byName = new Map(categories.map((c) => [c.name, c] as const));
 
@@ -193,19 +194,7 @@ export function useCategorySuggestions() {
           return t === "sem categoria" || t === "sem categoria ";
         };
 
-        // Resolve a stored value (UUID or name) into a human name.
-        // Falls back to the raw value when it's a plausible name so we don't
-        // silently drop valid historical categories.
-        const toName = (v: string | null | undefined): string | null => {
-          if (isMissingCat(v)) return null;
-          const raw = v as string;
-          const hit = byId.get(raw);
-          if (hit) return hit.name;
-          if (byName.has(raw)) return raw;
-          // Not in the local tree — keep the raw name; resolveCategoryPath
-          // in the modal will normalize casing/accents when applying.
-          return raw;
-        };
+        const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
         const sinceISO = (() => {
           const d = new Date();
@@ -213,9 +202,9 @@ export function useCategorySuggestions() {
           return d.toISOString().slice(0, 10);
         })();
 
-        // ---- Stage 1: load samples in parallel ----
+        // ---- Stage 1: load samples + full category dictionary in parallel ----
         // STRICT per-user isolation: every query is scoped to effectiveUserId.
-        const [txRes, pendingRes] = await Promise.all([
+        const [txRes, pendingRes, allCatsRes] = await Promise.all([
           supabase
             .from("transactions")
             .select("description, category, subcategory, subcategory2, type, payment_date, amount")
@@ -235,13 +224,47 @@ export function useCategorySuggestions() {
             .neq("category", "Sem Categoria")
             .neq("category", "Sem categoria")
             .limit(2000),
-
+          supabase
+            .from("categories")
+            .select("id, name")
+            .eq("user_id", effectiveUserId),
         ]);
+
+        // Full id→name / name→id dictionary across ALL contexts of THIS user.
+        const byIdAll = new Map<string, string>();
+        const namesAll = new Set<string>();
+        for (const c of ((allCatsRes.data as any[]) || [])) {
+          if (c?.id && c?.name) {
+            byIdAll.set(c.id, c.name);
+            namesAll.add(c.name);
+          }
+        }
+        // Fold the current-context lists too (defensive).
+        for (const [id, c] of byId) byIdAll.set(id, c.name);
+        for (const n of byName.keys()) namesAll.add(n);
+
+        // Resolve a stored value (UUID or name) into a human name.
+        // Returns null when we cannot resolve into a real name — this prevents
+        // UUIDs from ever reaching the UI.
+        const toName = (v: string | null | undefined): string | null => {
+          if (isMissingCat(v)) return null;
+          const raw = (v as string).trim();
+          const hit = byIdAll.get(raw);
+          if (hit) return hit;
+          if (namesAll.has(raw)) return raw;
+          // Looks like a UUID but not in our dictionary → orphan reference,
+          // drop it so no raw ID leaks to the suggestion.
+          if (UUID_RE.test(raw)) return null;
+          // Plain string that doesn't exist in the tree either — keep it so
+          // resolveCategoryPath in the modal can still try a name match.
+          return raw;
+        };
 
         const rawSamples: any[] = [
           ...((txRes.data as any[]) || []),
           ...((pendingRes.data as any[]) || []),
         ];
+
 
         // Build indexes over the same samples.
         const byNormDesc = new Map<string, HistEntry[]>();
