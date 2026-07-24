@@ -2,13 +2,33 @@ import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 
+export type SuggestionLayer = "exact" | "prefix" | "merchant" | "token";
+
+export interface MatchedSample {
+  description: string;
+  payment_date: string;
+  amount: number | null;
+  categoryPath: string;
+}
+
 export interface SuggestionSource {
   category: string;
   source: "history" | "ai";
   confidence?: number;
   subcategory?: string;
   subcategory2?: string;
+  /** Which matching layer produced this suggestion. */
+  layer?: SuggestionLayer;
+  /** Normalized description used for the search (audit trail). */
+  normalizedQuery?: string;
+  /** Up to 3 historical rows that justified this suggestion. */
+  matchedSamples?: MatchedSample[];
+  /** How many historical entries agreed with the chosen category. */
+  voteCount?: number;
+  /** Total historical candidates considered before the vote. */
+  candidateCount?: number;
 }
+
 
 interface NewRowInput {
   index: number;
