@@ -44,6 +44,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { RowMatch } from "@/hooks/useImportMatching";
 import type { SuggestionSource } from "@/hooks/useCategorySuggestions";
 import { CategoryPathCombobox } from "@/components/lancamentos/CategoryPathCombobox";
+import { SuggestionWhyPopover } from "@/components/lancamentos/import/SuggestionWhyPopover";
+
 
 export interface ParsedRow {
   date: string;
@@ -782,7 +784,7 @@ export function ReconcileStep({
 
 
           <section>
-            <header className="flex items-center justify-between mb-2">
+            <header className="flex items-center justify-between mb-2 gap-2 flex-wrap">
               <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
                 <Sparkles className="h-4 w-4" />
                 Só no extrato — o que fazer?
@@ -793,7 +795,28 @@ export function ReconcileStep({
                   </span>
                 )}
               </h3>
+              {(() => {
+                const total = newRows.length;
+                const matched = newRows.filter(({ i }) => suggestions[i]?.source === "history").length;
+                const unmatched = total - matched;
+                if (total === 0) return null;
+                return (
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 bg-emerald-500/5">
+                      <ShieldCheck className="h-2.5 w-2.5" />
+                      {matched} de {total} do seu histórico
+                    </Badge>
+                    {unmatched > 0 && (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        {unmatched} sem histórico
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-muted-foreground">0 vindas de IA</Badge>
+                  </div>
+                );
+              })()}
             </header>
+
 
             <Alert className="mb-2 py-2 px-3 bg-sky-500/5 border-sky-500/30">
               <Info className="h-3.5 w-3.5 text-sky-600" />
@@ -881,13 +904,9 @@ export function ReconcileStep({
                               />
 
                               {sug && !currentCat.touched && currentCat.category === sug.category && (
-                                <span
-                                  className="text-[10px] text-muted-foreground flex items-center gap-1"
-                                  title="Baseado em lançamentos anteriores seus"
-                                >
-                                  <BookOpen className="h-2.5 w-2.5" /> baseado no histórico
-                                </span>
+                                <SuggestionWhyPopover suggestion={sug} rowDescription={r.description} />
                               )}
+
 
                             </div>
                           </td>

@@ -2,13 +2,33 @@ import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 
+export type SuggestionLayer = "exact" | "prefix" | "merchant" | "token";
+
+export interface MatchedSample {
+  description: string;
+  payment_date: string;
+  amount: number | null;
+  categoryPath: string;
+}
+
 export interface SuggestionSource {
   category: string;
   source: "history" | "ai";
   confidence?: number;
   subcategory?: string;
   subcategory2?: string;
+  /** Which matching layer produced this suggestion. */
+  layer?: SuggestionLayer;
+  /** Normalized description used for the search (audit trail). */
+  normalizedQuery?: string;
+  /** Up to 3 historical rows that justified this suggestion. */
+  matchedSamples?: MatchedSample[];
+  /** How many historical entries agreed with the chosen category. */
+  voteCount?: number;
+  /** Total historical candidates considered before the vote. */
+  candidateCount?: number;
 }
+
 
 interface NewRowInput {
   index: number;
@@ -91,7 +111,10 @@ type HistEntry = {
   subcategory2: string | null;
   type: string;
   payment_date: string;
+  description: string;
+  amount: number | null;
 };
+
 
 function pickBest(entries: HistEntry[]): HistEntry | null {
   if (entries.length === 0) return null;
@@ -195,7 +218,7 @@ export function useCategorySuggestions() {
         const [txRes, pendingRes] = await Promise.all([
           supabase
             .from("transactions")
-            .select("description, category, subcategory, subcategory2, type, payment_date")
+            .select("description, category, subcategory, subcategory2, type, payment_date, amount")
             .eq("user_id", effectiveUserId)
             .not("category", "is", null)
             .neq("category", "Sem Categoria")
@@ -205,13 +228,14 @@ export function useCategorySuggestions() {
             .limit(5000),
           supabase
             .from("ai_pending_transactions")
-            .select("description, category, subcategory, subcategory2, type, payment_date")
+            .select("description, category, subcategory, subcategory2, type, payment_date, amount")
             .eq("user_id", effectiveUserId)
             .eq("status", "approved")
             .not("category", "is", null)
             .neq("category", "Sem Categoria")
             .neq("category", "Sem categoria")
             .limit(2000),
+
         ]);
 
         const rawSamples: any[] = [
@@ -231,14 +255,17 @@ export function useCategorySuggestions() {
           // Treat "Sem categoria" at sub-levels as absent, not as a real level.
           const sub = isMissingCat(h.subcategory) ? null : toName(h.subcategory);
           const sub2 = isMissingCat(h.subcategory2) ? null : toName(h.subcategory2);
+          const desc = h.description || "";
           const entry: HistEntry = {
             category: catName,
             subcategory: sub,
             subcategory2: sub2,
             type: h.type,
             payment_date: h.payment_date || "1970-01-01",
+            description: desc,
+            amount: typeof h.amount === "number" ? h.amount : (h.amount != null ? Number(h.amount) : null),
           };
-          const desc = h.description || "";
+
           const norm = normalizeDescription(desc);
           if (norm) {
             const arrN = byNormDesc.get(norm) || [];
@@ -264,16 +291,45 @@ export function useCategorySuggestions() {
 
         const unresolved: NewRowInput[] = [];
 
-        const applyEntry = (row: NewRowInput, entry: HistEntry, confidence: number) => {
-          // SuggestionSource.category is the TOP-LEVEL category name; the modal
-          // uses subcategory/subcategory2 to fill the hierarchy. Keeping the
-          // top-level here also makes the "baseado no histórico" badge match.
+        const toSample = (e: HistEntry): MatchedSample => ({
+          description: e.description,
+          payment_date: e.payment_date,
+          amount: e.amount,
+          categoryPath: [e.category, e.subcategory, e.subcategory2]
+            .filter(Boolean)
+            .join(" › "),
+        });
+
+        const applyEntry = (
+          row: NewRowInput,
+          entry: HistEntry,
+          confidence: number,
+          meta: {
+            layer: SuggestionLayer;
+            normalizedQuery: string;
+            candidates: HistEntry[];
+          },
+        ) => {
+          const chosenKey = `${entry.category}||${entry.subcategory ?? ""}||${entry.subcategory2 ?? ""}`;
+          const agreeing = meta.candidates.filter(
+            (c) => `${c.category}||${c.subcategory ?? ""}||${c.subcategory2 ?? ""}` === chosenKey,
+          );
+          const samplesSorted = (agreeing.length > 0 ? agreeing : [entry])
+            .slice()
+            .sort((a, b) => (b.payment_date > a.payment_date ? 1 : -1))
+            .slice(0, 3)
+            .map(toSample);
           result[row.index] = {
             category: entry.category,
             source: "history",
             confidence,
             subcategory: entry.subcategory ?? undefined,
             subcategory2: entry.subcategory2 ?? undefined,
+            layer: meta.layer,
+            normalizedQuery: meta.normalizedQuery,
+            matchedSamples: samplesSorted,
+            voteCount: agreeing.length || 1,
+            candidateCount: meta.candidates.length || 1,
           };
         };
 
@@ -298,18 +354,25 @@ export function useCategorySuggestions() {
           if (normRow) {
             const direct = (byNormDesc.get(normRow) || []).filter((e) => e.type === row.type);
             let hit = pickDeepestRecent(direct);
+            let layer: SuggestionLayer = "exact";
+            let candidates = direct;
             if (!hit) {
               // fallback: any historical normDesc that startsWith the current normRow, or vice-versa
-              const candidates: HistEntry[] = [];
+              const prefixCands: HistEntry[] = [];
               for (const [k, arr] of byNormDesc.entries()) {
                 if (k === normRow) continue;
                 if (k.startsWith(normRow) || normRow.startsWith(k)) {
-                  for (const e of arr) if (e.type === row.type) candidates.push(e);
+                  for (const e of arr) if (e.type === row.type) prefixCands.push(e);
                 }
               }
-              hit = pickDeepestRecent(candidates);
+              hit = pickDeepestRecent(prefixCands);
+              layer = "prefix";
+              candidates = prefixCands;
             }
-            if (hit) { applyEntry(row, hit, 4); continue; }
+            if (hit) {
+              applyEntry(row, hit, 4, { layer, normalizedQuery: normRow, candidates });
+              continue;
+            }
           }
 
           const mk = buildMerchantKey(row.description);
@@ -320,17 +383,23 @@ export function useCategorySuggestions() {
           if (mk) {
             const hits = (byMerchantKey.get(mk.key) || []).filter((e) => e.type === row.type);
             const best = pickBest(hits);
-            if (best) { applyEntry(row, best, 3); continue; }
+            if (best) {
+              applyEntry(row, best, 3, { layer: "merchant", normalizedQuery: mk.key, candidates: hits });
+              continue;
+            }
           }
           // Layer 2: merchant prefix
           if (mk) {
             const hits = (byMerchantPrefix.get(mk.prefix) || []).filter((e) => e.type === row.type);
             const best = pickBest(hits);
-            if (best) { applyEntry(row, best, 2); continue; }
+            if (best) {
+              applyEntry(row, best, 2, { layer: "merchant", normalizedQuery: mk.prefix, candidates: hits });
+              continue;
+            }
           }
           // Layer 3: token overlap
           if (tokens.length > 0) {
-            const tripleCounts = new Map<string, { entry: HistEntry; score: number; longHit: boolean; latest: string }>();
+            const tripleCounts = new Map<string, { entry: HistEntry; score: number; longHit: boolean; latest: string; entries: HistEntry[] }>();
             for (const tok of tokens) {
               const isLong = tok.length >= 7;
               const hits = byToken.get(tok) || [];
@@ -342,13 +411,14 @@ export function useCategorySuggestions() {
                   cur.score += 1;
                   if (isLong) cur.longHit = true;
                   if (h.payment_date > cur.latest) cur.latest = h.payment_date;
+                  cur.entries.push(h);
                 } else {
-                  tripleCounts.set(k, { entry: h, score: 1, longHit: isLong, latest: h.payment_date });
+                  tripleCounts.set(k, { entry: h, score: 1, longHit: isLong, latest: h.payment_date, entries: [h] });
                 }
               }
             }
             if (tripleCounts.size > 0) {
-              let best: { entry: HistEntry; score: number; longHit: boolean; latest: string } | null = null;
+              let best: { entry: HistEntry; score: number; longHit: boolean; latest: string; entries: HistEntry[] } | null = null;
               for (const c of tripleCounts.values()) {
                 if (!best) { best = c; continue; }
                 if (c.score > best.score) { best = c; continue; }
@@ -361,7 +431,11 @@ export function useCategorySuggestions() {
               }
               const accept = !!best && (best.score >= 2 || (best.score === 1 && best.longHit));
               if (accept && best) {
-                applyEntry(row, best.entry, best.score);
+                applyEntry(row, best.entry, best.score, {
+                  layer: "token",
+                  normalizedQuery: tokens.join(" "),
+                  candidates: best.entries,
+                });
                 continue;
               }
             }
@@ -369,6 +443,7 @@ export function useCategorySuggestions() {
 
           unresolved.push(row);
         }
+
 
         // AI fallback intentionally disabled — history-only matching is safer
         // and more predictable. Unresolved rows stay as "Sem categoria" for
