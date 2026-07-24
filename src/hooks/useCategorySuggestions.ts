@@ -218,7 +218,7 @@ export function useCategorySuggestions() {
         const [txRes, pendingRes] = await Promise.all([
           supabase
             .from("transactions")
-            .select("description, category, subcategory, subcategory2, type, payment_date")
+            .select("description, category, subcategory, subcategory2, type, payment_date, amount")
             .eq("user_id", effectiveUserId)
             .not("category", "is", null)
             .neq("category", "Sem Categoria")
@@ -228,13 +228,14 @@ export function useCategorySuggestions() {
             .limit(5000),
           supabase
             .from("ai_pending_transactions")
-            .select("description, category, subcategory, subcategory2, type, payment_date")
+            .select("description, category, subcategory, subcategory2, type, payment_date, amount")
             .eq("user_id", effectiveUserId)
             .eq("status", "approved")
             .not("category", "is", null)
             .neq("category", "Sem Categoria")
             .neq("category", "Sem categoria")
             .limit(2000),
+
         ]);
 
         const rawSamples: any[] = [
