@@ -1,36 +1,47 @@
-
-## Problema
-
-O `CategoryPathCombobox` está listando de uma vez **todos os caminhos possíveis** (categoria, sub, sub-sub) — o resultado é uma lista longa e poluída, com muitas linhas repetindo o mesmo pai. O usuário quer voltar à experiência anterior: mostrar só o nível atual e ir abrindo os filhos conforme clica, como um menu em cascata (bonito e funcional).
-
 ## Objetivo
+Cruzamento 100% baseado no histórico do próprio usuário — nunca misturar dados entre usuários — e garantir que a categoria correta apareça sempre que existir histórico compatível.
 
-Manter o combobox único (unificado, com portal, criação inline — nada disso muda), mas mudar a **forma de renderizar as opções**:
+## Garantia de isolamento por usuário
+- Toda consulta continua com `.eq("user_id", effectiveUserId)` nas tabelas `public.transactions` e `public.ai_pending_transactions`.
+- RLS já impede vazamento entre usuários; mantemos o filtro explícito como defesa dupla.
+- Nada de cache global entre sessões: as amostras são carregadas por importação, a partir do user_id efetivo.
 
-- Estado **navegação** (padrão, sem busca): mostrar só o nível atual.
-  - Nível 0: lista das categorias raiz.
-  - Ao clicar numa categoria com filhos: entra no nível 1 (subcategorias daquela categoria) com um cabeçalho de breadcrumb + botão "voltar".
-  - Idem para nível 2.
-  - Cada item com filhos tem um chevron `›` à direita indicando drill-down.
-  - Cada item pode ser **selecionado** clicando na área do label (ou num pequeno "Usar este nível" quando houver filhos), para permitir escolher só a categoria pai sem descer.
-- Estado **busca** (usuário digitou no input): aí sim mostrar a lista achatada de caminhos completos (como está hoje), para encontrar rapidamente por texto. Volta pra navegação quando a busca é limpa.
+## Correções no motor de sugestão (`useCategorySuggestions.ts`)
 
-## Comportamento
+1. **Não descartar histórico só porque a categoria não está no mapa local**
+   - Hoje `toName()` retorna `null` quando a categoria histórica não bate exatamente com a lista carregada no modal → a amostra é descartada silenciosamente.
+   - Passar a aceitar o nome do histórico como está (texto), desde que não seja vazio nem "Sem Categoria/Sem categoria".
+   - Depois, na hora de aplicar na linha, se o nome não existir na árvore de categorias do contexto atual, criar/mapear via `resolveCategoryPath` (fallback já existente) ou deixar apenas o nível que existir.
 
-- "Sem categoria" e o rodapé de criação (`+ Nova categoria`, `+ Sub em "X"`, `+ Sub-sub em "Y"`) continuam disponíveis em todos os níveis; o botão de "Sub em" usa o contexto do nível atual em que o usuário está navegando (não só o `value` selecionado).
-- Ao selecionar um item folha, fecha o popover como hoje.
-- Ao selecionar um item que tem filhos: por padrão **entra no nível** (drill-down). Um botão/atalho separado permite escolhê-lo como valor final sem descer.
-- Ao reabrir o popover, se já houver `value`, iniciar a navegação já posicionada no nível do valor selecionado (ex.: valor = `Alimentação > Restaurante` → abrir mostrando as subs de `Alimentação` com `Restaurante` marcado).
-- Tipo (`receita`/`despesa`) continua filtrando raízes como hoje.
+2. **Ignorar amostras não categorizadas em qualquer nível**
+   - Filtrar `category` nulo/`""`/`"sem categoria"` (case-insensitive, sem acento).
+   - Mesmo tratamento para `subcategory` e `subcategory2` — se vier "Sem categoria", tratar como ausente, não como nível válido.
+   - Isso evita que uma amostra antiga sem categoria "vença" outra correta.
 
-## Arquivos afetados
+3. **Prioridade absoluta para descrição idêntica normalizada**
+   - Layer 0 (match exato pós-normalização) deve preferir a amostra mais **profunda e recente** categorizada.
+   - Se houver múltiplas amostras iguais, escolher a de maior profundidade (subcategory2 > subcategory > category) e, em empate, a mais recente.
+   - Exemplo validado no banco: `L E M ESCOVA E BELEZA` → **Beleza > Salão** (existem 5 amostras assim e 4 como "Sem Categoria"; as "Sem Categoria" devem ser ignoradas).
 
-- `src/components/lancamentos/CategoryPathCombobox.tsx` — única alteração. Refatorar a renderização interna do `Command`:
-  - Novo estado `navPath: string[]` (nomes do caminho atual, vazio = raiz).
-  - Derivar `currentChildren` a partir do mapa `byParent` já existente.
-  - Renderizar cabeçalho com breadcrumb + botão `← Voltar` quando `navPath.length > 0`.
-  - Quando `query` está vazio: renderizar `currentChildren`.
-  - Quando `query` tem texto: renderizar `paths` achatado (comportamento atual) para busca global.
-  - Manter `CommandInput`, `CommandEmpty`, criação inline e "Sem categoria".
+4. **Fallback preserva profundidade parcial**
+   - Se o histórico traz apenas `Saúde` (sem subcategoria), aplicar `Saúde` e deixar subcategoria em branco — não inventar via IA.
+   - Se traz `Saúde > Farmácias`, aplicar os dois níveis.
 
-Nenhuma mudança em outros componentes, hooks, ou lógica de sugestão/histórico.
+5. **IA continua desligada**
+   - Linhas sem histórico ficam "Sem categoria" para o usuário ajustar. Nada de "sugerido pela IA".
+
+## Ajuste no modal (`ImportStatementModal.tsx`)
+- Ao aplicar a sugestão em `rowCategories`, se `resolveCategoryPath` não encontrar o nome exato na árvore local, tentar casar por normalização (lowercase + sem acento) antes de desistir. Assim uma categoria histórica com capitalização diferente (`transporte` vs `Transporte`) ainda preenche a linha.
+
+## Validação (após implementar)
+1. Rodar a importação novamente para `espclin@hotmail.com` e conferir:
+   - `L E M ESCOVA E BELEZA` → **Beleza > Salão**
+   - `DROGASIL …` → **Saúde > Farmácias** (não só "Saúde")
+   - Postos → categoria histórica correspondente
+2. Consultar o banco antes/depois para provar que:
+   - Nenhuma consulta cruza `user_id` de outros usuários.
+   - As sugestões refletem exatamente o que existe no histórico do próprio usuário.
+
+## Fora de escopo
+- Nenhuma mudança de RLS, schema ou dados históricos.
+- Nenhum retorno da sugestão por IA neste momento.
