@@ -293,9 +293,15 @@ export function useCategorySuggestions() {
           return raw;
         };
 
-        const rawSamples: any[] = [
-          ...((txRes.data as any[]) || []),
-          ...((pendingRes.data as any[]) || []),
+        const toKnownId = (v: string | null | undefined): string | null => {
+          if (!v || isMissingCat(v)) return null;
+          const raw = v.trim();
+          return UUID_RE.test(raw) && byIdAll.has(raw) ? raw : null;
+        };
+
+        const rawSamples: (any & { sourceTable: "transactions" | "ai_pending_transactions" })[] = [
+          ...(((txRes.data as any[]) || []).map((r) => ({ ...r, sourceTable: "transactions" as const }))),
+          ...(((pendingRes.data as any[]) || []).map((r) => ({ ...r, sourceTable: "ai_pending_transactions" as const }))),
         ];
 
 
@@ -314,12 +320,16 @@ export function useCategorySuggestions() {
           const desc = h.description || "";
           const entry: HistEntry = {
             category: catName,
+            categoryId: toKnownId(h.category),
             subcategory: sub,
+            subcategoryId: toKnownId(h.subcategory),
             subcategory2: sub2,
+            subcategory2Id: toKnownId(h.subcategory2),
             type: h.type,
             payment_date: h.payment_date || "1970-01-01",
             description: desc,
             amount: typeof h.amount === "number" ? h.amount : (h.amount != null ? Number(h.amount) : null),
+            sourceTable: h.sourceTable,
           };
 
           const norm = normalizeDescription(desc);
@@ -354,6 +364,7 @@ export function useCategorySuggestions() {
           categoryPath: [e.category, e.subcategory, e.subcategory2]
             .filter(Boolean)
             .join(" › "),
+          sourceTable: e.sourceTable,
         });
 
         const applyEntry = (
@@ -381,6 +392,10 @@ export function useCategorySuggestions() {
             confidence,
             subcategory: entry.subcategory ?? undefined,
             subcategory2: entry.subcategory2 ?? undefined,
+            categoryId: entry.categoryId ?? undefined,
+            subcategoryId: entry.subcategoryId ?? undefined,
+            subcategory2Id: entry.subcategory2Id ?? undefined,
+            sourceTable: entry.sourceTable,
             layer: meta.layer,
             normalizedQuery: meta.normalizedQuery,
             matchedSamples: samplesSorted,
