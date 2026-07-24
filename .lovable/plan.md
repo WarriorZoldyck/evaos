@@ -1,47 +1,48 @@
 ## Objetivo
-Cruzamento 100% baseado no histórico do próprio usuário — nunca misturar dados entre usuários — e garantir que a categoria correta apareça sempre que existir histórico compatível.
+Garantir — e provar — que a categorização na importação vem 100% do histórico real do próprio usuário no banco, sem IA e sem vazamento entre usuários.
 
-## Garantia de isolamento por usuário
-- Toda consulta continua com `.eq("user_id", effectiveUserId)` nas tabelas `public.transactions` e `public.ai_pending_transactions`.
-- RLS já impede vazamento entre usuários; mantemos o filtro explícito como defesa dupla.
-- Nada de cache global entre sessões: as amostras são carregadas por importação, a partir do user_id efetivo.
+## Resposta direta
+Não posso prometer "100% categorizado". Posso prometer **100% assertivo quando existir histórico**: se a descrição (normalizada) já foi categorizada antes por aquele usuário, ela virá igual; se nunca foi, fica "Sem categoria" para ele ajustar (em vez de chutar). Isso é o comportamento correto — chutar é o que estava dando errado.
 
-## Correções no motor de sugestão (`useCategorySuggestions.ts`)
+## O que já está garantido no código
+- Consulta apenas `public.transactions` e `public.ai_pending_transactions` filtradas por `user_id = effectiveUserId` (RLS + filtro explícito). Nunca mistura usuários.
+- IA de sugestão desligada. Só histórico.
+- Amostras "Sem Categoria" / vazias são ignoradas para não poluir o voto.
+- Hierarquia preservada (Categoria › Sub › Sub2), mesmo quando o nome histórico não está na árvore atual do contexto.
+- Sem match → fica "Sem categoria" (nunca inventa).
 
-1. **Não descartar histórico só porque a categoria não está no mapa local**
-   - Hoje `toName()` retorna `null` quando a categoria histórica não bate exatamente com a lista carregada no modal → a amostra é descartada silenciosamente.
-   - Passar a aceitar o nome do histórico como está (texto), desde que não seja vazio nem "Sem Categoria/Sem categoria".
-   - Depois, na hora de aplicar na linha, se o nome não existir na árvore de categorias do contexto atual, criar/mapear via `resolveCategoryPath` (fallback já existente) ou deixar apenas o nível que existir.
+## Como você vai ter certeza (plano de verificação)
 
-2. **Ignorar amostras não categorizadas em qualquer nível**
-   - Filtrar `category` nulo/`""`/`"sem categoria"` (case-insensitive, sem acento).
-   - Mesmo tratamento para `subcategory` e `subcategory2` — se vier "Sem categoria", tratar como ausente, não como nível válido.
-   - Isso evita que uma amostra antiga sem categoria "vença" outra correta.
+### 1. Painel de auditoria dentro do próprio modal de importação
+Adicionar, em cada linha sugerida, um pequeno "por quê?" clicável que abre um popover mostrando:
+- A descrição original e a descrição normalizada usada na busca.
+- A(s) transação(ões) do histórico que casaram: data, valor, descrição original, categoria completa.
+- A camada que resolveu (match exato, prefixo do comerciante, token, etc.) e quantas amostras votaram.
+- Link "abrir no sistema" para a transação histórica.
 
-3. **Prioridade absoluta para descrição idêntica normalizada**
-   - Layer 0 (match exato pós-normalização) deve preferir a amostra mais **profunda e recente** categorizada.
-   - Se houver múltiplas amostras iguais, escolher a de maior profundidade (subcategory2 > subcategory > category) e, em empate, a mais recente.
-   - Exemplo validado no banco: `L E M ESCOVA E BELEZA` → **Beleza > Salão** (existem 5 amostras assim e 4 como "Sem Categoria"; as "Sem Categoria" devem ser ignoradas).
+Assim, para qualquer linha, você vê exatamente qual lançamento do seu banco justificou a sugestão.
 
-4. **Fallback preserva profundidade parcial**
-   - Se o histórico traz apenas `Saúde` (sem subcategoria), aplicar `Saúde` e deixar subcategoria em branco — não inventar via IA.
-   - Se traz `Saúde > Farmácias`, aplicar os dois níveis.
+### 2. Contador de transparência no topo do passo de conciliação
+Mostrar: "X de Y linhas casadas com seu histórico · Z sem histórico · 0 vindas de IA". Deixa explícito que nada saiu de IA.
 
-5. **IA continua desligada**
-   - Linhas sem histórico ficam "Sem categoria" para o usuário ajustar. Nada de "sugerido pela IA".
+### 3. Script de verificação de isolamento (uso interno, quando pedir)
+Query pronta para rodar em qualquer usuário reclamante:
+- Conta quantas descrições distintas do extrato importado têm match exato normalizado em `transactions`/`ai_pending_transactions` daquele `user_id`.
+- Lista as que não têm — essas são legitimamente "Sem categoria".
+- Confirma que nenhuma linha da sugestão referencia `user_id` diferente.
 
-## Ajuste no modal (`ImportStatementModal.tsx`)
-- Ao aplicar a sugestão em `rowCategories`, se `resolveCategoryPath` não encontrar o nome exato na árvore local, tentar casar por normalização (lowercase + sem acento) antes de desistir. Assim uma categoria histórica com capitalização diferente (`transporte` vs `Transporte`) ainda preenche a linha.
+### 4. Teste guiado com o usuário atual (espclin@hotmail.com)
+- Reimportar o mesmo extrato.
+- Confirmar item a item usando o "por quê?": `DROGASIL` → Saúde › Farmácias, `L E M ESCOVA E BELEZA` → Beleza › Salão, `LE BOMBOM` → Vestuário › Roupas › Vitória.
+- Qualquer divergência vira bug reproduzível com evidência no popover.
 
-## Validação (após implementar)
-1. Rodar a importação novamente para `espclin@hotmail.com` e conferir:
-   - `L E M ESCOVA E BELEZA` → **Beleza > Salão**
-   - `DROGASIL …` → **Saúde > Farmácias** (não só "Saúde")
-   - Postos → categoria histórica correspondente
-2. Consultar o banco antes/depois para provar que:
-   - Nenhuma consulta cruza `user_id` de outros usuários.
-   - As sugestões refletem exatamente o que existe no histórico do próprio usuário.
+## Detalhes técnicos
+- Estender `SuggestionSource` em `src/hooks/useCategorySuggestions.ts` para carregar `matchedSamples` (até 3): `{ description, payment_date, amount, categoryPath }` e `layer` ("exact" | "merchant" | "prefix" | "token").
+- Novo componente `SuggestionWhyPopover` usado em `src/components/lancamentos/import/ReconcileStep.tsx` na coluna de categoria.
+- Header do passo mostra os contadores derivados de `suggestions` + linhas totais.
+- Nenhuma mudança em RLS, schema ou edge functions. Nenhuma chamada a IA. Somente leitura das duas tabelas já usadas hoje.
 
 ## Fora de escopo
-- Nenhuma mudança de RLS, schema ou dados históricos.
-- Nenhum retorno da sugestão por IA neste momento.
+- Reativar IA como fallback.
+- Alterar políticas RLS ou criar tabelas.
+- Migração de dados históricos.
