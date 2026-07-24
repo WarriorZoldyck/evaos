@@ -9,6 +9,7 @@ export interface MatchedSample {
   payment_date: string;
   amount: number | null;
   categoryPath: string;
+  sourceTable?: "transactions" | "ai_pending_transactions";
 }
 
 export interface SuggestionSource {
@@ -23,6 +24,12 @@ export interface SuggestionSource {
   normalizedQuery?: string;
   /** Up to 3 historical rows that justified this suggestion. */
   matchedSamples?: MatchedSample[];
+  /** UUIDs used to rebuild the exact category path when the same name exists in multiple contexts. */
+  categoryId?: string;
+  subcategoryId?: string;
+  subcategory2Id?: string;
+  /** Database table that supplied the chosen historical sample. */
+  sourceTable?: "transactions" | "ai_pending_transactions";
   /** How many historical entries agreed with the chosen category. */
   voteCount?: number;
   /** Total historical candidates considered before the vote. */
@@ -49,6 +56,11 @@ const STOPWORDS = new Set([
   "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez",
   "janeiro", "fevereiro", "marco", "março", "abril", "maio", "junho",
   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+  // nomes/sobrenomes comuns demais para inferir categoria por 1 token só
+  "ferreira", "silva", "santos", "souza", "sousa", "oliveira", "pereira",
+  "costa", "rocha", "almeida", "lima", "gomes", "ribeiro", "carvalho",
+  "martins", "barbosa", "araujo", "melo", "cardoso", "paulo", "pedro",
+  "maria", "jose", "joao", "luma", "borges",
 ]);
 
 function normalize(s: string): string {
@@ -65,6 +77,8 @@ function stripNoise(s: string): string {
   return normalize(s)
     // strip trailing installment markers like "11/12"
     .replace(/\b\d+\s*\/\s*\d+\b/g, " ")
+    // split issuer names glued to long authorization/ticket numbers: LINEA075211...
+    .replace(/\b([a-z]{3,})\d{3,}\b/g, "$1 ")
     // strip long numeric sequences (auth codes, doc numbers)
     .replace(/\b\d{3,}\b/g, " ")
     // strip "iof internacional -" prefix
@@ -103,6 +117,7 @@ function normalizeDescription(s: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\b\d+\s*\/\s*\d+\b/g, " ")
+    .replace(/\b([a-z]{3,})\d{3,}\b/g, "$1 ")
     .replace(/^iof internacional\s*-?\s*/i, " ")
     .replace(/\bamazonmktplc\*?/g, " ")
     .replace(/\bamazon marketplace\b/g, " ")
@@ -119,12 +134,16 @@ function normalizeDescription(s: string): string {
 
 type HistEntry = {
   category: string;
+  categoryId: string | null;
   subcategory: string | null;
+  subcategoryId: string | null;
   subcategory2: string | null;
+  subcategory2Id: string | null;
   type: string;
   payment_date: string;
   description: string;
   amount: number | null;
+  sourceTable: "transactions" | "ai_pending_transactions";
 };
 
 
@@ -142,19 +161,21 @@ function pickBest(entries: HistEntry[]): HistEntry | null {
     }
   }
   let best: { entry: HistEntry; count: number; latest: string } | null = null;
+  const depth = (e: HistEntry) => (e.subcategory2 ? 3 : e.subcategory ? 2 : 1);
   for (const c of counts.values()) {
     if (!best) { best = c; continue; }
-    if (c.count > best.count) { best = c; continue; }
-    if (c.count === best.count) {
-      const dCur = c.entry.subcategory2 ? 3 : c.entry.subcategory ? 2 : 1;
-      const dBest = best.entry.subcategory2 ? 3 : best.entry.subcategory ? 2 : 1;
-      if (dCur > dBest) { best = c; continue; }
-      if (dCur === dBest && c.latest > best.latest) best = c;
-    }
+    const dCur = depth(c.entry);
+    const dBest = depth(best.entry);
+    const curScore = c.count * 4 + dCur * 8;
+    const bestScore = best.count * 4 + dBest * 8;
+    if (curScore > bestScore) { best = c; continue; }
+    if (curScore === bestScore && c.count > best.count) { best = c; continue; }
+    if (curScore === bestScore && c.count === best.count && c.latest > best.latest) best = c;
   }
   if (!best) return null;
-  // require ≥60% consensus among the matched samples
-  if (best.count / entries.length < 0.6) return null;
+  // Avoid learning from one isolated conflicting row, but allow a deeper path
+  // with repeated evidence to beat a broader category with more samples.
+  if (entries.length > 1 && best.count < 2 && best.count / entries.length < 0.6) return null;
   return best.entry;
 }
 
@@ -272,9 +293,15 @@ export function useCategorySuggestions() {
           return raw;
         };
 
-        const rawSamples: any[] = [
-          ...((txRes.data as any[]) || []),
-          ...((pendingRes.data as any[]) || []),
+        const toKnownId = (v: string | null | undefined): string | null => {
+          if (!v || isMissingCat(v)) return null;
+          const raw = v.trim();
+          return UUID_RE.test(raw) && byIdAll.has(raw) ? raw : null;
+        };
+
+        const rawSamples: (any & { sourceTable: "transactions" | "ai_pending_transactions" })[] = [
+          ...(((txRes.data as any[]) || []).map((r) => ({ ...r, sourceTable: "transactions" as const }))),
+          ...(((pendingRes.data as any[]) || []).map((r) => ({ ...r, sourceTable: "ai_pending_transactions" as const }))),
         ];
 
 
@@ -293,12 +320,16 @@ export function useCategorySuggestions() {
           const desc = h.description || "";
           const entry: HistEntry = {
             category: catName,
+            categoryId: toKnownId(h.category),
             subcategory: sub,
+            subcategoryId: toKnownId(h.subcategory),
             subcategory2: sub2,
+            subcategory2Id: toKnownId(h.subcategory2),
             type: h.type,
             payment_date: h.payment_date || "1970-01-01",
             description: desc,
             amount: typeof h.amount === "number" ? h.amount : (h.amount != null ? Number(h.amount) : null),
+            sourceTable: h.sourceTable,
           };
 
           const norm = normalizeDescription(desc);
@@ -333,6 +364,7 @@ export function useCategorySuggestions() {
           categoryPath: [e.category, e.subcategory, e.subcategory2]
             .filter(Boolean)
             .join(" › "),
+          sourceTable: e.sourceTable,
         });
 
         const applyEntry = (
@@ -360,6 +392,10 @@ export function useCategorySuggestions() {
             confidence,
             subcategory: entry.subcategory ?? undefined,
             subcategory2: entry.subcategory2 ?? undefined,
+            categoryId: entry.categoryId ?? undefined,
+            subcategoryId: entry.subcategoryId ?? undefined,
+            subcategory2Id: entry.subcategory2Id ?? undefined,
+            sourceTable: entry.sourceTable,
             layer: meta.layer,
             normalizedQuery: meta.normalizedQuery,
             matchedSamples: samplesSorted,
