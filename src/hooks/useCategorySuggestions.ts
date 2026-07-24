@@ -152,14 +152,36 @@ export function useCategorySuggestions() {
 
       try {
         // Normalize category storage: transactions may hold UUIDs OR names.
+        // IMPORTANT: history samples can reference category names that are NOT
+        // currently in the user's category tree (renamed / different casing /
+        // legacy). We must NOT discard those — the modal's resolveCategoryPath
+        // will map them by normalized name later. Only strictly empty or
+        // "Sem Categoria" values are treated as missing.
         const byId = new Map(categories.map((c) => [c.id, c] as const));
         const byName = new Map(categories.map((c) => [c.name, c] as const));
+
+        const normText = (s: string) =>
+          s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+        const isMissingCat = (v: string | null | undefined): boolean => {
+          if (!v) return true;
+          const t = normText(v);
+          if (!t) return true;
+          return t === "sem categoria" || t === "sem categoria ";
+        };
+
+        // Resolve a stored value (UUID or name) into a human name.
+        // Falls back to the raw value when it's a plausible name so we don't
+        // silently drop valid historical categories.
         const toName = (v: string | null | undefined): string | null => {
-          if (!v) return null;
-          const hit = byId.get(v);
+          if (isMissingCat(v)) return null;
+          const raw = v as string;
+          const hit = byId.get(raw);
           if (hit) return hit.name;
-          if (byName.has(v)) return v;
-          return null;
+          if (byName.has(raw)) return raw;
+          // Not in the local tree — keep the raw name; resolveCategoryPath
+          // in the modal will normalize casing/accents when applying.
+          return raw;
         };
 
         const sinceISO = (() => {
@@ -169,6 +191,7 @@ export function useCategorySuggestions() {
         })();
 
         // ---- Stage 1: load samples in parallel ----
+        // STRICT per-user isolation: every query is scoped to effectiveUserId.
         const [txRes, pendingRes] = await Promise.all([
           supabase
             .from("transactions")
@@ -176,6 +199,7 @@ export function useCategorySuggestions() {
             .eq("user_id", effectiveUserId)
             .not("category", "is", null)
             .neq("category", "Sem Categoria")
+            .neq("category", "Sem categoria")
             .gte("payment_date", sinceISO)
             .order("payment_date", { ascending: false })
             .limit(5000),
@@ -185,6 +209,8 @@ export function useCategorySuggestions() {
             .eq("user_id", effectiveUserId)
             .eq("status", "approved")
             .not("category", "is", null)
+            .neq("category", "Sem Categoria")
+            .neq("category", "Sem categoria")
             .limit(2000),
         ]);
 
@@ -201,11 +227,14 @@ export function useCategorySuggestions() {
 
         for (const h of rawSamples) {
           const catName = toName(h.category);
-          if (!catName) continue;
+          if (!catName) continue; // skip uncategorized samples
+          // Treat "Sem categoria" at sub-levels as absent, not as a real level.
+          const sub = isMissingCat(h.subcategory) ? null : toName(h.subcategory);
+          const sub2 = isMissingCat(h.subcategory2) ? null : toName(h.subcategory2);
           const entry: HistEntry = {
             category: catName,
-            subcategory: toName(h.subcategory),
-            subcategory2: toName(h.subcategory2),
+            subcategory: sub,
+            subcategory2: sub2,
             type: h.type,
             payment_date: h.payment_date || "1970-01-01",
           };
@@ -231,6 +260,7 @@ export function useCategorySuggestions() {
             byToken.set(tok, arr);
           }
         }
+
 
         const unresolved: NewRowInput[] = [];
 
