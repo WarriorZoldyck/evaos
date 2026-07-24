@@ -111,7 +111,10 @@ type HistEntry = {
   subcategory2: string | null;
   type: string;
   payment_date: string;
+  description: string;
+  amount: number | null;
 };
+
 
 function pickBest(entries: HistEntry[]): HistEntry | null {
   if (entries.length === 0) return null;
