@@ -66,7 +66,12 @@ function stripNoise(s: string): string {
     // strip trailing installment markers like "11/12"
     .replace(/\b\d+\s*\/\s*\d+\b/g, " ")
     // strip long numeric sequences (auth codes, doc numbers)
-    .replace(/\b\d{4,}\b/g, " ")
+    .replace(/\b\d{3,}\b/g, " ")
+    // strip "iof internacional -" prefix
+    .replace(/^iof internacional\s*-?\s*/i, " ")
+    // strip well-known marketplace prefixes so the merchant stays visible
+    .replace(/\bamazonmktplc\*?/g, " ")
+    .replace(/\bamazon marketplace\b/g, " ")
     // strip acquirer prefixes like "mp *", "cb*", "pag*", "pp*"
     .replace(/\b[a-z]{1,4}\s*\*+\s*/g, " ")
     .replace(/\*+/g, " ")
@@ -89,19 +94,26 @@ function buildMerchantKey(description: string): { key: string; prefix: string } 
 }
 
 // Layer 0 normalization: preserve identity of the description.
-// Strips only installment markers, acquirer prefixes and punctuation.
+// Strips installment markers, IOF/marketplace prefixes, long numeric codes
+// and acquirer prefixes so "DROGASIL 3066" and "Compra na Drogasil 1424 03/03"
+// converge to the same key.
 function normalizeDescription(s: string): string {
   return s
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\b\d+\s*\/\s*\d+\b/g, " ")
+    .replace(/^iof internacional\s*-?\s*/i, " ")
+    .replace(/\bamazonmktplc\*?/g, " ")
+    .replace(/\bamazon marketplace\b/g, " ")
     .replace(/\b[a-z]{1,4}\s*\*+\s*/g, " ")
     .replace(/\*+/g, " ")
+    .replace(/\b\d{3,}\b/g, " ")
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
+
 
 // ---- History entry / voting ----
 
