@@ -255,14 +255,17 @@ export function useCategorySuggestions() {
           // Treat "Sem categoria" at sub-levels as absent, not as a real level.
           const sub = isMissingCat(h.subcategory) ? null : toName(h.subcategory);
           const sub2 = isMissingCat(h.subcategory2) ? null : toName(h.subcategory2);
+          const desc = h.description || "";
           const entry: HistEntry = {
             category: catName,
             subcategory: sub,
             subcategory2: sub2,
             type: h.type,
             payment_date: h.payment_date || "1970-01-01",
+            description: desc,
+            amount: typeof h.amount === "number" ? h.amount : (h.amount != null ? Number(h.amount) : null),
           };
-          const desc = h.description || "";
+
           const norm = normalizeDescription(desc);
           if (norm) {
             const arrN = byNormDesc.get(norm) || [];
