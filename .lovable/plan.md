@@ -1,48 +1,52 @@
-## Objetivo
-Garantir — e provar — que a categorização na importação vem 100% do histórico real do próprio usuário no banco, sem IA e sem vazamento entre usuários.
+## Diagnóstico confirmado
 
-## Resposta direta
-Não posso prometer "100% categorizado". Posso prometer **100% assertivo quando existir histórico**: se a descrição (normalizada) já foi categorizada antes por aquele usuário, ela virá igual; se nunca foi, fica "Sem categoria" para ele ajustar (em vez de chutar). Isso é o comportamento correto — chutar é o que estava dando errado.
+Ao ler `useCategories.ts` vi que ele filtra as categorias por contexto (`isPersonal` → `company_id IS NULL`; senão `company_id = selectedCompanyId`). Já `useCategorySuggestions.ts` recebe essa lista filtrada como único dicionário para converter UUID→nome:
 
-## O que já está garantido no código
-- Consulta apenas `public.transactions` e `public.ai_pending_transactions` filtradas por `user_id = effectiveUserId` (RLS + filtro explícito). Nunca mistura usuários.
-- IA de sugestão desligada. Só histórico.
-- Amostras "Sem Categoria" / vazias são ignoradas para não poluir o voto.
-- Hierarquia preservada (Categoria › Sub › Sub2), mesmo quando o nome histórico não está na árvore atual do contexto.
-- Sem match → fica "Sem categoria" (nunca inventa).
+```ts
+const byId = new Map(categories.map((c) => [c.id, c]));
+// ...
+const toName = (v) => byId.get(v)?.name ?? byName.get(v) ?? v; // devolve o UUID cru
+```
 
-## Como você vai ter certeza (plano de verificação)
+Consequência:
+1. Se o lançamento histórico referencia uma categoria que **existe no banco mas em outro contexto** (ex.: usuário está em "Pessoal" mas categorizou antes em uma empresa, ou vice-versa), `byId` não encontra e a função devolve o UUID cru.
+2. Esse UUID cru vai para `SuggestionSource.category / subcategory / subcategory2` e, em `ImportStatementModal`, o ramo `if (v.subcategory || v.subcategory2)` copia direto para `rowCategories` — daí os UUIDs aparecerem no input (print 1 e 2).
+3. Como o `type` do lançamento histórico pode não bater com o filtro atual e o dicionário está incompleto, várias linhas nem aparecem casadas (INDITEX apareceu, mas L E M / DROGASIL / POSTO não, porque a categoria original foi resolvida como UUID e caiu como "sem histórico" ou foi descartada em camadas seguintes).
 
-### 1. Painel de auditoria dentro do próprio modal de importação
-Adicionar, em cada linha sugerida, um pequeno "por quê?" clicável que abre um popover mostrando:
-- A descrição original e a descrição normalizada usada na busca.
-- A(s) transação(ões) do histórico que casaram: data, valor, descrição original, categoria completa.
-- A camada que resolveu (match exato, prefixo do comerciante, token, etc.) e quantas amostras votaram.
-- Link "abrir no sistema" para a transação histórica.
+## O que fazer
 
-Assim, para qualquer linha, você vê exatamente qual lançamento do seu banco justificou a sugestão.
+### 1. Carregar TODAS as categorias do usuário no hook de sugestões
+Dentro de `src/hooks/useCategorySuggestions.ts`, adicionar uma query paralela às amostras:
 
-### 2. Contador de transparência no topo do passo de conciliação
-Mostrar: "X de Y linhas casadas com seu histórico · Z sem histórico · 0 vindas de IA". Deixa explícito que nada saiu de IA.
+```ts
+supabase
+  .from("categories")
+  .select("id, name, parent_id, type, company_id")
+  .eq("user_id", effectiveUserId)   // isolamento total por usuário
+```
 
-### 3. Script de verificação de isolamento (uso interno, quando pedir)
-Query pronta para rodar em qualquer usuário reclamante:
-- Conta quantas descrições distintas do extrato importado têm match exato normalizado em `transactions`/`ai_pending_transactions` daquele `user_id`.
-- Lista as que não têm — essas são legitimamente "Sem categoria".
-- Confirma que nenhuma linha da sugestão referencia `user_id` diferente.
+Construir `byIdAll` / `byNameAll` a partir dessa lista (todos os contextos do próprio usuário). Usar esses mapas dentro de `toName` para converter UUIDs históricos em nomes reais, mesmo quando a categoria pertence a outro contexto (Pessoal ↔ Empresa).
 
-### 4. Teste guiado com o usuário atual (espclin@hotmail.com)
-- Reimportar o mesmo extrato.
-- Confirmar item a item usando o "por quê?": `DROGASIL` → Saúde › Farmácias, `L E M ESCOVA E BELEZA` → Beleza › Salão, `LE BOMBOM` → Vestuário › Roupas › Vitória.
-- Qualquer divergência vira bug reproduzível com evidência no popover.
+Isso preserva o isolamento por `user_id` (nada de outros usuários entra no cruzamento) e resolve o problema de exibir UUIDs.
 
-## Detalhes técnicos
-- Estender `SuggestionSource` em `src/hooks/useCategorySuggestions.ts` para carregar `matchedSamples` (até 3): `{ description, payment_date, amount, categoryPath }` e `layer` ("exact" | "merchant" | "prefix" | "token").
-- Novo componente `SuggestionWhyPopover` usado em `src/components/lancamentos/import/ReconcileStep.tsx` na coluna de categoria.
-- Header do passo mostra os contadores derivados de `suggestions` + linhas totais.
-- Nenhuma mudança em RLS, schema ou edge functions. Nenhuma chamada a IA. Somente leitura das duas tabelas já usadas hoje.
+### 2. Fallback duro contra UUIDs vazando para a UI
+Ainda no `toName`, se após todos os mapas o valor continuar com formato UUID (`/^[0-9a-f-]{36}$/i`), tratar como "sem nome resolvido" e descartar a amostra (não devolve UUID). Garantia de que o input nunca mais mostra UUID.
 
-## Fora de escopo
-- Reativar IA como fallback.
-- Alterar políticas RLS ou criar tabelas.
-- Migração de dados históricos.
+### 3. Melhorar `applyEntry` para não perder profundidade quando o contexto atual não tem a subcategoria
+Já resolvido em passo anterior; só reconfirmar que `subcategory` / `subcategory2` vão preenchidos com os NOMES resolvidos (não IDs).
+
+### 4. No `ImportStatementModal.tsx`
+Ao aplicar a sugestão (linhas 843-852), quando `v.subcategory || v.subcategory2` estiver presente, chamar `resolveCategoryPath(v.subcategory2 || v.subcategory || v.category, categories)` para tentar reaproveitar a hierarquia atual (walk-up por `parent_id`). Se o `resolveCategoryPath` não achar nada no contexto atual, cair de volta para os nomes crus vindos da sugestão — assim o usuário vê nomes legíveis (ex.: "Beleza › Salão") em vez de UUIDs, mesmo se aquela árvore ainda não existir no contexto atual.
+
+## Como testar
+
+1. Reimportar o extrato do usuário `espclin@hotmail.com`.
+2. Verificar que nenhum input mostra UUID — todos os campos exibem nomes reais ou "Selecionar categoria".
+3. Conferir se `L E M ESCOVA E BELEZA`, `DROGASIL`, `BOMBOM`, `POSTO ...` aparecem categorizados de acordo com o histórico do próprio usuário (independente do contexto Pessoal/Empresa em que foram lançados originalmente).
+4. O contador "X de Y do seu histórico" deve aumentar.
+
+## Escopo intocado
+
+- Não altero RLS nem tabelas.
+- Não misturo dados entre usuários — a query permanece `eq("user_id", effectiveUserId)`.
+- IA continua desligada.
