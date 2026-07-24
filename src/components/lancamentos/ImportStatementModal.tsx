@@ -838,19 +838,28 @@ export function ImportStatementModal({
         Object.entries(res).forEach(([k, v]) => {
           const idx = Number(k);
           if (!next[idx] || !next[idx].category) {
-            // Prefer explicit hierarchy from the suggestion (Stage 2 AI now returns
-            // full path). Fall back to walk-up from the leaf name.
+            // Prefer explicit hierarchy from the suggestion. Try to rebuild
+            // the path from the deepest leaf using the current context tree
+            // (walk-up by parent_id). If the leaf isn't in the current tree,
+            // fall back to the raw names — never expose UUIDs to the UI.
             if (v.subcategory || v.subcategory2) {
-              next[idx] = {
-                category: v.category,
-                subcategory: v.subcategory ?? undefined,
-                subcategory2: v.subcategory2 ?? undefined,
-                touched: false,
-              };
+              const leaf = v.subcategory2 || v.subcategory || v.category;
+              const rebuilt = resolveCategoryPath(leaf, categories);
+              const rebuiltIsRealPath =
+                !!rebuilt.category && !!categories.find((c) => c.name === rebuilt.category);
+              next[idx] = rebuiltIsRealPath
+                ? { ...rebuilt, touched: false }
+                : {
+                    category: v.category,
+                    subcategory: v.subcategory ?? undefined,
+                    subcategory2: v.subcategory2 ?? undefined,
+                    touched: false,
+                  };
             } else {
               next[idx] = { ...resolveCategoryPath(v.category, categories), touched: false };
             }
           }
+
         });
         return next;
       });
