@@ -265,15 +265,18 @@ export function useCategorySuggestions() {
         const unresolved: NewRowInput[] = [];
 
         const applyEntry = (row: NewRowInput, entry: HistEntry, confidence: number) => {
-          const leaf = entry.subcategory2 || entry.subcategory || entry.category;
+          // SuggestionSource.category is the TOP-LEVEL category name; the modal
+          // uses subcategory/subcategory2 to fill the hierarchy. Keeping the
+          // top-level here also makes the "baseado no histórico" badge match.
           result[row.index] = {
-            category: leaf,
+            category: entry.category,
             source: "history",
             confidence,
             subcategory: entry.subcategory ?? undefined,
             subcategory2: entry.subcategory2 ?? undefined,
           };
         };
+
 
         // Prefer the deepest + most recent entry among a candidate list.
         const pickDeepestRecent = (entries: HistEntry[]): HistEntry | null => {
