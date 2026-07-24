@@ -221,6 +221,7 @@ export function ImportStatementModal({
   wallets,
   creditCards,
   categories,
+  allCategories,
   allBankAccounts,
   companies,
   refetchAccounts,
@@ -292,10 +293,11 @@ export function ImportStatementModal({
 
   // Locally created categories from inside the reconcile step (dedup by id when merging).
   const [extraCategories, setExtraCategories] = useState<{ id: string; name: string; parent_id: string | null; type: string | null }[]>([]);
+  const categoryBase = allCategories && allCategories.length > 0 ? allCategories : categories;
   const mergedCategories = useMemo(() => {
-    const ids = new Set(categories.map((c) => c.id));
-    return [...categories, ...extraCategories.filter((c) => !ids.has(c.id))];
-  }, [categories, extraCategories]);
+    const ids = new Set(categoryBase.map((c) => c.id));
+    return [...categoryBase, ...extraCategories.filter((c) => !ids.has(c.id))];
+  }, [categoryBase, extraCategories]);
   const rootCategories = mergedCategories.filter((c) => !c.parent_id);
 
 
@@ -841,10 +843,10 @@ export function ImportStatementModal({
   }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard, creditCards, isPersonal, selectedCompanyId]);
 
 
-  // Trigger AI category suggestions once rows + categories are available.
+  // Trigger history category suggestions once rows + categories are available.
   // Pre-applies suggestion to rowCategories so the user just edits exceptions.
   useEffect(() => {
-    if (rows.length === 0 || categories.length === 0) return;
+    if (rows.length === 0 || mergedCategories.length === 0) return;
     if (Object.keys(suggestions).length > 0) return; // only once per file
 
     const items = rows
@@ -856,7 +858,7 @@ export function ImportStatementModal({
         amount: Math.abs(r.amount),
       }));
 
-    suggest(items, categories).then((res) => {
+    suggest(items, mergedCategories).then((res) => {
       // Pre-apply only where user hasn't already set a category. Resolve full path.
       setRowCategories((prev) => {
         const next = { ...prev };
@@ -867,11 +869,17 @@ export function ImportStatementModal({
             // the path from the deepest leaf using the current context tree
             // (walk-up by parent_id). If the leaf isn't in the current tree,
             // fall back to the raw names — never expose UUIDs to the UI.
-            if (v.subcategory || v.subcategory2) {
+            const rebuiltByIds = resolveCategoryPathByIds(
+              { categoryId: v.categoryId, subcategoryId: v.subcategoryId, subcategory2Id: v.subcategory2Id },
+              mergedCategories,
+            );
+            if (rebuiltByIds?.category) {
+              next[idx] = { ...rebuiltByIds, touched: false };
+            } else if (v.subcategory || v.subcategory2) {
               const leaf = v.subcategory2 || v.subcategory || v.category;
-              const rebuilt = resolveCategoryPath(leaf, categories);
+              const rebuilt = resolveCategoryPath(leaf, mergedCategories);
               const rebuiltIsRealPath =
-                !!rebuilt.category && !!categories.find((c) => c.name === rebuilt.category);
+                !!rebuilt.category && !!mergedCategories.find((c) => c.name === rebuilt.category);
               next[idx] = rebuiltIsRealPath
                 ? { ...rebuilt, touched: false }
                 : {
@@ -881,7 +889,7 @@ export function ImportStatementModal({
                     touched: false,
                   };
             } else {
-              next[idx] = { ...resolveCategoryPath(v.category, categories), touched: false };
+              next[idx] = { ...resolveCategoryPath(v.category, mergedCategories), touched: false };
             }
           }
 
@@ -891,16 +899,16 @@ export function ImportStatementModal({
     });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows.length, categories.length]);
+  }, [rows.length, mergedCategories.length]);
 
   // Seed rowCategories from matched candidates: when a statement line matches
   // an existing transaction in the system, inherit its category (highest
   // priority — overrides history/AI suggestions for untouched rows).
   useEffect(() => {
     if (Object.keys(matches).length === 0) return;
-    if (categories.length === 0) return;
-    const byId = new Map(categories.map((c) => [c.id, c] as const));
-    const byName = new Map(categories.map((c) => [c.name, c] as const));
+    if (mergedCategories.length === 0) return;
+    const byId = new Map(mergedCategories.map((c) => [c.id, c] as const));
+    const byName = new Map(mergedCategories.map((c) => [c.name, c] as const));
     const toName = (v: string | null | undefined): string | null => {
       if (!v) return null;
       const hit = byId.get(v);
@@ -920,7 +928,7 @@ export function ImportStatementModal({
         // Prefer the deepest leaf so resolveCategoryPath rebuilds the 3-level path.
         const leafName =
           toName(cand?.subcategory2) || toName(cand?.subcategory) || catName;
-        const resolved = resolveCategoryPath(leafName, categories);
+        const resolved = resolveCategoryPath(leafName, mergedCategories);
         const same =
           next[idx]?.category === resolved.category &&
           next[idx]?.subcategory === resolved.subcategory &&
@@ -931,7 +939,7 @@ export function ImportStatementModal({
       });
       return changed ? next : prev;
     });
-  }, [matches, categories]);
+  }, [matches, mergedCategories]);
 
 
 
@@ -1072,9 +1080,9 @@ export function ImportStatementModal({
 
       const realIdx = rows.indexOf(r);
       const rowCat = rowCategories[realIdx];
-      const categoryName = resolveCategoryName(rowCat?.category, categories) || catName;
-      const subcategoryName = resolveCategoryName(rowCat?.subcategory, categories) || null;
-      const subcategory2Name = resolveCategoryName(rowCat?.subcategory2, categories) || null;
+      const categoryName = resolveCategoryName(rowCat?.category, mergedCategories) || catName;
+      const subcategoryName = resolveCategoryName(rowCat?.subcategory, mergedCategories) || null;
+      const subcategory2Name = resolveCategoryName(rowCat?.subcategory2, mergedCategories) || null;
 
       return {
         description: r.description,
