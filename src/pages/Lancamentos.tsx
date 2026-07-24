@@ -543,6 +543,7 @@ export default function Lancamentos() {
         allBankAccounts={allAccounts.bankAccounts}
         companies={companies}
         categories={categories}
+        allCategories={allCategories}
         refetchAccounts={refetchAccounts}
       />
 
