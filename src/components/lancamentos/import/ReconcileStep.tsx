@@ -883,13 +883,9 @@ export function ReconcileStep({
                               />
 
                               {sug && !currentCat.touched && currentCat.category === sug.category && (
-                                <span
-                                  className="text-[10px] text-muted-foreground flex items-center gap-1"
-                                  title="Baseado em lançamentos anteriores seus"
-                                >
-                                  <BookOpen className="h-2.5 w-2.5" /> baseado no histórico
-                                </span>
+                                <SuggestionWhyPopover suggestion={sug} rowDescription={r.description} />
                               )}
+
 
                             </div>
                           </td>
