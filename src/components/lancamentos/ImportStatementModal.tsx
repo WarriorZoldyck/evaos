@@ -99,6 +99,30 @@ function resolveCategoryPath(
   };
 }
 
+function resolveCategoryPathByIds(
+  ids: { categoryId?: string; subcategoryId?: string; subcategory2Id?: string },
+  categories: { id: string; name: string; parent_id: string | null }[],
+): RowCategoryValue | null {
+  const deepestId = ids.subcategory2Id || ids.subcategoryId || ids.categoryId;
+  if (!deepestId) return null;
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const found = byId.get(deepestId);
+  if (!found) return null;
+  const chain: { id: string; name: string; parent_id: string | null }[] = [found];
+  let cur = found;
+  while (cur.parent_id) {
+    const parent = byId.get(cur.parent_id);
+    if (!parent) break;
+    chain.unshift(parent);
+    cur = parent;
+  }
+  return {
+    category: chain[0]?.name || "",
+    subcategory: chain[1]?.name,
+    subcategory2: chain[2]?.name,
+  };
+}
+
 function resolveCategoryName(
   value: string | undefined | null,
   categories: { id: string; name: string }[],
@@ -116,6 +140,7 @@ interface ImportStatementModalProps {
   wallets: { id: string; name: string }[];
   creditCards: { id: string; name: string; last_four_digits: string | null; parent_card_id?: string | null; bank_account_id?: string; company_id?: string | null; company_name?: string; closing_day?: number | null; due_day?: number | null }[];
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+  allCategories?: { id: string; name: string; parent_id: string | null; type: string | null }[];
   allBankAccounts?: { id: string; name: string; company_id: string | null; company_name?: string }[];
   companies?: { id: string; name: string }[];
   refetchAccounts?: () => Promise<void> | void;
