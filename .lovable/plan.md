@@ -1,54 +1,57 @@
-## Contexto (verificado agora no banco)
+## Diagnóstico confirmado
 
-Confirmei duas coisas antes de escrever o plano:
+Consultei diretamente o banco para `espclin@hotmail.com` e os exemplos citados existem no histórico do próprio usuário, mas alguns não aparecem na importação por dois motivos diferentes:
 
-1. **A UI já salva no banco.** Toda vez que o usuário categoriza — no formulário de lançamento, no passo de conciliação da importação, ou inline — o `useTransactions` executa `.from("transactions").update({ category, subcategory, subcategory2 })` e persiste o UUID. Ou seja: **o que o usuário faz na tela chega ao Supabase em tempo real** e fica disponível pra próxima importação cruzar.
+- **Categorias existem em outro contexto/empresa**: vários históricos estão com `company_id = a206...`, mas a tela de importação recebe apenas `categories` do contexto atual. Assim, o sistema até acha o histórico, mas não consegue reconstruir corretamente o caminho da categoria no seletor atual.
+- **Subcategorias misturadas entre contextos**: há lançamentos com raiz de uma empresa e subcategoria de outro contexto, por exemplo `AMAZONA WESTERN` com `Vestuário` de uma empresa, `Roupas` pessoal e `Paula` de empresa. Isso faz a UI não conseguir montar a árvore completa.
+- **Parcelas futuras não estão no banco ainda**: para `TEIXEIRA MODA INTIMA 02/02`, `ROS/EROS BOUTIQUE 02/03`, `LE BOMBOM 03/03`, `AMAZONA WESTERN 10/10` e `IBERIA ... 10/10`, o banco tem parcelas anteriores, mas não necessariamente a parcela exata final. Para categorização isso deveria funcionar por histórico; para conciliação com lançamento existente só funciona se a parcela já existe como transação.
+- **DROGASIL bateu parcialmente**: há histórico como `Saúde > Farmácias` e também `Saúde > Farmácia > Drogasil`. O algoritmo atual tende a escolher pelo volume de amostras, não pela categoria mais específica quando há conflito.
+- **FAUSTO/PAULO FERREIRA**: a amostra do banco para `FAUSTO FERREIRA` está como `Sem Categoria`, então a sugestão que aparece veio de token/similaridade com outro Ferreira (`Luma/Compra Luma Borges Ferreira`) e por isso a lógica cruzou texto certo, mas categorizou errado.
 
-2. **Havia legado sujo.** Rodei uma consulta e vi que muitos usuários têm lançamentos antigos com:
-   - Categoria em **texto puro** (`"Saúde"`, `"Farmácias"`) em vez de UUID → o hook não consegue casar de forma limpa
-   - Linhas salvas como `"Sem Categoria"` mesmo tendo histórico próprio disponível (foi o que aconteceu com `espclin@`)
+## Plano de correção
 
-O caso do `espclin@` já foi limpo. **A dúvida legítima que você levantou é: e o resto da base?**
+1. **Usar categorias globais do usuário na importação**
+   - Passar `allCategories` para o modal de importação, não só as categorias do contexto atual.
+   - Usar essa lista global para resolver UUIDs em nomes e montar os caminhos exibidos.
+   - Manter o isolamento por `user_id`; nada cruza dados entre usuários.
 
-## O que este plano faz
+2. **Separar “categoria para sugerir” de “categoria selecionável”**
+   - A sugestão histórica pode vir de qualquer contexto do usuário.
+   - Se a categoria sugerida não existir no contexto atual, mostrar o caminho real do histórico e ainda permitir importar com esse caminho por nome.
+   - Evitar que IDs brutos ou caminhos quebrados apareçam no seletor.
 
-Rodar o **mesmo backfill que funcionou** para `espclin@`, mas para **todos os usuários**, com escopo estritamente isolado (`user_id`). Nenhum dado cruza entre pessoas.
+3. **Melhorar ranking do histórico**
+   - Dar prioridade maior para:
+     - descrição normalizada igual/parcelas do mesmo estabelecimento;
+     - mesma raiz + maior profundidade (`categoria > sub > sub2`);
+     - histórico mais recente;
+     - consenso apenas dentro do mesmo comerciante real.
+   - Reduzir o peso de token genérico de sobrenome/palavra solta, para evitar `FAUSTO/PAULO FERREIRA` herdando categoria de outro “Ferreira”.
 
-### Passo 1 — Backfill global de "Sem Categoria" usando o próprio histórico
+4. **Tratar parcelas como o mesmo comerciante**
+   - Normalizar descrições removendo `01/03`, `02/03`, `10/10`, códigos longos e ruídos antes do cruzamento.
+   - Assim `LE BOMBOM 03/03` aprende com `LE BOMBOM 01/03` e `02/03`; idem `IBERIA`, `AMAZONA WESTERN`, `TEIXEIRA`, `ROS/EROS BOUTIQUE`.
 
-Para cada `user_id`:
-- Normaliza descrições (mesma regex do hook: strip parcelas `03/03`, `IOF Internacional`, `AMAZONMKTPLC*`, códigos numéricos ≥3 dígitos, prefixos de adquirente `MP*` `PG*` `SPAY*`)
-- Constrói dois dicionários **só com o histórico daquele usuário**:
-  - `exact` → descrição normalizada idêntica
-  - `merchant` → primeiro token significativo, exige ≥2 amostras concordantes pra evitar chute
-- Atualiza `category / subcategory / subcategory2` das linhas atualmente em `"Sem Categoria"` que tiverem match
+5. **Criar um relatório de auditoria no próprio popover**
+   - Mostrar claramente se o match veio de `transactions` ou `ai_pending_transactions`.
+   - Mostrar por que escolheu aquela categoria: “mesma descrição sem parcela”, “mesmo comerciante”, “tokens fortes”.
+   - Quando não houver base confiável, deixar “Selecionar categoria” em vez de chutar.
 
-### Passo 2 — Padronização texto → UUID (global)
+6. **Validação final com os casos citados**
+   - Conferir que os exemplos passam a se comportar assim:
+     - `TEIXEIRA MODA INTIMA 02/02` → `Vestuário > Roupas > Langerie`
+     - `ROS/EROS BOUTIQUE 02/03` → `Vestuário > Roupas > Paula`
+     - `LE BOMBOM 03/03` → `Vestuário > Roupas > Vitória`
+     - `DROGASIL 3066 03/03` → preferir o caminho mais específico quando existir: `Saúde > Farmácia > Drogasil`, senão `Saúde > Farmácias`
+     - `AMAZONA WESTERN 10/10` → `Vestuário > Roupas > Paula`
+     - `IBERIA LINEA... 10/10` → `Férias > Aéreo > Iberia`
+     - `PAULO/FAUSTO FERREIRA` → não categorizar por sobrenome se não houver histórico confiável do mesmo comerciante
 
-Para cada `user_id`, converte qualquer categoria salva como nome de texto (`"Saúde"`) para o UUID correspondente da tabela `public.categories` daquele mesmo usuário. Se o nome não bate com nenhuma categoria dele, deixa como está (não inventa).
+## Arquivos a alterar
 
-### Passo 3 — Relatório de resultado
+- `src/pages/Lancamentos.tsx`
+- `src/components/lancamentos/ImportStatementModal.tsx`
+- `src/hooks/useCategorySuggestions.ts`
+- `src/components/lancamentos/import/SuggestionWhyPopover.tsx`
 
-Uma consulta final devolvendo, por usuário: quantas linhas foram backfilladas, quantas foram padronizadas, e quantas continuam "Sem Categoria" por falta de histórico (essas são as que dependem do usuário categorizar 1x — comportamento esperado que você escolheu).
-
-## O que este plano NÃO faz
-
-- **Não mistura dados entre usuários.** Cada `UPDATE` é `WHERE user_id = X` e cruza só com o histórico do mesmo `X`.
-- **Não inventa categoria.** Se o usuário nunca categorizou aquele comerciante, a linha continua "Sem Categoria" — é a política que você aprovou ("EVA aprende com 1 exemplo").
-- **Não muda schema, RLS, edge functions nem código do frontend.** É só cirurgia em dados.
-- **Não toca em `ai_pending_transactions`** (staging da IA, não é histórico consolidado).
-
-## Como você valida
-
-Depois de rodar, eu retorno:
-- Total de linhas backfilladas por usuário (amostra dos top 10 mais impactados)
-- Confirmação de que `espclin@` continua igual (já estava limpo)
-- Um SELECT rápido pra confirmar que nenhum `user_id` recebeu categoria de outro
-
-Se algo parecer estranho, é `UPDATE` — dá pra reverter pontualmente, mas o script só grava onde havia `NULL`/`"Sem Categoria"`/texto, então não sobrescreve escolha manual do usuário.
-
-## Detalhes técnicos
-
-- Executado via `supabase--insert` (2 statements SQL, sem migração de schema)
-- Regex idêntica à que o hook `useCategorySuggestions.ts` agora usa — garante que o próximo import bate com o dado backfillado
-- Merchant threshold = 2 amostras (mais conservador que Layer 0/1 do hook, pra não propagar erro em massa)
+Não pretendo alterar dados do banco agora; primeiro vou corrigir a lógica para todo usuário. Se depois quisermos limpar categorias antigas inconsistentes entre contextos, faço isso como etapa separada com SQL auditável.
