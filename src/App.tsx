@@ -76,6 +76,7 @@ const App = () => {
                 <Route path="/configuracoes/assinatura" element={<MinhaAssinatura />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/lancamentos" element={<Lancamentos />} />
+                <Route path="/lancamentos/importar-extrato" element={<ImportarExtrato />} />
                 <Route path="/analises-eva" element={<AnalisesEva />} />
                 <Route path="/plano-de-caixa" element={<PlanoDeCaixa />} />
                 <Route path="/dre" element={<DRE />} />
