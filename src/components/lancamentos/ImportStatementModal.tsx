@@ -1902,7 +1902,7 @@ export function ImportStatementModal({
           let totalToLink = 0;
           selectedRows.forEach((r) => {
             const i = rows.indexOf(r);
-            const a = matchActions[i] || "criar";
+            const a = matchActions[i] || "ignorar";
             counts[a]++;
             const signed = r.type === "receita" ? Math.abs(r.amount) : -Math.abs(r.amount);
             if (a === "criar") totalToCreate += signed;
