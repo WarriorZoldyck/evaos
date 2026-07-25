@@ -1,22 +1,21 @@
 ## Plano
 
-1. **Manter o formato atual da seção**
-   - Não vou reorganizar cabeçalho, tabela, badges, rodapé ou a estrutura visual da seção “Só no extrato”.
-   - A mudança fica restrita ao comportamento/visual do toggle e ao estado da linha quando ele é desligado.
+1. **Padronizar a regra do toggle**
+   - Definir explicitamente: toggle ligado = `criar`; toggle desligado = `ignorar`.
+   - Usar essa mesma regra na linha, nos contadores do rodapé e no `handleImport`, evitando qualquer leitura invertida.
 
-2. **Corrigir o toggle para ligar/desligar de verdade**
-   - Ajustar o `NeuToggle` para usar um botão controlado (`button role="switch"`) em vez de depender de `input` invisível dentro de `label`, evitando clique confuso ou estado visual travado.
-   - O clique vai alternar diretamente `Criar` ↔ `Ignorar` usando o estado React atual.
+2. **Ajustar o visual sem mudar o formato da seção**
+   - Manter a linha dentro de “Só no extrato — o que fazer?” quando estiver desligada.
+   - Colocar o texto à esquerda do toggle, como solicitado:
+     - desligado: `Ignorar` + toggle cinza
+     - ligado: `Criar` + toggle azul
+   - Não mover a linha para “Ignorados” quando o usuário apenas desligar o toggle nessa seção.
 
-3. **Preservar o mesmo desenho do toggle**
-   - Manter o estilo neumórfico e o mesmo tamanho geral.
-   - Apenas trocar a posição/cor do indicador conforme ligado/desligado, sem mudar o formato da linha/tabela.
+3. **Evitar conflito de clique/tooltip**
+   - Tirar o toggle de dentro de qualquer wrapper que possa capturar o clique de forma ambígua.
+   - Deixar o `NeuToggle` como botão controlado, recebendo `checked={ação === "criar"}` e enviando `criar/ignorar` diretamente.
 
-4. **Feedback claro sem deformar a seção**
-   - Quando ligado: texto “Criar”.
-   - Quando desligado: texto “Ignorar”.
-   - Se precisar indicar “não será importado”, manter como badge discreto onde já existe hoje, sem alterar a estrutura da sessão.
-
-5. **Validar no preview**
-   - Abrir a rota de importação e testar o clique no toggle.
-   - Confirmar que o contador de criar/ignorar muda e que a linha não muda de formato, apenas estado visual.
+4. **Garantir que importar respeite o estado visual**
+   - Se a linha estiver com `Ignorar`, ela não entra em `rowsToCreate`.
+   - Se estiver com `Criar`, ela entra em `rowsToCreate`.
+   - Conferir que o resumo do rodapé mostra a mesma verdade do toggle antes de importar.
