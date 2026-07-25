@@ -3968,8 +3968,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // already exists in the system. If so, attach a [SUGESTAO_BAIXA] block
       // to the pending entry so the user can resolve it in Análises EVA.
       let boletoSuggestionBlock: string | null = null;
-      let boletoSuggestionMessage: string | null = null;
-      let boletoSuggestionTail: string | null = null;
+      let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
+      // Nota interna: sugestão de baixa é armazenada em notes e resolvida em Análises EVA.
+      // NÃO envia mais mensagem/imagem/menu no WhatsApp.
       let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
         try {
@@ -3996,12 +3997,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               `vencimento: ${match.tx.payment_date || ""}\n` +
               `fornecedor: ${match.supplierName || ""}\n` +
               `score: ${match.score}`;
-            const supplierLine = match.supplierName ? ` • ${match.supplierName}` : "";
-            boletoSuggestionMessage =
-              `📄 Encontrei um lançamento *pendente* parecido no sistema:\n` +
-              `• ${match.tx.description}${supplierLine}\n` +
-              `• ${fmt(match.tx.amount)} • venc. ${formatDate(match.tx.payment_date)}\n\n` +
-              `Responda:\n1 — ✅ Sim, dá baixa\n2 — ❌ Não, é outro\n3 — ✏️ Editar no app`;
           }
         } catch (e) {
           console.error("Boleto reconciliation skipped due to error:", e);
@@ -4052,108 +4047,10 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       const pendingId: string | null = insertedPending?.id || null;
 
-      // --- Sugestão de baixa: cria whatsapp_pending_actions e envia card + botões ---
-      if (boletoMatch && pendingId && phone) {
-        try {
-          await supabase.from("whatsapp_pending_actions").insert({
-            user_id: userId,
-            action_type: "confirm_boleto_match",
-            payload: {
-              pending_id: pendingId,
-              transaction_id: boletoMatch.tx.id,
-              amount: Number(boletoMatch.tx.amount),
-              description: boletoMatch.tx.description || "",
-              payment_date: paymentDate,
-              bank_account_id: bankAccountId,
-              wallet_id: walletId,
-              payment_method: paymentMethod,
-              attachment_url: attachmentUrl,
-            },
-            suggested_category_name: "",
-            category_type: "",
-            context_company_id: companyId,
-            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-          });
+      // Sugestão de baixa: apenas registra no notes do pending (boletoSuggestionBlock).
+      // NÃO envia mais imagem, link "Abrir no app" nem menu 1/2/3 no WhatsApp —
+      // usuário resolve tudo em Análises EVA no app.
 
-          const ctxParam = boletoMatch.tx.company_id || "personal";
-          const deepLink = buildAnalisesEvaLink(pendingId, false, ctxParam);
-          const editLink = buildAnalisesEvaLink(pendingId, true, ctxParam);
-          boletoSuggestionTail =
-            `\n\n━━━━━━━━━━━━━━━━━━\n${boletoSuggestionMessage}\n\n👉 Abrir no app: ${deepLink}`;
-
-
-          // PNG + list dispatch. Precisa de EdgeRuntime.waitUntil — sem isso o
-          // isolate morre quando respond() retorna e nada chega ao WhatsApp.
-          const dispatch = (async () => {
-            const bankName =
-              (bankAccountId && contextAccounts.find((a: any) => a.id === bankAccountId)?.name) ||
-              (walletId && contextWallets.find((w: any) => w.id === walletId)?.name) ||
-              null;
-            const cardData: BoletoCardData = {
-              descricao: boletoMatch.tx.description || "",
-              fornecedor: boletoMatch.supplierName,
-              valor: Number(boletoMatch.tx.amount) || 0,
-              vencimento: boletoMatch.tx.payment_date,
-              matchScore: boletoMatch.score,
-              type: (boletoMatch.tx.type as "despesa" | "receita") || "despesa",
-              bankAccountName: bankName,
-            };
-            console.log("boleto dispatch: rendering PNG…");
-            const png = await renderBoletoCardPng(cardData);
-            console.log("boleto dispatch: PNG bytes =", png?.byteLength ?? null);
-            const caption = `📄 Sugestão de baixa — responda *1*, *2* ou *3* na mensagem anterior.\n👉 ${deepLink}`;
-            let sentImage = false;
-            if (png) sentImage = await sendEvolutionImage(phone, png, caption);
-            console.log("boleto dispatch: sendMedia result =", sentImage);
-            if (!sentImage) {
-              // Sem imagem, não reenvia texto (o respond() principal já carrega tudo).
-              console.log("boleto dispatch: image failed, skipping duplicate text");
-            }
-
-            // WhatsApp descontinuou buttonsMessage clássico do Baileys.
-            // sendList ainda é renderizado como menu clicável em contas comerciais.
-            const listOk = await sendEvolutionList(
-              phone,
-              "Confirmar baixa do pendente?",
-              "Escolha o que fazer com o lançamento que já existe no sistema.",
-              `Ou edite no app: ${editLink}`,
-              "Escolher opção",
-              "Baixa pendente",
-              [
-                { id: "confirm_baixa", title: "✅ Sim, é esse", description: "Marca como Pago agora" },
-                { id: "reject_baixa", title: "❌ Não, é outro", description: "Mantém como lançamento novo" },
-                { id: "open_edit", title: "✏️ Editar no app", description: "Abre o formulário em Análises EVA" },
-              ],
-            );
-            console.log("boleto dispatch: sendList result =", listOk);
-            if (!listOk) {
-              const btnOk = await sendEvolutionButtons(
-                phone,
-                "Confirmar baixa do pendente?",
-                "Escolha o que fazer com o lançamento que já existe no sistema.",
-                `Ou responda 1, 2 ou 3 · Editar: ${editLink}`,
-                [
-                  { id: "confirm_baixa", text: "✅ Sim, é esse" },
-                  { id: "reject_baixa", text: "❌ Não, é outro" },
-                  { id: "open_edit", text: "✏️ Editar no app" },
-                ],
-              );
-              console.log("boleto dispatch: sendButtons fallback result =", btnOk);
-            }
-          })().catch((e) => console.error("boleto card/list dispatch failed:", e));
-          try {
-            (globalThis as any).EdgeRuntime?.waitUntil?.(dispatch);
-          } catch (e) {
-            console.warn("EdgeRuntime.waitUntil unavailable:", e);
-          }
-        } catch (e) {
-          console.error("Failed to register confirm_boleto_match action:", e);
-        }
-      }
-
-
-      // Ações rápidas removidas — voltamos ao modelo antigo: lançamento vai direto
-      // para "Análises EVA" no app para aprovação, sem menu interativo no WhatsApp.
       
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
@@ -4171,7 +4068,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       return respond({
         success: true,
         intent: "lancamento",
-        message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}${boletoSuggestionTail || ""}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+        message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
 
         transaction: {
           description: aiParsed.description,
