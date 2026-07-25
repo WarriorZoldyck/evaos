@@ -532,20 +532,7 @@ export default function Lancamentos() {
         }}
       />
 
-      {/* Import Statement */}
-      <ImportStatementModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onImport={createMultipleTransactions}
-        bankAccounts={bankAccounts}
-        wallets={wallets}
-        creditCards={allAccounts.creditCards}
-        allBankAccounts={allAccounts.bankAccounts}
-        companies={companies}
-        categories={categories}
-        allCategories={allCategories}
-        refetchAccounts={refetchAccounts}
-      />
+      {/* Import Statement moved to dedicated route: /lancamentos/importar-extrato */}
 
     </div>
   );
