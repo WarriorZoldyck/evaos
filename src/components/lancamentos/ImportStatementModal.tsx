@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
-import { calculateCreditCardBillTotal, filterCreditCardBillScope, type CandidateTx } from "@/lib/import/matching";
+import { calculateCreditCardBillTotal, filterCreditCardBillScope, descriptionSimilarity, AUTO_LINK_MIN_SIMILARITY, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { ReconcileStep } from "./import/ReconcileStep";
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
