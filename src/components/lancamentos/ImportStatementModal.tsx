@@ -2208,18 +2208,37 @@ export function ImportStatementModal({
                     <Check className="h-4 w-4" />
                     Nada a importar — concluir
                   </Button>
-                ) : (
-                  <Button
-                    onClick={handleImport}
-                    disabled={importing || blockedByDivergence}
-                    className="gap-2 mt-1"
-                  >
-                    {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
-                    {importType === "cartao" ? " para a fatura" : ""}
-                  </Button>
-
-                )}
+                ) : (() => {
+                  const unreviewedIdxs = rows
+                    .map((_, i) => i)
+                    .filter(
+                      (i) =>
+                        (matchActions[i] || "criar") === "criar" &&
+                        !mergedMatches[i]?.best?.candidate && // only "só no extrato" rows need review
+                        !reviewedRows.has(i)
+                    );
+                  const unreviewed = unreviewedIdxs.length;
+                  const blocked = unreviewed > 0;
+                  return (
+                    <div className="flex flex-col items-end gap-1">
+                      {blocked && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                          {unreviewed} lançamento{unreviewed > 1 ? "s" : ""} novo{unreviewed > 1 ? "s" : ""} aguarda{unreviewed > 1 ? "m" : ""} revisão antes de importar.
+                        </p>
+                      )}
+                      <Button
+                        onClick={handleImport}
+                        disabled={importing || blockedByDivergence || blocked}
+                        className="gap-2 mt-1"
+                        title={blocked ? "Revise as linhas novas ('Revisar e criar') antes de importar." : undefined}
+                      >
+                        {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
+                        {importType === "cartao" ? " para a fatura" : ""}
+                      </Button>
+                    </div>
+                  );
+                })()}
               </div>
             </DialogFooter>
           );
