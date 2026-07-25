@@ -265,7 +265,7 @@ export default function Lancamentos() {
                 size="sm"
                 variant="outline"
                 className="mt-3 h-7 text-xs"
-                onClick={() => { dismissFeatureBanner(); setImportOpen(true); }}
+                onClick={() => { dismissFeatureBanner(); navigate("/lancamentos/importar-extrato"); }}
               >
                 <Upload className="h-3 w-3 mr-1" /> Experimentar agora
               </Button>
