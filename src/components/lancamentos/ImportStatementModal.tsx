@@ -647,7 +647,7 @@ export function ImportStatementModal({
             nextActions[i] = res[i].best!.suggested ? "criar" : "vincular";
             nextTargets[i] = res[i].best!.candidate.id;
           } else {
-            nextActions[i] = "criar";
+            nextActions[i] = "ignorar";
           }
         });
         setMatchActions(nextActions);
@@ -703,7 +703,7 @@ export function ImportStatementModal({
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
         rows.forEach((_, i) => {
-          nextActions[i] = "criar";
+          nextActions[i] = "ignorar";
         });
         groupResults.flat().forEach(({ rowIdx, match }) => {
           if (match?.best) {
