@@ -899,13 +899,22 @@ export function ReconcileStep({
                       <th className="p-2 text-left font-medium">Descrição</th>
                       <th className="p-2 text-right font-medium whitespace-nowrap">Valor</th>
                       <th className="p-2 text-left font-medium min-w-[200px]">Categoria</th>
-                      <th className="p-2 text-center font-medium w-[300px]">Ação</th>
+                      <th className="p-2 text-center font-medium w-[160px]">Revisar</th>
+                      <th className="p-2 text-center font-medium w-[220px]">Ação</th>
                     </tr>
                   </thead>
                   <tbody>
                     {newRows.map(({ r, i }) => {
                       const sug = suggestions[i];
                       const currentCat = rowCategories[i] || { category: "" };
+                      const editedDesc = rowDescriptions[i];
+                      const contact = rowContacts[i];
+                      const contactName = contact?.supplier_id
+                        ? suppliers.find((s) => s.id === contact.supplier_id)?.name
+                        : contact?.client_id
+                        ? clients.find((c) => c.id === contact.client_id)?.name
+                        : undefined;
+                      const isReviewed = !!reviewedRows?.has(i);
                       const subs = childrenOf(currentCat.category);
                       const subSubs = childrenOf(currentCat.subcategory);
                       const dupKey = `${r.type}|${Math.abs(r.amount)}|${normalizeText(r.description)}`;
