@@ -94,6 +94,10 @@ interface ReconcileStepProps {
   onUndoKeepStatementOnly?: (systemTxId: string) => void;
   /** Create a category inline. Returns the new record's name (so caller can set it in rowCategories). */
   onCreateCategory?: (params: { name: string; parentName?: string; type?: "receita" | "despesa" }) => Promise<{ id: string; name: string } | null>;
+  /** When provided, "Criar no sistema" becomes an IMMEDIATE per-row commit. Returns true on success. */
+  onCreateNow?: (rowIdx: number) => Promise<boolean>;
+  /** Row indices currently being committed (spinner state). */
+  creatingRowIndices?: Set<number>;
 }
 
 
