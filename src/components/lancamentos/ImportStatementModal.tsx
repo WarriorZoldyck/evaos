@@ -1962,8 +1962,6 @@ export function ImportStatementModal({
                   return next;
                 });
               }}
-              onCreateNow={handleCreateOne}
-              creatingRowIndices={creatingRowIndices}
             />
 
 
