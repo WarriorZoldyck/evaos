@@ -409,7 +409,7 @@ async function extractDocumentParties(apiKey: string, userContent: any) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: WHATSAPP_AI_MODEL,
         messages: [
           {
             role: "system",
