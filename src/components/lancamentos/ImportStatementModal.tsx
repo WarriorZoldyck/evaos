@@ -2066,10 +2066,18 @@ export function ImportStatementModal({
           const blockedByDivergence = hasDivergence && !acknowledgeDivergence;
 
           return (
-            <DialogFooter className="gap-2 sm:justify-between flex-col-reverse sm:flex-row items-stretch">
-              <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
-                <ArrowLeft className="h-4 w-4" /> Voltar
-              </Button>
+            <DialogFooter className={`gap-2 sm:justify-between flex-col-reverse sm:flex-row items-stretch ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" /> Voltar
+                </Button>
+                {isPage && (
+                  <Button variant="ghost" onClick={handleClose} className="gap-2 text-muted-foreground">
+                    Cancelar importação
+                  </Button>
+                )}
+              </div>
+
               <div className="flex flex-col items-stretch sm:items-end gap-2 min-w-[320px]">
                 <div className="flex items-center gap-2 justify-end flex-wrap">
                   <label className="text-xs text-muted-foreground whitespace-nowrap">
