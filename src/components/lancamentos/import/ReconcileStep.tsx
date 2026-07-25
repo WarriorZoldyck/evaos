@@ -921,24 +921,35 @@ export function ReconcileStep({
                               const action = matchActions[i] || "criar";
                               const isCreate = action !== "ignorar";
                               return (
-                                <div className="inline-flex rounded-md border bg-muted/40 p-0.5 gap-0.5">
+                                <div
+                                  className="inline-flex rounded-md border bg-muted/40 p-0.5 gap-0.5"
+                                  role="radiogroup"
+                                  aria-label="Ação para esta linha"
+                                >
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Button
                                         size="sm"
                                         variant="ghost"
+                                        role="radio"
+                                        aria-checked={isCreate}
+                                        data-state={isCreate ? "active" : "inactive"}
                                         className={`h-6 text-[11px] gap-1 px-2 ${
                                           isCreate
-                                            ? "bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white"
+                                            ? "bg-emerald-600 text-white hover:bg-emerald-600 hover:text-white cursor-default"
                                             : "text-muted-foreground hover:bg-accent"
                                         }`}
-                                        onClick={() => onActionChange(i, "criar")}
+                                        onClick={() => {
+                                          if (!isCreate) onActionChange(i, "criar");
+                                        }}
                                       >
                                         <Plus className="h-3 w-3" /> Criar no sistema
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent side="left" className="text-xs max-w-[260px]">
-                                      Cria um novo lançamento no sistema usando a categoria escolhida ao lado. É a ação padrão.
+                                      {isCreate
+                                        ? "Ação atual: esta linha será criada no sistema ao clicar em \"Importar\" no rodapé."
+                                        : "Clique para alternar: esta linha voltará a ser criada no sistema ao importar."}
                                     </TooltipContent>
                                   </Tooltip>
                                   <Tooltip>
@@ -946,18 +957,25 @@ export function ReconcileStep({
                                       <Button
                                         size="sm"
                                         variant="ghost"
+                                        role="radio"
+                                        aria-checked={!isCreate}
+                                        data-state={!isCreate ? "active" : "inactive"}
                                         className={`h-6 text-[11px] gap-1 px-2 ${
                                           !isCreate
-                                            ? "bg-sky-600 text-white hover:bg-sky-700 hover:text-white"
+                                            ? "bg-sky-600 text-white hover:bg-sky-600 hover:text-white cursor-default"
                                             : "text-muted-foreground hover:bg-accent"
                                         }`}
-                                        onClick={() => onActionChange(i, "ignorar")}
+                                        onClick={() => {
+                                          if (isCreate) onActionChange(i, "ignorar");
+                                        }}
                                       >
                                         <ShieldCheck className="h-3 w-3" /> Manter só do extrato
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent side="left" className="text-xs max-w-[260px]">
-                                      Não criar este lançamento no sistema. A linha fica só no extrato importado e vai para "Ignorados" — pode ser restaurada depois.
+                                      {!isCreate
+                                        ? "Ação atual: esta linha ficará só no extrato importado (vai para \"Ignorados\") e não será criada no sistema."
+                                        : "Clique para alternar: pular a criação no sistema e manter esta linha só no extrato."}
                                     </TooltipContent>
                                   </Tooltip>
                                 </div>
