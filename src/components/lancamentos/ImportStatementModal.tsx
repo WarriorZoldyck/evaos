@@ -1826,16 +1826,17 @@ export function ImportStatementModal({
                 // Move row to "criar" so it is imported from the statement.
                 setMatchActions((prev) => ({ ...prev, [idx]: "criar" }));
                 // Seed category from candidate so the new line inherits classification.
+                // Always resolve to NAME (never UUID) — combobox and DB store names.
                 setRowCategories((prev) => {
                   if (prev[idx]?.touched) return prev;
-                  const cat = (cand as any).category as string | undefined;
-                  if (!cat) return prev;
+                  const catName = resolveCategoryName((cand as any).category, mergedCategories);
+                  if (!catName) return prev;
                   return {
                     ...prev,
                     [idx]: {
-                      category: cat,
-                      subcategory: (cand as any).subcategory ?? undefined,
-                      subcategory2: (cand as any).subcategory2 ?? undefined,
+                      category: catName,
+                      subcategory: resolveCategoryName((cand as any).subcategory, mergedCategories),
+                      subcategory2: resolveCategoryName((cand as any).subcategory2, mergedCategories),
                       touched: false,
                     },
                   };
