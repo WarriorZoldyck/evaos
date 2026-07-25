@@ -310,7 +310,13 @@ async function getImageBase64(remoteJid: string, messageId: string): Promise<str
 // Helper to build response AND send Evolution reply
 function buildResponse(body: any, status: number, phone: string) {
   if (body.message && phone) {
-    sendEvolutionReply(phone, body.message);
+    const replyTask = sendEvolutionReply(phone, body.message);
+    const edgeRuntime = (globalThis as any).EdgeRuntime;
+    if (edgeRuntime?.waitUntil) {
+      edgeRuntime.waitUntil(replyTask);
+    } else {
+      replyTask.catch((err) => console.error("Evolution reply background task failed:", err));
+    }
   }
   return new Response(JSON.stringify(body), {
     status,
