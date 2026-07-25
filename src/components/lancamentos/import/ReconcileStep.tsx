@@ -94,11 +94,8 @@ interface ReconcileStepProps {
   onUndoKeepStatementOnly?: (systemTxId: string) => void;
   /** Create a category inline. Returns the new record's name (so caller can set it in rowCategories). */
   onCreateCategory?: (params: { name: string; parentName?: string; type?: "receita" | "despesa" }) => Promise<{ id: string; name: string } | null>;
-  /** When provided, "Criar no sistema" becomes an IMMEDIATE per-row commit. Returns true on success. */
-  onCreateNow?: (rowIdx: number) => Promise<boolean>;
-  /** Row indices currently being committed (spinner state). */
-  creatingRowIndices?: Set<number>;
 }
+
 
 
 
@@ -169,8 +166,6 @@ export function ReconcileStep({
   onKeepStatementOnly,
   onUndoKeepStatementOnly,
   onCreateCategory,
-  onCreateNow,
-  creatingRowIndices,
 }: ReconcileStepProps) {
 
   const isCardMode = mode === "card";
@@ -932,8 +927,6 @@ export function ReconcileStep({
                             {(() => {
                               const action = matchActions[i] || "criar";
                               const isCreate = action !== "ignorar";
-                              const isCommitting = creatingRowIndices?.has(i) ?? false;
-                              const immediate = !!onCreateNow;
                               return (
                                 <div
                                   className="inline-flex rounded-md border bg-muted/40 p-0.5 gap-0.5"
@@ -948,34 +941,22 @@ export function ReconcileStep({
                                         role="radio"
                                         aria-checked={isCreate}
                                         data-state={isCreate ? "active" : "inactive"}
-                                        disabled={isCommitting}
                                         className={`h-6 text-[11px] gap-1 px-2 ${
                                           isCreate
-                                            ? "bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white"
+                                            ? "bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white cursor-default"
                                             : "text-muted-foreground hover:bg-accent"
                                         }`}
-                                        onClick={async () => {
-                                          if (immediate) {
-                                            if (isCommitting) return;
-                                            await onCreateNow!(i);
-                                          } else if (!isCreate) {
-                                            onActionChange(i, "criar");
-                                          }
+                                        onClick={() => {
+                                          if (!isCreate) onActionChange(i, "criar");
                                         }}
                                       >
-                                        {isCommitting ? (
-                                          <Loader2 className="h-3 w-3 animate-spin" />
-                                        ) : (
-                                          <Plus className="h-3 w-3" />
-                                        )}
-                                        {immediate ? "Criar agora" : "Criar no sistema"}
+                                        <Plus className="h-3 w-3" />
+                                        Criar no sistema
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent side="left" className="text-xs max-w-[260px]">
-                                      {immediate
-                                        ? "Cria este lançamento no sistema imediatamente. A linha some da lista e você pode desfazer no aviso que aparece."
-                                        : isCreate
-                                        ? "Ação atual: esta linha será criada no sistema ao clicar em \"Importar\" no rodapé."
+                                      {isCreate
+                                        ? "Esta linha será criada no sistema quando você clicar em \"Importar\" no rodapé."
                                         : "Clique para alternar: esta linha voltará a ser criada no sistema ao importar."}
                                     </TooltipContent>
                                   </Tooltip>
@@ -987,7 +968,6 @@ export function ReconcileStep({
                                         role="radio"
                                         aria-checked={!isCreate}
                                         data-state={!isCreate ? "active" : "inactive"}
-                                        disabled={isCommitting}
                                         className={`h-6 text-[11px] gap-1 px-2 ${
                                           !isCreate
                                             ? "bg-sky-600 text-white hover:bg-sky-600 hover:text-white cursor-default"
