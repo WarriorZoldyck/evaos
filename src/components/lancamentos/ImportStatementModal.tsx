@@ -24,8 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { TransactionInsert } from "@/hooks/useTransactions";
-import { useImportMatching } from "@/hooks/useImportMatching";
-import { calculateCreditCardBillTotal, filterCreditCardBillScope } from "@/lib/import/matching";
+import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
+import { calculateCreditCardBillTotal, filterCreditCardBillScope, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { ReconcileStep } from "./import/ReconcileStep";
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
@@ -280,6 +280,11 @@ export function ImportStatementModal({
     { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string; category?: string | null; subcategory?: string | null; subcategory2?: string | null }[]
   >([]);
   const [orphansLoading, setOrphansLoading] = useState(false);
+  // Pares promovidos pelo passe "extrato = fonte da verdade": órfão do sistema
+  // 1↔1 com linha do extrato de mesmo valor. Sobrepõem `matches` sem alterar
+  // o hook, e o órfão promovido some da lista "Só no sistema".
+  const [extraMatches, setExtraMatches] = useState<Record<number, RowMatch>>({});
+  const [promotedOrphanIds, setPromotedOrphanIds] = useState<Set<string>>(new Set());
   const [systemBill, setSystemBill] = useState<{ total: number; count: number; loading: boolean }>({
     total: 0,
     count: 0,
@@ -713,6 +718,8 @@ export function ImportStatementModal({
 
 
     resetMatches();
+    setExtraMatches({});
+    setPromotedOrphanIds(new Set());
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
 
   // ORPHAN DETECTOR (card mode) — flag system transactions that DON'T appear in the statement.
@@ -841,6 +848,113 @@ export function ImportStatementModal({
       setOrphans([]);
     });
   }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard, creditCards, isPersonal, selectedCompanyId]);
+
+  // AUTO-RECONCILIAÇÃO POR VALOR (extrato = fonte da verdade).
+  // Se um órfão do sistema (Só no sistema) tem o MESMO valor de UMA ÚNICA linha
+  // do extrato ainda sem match e ainda em "criar" (não tocada), promovemos o par
+  // como sugestão automática — o extrato veio direto do banco/cartão, então o
+  // valor aconteceu; data/descrição divergentes não invalidam o par.
+  // Casos ambíguos (>1 candidato do mesmo valor de um lado) permanecem para o
+  // usuário resolver com o botão "É o mesmo".
+  useEffect(() => {
+    if (importType !== "cartao" || step !== "reconcile") return;
+    if (orphansLoading || matchLoading) return;
+    if (orphans.length === 0 || rows.length === 0) return;
+
+    const unmatchedByCents = new Map<number, number[]>();
+    rows.forEach((r, i) => {
+      if (!r.selected) return;
+      if (matches[i]?.best) return;
+      if (extraMatches[i]) return;
+      const action = matchActions[i] || "criar";
+      if (action !== "criar") return;
+      const cents = Math.round(Math.abs(r.amount) * 100);
+      const arr = unmatchedByCents.get(cents) || [];
+      arr.push(i);
+      unmatchedByCents.set(cents, arr);
+    });
+    if (unmatchedByCents.size === 0) return;
+
+    const orphansByCents = new Map<number, typeof orphans>();
+    orphans.forEach((o) => {
+      if (promotedOrphanIds.has(o.id)) return;
+      const cents = Math.round(Math.abs(o.amount) * 100);
+      const arr = orphansByCents.get(cents) || [];
+      arr.push(o);
+      orphansByCents.set(cents, arr);
+    });
+
+    const nextExtra: Record<number, RowMatch> = {};
+    const nextActions: Record<number, "vincular"> = {};
+    const nextTargets: Record<number, string> = {};
+    const promotedIds: string[] = [];
+
+    orphansByCents.forEach((orphList, cents) => {
+      const lineIdxs = unmatchedByCents.get(cents) || [];
+      if (orphList.length !== 1 || lineIdxs.length !== 1) return; // só 1↔1
+      const orph = orphList[0];
+      const idx = lineIdxs[0];
+      const line = rows[idx];
+      const dayDiff = Math.abs(
+        Math.round(
+          (new Date(line.date + "T00:00:00").getTime() -
+            new Date((orph.competence_date || orph.payment_date) + "T00:00:00").getTime()) /
+            86400000
+        )
+      );
+      const candidate: CandidateTx = {
+        id: orph.id,
+        description: orph.description || "",
+        amount: Math.abs(orph.amount),
+        payment_date: orph.payment_date,
+        competence_date: orph.competence_date,
+        purchase_date_original: null,
+        type: (line.type as "receita" | "despesa") || "despesa",
+        status: orph.status,
+        category: (orph.category as string | null) ?? null,
+        subcategory: (orph.subcategory as string | null) ?? null,
+        subcategory2: (orph.subcategory2 as string | null) ?? null,
+        contact_name: null,
+        series_id: null,
+        installment_number: null,
+        installments_total: null,
+      };
+      nextExtra[idx] = {
+        best: {
+          candidate,
+          score: 100,
+          dayDiff,
+          similarity: 0,
+          amountDiff: 0,
+          tier: "exact",
+          contactMatched: false,
+          suggested: true,
+        },
+        alternatives: [],
+      };
+      nextActions[idx] = "vincular";
+      nextTargets[idx] = orph.id;
+      promotedIds.push(orph.id);
+    });
+
+    if (promotedIds.length === 0) return;
+
+    setExtraMatches((prev) => ({ ...prev, ...nextExtra }));
+    setMatchActions((prev) => ({ ...prev, ...nextActions }));
+    setMatchTargets((prev) => ({ ...prev, ...nextTargets }));
+    setPromotedOrphanIds((prev) => {
+      const next = new Set(prev);
+      promotedIds.forEach((id) => next.add(id));
+      return next;
+    });
+    setOrphans((prev) => prev.filter((o) => !promotedIds.includes(o.id)));
+  }, [importType, step, orphans, orphansLoading, matches, matchLoading, rows, extraMatches, matchActions, promotedOrphanIds]);
+
+  // Matches vistos pelo ReconcileStep = matches do hook + promoções por valor.
+  const mergedMatches = useMemo(() => {
+    if (Object.keys(extraMatches).length === 0) return matches;
+    return { ...matches, ...extraMatches };
+  }, [matches, extraMatches]);
 
 
   // Trigger history category suggestions once rows + categories are available.
@@ -1179,6 +1293,8 @@ export function ImportStatementModal({
     setMatchTargets({});
     setReplaceDeleteIds(new Set());
     setOrphans([]);
+    setExtraMatches({});
+    setPromotedOrphanIds(new Set());
     setSystemBill({ total: 0, count: 0, loading: false });
     setRowCategories({});
     setImportResult(null);
@@ -1527,7 +1643,7 @@ export function ImportStatementModal({
             <ReconcileStep
               mode={importType === "cartao" ? "card" : "debit"}
               rows={rows}
-              matches={matches}
+              matches={mergedMatches}
               matchLoading={matchLoading}
               matchActions={matchActions}
               matchTargets={matchTargets}
@@ -1541,7 +1657,7 @@ export function ImportStatementModal({
               walletId={walletId}
               replaceDeleteIds={replaceDeleteIds}
               onKeepStatementOnly={(idx) => {
-                const cand = matches[idx]?.best?.candidate;
+                const cand = mergedMatches[idx]?.best?.candidate;
                 if (!cand) return;
                 setReplaceDeleteIds((prev) => {
                   const next = new Set(prev);
