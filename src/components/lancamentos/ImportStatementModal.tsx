@@ -2056,13 +2056,90 @@ export function ImportStatementModal({
   );
 
   if (isPage) {
+    const canGoBack = rows.length > 0 && (step === "reconcile" || step === "summary");
     return (
       <div className="flex flex-col min-h-[calc(100vh-8rem)]">
-        {bodyContent}
+        {/* Sticky top bar: Voltar (left) · Info do extrato (center) · Cancelar importação (right) */}
+        <div className="sticky top-0 z-40 -mx-4 md:-mx-6 px-4 md:px-6 py-2 bg-background/95 backdrop-blur border-b border-border flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            {canGoBack ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep(step === "summary" ? "reconcile" : "preview")}
+                className="gap-1.5 -ml-2"
+              >
+                <ArrowLeft className="h-4 w-4" /> Voltar
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Upload className="h-4 w-4" />
+                Importar Extrato
+                <Badge variant="secondary" className="text-[10px]">Beta</Badge>
+              </div>
+            )}
+          </div>
+
+          {/* Center: statement total input during reconcile */}
+          {step === "reconcile" && rows.length > 0 ? (
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              <label className="text-xs text-muted-foreground whitespace-nowrap">
+                Total informado pelo banco (R$):
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="Ex.: 8.850,02"
+                value={statementTotalInput}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/[^\d.,]/g, "");
+                  setStatementTotalInput(v);
+                  setAcknowledgeDivergence(false);
+                }}
+                onBlur={() => {
+                  const cleaned = statementTotalInput.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+                  const n = Number(cleaned);
+                  if (Number.isFinite(n) && n > 0) {
+                    setStatementTotalInput(
+                      n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    );
+                  }
+                }}
+                className="h-8 w-36 rounded-md border bg-background px-2 text-right text-sm font-mono"
+              />
+              {statementTotal !== null && (() => {
+                const cleaned = statementTotalInput.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+                const u = Number(cleaned);
+                return Number.isFinite(u) && u > 0 && Math.abs(u - statementTotal) < 0.01;
+              })() && (
+                <span className="text-[10px] text-emerald-600 whitespace-nowrap">(detectado)</span>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1" />
+          )}
+
+          <div className="flex-1 flex justify-end">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClose}
+              className="gap-1.5 text-muted-foreground hover:text-destructive"
+            >
+              Cancelar importação
+              <span aria-hidden>✕</span>
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex-1">
+          {bodyContent}
+        </div>
         {nestedCreateCard}
       </div>
     );
   }
+
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
