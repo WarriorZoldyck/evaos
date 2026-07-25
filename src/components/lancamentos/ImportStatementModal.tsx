@@ -259,6 +259,10 @@ export function ImportStatementModal({
 
   // Wizard step
   const [step, setStep] = useState<"preview" | "reconcile" | "summary">("preview");
+  // Mês/ano de referência da fatura (YYYY-MM). Fonte da verdade para a busca de
+  // lançamentos já existentes no sistema quando o extrato é um cartão de crédito.
+  const [billReferenceMonth, setBillReferenceMonth] = useState<string>("");
+  const billReferenceMonthTouchedRef = useRef(false);
   const [importResult, setImportResult] = useState<{
     linked: number;
     created: number;
