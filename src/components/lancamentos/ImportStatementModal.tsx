@@ -144,6 +144,8 @@ interface ImportStatementModalProps {
   allBankAccounts?: { id: string; name: string; company_id: string | null; company_name?: string }[];
   companies?: { id: string; name: string }[];
   refetchAccounts?: () => Promise<void> | void;
+  /** "modal" (default) renders inside a Dialog. "page" renders full-bleed for a dedicated route. */
+  variant?: "modal" | "page";
 }
 
 /** Detects descriptions that look like a credit-card BILL PAYMENT (not a card purchase). */
