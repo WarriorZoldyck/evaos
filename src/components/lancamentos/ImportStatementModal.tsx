@@ -1387,6 +1387,10 @@ export function ImportStatementModal({
     setPromotedOrphanIds(new Set());
     setSystemBill({ total: 0, count: 0, loading: false });
     setRowCategories({});
+    setRowDescriptions({});
+    setRowContacts({});
+    setReviewedRows(new Set());
+    setReviewIdx(null);
     setImportResult(null);
     setStep("preview");
     resetMatches();
