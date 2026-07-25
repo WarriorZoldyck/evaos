@@ -1,46 +1,32 @@
-## Deixar claro visualmente o estado de cada linha em "Só no extrato"
+# Ajustes na etapa de conciliação da importação
 
-No vídeo, ao clicar em **"Criar no sistema"** nada parece acontecer: o botão já vem selecionado por padrão, o toggle não muda de posição perceptível, e o único sinal de vida é o pequeno contador no rodapé (`X criar · Y ignorar`). O usuário não entende que a criação vai acontecer no final, nem qual é o estado atual da linha.
+## 1. Inverter a lógica do switch "Criar ao importar" (opt-in)
 
-Vou tornar o estado explícito no próprio corpo da linha, tirar a ambiguidade do toggle e reforçar o CTA do rodapé.
+Hoje toda linha da seção **"Só no extrato"** entra com `matchActions[i] = "criar"` por padrão — o switch nasce ligado e o usuário precisa desligar para pular. O usuário quer o inverso: **o switch nasce desligado** e só vira criação quando ele clica.
 
-### O que muda
+Mudanças em `src/components/lancamentos/ImportStatementModal.tsx` e `src/components/lancamentos/import/ReconcileStep.tsx`:
 
-**`src/components/lancamentos/import/ReconcileStep.tsx` — seção "Só no extrato"**
+- Para linhas órfãs (sem candidato do sistema) o default passa a ser `"ignorar"` em vez de `"criar"`. Todos os `matchActions[i] || "criar"` desses caminhos viram `matchActions[i] || "ignorar"` (nas contagens do rodapé, `handleImport`, `newRows` e no `ReconcileStep`).
+- Linhas com sugestão de vínculo (`"vincular"`) continuam iguais — não são afetadas.
+- Contadores do cabeçalho da seção ("N serão criadas · M ignoradas") e do rodapé ("X conciliar + Y criar") passam a refletir o novo default (começa em `0 criar`, `N ignoradas`).
+- Ação em bulk **"Marcar todas para criar"** continua funcionando como atalho para ligar todas de uma vez.
+- Badge de linha muda de "Será criado ao importar" (verde) para "Não será importado" (cinza) por padrão. Vira verde quando o usuário liga o switch.
+- Tooltip do switch continua explicando os dois estados.
 
-1. **Badge de estado por linha (na coluna Descrição)**
-   - Ação = `criar` → chip verde **"✔ Será criado ao importar"** (com o número de ordem quando houver duplicatas: `#3 de 5`).
-   - Ação = `ignorar` → chip cinza **"⊘ Não será importado"** + linha inteira com `opacity-60` e categoria desabilitada.
-   - Substitui o feedback invisível de hoje: hoje só o botão muda de cor, agora a linha inteira comunica o resultado.
+## 2. Redistribuir o rodapé fixo e o botão de cancelar
 
-2. **Toggle de ação mais legível**
-   - Trocar o par de botões colados por um **Switch shadcn** com label dinâmica:
-     - Ligado: **"Criar ao importar"** (verde)
-     - Desligado: **"Ignorar esta linha"** (cinza)
-   - Elimina a impressão de que "Criar no sistema" é um botão que devia disparar algo agora — Switch comunica estado, não ação.
+Hoje o rodapé mistura Voltar + Cancelar num canto e joga input + 3 linhas de texto + botão azul empilhados do outro lado. Fica apertado e o Cancelar some visualmente.
 
-3. **Mini-resumo fixo no cabeçalho da seção**
-   - Ao lado do título "Só no extrato — o que fazer?", exibir contador ao vivo:
-     `N serão criadas · M ignoradas` (verde/cinza).
-   - Adiciona ações em bulk: **"Marcar todas para criar"** / **"Ignorar todas"**.
+Mudanças só de layout em `src/components/lancamentos/ImportStatementModal.tsx` (footer da etapa `reconcile`, linhas 1929–2037):
 
-4. **Alert reescrito, mais curto**
-   - Substituir o parágrafo atual por 2 linhas diretas:
-     > Cada linha marcada como **"Criar ao importar"** vira um novo lançamento quando você clicar em **"Importar N lançamentos"** no rodapé. Desligue o switch para pular a linha.
+- Três colunas no rodapé (desktop): 
+  1. Esquerda: **Voltar** (outline). 
+  2. Centro: bloco compacto com "Total informado pelo banco" (input), contagens (`X conciliar · Y criar · Z ignorar`), "Total no extrato após import" e status de divergência empilhados em duas linhas curtas. 
+  3. Direita: **Importar N** (CTA principal) + **Cancelar importação** como link discreto logo abaixo/à esquerda do CTA, ganhando destaque próprio em vez de ficar colado no Voltar.
+- No mobile: empilha em ordem `Cancelar importação` (topo, link), `Voltar` + `Importar` (linha), bloco de totais logo abaixo.
+- Manter comportamento sticky, `bg-background/95` e o gate de divergência.
 
-5. **Reforço no botão do rodapé (`ImportStatementModal.tsx`)**
-   - Atualizar o label para deixar explícito o que vai ser gravado:
-     `Importar (X conciliar + Y criar)`
-   - Mantém o botão desabilitado quando `X + Y = 0`.
+## Fora de escopo
 
-### O que NÃO muda
-
-- Nada de criação imediata — commit continua sendo em lote no clique do rodapé (evita o bug de "aparecerem repetidos em Só no sistema" que já corrigimos).
-- Lógica de matching, sugestões de categoria por histórico, ordenação e cabeçalho sticky permanecem iguais.
-- Ações e labels das outras seções ("Igual — pode conciliar", "Só no sistema") não são tocadas.
-
-### Resultado esperado
-
-- O usuário vê, na própria linha, "Será criado ao importar" — sem depender do contador do rodapé para entender.
-- Switch com label dinâmica remove a expectativa de que "Criar no sistema" seja um botão de ação imediata.
-- Botão do rodapé mostra exatamente quantos lançamentos serão gravados, encerrando a dúvida sobre "o que acontece agora".
+- Nenhuma alteração na lógica de matching, de sugestão de categorias ou no `handleImport` além dos defaults acima.
+- Sem mudança no fluxo "Igual — pode conciliar" nem em "Ignorados".
