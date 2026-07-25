@@ -1,28 +1,15 @@
-## Plano: Auditar reimportação do usuário espclin
+## Remover completamente menu Aprovar/Cancelar/Editar do WhatsApp
 
-Aguardar o usuário concluir a reimportação e categorização dos 2 extratos, depois auditar diretamente no banco se a EVA está persistindo as categorias corretamente.
+Voltar 100% ao comportamento antigo (imagem 2): apenas confirmação textual "Lançamento enviado para aprovação no app" — sem menu numerado, sem link de edição no rodapé, sem lista interativa.
 
-### Passos
+### O que muda em `supabase/functions/whatsapp-webhook/index.ts`
 
-1. **Snapshot antes/depois** — registrar contagem atual de `transactions` categorizadas do `user_id = b049592f-d97a-468d-a839-ed02c2a41d9b` para comparar após o import.
+1. Remover qualquer resquício do bloco de "Ações rápidas" para novos lançamentos (o `newTxActionsTail` e o registro `new_tx_actions` em `whatsapp_pending_actions`).
+2. Garantir que a mensagem de confirmação do novo lançamento **não** anexe o rodapé com `1 — Aprovar / 2 — Cancelar / 3 — Editar` nem o link `Abrir no app`.
+3. Deixar o texto final igual ao modelo antigo:
+   - `📋 Lançamento enviado para aprovação no app!` + dados + `⚠️ Acesse "Análises EVA" no app para aprovar.`
+4. Remover/desativar o handler que interpreta respostas `1/2/3` como aprovar/cancelar/editar do último lançamento (para não confundir com outros fluxos).
 
-2. **Consultar as novas linhas** em `public.transactions` filtrando por `user_id` + `created_at > agora` para pegar só o que a reimportação inseriu.
-
-3. **Validar campo a campo** em cada linha nova:
-   - `category_id`, `subcategory_id`, `subcategory2_id` populados com UUIDs válidos que existem em `public.categories` do próprio usuário
-   - `credit_card_id` bate com o cartão do usuário (não com cartão de outro user)
-   - `description` normalizada corretamente (sem ruído tipo `03/03`, `SPAY *`, `LINEA...`)
-
-4. **Cruzar com sugestões esperadas** — para cada merchant recorrente (DROGASIL, IBERIA, LE BOMBOM, EROS BOUTIQUE, TEIXEIRA, AMAZONA WESTERN, etc.), verificar se a categoria persistida bate com o histórico anterior do próprio user.
-
-5. **Relatório para o usuário** — tabela com:
-   - Merchant | Categoria persistida | Categoria esperada (histórico) | ✅/❌
-   - Total de linhas categorizadas vs "Sem Categoria"
-   - Qualquer divergência entre o que a UI mostrou e o que ficou salvo
-
-6. **Se houver divergência**, investigar se o problema é:
-   - Persistência (UI mostrou certo, banco salvou errado)
-   - Sugestão (histórico existia mas não foi encontrado — bug em `useCategorySuggestions.ts`)
-   - Ausência de histórico (esperado — usuário categoriza 1x e EVA aprende)
-
-Nenhum código será alterado neste plano — é puramente auditoria. Se aparecer bug real de persistência ou de matching, abro plano separado de correção.
+### O que NÃO muda
+- Fluxo de match de boleto (confirmar baixa de pendente) continua com seu próprio menu — o usuário só pediu para remover no caso de novo lançamento comum.
+- Card/imagem do boleto quando há match segue igual.
