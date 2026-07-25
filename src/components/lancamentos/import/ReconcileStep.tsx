@@ -913,22 +913,54 @@ export function ReconcileStep({
                             </div>
                           </td>
                           <td className="p-2 text-center align-top">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-[11px] gap-1 text-sky-700 hover:text-sky-800 hover:bg-sky-500/10"
-                                  onClick={() => onActionChange(i, "ignorar")}
-                                >
-                                  <ShieldCheck className="h-3 w-3" /> Manter só do extrato
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left" className="text-xs max-w-[260px]">
-                                Reconhece que essa linha existe só no extrato e <strong>não deve virar lançamento no sistema</strong>. Nada é criado, nada é excluído. Fica registrada em "Ignorados" e pode ser restaurada.
-                              </TooltipContent>
-                            </Tooltip>
+                            {(() => {
+                              const action = matchActions[i] || "criar";
+                              const isCreate = action !== "ignorar";
+                              return (
+                                <div className="inline-flex rounded-md border bg-muted/40 p-0.5 gap-0.5">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className={`h-6 text-[11px] gap-1 px-2 ${
+                                          isCreate
+                                            ? "bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white"
+                                            : "text-muted-foreground hover:bg-accent"
+                                        }`}
+                                        onClick={() => onActionChange(i, "criar")}
+                                      >
+                                        <Plus className="h-3 w-3" /> Criar no sistema
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="text-xs max-w-[260px]">
+                                      Cria um novo lançamento no sistema usando a categoria escolhida ao lado. É a ação padrão.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className={`h-6 text-[11px] gap-1 px-2 ${
+                                          !isCreate
+                                            ? "bg-sky-600 text-white hover:bg-sky-700 hover:text-white"
+                                            : "text-muted-foreground hover:bg-accent"
+                                        }`}
+                                        onClick={() => onActionChange(i, "ignorar")}
+                                      >
+                                        <ShieldCheck className="h-3 w-3" /> Manter só do extrato
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="text-xs max-w-[260px]">
+                                      Não criar este lançamento no sistema. A linha fica só no extrato importado e vai para "Ignorados" — pode ser restaurada depois.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              );
+                            })()}
                           </td>
+
                         </tr>
                       );
                     })}
