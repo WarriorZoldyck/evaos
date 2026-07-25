@@ -103,6 +103,9 @@ interface ReconcileStepProps {
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const signedStatementAmount = (row: { amount: number; type: "receita" | "despesa" }) =>
+  row.type === "receita" ? -Math.abs(row.amount) : Math.abs(row.amount);
+
 const fmtDate = (iso: string) => {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y.slice(2)}`;
@@ -239,11 +242,13 @@ export function ReconcileStep({
   // Sistema × Extrato totals (fatura-level, independent of matcher tier)
   // Statement total = net bill value. On a card statement, refunds (receitas)
   // reduce the amount owed, so we subtract them instead of summing absolutes.
-  const statementNet = indexed.reduce(
-    (s, { r }) => s + (r.type === "despesa" ? Math.abs(r.amount) : -Math.abs(r.amount)),
+  const statementNet = indexed.reduce((s, { r }) => s + signedStatementAmount(r), 0);
+  const statementTotal = Math.abs(statementNet);
+  const statementGrossTotal = indexed.reduce((s, { r }) => s + Math.abs(r.amount), 0);
+  const statementCreditsTotal = indexed.reduce(
+    (s, { r }) => s + (r.type === "receita" ? Math.abs(r.amount) : 0),
     0,
   );
-  const statementTotal = Math.abs(statementNet);
   const matchedSystemTotal = [...matchedExactRows, ...matchedToleranceRows].reduce(
     (s, { i }) => s + Math.abs(Number(matches[i]!.best!.candidate.amount)),
     0
@@ -263,11 +268,11 @@ export function ReconcileStep({
   // - Restante = original − conciliado (o que ainda precisa virar novo/ignorado)
   const reconciledRowsTotal = indexed
     .filter(({ i }) => (matchActions[i] || "criar") === "vincular")
-    .reduce((s, { r }) => s + Math.abs(r.amount), 0);
+    .reduce((s, { r }) => s + signedStatementAmount(r), 0);
   const reconciledRowsCount = indexed.filter(
     ({ i }) => (matchActions[i] || "criar") === "vincular"
   ).length;
-  const remainingTotal = Math.max(0, statementTotal - reconciledRowsTotal);
+  const remainingTotal = Math.max(0, statementTotal - Math.abs(reconciledRowsTotal));
   const remainingCount = Math.max(0, coverageTotal - reconciledRowsCount);
 
 
@@ -509,10 +514,15 @@ export function ReconcileStep({
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Extrato original</p>
                   <p className="font-mono text-sm">{fmt(statementTotal)}</p>
                   <p className="text-[10px] text-muted-foreground">{coverageTotal} linha{coverageTotal === 1 ? "" : "s"} selecionada{coverageTotal === 1 ? "" : "s"}</p>
+                  {statementCreditsTotal > 0 && (
+                    <p className="text-[10px] text-emerald-700">
+                      bruto {fmt(statementGrossTotal)} · créditos − {fmt(statementCreditsTotal)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-emerald-700">Já conciliado</p>
-                  <p className="font-mono text-sm text-emerald-700">− {fmt(reconciledRowsTotal)}</p>
+                  <p className="font-mono text-sm text-emerald-700">− {fmt(Math.abs(reconciledRowsTotal))}</p>
                   <p className="text-[10px] text-muted-foreground">{reconciledRowsCount} vinculada{reconciledRowsCount === 1 ? "" : "s"} ao sistema</p>
                 </div>
                 <div>
@@ -529,7 +539,7 @@ export function ReconcileStep({
               <div className="mt-2 h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
                   className="h-full bg-emerald-500 transition-all"
-                  style={{ width: `${statementTotal > 0 ? Math.min(100, (reconciledRowsTotal / statementTotal) * 100) : 0}%` }}
+                  style={{ width: `${statementTotal > 0 ? Math.min(100, (Math.abs(reconciledRowsTotal) / statementTotal) * 100) : 0}%` }}
                 />
               </div>
             </div>
@@ -573,6 +583,11 @@ export function ReconcileStep({
                   <p className="text-[10px] text-muted-foreground">
                     {indexed.length} linhas selecionadas
                   </p>
+                  {statementCreditsTotal > 0 && (
+                    <p className="text-[10px] text-emerald-700">
+                      créditos/restituições − {fmt(statementCreditsTotal)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Diferença</p>
@@ -885,7 +900,7 @@ export function ReconcileStep({
                                 </Badge>
                               )}
                               <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[9px]">
-                                {r.type === "receita" ? "Entrada" : "Saída"}
+                                {r.type === "receita" ? "Entrada/crédito" : "Saída"}
                               </Badge>
                               {dupCount > 1 && (
                                 <Tooltip>

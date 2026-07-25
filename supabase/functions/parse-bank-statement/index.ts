@@ -22,6 +22,29 @@ interface ParsedTransaction {
   raw_statement_date?: string;
 }
 
+function normalizeForRules(value: string): string {
+  return (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isRefundLikeDescription(description: string): boolean {
+  const d = normalizeForRules(description);
+  return /\b(estorno|devolucao|reembolso|ressarcimento|restituicao|credito)\b/.test(d);
+}
+
+function isExcludedCardStatementLine(description: string): boolean {
+  const d = normalizeForRules(description);
+  return /\b(pagamento|pagto|pgto|pag)\b.*\b(fatura|cartao|cartao de credito)\b/.test(d)
+    || /\bdeb(?:ito)?\s+autom(?:atico)?\s+de\s+fatura\b/.test(d)
+    || /\btotal\s+(da\s+)?fatura\b/.test(d)
+    || /\bsaldo\s+financiado\b/.test(d)
+    || /\blancamentos\s+atuais\b/.test(d);
+}
+
 function extractOFXAccountDigits(content: string): string | undefined {
   // Extract ACCTID from OFX — often contains card number or account number
   const acctMatch = content.match(/<ACCTID>\s*([^<\n]+)/i);
@@ -139,7 +162,7 @@ Field rules for each tx:
 - "d": date EXACTLY as printed on the line, "DD/MM". Never convert or guess the year.
 - "desc": transaction description (installment info like "3/6" stays inside desc).
 - "a": positive number in REAIS with TWO DECIMAL places. Brazilian statements use "." as thousand separator and "," as decimal separator. Convert: "R$ 8.850,02" → 8850.02 (NEVER 885002, NEVER 8850). "R$ 49,90" → 49.90. "R$ 100,00" → 100.00 (NEVER 10000). If you cannot see decimal places, re-read the line — the value is wrong.
-- "t": "d" for despesa/purchase/expense, "r" ONLY for real refunds/chargebacks (ESTORNO, DEVOLUCAO).
+- "t": "d" for despesa/purchase/expense, "r" ONLY for real refunds/chargebacks/credits that reduce the bill (ESTORNO, DEVOLUCAO, REEMBOLSO, RESTITUICAO, CREDITO). If unsure, use "d".
 - "c": last 4 digits of the card this tx belongs to (string), or null.
 
 CRITICAL:
@@ -159,6 +182,7 @@ PRESERVE DUPLICATES (bank statement is source of truth):
 
 EXCLUDE (NOT real transactions):
 - Bill payments: "DEB AUTOM DE FATURA", "PAGAMENTO DE FATURA", "PAG FATURA"
+- Payment/credit lines that only register paying the card bill: "PAGAMENTO RECEBIDO", "CREDITO DE PAGAMENTO", "PGTO FATURA" — do NOT emit these as txs.
 - Summary/header lines: "Total da fatura anterior", "Pagamento efetuado em ...", "Saldo financiado", "Lançamentos atuais"
 - Section totals, "Total transações inter. em R$", "Total lançamentos inter. em R$"
 - Opening/closing balances, "ANUIDADE" R$ 0,00
@@ -374,7 +398,7 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
       }
 
       const rawTypeStr = String(t.t ?? t.type ?? "d").toLowerCase();
-      const isReceita = rawTypeStr === "r" || rawTypeStr === "receita";
+      let isReceita = rawTypeStr === "r" || rawTypeStr === "receita";
 
       const rawDate = t.d ? String(t.d).trim() : (t.raw_date ? String(t.raw_date).trim() : undefined);
       const dateField = String(t.date || rawDate || "");
@@ -393,6 +417,15 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
       const amount = Math.abs(Number(t.a ?? t.amount) || 0);
       const description = String(t.desc ?? t.description ?? "Sem descrição");
 
+      if (isReceita && !isRefundLikeDescription(description)) {
+        console.warn(`Forcing AI-marked receita to despesa: desc="${description.slice(0, 120)}" amount=${amount}`);
+        isReceita = false;
+      }
+
+      if (isReceita) {
+        console.log(`Receita/credit detected: desc="${description.slice(0, 120)}" amount=${amount} card=${detectedDigits || "unknown"}`);
+      }
+
       return {
         date: dateField,
         description,
@@ -405,7 +438,13 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
         ...(statementTotal ? { statement_total: statementTotal } : {}),
         ...(rawDate ? { raw_statement_date: rawDate } : {}),
       };
-    }).filter((t: ParsedTransaction) => t.amount > 0 && (t.date || t.raw_statement_date));
+    }).filter((t: ParsedTransaction) => {
+      if (isExcludedCardStatementLine(t.description)) {
+        console.log(`Excluded non-transaction statement line: desc="${t.description.slice(0, 120)}" amount=${t.amount}`);
+        return false;
+      }
+      return t.amount > 0 && (t.date || t.raw_statement_date);
+    });
   } catch (e) {
     console.error("Failed to parse AI response:", jsonStr.slice(0, 500));
     throw new Error("Não foi possível extrair transações do PDF. Tente com OFX ou CSV.");
@@ -519,22 +558,37 @@ serve(async (req) => {
       }
     }
 
+    const parsedGrossCentsBeforeStatementCheck = transactions.reduce(
+      (acc, t) => acc + toCents(Math.abs(t.amount || 0)),
+      0,
+    );
+    const parsedNetCentsBeforeStatementCheck = transactions.reduce(
+      (acc, t) => acc + (t.type === "receita" ? -toCents(Math.abs(t.amount || 0)) : toCents(Math.abs(t.amount || 0))),
+      0,
+    );
+
     // Sanity check: if the AI returned a statement_total that's clearly out of scale
-    // vs. the sum of line amounts, try to rescale (~100× is a dropped decimal separator);
+    // vs. the net/gross line totals, try to rescale (~100× is a dropped decimal separator);
     // only discard when it's still implausible after the rescale attempt.
     if (statementTotal !== null) {
-      const sumAmounts = transactions.reduce((acc, t) => acc + (t.amount || 0), 0);
-      if (sumAmounts > 0 && statementTotal > sumAmounts * 20) {
+      const grossTotal = fromCents(parsedGrossCentsBeforeStatementCheck);
+      const netTotal = Math.abs(fromCents(parsedNetCentsBeforeStatementCheck));
+      const comparisonTotal = netTotal > 0 ? netTotal : grossTotal;
+      const ratio = comparisonTotal > 0 ? statementTotal / comparisonTotal : 0;
+      console.log(
+        `Statement total check: statement_total=${statementTotal} gross=${grossTotal.toFixed(2)} net=${netTotal.toFixed(2)} ratio=${ratio.toFixed(2)}`
+      );
+      if (comparisonTotal > 0 && statementTotal > comparisonTotal * 20) {
         // Mirror of Signal 1: statement_total ~100× the sum of lines => dropped decimals
-        if (statementTotal >= sumAmounts * 50 && statementTotal <= sumAmounts * 200) {
+        if (statementTotal >= comparisonTotal * 30 && statementTotal <= comparisonTotal * 300) {
           const rescaled = Math.round(statementTotal) / 100;
           console.warn(
-            `Rescaled statement_total /100: was=${statementTotal} now=${rescaled.toFixed(2)} (sum=${sumAmounts.toFixed(2)})`
+            `Rescaled statement_total /100: was=${statementTotal} now=${rescaled.toFixed(2)} (gross=${grossTotal.toFixed(2)} net=${netTotal.toFixed(2)})`
           );
           statementTotal = rescaled;
         } else {
           console.warn(
-            `Discarding implausible statement_total=${statementTotal} (sum of amounts=${sumAmounts.toFixed(2)}, ratio=${(statementTotal / sumAmounts).toFixed(1)}x)`
+            `Discarding implausible statement_total=${statementTotal} (gross=${grossTotal.toFixed(2)}, net=${netTotal.toFixed(2)}, ratio=${ratio.toFixed(1)}x)`
           );
           statementTotal = null;
         }
@@ -542,12 +596,29 @@ serve(async (req) => {
     }
 
     // Final tallies in INTEGER CENTS to avoid float drift on long sums.
-    const parsedTotalCents = transactions.reduce(
+    const parsedGrossTotalCents = transactions.reduce(
       (acc, t) => acc + toCents(Math.abs(t.amount || 0)),
       0,
     );
+    const parsedNetTotalCents = transactions.reduce(
+      (acc, t) => acc + (t.type === "receita" ? -toCents(Math.abs(t.amount || 0)) : toCents(Math.abs(t.amount || 0))),
+      0,
+    );
     const statementTotalCents = statementTotal !== null ? toCents(statementTotal) : null;
-    const diffCents = statementTotalCents !== null ? parsedTotalCents - statementTotalCents : null;
+    const parsedNetAbsCents = Math.abs(parsedNetTotalCents);
+    const diffCents = statementTotalCents !== null ? parsedNetAbsCents - statementTotalCents : null;
+    const creditLines = transactions.filter((t) => t.type === "receita");
+    const topLines = [...transactions]
+      .sort((a, b) => Math.abs(b.amount || 0) - Math.abs(a.amount || 0))
+      .slice(0, 8)
+      .map((t) => `${t.type}:${(t.amount || 0).toFixed(2)}:${t.description.slice(0, 60)}`);
+    console.log(
+      `Final totals: statement=${statementTotal ?? "null"} gross=${fromCents(parsedGrossTotalCents).toFixed(2)} net=${fromCents(parsedNetTotalCents).toFixed(2)} diff_cents=${diffCents ?? "null"} credits=${creditLines.length}`
+    );
+    if (creditLines.length > 0) {
+      console.log(`Credit/refund lines: ${JSON.stringify(creditLines.map((t) => ({ desc: t.description.slice(0, 100), amount: t.amount, card: t.detected_card_digits })))} `);
+    }
+    console.log(`Top parsed lines: ${JSON.stringify(topLines)}`);
 
     return new Response(
       JSON.stringify({
@@ -555,8 +626,12 @@ serve(async (req) => {
         count: transactions.length,
         statement_total: statementTotal,
         statement_total_cents: statementTotalCents,
-        parsed_total: fromCents(parsedTotalCents),
-        parsed_total_cents: parsedTotalCents,
+        parsed_total: fromCents(parsedNetAbsCents),
+        parsed_total_cents: parsedNetAbsCents,
+        parsed_net_total: fromCents(parsedNetTotalCents),
+        parsed_net_total_cents: parsedNetTotalCents,
+        parsed_gross_total: fromCents(parsedGrossTotalCents),
+        parsed_gross_total_cents: parsedGrossTotalCents,
         diff_cents: diffCents,
         amount_rescaled: amountRescaled,
       }),
