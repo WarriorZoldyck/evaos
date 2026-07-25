@@ -1,23 +1,53 @@
-## Diagnóstico
+## Ajustes na tela de Importar Extrato (a partir do vídeo)
 
-O botão **"Criar no sistema"** já funciona tecnicamente — ele executa `onActionChange(i, "criar")`, que grava `matchActions[i] = "criar"` no estado do pai (`ImportStatementModal`). O problema é que essa **também é a ação padrão** de qualquer linha da seção "Só no extrato" (o código faz `matchActions[i] || "criar"`).
+Três ajustes pontuais, todos em UI/UX + cálculo de total. Sem mudanças de backend.
 
-Ou seja: a linha já está em `"criar"` desde que apareceu. Clicar de novo em "Criar no sistema" não muda nada — nem visualmente, nem no contador do rodapé (que já mostra "1 criar"). O usuário percebe isso como "botão morto".
+### 1. Um único botão "Cancelar importação", fixo no rodapé
 
-A criação de fato acontece só quando ele clica em **"Importar 115 lançamentos…"** no rodapé. O toggle atual serve apenas para **alternar** entre "Criar no sistema" e "Manter só do extrato".
+Hoje existem dois botões: um no cabeçalho superior (`src/pages/ImportarExtrato.tsx`) e o "Voltar/Cancelar" do rodapé do modal. O usuário reportou que o de cima não responde ao hover e é redundante.
 
-## O que ajustar (só UI/UX da coluna Ação)
+- Remover o botão "Cancelar importação" do cabeçalho superior em `ImportarExtrato.tsx` (mantendo só o ESC e a navegação por rota).
+- No rodapé de `ImportStatementModal.tsx` (variant `page`), garantir que o rodapé fica **sticky no bottom** durante **todas as etapas** (upload, preview, reconcile) — não só na última.
+- Colocar **"Cancelar importação"** no canto **esquerdo** do rodapé (variant `ghost`, ícone X) em todas as etapas. Ele chama o mesmo `onClose` que hoje volta para `/lancamentos` com a animação de slide.
+- O botão de avançar ("Próximo…" / "Importar N transações") continua no canto direito, como está.
+- Na etapa `reconcile`, o botão "Voltar" atual passa a conviver com o "Cancelar importação" (Cancelar à esquerda, Voltar ao lado, ações principais à direita).
 
-Arquivo único: `src/components/lancamentos/import/ReconcileStep.tsx` (bloco lines 915‑962, coluna "Ação" da tabela "Só no extrato").
+### 2. "Criar no sistema" vira ação por linha (com feedback imediato)
 
-1. **Deixar claro qual é o estado atual**: o botão do estado ativo passa a ter `aria-pressed="true"`, `data-state="active"` e recebe `cursor-default` + `disabled`‑like feel (mantendo o realce verde/azul). Só o botão da **alternativa** fica clicável.
-2. **Tooltip contextual por estado**:
-   - Estado ativo → "Ação atual: será criado no sistema ao importar." / "Ação atual: ficará só no extrato."
-   - Estado alternativo → "Clique para alternar para X."
-3. **Reforçar onde a criação acontece de verdade**: adicionar uma micro‑copy discreta abaixo do toggle no primeiro render (ou no cabeçalho da seção): _"A criação acontece ao clicar em 'Importar N lançamentos' no rodapé."_
-4. **Sem mudanças em lógica de negócio**, estado, contadores, ou no fluxo de import. Nenhuma alteração em `ImportStatementModal.tsx` nem no backend.
+Hoje "Criar no sistema" é apenas o **estado padrão** da linha — clicar não faz nada visível, o que o usuário lê como botão quebrado. A criação só acontece no "Importar N…" do rodapé.
 
-## Fora do escopo
+Mudança de comportamento na coluna "Ação" da seção "Só no extrato" em `ReconcileStep.tsx`:
 
-- Não vou transformar "Criar no sistema" num botão de commit imediato por linha — isso quebraria o fluxo em lote atual (categorização em massa + um único import no fim) e o contador do rodapé.
-- Se preferir esse comportamento (criar imediatamente ao clicar, linha some da lista), me diga que faço em plano separado.
+- Clicar em **"Criar no sistema"** passa a **criar aquele lançamento imediatamente** (chamando o mesmo caminho de `createMultipleTransactions` usado pelo import em lote, mas com uma única linha).
+- Enquanto processa: botão mostra spinner + fica `disabled`.
+- Ao concluir: a linha sai da tabela "Só no extrato" com um fade curto e entra numa nova seção compacta **"Criados nesta sessão (N)"** logo abaixo do cabeçalho, com link "Desfazer" (últimos 30s) que apaga o lançamento recém-criado.
+- Os contadores do rodapé (`criar` / total) descontam a linha criada; o botão final passa a dizer "Importar N transações restantes" e ignora as linhas já criadas.
+- Se falhar: toast de erro e a linha permanece na lista, sem mudança de estado.
+- **"Manter só do extrato"** continua como está (marca `ignorar`, aplicado no import final) — é a única ação que ainda depende do commit do rodapé.
+- Tooltip do "Criar no sistema" muda para: _"Criar este lançamento agora no sistema."_
+
+Motivo: alinha o comportamento à expectativa demonstrada no vídeo ("clico e nada acontece") e mantém coerência com "Manter só do extrato" ser uma marcação, não uma ação imediata.
+
+### 3. "Extrato original" mostrando valor errado (~R$ 21.038,94 vs R$ 20.739,08 real)
+
+Hoje, em `ReconcileStep.tsx` linha 231:
+
+```ts
+const statementTotal = indexed.reduce((s, { r }) => s + Math.abs(r.amount), 0);
+```
+
+Isso soma **valores absolutos** de todas as linhas selecionadas. Para fatura de cartão, os estornos/pagamentos (receitas) precisam **subtrair** do total — é exatamente por isso que o rodapé (que usa valor sinalizado) mostra R$ 20.739,08 e o topo mostra R$ 21.038,94.
+
+Correção mínima:
+
+- Substituir por soma **sinalizada** (despesa positiva, receita negativa) e mostrar o `Math.abs` do resultado — ficando idêntico ao `grandTotal`/`importedAbs` do rodapé.
+- Aplicar a mesma correção em `remainingTotal` e no cálculo de `reconciledRowsTotal` para manter a barra de progresso coerente.
+- Manter tolerância de ±R$ 0,05 no comparador `totalsDivergent` (a diferença de "dois centavos da Apple" que o usuário mencionou continua absorvida).
+
+Resultado esperado: "Extrato original", "Restante" e o total do rodapé passam a bater no mesmo número (R$ 20.739,08 no caso do vídeo).
+
+### Fora do escopo
+
+- Não vou mexer no parser (`parse-bank-statement`) — o problema é de agregação na UI, não de extração.
+- Não vou alterar o fluxo de matching nem a lógica de "É o mesmo".
+- Se preferir que "Criar no sistema" continue como marcação (mantendo commit em lote) e a mudança fique só em copy/UX, me diga que reverto o ponto 2 para um ajuste puramente visual.
