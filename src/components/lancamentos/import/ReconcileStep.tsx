@@ -225,9 +225,16 @@ export function ReconcileStep({
   const newRows = indexed.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
     const a = matchActions[i] || "criar";
+    if (a === "ignorar") {
+      return !matches[i]?.best || dismissedSuggestions.has(i);
+    }
     return a === "criar" || (a === "vincular" && !matches[i]?.best);
   });
-  const ignoredRows = indexed.filter(({ i }) => matchActions[i] === "ignorar");
+  const newRowIdxSet = new Set(newRows.map(({ i }) => i));
+  const ignoredRows = indexed.filter(({ i }) => {
+    if (newRowIdxSet.has(i)) return false;
+    return matchActions[i] === "ignorar";
+  });
 
   // Sistema × Extrato totals (fatura-level, independent of matcher tier)
   // Statement total = net bill value. On a card statement, refunds (receitas)
