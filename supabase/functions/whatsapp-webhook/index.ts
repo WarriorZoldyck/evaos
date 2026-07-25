@@ -2239,6 +2239,7 @@ ${historicalPatternsBlock}`;
       ? await extractDocumentParties(LOVABLE_API_KEY, userContent)
       : null;
     const documentContextMatch = matchCompanyFromDocument(companies, documentPartyExtraction);
+    markTiming("document context extraction");
 
     if (documentContextMatch) {
       console.log("DOCUMENT CONTEXT DETECTED:", {
@@ -2265,8 +2266,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        max_tokens: 4096,
+        model: WHATSAPP_AI_MODEL,
+        max_tokens: 2048,
         messages: [
           { role: "system", content: effectiveSystemPrompt },
           ...conversationHistory,
@@ -2274,6 +2275,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         ],
       }),
     });
+    markTiming("main AI response received");
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
@@ -2304,6 +2306,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
+    markTiming("main AI response parsed");
 
     // Increment AI usage counter (best-effort)
     supabase.rpc("increment_ai_usage", { _uid: userId }).then(({ error }: any) => {
