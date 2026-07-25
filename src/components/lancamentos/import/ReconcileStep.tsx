@@ -842,6 +842,9 @@ export function ReconcileStep({
               const total = newRows.length;
               const matched = newRows.filter(({ i }) => suggestions[i]?.source === "history").length;
               const unmatched = total - matched;
+              const pendingReview = newRows.filter(
+                ({ i }) => (matchActions[i] || "criar") === "criar" && !(reviewedRows?.has(i))
+              ).length;
               return (
                 <>
                   <header className="flex items-center justify-between mb-2 gap-2 flex-wrap">
@@ -857,6 +860,12 @@ export function ReconcileStep({
                     </h3>
                     {total > 0 && (
                       <div className="flex items-center gap-1.5 text-[10px] flex-wrap">
+                        {pendingReview > 0 && (
+                          <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-700 bg-amber-500/5">
+                            <AlertTriangle className="h-2.5 w-2.5" />
+                            {pendingReview} aguardando revisão
+                          </Badge>
+                        )}
                         <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 bg-emerald-500/5">
                           <ShieldCheck className="h-2.5 w-2.5" />
                           {matched}/{total} do histórico
@@ -872,6 +881,7 @@ export function ReconcileStep({
                 </>
               );
             })()}
+
 
 
 
