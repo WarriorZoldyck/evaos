@@ -1,34 +1,44 @@
+# Clarear ações da seção "Só no extrato"
 
-## Causa
+## Contexto
 
-Em `src/components/lancamentos/PaymentMethodFields.tsx` (linhas 66-82), sempre que um cartão de crédito está selecionado, um `useEffect` recalcula `payment_date` a partir de `hoje` + `closing_day`/`due_day`:
+Hoje, na tela de importação de extrato, a seção **"Só no extrato — o que fazer?"** já cria cada linha como novo lançamento por padrão (`matchAction = "criar"`). O único botão visível na coluna "Ação" é **"Manter só do extrato"**, que na verdade é a alternativa (ignorar). Isso faz o usuário achar que a linha não será importada, quando ela **será** — basta escolher categoria e clicar em "Importar N lançamentos" no rodapé.
 
-```ts
-const todayISO = ...; // hoje
-const dueISO = getCreditCardDueDate(todayISO, closing_day, due_day);
-form.setValue("payment_date", new Date(dueISO + "T12:00:00"));
+Não há bug de lógica. É um problema de UI/copy: a ação padrão ("criar no sistema") está invisível.
+
+## Escopo
+
+Apenas UI e textos em `src/components/lancamentos/import/ReconcileStep.tsx`. Nenhuma mudança em matching, categorização ou persistência.
+
+## Mudanças
+
+### 1. Coluna "Ação" da seção "Só no extrato"
+
+Substituir o botão único por um toggle de dois estados, seguindo o mesmo padrão visual já usado na seção de conciliação:
+
+```text
+[ ✓ Criar no sistema ]   [ Manter só do extrato ]
+    (padrão, destacado)      (alternativa)
 ```
 
-Quando o usuário abre "Editar" em Análises EVA para uma pendência com cartão vinculado, o `form.reset` do `TransactionFormModal` popula `credit_card_id` com o valor original — isso dispara o effect e sobrescreve `payment_date` (ex.: pendência de 13/07 vira 21/08, próximo vencimento a partir de hoje). O `paymentDateManuallyEdited` do modal-pai não protege esse effect porque ele mora em outro componente.
+- **Criar no sistema** → `onActionChange(i, "criar")` (estado atual default).
+- **Manter só do extrato** → `onActionChange(i, "ignorar")` (comportamento atual do botão único).
+- Estilo do botão ativo igual ao já usado nos demais toggles do arquivo (fundo sólido + ícone).
 
-## Correção
+### 2. Tooltip do botão "Manter só do extrato"
 
-Evitar que o effect rode na hidratação do formulário. Só recalcular `payment_date` quando o usuário **trocar** o cartão de crédito dentro do modal aberto, não quando o cartão já vem preenchido do registro que está sendo editado.
+Trocar o texto atual por:
 
-Alterar apenas `PaymentMethodFields.tsx`:
+> "Não criar este lançamento no sistema. A linha fica só no extrato importado e vai para 'Ignorados' — pode ser restaurada depois."
 
-- Adicionar um `useRef` (`hydratedCardIdRef`) que guarda o valor inicial de `credit_card_id` na primeira renderização do componente com um cartão selecionado.
-- No effect existente, retornar cedo se `selectedCreditCardId === hydratedCardIdRef.current` (mesma seleção que veio do `reset`) — assim a data original é preservada.
-- Se o usuário limpar e escolher outro cartão depois, o effect roda normalmente e recalcula a data para a fatura desse novo cartão.
-- Também considerar `competence_date` como base do cálculo (em vez de `today`) para novas seleções, garantindo coerência com a compra que está sendo editada. Fallback para hoje quando não houver `competence_date`.
+### 3. Micro-copy do cabeçalho da seção
+
+No bloco informativo azul acima da tabela (L820-825 aprox.), adicionar uma frase:
+
+> "Por padrão, cada linha vira um novo lançamento no sistema com a categoria escolhida abaixo. Use **'Manter só do extrato'** para pular linhas que você não quer importar."
 
 ## Fora de escopo
 
-- Não mexer em `TransactionFormModal.tsx`, `AnalisesEva.tsx`, nem no schema/serviços.
-- Não alterar o comportamento de "Novo Lançamento" (quando não há cartão inicial, o effect roda como hoje).
-
-## Validação
-
-- Abrir "Editar" em uma pendência da Análises EVA com cartão de crédito: `Data de Pagamento` deve permanecer igual à do registro (ex.: 13/07 → 21/07, tal como no cartão exibido antes de clicar).
-- Em "Novo Lançamento", selecionar um cartão de crédito ainda preenche a data de vencimento automaticamente com base na competência.
-- Trocar o cartão no meio da edição recalcula a data (fluxo intencional).
+- Alterar lógica de matching, auto-pareamento por valor, ou contadores do rodapé.
+- Mudar comportamento das outras seções ("Igual", "Quase igual", "Só no sistema").
+- Criar nova ação além de `criar` / `ignorar`.
