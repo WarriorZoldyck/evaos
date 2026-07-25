@@ -934,7 +934,21 @@ export function ReconcileStep({
                         >
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
-                            <p className="break-words leading-snug" title={r.description}>{r.description}</p>
+                            {editedDesc && editedDesc !== r.description ? (
+                              <>
+                                <p className="break-words leading-snug font-medium" title={editedDesc}>{editedDesc}</p>
+                                <p className="text-[10px] text-muted-foreground truncate" title={r.description}>
+                                  Original: {r.description}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="break-words leading-snug" title={r.description}>{r.description}</p>
+                            )}
+                            {contactName && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {contact?.supplier_id ? "Fornecedor" : "Cliente"}: <span className="font-medium">{contactName}</span>
+                              </p>
+                            )}
                             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                               {!willBeCreated && (
                                 <Badge variant="outline" className="text-[9px] gap-0.5 text-muted-foreground bg-muted/40">
