@@ -1926,55 +1926,8 @@ export function ImportStatementModal({
           const blockedByDivergence = hasDivergence && !acknowledgeDivergence;
 
           return (
-            <DialogFooter className={`gap-2 sm:justify-between flex-col-reverse sm:flex-row items-stretch ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
-                  <ArrowLeft className="h-4 w-4" /> Voltar
-                </Button>
-                {isPage && (
-                  <Button variant="ghost" onClick={handleClose} className="gap-2 text-muted-foreground">
-                    Cancelar importação
-                  </Button>
-                )}
-              </div>
-
+            <DialogFooter className={`gap-2 sm:justify-end flex-col-reverse sm:flex-row items-stretch ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
               <div className="flex flex-col items-stretch sm:items-end gap-2 min-w-[320px]">
-                <div className="flex items-center gap-2 justify-end flex-wrap">
-                  <label className="text-xs text-muted-foreground whitespace-nowrap">
-                    Total informado pelo banco (R$):
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Ex.: 8.850,02"
-                    value={statementTotalInput}
-                    onChange={(e) => {
-                      // Only allow digits, dot, comma
-                      const v = e.target.value.replace(/[^\d.,]/g, "");
-                      setStatementTotalInput(v);
-                      setAcknowledgeDivergence(false);
-                    }}
-                    onBlur={() => {
-                      const cleaned = statementTotalInput.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
-                      const n = Number(cleaned);
-                      if (Number.isFinite(n) && n > 0) {
-                        setStatementTotalInput(
-                          n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        );
-                      }
-                    }}
-                    className="h-7 w-32 rounded border bg-background px-2 text-right text-xs font-mono"
-                  />
-                  {statementTotal !== null && userStatementTotal !== null && Math.abs(userStatementTotal - statementTotal) < 0.01 && (
-                    <span className="text-[10px] text-emerald-600 whitespace-nowrap">(detectado da fatura)</span>
-                  )}
-                </div>
-                {userStatementTotal !== null && importedAbs > 0 && userStatementTotal > importedAbs * 10 && (
-                  <span className="text-[11px] text-amber-600 text-right">
-                    ⚠ Valor parece fora de escala. Confira o separador decimal (use vírgula: 8.850,02).
-                  </span>
-                )}
-
                 <span className="text-xs text-muted-foreground text-right">
                   <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
                 </span>
