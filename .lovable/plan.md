@@ -1,52 +1,91 @@
+## Diagnóstico atualizado
 
-## 1. Toggle "Ignorar / Criar" — rótulos fixos nas laterais corretas
+O ponto principal agora é: **não dá para tratar toda linha da fatura como soma absoluta**.
 
-Em `src/components/lancamentos/import/ReconcileStep.tsx`, célula de ação da tabela "Só no extrato":
+Se existe uma restituição/crédito de **R$ 519,33**, a fatura precisa ser calculada como líquido:
 
-- Rótulo **"Ignorar"** sempre à **esquerda** do `NeuToggle`.
-- Rótulo **"Criar"** sempre à **direita** do `NeuToggle`.
-- Destaque visual do lado ativo (Ignorar em cinza quando off, Criar em cor primary quando on); o lado inativo fica atenuado. Nenhum outro elemento do layout muda.
-- Mapeamento mantido: toggle ligado = `criar`, desligado = `ignorar`.
+```text
+Compras/saídas - créditos/restituições = total da fatura
+```
 
-## 2. Corrigir leitura do total da fatura no parser
+Pelo que foi verificado:
 
-Logs de `parse-bank-statement` mostram uma fatura em que a soma das linhas era R$ 23.180,45 e o `statement_total` retornado pela IA foi `2266108` (ou seja, R$ 22.661,08 lido sem a vírgula decimal). Hoje esse caso cai no bloco "Discarding implausible statement_total" (linhas 522–532 de `supabase/functions/parse-bank-statement/index.ts`) e o total é jogado fora, o que quebra a conferência no modal e a base do "Total do banco".
+- O log da última importação ainda mostrou `statement_total=2266108`, ou seja, a IA leu `R$ 22.661,08` sem a vírgula decimal.
+- O parser retornava `parsed_total` usando `Math.abs(...)` em todas as linhas. Isso soma entradas e saídas como se tudo fosse compra, o que é errado para fatura com restituição.
+- A UI do passo de reconciliação já tenta calcular um líquido em alguns pontos, mas o backend ainda devolve total bruto, e o rodapé da importação compara contra o total digitado usando a soma das ações selecionadas. Isso pode gerar diferença confusa quando há crédito/restituição.
+- A busca por lançamentos existentes encontrou `LAGOA M*ANNE FERNANDES` como **despesa** histórica, mas ainda não confirma a linha exata de **R$ 519,33** na importação atual porque ela ainda está no preview/local ou no parser, não necessariamente gravada no banco.
 
-Correção em `supabase/functions/parse-bank-statement/index.ts`:
+## O que vou corrigir
 
-- Adicionar sinal simétrico ao rescaling: se `statementTotal` é ~100× a soma das linhas (razão entre 50× e 200×), dividir `statementTotal` por 100 antes de considerá-lo, em vez de descartar.
-- Só descartar (comportamento atual) quando a razão continuar fora de escala mesmo após a tentativa de reescalar.
-- Log claro: "Rescaled statement_total /100: was=X now=Y (sum=Z)".
-- Nenhuma mudança na leitura das linhas individuais — o Signal 2 existente (70% de inteiros grandes) já cobre esses casos.
+### 1. Total do parser: bruto vs líquido
+No edge function `parse-bank-statement`:
 
-## 3. Mês/ano de referência da fatura informado pelo usuário
+- Manter dois totais separados:
+  - `parsed_gross_total`: soma absoluta de todas as linhas, apenas para auditoria.
+  - `parsed_net_total`: soma correta da fatura: despesas somam, receitas/créditos subtraem.
+- Usar `parsed_net_total` para comparar com `statement_total` e `diff_cents`.
+- Aplicar o rescale `/100` no `statement_total` antes da comparação final, garantindo que `2266108` vire `22661.08`.
+- Logar claramente:
+  - total informado pela fatura;
+  - total bruto parseado;
+  - total líquido parseado;
+  - diferença em centavos;
+  - linhas marcadas como entrada/restituição.
 
-Hoje `ImportStatementModal.tsx` (linhas ~749–777) deriva `billRef` das próprias linhas do extrato. Quando a fatura tem parcelas ou compras de meses anteriores, o mês resolve errado (usuário sobe fatura de fevereiro, sistema busca janeiro).
+### 2. Classificação segura de restituição/crédito
+Ainda no parser:
 
-### 3.1 Novo campo no passo "Conferir" (step `preview`)
+- Para importação de cartão, `receita` só será aceita se a descrição indicar de fato crédito/restituição, como:
+  - `ESTORNO`
+  - `DEVOLUCAO` / `DEVOLUÇÃO`
+  - `REEMBOLSO`
+  - `CREDITO` / `CRÉDITO`, quando claramente for crédito da fatura
+- Se a IA marcar uma linha como entrada sem esses gatilhos, o sistema força para **saída** e registra log de override.
+- Se a linha for pagamento da fatura/ajuste bancário que não representa compra nem restituição, ela deve ser excluída da lista de lançamentos importáveis.
 
-- Em `src/components/lancamentos/ImportStatementModal.tsx`, adicionar `<Input type="month">` com o rótulo **"Qual o mês desta fatura?"** e hint curto: "Usamos para buscar os lançamentos já registrados neste mês."
-- Estado local `billReferenceMonth: string` (`YYYY-MM`).
-- Pré-preencher com o mês mais frequente entre `statement_due_date` / `resolved_competence_date` das linhas (sugestão, não fonte da verdade).
-- Bloquear o botão "Avançar para conciliação" enquanto o campo estiver vazio, apenas para importações de cartão. Para extrato bancário, o campo é opcional e o fluxo atual continua.
+### 3. Tela de reconciliação: mostrar líquido corretamente
+Em `ImportStatementModal` e `ReconcileStep`:
 
-### 3.2 Usar o valor na busca de lançamentos do sistema
+- A diferença contra o “valor da fatura” será calculada com o **total líquido selecionado**, não com soma absoluta.
+- O rodapé deve mostrar algo do tipo:
 
-No efeito que carrega `orphans` e `systemBill` (linhas ~735–853):
+```text
+Total da fatura: R$ 22.661,08
+Selecionado líquido: R$ XX.XXX,XX
+Diferença: R$ X,XX
+```
 
-- Quando `billReferenceMonth` estiver definido, calcular `billStart` e `billEnd` a partir dele (primeiro e último dia do mês), ignorando `billDate` derivado das linhas.
-- Manter `minDate`/`maxDate` (janela ±3 dias) apenas para o cruzamento por data de compra da Onda A.
-- Incluir `billReferenceMonth` nas dependências do `useEffect`.
+- Se houver créditos/restituições, mostrar uma linha discreta:
 
-### 3.3 Persistência e deep-link
+```text
+Créditos/restituições: -R$ 519,33
+```
 
-- Propagar `billReferenceMonth` para `importResult.dateFrom/dateTo` quando presente, para que o link em Análises EVA respeite o mês informado.
+### 4. Auditoria da linha que está faltando
+Para descobrir exatamente onde está faltando chegar em **R$ 22.661,08**:
 
-## Detalhes técnicos
+- Adicionar log resumido das maiores linhas e de todas as entradas/créditos detectados na próxima importação.
+- Mostrar no preview uma seção pequena “Entradas/créditos detectados” quando houver linhas como essa de R$ 519,33.
+- Assim fica claro se o valor está:
+  - vindo do PDF mas classificado errado;
+  - sendo excluído indevidamente;
+  - sendo somado com sinal invertido;
+  - ou se realmente falta uma linha no OCR/IA.
 
-Arquivos afetados:
-- `src/components/lancamentos/import/ReconcileStep.tsx` — posicionamento dos rótulos.
-- `src/components/lancamentos/ImportStatementModal.tsx` — novo estado `billReferenceMonth`, input no step `preview`, uso no cálculo do escopo da fatura.
-- `supabase/functions/parse-bank-statement/index.ts` — reescalar `statement_total` /100 quando ~100× a soma das linhas.
+## Resultado esperado
 
-Fora de escopo: `neu-toggle.tsx`, outras edge functions, sugestões de categoria, webhook do WhatsApp.
+Na próxima importação da mesma fatura:
+
+1. `statement_total` deve aparecer como **R$ 22.661,08**, não `2.266.108`.
+2. O sistema deve calcular o total líquido da fatura, descontando a restituição/crédito de **R$ 519,33**.
+3. Se `LAGOA ANNE FERNANDES` for compra comum, fica como **Saída**.
+4. Se for restituição real, fica como **Entrada/crédito** e aparece destacada como crédito da fatura.
+5. A diferença exibida deve apontar exatamente se ainda falta alguma linha para fechar os **R$ 22.661,08**.
+
+## Arquivos envolvidos
+
+- `supabase/functions/parse-bank-statement/index.ts`
+- `src/components/lancamentos/ImportStatementModal.tsx`
+- `src/components/lancamentos/import/ReconcileStep.tsx`
+
+Sem migração de banco.
