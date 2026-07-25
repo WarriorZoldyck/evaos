@@ -89,6 +89,7 @@ export function AppSidebar() {
   const onlyPersonal = !viewAll && personalSelected && selectedCompanyIds.length === 0;
   const visibleFinanceMenuItems = financeMenuItems.filter((i) => !(onlyPersonal && i.url === "/dre"));
   const { pendingCount } = useAIPendingTransactions();
+  const pendingByContext = usePendingAnalisesCountByContext();
   const { state } = useSidebar();
   const { isHubMember, isOwnerWithMembers, pendingInvitationsCount } = useHub();
   const { hubAllowed } = usePlanLimits();
