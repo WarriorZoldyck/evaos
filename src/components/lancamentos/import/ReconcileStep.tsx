@@ -1007,11 +1007,8 @@ export function ReconcileStep({
 
 
                         </tr>
-
-
-
-                        </tr>
                       );
+
                     })}
                   </tbody>
                 </table>
