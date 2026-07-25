@@ -1,55 +1,45 @@
+## Ajustes no fluxo "Criar novo" da conciliação
 
-## O que ajustar no fluxo de Importar Extrato
+Objetivo: garantir que toda linha nova criada a partir do extrato passe por uma revisão consciente do usuário (descrição amigável, fornecedor e categoria), sem alterar o comportamento validado de "Manter só o do extrato" nem o de vinculação 1:1.
 
-Foram identificadas 4 fricções na página `/lancamentos/importar-extrato` (arquivos `ImportStatementModal.tsx` e `import/ReconcileStep.tsx`). Todos os ajustes são só de UI/UX + resolução de nome de categoria — nada muda no parser nem no schema.
+### O que muda
 
-### 1. Pedir o **mês da fatura** ANTES de subir o PDF (cartão)
+1. **"Manter só o do extrato"** — sem alteração. Continua substituindo o lançamento do sistema pelo par do extrato preservando categoria por nome (comportamento atual já validado).
 
-Hoje o campo "Qual o mês desta fatura?" aparece só depois do parse, e a heurística já o pré-preenche — quando ela erra (fev vindo como jan), a query de "só no sistema" busca o mês errado.
+2. **Linhas novas ("Só no extrato")** deixam de ir direto para a importação em lote sem revisão. Cada linha nova ganha um botão **"Revisar e criar"** ao lado do toggle Ignorar/Criar. Enquanto a linha não for revisada, ela fica marcada como **"Requer revisão"** e o botão **Importar N** do rodapé bloqueia a submissão se ainda houver linhas `criar` sem revisão (com contador claro: "3 linhas aguardando revisão").
 
-Mudança:
-- Quando `importType === "cartao"`, exibir o campo **Mês da fatura (YYYY-MM)** já no passo inicial (junto do seletor de cartão), **antes** de habilitar o botão de escolher arquivo.
-- Enquanto não preenchido: input de arquivo desabilitado com dica "Selecione o mês da fatura para continuar".
-- Não pré-preencher automaticamente pela heurística das linhas — só sugerir como placeholder ("ex.: 2026-02"). Manter a marcação `billReferenceMonthTouchedRef` para nunca sobrescrever a escolha do usuário.
-- Este mês vira a única fonte da verdade da janela de busca no `useEffect` de órfãos/`systemBill`, no deep-link para Análises EVA e no filtro de reconciliação.
+3. **Modal "Revisar novo lançamento"** (novo componente `ReviewNewEntryModal.tsx`) abre com os campos pré-preenchidos vindos do extrato + sugestões do histórico:
+   - **Descrição** — editável (ex.: renomear `KAUARA VILARINHO 332/10` → `Formatura Ana`). A descrição original crua fica visível abaixo em cinza como referência ("Original: …") e é preservada em `raw_description` para auditoria.
+   - **Fornecedor/Cliente** — `ContactSelectWithCreate` com sugestão pré-selecionada (quando o histórico casa) e opção de criar novo inline. Tipo (fornecedor vs cliente) segue o `type` da linha.
+   - **Categoria / Subcategoria / Sub-sub** — `CategoryPathCombobox` já pré-preenchido pela sugestão de histórico; usuário confirma ou altera.
+   - **Data e valor** — visíveis, somente leitura (vêm do extrato, não fazem parte da revisão).
+   - Ao confirmar, a linha fica marcada como **"Revisada"** (badge verde) e os valores editados são guardados em `rowCategories[i]` + novos campos `rowDescriptions[i]` e `rowContacts[i]`.
 
-### 2. Botão **"É outra compra — criar"**: só aparecer quando faz sentido
+4. **Persistência na importação** — o `ImportStatementModal` passa a enviar, para cada linha nova, a descrição editada e o `supplier_id`/`client_id` além da categoria (hoje só categoria). Se o usuário não abrir o modal e mesmo assim tentar importar, o botão fica desabilitado com tooltip explicando o motivo.
 
-Hoje ele aparece em toda linha da seção "Igual — pode conciliar", com o mesmo efeito prático de "criar do zero" — o usuário estranhou porque na prática, quando o valor é idêntico, ele acaba parecendo um clone do "Manter só o do extrato".
-
-Mudança em `renderMatchRow` (`ReconcileStep.tsx`):
-- Só renderizar o botão "É outra compra — criar" quando `best.tier === "tolerance"` **ou** `best.suggested === true` (ou seja, quando o valor difere ou o nome diverge). Na seção "Igual — pode conciliar" (tier `exact` e mesmo nome), o botão some.
-- Manter o comportamento: ao clicar, `onActionChange(i, "criar")` — a linha sai da seção "Igual" e entra em "Só no extrato", onde já existe o combobox de categoria (garante que o usuário categorize antes de importar).
-- Atualizar a copy do tooltip da seção "Diferença de centavos" e a legenda para deixar explícito: "'É outra compra' desfaz o vínculo; a linha vai para 'Só no extrato' para você categorizar antes de importar."
-
-### 3. **"Manter só o do extrato"** deve herdar a categoria pelo **nome**, nunca por ID
-
-O handler `onKeepStatementOnly` em `ImportStatementModal.tsx` (linha ~1770) hoje faz:
-
-```ts
-category: (cand as any).category,
-subcategory: (cand as any).subcategory,
-subcategory2: (cand as any).subcategory2,
-```
-
-O select por trás retorna esses campos como texto na maioria dos casos, mas há candidatos legados com UUID salvo em `category`. Precisa passar por `resolveCategoryName(...)` (já existe no arquivo) antes de escrever em `rowCategories`, garantindo que o combobox mostre e persista o **nome**, nunca o código:
-
-```ts
-category: resolveCategoryName(cand.category, mergedCategories) || "",
-subcategory: resolveCategoryName(cand.subcategory, mergedCategories),
-subcategory2: resolveCategoryName(cand.subcategory2, mergedCategories),
-```
-
-Fazer o mesmo tratamento no `CategoryChain` do `renderMatchRow` (já usa `resolveCategoryLabel`, mas confirmar que a normalização é consistente para não mostrar UUIDs em nenhuma célula da tabela de conciliação).
-
-### 4. Deixar claro que "Manter só do extrato" ≠ "É outra compra"
-
-Depois do ajuste 2, os dois botões só coexistem quando faz sentido (valor divergente ou nome divergente). Ainda assim, revisar os tooltips para reforçar a diferença em uma linha:
-
-- **Manter só o do extrato**: substitui o do sistema (exclui + cria com a mesma categoria).
-- **É outra compra — criar**: mantém os dois lados (potencial duplicata proposital).
+5. **Ação "É outra compra — criar"** (já restrita a divergências) passa a levar a linha para "Só no extrato" **e abrir automaticamente o modal de revisão**, já que por definição precisa ser categorizada/renomeada.
 
 ### Fora do escopo
 
-- Parser (`parse-bank-statement`): mantido como está — os problemas apontados são resolvidos por o usuário informar o mês certo antes.
-- Nada no backend/DB.
+- Parser (`parse-bank-statement`), regras de match e cálculos de total permanecem como estão.
+- Toggle Ignorar/Criar e layout do rodapé (Voltar / Total do banco / Cancelar) permanecem como estão.
+- Nenhuma mudança de schema no banco (usamos campos já existentes de `transactions`: `description`, `supplier_id`, `client_id`, `category`, `subcategory`, `subcategory2`).
+
+### Arquivos afetados
+
+- `src/components/lancamentos/import/ReviewNewEntryModal.tsx` — novo.
+- `src/components/lancamentos/import/ReconcileStep.tsx` — botão "Revisar e criar", badge de status por linha, novos props (`rowDescriptions`, `rowContacts`, `onOpenReview`).
+- `src/components/lancamentos/ImportStatementModal.tsx` — estado das descrições/contatos revisados, bloqueio do botão Importar quando há pendências, passagem desses campos ao criar as transactions.
+
+### Diagrama do fluxo por linha nova
+
+```text
+extrato → linha "Só no extrato"
+   │
+   ├─ toggle Ignorar     → não entra na importação
+   └─ toggle Criar
+        │
+        ├─ [Revisar e criar]  → modal (descrição, fornecedor, categoria)
+        │        └─ confirmar → linha "Revisada" ✓  → entra em Importar N
+        └─ sem revisar        → bloqueia Importar N (tooltip "N linhas aguardando revisão")
+```

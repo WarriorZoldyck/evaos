@@ -95,6 +95,17 @@ interface ReconcileStepProps {
   onUndoKeepStatementOnly?: (systemTxId: string) => void;
   /** Create a category inline. Returns the new record's name (so caller can set it in rowCategories). */
   onCreateCategory?: (params: { name: string; parentName?: string; type?: "receita" | "despesa" }) => Promise<{ id: string; name: string } | null>;
+  /** Edited (user-friendly) descriptions per row, applied when creating the transaction. */
+  rowDescriptions?: Record<number, string>;
+  /** Selected supplier/client per row, applied when creating the transaction. */
+  rowContacts?: Record<number, { supplier_id?: string | null; client_id?: string | null }>;
+  /** Rows already reviewed in the "Revisar novo lançamento" modal. */
+  reviewedRows?: Set<number>;
+  /** Open the review modal for a specific row idx. */
+  onOpenReview?: (rowIdx: number) => void;
+  /** Suppliers/clients lists to render the small "vinculado a" hint. */
+  suppliers?: { id: string; name: string }[];
+  clients?: { id: string; name: string }[];
 }
 
 
@@ -170,6 +181,12 @@ export function ReconcileStep({
   onKeepStatementOnly,
   onUndoKeepStatementOnly,
   onCreateCategory,
+  rowDescriptions = {},
+  rowContacts = {},
+  reviewedRows,
+  onOpenReview,
+  suppliers = [],
+  clients = [],
 }: ReconcileStepProps) {
 
   const isCardMode = mode === "card";
@@ -825,6 +842,9 @@ export function ReconcileStep({
               const total = newRows.length;
               const matched = newRows.filter(({ i }) => suggestions[i]?.source === "history").length;
               const unmatched = total - matched;
+              const pendingReview = newRows.filter(
+                ({ i }) => (matchActions[i] || "criar") === "criar" && !(reviewedRows?.has(i))
+              ).length;
               return (
                 <>
                   <header className="flex items-center justify-between mb-2 gap-2 flex-wrap">
@@ -840,6 +860,12 @@ export function ReconcileStep({
                     </h3>
                     {total > 0 && (
                       <div className="flex items-center gap-1.5 text-[10px] flex-wrap">
+                        {pendingReview > 0 && (
+                          <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-700 bg-amber-500/5">
+                            <AlertTriangle className="h-2.5 w-2.5" />
+                            {pendingReview} aguardando revisão
+                          </Badge>
+                        )}
                         <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 bg-emerald-500/5">
                           <ShieldCheck className="h-2.5 w-2.5" />
                           {matched}/{total} do histórico
@@ -859,6 +885,7 @@ export function ReconcileStep({
 
 
 
+
             {newRows.length === 0 ? (
               <p className="text-xs text-muted-foreground italic px-2 py-3 border rounded-lg bg-muted/20">
                 Nenhum lançamento novo a criar.
@@ -872,13 +899,22 @@ export function ReconcileStep({
                       <th className="p-2 text-left font-medium">Descrição</th>
                       <th className="p-2 text-right font-medium whitespace-nowrap">Valor</th>
                       <th className="p-2 text-left font-medium min-w-[200px]">Categoria</th>
-                      <th className="p-2 text-center font-medium w-[300px]">Ação</th>
+                      <th className="p-2 text-center font-medium w-[160px]">Revisar</th>
+                      <th className="p-2 text-center font-medium w-[220px]">Ação</th>
                     </tr>
                   </thead>
                   <tbody>
                     {newRows.map(({ r, i }) => {
                       const sug = suggestions[i];
                       const currentCat = rowCategories[i] || { category: "" };
+                      const editedDesc = rowDescriptions[i];
+                      const contact = rowContacts[i];
+                      const contactName = contact?.supplier_id
+                        ? suppliers.find((s) => s.id === contact.supplier_id)?.name
+                        : contact?.client_id
+                        ? clients.find((c) => c.id === contact.client_id)?.name
+                        : undefined;
+                      const isReviewed = !!reviewedRows?.has(i);
                       const subs = childrenOf(currentCat.category);
                       const subSubs = childrenOf(currentCat.subcategory);
                       const dupKey = `${r.type}|${Math.abs(r.amount)}|${normalizeText(r.description)}`;
@@ -898,7 +934,21 @@ export function ReconcileStep({
                         >
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
-                            <p className="break-words leading-snug" title={r.description}>{r.description}</p>
+                            {editedDesc && editedDesc !== r.description ? (
+                              <>
+                                <p className="break-words leading-snug font-medium" title={editedDesc}>{editedDesc}</p>
+                                <p className="text-[10px] text-muted-foreground truncate" title={r.description}>
+                                  Original: {r.description}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="break-words leading-snug" title={r.description}>{r.description}</p>
+                            )}
+                            {contactName && (
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {contact?.supplier_id ? "Fornecedor" : "Cliente"}: <span className="font-medium">{contactName}</span>
+                              </p>
+                            )}
                             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                               {!willBeCreated && (
                                 <Badge variant="outline" className="text-[9px] gap-0.5 text-muted-foreground bg-muted/40">
@@ -953,6 +1003,39 @@ export function ReconcileStep({
 
 
                             </div>
+                          </td>
+                          <td className="p-2 text-center align-top">
+                            {willBeCreated ? (
+                              isReviewed ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+                                    <Check className="h-2.5 w-2.5" /> Revisada
+                                  </Badge>
+                                  {onOpenReview && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenReview(i)}
+                                      className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
+                                    >
+                                      editar
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 border-amber-500/60 text-amber-700 hover:bg-amber-500/10"
+                                  onClick={() => onOpenReview?.(i)}
+                                  title="Renomear, escolher fornecedor e confirmar categoria antes de importar."
+                                >
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Revisar e criar
+                                </Button>
+                              )
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground italic">—</span>
+                            )}
                           </td>
                           <td className="p-2 text-center align-top">
                             <div

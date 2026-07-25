@@ -29,6 +29,7 @@ import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
 import { calculateCreditCardBillTotal, filterCreditCardBillScope, descriptionSimilarity, AUTO_LINK_MIN_SIMILARITY, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { ReconcileStep } from "./import/ReconcileStep";
+import { ReviewNewEntryModal } from "./import/ReviewNewEntryModal";
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
 import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -305,6 +306,17 @@ export function ImportStatementModal({
   // Per-row category override (with 3-level hierarchy). Pre-filled from suggestions when available.
   // `touched: true` means the user manually edited this row — never overwrite via propagation.
   const [rowCategories, setRowCategories] = useState<Record<number, RowCategoryValue>>({});
+  // Per-row user-friendly description override (empty = use raw statement description).
+  const [rowDescriptions, setRowDescriptions] = useState<Record<number, string>>({});
+  // Per-row supplier/client selection.
+  const [rowContacts, setRowContacts] = useState<Record<number, { supplier_id?: string | null; client_id?: string | null }>>({});
+  // Rows the user has confirmed in the "Revisar novo lançamento" modal.
+  const [reviewedRows, setReviewedRows] = useState<Set<number>>(new Set());
+  // Which row idx is being reviewed right now (null = modal closed).
+  const [reviewIdx, setReviewIdx] = useState<number | null>(null);
+  // Suppliers & clients used to pre-select / render "Fornecedor: X" hints.
+  const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
+  const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
   const { suggest, suggestions, loading: suggestLoading, reset: resetSuggestions } = useCategorySuggestions();
 
   // Locally created categories from inside the reconcile step (dedup by id when merging).
@@ -315,6 +327,24 @@ export function ImportStatementModal({
     return [...categoryBase, ...extraCategories.filter((c) => !ids.has(c.id))];
   }, [categoryBase, extraCategories]);
   const rootCategories = mergedCategories.filter((c) => !c.parent_id);
+
+  // Load suppliers/clients once the reconcile step is reachable, so the review
+  // modal has options to pre-select and let the user create new inline.
+  useEffect(() => {
+    if (!open || !effectiveUserId) return;
+    let cancelled = false;
+    (async () => {
+      const [supRes, cliRes] = await Promise.all([
+        supabase.from("suppliers").select("id, name").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("clients").select("id, name").eq("user_id", effectiveUserId).order("name"),
+      ]);
+      if (cancelled) return;
+      setSuppliersList((supRes.data as any) || []);
+      setClientsList((cliRes.data as any) || []);
+    })();
+    return () => { cancelled = true; };
+  }, [open, effectiveUserId]);
+
 
 
 
@@ -1247,9 +1277,12 @@ export function ImportStatementModal({
       const categoryName = resolveCategoryName(rowCat?.category, mergedCategories) || catName;
       const subcategoryName = resolveCategoryName(rowCat?.subcategory, mergedCategories) || null;
       const subcategory2Name = resolveCategoryName(rowCat?.subcategory2, mergedCategories) || null;
+      const editedDesc = (rowDescriptions[realIdx] || "").trim();
+      const finalDesc = editedDesc || r.description;
+      const contact = rowContacts[realIdx] || {};
 
       return {
-        description: r.description,
+        description: finalDesc,
         amount: r.amount,
         type: r.type,
         payment_date: billingDate,
@@ -1260,6 +1293,8 @@ export function ImportStatementModal({
         category: categoryName,
         subcategory: subcategoryName,
         subcategory2: subcategory2Name,
+        supplier_id: contact.supplier_id || null,
+        client_id: contact.client_id || null,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
@@ -1357,6 +1392,10 @@ export function ImportStatementModal({
     setPromotedOrphanIds(new Set());
     setSystemBill({ total: 0, count: 0, loading: false });
     setRowCategories({});
+    setRowDescriptions({});
+    setRowContacts({});
+    setReviewedRows(new Set());
+    setReviewIdx(null);
     setImportResult(null);
     setStep("preview");
     resetMatches();
@@ -1939,6 +1978,12 @@ export function ImportStatementModal({
                   return next;
                 });
               }}
+              suppliers={suppliersList}
+              clients={clientsList}
+              rowDescriptions={rowDescriptions}
+              rowContacts={rowContacts}
+              reviewedRows={reviewedRows}
+              onOpenReview={(idx) => setReviewIdx(idx)}
             />
 
 
@@ -2163,18 +2208,37 @@ export function ImportStatementModal({
                     <Check className="h-4 w-4" />
                     Nada a importar — concluir
                   </Button>
-                ) : (
-                  <Button
-                    onClick={handleImport}
-                    disabled={importing || blockedByDivergence}
-                    className="gap-2 mt-1"
-                  >
-                    {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
-                    {importType === "cartao" ? " para a fatura" : ""}
-                  </Button>
-
-                )}
+                ) : (() => {
+                  const unreviewedIdxs = rows
+                    .map((_, i) => i)
+                    .filter(
+                      (i) =>
+                        (matchActions[i] || "criar") === "criar" &&
+                        !mergedMatches[i]?.best?.candidate && // only "só no extrato" rows need review
+                        !reviewedRows.has(i)
+                    );
+                  const unreviewed = unreviewedIdxs.length;
+                  const blocked = unreviewed > 0;
+                  return (
+                    <div className="flex flex-col items-end gap-1">
+                      {blocked && (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                          {unreviewed} lançamento{unreviewed > 1 ? "s" : ""} novo{unreviewed > 1 ? "s" : ""} aguarda{unreviewed > 1 ? "m" : ""} revisão antes de importar.
+                        </p>
+                      )}
+                      <Button
+                        onClick={handleImport}
+                        disabled={importing || blockedByDivergence || blocked}
+                        className="gap-2 mt-1"
+                        title={blocked ? "Revise as linhas novas ('Revisar e criar') antes de importar." : undefined}
+                      >
+                        {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
+                        {importType === "cartao" ? " para a fatura" : ""}
+                      </Button>
+                    </div>
+                  );
+                })()}
               </div>
             </DialogFooter>
           );
@@ -2268,12 +2332,66 @@ export function ImportStatementModal({
   }
 
 
+  const reviewRow = reviewIdx != null ? rows[reviewIdx] : null;
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
         {bodyContent}
       </DialogContent>
       {nestedCreateCard}
+      <ReviewNewEntryModal
+        open={reviewIdx != null && !!reviewRow}
+        onClose={() => setReviewIdx(null)}
+        row={reviewRow}
+        rawDescription={reviewRow?.description || ""}
+        initialDescription={reviewIdx != null ? (rowDescriptions[reviewIdx] || "") : ""}
+        initialCategory={reviewIdx != null ? (rowCategories[reviewIdx] || { category: "" }) : { category: "" }}
+        initialContact={reviewIdx != null ? (rowContacts[reviewIdx] || {}) : {}}
+        categories={mergedCategories}
+        suppliers={suppliersList}
+        clients={clientsList}
+        onCreateCategory={async ({ name, parentName, type }) => {
+          const trimmed = name.trim();
+          if (!trimmed) return null;
+          const parent = parentName
+            ? mergedCategories.find((c) => c.name.toLowerCase() === parentName.toLowerCase()) || null
+            : null;
+          const { data, error } = await supabase
+            .from("categories")
+            .insert({
+              name: trimmed,
+              parent_id: parent?.id || null,
+              type: type || parent?.type || "despesa",
+              user_id: effectiveUserId,
+            })
+            .select("id, name, parent_id, type")
+            .single();
+          if (error || !data) {
+            toast({ title: "Erro ao criar categoria", description: error?.message, variant: "destructive" });
+            return null;
+          }
+          setExtraCategories((prev) => [...prev, data as any]);
+          return { id: data.id, name: data.name };
+        }}
+        onContactCreated={(type, id, name) => {
+          if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
+          else setClientsList((prev) => [...prev, { id, name }]);
+        }}
+        onConfirm={({ description, category, contact }) => {
+          if (reviewIdx == null) return;
+          const idx = reviewIdx;
+          setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
+          setRowCategories((prev) => ({ ...prev, [idx]: category }));
+          setRowContacts((prev) => ({ ...prev, [idx]: contact }));
+          setReviewedRows((prev) => {
+            const next = new Set(prev);
+            next.add(idx);
+            return next;
+          });
+          setReviewIdx(null);
+        }}
+      />
     </Dialog>
   );
 }
