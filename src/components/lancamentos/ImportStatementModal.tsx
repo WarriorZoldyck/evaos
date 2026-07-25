@@ -227,6 +227,7 @@ export function ImportStatementModal({
   allBankAccounts,
   companies,
   refetchAccounts,
+  variant = "modal",
 }: ImportStatementModalProps) {
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
