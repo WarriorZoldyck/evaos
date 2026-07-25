@@ -3805,7 +3805,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
       const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
-      const { data: insertedPending, error: insertError } = await supabase.from("ai_pending_transactions").insert({
+      const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
         source: "whatsapp",
         status: mainStatus,
