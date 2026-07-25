@@ -1,57 +1,28 @@
-## Diagnóstico confirmado
+## Plano: Auditar reimportação do usuário espclin
 
-Consultei diretamente o banco para `espclin@hotmail.com` e os exemplos citados existem no histórico do próprio usuário, mas alguns não aparecem na importação por dois motivos diferentes:
+Aguardar o usuário concluir a reimportação e categorização dos 2 extratos, depois auditar diretamente no banco se a EVA está persistindo as categorias corretamente.
 
-- **Categorias existem em outro contexto/empresa**: vários históricos estão com `company_id = a206...`, mas a tela de importação recebe apenas `categories` do contexto atual. Assim, o sistema até acha o histórico, mas não consegue reconstruir corretamente o caminho da categoria no seletor atual.
-- **Subcategorias misturadas entre contextos**: há lançamentos com raiz de uma empresa e subcategoria de outro contexto, por exemplo `AMAZONA WESTERN` com `Vestuário` de uma empresa, `Roupas` pessoal e `Paula` de empresa. Isso faz a UI não conseguir montar a árvore completa.
-- **Parcelas futuras não estão no banco ainda**: para `TEIXEIRA MODA INTIMA 02/02`, `ROS/EROS BOUTIQUE 02/03`, `LE BOMBOM 03/03`, `AMAZONA WESTERN 10/10` e `IBERIA ... 10/10`, o banco tem parcelas anteriores, mas não necessariamente a parcela exata final. Para categorização isso deveria funcionar por histórico; para conciliação com lançamento existente só funciona se a parcela já existe como transação.
-- **DROGASIL bateu parcialmente**: há histórico como `Saúde > Farmácias` e também `Saúde > Farmácia > Drogasil`. O algoritmo atual tende a escolher pelo volume de amostras, não pela categoria mais específica quando há conflito.
-- **FAUSTO/PAULO FERREIRA**: a amostra do banco para `FAUSTO FERREIRA` está como `Sem Categoria`, então a sugestão que aparece veio de token/similaridade com outro Ferreira (`Luma/Compra Luma Borges Ferreira`) e por isso a lógica cruzou texto certo, mas categorizou errado.
+### Passos
 
-## Plano de correção
+1. **Snapshot antes/depois** — registrar contagem atual de `transactions` categorizadas do `user_id = b049592f-d97a-468d-a839-ed02c2a41d9b` para comparar após o import.
 
-1. **Usar categorias globais do usuário na importação**
-   - Passar `allCategories` para o modal de importação, não só as categorias do contexto atual.
-   - Usar essa lista global para resolver UUIDs em nomes e montar os caminhos exibidos.
-   - Manter o isolamento por `user_id`; nada cruza dados entre usuários.
+2. **Consultar as novas linhas** em `public.transactions` filtrando por `user_id` + `created_at > agora` para pegar só o que a reimportação inseriu.
 
-2. **Separar “categoria para sugerir” de “categoria selecionável”**
-   - A sugestão histórica pode vir de qualquer contexto do usuário.
-   - Se a categoria sugerida não existir no contexto atual, mostrar o caminho real do histórico e ainda permitir importar com esse caminho por nome.
-   - Evitar que IDs brutos ou caminhos quebrados apareçam no seletor.
+3. **Validar campo a campo** em cada linha nova:
+   - `category_id`, `subcategory_id`, `subcategory2_id` populados com UUIDs válidos que existem em `public.categories` do próprio usuário
+   - `credit_card_id` bate com o cartão do usuário (não com cartão de outro user)
+   - `description` normalizada corretamente (sem ruído tipo `03/03`, `SPAY *`, `LINEA...`)
 
-3. **Melhorar ranking do histórico**
-   - Dar prioridade maior para:
-     - descrição normalizada igual/parcelas do mesmo estabelecimento;
-     - mesma raiz + maior profundidade (`categoria > sub > sub2`);
-     - histórico mais recente;
-     - consenso apenas dentro do mesmo comerciante real.
-   - Reduzir o peso de token genérico de sobrenome/palavra solta, para evitar `FAUSTO/PAULO FERREIRA` herdando categoria de outro “Ferreira”.
+4. **Cruzar com sugestões esperadas** — para cada merchant recorrente (DROGASIL, IBERIA, LE BOMBOM, EROS BOUTIQUE, TEIXEIRA, AMAZONA WESTERN, etc.), verificar se a categoria persistida bate com o histórico anterior do próprio user.
 
-4. **Tratar parcelas como o mesmo comerciante**
-   - Normalizar descrições removendo `01/03`, `02/03`, `10/10`, códigos longos e ruídos antes do cruzamento.
-   - Assim `LE BOMBOM 03/03` aprende com `LE BOMBOM 01/03` e `02/03`; idem `IBERIA`, `AMAZONA WESTERN`, `TEIXEIRA`, `ROS/EROS BOUTIQUE`.
+5. **Relatório para o usuário** — tabela com:
+   - Merchant | Categoria persistida | Categoria esperada (histórico) | ✅/❌
+   - Total de linhas categorizadas vs "Sem Categoria"
+   - Qualquer divergência entre o que a UI mostrou e o que ficou salvo
 
-5. **Criar um relatório de auditoria no próprio popover**
-   - Mostrar claramente se o match veio de `transactions` ou `ai_pending_transactions`.
-   - Mostrar por que escolheu aquela categoria: “mesma descrição sem parcela”, “mesmo comerciante”, “tokens fortes”.
-   - Quando não houver base confiável, deixar “Selecionar categoria” em vez de chutar.
+6. **Se houver divergência**, investigar se o problema é:
+   - Persistência (UI mostrou certo, banco salvou errado)
+   - Sugestão (histórico existia mas não foi encontrado — bug em `useCategorySuggestions.ts`)
+   - Ausência de histórico (esperado — usuário categoriza 1x e EVA aprende)
 
-6. **Validação final com os casos citados**
-   - Conferir que os exemplos passam a se comportar assim:
-     - `TEIXEIRA MODA INTIMA 02/02` → `Vestuário > Roupas > Langerie`
-     - `ROS/EROS BOUTIQUE 02/03` → `Vestuário > Roupas > Paula`
-     - `LE BOMBOM 03/03` → `Vestuário > Roupas > Vitória`
-     - `DROGASIL 3066 03/03` → preferir o caminho mais específico quando existir: `Saúde > Farmácia > Drogasil`, senão `Saúde > Farmácias`
-     - `AMAZONA WESTERN 10/10` → `Vestuário > Roupas > Paula`
-     - `IBERIA LINEA... 10/10` → `Férias > Aéreo > Iberia`
-     - `PAULO/FAUSTO FERREIRA` → não categorizar por sobrenome se não houver histórico confiável do mesmo comerciante
-
-## Arquivos a alterar
-
-- `src/pages/Lancamentos.tsx`
-- `src/components/lancamentos/ImportStatementModal.tsx`
-- `src/hooks/useCategorySuggestions.ts`
-- `src/components/lancamentos/import/SuggestionWhyPopover.tsx`
-
-Não pretendo alterar dados do banco agora; primeiro vou corrigir a lógica para todo usuário. Se depois quisermos limpar categorias antigas inconsistentes entre contextos, faço isso como etapa separada com SQL auditável.
+Nenhum código será alterado neste plano — é puramente auditoria. Se aparecer bug real de persistência ou de matching, abro plano separado de correção.
