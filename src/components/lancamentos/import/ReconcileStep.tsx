@@ -234,7 +234,10 @@ export function ReconcileStep({
   const ignoredRows = indexed.filter(({ i }) => matchActions[i] === "ignorar");
 
   // Sistema × Extrato totals (fatura-level, independent of matcher tier)
-  const statementTotal = indexed.reduce((s, { r }) => s + Math.abs(r.amount), 0);
+  const statementTotal = indexed.reduce(
+    (s, { r }) => s + (r.type === "receita" ? Math.abs(r.amount) : -Math.abs(r.amount)),
+    0,
+  );
   const matchedSystemTotal = [...matchedExactRows, ...matchedToleranceRows].reduce(
     (s, { i }) => s + Math.abs(Number(matches[i]!.best!.candidate.amount)),
     0
