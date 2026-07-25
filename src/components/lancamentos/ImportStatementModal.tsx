@@ -1996,7 +1996,10 @@ export function ImportStatementModal({
             )}
           </DialogFooter>
         )}
-      </DialogContent>
+    </>
+  );
+
+  const nestedCreateCard = (
 
       {/* Nested modal: create new credit card from within import */}
       <CreditCardFormModal
