@@ -1291,6 +1291,8 @@ export function ImportStatementModal({
     setMatchTargets({});
     setReplaceDeleteIds(new Set());
     setOrphans([]);
+    setExtraMatches({});
+    setPromotedOrphanIds(new Set());
     setSystemBill({ total: 0, count: 0, loading: false });
     setRowCategories({});
     setImportResult(null);
