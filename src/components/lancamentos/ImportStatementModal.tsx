@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -258,6 +259,10 @@ export function ImportStatementModal({
 
   // Wizard step
   const [step, setStep] = useState<"preview" | "reconcile" | "summary">("preview");
+  // Mês/ano de referência da fatura (YYYY-MM). Fonte da verdade para a busca de
+  // lançamentos já existentes no sistema quando o extrato é um cartão de crédito.
+  const [billReferenceMonth, setBillReferenceMonth] = useState<string>("");
+  const billReferenceMonthTouchedRef = useRef(false);
   const [importResult, setImportResult] = useState<{
     linked: number;
     created: number;
@@ -725,6 +730,22 @@ export function ImportStatementModal({
     setPromotedOrphanIds(new Set());
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
 
+  // Sugere o mês/ano de referência a partir das datas de vencimento/competência
+  // predominantes. O usuário pode sobrescrever no input do passo "Conferir".
+  useEffect(() => {
+    if (importType !== "cartao" || rows.length === 0) return;
+    if (billReferenceMonthTouchedRef.current && billReferenceMonth) return;
+    const counts: Record<string, number> = {};
+    rows.forEach((r) => {
+      const d = r.statement_due_date || r.resolved_competence_date || r.date;
+      if (!d) return;
+      const key = d.slice(0, 7);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (best && best !== billReferenceMonth) setBillReferenceMonth(best);
+  }, [importType, rows, billReferenceMonth]);
+
   // ORPHAN DETECTOR (card mode) — flag system transactions that DON'T appear in the statement.
   // The bank statement is the source of truth: any extra line in the system is a likely error.
   useEffect(() => {
@@ -770,7 +791,11 @@ export function ImportStatementModal({
     };
     const wMin = shift(minDate, -3);
     const wMax = shift(maxDate, 3);
-    const billRef = billDate || maxDate;
+    // Prioriza o mês informado pelo usuário (fonte da verdade). Fallback: heurística
+    // das próprias linhas do extrato (comportamento legado).
+    const billRef = billReferenceMonth
+      ? `${billReferenceMonth}-15`
+      : (billDate || maxDate);
     const [billYear, billMonth] = billRef.split("-").map(Number);
     const billStart = `${billYear}-${String(billMonth).padStart(2, "0")}-01`;
     const billEndDate = new Date(billYear, billMonth, 0);
@@ -850,7 +875,7 @@ export function ImportStatementModal({
       setSystemBill({ total: 0, count: 0, loading: false });
       setOrphans([]);
     });
-  }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard, creditCards, isPersonal, selectedCompanyId]);
+  }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard, creditCards, isPersonal, selectedCompanyId, billReferenceMonth]);
 
   // AUTO-RECONCILIAÇÃO POR VALOR (extrato = fonte da verdade).
   // Se um órfão do sistema (Só no sistema) tem o MESMO valor de UMA ÚNICA linha
@@ -1300,13 +1325,23 @@ export function ImportStatementModal({
         (r) => matchActions[rows.indexOf(r)] === "ignorar"
       ).length;
 
+      // Quando o usuário informou o mês da fatura, o deep-link em Análises EVA
+      // respeita o mês/ano informado (primeiro/último dia do mês).
+      let dfrom = allDates[0] || "";
+      let dto = allDates[allDates.length - 1] || "";
+      if (importType === "cartao" && billReferenceMonth) {
+        const [by, bm] = billReferenceMonth.split("-").map(Number);
+        const end = new Date(by, bm, 0);
+        dfrom = `${by}-${String(bm).padStart(2, "0")}-01`;
+        dto = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+      }
       setImportResult({
         linked: linkOk,
         created: transactions.length,
         ignored: ignoredCount,
         failed: linkFail,
-        dateFrom: allDates[0] || "",
-        dateTo: allDates[allDates.length - 1] || "",
+        dateFrom: dfrom,
+        dateTo: dto,
         status: importType === "cartao" ? "Pendente" : "Pago",
       });
       setStep("summary");
@@ -1524,6 +1559,27 @@ export function ImportStatementModal({
                   </div>
                 </div>
               )}
+
+              {importType === "cartao" && (
+                <div className="flex-1 min-w-[180px]">
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Qual o mês desta fatura? *
+                  </label>
+                  <Input
+                    type="month"
+                    value={billReferenceMonth}
+                    onChange={(e) => {
+                      billReferenceMonthTouchedRef.current = true;
+                      setBillReferenceMonth(e.target.value);
+                    }}
+                    className="w-full"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Usamos para buscar os lançamentos já registrados neste mês.
+                  </p>
+                </div>
+              )}
+
 
 
             </div>
@@ -1859,7 +1915,7 @@ export function ImportStatementModal({
         {rows.length > 0 && step === "preview" && (() => {
           const canGoReconcile =
             (importType === "debito" && !!targetBankAccount) ||
-            (importType === "cartao" && (isMultiCard || !!targetCard));
+            (importType === "cartao" && (isMultiCard || !!targetCard) && !!billReferenceMonth);
           return (
             <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-card border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between items-center" : ""}`}>
               {isPage ? (

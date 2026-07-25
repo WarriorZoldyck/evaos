@@ -934,7 +934,7 @@ export function ReconcileStep({
                           </td>
                           <td className="p-2 text-center align-top">
                             <div
-                              className="inline-flex items-center justify-end gap-2 select-none min-w-[104px]"
+                              className="inline-flex items-center justify-center gap-2 select-none"
                               title={
                                 willBeCreated
                                   ? "Ligado: esta linha será criada ao importar."
@@ -942,11 +942,11 @@ export function ReconcileStep({
                               }
                             >
                               <span
-                                className={`w-12 text-right text-[11px] font-medium whitespace-nowrap ${
-                                  willBeCreated ? "text-primary" : "text-muted-foreground"
+                                className={`text-[11px] font-medium whitespace-nowrap ${
+                                  willBeCreated ? "text-muted-foreground/50" : "text-muted-foreground"
                                 }`}
                               >
-                                {willBeCreated ? "Criar" : "Ignorar"}
+                                Ignorar
                               </span>
                               <NeuToggle
                                 checked={willBeCreated}
@@ -955,6 +955,13 @@ export function ReconcileStep({
                                 }
                                 ariaLabel={willBeCreated ? "Ignorar esta linha" : "Criar esta linha"}
                               />
+                              <span
+                                className={`text-[11px] font-medium whitespace-nowrap ${
+                                  willBeCreated ? "text-primary" : "text-muted-foreground/50"
+                                }`}
+                              >
+                                Criar
+                              </span>
                             </div>
                           </td>
 

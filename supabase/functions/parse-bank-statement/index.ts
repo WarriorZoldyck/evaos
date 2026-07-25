@@ -520,14 +520,24 @@ serve(async (req) => {
     }
 
     // Sanity check: if the AI returned a statement_total that's clearly out of scale
-    // vs. the sum of line amounts, it almost certainly misread the number.
+    // vs. the sum of line amounts, try to rescale (~100× is a dropped decimal separator);
+    // only discard when it's still implausible after the rescale attempt.
     if (statementTotal !== null) {
       const sumAmounts = transactions.reduce((acc, t) => acc + (t.amount || 0), 0);
       if (sumAmounts > 0 && statementTotal > sumAmounts * 20) {
-        console.warn(
-          `Discarding implausible statement_total=${statementTotal} (sum of amounts=${sumAmounts.toFixed(2)}, ratio=${(statementTotal / sumAmounts).toFixed(1)}x)`
-        );
-        statementTotal = null;
+        // Mirror of Signal 1: statement_total ~100× the sum of lines => dropped decimals
+        if (statementTotal >= sumAmounts * 50 && statementTotal <= sumAmounts * 200) {
+          const rescaled = Math.round(statementTotal) / 100;
+          console.warn(
+            `Rescaled statement_total /100: was=${statementTotal} now=${rescaled.toFixed(2)} (sum=${sumAmounts.toFixed(2)})`
+          );
+          statementTotal = rescaled;
+        } else {
+          console.warn(
+            `Discarding implausible statement_total=${statementTotal} (sum of amounts=${sumAmounts.toFixed(2)}, ratio=${(statementTotal / sumAmounts).toFixed(1)}x)`
+          );
+          statementTotal = null;
+        }
       }
     }
 
