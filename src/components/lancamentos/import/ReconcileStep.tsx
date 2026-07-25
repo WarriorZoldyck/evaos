@@ -1038,7 +1038,7 @@ export function ReconcileStep({
                             )}
                           </td>
                           <td className="p-2 text-center align-top">
-
+                            <div
                               className="inline-flex items-center justify-center gap-2 select-none"
                               title={
                                 willBeCreated
