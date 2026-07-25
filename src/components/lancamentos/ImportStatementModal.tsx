@@ -1325,13 +1325,23 @@ export function ImportStatementModal({
         (r) => matchActions[rows.indexOf(r)] === "ignorar"
       ).length;
 
+      // Quando o usuário informou o mês da fatura, o deep-link em Análises EVA
+      // respeita o mês/ano informado (primeiro/último dia do mês).
+      let dfrom = allDates[0] || "";
+      let dto = allDates[allDates.length - 1] || "";
+      if (importType === "cartao" && billReferenceMonth) {
+        const [by, bm] = billReferenceMonth.split("-").map(Number);
+        const end = new Date(by, bm, 0);
+        dfrom = `${by}-${String(bm).padStart(2, "0")}-01`;
+        dto = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+      }
       setImportResult({
         linked: linkOk,
         created: transactions.length,
         ignored: ignoredCount,
         failed: linkFail,
-        dateFrom: allDates[0] || "",
-        dateTo: allDates[allDates.length - 1] || "",
+        dateFrom: dfrom,
+        dateTo: dto,
         status: importType === "cartao" ? "Pendente" : "Pago",
       });
       setStep("summary");
