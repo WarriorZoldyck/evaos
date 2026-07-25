@@ -225,9 +225,16 @@ export function ReconcileStep({
   const newRows = indexed.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
     const a = matchActions[i] || "criar";
+    if (a === "ignorar") {
+      return !matches[i]?.best || dismissedSuggestions.has(i);
+    }
     return a === "criar" || (a === "vincular" && !matches[i]?.best);
   });
-  const ignoredRows = indexed.filter(({ i }) => matchActions[i] === "ignorar");
+  const newRowIdxSet = new Set(newRows.map(({ i }) => i));
+  const ignoredRows = indexed.filter(({ i }) => {
+    if (newRowIdxSet.has(i)) return false;
+    return matchActions[i] === "ignorar";
+  });
 
   // Sistema × Extrato totals (fatura-level, independent of matcher tier)
   // Statement total = net bill value. On a card statement, refunds (receitas)
@@ -796,11 +803,6 @@ export function ReconcileStep({
               const total = newRows.length;
               const matched = newRows.filter(({ i }) => suggestions[i]?.source === "history").length;
               const unmatched = total - matched;
-              const willCreate = newRows.filter(({ i }) => (matchActions[i] || "criar") !== "ignorar").length;
-              const willIgnore = total - willCreate;
-              const setAll = (action: "criar" | "ignorar") => {
-                newRows.forEach(({ i }) => onActionChange(i, action));
-              };
               return (
                 <>
                   <header className="flex items-center justify-between mb-2 gap-2 flex-wrap">
@@ -816,14 +818,6 @@ export function ReconcileStep({
                     </h3>
                     {total > 0 && (
                       <div className="flex items-center gap-1.5 text-[10px] flex-wrap">
-                        <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 bg-emerald-500/10">
-                          <Check className="h-2.5 w-2.5" />
-                          {willCreate} serão criadas
-                        </Badge>
-                        <Badge variant="outline" className="gap-1 text-muted-foreground bg-muted/40">
-                          <X className="h-2.5 w-2.5" />
-                          {willIgnore} ignoradas
-                        </Badge>
                         <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 bg-emerald-500/5">
                           <ShieldCheck className="h-2.5 w-2.5" />
                           {matched}/{total} do histórico
@@ -833,37 +827,9 @@ export function ReconcileStep({
                             {unmatched} sem histórico
                           </Badge>
                         )}
-                        <span className="mx-1 h-3 w-px bg-border" aria-hidden />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-[10px] px-2"
-                          onClick={() => setAll("criar")}
-                          disabled={willIgnore === 0}
-                        >
-                          Marcar todas para criar
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 text-[10px] px-2"
-                          onClick={() => setAll("ignorar")}
-                          disabled={willCreate === 0}
-                        >
-                          Ignorar todas
-                        </Button>
                       </div>
                     )}
                   </header>
-
-                  <Alert className="mb-2 py-2 px-3 bg-sky-500/5 border-sky-500/30">
-                    <Info className="h-3.5 w-3.5 text-sky-600" />
-                    <AlertDescription className="text-[11px] leading-snug ml-1">
-                      Cada linha marcada como <strong>"Criar ao importar"</strong> vira um novo lançamento quando você clicar em <strong>"Importar N lançamentos"</strong> no rodapé. Desligue o switch da coluna Ação para pular a linha.
-                    </AlertDescription>
-                  </Alert>
                 </>
               );
             })()}
@@ -906,21 +872,16 @@ export function ReconcileStep({
                           key={i}
                           className={`border-b last:border-0 hover:bg-accent/30 transition-opacity ${
                             isReplacing ? "bg-sky-500/5" : ""
-                          } ${!willBeCreated ? "opacity-60" : ""}`}
+                          }`}
                         >
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
                             <p className="break-words leading-snug" title={r.description}>{r.description}</p>
                             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                              {willBeCreated ? (
-                                <Badge className="text-[9px] gap-0.5 bg-emerald-600 hover:bg-emerald-600 text-white border-0">
-                                  <Check className="h-2.5 w-2.5" />
-                                  Será criado ao importar
-                                </Badge>
-                              ) : (
+                              {!willBeCreated && (
                                 <Badge variant="outline" className="text-[9px] gap-0.5 text-muted-foreground bg-muted/40">
                                   <X className="h-2.5 w-2.5" />
-                                  Não será importado
+                                  Ignorado
                                 </Badge>
                               )}
                               <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[9px]">
