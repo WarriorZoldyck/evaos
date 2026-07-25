@@ -1855,14 +1855,24 @@ export function ImportStatementModal({
           </div>
         )}
 
-        {/* FOOTER — step-aware */}
+        {/* FOOTER — step-aware. On page mode, everything (Voltar, Cancelar, Total, Importar) lives here in a single sticky bottom bar. */}
         {rows.length > 0 && step === "preview" && (() => {
           const canGoReconcile =
             (importType === "debito" && !!targetBankAccount) ||
             (importType === "cartao" && (isMultiCard || !!targetCard));
           return (
-            <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-end" : ""}`}>
-              {!isPage && (
+            <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-card border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between items-center" : ""}`}>
+              {isPage ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClose}
+                  className="gap-1.5 text-muted-foreground hover:text-destructive"
+                >
+                  Cancelar importação
+                  <span aria-hidden>✕</span>
+                </Button>
+              ) : (
                 <Button variant="outline" onClick={handleClose}>
                   Cancelar
                 </Button>
@@ -1908,7 +1918,6 @@ export function ImportStatementModal({
             v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
           // Validate vs. statement total reported by the bank.
-          // For credit cards the bill is a positive amount; compare against absolute import total.
           const userStatementTotal = (() => {
             const cleaned = statementTotalInput.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
             const n = Number(cleaned);
@@ -1918,10 +1927,66 @@ export function ImportStatementModal({
           const diff = userStatementTotal !== null ? +(importedAbs - userStatementTotal).toFixed(2) : null;
           const hasDivergence = diff !== null && Math.abs(diff) > 1.00;
           const blockedByDivergence = hasDivergence && !acknowledgeDivergence;
+          const detectedMatches = statementTotal !== null && userStatementTotal !== null &&
+            Math.abs(userStatementTotal - statementTotal) < 0.01;
 
           return (
-            <DialogFooter className={`gap-2 sm:justify-end flex-col-reverse sm:flex-row items-stretch ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
-              <div className="flex flex-col items-stretch sm:items-end gap-2 min-w-[320px]">
+            <DialogFooter className={`gap-3 ${isPage ? "sticky bottom-0 z-30 bg-card border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between items-center flex-wrap" : "sm:justify-end flex-col-reverse sm:flex-row items-stretch"}`}>
+              {isPage && (
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStep("preview")}
+                    className="gap-1.5"
+                  >
+                    <ArrowLeft className="h-4 w-4" /> Voltar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClose}
+                    className="gap-1.5 text-muted-foreground hover:text-destructive"
+                  >
+                    Cancelar importação
+                    <span aria-hidden>✕</span>
+                  </Button>
+                </div>
+              )}
+
+              {isPage && (
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">
+                    Total informado pelo banco (R$):
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Ex.: 8.850,02"
+                    value={statementTotalInput}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^\d.,]/g, "");
+                      setStatementTotalInput(v);
+                      setAcknowledgeDivergence(false);
+                    }}
+                    onBlur={() => {
+                      const cleaned = statementTotalInput.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "");
+                      const n = Number(cleaned);
+                      if (Number.isFinite(n) && n > 0) {
+                        setStatementTotalInput(
+                          n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        );
+                      }
+                    }}
+                    className="h-8 w-36 rounded-md border bg-background px-2 text-right text-sm font-mono"
+                  />
+                  {detectedMatches && (
+                    <span className="text-[10px] text-emerald-600 whitespace-nowrap">(detectado)</span>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-col items-stretch sm:items-end gap-1.5 min-w-[280px]">
                 <span className="text-xs text-muted-foreground text-right">
                   <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
                 </span>
@@ -1986,13 +2051,25 @@ export function ImportStatementModal({
         })()}
 
         {step === "summary" && importResult && (
-          <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
-            <Button variant="outline" onClick={handleClose}>Fechar</Button>
-            {importResult.created > 0 && (
-              <Button onClick={handleViewNew} className="gap-2">
-                Ver novos para categorizar <ArrowRight className="h-4 w-4" />
+          <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-card border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between items-center" : ""}`}>
+            {isPage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("reconcile")}
+                className="gap-1.5"
+              >
+                <ArrowLeft className="h-4 w-4" /> Voltar
               </Button>
             )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleClose}>Fechar</Button>
+              {importResult.created > 0 && (
+                <Button onClick={handleViewNew} className="gap-2">
+                  Ver novos para categorizar <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         )}
 
