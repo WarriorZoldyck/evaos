@@ -1,38 +1,32 @@
-## Objetivo
-Voltar 100% ao feedback simples e antigo no WhatsApp quando o usuário cria um lançamento pela IA: só a mensagem de confirmação enxuta + "Acesse Análises EVA no app para aprovar". Sem imagem, sem link "Abrir no app" e sem menu Aprovar/Cancelar/Editar.
+## Diagnóstico confirmado
 
-## O que remover em `supabase/functions/whatsapp-webhook/index.ts`
+- O `whatsapp-webhook` está falhando para iniciar na versão mais recente por erro de código: `Identifier 'boletoMatch' has already been declared`.
+- A chamada anterior que ainda respondeu com sucesso levou **43,8 segundos**, principalmente no fluxo com mídia/imagem e IA antes de enviar o feedback ao WhatsApp.
+- Também há resíduo de lógica antiga de lista/botões (`sendEvolutionList`) que precisa ficar neutra para não reabrir o problema anterior.
 
-1. **Rodapé de sugestão de baixa na mensagem principal** (linha 4174)
-   - Tirar `${boletoSuggestionTail || ""}` do template do `respond({ message: ... })` do intent `lancamento`.
-   - Resultado: mensagem final volta a ser exatamente o formato antigo:
-     ```
-     📋 Lançamento enviado para aprovação no app!
-     📝 <descrição>
-     💰 <valor>
-     📁 <tipo> / <categoria>
-     🏢 <contexto>
-     📅 Competência: … | Pagamento: …
-     🏦 <conta/cartão>
-     ⚠️ Acesse "Análises EVA" no app para aprovar.
-     ```
+## Plano de correção
 
-2. **Dispatch assíncrono do card PNG + sendList/sendButtons** (linhas ~4056–4152)
-   - Remover completamente o bloco `if (boletoMatch && pendingId && phone) { … }` que:
-     - cria `whatsapp_pending_actions` com `action_type: "confirm_boleto_match"`
-     - constrói `deepLink` / `editLink`
-     - monta `boletoSuggestionTail`
-     - renderiza PNG do boleto e chama `sendEvolutionImage`
-     - envia `sendEvolutionList` / `sendEvolutionButtons` com os botões Aprovar/Não/Editar
-     - agenda tudo com `EdgeRuntime.waitUntil`
-   - Também remover as variáveis `boletoSuggestionMessage` e `boletoSuggestionTail` (deixam de ser usadas).
+1. **Corrigir o boot failure imediatamente**
+   - Remover a declaração duplicada de `boletoMatch` no `whatsapp-webhook`.
+   - Garantir que a função volte a subir sem erro 503.
 
-3. **Preservar (não mexer)**
-   - `boletoSuggestionBlock` continua sendo concatenado em `notes` do `ai_pending_transactions.insert` — isso é interno, ajuda a EVA a mostrar match em Análises EVA e não vaza pro WhatsApp.
-   - `boletoMatch` em si continua sendo detectado (não removemos a lógica de detecção nas linhas ~3970–4009), só não gera mais efeito colateral no WhatsApp.
-   - Handler `confirm_boleto_match` já existente (respostas 1/2/3 do usuário) fica; se não houver mais `whatsapp_pending_actions` criado, ele simplesmente não é acionado.
+2. **Reduzir o tempo de resposta percebido no WhatsApp**
+   - Manter o feedback simples e antigo para o usuário.
+   - Enviar a resposta do webhook o mais cedo possível quando o lançamento for criado/enviado para Análises EVA.
+   - Evitar que tarefas secundárias segurem a resposta HTTP principal.
 
-## Fora de escopo
-- Não alterar fluxos de parcelas (linha 1697) nem de criação de categoria (linha 1902) — ambos já estão no formato antigo enxuto.
-- Não alterar Análises EVA no app.
-- Não mexer em `whatsapp-boleto-card.ts` (fica sem uso; podemos limpar depois se quiser).
+3. **Remover/neutralizar sobras do modelo novo**
+   - Conferir e limpar referências que possam acionar lista, imagem, link, aprovar, editar ou cancelar.
+   - Manter ações antigas de `whatsapp_pending_actions` como ignoradas/expiradas, sem responder menu ao usuário.
+
+4. **Instrumentar tempos nos logs**
+   - Adicionar logs objetivos de duração por etapa crítica: identificação do usuário, mídia, IA, criação do lançamento e envio Evolution.
+   - Isso permite saber se a demora vem da Evolution, da IA multimodal, do upload de mídia ou do banco.
+
+5. **Deploy e validação**
+   - Deploy do `whatsapp-webhook`.
+   - Verificar logs recentes para confirmar: sem boot error, sem `sendEvolutionList`, status 200 e tempo menor no webhook.
+
+## Resultado esperado
+
+O WhatsApp volta a receber apenas a mensagem simples antiga, sem botões/link/imagem, e a função deixa de falhar com 503. Também teremos logs melhores para atacar qualquer demora externa restante com precisão.
