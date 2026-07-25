@@ -1,36 +1,62 @@
-## Objetivo
+## Princípio (fica explícito no código e na UX)
 
-1. Remover o prefixo `⚠️ [CORREÇÃO EVA — CONFERIR]` dos títulos das transações — o usuário simoespaula já conferiu tudo (153 lançamentos afetados, exclusivo desse user).
-2. Consolidar o aprendizado global: para cada usuário, aplicar as categorias já definidas manualmente nos lançamentos ainda sem categoria com o mesmo estabelecimento normalizado.
+**O extrato é a fonte da verdade.** Ele vem direto do banco/cartão do usuário, então:
 
-## Passo 1 — Limpar títulos (SQL)
+- Se um valor está no extrato, ele **aconteceu** — o sistema não pode dizer "não aparece no extrato" quando aparece.
+- Divergências de **data** (lançamento manual usou vencimento, extrato traz a compra) ou de **descrição** (nome do estabelecimento diferente do rótulo manual) **não invalidam o par** — o valor e o cartão são suficientes para reconciliar dentro do ciclo da fatura.
+- Órfão real ("Só no sistema") = valor que **não existe em lugar nenhum** do extrato daquele ciclo. Só esses ficam para o usuário decidir excluir.
 
-```sql
-UPDATE public.transactions
-SET description = trim(regexp_replace(description, '^⚠️\s*\[CORREÇÃO EVA — CONFERIR\]\s*', ''))
-WHERE description LIKE '⚠️ [CORREÇÃO EVA — CONFERIR]%';
-```
+## Problema
 
-Mesma limpeza em `ai_pending_transactions` (caso existam pendências com o mesmo prefixo).
+Na tela "Conciliar & Categorizar" (cartão), a seção **"Só no sistema"** lista lançamentos com o texto "não aparecem no extrato" — mas ao lado o próprio painel mostra "Mesmo valor no extrato". Isso contraria o princípio acima e obriga o usuário a resolver manualmente.
 
-## Passo 2 — Backfill global de categorias
+## Causa
 
-Para cada usuário, montar um dicionário `estabelecimento_normalizado → category_id` a partir das transações do próprio usuário (últimos 24 meses) já categorizadas, priorizando a categoria mais profunda/mais frequente. Aplicar em transações do mesmo usuário sem `category_id`.
+3 baldes independentes no `ImportStatementModal`:
+1. `matches` (via `useImportMatching`) — casa por valor + data + descrição numa janela.
+2. `onlyStatementRows` — linhas do extrato sem `matches[i].best`.
+3. `orphans` — transações do sistema no ciclo que ninguém reivindicou.
 
-Regras de segurança:
-- Estritamente escopado por `user_id` (nunca cruza usuários).
-- Só preenche onde `category_id IS NULL`.
-- Normalização igual à do `useCategorySuggestions` (uppercase, remove parcelas `01/03`, prefixos de adquirentes, stopwords).
-- Um único statement SQL com CTE + `UPDATE ... FROM`.
+Quando data/descrição divergem além da janela, `pickBestMatch` devolve `null` e a mesma compra aparece 2x: "criar" no extrato + "órfã" no sistema.
 
-## Passo 3 — Verificação
+## Solução (frontend apenas)
 
-- Contagem de linhas afetadas por passo.
-- Amostra de 10 títulos do simoespaula antes/depois.
-- Total de transações sem categoria por usuário antes/depois.
+Adicionar um **passe de reconciliação por valor pós-matching** no modal, tratando o extrato como fonte da verdade:
+
+### 1. `src/components/lancamentos/ImportStatementModal.tsx`
+
+Novo `useEffect` que roda quando `orphans`, `rows` e `matches` estabilizam, guardado por `ref` para não sobrescrever ações já tocadas pelo usuário:
+
+- Monta dois mapas: `orphansPorValor` (chave = valor absoluto em centavos) e `linhasSemMatchPorValor` (idem, apenas linhas com `matches[i].best == null` e ação "criar" não tocada).
+- Para cada valor que existe **exatamente 1 vez** dos dois lados:
+  - Promove o par a match sugerido:  
+    `matches[i] = { best: { candidate: orphan, suggested: true, tier: "exact", dayDiff, similarity: 0, amountDiff: 0, contactMatched: false, score: 0 }, alternatives: [] }`
+  - Define ação `"vincular"` com `target_id = orphan.id`.
+  - Remove o `orphan` da lista exibida.
+- Se o valor bate em >1 linha ou >1 órfão (ambíguo), **não** auto-vincula — mantém aviso amarelo e botão "É o mesmo" para o usuário escolher qual é qual.
+
+### 2. `src/components/lancamentos/import/ReconcileStep.tsx`
+
+Reescrever cabeçalho e copy da seção "Só no sistema" para refletir o princípio:
+
+- Título/alerta passa a explicar: "Estes valores **não existem no extrato** deste ciclo. Como o extrato é a fonte da verdade, provavelmente são duplicatas, ghosts ou pertencem a outro cartão/fatura — revise e exclua."
+- Mantém o bloco "Mesmo valor no extrato" apenas para os casos **ambíguos** que sobraram (>1 candidato do mesmo valor), com botão "É o mesmo" para o usuário desempatar.
+- Ícone/tom passa de "erro do sistema" para "revisão do usuário" (mantém o `destructive`, mas ajusta o texto).
+
+### 3. Selo na seção "Igual — pode conciliar"
+
+Pares promovidos pelo passe automático entram como `suggested: true` (o `ScoredCandidate` já suporta). O `ReconcileStep` já renderiza selo diferente para `suggested` — apenas conferir a label ("sugerido pelo valor — confirme") e nada mais.
+
+## Não escopo
+
+- Não altera `matching.ts` nem `useImportMatching` — o comportamento para débito/carteira e os testes existentes ficam iguais.
+- Não altera edge functions, schema ou fluxo do WhatsApp / Análises EVA.
+- Não muda a janela de data do matching principal — evitamos regressão em outros bancos.
 
 ## Detalhes técnicos
 
-- Executado via migration única (idempotente — o `LIKE` do passo 1 não bate após rodar; o passo 2 só age em `category_id IS NULL`).
-- Nenhuma alteração de schema, RLS ou código frontend.
-- Não altera `bank_account_id`, `credit_card_id`, valor ou data — apenas `description` (passo 1) e `category_id` (passo 2).
+- Arquivos: `src/components/lancamentos/ImportStatementModal.tsx`, `src/components/lancamentos/import/ReconcileStep.tsx`.
+- Tolerância de valor: `AMOUNT_TOLERANCE = 0,05` (mesma já usada).
+- Chave de agrupamento: `Math.round(Math.abs(amount) * 100)`.
+- Guard: `Set<string>` de ids de órfãos já promovidos + flag "user touched" por linha para não desfazer edições manuais.
+- Feito 100% no cliente, sem chamada extra ao banco.
