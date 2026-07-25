@@ -25,7 +25,7 @@ import { TransactionDetailModal } from "@/components/lancamentos/TransactionDeta
 import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
-import { ImportStatementModal } from "@/components/lancamentos/ImportStatementModal";
+
 import { ExportTransactionsButton } from "@/components/lancamentos/ExportTransactionsButton";
 
 type TabValue = "todos" | "realizado" | "projetado";
