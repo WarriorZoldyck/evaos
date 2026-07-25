@@ -1,48 +1,37 @@
+## Ajustes na tela de Importar Extrato
 
-## Contexto
+### 1. Remover a barra sticky no topo, voltar tudo para o rodapé
+Na etapa **Conciliar & Categorizar**, o rodapé volta a ser o único lugar com os controles principais, alinhados numa mesma linha:
 
-O undo já reverteu os badges por linha, contadores e switch shadcn na seção "Só no extrato". A lógica atual (marcar `criar` vs `ignorar`, commit em lote no botão do rodapé) fica mantida — só ajustamos apresentação.
-
-## Mudanças
-
-### 1. Cabeçalho único na mesma altura — `ImportStatementModal.tsx` (variant `page`)
-
-Hoje o topo tem duas linhas: uma com "Voltar" + título "Importar Extrato" + ícone banco/data, outra com "Cancelar importação". E o total do extrato aparece só dentro do card na etapa de conciliação.
-
-Passa a ser **uma única barra sticky** com três zonas:
-
-```text
-[← Voltar]   [Banco • Data • Total informado R$ X.XXX,XX]   [Cancelar importação ✕]
+```
+[← Voltar]   [Total informado pelo banco: R$ ____]   [resumo N conciliar · N criar · N ignorar]   [Cancelar importação] [Importar N]
 ```
 
-- Esquerda: botão `← Voltar` (etapa anterior / fecha se for a primeira).
-- Centro: metadados do extrato (banco/cartão, período, total informado pelo banco — mesmo dado que hoje aparece dentro do card "Extrato original", trazido pro header).
-- Direita: `Cancelar importação` (mantém comportamento atual, fecha a rota).
-- Sticky com `bg-background` sólido + border-bottom; z-index acima do conteúdo. Some o "header duplicado" que existia na etapa reconcile.
+Mudanças em `src/components/lancamentos/ImportStatementModal.tsx`:
+- Remover o bloco "Sticky top bar" (linhas ~2056–2127) da branch `isPage`. O topo da página fica limpo, como era antes.
+- Reformar o `DialogFooter` da etapa `reconcile` para ser um `flex` de 3 zonas (esquerda / centro / direita) e continuar `sticky bottom-0` com fundo opaco.
+  - Esquerda: `Voltar` (aparece nas etapas reconcile e summary), `Cancelar importação` como link discreto ao lado.
+  - Centro: input "Total informado pelo banco (R$)" + indicador `(detectado)` + mensagens de divergência/checkbox de acknowledge (só na etapa reconcile).
+  - Direita: contadores (`N conciliar · N criar · N ignorar`), total após import e o botão `Importar N (…)`.
+- Na etapa `preview`, manter só `Cancelar importação` + `Próximo` no rodapé sticky.
+- Na etapa `summary`, manter `Voltar` + `Fechar` + `Ver novos para categorizar` no rodapé sticky.
 
-### 2. Toggle neumórfico Uiverse — nova primitiva `src/components/ui/neu-toggle.tsx`
+Nada é movido para o topo da página — o `AppLayout` já mantém seu cabeçalho global fixo, e o rodapé passa a concentrar o que estava indevidamente no topo.
 
-- Componente controlado: `<NeuToggle checked onCheckedChange aria-label />`.
-- HTML/CSS exatos do snippet fornecido (label > toggle > input + indicator), estilo neumórfico com estado ligado em gradiente azul.
-- CSS colocalizado no arquivo via `<style>` scoped por classe única (`neu-toggle`) pra não vazar globalmente e não depender de `index.css`.
-- Sem hardcode de cores no consumidor — o componente encapsula.
+### 2. Corrigir o NeuToggle para realmente ativar/desativar
 
-### 3. Uso do NeuToggle em "Só no extrato" — `ReconcileStep.tsx`
+O componente atual usa `<input type="checkbox" style="display:none">` dentro do label, mas isso não está refletindo o estado visual (fica sempre no formato "desligado" ou "muda de forma sem virar azul"). Vou reescrever `src/components/ui/neu-toggle.tsx` seguindo fielmente o HTML/CSS que você enviou:
 
-- Substituir o par de botões `Criar no sistema` / `Manter só do extrato` pelo `NeuToggle` na coluna Ação.
-- Ligado = `criar` (padrão), desligado = `ignorar`.
-- Ao lado do toggle, um label curto reflete o estado: **"Criar"** (ligado) / **"Ignorar"** (desligado), pra não depender só da cor.
-- Tooltip mantém a explicação "A criação acontece ao clicar em Importar no rodapé".
-- Sem badges por linha, sem contadores no cabeçalho da seção, sem bulk actions, sem dimming — nada do que foi revertido volta.
+- Estrutura `label > input.toggle + div.indicator` (input e indicator irmãos diretos, na mesma ordem do exemplo).
+- Trocar `display: none` do input por `opacity: 0; position: absolute; inset: 0` para garantir que o seletor `~` e o clique via label funcionem em todos os browsers, sem sumir o input do fluxo.
+- Usar `data-state="on" | "off"` no label como fallback e aplicar o estilo "ligado" tanto por `:checked ~ .indicator` quanto por `[data-state="on"] .indicator` — assim o estado visual acompanha React mesmo se o CSS injetado inline sofrer purga.
+- Manter as cores/sombras do exemplo (fundo `#ecf0f3`, gradiente azul `#4da3ff → #007bff` quando ligado).
+- Preservar a API atual (`checked`, `onCheckedChange`, `ariaLabel`, `disabled`) — nenhuma mudança necessária no `ReconcileStep.tsx`.
 
-### 4. O que NÃO muda
+### Escopo
 
-- Botão `Importar N lançamentos` do rodapé permanece como está (label atual, sem breakdown extra).
-- Lógica de matching, ordem, categorias, seções "Igual" e "Só no sistema" — intocadas.
-- Rodapé sticky já existente permanece.
+Apenas os dois arquivos:
+- `src/components/lancamentos/ImportStatementModal.tsx` (rodapé sticky reorganizado, sticky top removido)
+- `src/components/ui/neu-toggle.tsx` (reescrita para funcionar)
 
-## Resultado
-
-- Topo com uma linha só, voltar + info do extrato + cancelar, tudo alinhado verticalmente.
-- Toggle bonito neumórfico substitui o switch/botões atuais na coluna Ação.
-- Comportamento de commit em lote preservado (sem o bug de "aparecer tudo repetido").
+Sem mudanças de lógica de negócio, conciliação, IA ou banco.

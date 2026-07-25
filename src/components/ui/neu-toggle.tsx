@@ -10,6 +10,11 @@ interface NeuToggleProps {
 /**
  * Neumorphic toggle inspired by Uiverse (mobinkakei).
  * Self-contained styles so it does not depend on global CSS.
+ *
+ * We drive the visual state from a `data-state` attribute (instead of relying
+ * only on the `:checked` sibling selector) so React always keeps the DOM in
+ * sync with the `checked` prop, even in controlled scenarios where the input
+ * is visually hidden.
  */
 export function NeuToggle({
   checked,
@@ -38,18 +43,32 @@ export function NeuToggle({
           display: inline-block;
         }
         .neu-toggle[data-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
-        .neu-toggle-input { display: none; }
+        .neu-toggle-input {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          margin: 0;
+          cursor: inherit;
+          z-index: 2;
+        }
         .neu-toggle-indicator {
+          position: absolute;
+          top: 0;
+          left: 0;
           height: 100%;
           width: 200%;
           border-radius: 13px;
           background: #ecf0f3;
           transform: translate3d(-75%, 0, 0);
-          transition: all 0.4s cubic-bezier(0.85, 0.05, 0.18, 1.35);
+          transition: transform 0.4s cubic-bezier(0.85, 0.05, 0.18, 1.35),
+                      background 0.3s ease,
+                      box-shadow 0.3s ease;
           box-shadow:
             -6px -3px 6px rgba(255,255,255,0.9),
             6px 3px 10px rgba(209,217,230,0.9);
+          z-index: 1;
         }
+        .neu-toggle[data-state="on"] .neu-toggle-indicator,
         .neu-toggle-input:checked ~ .neu-toggle-indicator {
           transform: translate3d(25%, 0, 0);
           background: linear-gradient(145deg, #4da3ff, #007bff);
@@ -62,6 +81,7 @@ export function NeuToggle({
       <label
         htmlFor={id}
         className="neu-toggle"
+        data-state={checked ? "on" : "off"}
         data-disabled={disabled ? "true" : "false"}
         aria-label={ariaLabel}
       >
@@ -69,11 +89,13 @@ export function NeuToggle({
           id={id}
           className="neu-toggle-input"
           type="checkbox"
+          role="switch"
+          aria-checked={checked}
           checked={checked}
           disabled={disabled}
           onChange={(e) => onCheckedChange(e.target.checked)}
         />
-        <div className="neu-toggle-indicator" />
+        <span className="neu-toggle-indicator" />
       </label>
     </>
   );
