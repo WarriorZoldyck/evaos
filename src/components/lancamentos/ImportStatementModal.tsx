@@ -869,7 +869,7 @@ export function ImportStatementModal({
       if (!r.selected) return;
       if (matches[i]?.best) return;
       if (extraMatches[i]) return;
-      const action = matchActions[i] || "criar";
+      const action = matchActions[i] || "ignorar";
       if (action !== "criar") return;
       const cents = Math.round(Math.abs(r.amount) * 100);
       const arr = unmatchedByCents.get(cents) || [];
