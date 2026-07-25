@@ -1978,6 +1978,12 @@ export function ImportStatementModal({
                   return next;
                 });
               }}
+              suppliers={suppliersList}
+              clients={clientsList}
+              rowDescriptions={rowDescriptions}
+              rowContacts={rowContacts}
+              reviewedRows={reviewedRows}
+              onOpenReview={(idx) => setReviewIdx(idx)}
             />
 
 
