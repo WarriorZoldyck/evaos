@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
-import { calculateCreditCardBillTotal, filterCreditCardBillScope, type CandidateTx } from "@/lib/import/matching";
+import { calculateCreditCardBillTotal, filterCreditCardBillScope, descriptionSimilarity, AUTO_LINK_MIN_SIMILARITY, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { ReconcileStep } from "./import/ReconcileStep";
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
@@ -894,51 +894,78 @@ export function ImportStatementModal({
 
     orphansByCents.forEach((orphList, cents) => {
       const lineIdxs = unmatchedByCents.get(cents) || [];
-      if (orphList.length !== 1 || lineIdxs.length !== 1) return; // só 1↔1
-      const orph = orphList[0];
-      const idx = lineIdxs[0];
-      const line = rows[idx];
-      const dayDiff = Math.abs(
-        Math.round(
-          (new Date(line.date + "T00:00:00").getTime() -
-            new Date((orph.competence_date || orph.payment_date) + "T00:00:00").getTime()) /
-            86400000
-        )
-      );
-      const candidate: CandidateTx = {
-        id: orph.id,
-        description: orph.description || "",
-        amount: Math.abs(orph.amount),
-        payment_date: orph.payment_date,
-        competence_date: orph.competence_date,
-        purchase_date_original: null,
-        type: (line.type as "receita" | "despesa") || "despesa",
-        status: orph.status,
-        category: (orph.category as string | null) ?? null,
-        subcategory: (orph.subcategory as string | null) ?? null,
-        subcategory2: (orph.subcategory2 as string | null) ?? null,
-        contact_name: null,
-        series_id: null,
-        installment_number: null,
-        installments_total: null,
-      };
-      nextExtra[idx] = {
-        best: {
-          candidate,
-          score: 100,
-          dayDiff,
-          similarity: 0,
-          amountDiff: 0,
-          tier: "exact",
-          contactMatched: false,
-          suggested: true,
-        },
-        alternatives: [],
-      };
-      nextActions[idx] = "vincular";
-      nextTargets[idx] = orph.id;
-      promotedIds.push(orph.id);
+      if (lineIdxs.length === 0 || orphList.length === 0) return;
+
+      const isSingleton = orphList.length === 1 && lineIdxs.length === 1;
+
+      // Build all (line, orphan) pairs of same value with description similarity.
+      const pairs: { idx: number; orph: typeof orphList[number]; sim: number }[] = [];
+      for (const idx of lineIdxs) {
+        const line = rows[idx];
+        for (const orph of orphList) {
+          const sim = descriptionSimilarity(line.description || "", orph.description || "");
+          pairs.push({ idx, orph, sim });
+        }
+      }
+      // Greedy: prefer strongest description overlap first.
+      pairs.sort((a, b) => b.sim - a.sim);
+
+      const usedIdx = new Set<number>();
+      const usedOrph = new Set<string>();
+
+      for (const p of pairs) {
+        if (usedIdx.has(p.idx) || usedOrph.has(p.orph.id)) continue;
+        // 1↔1: preserva comportamento antigo (aceita mesmo sem overlap de texto).
+        // M↔N: exige similaridade mínima para não colidir por acaso.
+        if (!isSingleton && p.sim < AUTO_LINK_MIN_SIMILARITY) continue;
+
+        const line = rows[p.idx];
+        const orph = p.orph;
+        const dayDiff = Math.abs(
+          Math.round(
+            (new Date(line.date + "T00:00:00").getTime() -
+              new Date((orph.competence_date || orph.payment_date) + "T00:00:00").getTime()) /
+              86400000
+          )
+        );
+        const candidate: CandidateTx = {
+          id: orph.id,
+          description: orph.description || "",
+          amount: Math.abs(orph.amount),
+          payment_date: orph.payment_date,
+          competence_date: orph.competence_date,
+          purchase_date_original: null,
+          type: (line.type as "receita" | "despesa") || "despesa",
+          status: orph.status,
+          category: (orph.category as string | null) ?? null,
+          subcategory: (orph.subcategory as string | null) ?? null,
+          subcategory2: (orph.subcategory2 as string | null) ?? null,
+          contact_name: null,
+          series_id: null,
+          installment_number: null,
+          installments_total: null,
+        };
+        nextExtra[p.idx] = {
+          best: {
+            candidate,
+            score: 100,
+            dayDiff,
+            similarity: p.sim,
+            amountDiff: 0,
+            tier: "exact",
+            contactMatched: false,
+            suggested: true,
+          },
+          alternatives: [],
+        };
+        nextActions[p.idx] = "vincular";
+        nextTargets[p.idx] = orph.id;
+        promotedIds.push(orph.id);
+        usedIdx.add(p.idx);
+        usedOrph.add(orph.id);
+      }
     });
+
 
     if (promotedIds.length === 0) return;
 
