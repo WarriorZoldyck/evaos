@@ -730,6 +730,22 @@ export function ImportStatementModal({
     setPromotedOrphanIds(new Set());
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
 
+  // Sugere o mês/ano de referência a partir das datas de vencimento/competência
+  // predominantes. O usuário pode sobrescrever no input do passo "Conferir".
+  useEffect(() => {
+    if (importType !== "cartao" || rows.length === 0) return;
+    if (billReferenceMonthTouchedRef.current && billReferenceMonth) return;
+    const counts: Record<string, number> = {};
+    rows.forEach((r) => {
+      const d = r.statement_due_date || r.resolved_competence_date || r.date;
+      if (!d) return;
+      const key = d.slice(0, 7);
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (best && best !== billReferenceMonth) setBillReferenceMonth(best);
+  }, [importType, rows, billReferenceMonth]);
+
   // ORPHAN DETECTOR (card mode) — flag system transactions that DON'T appear in the statement.
   // The bank statement is the source of truth: any extra line in the system is a likely error.
   useEffect(() => {
