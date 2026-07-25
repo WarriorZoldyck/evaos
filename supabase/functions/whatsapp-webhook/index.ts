@@ -3998,7 +3998,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               `fornecedor: ${match.supplierName || ""}\n` +
               `score: ${match.score}`;
           }
-          }
         } catch (e) {
           console.error("Boleto reconciliation skipped due to error:", e);
         }
