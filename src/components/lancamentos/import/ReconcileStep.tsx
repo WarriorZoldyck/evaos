@@ -798,7 +798,7 @@ export function ReconcileStep({
               const total = newRows.length;
               const matched = newRows.filter(({ i }) => suggestions[i]?.source === "history").length;
               const unmatched = total - matched;
-              const willCreate = newRows.filter(({ i }) => (matchActions[i] || "criar") !== "ignorar").length;
+              const willCreate = newRows.filter(({ i }) => matchActions[i] === "criar").length;
               const willIgnore = total - willCreate;
               const setAll = (action: "criar" | "ignorar") => {
                 newRows.forEach(({ i }) => onActionChange(i, action));
@@ -863,7 +863,7 @@ export function ReconcileStep({
                   <Alert className="mb-2 py-2 px-3 bg-sky-500/5 border-sky-500/30">
                     <Info className="h-3.5 w-3.5 text-sky-600" />
                     <AlertDescription className="text-[11px] leading-snug ml-1">
-                      Cada linha marcada como <strong>"Criar ao importar"</strong> vira um novo lançamento quando você clicar em <strong>"Importar N lançamentos"</strong> no rodapé. Desligue o switch da coluna Ação para pular a linha.
+                      Por padrão, nada desta seção é importado. <strong>Ligue o switch</strong> na coluna Ação nas linhas que você quer criar como novo lançamento. Elas serão gravadas quando você clicar em <strong>"Importar N lançamentos"</strong> no rodapé.
                     </AlertDescription>
                   </Alert>
                 </>
@@ -901,8 +901,8 @@ export function ReconcileStep({
                       const isReplacing = !!(
                         replacingCandId && replaceDeleteIds?.has(replacingCandId)
                       );
-                      const rowAction = matchActions[i] || "criar";
-                      const willBeCreated = rowAction !== "ignorar";
+                      const rowAction = matchActions[i] || "ignorar";
+                      const willBeCreated = rowAction === "criar";
                       return (
                         <tr
                           key={i}
