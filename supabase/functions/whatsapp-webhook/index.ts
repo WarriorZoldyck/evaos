@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
-import { renderBoletoCardPng, type BoletoCardData } from "../_shared/whatsapp-boleto-card.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +9,17 @@ const corsHeaders = {
 };
 
 const EVA_MAINTENANCE_FALLBACK = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
+const WHATSAPP_AI_MODEL = "google/gemini-3-flash-preview";
+
+function createTimer(scope: string) {
+  const startedAt = performance.now();
+  let lastMark = startedAt;
+  return (label: string) => {
+    const now = performance.now();
+    console.log(`[timing:${scope}] ${label} +${Math.round(now - lastMark)}ms total=${Math.round(now - startedAt)}ms`);
+    lastMark = now;
+  };
+}
 
 function isMaintenanceFallbackMessage(content: string | null | undefined): boolean {
   const normalized = (content || "")
@@ -249,151 +259,6 @@ async function sendEvolutionReply(phone: string, text: string) {
     }
   } catch (err) {
     console.error("Evolution sendText exception:", err);
-  }
-}
-
-// --- App URL for deep links back into Análises EVA ---
-const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://eva.tec.br").replace(/\/$/, "");
-function buildAnalisesEvaLink(pendingId: string, edit = false, ctx?: string | null): string {
-  const q = new URLSearchParams({ pending: pendingId });
-  if (edit) q.set("edit", "1");
-  if (ctx) q.set("ctx", ctx);
-  return `${APP_BASE_URL}/analises-eva?${q.toString()}`;
-}
-
-// --- Evolution API helper: send image (base64) with caption ---
-async function sendEvolutionImage(phone: string, base64Png: Uint8Array, caption: string): Promise<boolean> {
-  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
-  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
-  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
-  if (!evoUrl || !evoKey || !evoInstance) return false;
-  try {
-    // Uint8Array -> base64 (chunked to avoid stack overflow)
-    let binary = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < base64Png.length; i += chunk) {
-      binary += String.fromCharCode(...base64Png.subarray(i, i + chunk));
-    }
-    const b64 = btoa(binary);
-
-    const url = `${evoUrl}/message/sendMedia/${encodeURIComponent(evoInstance)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "apikey": evoKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        number: phone,
-        mediatype: "image",
-        mimetype: "image/png",
-        media: b64,
-        fileName: "sugestao-baixa.png",
-        caption,
-      }),
-    });
-    if (!res.ok) {
-      const errBody = await res.text();
-      console.error("Evolution sendMedia error:", res.status, errBody);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("Evolution sendMedia exception:", err);
-    return false;
-  }
-}
-
-// --- Evolution API helper: send WhatsApp reply-buttons ---
-// buttons: [{ id, text }] — Evolution encaminha a resposta com selectedButtonId
-async function sendEvolutionButtons(
-  phone: string,
-  title: string,
-  description: string,
-  footer: string,
-  buttons: Array<{ id: string; text: string }>,
-): Promise<boolean> {
-  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
-  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
-  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
-  if (!evoUrl || !evoKey || !evoInstance) return false;
-  try {
-    const url = `${evoUrl}/message/sendButtons/${encodeURIComponent(evoInstance)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "apikey": evoKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        number: phone,
-        title,
-        description,
-        footer,
-        buttons: buttons.slice(0, 3).map((b, i) => ({
-          buttonId: b.id,
-          buttonText: { displayText: b.text },
-          type: 1,
-          // some Evolution builds expect `id` / `text` at top level too
-          id: b.id,
-          text: b.text,
-          index: i,
-        })),
-      }),
-    });
-    if (!res.ok) {
-      const errBody = await res.text();
-      console.error("Evolution sendButtons error:", res.status, errBody);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("Evolution sendButtons exception:", err);
-    return false;
-}
-}
-
-// --- Evolution API helper: send WhatsApp list message (still supported by modern WhatsApp) ---
-// rows: [{ id, title, description? }] — user pick returns as listResponseMessage.singleSelectReply.selectedRowId
-async function sendEvolutionList(
-  phone: string,
-  title: string,
-  description: string,
-  footer: string,
-  buttonText: string,
-  sectionTitle: string,
-  rows: Array<{ id: string; title: string; description?: string }>,
-): Promise<boolean> {
-  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
-  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
-  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
-  if (!evoUrl || !evoKey || !evoInstance) return false;
-  try {
-    const url = `${evoUrl}/message/sendList/${encodeURIComponent(evoInstance)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "apikey": evoKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        number: phone,
-        title,
-        description,
-        footerText: footer,
-        buttonText,
-        sections: [
-          {
-            title: sectionTitle,
-            rows: rows.map((r) => ({
-              title: r.title,
-              description: r.description || "",
-              rowId: r.id,
-            })),
-          },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      const errBody = await res.text();
-      console.error("Evolution sendList error:", res.status, errBody);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("Evolution sendList exception:", err);
-    return false;
   }
 }
 
