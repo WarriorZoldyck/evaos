@@ -306,6 +306,17 @@ export function ImportStatementModal({
   // Per-row category override (with 3-level hierarchy). Pre-filled from suggestions when available.
   // `touched: true` means the user manually edited this row — never overwrite via propagation.
   const [rowCategories, setRowCategories] = useState<Record<number, RowCategoryValue>>({});
+  // Per-row user-friendly description override (empty = use raw statement description).
+  const [rowDescriptions, setRowDescriptions] = useState<Record<number, string>>({});
+  // Per-row supplier/client selection.
+  const [rowContacts, setRowContacts] = useState<Record<number, { supplier_id?: string | null; client_id?: string | null }>>({});
+  // Rows the user has confirmed in the "Revisar novo lançamento" modal.
+  const [reviewedRows, setReviewedRows] = useState<Set<number>>(new Set());
+  // Which row idx is being reviewed right now (null = modal closed).
+  const [reviewIdx, setReviewIdx] = useState<number | null>(null);
+  // Suppliers & clients used to pre-select / render "Fornecedor: X" hints.
+  const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
+  const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
   const { suggest, suggestions, loading: suggestLoading, reset: resetSuggestions } = useCategorySuggestions();
 
   // Locally created categories from inside the reconcile step (dedup by id when merging).
