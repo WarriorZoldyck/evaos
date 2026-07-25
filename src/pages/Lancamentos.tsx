@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
 import { Plus, CreditCard, Upload, Sparkles, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
