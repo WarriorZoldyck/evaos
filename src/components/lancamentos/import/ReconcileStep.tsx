@@ -821,12 +821,14 @@ export function ReconcileStep({
             <Alert className="mb-2 py-2 px-3 bg-sky-500/5 border-sky-500/30">
               <Info className="h-3.5 w-3.5 text-sky-600" />
               <AlertDescription className="text-[11px] leading-snug ml-1">
-                Estas linhas estão no extrato mas <strong>não têm correspondente no sistema</strong>. Escolha o que fazer com cada uma:
-                <strong> lançar e categorizar</strong> (padrão) definindo categoria abaixo, ou <strong>ignorar</strong> se não deve ser importada.
+                Estas linhas estão no extrato mas <strong>não têm correspondente no sistema</strong>.
+                Por padrão, cada linha vira um <strong>novo lançamento no sistema</strong> com a categoria escolhida abaixo.
+                Use <strong>"Manter só do extrato"</strong> para pular linhas que você não quer importar.
                 Se for o mesmo lançamento já existente com data errada, use "É o mesmo" na seção <em>Só no sistema</em>.
                 Ao categorizar uma linha, lançamentos idênticos são preenchidos automaticamente.
               </AlertDescription>
             </Alert>
+
 
             {newRows.length === 0 ? (
               <p className="text-xs text-muted-foreground italic px-2 py-3 border rounded-lg bg-muted/20">
@@ -841,7 +843,7 @@ export function ReconcileStep({
                       <th className="p-2 text-left font-medium">Descrição</th>
                       <th className="p-2 text-right font-medium whitespace-nowrap">Valor</th>
                       <th className="p-2 text-left font-medium min-w-[200px]">Categoria</th>
-                      <th className="p-2 text-center font-medium w-[190px]">Ação</th>
+                      <th className="p-2 text-center font-medium w-[300px]">Ação</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -911,22 +913,54 @@ export function ReconcileStep({
                             </div>
                           </td>
                           <td className="p-2 text-center align-top">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-[11px] gap-1 text-sky-700 hover:text-sky-800 hover:bg-sky-500/10"
-                                  onClick={() => onActionChange(i, "ignorar")}
-                                >
-                                  <ShieldCheck className="h-3 w-3" /> Manter só do extrato
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="left" className="text-xs max-w-[260px]">
-                                Reconhece que essa linha existe só no extrato e <strong>não deve virar lançamento no sistema</strong>. Nada é criado, nada é excluído. Fica registrada em "Ignorados" e pode ser restaurada.
-                              </TooltipContent>
-                            </Tooltip>
+                            {(() => {
+                              const action = matchActions[i] || "criar";
+                              const isCreate = action !== "ignorar";
+                              return (
+                                <div className="inline-flex rounded-md border bg-muted/40 p-0.5 gap-0.5">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className={`h-6 text-[11px] gap-1 px-2 ${
+                                          isCreate
+                                            ? "bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white"
+                                            : "text-muted-foreground hover:bg-accent"
+                                        }`}
+                                        onClick={() => onActionChange(i, "criar")}
+                                      >
+                                        <Plus className="h-3 w-3" /> Criar no sistema
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="text-xs max-w-[260px]">
+                                      Cria um novo lançamento no sistema usando a categoria escolhida ao lado. É a ação padrão.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className={`h-6 text-[11px] gap-1 px-2 ${
+                                          !isCreate
+                                            ? "bg-sky-600 text-white hover:bg-sky-700 hover:text-white"
+                                            : "text-muted-foreground hover:bg-accent"
+                                        }`}
+                                        onClick={() => onActionChange(i, "ignorar")}
+                                      >
+                                        <ShieldCheck className="h-3 w-3" /> Manter só do extrato
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="text-xs max-w-[260px]">
+                                      Não criar este lançamento no sistema. A linha fica só no extrato importado e vai para "Ignorados" — pode ser restaurada depois.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              );
+                            })()}
                           </td>
+
                         </tr>
                       );
                     })}
