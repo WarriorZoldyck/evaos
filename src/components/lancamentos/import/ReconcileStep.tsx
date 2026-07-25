@@ -968,7 +968,6 @@ export function ReconcileStep({
                                         role="radio"
                                         aria-checked={!isCreate}
                                         data-state={!isCreate ? "active" : "inactive"}
-                                        disabled={isCommitting}
                                         className={`h-6 text-[11px] gap-1 px-2 ${
                                           !isCreate
                                             ? "bg-sky-600 text-white hover:bg-sky-600 hover:text-white cursor-default"
