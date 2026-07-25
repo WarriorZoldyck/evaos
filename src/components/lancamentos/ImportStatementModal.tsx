@@ -280,6 +280,11 @@ export function ImportStatementModal({
     { id: string; description: string; amount: number; competence_date: string; payment_date: string; status: string; category?: string | null; subcategory?: string | null; subcategory2?: string | null }[]
   >([]);
   const [orphansLoading, setOrphansLoading] = useState(false);
+  // Pares promovidos pelo passe "extrato = fonte da verdade": órfão do sistema
+  // 1↔1 com linha do extrato de mesmo valor. Sobrepõem `matches` sem alterar
+  // o hook, e o órfão promovido some da lista "Só no sistema".
+  const [extraMatches, setExtraMatches] = useState<Record<number, RowMatch>>({});
+  const [promotedOrphanIds, setPromotedOrphanIds] = useState<Set<string>>(new Set());
   const [systemBill, setSystemBill] = useState<{ total: number; count: number; loading: boolean }>({
     total: 0,
     count: 0,
