@@ -1653,7 +1653,7 @@ export function ImportStatementModal({
               walletId={walletId}
               replaceDeleteIds={replaceDeleteIds}
               onKeepStatementOnly={(idx) => {
-                const cand = matches[idx]?.best?.candidate;
+                const cand = mergedMatches[idx]?.best?.candidate;
                 if (!cand) return;
                 setReplaceDeleteIds((prev) => {
                   const next = new Set(prev);
