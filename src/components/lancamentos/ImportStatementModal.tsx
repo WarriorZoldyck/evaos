@@ -775,7 +775,11 @@ export function ImportStatementModal({
     };
     const wMin = shift(minDate, -3);
     const wMax = shift(maxDate, 3);
-    const billRef = billDate || maxDate;
+    // Prioriza o mês informado pelo usuário (fonte da verdade). Fallback: heurística
+    // das próprias linhas do extrato (comportamento legado).
+    const billRef = billReferenceMonth
+      ? `${billReferenceMonth}-15`
+      : (billDate || maxDate);
     const [billYear, billMonth] = billRef.split("-").map(Number);
     const billStart = `${billYear}-${String(billMonth).padStart(2, "0")}-01`;
     const billEndDate = new Date(billYear, billMonth, 0);
