@@ -32,6 +32,7 @@ type TabValue = "todos" | "realizado" | "projetado";
 
 export default function Lancamentos() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { companies } = useCompany();
   const { settings: fieldSettings } = useFormFieldSettings();
 
