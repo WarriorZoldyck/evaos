@@ -1,7 +1,5 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useTransactions } from "@/hooks/useTransactions";
 import { ImportStatementModal } from "@/components/lancamentos/ImportStatementModal";
@@ -47,14 +45,6 @@ export default function ImportarExtrato() {
           : "animate-slide-in-right")
       }
     >
-      <div className="sticky top-0 z-40 -mx-4 md:-mx-6 px-4 md:px-6 py-3 mb-4 flex items-center justify-between gap-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border">
-        <Button variant="ghost" size="sm" onClick={goBack} className="gap-2">
-          <X className="h-4 w-4" />
-          Cancelar importação
-        </Button>
-      </div>
-
-
       <ImportStatementModal
         variant="page"
         open

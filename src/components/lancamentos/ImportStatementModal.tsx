@@ -1100,6 +1100,148 @@ export function ImportStatementModal({
 
   const selectedRows = rows.filter((r) => r.selected);
 
+  // Per-row immediate commit state (used in the reconcile step's "Criar agora" button).
+  const [creatingRowIndices, setCreatingRowIndices] = useState<Set<number>>(new Set());
+
+  /**
+   * Build a TransactionInsert payload for a single parsed row using the same
+   * rules as the bulk import path. Kept outside handleImport so it can also be
+   * used by the per-row immediate-commit action.
+   */
+  const buildInsertForRow = (r: ParsedTransaction): TransactionInsert | null => {
+    if (!user) return null;
+    const [accType, ...idParts] = targetBankAccount.split(":");
+    const accId = idParts.join(":");
+    const parentCardId = isMultiCard
+      ? (detectedCards.find((c) => !c.parent_card_id)?.id || detectedCards[0]?.id || null)
+      : null;
+    const detectedCard = r.matched_card_id
+      ? creditCards.find((c) => c.id === r.matched_card_id)
+      : undefined;
+    const cardId = isMultiCard
+      ? (r.matched_card_id || parentCardId)
+      : (importType === "cartao" ? targetCard : null);
+    const companyIdForTransaction = importType === "cartao"
+      ? (detectedCard?.company_id ?? creditCards.find((c) => c.id === targetCard)?.company_id ?? selectedCompanyId ?? null)
+      : (selectedCompanyId || null);
+
+    let billingDate: string;
+    if (importType === "cartao") {
+      const cardForLine = cardId ? creditCards.find((c) => c.id === cardId) : undefined;
+      const parentForCycle = cardForLine?.parent_card_id
+        ? creditCards.find((c) => c.id === cardForLine.parent_card_id)
+        : cardForLine;
+      const closingDay = cardForLine?.closing_day ?? parentForCycle?.closing_day ?? null;
+      const dueDay = cardForLine?.due_day ?? parentForCycle?.due_day ?? null;
+      const purchaseISO = r.purchase_date_original || r.date;
+      if (closingDay && dueDay && purchaseISO) {
+        billingDate = getCreditCardDueDate(purchaseISO, closingDay, dueDay);
+      } else {
+        billingDate = r.statement_due_date || r.date;
+      }
+    } else {
+      billingDate = r.date;
+    }
+
+    const competenceDate = importType === "cartao"
+      ? (r.resolved_competence_date || r.statement_close_date || r.statement_due_date || r.date)
+      : r.date;
+    const purchaseDateOriginal = importType === "cartao" ? (r.purchase_date_original || r.date) : undefined;
+
+    const realIdx = rows.indexOf(r);
+    const rowCat = rowCategories[realIdx];
+    const categoryName = resolveCategoryName(rowCat?.category, mergedCategories) || "Sem Categoria";
+    const subcategoryName = resolveCategoryName(rowCat?.subcategory, mergedCategories) || null;
+    const subcategory2Name = resolveCategoryName(rowCat?.subcategory2, mergedCategories) || null;
+
+    return {
+      description: r.description,
+      amount: r.amount,
+      type: r.type,
+      payment_date: billingDate,
+      competence_date: competenceDate,
+      status: (importType === "cartao" ? "Pendente" : "Pago") as "Pendente" | "Pago",
+      category: categoryName,
+      subcategory: subcategoryName,
+      subcategory2: subcategory2Name,
+      user_id: effectiveUserId,
+      company_id: companyIdForTransaction,
+      bank_account_id: accType === "bank" ? accId : null,
+      wallet_id: accType === "wallet" ? accId : null,
+      credit_card_id: cardId,
+      external_id: `import_${cardId || 'nocrd'}_${billingDate}_${r.date}_${r.amount}_${r.description.replace(/\s+/g, ' ').trim().slice(0, 50)}_${crypto.randomUUID()}`,
+      series_id: r.series_id || null,
+      installment_number: r.installment_number || null,
+      installments_total: r.installments_total || null,
+      original_amount: r.original_amount || null,
+      purchase_date_original: purchaseDateOriginal || null,
+    };
+  };
+
+  /** Immediate per-row commit — used by ReconcileStep's "Criar agora" button. */
+  const handleCreateOne = async (idx: number): Promise<boolean> => {
+    const r = rows[idx];
+    if (!r) return false;
+    if (!targetBankAccount || !importType || (importType === "cartao" && !isMultiCard && !targetCard)) {
+      toast({ title: "Selecione a conta e o tipo antes de criar", variant: "destructive" });
+      return false;
+    }
+    const payload = buildInsertForRow(r);
+    if (!payload) return false;
+
+    setCreatingRowIndices((prev) => {
+      const next = new Set(prev);
+      next.add(idx);
+      return next;
+    });
+    try {
+      const { data, error } = await supabase
+        .from("transactions")
+        .insert(payload as any)
+        .select("id")
+        .single();
+      if (error || !data) {
+        toast({ title: "Erro ao criar", description: error?.message, variant: "destructive" });
+        return false;
+      }
+      window.dispatchEvent(new Event("transaction-created"));
+      // Remove the row from the reconcile list (deselect so it stops appearing).
+      setRows((prev) => prev.map((row, i) => (i === idx ? { ...row, selected: false } : row)));
+
+      const createdId = data.id as string;
+      toast({
+        title: "Lançamento criado",
+        description: `${r.description} — ${formatCurrency(r.amount)}`,
+        action: (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              const { error: delErr } = await supabase.from("transactions").delete().eq("id", createdId);
+              if (delErr) {
+                toast({ title: "Erro ao desfazer", description: delErr.message, variant: "destructive" });
+                return;
+              }
+              setRows((prev) => prev.map((row, i) => (i === idx ? { ...row, selected: true } : row)));
+              window.dispatchEvent(new Event("transaction-created"));
+              toast({ title: "Criação desfeita" });
+            }}
+          >
+            Desfazer
+          </Button>
+        ),
+      });
+      return true;
+    } finally {
+      setCreatingRowIndices((prev) => {
+        const next = new Set(prev);
+        next.delete(idx);
+        return next;
+      });
+    }
+  };
+
+
   const handleImport = async () => {
     if (!user) return;
     if (!targetBankAccount) {
@@ -1820,6 +1962,8 @@ export function ImportStatementModal({
                   return next;
                 });
               }}
+              onCreateNow={handleCreateOne}
+              creatingRowIndices={creatingRowIndices}
             />
 
 
@@ -1865,8 +2009,10 @@ export function ImportStatementModal({
             (importType === "debito" && !!targetBankAccount) ||
             (importType === "cartao" && (isMultiCard || !!targetCard));
           return (
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+            <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between" : ""}`}>
+              <Button variant="outline" onClick={handleClose}>
+                {isPage ? "Cancelar importação" : "Cancelar"}
+              </Button>
               {canGoReconcile ? (
                 <Button
                   onClick={() => setStep("reconcile")}
@@ -1888,6 +2034,7 @@ export function ImportStatementModal({
             </DialogFooter>
           );
         })()}
+
 
         {rows.length > 0 && step === "reconcile" && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
@@ -1919,10 +2066,18 @@ export function ImportStatementModal({
           const blockedByDivergence = hasDivergence && !acknowledgeDivergence;
 
           return (
-            <DialogFooter className="gap-2 sm:justify-between flex-col-reverse sm:flex-row items-stretch">
-              <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
-                <ArrowLeft className="h-4 w-4" /> Voltar
-              </Button>
+            <DialogFooter className={`gap-2 sm:justify-between flex-col-reverse sm:flex-row items-stretch ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
+                  <ArrowLeft className="h-4 w-4" /> Voltar
+                </Button>
+                {isPage && (
+                  <Button variant="ghost" onClick={handleClose} className="gap-2 text-muted-foreground">
+                    Cancelar importação
+                  </Button>
+                )}
+              </div>
+
               <div className="flex flex-col items-stretch sm:items-end gap-2 min-w-[320px]">
                 <div className="flex items-center gap-2 justify-end flex-wrap">
                   <label className="text-xs text-muted-foreground whitespace-nowrap">
@@ -2024,7 +2179,7 @@ export function ImportStatementModal({
         })()}
 
         {step === "summary" && importResult && (
-          <DialogFooter className="gap-2">
+          <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
             <Button variant="outline" onClick={handleClose}>Fechar</Button>
             {importResult.created > 0 && (
               <Button onClick={handleViewNew} className="gap-2">
@@ -2033,6 +2188,7 @@ export function ImportStatementModal({
             )}
           </DialogFooter>
         )}
+
     </>
   );
 
