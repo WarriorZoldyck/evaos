@@ -169,6 +169,8 @@ export function ReconcileStep({
   onKeepStatementOnly,
   onUndoKeepStatementOnly,
   onCreateCategory,
+  onCreateNow,
+  creatingRowIndices,
 }: ReconcileStepProps) {
 
   const isCardMode = mode === "card";
