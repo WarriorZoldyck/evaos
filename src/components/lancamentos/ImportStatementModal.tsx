@@ -1139,7 +1139,7 @@ export function ImportStatementModal({
 
     selectedRows.forEach((r) => {
       const realIdx = rows.indexOf(r);
-      const action = matchActions[realIdx] || "criar";
+      const action = matchActions[realIdx] || "ignorar";
       if (action === "ignorar") return;
       if (action === "vincular") {
         const txId = matchTargets[realIdx];
