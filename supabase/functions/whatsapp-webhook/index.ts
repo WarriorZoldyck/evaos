@@ -3968,8 +3968,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // already exists in the system. If so, attach a [SUGESTAO_BAIXA] block
       // to the pending entry so the user can resolve it in Análises EVA.
       let boletoSuggestionBlock: string | null = null;
-      let boletoSuggestionMessage: string | null = null;
-      let boletoSuggestionTail: string | null = null;
+      let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
+      // Nota interna: sugestão de baixa é armazenada em notes e resolvida em Análises EVA.
+      // NÃO envia mais mensagem/imagem/menu no WhatsApp.
       let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
         try {
