@@ -4243,71 +4243,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }
 
 
-      // --- Ações rápidas em TODO lançamento novo (Aprovar / Cancelar / Editar) ---
-      // Só registramos quando NÃO há match de boleto (que já tem seu próprio menu).
+      // Ações rápidas removidas — voltamos ao modelo antigo: lançamento vai direto
+      // para "Análises EVA" no app para aprovação, sem menu interativo no WhatsApp.
       let newTxActionsTail = "";
-      if (!boletoMatch && pendingId && phone) {
-        try {
-          const ctxParam = companyId || "personal";
-          const editLink = buildAnalisesEvaLink(pendingId, true, ctxParam);
-          const showApprove = (status || "Pago") === "Pago"; // aprovar sempre faz sentido; se já vier Pendente, ainda pode aprovar
-          await supabase.from("whatsapp_pending_actions").insert({
-            user_id: userId,
-            action_type: "new_tx_actions",
-            payload: {
-              pending_id: pendingId,
-              ctx: ctxParam,
-              transaction_status: status,
-            },
-            suggested_category_name: "",
-            category_type: "",
-            context_company_id: companyId,
-            expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-          });
-          newTxActionsTail =
-            `\n\n━━━━━━━━━━━━━━━━━━\n` +
-            `O que fazer com este lançamento?\n` +
-            `*1* — ✅ Aprovar (registra no sistema)\n` +
-            `*2* — ❌ Cancelar (descarta)\n` +
-            `*3* — ✏️ Editar no app\n\n` +
-            `👉 Abrir no app: ${editLink}`;
-
-          const dispatchNewTx = (async () => {
-            const rows = [
-              { id: "approve_tx", title: "✅ Aprovar", description: "Registra o lançamento no sistema" },
-              { id: "cancel_tx", title: "❌ Cancelar", description: "Descarta este lançamento" },
-              { id: "open_edit_tx", title: "✏️ Editar no app", description: "Abre o formulário em Análises EVA" },
-            ];
-            const listOk = await sendEvolutionList(
-              phone,
-              "Ações do lançamento",
-              "Escolha uma opção para o lançamento que acabei de criar.",
-              `Ou responda 1, 2 ou 3 · Editar: ${editLink}`,
-              "Escolher opção",
-              "Novo lançamento",
-              rows,
-            );
-            console.log("new_tx dispatch: sendList result =", listOk);
-            if (!listOk) {
-              const btnOk = await sendEvolutionButtons(
-                phone,
-                "Ações do lançamento",
-                "Escolha uma opção para o lançamento que acabei de criar.",
-                `Ou responda 1, 2 ou 3 · Editar: ${editLink}`,
-                rows.map(r => ({ id: r.id, text: r.title })),
-              );
-              console.log("new_tx dispatch: sendButtons fallback result =", btnOk);
-            }
-          })().catch((e) => console.error("new_tx list dispatch failed:", e));
-          try {
-            (globalThis as any).EdgeRuntime?.waitUntil?.(dispatchNewTx);
-          } catch (e) {
-            console.warn("EdgeRuntime.waitUntil unavailable:", e);
-          }
-        } catch (e) {
-          console.error("Failed to register new_tx_actions:", e);
-        }
-      }
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(aiParsed.amount || 0);
