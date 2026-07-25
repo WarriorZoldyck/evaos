@@ -1334,13 +1334,23 @@ export function ImportStatementModal({
 
   const bodyContent = (
     <>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Importar Extrato Bancário
-            <Badge variant="secondary" className="text-[10px]">Beta</Badge>
-          </DialogTitle>
-        </DialogHeader>
+        {isPage ? (
+          <div className="flex flex-col space-y-1.5 text-left mb-4">
+            <h2 className="text-lg font-semibold leading-none tracking-tight flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Importar Extrato Bancário
+              <Badge variant="secondary" className="text-[10px]">Beta</Badge>
+            </h2>
+          </div>
+        ) : (
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Importar Extrato Bancário
+              <Badge variant="secondary" className="text-[10px]">Beta</Badge>
+            </DialogTitle>
+          </DialogHeader>
+        )}
 
         {/* Upload area */}
         {rows.length === 0 && (
