@@ -1293,11 +1293,11 @@ export function ImportStatementModal({
 
       // Compute date range across all imported rows for the post-import filter
       const allDates = selectedRows
-        .filter((r) => (matchActions[rows.indexOf(r)] || "criar") !== "ignorar")
+        .filter((r) => (matchActions[rows.indexOf(r)] || "ignorar") !== "ignorar")
         .map((r) => r.date)
         .sort();
       const ignoredCount = selectedRows.filter(
-        (r) => matchActions[rows.indexOf(r)] === "ignorar"
+        (r) => (matchActions[rows.indexOf(r)] || "ignorar") === "ignorar"
       ).length;
 
       setImportResult({
