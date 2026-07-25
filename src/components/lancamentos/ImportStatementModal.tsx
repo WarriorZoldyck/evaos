@@ -2313,12 +2313,66 @@ export function ImportStatementModal({
   }
 
 
+  const reviewRow = reviewIdx != null ? rows[reviewIdx] : null;
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
         {bodyContent}
       </DialogContent>
       {nestedCreateCard}
+      <ReviewNewEntryModal
+        open={reviewIdx != null && !!reviewRow}
+        onClose={() => setReviewIdx(null)}
+        row={reviewRow}
+        rawDescription={reviewRow?.description || ""}
+        initialDescription={reviewIdx != null ? (rowDescriptions[reviewIdx] || "") : ""}
+        initialCategory={reviewIdx != null ? (rowCategories[reviewIdx] || { category: "" }) : { category: "" }}
+        initialContact={reviewIdx != null ? (rowContacts[reviewIdx] || {}) : {}}
+        categories={mergedCategories}
+        suppliers={suppliersList}
+        clients={clientsList}
+        onCreateCategory={async ({ name, parentName, type }) => {
+          const trimmed = name.trim();
+          if (!trimmed) return null;
+          const parent = parentName
+            ? mergedCategories.find((c) => c.name.toLowerCase() === parentName.toLowerCase()) || null
+            : null;
+          const { data, error } = await supabase
+            .from("categories")
+            .insert({
+              name: trimmed,
+              parent_id: parent?.id || null,
+              type: type || parent?.type || "despesa",
+              user_id: effectiveUserId,
+            })
+            .select("id, name, parent_id, type")
+            .single();
+          if (error || !data) {
+            toast({ title: "Erro ao criar categoria", description: error?.message, variant: "destructive" });
+            return null;
+          }
+          setExtraCategories((prev) => [...prev, data as any]);
+          return { id: data.id, name: data.name };
+        }}
+        onContactCreated={(type, id, name) => {
+          if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
+          else setClientsList((prev) => [...prev, { id, name }]);
+        }}
+        onConfirm={({ description, category, contact }) => {
+          if (reviewIdx == null) return;
+          const idx = reviewIdx;
+          setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
+          setRowCategories((prev) => ({ ...prev, [idx]: category }));
+          setRowContacts((prev) => ({ ...prev, [idx]: contact }));
+          setReviewedRows((prev) => {
+            const next = new Set(prev);
+            next.add(idx);
+            return next;
+          });
+          setReviewIdx(null);
+        }}
+      />
     </Dialog>
   );
 }
