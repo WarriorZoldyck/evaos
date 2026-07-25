@@ -1,37 +1,46 @@
-## Voltar "Criar no sistema" a ser marcação (commit só no final)
+## Deixar claro visualmente o estado de cada linha em "Só no extrato"
 
-Clicar em **"Criar no sistema"** volta a apenas **marcar** a linha. A criação acontece **uma única vez, no final**, quando o usuário clica em **"Importar N lançamentos"** no rodapé — como estava antes.
+No vídeo, ao clicar em **"Criar no sistema"** nada parece acontecer: o botão já vem selecionado por padrão, o toggle não muda de posição perceptível, e o único sinal de vida é o pequeno contador no rodapé (`X criar · Y ignorar`). O usuário não entende que a criação vai acontecer no final, nem qual é o estado atual da linha.
 
-### Por que isso também mata o bug dos "lançamentos repetidos"
+Vou tornar o estado explícito no próprio corpo da linha, tirar a ambiguidade do toggle e reforçar o CTA do rodapé.
 
-No vídeo, depois de "Criar agora" o painel **"Só no sistema"** enche de itens espelhando o extrato (SCP BÁSICO, ALLIANZ SEGU, AUGUSTA PADARIA...). Não é bug de duplicação nova: é o `handleCreateOne` que:
+### O que muda
 
-1. Grava o lançamento no banco na hora.
-2. Deseleciona a linha do extrato correspondente.
-3. Dispara `transaction-created` → o refetch de órfãos roda no meio da conciliação.
-4. O lançamento recém-criado aparece como "órfão" (não casa com nenhuma linha selecionada) e cai em **"Só no sistema"**.
+**`src/components/lancamentos/import/ReconcileStep.tsx` — seção "Só no extrato"**
 
-Tirando o commit imediato, nada é gravado no meio, nenhum refetch dispara, e órfãos param de aparecer espelhando o extrato. A gravação em lote no `handleImport` do rodapé continua funcionando igual — cada linha vira exatamente um lançamento, sem duplicata.
+1. **Badge de estado por linha (na coluna Descrição)**
+   - Ação = `criar` → chip verde **"✔ Será criado ao importar"** (com o número de ordem quando houver duplicatas: `#3 de 5`).
+   - Ação = `ignorar` → chip cinza **"⊘ Não será importado"** + linha inteira com `opacity-60` e categoria desabilitada.
+   - Substitui o feedback invisível de hoje: hoje só o botão muda de cor, agora a linha inteira comunica o resultado.
 
-### O que vou mudar
+2. **Toggle de ação mais legível**
+   - Trocar o par de botões colados por um **Switch shadcn** com label dinâmica:
+     - Ligado: **"Criar ao importar"** (verde)
+     - Desligado: **"Ignorar esta linha"** (cinza)
+   - Elimina a impressão de que "Criar no sistema" é um botão que devia disparar algo agora — Switch comunica estado, não ação.
 
-**`src/components/lancamentos/import/ReconcileStep.tsx`**
-- Remover o caminho de "criar imediato" no botão. O clique volta a só alternar a marcação da linha entre `criar` e `ignorar` (sem chamada ao Supabase, sem spinner, sem remover a linha da lista).
-- Voltar o label fixo para **"Criar no sistema"** e ajustar o tooltip: _"Esta linha será criada no sistema quando você clicar em Importar no rodapé."_
-- Tirar as props `onCreateNow` e `creatingRowIndices` da interface.
+3. **Mini-resumo fixo no cabeçalho da seção**
+   - Ao lado do título "Só no extrato — o que fazer?", exibir contador ao vivo:
+     `N serão criadas · M ignoradas` (verde/cinza).
+   - Adiciona ações em bulk: **"Marcar todas para criar"** / **"Ignorar todas"**.
 
-**`src/components/lancamentos/ImportStatementModal.tsx`**
-- Parar de passar `onCreateNow` / `creatingRowIndices` para o `ReconcileStep`.
-- Remover `handleCreateOne`, o state `creatingRowIndices` e o helper `buildInsertForRow` que só serviam ao commit imediato. O `handleImport` do rodapé é quem cria tudo em lote no final.
+4. **Alert reescrito, mais curto**
+   - Substituir o parágrafo atual por 2 linhas diretas:
+     > Cada linha marcada como **"Criar ao importar"** vira um novo lançamento quando você clicar em **"Importar N lançamentos"** no rodapé. Desligue o switch para pular a linha.
 
-### O que fica como está
+5. **Reforço no botão do rodapé (`ImportStatementModal.tsx`)**
+   - Atualizar o label para deixar explícito o que vai ser gravado:
+     `Importar (X conciliar + Y criar)`
+   - Mantém o botão desabilitado quando `X + Y = 0`.
 
-- Rodapé sticky com **"Cancelar importação"** à esquerda em todas as etapas.
-- Total do **"Extrato original"** líquido (despesas − receitas), batendo com a fatura.
-- **"Manter só do extrato"** continua como marcação da linha, aplicada no import final.
+### O que NÃO muda
 
-### Resultado
+- Nada de criação imediata — commit continua sendo em lote no clique do rodapé (evita o bug de "aparecerem repetidos em Só no sistema" que já corrigimos).
+- Lógica de matching, sugestões de categoria por histórico, ordenação e cabeçalho sticky permanecem iguais.
+- Ações e labels das outras seções ("Igual — pode conciliar", "Só no sistema") não são tocadas.
 
-- Clique em "Criar no sistema" só marca a linha — nada some, nada re-embaralha.
-- Nenhum lançamento espelhado aparece em "Só no sistema" no meio da conciliação.
-- A criação em lote acontece uma única vez, quando o usuário confirma o "Importar N lançamentos".
+### Resultado esperado
+
+- O usuário vê, na própria linha, "Será criado ao importar" — sem depender do contador do rodapé para entender.
+- Switch com label dinâmica remove a expectativa de que "Criar no sistema" seja um botão de ação imediata.
+- Botão do rodapé mostra exatamente quantos lançamentos serão gravados, encerrando a dúvida sobre "o que acontece agora".
