@@ -1,41 +1,34 @@
 
-## Contexto
-
-No vídeo do usuário `simoespaula`, a seção **"Só no sistema"** lista itens que também aparecem no extrato (badge "Mesmo valor no extrato — pode ser o mesmo lançamento com data errada"). Ex.: `AMAZONPRIMEBR R$ 19,90` e `APPLE COM/BILL R$ 19,90` aparecem no extrato E como órfãos do sistema, mas continuam separados nas duas listas — parecendo bug.
-
 ## Causa
 
-O passe automático em `ImportStatementModal.tsx` (linhas 856–954) que promove órfão → sugestão de vínculo só age quando é **estritamente 1↔1 por valor**:
+Em `src/components/lancamentos/PaymentMethodFields.tsx` (linhas 66-82), sempre que um cartão de crédito está selecionado, um `useEffect` recalcula `payment_date` a partir de `hoje` + `closing_day`/`due_day`:
 
 ```ts
-if (orphList.length !== 1 || lineIdxs.length !== 1) return; // só 1↔1
+const todayISO = ...; // hoje
+const dueISO = getCreditCardDueDate(todayISO, closing_day, due_day);
+form.setValue("payment_date", new Date(dueISO + "T12:00:00"));
 ```
 
-Quando há 2 órfãos AMAZONPRIMEBR de R$19,90 e 2 linhas do extrato AMAZONPRIMEBR de R$19,90, o passe desiste e mantém tudo separado. Como o extrato é a fonte da verdade e a descrição é praticamente idêntica, essas M↔N deveriam ser pareadas.
+Quando o usuário abre "Editar" em Análises EVA para uma pendência com cartão vinculado, o `form.reset` do `TransactionFormModal` popula `credit_card_id` com o valor original — isso dispara o effect e sobrescreve `payment_date` (ex.: pendência de 13/07 vira 21/08, próximo vencimento a partir de hoje). O `paymentDateManuallyEdited` do modal-pai não protege esse effect porque ele mora em outro componente.
 
-## Mudança
+## Correção
 
-Editar apenas o `useEffect` de auto-pareamento em `src/components/lancamentos/ImportStatementModal.tsx` (856–954). Nenhuma alteração de backend, schema ou lógica de importação/matching principal.
+Evitar que o effect rode na hidratação do formulário. Só recalcular `payment_date` quando o usuário **trocar** o cartão de crédito dentro do modal aberto, não quando o cartão já vem preenchido do registro que está sendo editado.
 
-Novo algoritmo por valor (em centavos):
+Alterar apenas `PaymentMethodFields.tsx`:
 
-1. Coletar órfãos e linhas não-matcheadas (`ação = criar`, sem `best`/`extraMatches`) desse valor.
-2. Caso 1↔1 → parear (comportamento atual, preservado).
-3. Caso M↔N (M,N ≥ 1):
-   - Normalizar descrições (mesma normalização já usada em `lib/import/matching.ts`).
-   - Para cada linha, computar `descriptionSimilarity` contra cada órfão do mesmo valor.
-   - Casar de forma gulosa em ordem decrescente de similaridade, exigindo `similarity ≥ AUTO_LINK_MIN_SIMILARITY` OU token compartilhado significativo (mesma regra de `pickBestMatch`).
-   - Pares aceitos viram `extraMatches`/`vincular` e o órfão sai da lista "Só no sistema" (via `promotedOrphanIds` e `setOrphans`).
-   - Órfãos/linhas que não acharam par ficam onde estão para revisão manual.
-4. Manter `suggested: true` para que a UI mostre como "sugerido — confirmar", não como conciliação silenciosa.
+- Adicionar um `useRef` (`hydratedCardIdRef`) que guarda o valor inicial de `credit_card_id` na primeira renderização do componente com um cartão selecionado.
+- No effect existente, retornar cedo se `selectedCreditCardId === hydratedCardIdRef.current` (mesma seleção que veio do `reset`) — assim a data original é preservada.
+- Se o usuário limpar e escolher outro cartão depois, o effect roda normalmente e recalcula a data para a fatura desse novo cartão.
+- Também considerar `competence_date` como base do cálculo (em vez de `today`) para novas seleções, garantindo coerência com a compra que está sendo editada. Fallback para hoje quando não houver `competence_date`.
 
 ## Fora de escopo
 
-- Não mexer em `useCategorySuggestions`, `parse-bank-statement` nem no webhook.
-- Não alterar categorização — apenas o pareamento visual/estado.
-- Não mudar a UI da seção "Só no sistema" além da consequência natural (itens promovidos somem da lista, como já ocorre no fluxo 1↔1).
+- Não mexer em `TransactionFormModal.tsx`, `AnalisesEva.tsx`, nem no schema/serviços.
+- Não alterar o comportamento de "Novo Lançamento" (quando não há cartão inicial, o effect roda como hoje).
 
 ## Validação
 
-- Reimportar o mesmo extrato do vídeo: `AMAZONPRIMEBR` e `APPLE COM/BILL` de R$19,90 devem sair de "Só no sistema" e aparecer como linhas com sugestão "É o mesmo" pré-selecionada.
-- Casos onde a descrição diverge (ex.: valor igual mas nomes sem overlap) permanecem em "Só no sistema" — evita colisões cegas.
+- Abrir "Editar" em uma pendência da Análises EVA com cartão de crédito: `Data de Pagamento` deve permanecer igual à do registro (ex.: 13/07 → 21/07, tal como no cartão exibido antes de clicar).
+- Em "Novo Lançamento", selecionar um cartão de crédito ainda preenche a data de vencimento automaticamente com base na competência.
+- Trocar o cartão no meio da edição recalcula a data (fluxo intencional).
