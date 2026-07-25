@@ -1,32 +1,36 @@
-## Diagnóstico confirmado
+## Objetivo
 
-- O `whatsapp-webhook` está falhando para iniciar na versão mais recente por erro de código: `Identifier 'boletoMatch' has already been declared`.
-- A chamada anterior que ainda respondeu com sucesso levou **43,8 segundos**, principalmente no fluxo com mídia/imagem e IA antes de enviar o feedback ao WhatsApp.
-- Também há resíduo de lógica antiga de lista/botões (`sendEvolutionList`) que precisa ficar neutra para não reabrir o problema anterior.
+1. Remover o prefixo `⚠️ [CORREÇÃO EVA — CONFERIR]` dos títulos das transações — o usuário simoespaula já conferiu tudo (153 lançamentos afetados, exclusivo desse user).
+2. Consolidar o aprendizado global: para cada usuário, aplicar as categorias já definidas manualmente nos lançamentos ainda sem categoria com o mesmo estabelecimento normalizado.
 
-## Plano de correção
+## Passo 1 — Limpar títulos (SQL)
 
-1. **Corrigir o boot failure imediatamente**
-   - Remover a declaração duplicada de `boletoMatch` no `whatsapp-webhook`.
-   - Garantir que a função volte a subir sem erro 503.
+```sql
+UPDATE public.transactions
+SET description = trim(regexp_replace(description, '^⚠️\s*\[CORREÇÃO EVA — CONFERIR\]\s*', ''))
+WHERE description LIKE '⚠️ [CORREÇÃO EVA — CONFERIR]%';
+```
 
-2. **Reduzir o tempo de resposta percebido no WhatsApp**
-   - Manter o feedback simples e antigo para o usuário.
-   - Enviar a resposta do webhook o mais cedo possível quando o lançamento for criado/enviado para Análises EVA.
-   - Evitar que tarefas secundárias segurem a resposta HTTP principal.
+Mesma limpeza em `ai_pending_transactions` (caso existam pendências com o mesmo prefixo).
 
-3. **Remover/neutralizar sobras do modelo novo**
-   - Conferir e limpar referências que possam acionar lista, imagem, link, aprovar, editar ou cancelar.
-   - Manter ações antigas de `whatsapp_pending_actions` como ignoradas/expiradas, sem responder menu ao usuário.
+## Passo 2 — Backfill global de categorias
 
-4. **Instrumentar tempos nos logs**
-   - Adicionar logs objetivos de duração por etapa crítica: identificação do usuário, mídia, IA, criação do lançamento e envio Evolution.
-   - Isso permite saber se a demora vem da Evolution, da IA multimodal, do upload de mídia ou do banco.
+Para cada usuário, montar um dicionário `estabelecimento_normalizado → category_id` a partir das transações do próprio usuário (últimos 24 meses) já categorizadas, priorizando a categoria mais profunda/mais frequente. Aplicar em transações do mesmo usuário sem `category_id`.
 
-5. **Deploy e validação**
-   - Deploy do `whatsapp-webhook`.
-   - Verificar logs recentes para confirmar: sem boot error, sem `sendEvolutionList`, status 200 e tempo menor no webhook.
+Regras de segurança:
+- Estritamente escopado por `user_id` (nunca cruza usuários).
+- Só preenche onde `category_id IS NULL`.
+- Normalização igual à do `useCategorySuggestions` (uppercase, remove parcelas `01/03`, prefixos de adquirentes, stopwords).
+- Um único statement SQL com CTE + `UPDATE ... FROM`.
 
-## Resultado esperado
+## Passo 3 — Verificação
 
-O WhatsApp volta a receber apenas a mensagem simples antiga, sem botões/link/imagem, e a função deixa de falhar com 503. Também teremos logs melhores para atacar qualquer demora externa restante com precisão.
+- Contagem de linhas afetadas por passo.
+- Amostra de 10 títulos do simoespaula antes/depois.
+- Total de transações sem categoria por usuário antes/depois.
+
+## Detalhes técnicos
+
+- Executado via migration única (idempotente — o `LIKE` do passo 1 não bate após rodar; o passo 2 só age em `category_id IS NULL`).
+- Nenhuma alteração de schema, RLS ou código frontend.
+- Não altera `bank_account_id`, `credit_card_id`, valor ou data — apenas `description` (passo 1) e `category_id` (passo 2).
