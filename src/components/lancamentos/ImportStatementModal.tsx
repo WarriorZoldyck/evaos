@@ -328,6 +328,24 @@ export function ImportStatementModal({
   }, [categoryBase, extraCategories]);
   const rootCategories = mergedCategories.filter((c) => !c.parent_id);
 
+  // Load suppliers/clients once the reconcile step is reachable, so the review
+  // modal has options to pre-select and let the user create new inline.
+  useEffect(() => {
+    if (!open || !effectiveUserId) return;
+    let cancelled = false;
+    (async () => {
+      const [supRes, cliRes] = await Promise.all([
+        supabase.from("suppliers").select("id, name").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("clients").select("id, name").eq("user_id", effectiveUserId).order("name"),
+      ]);
+      if (cancelled) return;
+      setSuppliersList((supRes.data as any) || []);
+      setClientsList((cliRes.data as any) || []);
+    })();
+    return () => { cancelled = true; };
+  }, [open, effectiveUserId]);
+
+
 
 
   // Derive detected cards summary (use real card IDs, not collapsed to parent)
