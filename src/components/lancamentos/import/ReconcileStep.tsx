@@ -95,6 +95,17 @@ interface ReconcileStepProps {
   onUndoKeepStatementOnly?: (systemTxId: string) => void;
   /** Create a category inline. Returns the new record's name (so caller can set it in rowCategories). */
   onCreateCategory?: (params: { name: string; parentName?: string; type?: "receita" | "despesa" }) => Promise<{ id: string; name: string } | null>;
+  /** Edited (user-friendly) descriptions per row, applied when creating the transaction. */
+  rowDescriptions?: Record<number, string>;
+  /** Selected supplier/client per row, applied when creating the transaction. */
+  rowContacts?: Record<number, { supplier_id?: string | null; client_id?: string | null }>;
+  /** Rows already reviewed in the "Revisar novo lançamento" modal. */
+  reviewedRows?: Set<number>;
+  /** Open the review modal for a specific row idx. */
+  onOpenReview?: (rowIdx: number) => void;
+  /** Suppliers/clients lists to render the small "vinculado a" hint. */
+  suppliers?: { id: string; name: string }[];
+  clients?: { id: string; name: string }[];
 }
 
 
