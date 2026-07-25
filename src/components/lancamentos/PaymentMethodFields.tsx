@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { UseFormReturn } from "react-hook-form";
 import {
   FormControl,
@@ -63,23 +63,42 @@ export function PaymentMethodFields({
     }
   }, [showTerminal, selectedTerminal, form]);
 
-  // Auto-set payment_date when credit card selected (despesa only)
+  // Auto-set payment_date when credit card is CHOSEN by the user (despesa only).
+  // We must NOT run on form hydration (edit mode), otherwise editing a pending
+  // transaction would overwrite its original payment_date with a freshly
+  // computed due date from today.
   const selectedCreditCardId = form.watch("credit_card_id");
   const selectedCreditCard = creditCards.find((c) => c.id === selectedCreditCardId);
+  const hydratedCardIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
+    // First render: capture the initial value coming from form.reset and skip.
+    if (hydratedCardIdRef.current === undefined) {
+      hydratedCardIdRef.current = selectedCreditCardId || null;
+      return;
+    }
     if (!showCreditCardSelect || !selectedCreditCard) return;
+    // Same card that was already there — don't overwrite date.
+    if (selectedCreditCardId === hydratedCardIdRef.current) return;
 
-    const today = new Date();
+    hydratedCardIdRef.current = selectedCreditCardId || null;
+
+    // Base the due date on competence_date when available (coherent with the
+    // purchase being edited), fall back to today for brand new entries.
     const pad = (n: number) => String(n).padStart(2, "0");
-    const todayISO = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const compRaw = form.getValues("competence_date") as Date | undefined;
+    const baseISO = compRaw instanceof Date && !isNaN(compRaw.getTime())
+      ? toISO(compRaw)
+      : toISO(new Date());
     const dueISO = getCreditCardDueDate(
-      todayISO,
+      baseISO,
       selectedCreditCard.closing_day,
       selectedCreditCard.due_day,
     );
     form.setValue("payment_date", new Date(dueISO + "T12:00:00"));
   }, [selectedCreditCardId, showCreditCardSelect, selectedCreditCard, form]);
+
 
   // Clear irrelevant fields when payment method changes
   useEffect(() => {
