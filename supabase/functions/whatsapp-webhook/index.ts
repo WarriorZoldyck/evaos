@@ -345,6 +345,7 @@ async function sendEvolutionButtons(
     console.error("Evolution sendButtons exception:", err);
     return false;
 }
+}
 
 // --- Evolution API helper: send WhatsApp list message (still supported by modern WhatsApp) ---
 // rows: [{ id, title, description? }] — user pick returns as listResponseMessage.singleSelectReply.selectedRowId
@@ -394,7 +395,6 @@ async function sendEvolutionList(
     console.error("Evolution sendList exception:", err);
     return false;
   }
-}
 }
 
 // --- Evolution API helper: get base64 image from media message ---
@@ -1405,92 +1405,13 @@ serve(async (req) => {
     const pendingAction = pendingActions?.[0];
 
     if (pendingAction) {
-      // Handler "new_tx_actions" removido — voltamos ao modelo antigo (sem menu 1/2/3 no WhatsApp).
-
-
-      // === HANDLE "confirm_boleto_match" (Sim/Não/Editar) ===
-      if (pendingAction.action_type === "confirm_boleto_match") {
-        console.log("=== PENDING ACTION: CONFIRM BOLETO MATCH ===");
-        const payload = pendingAction.payload as any;
-        const raw = (trimmedMsg || "").toLowerCase();
-        const isConfirm = raw.startsWith("confirm_baixa") || /^(sim|s|isso|é ess[ae]|confirma|pode|ok|1)\b/.test(raw);
-        const isReject = raw.startsWith("reject_baixa") || /^(n[ãa]o|n|outro|nova|nao é|2)\b/.test(raw);
-        const isEdit = raw.startsWith("open_edit") || /^3\b/.test(raw) || /(editar|edita|abrir no app|abrir)/.test(raw);
-
-        if (isConfirm) {
-          // Dar baixa direto: UPDATE transactions + mark pending approved
-          const updates: Record<string, unknown> = {
-            status: "Pago",
-            payment_date: payload.payment_date || new Date().toISOString().slice(0, 10),
-          };
-          if (payload.bank_account_id) updates.bank_account_id = payload.bank_account_id;
-          if (payload.wallet_id) updates.wallet_id = payload.wallet_id;
-          if (payload.payment_method) updates.payment_method = payload.payment_method;
-          if (payload.attachment_url) updates.attachment_url = payload.attachment_url;
-
-          const { error: updErr } = await supabase
-            .from("transactions")
-            .update(updates)
-            .eq("id", payload.transaction_id)
-            .eq("user_id", userId);
-
-          if (updErr) {
-            console.error("confirm_boleto_match update error:", updErr);
-            await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-            return respond({
-              success: false,
-              message: `❌ Não consegui dar baixa: ${updErr.message}. Tenta pelo app em Análises EVA.`,
-            }, 200);
-          }
-          if (payload.pending_id) {
-            await supabase
-              .from("ai_pending_transactions")
-              .update({ status: "approved", reviewed_at: new Date().toISOString() })
-              .eq("id", payload.pending_id);
-          }
-          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-          return respond({
-            success: true,
-            message: "✅ Baixa feita! O pendente virou *Pago* e o saldo já foi atualizado. 🙌",
-          }, 200);
-        }
-
-        if (isReject) {
-          // Remove o bloco [SUGESTAO_BAIXA] das notes do pending para virar lançamento normal
-          if (payload.pending_id) {
-            const { data: cur } = await supabase
-              .from("ai_pending_transactions")
-              .select("notes")
-              .eq("id", payload.pending_id)
-              .maybeSingle();
-            const cleaned = (cur?.notes || "").replace(/\n*\[SUGESTAO_BAIXA\][\s\S]*?(?=\n\n|$)/g, "").trim() || null;
-            await supabase
-              .from("ai_pending_transactions")
-              .update({ notes: cleaned })
-              .eq("id", payload.pending_id);
-          }
-          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-          return respond({
-            success: true,
-            message: "Beleza! Mantive como um lançamento novo em *Análises EVA* para você aprovar quando quiser. 👍",
-          }, 200);
-        }
-
-        if (isEdit) {
-          const link = payload.pending_id
-            ? buildAnalisesEvaLink(payload.pending_id, true)
-            : `${APP_BASE_URL}/analises-eva`;
-          await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
-          return respond({
-            success: true,
-            message: `✏️ Abre aí: ${link}\n\nJá deixei o formulário pronto para você ajustar antes de dar baixa.`,
-          }, 200);
-        }
-
-        // Não bateu com nenhum padrão — mantém a ação viva e devolve o menu por texto
+      if (["new_tx_actions", "confirm_boleto_match"].includes(pendingAction.action_type)) {
+        console.log("=== DEPRECATED PENDING ACTION CLEARED ===", pendingAction.action_type);
+        await supabase.from("whatsapp_pending_actions").delete().eq("id", pendingAction.id);
         return respond({
           success: true,
-          message: "Sobre o pendente que te mostrei, me responde:\n\n• *Sim* — para dar baixa direto\n• *Não* — para deixar como lançamento novo\n• *Editar* — para abrir no app antes de aprovar",
+          intent: "lancamento",
+          message: `📋 Lançamento enviado para aprovação no app!\n\n⚠️ Acesse "Análises EVA" no app para conferir e aprovar.`,
         }, 200);
       }
 
@@ -1757,7 +1678,7 @@ serve(async (req) => {
 
       // === HANDLE "create_category" pending action (existing) ===
       // User is responding to a pending action
-      if (CONFIRM_PATTERNS.test(trimmedMsg)) {
+      if (pendingAction.action_type === "create_category" && CONFIRM_PATTERNS.test(trimmedMsg)) {
         console.log("=== PENDING ACTION: CONFIRMED ===");
         console.log("Creating category:", pendingAction.suggested_category_name);
 
