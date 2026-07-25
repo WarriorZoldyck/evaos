@@ -1639,7 +1639,7 @@ export function ImportStatementModal({
             <ReconcileStep
               mode={importType === "cartao" ? "card" : "debit"}
               rows={rows}
-              matches={matches}
+              matches={mergedMatches}
               matchLoading={matchLoading}
               matchActions={matchActions}
               matchTargets={matchTargets}
