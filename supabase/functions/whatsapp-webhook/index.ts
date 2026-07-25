@@ -3765,7 +3765,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // already exists in the system. If so, attach a [SUGESTAO_BAIXA] block
       // to the pending entry so the user can resolve it in Análises EVA.
       let boletoSuggestionBlock: string | null = null;
-      let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       // Nota interna: sugestão de baixa é armazenada em notes e resolvida em Análises EVA.
       // NÃO envia mais mensagem/imagem/menu no WhatsApp.
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
@@ -3783,7 +3782,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             paymentDate,
           });
           if (match) {
-            boletoMatch = match;
             console.log("=== BOLETO MATCH FOUND (suggestion) ===", { txId: match.tx.id, score: match.score });
             boletoSuggestionBlock =
               `\n\n[SUGESTAO_BAIXA]\n` +
@@ -3854,7 +3852,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
       const payMethodDisplay = paymentMethod ? `\n💳 ${paymentMethod}` : "";
       const contactDisplay = contactName ? `\n👤 ${contactName}` : "";
-      const statusDisplay = status === "Pendente" ? " (Pendente)" : "";
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const bankName = bankAccountId ? contextAccounts.find((a: any) => a.id === bankAccountId)?.name : null;
       const walletName = walletId ? contextWallets.find((w: any) => w.id === walletId)?.name : null;
