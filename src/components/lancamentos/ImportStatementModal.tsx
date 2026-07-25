@@ -54,6 +54,9 @@ interface ParsedTransaction {
   purchase_date_original?: string;
 }
 
+const signedStatementAmount = (row: { amount: number; type: "receita" | "despesa" }) =>
+  row.type === "receita" ? -Math.abs(row.amount) : Math.abs(row.amount);
+
 interface RowCategoryValue {
   category: string;
   subcategory?: string;
@@ -1658,6 +1661,17 @@ export function ImportStatementModal({
             )}
 
             <div className="flex-1 overflow-auto border rounded-lg">
+              {importType === "cartao" && rows.some((r) => r.type === "receita") && (
+                <div className="m-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2 text-xs text-emerald-700">
+                  <p className="font-medium">Entradas/créditos detectados</p>
+                  <p className="text-muted-foreground">
+                    {rows.filter((r) => r.type === "receita").length} linha{rows.filter((r) => r.type === "receita").length === 1 ? "" : "s"} reduz{rows.filter((r) => r.type === "receita").length === 1 ? "" : "em"} o total da fatura em{" "}
+                    <strong>
+                      {formatCurrency(rows.filter((r) => r.type === "receita").reduce((sum, r) => sum + Math.abs(r.amount), 0))}
+                    </strong>.
+                  </p>
+                </div>
+              )}
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b bg-muted/50">
@@ -1701,7 +1715,11 @@ export function ImportStatementModal({
                           </Badge>
                         )}
                       </td>
-                      <td className="p-2 text-right font-mono">{formatCurrency(r.amount)}</td>
+                      <td className="p-2 text-right font-mono">
+                        <span className={r.type === "receita" ? "text-emerald-600" : ""}>
+                          {r.type === "receita" ? "− " : ""}{formatCurrency(r.amount)}
+                        </span>
+                      </td>
                       <td className="p-2 text-center">
                         <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[10px]">
                           {r.type === "receita" ? "Entrada" : "Saída"}
@@ -1958,18 +1976,20 @@ export function ImportStatementModal({
 
         {rows.length > 0 && step === "reconcile" && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
-          let totalToCreate = 0;
-          let totalToLink = 0;
+          let netToCreate = 0;
+          let netToLink = 0;
+          let creditsTotal = 0;
           selectedRows.forEach((r) => {
             const i = rows.indexOf(r);
             const a = matchActions[i] || "criar";
             counts[a]++;
-            const signed = r.type === "receita" ? Math.abs(r.amount) : -Math.abs(r.amount);
-            if (a === "criar") totalToCreate += signed;
-            if (a === "vincular") totalToLink += signed;
+            const signed = signedStatementAmount(r);
+            if (r.type === "receita" && a !== "ignorar") creditsTotal += Math.abs(r.amount);
+            if (a === "criar") netToCreate += signed;
+            if (a === "vincular") netToLink += signed;
           });
           const toImport = counts.vincular + counts.criar;
-          const grandTotal = totalToCreate + totalToLink;
+          const selectedNetTotal = netToCreate + netToLink;
           const fmt = (v: number) =>
             v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -1979,8 +1999,8 @@ export function ImportStatementModal({
             const n = Number(cleaned);
             return Number.isFinite(n) && n > 0 ? n : null;
           })();
-          const importedAbs = Math.abs(grandTotal);
-          const diff = userStatementTotal !== null ? +(importedAbs - userStatementTotal).toFixed(2) : null;
+          const selectedNetAbs = Math.abs(selectedNetTotal);
+          const diff = userStatementTotal !== null ? +(selectedNetAbs - userStatementTotal).toFixed(2) : null;
           const hasDivergence = diff !== null && Math.abs(diff) > 1.00;
           const blockedByDivergence = hasDivergence && !acknowledgeDivergence;
           const detectedMatches = statementTotal !== null && userStatementTotal !== null &&
@@ -2047,11 +2067,16 @@ export function ImportStatementModal({
                   <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
                 </span>
                 <span className="text-xs text-muted-foreground text-right">
-                  Total no extrato após import:{" "}
-                  <strong className={grandTotal < 0 ? "text-destructive" : "text-foreground"}>
-                    {fmt(grandTotal)}
+                  Selecionado líquido:{" "}
+                  <strong className="text-foreground">
+                    {fmt(selectedNetAbs)}
                   </strong>
                 </span>
+                {creditsTotal > 0 && (
+                  <span className="text-xs text-muted-foreground text-right">
+                    Créditos/restituições: <strong className="text-emerald-600">− {fmt(creditsTotal)}</strong>
+                  </span>
+                )}
                 {diff !== null && (
                   <span
                     className={`text-xs text-right ${
