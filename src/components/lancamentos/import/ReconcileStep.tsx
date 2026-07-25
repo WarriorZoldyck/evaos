@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -791,54 +792,83 @@ export function ReconcileStep({
 
 
           <section>
-            <header className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-              <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
-                <Sparkles className="h-4 w-4" />
-                Só no extrato — o que fazer?
-                <Badge variant="secondary" className="text-[10px]">{newRows.length}</Badge>
-                {suggestLoading && (
-                  <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-normal">
-                    <Loader2 className="h-3 w-3 animate-spin" /> sugerindo categorias...
-                  </span>
-                )}
-              </h3>
-              {(() => {
-                const total = newRows.length;
-                const matched = newRows.filter(({ i }) => suggestions[i]?.source === "history").length;
-                const unmatched = total - matched;
-                if (total === 0) return null;
-                return (
-                  <div className="flex items-center gap-1.5 text-[10px]">
-                    <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 bg-emerald-500/5">
-                      <ShieldCheck className="h-2.5 w-2.5" />
-                      {matched} de {total} do seu histórico
-                    </Badge>
-                    {unmatched > 0 && (
-                      <Badge variant="outline" className="text-muted-foreground">
-                        {unmatched} sem histórico
-                      </Badge>
+            {(() => {
+              const total = newRows.length;
+              const matched = newRows.filter(({ i }) => suggestions[i]?.source === "history").length;
+              const unmatched = total - matched;
+              const willCreate = newRows.filter(({ i }) => (matchActions[i] || "criar") !== "ignorar").length;
+              const willIgnore = total - willCreate;
+              const setAll = (action: "criar" | "ignorar") => {
+                newRows.forEach(({ i }) => onActionChange(i, action));
+              };
+              return (
+                <>
+                  <header className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                    <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
+                      <Sparkles className="h-4 w-4" />
+                      Só no extrato — o que fazer?
+                      <Badge variant="secondary" className="text-[10px]">{total}</Badge>
+                      {suggestLoading && (
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-normal">
+                          <Loader2 className="h-3 w-3 animate-spin" /> sugerindo categorias...
+                        </span>
+                      )}
+                    </h3>
+                    {total > 0 && (
+                      <div className="flex items-center gap-1.5 text-[10px] flex-wrap">
+                        <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 bg-emerald-500/10">
+                          <Check className="h-2.5 w-2.5" />
+                          {willCreate} serão criadas
+                        </Badge>
+                        <Badge variant="outline" className="gap-1 text-muted-foreground bg-muted/40">
+                          <X className="h-2.5 w-2.5" />
+                          {willIgnore} ignoradas
+                        </Badge>
+                        <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 bg-emerald-500/5">
+                          <ShieldCheck className="h-2.5 w-2.5" />
+                          {matched}/{total} do histórico
+                        </Badge>
+                        {unmatched > 0 && (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            {unmatched} sem histórico
+                          </Badge>
+                        )}
+                        <span className="mx-1 h-3 w-px bg-border" aria-hidden />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-[10px] px-2"
+                          onClick={() => setAll("criar")}
+                          disabled={willIgnore === 0}
+                        >
+                          Marcar todas para criar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 text-[10px] px-2"
+                          onClick={() => setAll("ignorar")}
+                          disabled={willCreate === 0}
+                        >
+                          Ignorar todas
+                        </Button>
+                      </div>
                     )}
-                    <Badge variant="outline" className="text-muted-foreground">0 vindas de IA</Badge>
-                  </div>
-                );
-              })()}
-            </header>
+                  </header>
+
+                  <Alert className="mb-2 py-2 px-3 bg-sky-500/5 border-sky-500/30">
+                    <Info className="h-3.5 w-3.5 text-sky-600" />
+                    <AlertDescription className="text-[11px] leading-snug ml-1">
+                      Cada linha marcada como <strong>"Criar ao importar"</strong> vira um novo lançamento quando você clicar em <strong>"Importar N lançamentos"</strong> no rodapé. Desligue o switch da coluna Ação para pular a linha.
+                    </AlertDescription>
+                  </Alert>
+                </>
+              );
+            })()}
 
 
-            <Alert className="mb-2 py-2 px-3 bg-sky-500/5 border-sky-500/30">
-              <Info className="h-3.5 w-3.5 text-sky-600" />
-              <AlertDescription className="text-[11px] leading-snug ml-1">
-                Estas linhas estão no extrato mas <strong>não têm correspondente no sistema</strong>.
-                Por padrão, cada linha vira um <strong>novo lançamento no sistema</strong> com a categoria escolhida abaixo.
-                Use <strong>"Manter só do extrato"</strong> para pular linhas que você não quer importar.
-                Se for o mesmo lançamento já existente com data errada, use "É o mesmo" na seção <em>Só no sistema</em>.
-                Ao categorizar uma linha, lançamentos idênticos são preenchidos automaticamente.
-                <br />
-                <span className="text-muted-foreground">
-                  A criação acontece ao clicar em <strong>"Importar N lançamentos"</strong> no rodapé — o toggle da coluna Ação só define o que fazer com cada linha.
-                </span>
-              </AlertDescription>
-            </Alert>
 
 
             {newRows.length === 0 ? (
@@ -869,12 +899,30 @@ export function ReconcileStep({
                       const isReplacing = !!(
                         replacingCandId && replaceDeleteIds?.has(replacingCandId)
                       );
+                      const rowAction = matchActions[i] || "criar";
+                      const willBeCreated = rowAction !== "ignorar";
                       return (
-                        <tr key={i} className={`border-b last:border-0 hover:bg-accent/30 ${isReplacing ? "bg-sky-500/5" : ""}`}>
+                        <tr
+                          key={i}
+                          className={`border-b last:border-0 hover:bg-accent/30 transition-opacity ${
+                            isReplacing ? "bg-sky-500/5" : ""
+                          } ${!willBeCreated ? "opacity-60" : ""}`}
+                        >
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
                             <p className="break-words leading-snug" title={r.description}>{r.description}</p>
                             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                              {willBeCreated ? (
+                                <Badge className="text-[9px] gap-0.5 bg-emerald-600 hover:bg-emerald-600 text-white border-0">
+                                  <Check className="h-2.5 w-2.5" />
+                                  Será criado ao importar
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[9px] gap-0.5 text-muted-foreground bg-muted/40">
+                                  <X className="h-2.5 w-2.5" />
+                                  Não será importado
+                                </Badge>
+                              )}
                               <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[9px]">
                                 {r.type === "receita" ? "Entrada" : "Saída"}
                               </Badge>
@@ -907,7 +955,7 @@ export function ReconcileStep({
                           </td>
                           <td className="p-2 text-right font-mono whitespace-nowrap align-top">{fmt(r.amount)}</td>
                           <td className="p-2 align-top">
-                            <div className="flex flex-col gap-1">
+                            <div className={`flex flex-col gap-1 ${!willBeCreated ? "pointer-events-none" : ""}`}>
                               <CategoryPathCombobox
                                 categories={categories}
                                 value={currentCat}
@@ -924,76 +972,43 @@ export function ReconcileStep({
                             </div>
                           </td>
                           <td className="p-2 text-center align-top">
-                            {(() => {
-                              const action = matchActions[i] || "criar";
-                              const isCreate = action !== "ignorar";
-                              return (
-                                <div
-                                  className="inline-flex rounded-md border bg-muted/40 p-0.5 gap-0.5"
-                                  role="radiogroup"
-                                  aria-label="Ação para esta linha"
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <label
+                                  className={`inline-flex items-center gap-2 cursor-pointer select-none rounded-md border px-2 py-1 transition-colors ${
+                                    willBeCreated
+                                      ? "border-emerald-500/50 bg-emerald-500/10"
+                                      : "border-border bg-muted/40"
+                                  }`}
                                 >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        role="radio"
-                                        aria-checked={isCreate}
-                                        data-state={isCreate ? "active" : "inactive"}
-                                        className={`h-6 text-[11px] gap-1 px-2 ${
-                                          isCreate
-                                            ? "bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white cursor-default"
-                                            : "text-muted-foreground hover:bg-accent"
-                                        }`}
-                                        onClick={() => {
-                                          if (!isCreate) onActionChange(i, "criar");
-                                        }}
-                                      >
-                                        <Plus className="h-3 w-3" />
-                                        Criar no sistema
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left" className="text-xs max-w-[260px]">
-                                      {isCreate
-                                        ? "Esta linha será criada no sistema quando você clicar em \"Importar\" no rodapé."
-                                        : "Clique para alternar: esta linha voltará a ser criada no sistema ao importar."}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        role="radio"
-                                        aria-checked={!isCreate}
-                                        data-state={!isCreate ? "active" : "inactive"}
-                                        className={`h-6 text-[11px] gap-1 px-2 ${
-                                          !isCreate
-                                            ? "bg-sky-600 text-white hover:bg-sky-600 hover:text-white cursor-default"
-                                            : "text-muted-foreground hover:bg-accent"
-                                        }`}
-                                        onClick={() => {
-                                          if (isCreate) onActionChange(i, "ignorar");
-                                        }}
-                                      >
-                                        <ShieldCheck className="h-3 w-3" /> Manter só do extrato
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left" className="text-xs max-w-[260px]">
-                                      {!isCreate
-                                        ? "Ação atual: esta linha ficará só no extrato importado (vai para \"Ignorados\") e não será criada no sistema."
-                                        : "Clique para alternar: pular a criação no sistema e manter esta linha só no extrato."}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </div>
-                              );
-                            })()}
+                                  <Switch
+                                    checked={willBeCreated}
+                                    onCheckedChange={(checked) =>
+                                      onActionChange(i, checked ? "criar" : "ignorar")
+                                    }
+                                    aria-label="Criar esta linha ao importar"
+                                  />
+                                  <span
+                                    className={`text-[11px] font-medium whitespace-nowrap ${
+                                      willBeCreated ? "text-emerald-700" : "text-muted-foreground"
+                                    }`}
+                                  >
+                                    {willBeCreated ? "Criar ao importar" : "Ignorar esta linha"}
+                                  </span>
+                                </label>
+                              </TooltipTrigger>
+                              <TooltipContent side="left" className="text-xs max-w-[260px]">
+                                {willBeCreated
+                                  ? "Ligado: esta linha vira um novo lançamento quando você clicar em \"Importar\" no rodapé."
+                                  : "Desligado: esta linha fica só no extrato importado e não vira lançamento no sistema."}
+                              </TooltipContent>
+                            </Tooltip>
                           </td>
 
 
                         </tr>
                       );
+
                     })}
                   </tbody>
                 </table>
