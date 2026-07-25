@@ -4154,7 +4154,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       // Ações rápidas removidas — voltamos ao modelo antigo: lançamento vai direto
       // para "Análises EVA" no app para aprovação, sem menu interativo no WhatsApp.
-      let newTxActionsTail = "";
+      
 
       const typeLabel = txType === "receita" ? "Receita" : "Despesa";
       const formattedAmount = fmt(aiParsed.amount || 0);
