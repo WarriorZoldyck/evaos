@@ -1330,9 +1330,10 @@ export function ImportStatementModal({
     return `${card.name}${card.last_four_digits ? ` ****${card.last_four_digits}` : ""}`;
   };
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+  const isPage = variant === "page";
+
+  const bodyContent = (
+    <>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
