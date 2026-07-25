@@ -826,6 +826,10 @@ export function ReconcileStep({
                 Use <strong>"Manter só do extrato"</strong> para pular linhas que você não quer importar.
                 Se for o mesmo lançamento já existente com data errada, use "É o mesmo" na seção <em>Só no sistema</em>.
                 Ao categorizar uma linha, lançamentos idênticos são preenchidos automaticamente.
+                <br />
+                <span className="text-muted-foreground">
+                  A criação acontece ao clicar em <strong>"Importar N lançamentos"</strong> no rodapé — o toggle da coluna Ação só define o que fazer com cada linha.
+                </span>
               </AlertDescription>
             </Alert>
 
