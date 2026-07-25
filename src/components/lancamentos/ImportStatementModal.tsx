@@ -1926,20 +1926,17 @@ export function ImportStatementModal({
           const blockedByDivergence = hasDivergence && !acknowledgeDivergence;
 
           return (
-            <DialogFooter className={`gap-2 sm:justify-between flex-col-reverse sm:flex-row items-stretch ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
-              <div className="flex flex-col sm:flex-row gap-2">
+            <DialogFooter className={`gap-4 flex-col sm:flex-row sm:items-end sm:justify-between ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
+              {/* LEFT — Voltar */}
+              <div className="flex sm:self-end">
                 <Button variant="outline" onClick={() => setStep("preview")} className="gap-2">
                   <ArrowLeft className="h-4 w-4" /> Voltar
                 </Button>
-                {isPage && (
-                  <Button variant="ghost" onClick={handleClose} className="gap-2 text-muted-foreground">
-                    Cancelar importação
-                  </Button>
-                )}
               </div>
 
-              <div className="flex flex-col items-stretch sm:items-end gap-2 min-w-[320px]">
-                <div className="flex items-center gap-2 justify-end flex-wrap">
+              {/* CENTER — totals + input */}
+              <div className="flex-1 flex flex-col items-stretch sm:items-center gap-1 text-center min-w-0">
+                <div className="flex items-center gap-2 justify-center flex-wrap">
                   <label className="text-xs text-muted-foreground whitespace-nowrap">
                     Total informado pelo banco (R$):
                   </label>
@@ -1949,7 +1946,6 @@ export function ImportStatementModal({
                     placeholder="Ex.: 8.850,02"
                     value={statementTotalInput}
                     onChange={(e) => {
-                      // Only allow digits, dot, comma
                       const v = e.target.value.replace(/[^\d.,]/g, "");
                       setStatementTotalInput(v);
                       setAcknowledgeDivergence(false);
@@ -1970,33 +1966,32 @@ export function ImportStatementModal({
                   )}
                 </div>
                 {userStatementTotal !== null && importedAbs > 0 && userStatementTotal > importedAbs * 10 && (
-                  <span className="text-[11px] text-amber-600 text-right">
+                  <span className="text-[11px] text-amber-600">
                     ⚠ Valor parece fora de escala. Confira o separador decimal (use vírgula: 8.850,02).
                   </span>
                 )}
-
-                <span className="text-xs text-muted-foreground text-right">
-                  <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
-                </span>
-                <span className="text-xs text-muted-foreground text-right">
-                  Total no extrato após import:{" "}
-                  <strong className={grandTotal < 0 ? "text-destructive" : "text-foreground"}>
-                    {fmt(grandTotal)}
-                  </strong>
-                </span>
-                {diff !== null && (
-                  <span
-                    className={`text-xs text-right ${
-                      hasDivergence ? "text-destructive font-medium" : "text-emerald-600"
-                    }`}
-                  >
-                    {hasDivergence ? "⚠ Divergência" : "✓ Bate com a fatura"}:{" "}
-                    <strong>{fmt(diff)}</strong>
-                    {hasDivergence ? ` (esperado ${fmt(userStatementTotal!)})` : ""}
+                <div className="flex items-center justify-center gap-x-3 gap-y-0.5 flex-wrap text-xs text-muted-foreground">
+                  <span><strong>{counts.vincular}</strong> conciliar</span>
+                  <span aria-hidden>·</span>
+                  <span><strong>{counts.criar}</strong> criar</span>
+                  <span aria-hidden>·</span>
+                  <span><strong>{counts.ignorar}</strong> ignorar</span>
+                  <span aria-hidden className="h-3 w-px bg-border" />
+                  <span>
+                    Total após import:{" "}
+                    <strong className={grandTotal < 0 ? "text-destructive" : "text-foreground"}>
+                      {fmt(grandTotal)}
+                    </strong>
                   </span>
-                )}
+                  {diff !== null && (
+                    <span className={hasDivergence ? "text-destructive font-medium" : "text-emerald-600"}>
+                      {hasDivergence ? "⚠ Divergência" : "✓ Bate"}: <strong>{fmt(diff)}</strong>
+                      {hasDivergence ? ` (esperado ${fmt(userStatementTotal!)})` : ""}
+                    </span>
+                  )}
+                </div>
                 {hasDivergence && (
-                  <div className="rounded border border-destructive/40 bg-destructive/5 p-2 text-[11px] text-left text-destructive max-w-[360px]">
+                  <div className="rounded border border-destructive/40 bg-destructive/5 p-2 text-[11px] text-left text-destructive max-w-[420px] mx-auto">
                     <p className="font-medium mb-1">A importação não bate com o valor da fatura.</p>
                     <p className="text-muted-foreground mb-2">
                       Revise se existem linhas duplicadas no extrato, lançamentos ausentes
@@ -2012,10 +2007,14 @@ export function ImportStatementModal({
                     </label>
                   </div>
                 )}
+              </div>
+
+              {/* RIGHT — CTA + Cancelar */}
+              <div className="flex flex-col items-stretch sm:items-end gap-1.5">
                 {toImport === 0 ? (
                   <Button
                     onClick={handleClose}
-                    className="gap-2 mt-1"
+                    className="gap-2"
                     title="Todas as linhas foram tratadas como 'manter só o do sistema' ou 'ignorar' — nada precisa ser salvo."
                   >
                     <Check className="h-4 w-4" />
@@ -2025,18 +2024,27 @@ export function ImportStatementModal({
                   <Button
                     onClick={handleImport}
                     disabled={importing || blockedByDivergence}
-                    className="gap-2 mt-1"
+                    className="gap-2"
                   >
                     {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
                     {importType === "cartao" ? " para a fatura" : ""}
                   </Button>
-
+                )}
+                {isPage && (
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="text-xs text-muted-foreground hover:text-destructive underline underline-offset-2 self-center sm:self-end"
+                  >
+                    Cancelar importação
+                  </button>
                 )}
               </div>
             </DialogFooter>
           );
         })()}
+
 
         {step === "summary" && importResult && (
           <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
