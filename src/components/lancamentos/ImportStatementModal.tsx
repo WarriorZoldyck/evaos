@@ -1905,7 +1905,7 @@ export function ImportStatementModal({
         {rows.length > 0 && step === "preview" && (() => {
           const canGoReconcile =
             (importType === "debito" && !!targetBankAccount) ||
-            (importType === "cartao" && (isMultiCard || !!targetCard));
+            (importType === "cartao" && (isMultiCard || !!targetCard) && !!billReferenceMonth);
           return (
             <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-card border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between items-center" : ""}`}>
               {isPage ? (
