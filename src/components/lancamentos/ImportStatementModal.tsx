@@ -859,7 +859,7 @@ export function ImportStatementModal({
       setSystemBill({ total: 0, count: 0, loading: false });
       setOrphans([]);
     });
-  }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard, creditCards, isPersonal, selectedCompanyId]);
+  }, [importType, step, rows, matchLoading, matchTargets, targetCard, isMultiCard, creditCards, isPersonal, selectedCompanyId, billReferenceMonth]);
 
   // AUTO-RECONCILIAÇÃO POR VALOR (extrato = fonte da verdade).
   // Se um órfão do sistema (Só no sistema) tem o MESMO valor de UMA ÚNICA linha
