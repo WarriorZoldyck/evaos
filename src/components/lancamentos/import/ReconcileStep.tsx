@@ -181,6 +181,12 @@ export function ReconcileStep({
   onKeepStatementOnly,
   onUndoKeepStatementOnly,
   onCreateCategory,
+  rowDescriptions = {},
+  rowContacts = {},
+  reviewedRows,
+  onOpenReview,
+  suppliers = [],
+  clients = [],
 }: ReconcileStepProps) {
 
   const isCardMode = mode === "card";
