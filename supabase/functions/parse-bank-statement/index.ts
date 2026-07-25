@@ -39,10 +39,16 @@ function isRefundLikeDescription(description: string): boolean {
 function isExcludedCardStatementLine(description: string): boolean {
   const d = normalizeForRules(description);
   return /\b(pagamento|pagto|pgto|pag)\b.*\b(fatura|cartao|cartao de credito)\b/.test(d)
+    || /\bcredito\s+de\s+pagamento\b/.test(d)
+    || /\bpagamento\s+recebido\b/.test(d)
     || /\bdeb(?:ito)?\s+autom(?:atico)?\s+de\s+fatura\b/.test(d)
     || /\btotal\s+(da\s+)?fatura\b/.test(d)
     || /\bsaldo\s+financiado\b/.test(d)
     || /\blancamentos\s+atuais\b/.test(d);
+}
+
+function absCentsDelta(a: number, b: number): number {
+  return Math.abs(Math.round(a * 100) - Math.round(b * 100));
 }
 
 function extractOFXAccountDigits(content: string): string | undefined {
@@ -417,11 +423,6 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
       const amount = Math.abs(Number(t.a ?? t.amount) || 0);
       const description = String(t.desc ?? t.description ?? "Sem descrição");
 
-      if (isReceita && !isRefundLikeDescription(description)) {
-        console.warn(`Forcing AI-marked receita to despesa: desc="${description.slice(0, 120)}" amount=${amount}`);
-        isReceita = false;
-      }
-
       if (isReceita) {
         console.log(`Receita/credit detected: desc="${description.slice(0, 120)}" amount=${amount} card=${detectedDigits || "unknown"}`);
       }
@@ -591,6 +592,51 @@ serve(async (req) => {
             `Discarding implausible statement_total=${statementTotal} (gross=${grossTotal.toFixed(2)}, net=${netTotal.toFixed(2)}, ratio=${ratio.toFixed(1)}x)`
           );
           statementTotal = null;
+        }
+      }
+    }
+
+    // Credit-card statements sometimes expose a credit/restitution/adjustment line that
+    // is already reflected in the bank's final total. If we import it as "receita", the
+    // bill gets discounted twice (exactly the R$519,33 scenario). Use the bank total as
+    // source of truth to decide whether credit lines should stay, be excluded, or be
+    // treated as normal expenses.
+    if (statementTotal !== null && transactions.some((t) => t.type === "receita")) {
+      const credits = transactions.filter((t) => t.type === "receita");
+      const expenseOnlyTotal = transactions.reduce(
+        (sum, t) => sum + (t.type === "despesa" ? Math.abs(t.amount || 0) : 0),
+        0,
+      );
+      const netTotal = Math.abs(transactions.reduce(
+        (sum, t) => sum + (t.type === "receita" ? -Math.abs(t.amount || 0) : Math.abs(t.amount || 0)),
+        0,
+      ));
+      const grossTotal = transactions.reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+      const toleranceCents = 150;
+
+      if (absCentsDelta(netTotal, statementTotal) <= toleranceCents) {
+        console.log(
+          `Keeping credit lines: net total matches statement (net=${netTotal.toFixed(2)}, statement=${statementTotal.toFixed(2)}, credits=${credits.length})`
+        );
+      } else if (absCentsDelta(expenseOnlyTotal, statementTotal) <= toleranceCents) {
+        console.warn(
+          `Excluding ${credits.length} credit/adjustment line(s): expenses-only total matches statement (expenses=${expenseOnlyTotal.toFixed(2)}, net=${netTotal.toFixed(2)}, gross=${grossTotal.toFixed(2)}, statement=${statementTotal.toFixed(2)})`
+        );
+        console.warn(
+          `Excluded credit/adjustment lines: ${JSON.stringify(credits.map((t) => ({ desc: t.description.slice(0, 100), amount: t.amount, card: t.detected_card_digits })))} `
+        );
+        transactions = transactions.filter((t) => t.type !== "receita");
+      } else if (absCentsDelta(grossTotal, statementTotal) <= toleranceCents) {
+        console.warn(
+          `Converting ${credits.length} AI-marked receita line(s) to despesa: gross total matches statement (gross=${grossTotal.toFixed(2)}, net=${netTotal.toFixed(2)}, statement=${statementTotal.toFixed(2)})`
+        );
+        transactions = transactions.map((t) => t.type === "receita" ? { ...t, type: "despesa" } : t);
+      } else {
+        const nonExplicitCredits = credits.filter((t) => !isRefundLikeDescription(t.description));
+        if (nonExplicitCredits.length > 0) {
+          console.warn(
+            `Credit lines did not reconcile with statement and lack explicit refund wording: ${JSON.stringify(nonExplicitCredits.map((t) => ({ desc: t.description.slice(0, 100), amount: t.amount })))} `
+          );
         }
       }
     }
