@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
-import { renderBoletoCardPng, type BoletoCardData } from "../_shared/whatsapp-boleto-card.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +9,17 @@ const corsHeaders = {
 };
 
 const EVA_MAINTENANCE_FALLBACK = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
+const WHATSAPP_AI_MODEL = "google/gemini-3-flash-preview";
+
+function createTimer(scope: string) {
+  const startedAt = performance.now();
+  let lastMark = startedAt;
+  return (label: string) => {
+    const now = performance.now();
+    console.log(`[timing:${scope}] ${label} +${Math.round(now - lastMark)}ms total=${Math.round(now - startedAt)}ms`);
+    lastMark = now;
+  };
+}
 
 function isMaintenanceFallbackMessage(content: string | null | undefined): boolean {
   const normalized = (content || "")
@@ -252,151 +262,6 @@ async function sendEvolutionReply(phone: string, text: string) {
   }
 }
 
-// --- App URL for deep links back into Análises EVA ---
-const APP_BASE_URL = (Deno.env.get("APP_BASE_URL") || "https://eva.tec.br").replace(/\/$/, "");
-function buildAnalisesEvaLink(pendingId: string, edit = false, ctx?: string | null): string {
-  const q = new URLSearchParams({ pending: pendingId });
-  if (edit) q.set("edit", "1");
-  if (ctx) q.set("ctx", ctx);
-  return `${APP_BASE_URL}/analises-eva?${q.toString()}`;
-}
-
-// --- Evolution API helper: send image (base64) with caption ---
-async function sendEvolutionImage(phone: string, base64Png: Uint8Array, caption: string): Promise<boolean> {
-  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
-  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
-  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
-  if (!evoUrl || !evoKey || !evoInstance) return false;
-  try {
-    // Uint8Array -> base64 (chunked to avoid stack overflow)
-    let binary = "";
-    const chunk = 0x8000;
-    for (let i = 0; i < base64Png.length; i += chunk) {
-      binary += String.fromCharCode(...base64Png.subarray(i, i + chunk));
-    }
-    const b64 = btoa(binary);
-
-    const url = `${evoUrl}/message/sendMedia/${encodeURIComponent(evoInstance)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "apikey": evoKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        number: phone,
-        mediatype: "image",
-        mimetype: "image/png",
-        media: b64,
-        fileName: "sugestao-baixa.png",
-        caption,
-      }),
-    });
-    if (!res.ok) {
-      const errBody = await res.text();
-      console.error("Evolution sendMedia error:", res.status, errBody);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("Evolution sendMedia exception:", err);
-    return false;
-  }
-}
-
-// --- Evolution API helper: send WhatsApp reply-buttons ---
-// buttons: [{ id, text }] — Evolution encaminha a resposta com selectedButtonId
-async function sendEvolutionButtons(
-  phone: string,
-  title: string,
-  description: string,
-  footer: string,
-  buttons: Array<{ id: string; text: string }>,
-): Promise<boolean> {
-  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
-  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
-  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
-  if (!evoUrl || !evoKey || !evoInstance) return false;
-  try {
-    const url = `${evoUrl}/message/sendButtons/${encodeURIComponent(evoInstance)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "apikey": evoKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        number: phone,
-        title,
-        description,
-        footer,
-        buttons: buttons.slice(0, 3).map((b, i) => ({
-          buttonId: b.id,
-          buttonText: { displayText: b.text },
-          type: 1,
-          // some Evolution builds expect `id` / `text` at top level too
-          id: b.id,
-          text: b.text,
-          index: i,
-        })),
-      }),
-    });
-    if (!res.ok) {
-      const errBody = await res.text();
-      console.error("Evolution sendButtons error:", res.status, errBody);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("Evolution sendButtons exception:", err);
-    return false;
-}
-}
-
-// --- Evolution API helper: send WhatsApp list message (still supported by modern WhatsApp) ---
-// rows: [{ id, title, description? }] — user pick returns as listResponseMessage.singleSelectReply.selectedRowId
-async function sendEvolutionList(
-  phone: string,
-  title: string,
-  description: string,
-  footer: string,
-  buttonText: string,
-  sectionTitle: string,
-  rows: Array<{ id: string; title: string; description?: string }>,
-): Promise<boolean> {
-  const evoUrl = Deno.env.get("EVOLUTION_API_URL");
-  const evoKey = Deno.env.get("EVOLUTION_API_KEY");
-  const evoInstance = Deno.env.get("EVOLUTION_INSTANCE");
-  if (!evoUrl || !evoKey || !evoInstance) return false;
-  try {
-    const url = `${evoUrl}/message/sendList/${encodeURIComponent(evoInstance)}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "apikey": evoKey, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        number: phone,
-        title,
-        description,
-        footerText: footer,
-        buttonText,
-        sections: [
-          {
-            title: sectionTitle,
-            rows: rows.map((r) => ({
-              title: r.title,
-              description: r.description || "",
-              rowId: r.id,
-            })),
-          },
-        ],
-      }),
-    });
-    if (!res.ok) {
-      const errBody = await res.text();
-      console.error("Evolution sendList error:", res.status, errBody);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.error("Evolution sendList exception:", err);
-    return false;
-  }
-}
-
 // --- Evolution API helper: get base64 image from media message ---
 async function getImageBase64(remoteJid: string, messageId: string): Promise<string | null> {
   const evoUrl = Deno.env.get("EVOLUTION_API_URL");
@@ -445,7 +310,13 @@ async function getImageBase64(remoteJid: string, messageId: string): Promise<str
 // Helper to build response AND send Evolution reply
 function buildResponse(body: any, status: number, phone: string) {
   if (body.message && phone) {
-    sendEvolutionReply(phone, body.message);
+    const replyTask = sendEvolutionReply(phone, body.message);
+    const edgeRuntime = (globalThis as any).EdgeRuntime;
+    if (edgeRuntime?.waitUntil) {
+      edgeRuntime.waitUntil(replyTask);
+    } else {
+      replyTask.catch((err) => console.error("Evolution reply background task failed:", err));
+    }
   }
   return new Response(JSON.stringify(body), {
     status,
@@ -544,7 +415,7 @@ async function extractDocumentParties(apiKey: string, userContent: any) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: WHATSAPP_AI_MODEL,
         messages: [
           {
             role: "system",
@@ -728,6 +599,7 @@ serve(async (req) => {
   let shouldAcknowledgeOnError = false;
 
   try {
+    const markTiming = createTimer("whatsapp-webhook");
     // Admin Supabase client must exist before idempotency checks.
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -753,6 +625,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    markTiming("request parsed");
 
     // === EVOLUTION API ONLY ===
     // Ignore non-message events (connection.update, qrcode.updated, etc)
@@ -907,6 +780,7 @@ serve(async (req) => {
         console.log("Audio media fetched, mimetype:", mediaMimetype, "length:", imageBase64.length);
       }
     }
+    markTiming("media fetched/prepared");
 
     // --- Prepare media for private, owner-scoped storage after user resolution ---
     let attachmentUrl: string | null = null;
@@ -1038,6 +912,7 @@ serve(async (req) => {
     }
 
     console.log("Matched profile:", profile.id.slice(0, 8), "| Stored number:", profile.whatsapp_number);
+    markTiming("profile matched");
 
     let userId = profile.id;
     const callerUserId = profile.id;
@@ -1185,6 +1060,7 @@ serve(async (req) => {
     } catch (hubErr) {
       console.error("Hub context resolution failed (defaulting to caller):", hubErr);
     }
+    markTiming("hub context resolved");
 
     // Helper used later to enforce viewer role on write intents
     const denyIfViewer = () => {
@@ -1249,6 +1125,7 @@ serve(async (req) => {
         console.log("Media uploaded to private storage path:", filePath);
       }
     }
+    markTiming("attachment uploaded");
 
     // ============================================================
     // CONVERSATION MEMORY: Load recent history + save user message
@@ -1357,6 +1234,7 @@ serve(async (req) => {
       "activeSessionMsgs=",
       activeMessages.length,
     );
+    markTiming("conversation history loaded");
 
     // Save incoming user message
     const userMsgText = message || (hasAudio ? "[áudio enviado]" : hasDocument ? "[documento enviado]" : "[imagem enviada]");
@@ -1365,6 +1243,7 @@ serve(async (req) => {
       role: "user",
       content: userMsgText,
     });
+    markTiming("incoming message saved");
 
     // Helper to save assistant response to history
     const saveAssistantMsg = (text: string) => {
@@ -2366,6 +2245,7 @@ ${historicalPatternsBlock}`;
       ? await extractDocumentParties(LOVABLE_API_KEY, userContent)
       : null;
     const documentContextMatch = matchCompanyFromDocument(companies, documentPartyExtraction);
+    markTiming("document context extraction");
 
     if (documentContextMatch) {
       console.log("DOCUMENT CONTEXT DETECTED:", {
@@ -2392,8 +2272,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        max_tokens: 4096,
+        model: WHATSAPP_AI_MODEL,
+        max_tokens: 2048,
         messages: [
           { role: "system", content: effectiveSystemPrompt },
           ...conversationHistory,
@@ -2401,6 +2281,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         ],
       }),
     });
+    markTiming("main AI response received");
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
@@ -2431,6 +2312,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
+    markTiming("main AI response parsed");
 
     // Increment AI usage counter (best-effort)
     supabase.rpc("increment_ai_usage", { _uid: userId }).then(({ error }: any) => {
@@ -3889,10 +3771,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       // already exists in the system. If so, attach a [SUGESTAO_BAIXA] block
       // to the pending entry so the user can resolve it in Análises EVA.
       let boletoSuggestionBlock: string | null = null;
-      let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       // Nota interna: sugestão de baixa é armazenada em notes e resolvida em Análises EVA.
       // NÃO envia mais mensagem/imagem/menu no WhatsApp.
-      let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
         try {
           const supplierName = supplierId
@@ -3908,7 +3788,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             paymentDate,
           });
           if (match) {
-            boletoMatch = match;
             console.log("=== BOLETO MATCH FOUND (suggestion) ===", { txId: match.tx.id, score: match.score });
             boletoSuggestionBlock =
               `\n\n[SUGESTAO_BAIXA]\n` +
@@ -3923,13 +3802,14 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           console.error("Boleto reconciliation skipped due to error:", e);
         }
       }
+      markTiming("boleto match checked");
 
 
 
 
       const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
       const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
-      const { data: insertedPending, error: insertError } = await supabase.from("ai_pending_transactions").insert({
+      const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
         source: "whatsapp",
         status: mainStatus,
@@ -3956,6 +3836,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         original_message: originalUserText || null,
         ai_response_message: aiParsed.friendly_message || null,
       }).select("id").single();
+      markTiming("pending transaction inserted");
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
@@ -3965,8 +3846,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           message: "❌ Não consegui criar o lançamento. Tente novamente.",
         }, 500);
       }
-
-      const pendingId: string | null = insertedPending?.id || null;
 
       // Sugestão de baixa: apenas registra no notes do pending (boletoSuggestionBlock).
       // NÃO envia mais imagem, link "Abrir no app" nem menu 1/2/3 no WhatsApp —
@@ -3979,7 +3858,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const subDisplay = subcategoryLabel ? " / " + subcategoryLabel : "";
       const payMethodDisplay = paymentMethod ? `\n💳 ${paymentMethod}` : "";
       const contactDisplay = contactName ? `\n👤 ${contactName}` : "";
-      const statusDisplay = status === "Pendente" ? " (Pendente)" : "";
       const cardName = creditCardId ? contextCards.find(c => c.id === creditCardId)?.name : null;
       const bankName = bankAccountId ? contextAccounts.find((a: any) => a.id === bankAccountId)?.name : null;
       const walletName = walletId ? contextWallets.find((w: any) => w.id === walletId)?.name : null;
