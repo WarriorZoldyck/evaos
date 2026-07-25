@@ -1,21 +1,23 @@
-# Botão "Cancelar importação" sempre visível
+## Diagnóstico
 
-## Contexto
+O botão **"Criar no sistema"** já funciona tecnicamente — ele executa `onActionChange(i, "criar")`, que grava `matchActions[i] = "criar"` no estado do pai (`ImportStatementModal`). O problema é que essa **também é a ação padrão** de qualquer linha da seção "Só no extrato" (o código faz `matchActions[i] || "criar"`).
 
-`src/pages/ImportarExtrato.tsx` já tem um botão "Voltar para Lançamentos" no topo da página, mas ele rola junto com o conteúdo. Nas etapas mais longas (Conferir, Conciliar, Resumo), o usuário precisa rolar até o topo para sair — o que ele quer evitar.
+Ou seja: a linha já está em `"criar"` desde que apareceu. Clicar de novo em "Criar no sistema" não muda nada — nem visualmente, nem no contador do rodapé (que já mostra "1 criar"). O usuário percebe isso como "botão morto".
 
-## Mudança
+A criação de fato acontece só quando ele clica em **"Importar 115 lançamentos…"** no rodapé. O toggle atual serve apenas para **alternar** entre "Criar no sistema" e "Manter só do extrato".
 
-Arquivo único: `src/pages/ImportarExtrato.tsx`.
+## O que ajustar (só UI/UX da coluna Ação)
 
-- Transformar a barra superior em `sticky top-0 z-40` com fundo sólido (`bg-background/95 backdrop-blur` + borda inferior), acompanhando o padrão dos demais cabeçalhos fixos do app.
-- Renomear o label para **"Cancelar importação"** (mais claro que "Voltar" quando há trabalho em andamento) e manter o ícone `X` (ou `ArrowLeft` + texto) — usar `X` para reforçar cancelamento.
-- Manter `goBack()` como handler (já dispara `fetchTransactions()` via `onClose` do modal, e retorna com animação).
-- ESC continua funcionando.
+Arquivo único: `src/components/lancamentos/import/ReconcileStep.tsx` (bloco lines 915‑962, coluna "Ação" da tabela "Só no extrato").
 
-Nenhuma mudança em `ImportStatementModal.tsx` ou na lógica de importação — o botão já chama `onClose`, que a página trata como cancelamento/saída limpa.
+1. **Deixar claro qual é o estado atual**: o botão do estado ativo passa a ter `aria-pressed="true"`, `data-state="active"` e recebe `cursor-default` + `disabled`‑like feel (mantendo o realce verde/azul). Só o botão da **alternativa** fica clicável.
+2. **Tooltip contextual por estado**:
+   - Estado ativo → "Ação atual: será criado no sistema ao importar." / "Ação atual: ficará só no extrato."
+   - Estado alternativo → "Clique para alternar para X."
+3. **Reforçar onde a criação acontece de verdade**: adicionar uma micro‑copy discreta abaixo do toggle no primeiro render (ou no cabeçalho da seção): _"A criação acontece ao clicar em 'Importar N lançamentos' no rodapé."_
+4. **Sem mudanças em lógica de negócio**, estado, contadores, ou no fluxo de import. Nenhuma alteração em `ImportStatementModal.tsx` nem no backend.
 
-## Fora de escopo
+## Fora do escopo
 
-- Confirmação "tem certeza que quer cancelar?" (pode ser um follow-up se o usuário pedir).
-- Alterar os botões internos "Cancelar/Voltar" do rodapé de cada step do modal.
+- Não vou transformar "Criar no sistema" num botão de commit imediato por linha — isso quebraria o fluxo em lote atual (categorização em massa + um único import no fim) e o contador do rodapé.
+- Se preferir esse comportamento (criar imediatamente ao clicar, linha some da lista), me diga que faço em plano separado.
