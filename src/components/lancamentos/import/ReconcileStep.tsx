@@ -1005,7 +1005,40 @@ export function ReconcileStep({
                             </div>
                           </td>
                           <td className="p-2 text-center align-top">
-                            <div
+                            {willBeCreated ? (
+                              isReviewed ? (
+                                <div className="flex flex-col items-center gap-1">
+                                  <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+                                    <Check className="h-2.5 w-2.5" /> Revisada
+                                  </Badge>
+                                  {onOpenReview && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenReview(i)}
+                                      className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
+                                    >
+                                      editar
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 border-amber-500/60 text-amber-700 hover:bg-amber-500/10"
+                                  onClick={() => onOpenReview?.(i)}
+                                  title="Renomear, escolher fornecedor e confirmar categoria antes de importar."
+                                >
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Revisar e criar
+                                </Button>
+                              )
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground italic">—</span>
+                            )}
+                          </td>
+                          <td className="p-2 text-center align-top">
+
                               className="inline-flex items-center justify-center gap-2 select-none"
                               title={
                                 willBeCreated
