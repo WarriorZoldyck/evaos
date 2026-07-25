@@ -1,15 +1,49 @@
-## Remover completamente menu Aprovar/Cancelar/Editar do WhatsApp
+## Objetivo
+Mostrar, no seletor de contexto do sidebar, a quantidade de lançamentos pendentes em **Análises EVA** por contexto — para que o usuário identifique rapidamente onde há itens a revisar sem precisar entrar e trocar de contexto.
 
-Voltar 100% ao comportamento antigo (imagem 2): apenas confirmação textual "Lançamento enviado para aprovação no app" — sem menu numerado, sem link de edição no rodapé, sem lista interativa.
+## Como vai ficar
+No dropdown atual "Todas as contas / Pessoal / [Empresas]", cada linha ganha um badge numérico à direita quando houver pendências:
 
-### O que muda em `supabase/functions/whatsapp-webhook/index.ts`
+```text
+[Layers]  Todas as contas              (7)
+─────────────────────────────────────────
+[☐] [User]      Pessoal                (2)
+[☑] [Building]  EVA OS                 (3)
+[☐] [Building]  IMPLANTES BR LTDA      (2)
+[☐] [Building]  RENATO BRUGGEMANN
+```
 
-1. Remover qualquer resquício do bloco de "Ações rápidas" para novos lançamentos (o `newTxActionsTail` e o registro `new_tx_actions` em `whatsapp_pending_actions`).
-2. Garantir que a mensagem de confirmação do novo lançamento **não** anexe o rodapé com `1 — Aprovar / 2 — Cancelar / 3 — Editar` nem o link `Abrir no app`.
-3. Deixar o texto final igual ao modelo antigo:
-   - `📋 Lançamento enviado para aprovação no app!` + dados + `⚠️ Acesse "Análises EVA" no app para aprovar.`
-4. Remover/desativar o handler que interpreta respostas `1/2/3` como aprovar/cancelar/editar do último lançamento (para não confundir com outros fluxos).
+- Badge só aparece quando `count > 0`.
+- Estilo: pill pequeno em `bg-primary/15 text-primary`, consistente com o "3 pendentes" já usado em Análises EVA.
+- "Todas as contas" mostra o total somado.
+- Opcional (leve): mostrar um pontinho indicador no botão-trigger do seletor quando o total > 0 e o contexto atualmente selecionado não cobre todas as pendências (ex: usuário está em "Pessoal" mas há pendências em "EVA OS").
 
-### O que NÃO muda
-- Fluxo de match de boleto (confirmar baixa de pendente) continua com seu próprio menu — o usuário só pediu para remover no caso de novo lançamento comum.
-- Card/imagem do boleto quando há match segue igual.
+## Fonte de dados
+Query única scoped por `user_id`:
+
+```sql
+select company_id, count(*)
+from ai_pending_transactions
+where user_id = auth.uid() and status = 'pending'
+group by company_id;
+```
+
+- `company_id IS NULL` → Pessoal.
+- Demais IDs mapeiam para o nome via `companies`.
+
+## Implementação técnica
+1. Novo hook `src/hooks/usePendingAnalisesCountByContext.ts`
+   - Usa React Query, key `["pending-analises-by-context", userId]`.
+   - Retorna `{ personal: number, byCompanyId: Record<string, number>, total: number }`.
+   - `staleTime: 30s`; invalidado quando pendentes mudam (reaproveitar invalidação já existente em Análises EVA — adicionar `queryClient.invalidateQueries({ queryKey: ["pending-analises-by-context"] })` nos pontos que hoje invalidam a lista pendente).
+2. `src/components/layout/AppSidebar.tsx`
+   - Consumir o hook.
+   - Adicionar `<span>` de badge ao final de cada `DropdownMenuItem` (Todas / Pessoal / cada empresa) quando count > 0.
+   - Ajustar layout: `flex items-center` no item + `ml-auto` no badge (respeitando o `Check` de "Todas as contas" — mover o Check para antes do badge ou empilhar ambos com gap).
+   - (Opcional) Pequeno dot `bg-primary` no trigger quando houver pendências fora do contexto atualmente ativo.
+3. Sem mudanças em `src/pages/AnalisesEva.tsx` além da invalidação do novo query key após aprovar/rejeitar.
+
+## Fora de escopo
+- Não alterar o header da página Análises EVA.
+- Não adicionar badges nos cards individuais.
+- Não mudar a lógica de filtragem por contexto — apenas exibir contadores.

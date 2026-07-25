@@ -29,6 +29,7 @@ import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions } from "@/hooks/useAIPendingTransactions";
+import { usePendingAnalisesCountByContext } from "@/hooks/usePendingAnalisesCountByContext";
 import { useHub } from "@/contexts/HubContext";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import {
@@ -88,6 +89,7 @@ export function AppSidebar() {
   const onlyPersonal = !viewAll && personalSelected && selectedCompanyIds.length === 0;
   const visibleFinanceMenuItems = financeMenuItems.filter((i) => !(onlyPersonal && i.url === "/dre"));
   const { pendingCount } = useAIPendingTransactions();
+  const pendingByContext = usePendingAnalisesCountByContext();
   const { state } = useSidebar();
   const { isHubMember, isOwnerWithMembers, pendingInvitationsCount } = useHub();
   const { hubAllowed } = usePlanLimits();
@@ -159,25 +161,43 @@ export function AppSidebar() {
             <DropdownMenuContent align="start" className="w-64">
               <DropdownMenuItem onClick={() => setViewAll(true)}>
                 <Layers className="mr-2 h-4 w-4" />
-                Todas as contas
-                {viewAll && <Check className="ml-auto h-4 w-4 text-primary" />}
+                <span className="flex-1">Todas as contas</span>
+                {viewAll && <Check className="ml-2 h-4 w-4 text-primary" />}
+                {pendingByContext.total > 0 && (
+                  <span className="ml-2 min-w-[1.25rem] rounded-full bg-primary/15 px-1.5 py-0.5 text-center text-[10px] font-semibold text-primary">
+                    {pendingByContext.total}
+                  </span>
+                )}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={(e) => { e.preventDefault(); togglePersonal(); }}>
                 <Checkbox checked={viewAll || personalSelected} className="mr-2 pointer-events-none" />
                 <User className="mr-2 h-4 w-4" />
-                Pessoal
+                <span className="flex-1">Pessoal</span>
+                {pendingByContext.personal > 0 && (
+                  <span className="ml-2 min-w-[1.25rem] rounded-full bg-primary/15 px-1.5 py-0.5 text-center text-[10px] font-semibold text-primary">
+                    {pendingByContext.personal}
+                  </span>
+                )}
               </DropdownMenuItem>
-              {companies.map((company) => (
-                <DropdownMenuItem
-                  key={company.id}
-                  onSelect={(e) => { e.preventDefault(); toggleCompanyId(company.id); }}
-                >
-                  <Checkbox checked={viewAll || selectedCompanyIds.includes(company.id)} className="mr-2 pointer-events-none" />
-                  <Building2 className="mr-2 h-4 w-4" />
-                  <span className="truncate">{company.name}</span>
-                </DropdownMenuItem>
-              ))}
+              {companies.map((company) => {
+                const count = pendingByContext.byCompanyId[company.id] || 0;
+                return (
+                  <DropdownMenuItem
+                    key={company.id}
+                    onSelect={(e) => { e.preventDefault(); toggleCompanyId(company.id); }}
+                  >
+                    <Checkbox checked={viewAll || selectedCompanyIds.includes(company.id)} className="mr-2 pointer-events-none" />
+                    <Building2 className="mr-2 h-4 w-4" />
+                    <span className="truncate flex-1">{company.name}</span>
+                    {count > 0 && (
+                      <span className="ml-2 min-w-[1.25rem] rounded-full bg-primary/15 px-1.5 py-0.5 text-center text-[10px] font-semibold text-primary">
+                        {count}
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
               {selectedCount > 1 && !viewAll && (
                 <>
                   <DropdownMenuSeparator />

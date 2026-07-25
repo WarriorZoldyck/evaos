@@ -130,6 +130,7 @@ export function useAIPendingTransactions() {
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });
     queryClient.invalidateQueries({ queryKey: ["ai-pending-count"] });
+    queryClient.invalidateQueries({ queryKey: ["ai-pending-by-context"] });
     queryClient.invalidateQueries({ queryKey: ["ai-duplicate-suspects"] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
   };
