@@ -204,7 +204,7 @@ export default function Lancamentos() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setImportOpen(true)}
+          onClick={() => navigate("/lancamentos/importar-extrato")}
           className="gap-1.5 h-8 shrink-0"
         >
           <Upload className="h-3.5 w-3.5" />
