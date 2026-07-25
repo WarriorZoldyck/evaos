@@ -1550,6 +1550,27 @@ export function ImportStatementModal({
                 </div>
               )}
 
+              {importType === "cartao" && (
+                <div className="flex-1 min-w-[180px]">
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Qual o mês desta fatura? *
+                  </label>
+                  <Input
+                    type="month"
+                    value={billReferenceMonth}
+                    onChange={(e) => {
+                      billReferenceMonthTouchedRef.current = true;
+                      setBillReferenceMonth(e.target.value);
+                    }}
+                    className="w-full"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Usamos para buscar os lançamentos já registrados neste mês.
+                  </p>
+                </div>
+              )}
+
+
 
             </div>
 
