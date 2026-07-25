@@ -2048,6 +2048,23 @@ export function ImportStatementModal({
           return true;
         }}
       />
+  );
+
+  if (isPage) {
+    return (
+      <div className="flex flex-col min-h-[calc(100vh-8rem)]">
+        {bodyContent}
+        {nestedCreateCard}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+        {bodyContent}
+      </DialogContent>
+      {nestedCreateCard}
     </Dialog>
   );
 }
