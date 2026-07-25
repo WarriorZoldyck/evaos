@@ -605,7 +605,7 @@ export function ReconcileStep({
                   <p className="font-medium text-foreground">Prováveis causas da divergência:</p>
                   {onlyStatementRows.length > 0 && (
                     <p>
-                      • {onlyStatementRows.length} linha{onlyStatementRows.length === 1 ? "" : "s"} só no extrato ({fmt(onlyStatementRows.reduce((s, { r }) => s + Math.abs(r.amount), 0))})
+                      • {onlyStatementRows.length} linha{onlyStatementRows.length === 1 ? "" : "s"} só no extrato ({fmt(Math.abs(onlyStatementRows.reduce((s, { r }) => s + signedStatementAmount(r), 0)))})
                     </p>
                   )}
                   {orphans.length > 0 && (
