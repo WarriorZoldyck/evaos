@@ -718,6 +718,8 @@ export function ImportStatementModal({
 
 
     resetMatches();
+    setExtraMatches({});
+    setPromotedOrphanIds(new Set());
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
 
   // ORPHAN DETECTOR (card mode) — flag system transactions that DON'T appear in the statement.
