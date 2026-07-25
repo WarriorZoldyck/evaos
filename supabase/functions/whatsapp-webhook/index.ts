@@ -3768,7 +3768,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       // Nota interna: sugestão de baixa é armazenada em notes e resolvida em Análises EVA.
       // NÃO envia mais mensagem/imagem/menu no WhatsApp.
-      let boletoMatch: { tx: any; supplierName: string | null; score: number } | null = null;
       if (txType === "despesa" && status === "Pago" && !creditCardId) {
         try {
           const supplierName = supplierId
@@ -3799,6 +3798,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           console.error("Boleto reconciliation skipped due to error:", e);
         }
       }
+      markTiming("boleto match checked");
 
 
 
@@ -3832,6 +3832,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         original_message: originalUserText || null,
         ai_response_message: aiParsed.friendly_message || null,
       }).select("id").single();
+      markTiming("pending transaction inserted");
 
       if (insertError) {
         console.error("Transaction insert error:", insertError);
@@ -3841,8 +3842,6 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           message: "❌ Não consegui criar o lançamento. Tente novamente.",
         }, 500);
       }
-
-      const pendingId: string | null = insertedPending?.id || null;
 
       // Sugestão de baixa: apenas registra no notes do pending (boletoSuggestionBlock).
       // NÃO envia mais imagem, link "Abrir no app" nem menu 1/2/3 no WhatsApp —
