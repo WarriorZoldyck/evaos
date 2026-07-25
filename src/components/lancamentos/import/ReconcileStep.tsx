@@ -218,16 +218,18 @@ export function ReconcileStep({
   // Rows where matcher found a same-value candidate but text differs — user must confirm.
   const suggestedRows = indexed.filter(({ i }) => {
     if (dismissedSuggestions.has(i)) return false;
-    const a = matchActions[i] || "criar";
-    return a === "criar" && matches[i]?.best?.suggested;
+    const a = matchActions[i] || "ignorar";
+    return a !== "vincular" && matches[i]?.best?.suggested;
   });
   const suggestedIdxSet = new Set(suggestedRows.map(({ i }) => i));
   const newRows = indexed.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
-    const a = matchActions[i] || "criar";
-    return a === "criar" || (a === "vincular" && !matches[i]?.best);
+    const a = matchActions[i] || "ignorar";
+    // Include every non-vincular row (default "ignorar" and explicit "criar" both show up
+    // so the user can toggle the switch to opt-in to creation).
+    return a !== "vincular" || !matches[i]?.best;
   });
-  const ignoredRows = indexed.filter(({ i }) => matchActions[i] === "ignorar");
+  const ignoredRows = indexed.filter(({ i }) => matchActions[i] === "ignorar" && matches[i]?.best);
 
   // Sistema × Extrato totals (fatura-level, independent of matcher tier)
   // Statement total = net bill value. On a card statement, refunds (receitas)
