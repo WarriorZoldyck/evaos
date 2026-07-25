@@ -16,7 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import { NeuToggle } from "@/components/ui/neu-toggle";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -974,28 +974,22 @@ export function ReconcileStep({
                           <td className="p-2 text-center align-top">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <label
-                                  className={`inline-flex items-center gap-2 cursor-pointer select-none rounded-md border px-2 py-1 transition-colors ${
-                                    willBeCreated
-                                      ? "border-emerald-500/50 bg-emerald-500/10"
-                                      : "border-border bg-muted/40"
-                                  }`}
-                                >
-                                  <Switch
+                                <div className="inline-flex items-center gap-2 select-none">
+                                  <NeuToggle
                                     checked={willBeCreated}
                                     onCheckedChange={(checked) =>
                                       onActionChange(i, checked ? "criar" : "ignorar")
                                     }
-                                    aria-label="Criar esta linha ao importar"
+                                    ariaLabel="Criar esta linha ao importar"
                                   />
                                   <span
                                     className={`text-[11px] font-medium whitespace-nowrap ${
-                                      willBeCreated ? "text-emerald-700" : "text-muted-foreground"
+                                      willBeCreated ? "text-primary" : "text-muted-foreground"
                                     }`}
                                   >
-                                    {willBeCreated ? "Criar ao importar" : "Ignorar esta linha"}
+                                    {willBeCreated ? "Criar" : "Ignorar"}
                                   </span>
-                                </label>
+                                </div>
                               </TooltipTrigger>
                               <TooltipContent side="left" className="text-xs max-w-[260px]">
                                 {willBeCreated

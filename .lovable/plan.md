@@ -1,46 +1,48 @@
-## Deixar claro visualmente o estado de cada linha em "Só no extrato"
 
-No vídeo, ao clicar em **"Criar no sistema"** nada parece acontecer: o botão já vem selecionado por padrão, o toggle não muda de posição perceptível, e o único sinal de vida é o pequeno contador no rodapé (`X criar · Y ignorar`). O usuário não entende que a criação vai acontecer no final, nem qual é o estado atual da linha.
+## Contexto
 
-Vou tornar o estado explícito no próprio corpo da linha, tirar a ambiguidade do toggle e reforçar o CTA do rodapé.
+O undo já reverteu os badges por linha, contadores e switch shadcn na seção "Só no extrato". A lógica atual (marcar `criar` vs `ignorar`, commit em lote no botão do rodapé) fica mantida — só ajustamos apresentação.
 
-### O que muda
+## Mudanças
 
-**`src/components/lancamentos/import/ReconcileStep.tsx` — seção "Só no extrato"**
+### 1. Cabeçalho único na mesma altura — `ImportStatementModal.tsx` (variant `page`)
 
-1. **Badge de estado por linha (na coluna Descrição)**
-   - Ação = `criar` → chip verde **"✔ Será criado ao importar"** (com o número de ordem quando houver duplicatas: `#3 de 5`).
-   - Ação = `ignorar` → chip cinza **"⊘ Não será importado"** + linha inteira com `opacity-60` e categoria desabilitada.
-   - Substitui o feedback invisível de hoje: hoje só o botão muda de cor, agora a linha inteira comunica o resultado.
+Hoje o topo tem duas linhas: uma com "Voltar" + título "Importar Extrato" + ícone banco/data, outra com "Cancelar importação". E o total do extrato aparece só dentro do card na etapa de conciliação.
 
-2. **Toggle de ação mais legível**
-   - Trocar o par de botões colados por um **Switch shadcn** com label dinâmica:
-     - Ligado: **"Criar ao importar"** (verde)
-     - Desligado: **"Ignorar esta linha"** (cinza)
-   - Elimina a impressão de que "Criar no sistema" é um botão que devia disparar algo agora — Switch comunica estado, não ação.
+Passa a ser **uma única barra sticky** com três zonas:
 
-3. **Mini-resumo fixo no cabeçalho da seção**
-   - Ao lado do título "Só no extrato — o que fazer?", exibir contador ao vivo:
-     `N serão criadas · M ignoradas` (verde/cinza).
-   - Adiciona ações em bulk: **"Marcar todas para criar"** / **"Ignorar todas"**.
+```text
+[← Voltar]   [Banco • Data • Total informado R$ X.XXX,XX]   [Cancelar importação ✕]
+```
 
-4. **Alert reescrito, mais curto**
-   - Substituir o parágrafo atual por 2 linhas diretas:
-     > Cada linha marcada como **"Criar ao importar"** vira um novo lançamento quando você clicar em **"Importar N lançamentos"** no rodapé. Desligue o switch para pular a linha.
+- Esquerda: botão `← Voltar` (etapa anterior / fecha se for a primeira).
+- Centro: metadados do extrato (banco/cartão, período, total informado pelo banco — mesmo dado que hoje aparece dentro do card "Extrato original", trazido pro header).
+- Direita: `Cancelar importação` (mantém comportamento atual, fecha a rota).
+- Sticky com `bg-background` sólido + border-bottom; z-index acima do conteúdo. Some o "header duplicado" que existia na etapa reconcile.
 
-5. **Reforço no botão do rodapé (`ImportStatementModal.tsx`)**
-   - Atualizar o label para deixar explícito o que vai ser gravado:
-     `Importar (X conciliar + Y criar)`
-   - Mantém o botão desabilitado quando `X + Y = 0`.
+### 2. Toggle neumórfico Uiverse — nova primitiva `src/components/ui/neu-toggle.tsx`
 
-### O que NÃO muda
+- Componente controlado: `<NeuToggle checked onCheckedChange aria-label />`.
+- HTML/CSS exatos do snippet fornecido (label > toggle > input + indicator), estilo neumórfico com estado ligado em gradiente azul.
+- CSS colocalizado no arquivo via `<style>` scoped por classe única (`neu-toggle`) pra não vazar globalmente e não depender de `index.css`.
+- Sem hardcode de cores no consumidor — o componente encapsula.
 
-- Nada de criação imediata — commit continua sendo em lote no clique do rodapé (evita o bug de "aparecerem repetidos em Só no sistema" que já corrigimos).
-- Lógica de matching, sugestões de categoria por histórico, ordenação e cabeçalho sticky permanecem iguais.
-- Ações e labels das outras seções ("Igual — pode conciliar", "Só no sistema") não são tocadas.
+### 3. Uso do NeuToggle em "Só no extrato" — `ReconcileStep.tsx`
 
-### Resultado esperado
+- Substituir o par de botões `Criar no sistema` / `Manter só do extrato` pelo `NeuToggle` na coluna Ação.
+- Ligado = `criar` (padrão), desligado = `ignorar`.
+- Ao lado do toggle, um label curto reflete o estado: **"Criar"** (ligado) / **"Ignorar"** (desligado), pra não depender só da cor.
+- Tooltip mantém a explicação "A criação acontece ao clicar em Importar no rodapé".
+- Sem badges por linha, sem contadores no cabeçalho da seção, sem bulk actions, sem dimming — nada do que foi revertido volta.
 
-- O usuário vê, na própria linha, "Será criado ao importar" — sem depender do contador do rodapé para entender.
-- Switch com label dinâmica remove a expectativa de que "Criar no sistema" seja um botão de ação imediata.
-- Botão do rodapé mostra exatamente quantos lançamentos serão gravados, encerrando a dúvida sobre "o que acontece agora".
+### 4. O que NÃO muda
+
+- Botão `Importar N lançamentos` do rodapé permanece como está (label atual, sem breakdown extra).
+- Lógica de matching, ordem, categorias, seções "Igual" e "Só no sistema" — intocadas.
+- Rodapé sticky já existente permanece.
+
+## Resultado
+
+- Topo com uma linha só, voltar + info do extrato + cancelar, tudo alinhado verticalmente.
+- Toggle bonito neumórfico substitui o switch/botões atuais na coluna Ação.
+- Comportamento de commit em lote preservado (sem o bug de "aparecer tudo repetido").
