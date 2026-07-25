@@ -144,6 +144,8 @@ interface ImportStatementModalProps {
   allBankAccounts?: { id: string; name: string; company_id: string | null; company_name?: string }[];
   companies?: { id: string; name: string }[];
   refetchAccounts?: () => Promise<void> | void;
+  /** "modal" (default) renders inside a Dialog. "page" renders full-bleed for a dedicated route. */
+  variant?: "modal" | "page";
 }
 
 /** Detects descriptions that look like a credit-card BILL PAYMENT (not a card purchase). */
@@ -225,6 +227,7 @@ export function ImportStatementModal({
   allBankAccounts,
   companies,
   refetchAccounts,
+  variant = "modal",
 }: ImportStatementModalProps) {
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
@@ -1327,9 +1330,10 @@ export function ImportStatementModal({
     return `${card.name}${card.last_four_digits ? ` ****${card.last_four_digits}` : ""}`;
   };
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+  const isPage = variant === "page";
+
+  const bodyContent = (
+    <>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
@@ -1992,9 +1996,11 @@ export function ImportStatementModal({
             )}
           </DialogFooter>
         )}
-      </DialogContent>
+    </>
+  );
 
-      {/* Nested modal: create new credit card from within import */}
+  const nestedCreateCard = (
+      /* Nested modal: create new credit card from within import */
       <CreditCardFormModal
         open={createCardOpen}
         onClose={() => setCreateCardOpen(false)}
@@ -2041,6 +2047,23 @@ export function ImportStatementModal({
           return true;
         }}
       />
+  );
+
+  if (isPage) {
+    return (
+      <div className="flex flex-col min-h-[calc(100vh-8rem)]">
+        {bodyContent}
+        {nestedCreateCard}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+        {bodyContent}
+      </DialogContent>
+      {nestedCreateCard}
     </Dialog>
   );
 }

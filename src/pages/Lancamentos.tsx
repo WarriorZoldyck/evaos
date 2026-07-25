@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
 import { Plus, CreditCard, Upload, Sparkles, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,13 +25,14 @@ import { TransactionDetailModal } from "@/components/lancamentos/TransactionDeta
 import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
-import { ImportStatementModal } from "@/components/lancamentos/ImportStatementModal";
+
 import { ExportTransactionsButton } from "@/components/lancamentos/ExportTransactionsButton";
 
 type TabValue = "todos" | "realizado" | "projetado";
 
 export default function Lancamentos() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { companies } = useCompany();
   const { settings: fieldSettings } = useFormFieldSettings();
 
@@ -55,7 +56,6 @@ export default function Lancamentos() {
   const [detailTarget, setDetailTarget] = useState<Transaction | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
   const [billPaymentCard, setBillPaymentCard] = useState<{ card: any; referenceDate?: Date } | null>(null);
-  const [importOpen, setImportOpen] = useState(false);
   const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
 
   // Open modal from query param (?new=true) or custom event
@@ -204,7 +204,7 @@ export default function Lancamentos() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setImportOpen(true)}
+          onClick={() => navigate("/lancamentos/importar-extrato")}
           className="gap-1.5 h-8 shrink-0"
         >
           <Upload className="h-3.5 w-3.5" />
@@ -265,7 +265,7 @@ export default function Lancamentos() {
                 size="sm"
                 variant="outline"
                 className="mt-3 h-7 text-xs"
-                onClick={() => { dismissFeatureBanner(); setImportOpen(true); }}
+                onClick={() => { dismissFeatureBanner(); navigate("/lancamentos/importar-extrato"); }}
               >
                 <Upload className="h-3 w-3 mr-1" /> Experimentar agora
               </Button>
@@ -532,20 +532,7 @@ export default function Lancamentos() {
         }}
       />
 
-      {/* Import Statement */}
-      <ImportStatementModal
-        open={importOpen}
-        onClose={() => setImportOpen(false)}
-        onImport={createMultipleTransactions}
-        bankAccounts={bankAccounts}
-        wallets={wallets}
-        creditCards={allAccounts.creditCards}
-        allBankAccounts={allAccounts.bankAccounts}
-        companies={companies}
-        categories={categories}
-        allCategories={allCategories}
-        refetchAccounts={refetchAccounts}
-      />
+      {/* Import Statement moved to dedicated route: /lancamentos/importar-extrato */}
 
     </div>
   );
