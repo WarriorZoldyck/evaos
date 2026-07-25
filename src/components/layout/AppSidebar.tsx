@@ -29,6 +29,7 @@ import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useAIPendingTransactions } from "@/hooks/useAIPendingTransactions";
+import { usePendingAnalisesCountByContext } from "@/hooks/usePendingAnalisesCountByContext";
 import { useHub } from "@/contexts/HubContext";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import {
