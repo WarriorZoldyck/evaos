@@ -29,6 +29,7 @@ import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
 import { calculateCreditCardBillTotal, filterCreditCardBillScope, descriptionSimilarity, AUTO_LINK_MIN_SIMILARITY, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { ReconcileStep } from "./import/ReconcileStep";
+import { ReviewNewEntryModal } from "./import/ReviewNewEntryModal";
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
 import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
