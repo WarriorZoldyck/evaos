@@ -593,6 +593,7 @@ serve(async (req) => {
   let shouldAcknowledgeOnError = false;
 
   try {
+    const markTiming = createTimer("whatsapp-webhook");
     // Admin Supabase client must exist before idempotency checks.
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -618,6 +619,7 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    markTiming("request parsed");
 
     // === EVOLUTION API ONLY ===
     // Ignore non-message events (connection.update, qrcode.updated, etc)
@@ -772,6 +774,7 @@ serve(async (req) => {
         console.log("Audio media fetched, mimetype:", mediaMimetype, "length:", imageBase64.length);
       }
     }
+    markTiming("media fetched/prepared");
 
     // --- Prepare media for private, owner-scoped storage after user resolution ---
     let attachmentUrl: string | null = null;
@@ -903,6 +906,7 @@ serve(async (req) => {
     }
 
     console.log("Matched profile:", profile.id.slice(0, 8), "| Stored number:", profile.whatsapp_number);
+    markTiming("profile matched");
 
     let userId = profile.id;
     const callerUserId = profile.id;
@@ -1050,6 +1054,7 @@ serve(async (req) => {
     } catch (hubErr) {
       console.error("Hub context resolution failed (defaulting to caller):", hubErr);
     }
+    markTiming("hub context resolved");
 
     // Helper used later to enforce viewer role on write intents
     const denyIfViewer = () => {
@@ -1114,6 +1119,7 @@ serve(async (req) => {
         console.log("Media uploaded to private storage path:", filePath);
       }
     }
+    markTiming("attachment uploaded");
 
     // ============================================================
     // CONVERSATION MEMORY: Load recent history + save user message
@@ -1222,6 +1228,7 @@ serve(async (req) => {
       "activeSessionMsgs=",
       activeMessages.length,
     );
+    markTiming("conversation history loaded");
 
     // Save incoming user message
     const userMsgText = message || (hasAudio ? "[áudio enviado]" : hasDocument ? "[documento enviado]" : "[imagem enviada]");
@@ -1230,6 +1237,7 @@ serve(async (req) => {
       role: "user",
       content: userMsgText,
     });
+    markTiming("incoming message saved");
 
     // Helper to save assistant response to history
     const saveAssistantMsg = (text: string) => {
