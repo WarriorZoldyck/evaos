@@ -2009,8 +2009,10 @@ export function ImportStatementModal({
             (importType === "debito" && !!targetBankAccount) ||
             (importType === "cartao" && (isMultiCard || !!targetCard));
           return (
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={handleClose}>Cancelar</Button>
+            <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between" : ""}`}>
+              <Button variant="outline" onClick={handleClose}>
+                {isPage ? "Cancelar importação" : "Cancelar"}
+              </Button>
               {canGoReconcile ? (
                 <Button
                   onClick={() => setStep("reconcile")}
@@ -2032,6 +2034,7 @@ export function ImportStatementModal({
             </DialogFooter>
           );
         })()}
+
 
         {rows.length > 0 && step === "reconcile" && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
