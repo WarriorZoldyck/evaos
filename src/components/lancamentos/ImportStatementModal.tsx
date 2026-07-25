@@ -2000,8 +2000,7 @@ export function ImportStatementModal({
   );
 
   const nestedCreateCard = (
-
-      {/* Nested modal: create new credit card from within import */}
+      /* Nested modal: create new credit card from within import */
       <CreditCardFormModal
         open={createCardOpen}
         onClose={() => setCreateCardOpen(false)}
