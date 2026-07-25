@@ -1403,43 +1403,103 @@ export function ImportStatementModal({
 
         {/* Upload area */}
         {rows.length === 0 && (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center w-full cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => !parsing && fileRef.current?.click()}>
-              {parsing ? (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-sm font-medium">Analisando arquivo com IA…</p>
-                  <p className="text-[11px] text-muted-foreground max-w-xs">
-                    Pode levar até <strong>40 segundos</strong> em faturas grandes (PDFs com muitas linhas). Não feche esta janela.
+          <div className="flex flex-col gap-4 py-6">
+            {/* Pergunta o tipo (e o mês, se cartão) ANTES de subir o arquivo,
+                para garantir que a busca de "só no sistema" use o mês correto. */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Tipo de extrato *</label>
+                <Select value={importType} onValueChange={(v) => setImportType(v as "debito" | "cartao")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="debito">💰 Débito em conta</SelectItem>
+                    <SelectItem value="cartao">💳 Cartão de crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {importType === "cartao" && (
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Mês desta fatura *
+                  </label>
+                  <Input
+                    type="month"
+                    value={billReferenceMonth}
+                    onChange={(e) => {
+                      billReferenceMonthTouchedRef.current = true;
+                      setBillReferenceMonth(e.target.value);
+                    }}
+                    placeholder="AAAA-MM"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Usamos esse mês para buscar os lançamentos já registrados desta fatura.
                   </p>
-                  <div className="w-full max-w-md mt-2 space-y-1.5">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="h-6 rounded bg-muted/60 animate-pulse"
-                        style={{ animationDelay: `${i * 100}ms`, width: `${100 - i * 6}%` }}
-                      />
-                    ))}
-                  </div>
                 </div>
-              ) : (
-                <>
-                  <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm font-medium">Clique para selecionar um arquivo</p>
-                   <p className="text-xs text-muted-foreground mt-1">
-                     Formatos aceitos: OFX, CSV, TXT, PDF
-                   </p>
-                </>
               )}
             </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".ofx,.qfx,.csv,.txt,.pdf"
-              className="hidden"
-              onChange={handleFileChange}
-            />
+
+            {(() => {
+              const canUpload =
+                !!importType &&
+                (importType !== "cartao" || !!billReferenceMonth);
+              const blockedReason = !importType
+                ? "Selecione o tipo de extrato para continuar."
+                : importType === "cartao" && !billReferenceMonth
+                ? "Informe o mês da fatura para continuar."
+                : "";
+              return (
+                <>
+                  <div
+                    className={
+                      "border-2 border-dashed rounded-lg p-8 text-center w-full transition-colors " +
+                      (canUpload && !parsing
+                        ? "cursor-pointer hover:border-primary/50"
+                        : "opacity-60 cursor-not-allowed")
+                    }
+                    onClick={() => canUpload && !parsing && fileRef.current?.click()}
+                  >
+                    {parsing ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm font-medium">Analisando arquivo com IA…</p>
+                        <p className="text-[11px] text-muted-foreground max-w-xs">
+                          Pode levar até <strong>40 segundos</strong> em faturas grandes (PDFs com muitas linhas). Não feche esta janela.
+                        </p>
+                        <div className="w-full max-w-md mt-2 space-y-1.5">
+                          {Array.from({ length: 6 }).map((_, i) => (
+                            <div
+                              key={i}
+                              className="h-6 rounded bg-muted/60 animate-pulse"
+                              style={{ animationDelay: `${i * 100}ms`, width: `${100 - i * 6}%` }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm font-medium">Clique para selecionar um arquivo</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Formatos aceitos: OFX, CSV, TXT, PDF
+                        </p>
+                        {blockedReason && (
+                          <p className="text-[11px] text-amber-600 mt-2">{blockedReason}</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".ofx,.qfx,.csv,.txt,.pdf"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </>
+              );
+            })()}
           </div>
         )}
 
