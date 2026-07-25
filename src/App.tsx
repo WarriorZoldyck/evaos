@@ -12,6 +12,7 @@ import HubLayout from "@/components/layout/HubLayout";
 import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Lancamentos from "@/pages/Lancamentos";
+import ImportarExtrato from "@/pages/ImportarExtrato";
 import PlanoDeCaixa from "@/pages/PlanoDeCaixa";
 import DRE from "@/pages/DRE";
 import Precificacao from "@/pages/Precificacao";
