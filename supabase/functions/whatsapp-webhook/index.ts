@@ -3997,12 +3997,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               `vencimento: ${match.tx.payment_date || ""}\n` +
               `fornecedor: ${match.supplierName || ""}\n` +
               `score: ${match.score}`;
-            const supplierLine = match.supplierName ? ` • ${match.supplierName}` : "";
-            boletoSuggestionMessage =
-              `📄 Encontrei um lançamento *pendente* parecido no sistema:\n` +
-              `• ${match.tx.description}${supplierLine}\n` +
-              `• ${fmt(match.tx.amount)} • venc. ${formatDate(match.tx.payment_date)}\n\n` +
-              `Responda:\n1 — ✅ Sim, dá baixa\n2 — ❌ Não, é outro\n3 — ✏️ Editar no app`;
+          }
           }
         } catch (e) {
           console.error("Boleto reconciliation skipped due to error:", e);
