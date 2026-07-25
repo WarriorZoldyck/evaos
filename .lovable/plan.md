@@ -1,44 +1,21 @@
-# Clarear ações da seção "Só no extrato"
+# Botão "Cancelar importação" sempre visível
 
 ## Contexto
 
-Hoje, na tela de importação de extrato, a seção **"Só no extrato — o que fazer?"** já cria cada linha como novo lançamento por padrão (`matchAction = "criar"`). O único botão visível na coluna "Ação" é **"Manter só do extrato"**, que na verdade é a alternativa (ignorar). Isso faz o usuário achar que a linha não será importada, quando ela **será** — basta escolher categoria e clicar em "Importar N lançamentos" no rodapé.
+`src/pages/ImportarExtrato.tsx` já tem um botão "Voltar para Lançamentos" no topo da página, mas ele rola junto com o conteúdo. Nas etapas mais longas (Conferir, Conciliar, Resumo), o usuário precisa rolar até o topo para sair — o que ele quer evitar.
 
-Não há bug de lógica. É um problema de UI/copy: a ação padrão ("criar no sistema") está invisível.
+## Mudança
 
-## Escopo
+Arquivo único: `src/pages/ImportarExtrato.tsx`.
 
-Apenas UI e textos em `src/components/lancamentos/import/ReconcileStep.tsx`. Nenhuma mudança em matching, categorização ou persistência.
+- Transformar a barra superior em `sticky top-0 z-40` com fundo sólido (`bg-background/95 backdrop-blur` + borda inferior), acompanhando o padrão dos demais cabeçalhos fixos do app.
+- Renomear o label para **"Cancelar importação"** (mais claro que "Voltar" quando há trabalho em andamento) e manter o ícone `X` (ou `ArrowLeft` + texto) — usar `X` para reforçar cancelamento.
+- Manter `goBack()` como handler (já dispara `fetchTransactions()` via `onClose` do modal, e retorna com animação).
+- ESC continua funcionando.
 
-## Mudanças
-
-### 1. Coluna "Ação" da seção "Só no extrato"
-
-Substituir o botão único por um toggle de dois estados, seguindo o mesmo padrão visual já usado na seção de conciliação:
-
-```text
-[ ✓ Criar no sistema ]   [ Manter só do extrato ]
-    (padrão, destacado)      (alternativa)
-```
-
-- **Criar no sistema** → `onActionChange(i, "criar")` (estado atual default).
-- **Manter só do extrato** → `onActionChange(i, "ignorar")` (comportamento atual do botão único).
-- Estilo do botão ativo igual ao já usado nos demais toggles do arquivo (fundo sólido + ícone).
-
-### 2. Tooltip do botão "Manter só do extrato"
-
-Trocar o texto atual por:
-
-> "Não criar este lançamento no sistema. A linha fica só no extrato importado e vai para 'Ignorados' — pode ser restaurada depois."
-
-### 3. Micro-copy do cabeçalho da seção
-
-No bloco informativo azul acima da tabela (L820-825 aprox.), adicionar uma frase:
-
-> "Por padrão, cada linha vira um novo lançamento no sistema com a categoria escolhida abaixo. Use **'Manter só do extrato'** para pular linhas que você não quer importar."
+Nenhuma mudança em `ImportStatementModal.tsx` ou na lógica de importação — o botão já chama `onClose`, que a página trata como cancelamento/saída limpa.
 
 ## Fora de escopo
 
-- Alterar lógica de matching, auto-pareamento por valor, ou contadores do rodapé.
-- Mudar comportamento das outras seções ("Igual", "Quase igual", "Só no sistema").
-- Criar nova ação além de `criar` / `ignorar`.
+- Confirmação "tem certeza que quer cancelar?" (pode ser um follow-up se o usuário pedir).
+- Alterar os botões internos "Cancelar/Voltar" do rodapé de cada step do modal.
