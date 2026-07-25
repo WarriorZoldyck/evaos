@@ -956,7 +956,7 @@ export function ReconcileStep({
               <Alert className="mb-2 py-2 px-3 bg-destructive/5 border-destructive/30">
                 <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
                 <AlertDescription className="text-[11px] leading-snug ml-1">
-                  Lançamentos que existem no sistema mas <strong>não aparecem no extrato</strong>. Costumam ser erros (digitação duplicada, importação anterior corrompida, ghost de recuperação) ou pertencem a outra fatura. Exclua os incorretos para a fatura bater certinho.
+                  Estes valores <strong>não existem no extrato</strong> deste ciclo. Como o extrato vem direto do banco/cartão e é a fonte da verdade, provavelmente são duplicatas, ghosts, lançamentos manuais errados ou pertencem a outra fatura. Revise e exclua os incorretos para a fatura bater.
                 </AlertDescription>
               </Alert>
               {showOrphans && (
