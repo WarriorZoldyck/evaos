@@ -1277,9 +1277,12 @@ export function ImportStatementModal({
       const categoryName = resolveCategoryName(rowCat?.category, mergedCategories) || catName;
       const subcategoryName = resolveCategoryName(rowCat?.subcategory, mergedCategories) || null;
       const subcategory2Name = resolveCategoryName(rowCat?.subcategory2, mergedCategories) || null;
+      const editedDesc = (rowDescriptions[realIdx] || "").trim();
+      const finalDesc = editedDesc || r.description;
+      const contact = rowContacts[realIdx] || {};
 
       return {
-        description: r.description,
+        description: finalDesc,
         amount: r.amount,
         type: r.type,
         payment_date: billingDate,
@@ -1290,6 +1293,8 @@ export function ImportStatementModal({
         category: categoryName,
         subcategory: subcategoryName,
         subcategory2: subcategory2Name,
+        supplier_id: contact.supplier_id || null,
+        client_id: contact.client_id || null,
         user_id: effectiveUserId,
         company_id: companyIdForTransaction,
         bank_account_id: accType === "bank" ? accId : null,
