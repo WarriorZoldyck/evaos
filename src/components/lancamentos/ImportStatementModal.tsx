@@ -733,21 +733,9 @@ export function ImportStatementModal({
     setPromotedOrphanIds(new Set());
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
 
-  // Sugere o mês/ano de referência a partir das datas de vencimento/competência
-  // predominantes. O usuário pode sobrescrever no input do passo "Conferir".
-  useEffect(() => {
-    if (importType !== "cartao" || rows.length === 0) return;
-    if (billReferenceMonthTouchedRef.current && billReferenceMonth) return;
-    const counts: Record<string, number> = {};
-    rows.forEach((r) => {
-      const d = r.statement_due_date || r.resolved_competence_date || r.date;
-      if (!d) return;
-      const key = d.slice(0, 7);
-      counts[key] = (counts[key] || 0) + 1;
-    });
-    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (best && best !== billReferenceMonth) setBillReferenceMonth(best);
-  }, [importType, rows, billReferenceMonth]);
+  // O mês da fatura é perguntado ao usuário ANTES do upload (fonte da verdade).
+  // Não pré-preenchemos por heurística — assim evitamos casar contra o mês errado
+  // quando o parser interpreta datas de forma ambígua.
 
   // ORPHAN DETECTOR (card mode) — flag system transactions that DON'T appear in the statement.
   // The bank statement is the source of truth: any extra line in the system is a likely error.
@@ -1415,43 +1403,103 @@ export function ImportStatementModal({
 
         {/* Upload area */}
         {rows.length === 0 && (
-          <div className="flex flex-col items-center gap-4 py-8">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center w-full cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => !parsing && fileRef.current?.click()}>
-              {parsing ? (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-sm font-medium">Analisando arquivo com IA…</p>
-                  <p className="text-[11px] text-muted-foreground max-w-xs">
-                    Pode levar até <strong>40 segundos</strong> em faturas grandes (PDFs com muitas linhas). Não feche esta janela.
+          <div className="flex flex-col gap-4 py-6">
+            {/* Pergunta o tipo (e o mês, se cartão) ANTES de subir o arquivo,
+                para garantir que a busca de "só no sistema" use o mês correto. */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Tipo de extrato *</label>
+                <Select value={importType} onValueChange={(v) => setImportType(v as "debito" | "cartao")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="debito">💰 Débito em conta</SelectItem>
+                    <SelectItem value="cartao">💳 Cartão de crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {importType === "cartao" && (
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    Mês desta fatura *
+                  </label>
+                  <Input
+                    type="month"
+                    value={billReferenceMonth}
+                    onChange={(e) => {
+                      billReferenceMonthTouchedRef.current = true;
+                      setBillReferenceMonth(e.target.value);
+                    }}
+                    placeholder="AAAA-MM"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Usamos esse mês para buscar os lançamentos já registrados desta fatura.
                   </p>
-                  <div className="w-full max-w-md mt-2 space-y-1.5">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div
-                        key={i}
-                        className="h-6 rounded bg-muted/60 animate-pulse"
-                        style={{ animationDelay: `${i * 100}ms`, width: `${100 - i * 6}%` }}
-                      />
-                    ))}
-                  </div>
                 </div>
-              ) : (
-                <>
-                  <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-sm font-medium">Clique para selecionar um arquivo</p>
-                   <p className="text-xs text-muted-foreground mt-1">
-                     Formatos aceitos: OFX, CSV, TXT, PDF
-                   </p>
-                </>
               )}
             </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".ofx,.qfx,.csv,.txt,.pdf"
-              className="hidden"
-              onChange={handleFileChange}
-            />
+
+            {(() => {
+              const canUpload =
+                !!importType &&
+                (importType !== "cartao" || !!billReferenceMonth);
+              const blockedReason = !importType
+                ? "Selecione o tipo de extrato para continuar."
+                : importType === "cartao" && !billReferenceMonth
+                ? "Informe o mês da fatura para continuar."
+                : "";
+              return (
+                <>
+                  <div
+                    className={
+                      "border-2 border-dashed rounded-lg p-8 text-center w-full transition-colors " +
+                      (canUpload && !parsing
+                        ? "cursor-pointer hover:border-primary/50"
+                        : "opacity-60 cursor-not-allowed")
+                    }
+                    onClick={() => canUpload && !parsing && fileRef.current?.click()}
+                  >
+                    {parsing ? (
+                      <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="text-sm font-medium">Analisando arquivo com IA…</p>
+                        <p className="text-[11px] text-muted-foreground max-w-xs">
+                          Pode levar até <strong>40 segundos</strong> em faturas grandes (PDFs com muitas linhas). Não feche esta janela.
+                        </p>
+                        <div className="w-full max-w-md mt-2 space-y-1.5">
+                          {Array.from({ length: 6 }).map((_, i) => (
+                            <div
+                              key={i}
+                              className="h-6 rounded bg-muted/60 animate-pulse"
+                              style={{ animationDelay: `${i * 100}ms`, width: `${100 - i * 6}%` }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <FileText className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm font-medium">Clique para selecionar um arquivo</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Formatos aceitos: OFX, CSV, TXT, PDF
+                        </p>
+                        {blockedReason && (
+                          <p className="text-[11px] text-amber-600 mt-2">{blockedReason}</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".ofx,.qfx,.csv,.txt,.pdf"
+                    className="hidden"
+                    onChange={handleFileChange}
+                  />
+                </>
+              );
+            })()}
           </div>
         )}
 
@@ -1778,16 +1826,17 @@ export function ImportStatementModal({
                 // Move row to "criar" so it is imported from the statement.
                 setMatchActions((prev) => ({ ...prev, [idx]: "criar" }));
                 // Seed category from candidate so the new line inherits classification.
+                // Always resolve to NAME (never UUID) — combobox and DB store names.
                 setRowCategories((prev) => {
                   if (prev[idx]?.touched) return prev;
-                  const cat = (cand as any).category as string | undefined;
-                  if (!cat) return prev;
+                  const catName = resolveCategoryName((cand as any).category, mergedCategories);
+                  if (!catName) return prev;
                   return {
                     ...prev,
                     [idx]: {
-                      category: cat,
-                      subcategory: (cand as any).subcategory ?? undefined,
-                      subcategory2: (cand as any).subcategory2 ?? undefined,
+                      category: catName,
+                      subcategory: resolveCategoryName((cand as any).subcategory, mergedCategories),
+                      subcategory2: resolveCategoryName((cand as any).subcategory2, mergedCategories),
                       touched: false,
                     },
                   };

@@ -444,26 +444,33 @@ export function ReconcileStep({
             </Tooltip>
           )}
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={() => onActionChange(i, "criar")}
-              >
-                <X className="h-3 w-3" /> É outra compra — criar
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[280px] text-xs">
-              <div className="flex items-start gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
-                <span>
-                  Desfaz o vínculo e cria um lançamento <strong>NOVO</strong> a partir da linha do extrato. O que já existia continua existindo — <strong>pode gerar duplicata</strong>. Use só se for realmente uma segunda compra.
-                </span>
-              </div>
-            </TooltipContent>
-          </Tooltip>
+          {/* "É outra compra — criar" só faz sentido quando o vínculo pode ser
+              falso — ou seja, valor com diferença de centavos (tier=tolerance)
+              ou nome divergente (best.suggested). No match exato de mesmo valor
+              e mesma descrição não expomos esse botão para evitar duplicatas
+              acidentais — nesse caso o botão certo é "Manter só o do extrato". */}
+          {(best.tier === "tolerance" || best.suggested) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => onActionChange(i, "criar")}
+                >
+                  <X className="h-3 w-3" /> É outra compra — criar
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[280px] text-xs">
+                <div className="flex items-start gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                  <span>
+                    Desfaz o vínculo e move a linha para <strong>"Só no extrato"</strong> para você <strong>categorizar</strong> antes de importar. O lançamento do sistema continua existindo — pode gerar duplicata proposital.
+                  </span>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
       </div>

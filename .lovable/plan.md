@@ -1,91 +1,55 @@
-## Diagnóstico atualizado
 
-O ponto principal agora é: **não dá para tratar toda linha da fatura como soma absoluta**.
+## O que ajustar no fluxo de Importar Extrato
 
-Se existe uma restituição/crédito de **R$ 519,33**, a fatura precisa ser calculada como líquido:
+Foram identificadas 4 fricções na página `/lancamentos/importar-extrato` (arquivos `ImportStatementModal.tsx` e `import/ReconcileStep.tsx`). Todos os ajustes são só de UI/UX + resolução de nome de categoria — nada muda no parser nem no schema.
 
-```text
-Compras/saídas - créditos/restituições = total da fatura
+### 1. Pedir o **mês da fatura** ANTES de subir o PDF (cartão)
+
+Hoje o campo "Qual o mês desta fatura?" aparece só depois do parse, e a heurística já o pré-preenche — quando ela erra (fev vindo como jan), a query de "só no sistema" busca o mês errado.
+
+Mudança:
+- Quando `importType === "cartao"`, exibir o campo **Mês da fatura (YYYY-MM)** já no passo inicial (junto do seletor de cartão), **antes** de habilitar o botão de escolher arquivo.
+- Enquanto não preenchido: input de arquivo desabilitado com dica "Selecione o mês da fatura para continuar".
+- Não pré-preencher automaticamente pela heurística das linhas — só sugerir como placeholder ("ex.: 2026-02"). Manter a marcação `billReferenceMonthTouchedRef` para nunca sobrescrever a escolha do usuário.
+- Este mês vira a única fonte da verdade da janela de busca no `useEffect` de órfãos/`systemBill`, no deep-link para Análises EVA e no filtro de reconciliação.
+
+### 2. Botão **"É outra compra — criar"**: só aparecer quando faz sentido
+
+Hoje ele aparece em toda linha da seção "Igual — pode conciliar", com o mesmo efeito prático de "criar do zero" — o usuário estranhou porque na prática, quando o valor é idêntico, ele acaba parecendo um clone do "Manter só o do extrato".
+
+Mudança em `renderMatchRow` (`ReconcileStep.tsx`):
+- Só renderizar o botão "É outra compra — criar" quando `best.tier === "tolerance"` **ou** `best.suggested === true` (ou seja, quando o valor difere ou o nome diverge). Na seção "Igual — pode conciliar" (tier `exact` e mesmo nome), o botão some.
+- Manter o comportamento: ao clicar, `onActionChange(i, "criar")` — a linha sai da seção "Igual" e entra em "Só no extrato", onde já existe o combobox de categoria (garante que o usuário categorize antes de importar).
+- Atualizar a copy do tooltip da seção "Diferença de centavos" e a legenda para deixar explícito: "'É outra compra' desfaz o vínculo; a linha vai para 'Só no extrato' para você categorizar antes de importar."
+
+### 3. **"Manter só o do extrato"** deve herdar a categoria pelo **nome**, nunca por ID
+
+O handler `onKeepStatementOnly` em `ImportStatementModal.tsx` (linha ~1770) hoje faz:
+
+```ts
+category: (cand as any).category,
+subcategory: (cand as any).subcategory,
+subcategory2: (cand as any).subcategory2,
 ```
 
-Pelo que foi verificado:
+O select por trás retorna esses campos como texto na maioria dos casos, mas há candidatos legados com UUID salvo em `category`. Precisa passar por `resolveCategoryName(...)` (já existe no arquivo) antes de escrever em `rowCategories`, garantindo que o combobox mostre e persista o **nome**, nunca o código:
 
-- O log da última importação ainda mostrou `statement_total=2266108`, ou seja, a IA leu `R$ 22.661,08` sem a vírgula decimal.
-- O parser retornava `parsed_total` usando `Math.abs(...)` em todas as linhas. Isso soma entradas e saídas como se tudo fosse compra, o que é errado para fatura com restituição.
-- A UI do passo de reconciliação já tenta calcular um líquido em alguns pontos, mas o backend ainda devolve total bruto, e o rodapé da importação compara contra o total digitado usando a soma das ações selecionadas. Isso pode gerar diferença confusa quando há crédito/restituição.
-- A busca por lançamentos existentes encontrou `LAGOA M*ANNE FERNANDES` como **despesa** histórica, mas ainda não confirma a linha exata de **R$ 519,33** na importação atual porque ela ainda está no preview/local ou no parser, não necessariamente gravada no banco.
-
-## O que vou corrigir
-
-### 1. Total do parser: bruto vs líquido
-No edge function `parse-bank-statement`:
-
-- Manter dois totais separados:
-  - `parsed_gross_total`: soma absoluta de todas as linhas, apenas para auditoria.
-  - `parsed_net_total`: soma correta da fatura: despesas somam, receitas/créditos subtraem.
-- Usar `parsed_net_total` para comparar com `statement_total` e `diff_cents`.
-- Aplicar o rescale `/100` no `statement_total` antes da comparação final, garantindo que `2266108` vire `22661.08`.
-- Logar claramente:
-  - total informado pela fatura;
-  - total bruto parseado;
-  - total líquido parseado;
-  - diferença em centavos;
-  - linhas marcadas como entrada/restituição.
-
-### 2. Classificação segura de restituição/crédito
-Ainda no parser:
-
-- Para importação de cartão, `receita` só será aceita se a descrição indicar de fato crédito/restituição, como:
-  - `ESTORNO`
-  - `DEVOLUCAO` / `DEVOLUÇÃO`
-  - `REEMBOLSO`
-  - `CREDITO` / `CRÉDITO`, quando claramente for crédito da fatura
-- Se a IA marcar uma linha como entrada sem esses gatilhos, o sistema força para **saída** e registra log de override.
-- Se a linha for pagamento da fatura/ajuste bancário que não representa compra nem restituição, ela deve ser excluída da lista de lançamentos importáveis.
-
-### 3. Tela de reconciliação: mostrar líquido corretamente
-Em `ImportStatementModal` e `ReconcileStep`:
-
-- A diferença contra o “valor da fatura” será calculada com o **total líquido selecionado**, não com soma absoluta.
-- O rodapé deve mostrar algo do tipo:
-
-```text
-Total da fatura: R$ 22.661,08
-Selecionado líquido: R$ XX.XXX,XX
-Diferença: R$ X,XX
+```ts
+category: resolveCategoryName(cand.category, mergedCategories) || "",
+subcategory: resolveCategoryName(cand.subcategory, mergedCategories),
+subcategory2: resolveCategoryName(cand.subcategory2, mergedCategories),
 ```
 
-- Se houver créditos/restituições, mostrar uma linha discreta:
+Fazer o mesmo tratamento no `CategoryChain` do `renderMatchRow` (já usa `resolveCategoryLabel`, mas confirmar que a normalização é consistente para não mostrar UUIDs em nenhuma célula da tabela de conciliação).
 
-```text
-Créditos/restituições: -R$ 519,33
-```
+### 4. Deixar claro que "Manter só do extrato" ≠ "É outra compra"
 
-### 4. Auditoria da linha que está faltando
-Para descobrir exatamente onde está faltando chegar em **R$ 22.661,08**:
+Depois do ajuste 2, os dois botões só coexistem quando faz sentido (valor divergente ou nome divergente). Ainda assim, revisar os tooltips para reforçar a diferença em uma linha:
 
-- Adicionar log resumido das maiores linhas e de todas as entradas/créditos detectados na próxima importação.
-- Mostrar no preview uma seção pequena “Entradas/créditos detectados” quando houver linhas como essa de R$ 519,33.
-- Assim fica claro se o valor está:
-  - vindo do PDF mas classificado errado;
-  - sendo excluído indevidamente;
-  - sendo somado com sinal invertido;
-  - ou se realmente falta uma linha no OCR/IA.
+- **Manter só o do extrato**: substitui o do sistema (exclui + cria com a mesma categoria).
+- **É outra compra — criar**: mantém os dois lados (potencial duplicata proposital).
 
-## Resultado esperado
+### Fora do escopo
 
-Na próxima importação da mesma fatura:
-
-1. `statement_total` deve aparecer como **R$ 22.661,08**, não `2.266.108`.
-2. O sistema deve calcular o total líquido da fatura, descontando a restituição/crédito de **R$ 519,33**.
-3. Se `LAGOA ANNE FERNANDES` for compra comum, fica como **Saída**.
-4. Se for restituição real, fica como **Entrada/crédito** e aparece destacada como crédito da fatura.
-5. A diferença exibida deve apontar exatamente se ainda falta alguma linha para fechar os **R$ 22.661,08**.
-
-## Arquivos envolvidos
-
-- `supabase/functions/parse-bank-statement/index.ts`
-- `src/components/lancamentos/ImportStatementModal.tsx`
-- `src/components/lancamentos/import/ReconcileStep.tsx`
-
-Sem migração de banco.
+- Parser (`parse-bank-statement`): mantido como está — os problemas apontados são resolvidos por o usuário informar o mês certo antes.
+- Nada no backend/DB.
