@@ -48,10 +48,10 @@ export function NeuToggle({
           top: 0;
           left: 0;
           height: 100%;
-          width: 200%;
-          border-radius: 13px;
+          width: 50%;
+          border-radius: 999px;
           background: #ecf0f3;
-          transform: translate3d(-75%, 0, 0);
+          transform: translate3d(0, 0, 0);
           transition: transform 0.4s cubic-bezier(0.85, 0.05, 0.18, 1.35),
                       background 0.3s ease,
                       box-shadow 0.3s ease;
@@ -61,7 +61,7 @@ export function NeuToggle({
           z-index: 1;
         }
         .neu-toggle[data-state="on"] .neu-toggle-indicator {
-          transform: translate3d(25%, 0, 0);
+          transform: translate3d(100%, 0, 0);
           background: linear-gradient(145deg, #4da3ff, #007bff);
           box-shadow:
             0 0 12px rgba(0, 123, 255, 0.45),

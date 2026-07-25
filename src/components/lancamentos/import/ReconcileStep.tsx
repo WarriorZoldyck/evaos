@@ -933,31 +933,29 @@ export function ReconcileStep({
                             </div>
                           </td>
                           <td className="p-2 text-center align-top">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="inline-flex items-center gap-2 select-none">
-                                  <NeuToggle
-                                    checked={willBeCreated}
-                                    onCheckedChange={(checked) =>
-                                      onActionChange(i, checked ? "criar" : "ignorar")
-                                    }
-                                    ariaLabel="Criar esta linha ao importar"
-                                  />
-                                  <span
-                                    className={`text-[11px] font-medium whitespace-nowrap ${
-                                      willBeCreated ? "text-primary" : "text-muted-foreground"
-                                    }`}
-                                  >
-                                    {willBeCreated ? "Criar" : "Ignorar"}
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="left" className="text-xs max-w-[260px]">
-                                {willBeCreated
-                                  ? "Ligado: esta linha vira um novo lançamento quando você clicar em \"Importar\" no rodapé."
-                                  : "Desligado: esta linha fica só no extrato importado e não vira lançamento no sistema."}
-                              </TooltipContent>
-                            </Tooltip>
+                            <div
+                              className="inline-flex items-center justify-end gap-2 select-none min-w-[104px]"
+                              title={
+                                willBeCreated
+                                  ? "Ligado: esta linha será criada ao importar."
+                                  : "Desligado: esta linha será ignorada e não será criada."
+                              }
+                            >
+                              <span
+                                className={`w-12 text-right text-[11px] font-medium whitespace-nowrap ${
+                                  willBeCreated ? "text-primary" : "text-muted-foreground"
+                                }`}
+                              >
+                                {willBeCreated ? "Criar" : "Ignorar"}
+                              </span>
+                              <NeuToggle
+                                checked={willBeCreated}
+                                onCheckedChange={(checked) =>
+                                  onActionChange(i, checked ? "criar" : "ignorar")
+                                }
+                                ariaLabel={willBeCreated ? "Ignorar esta linha" : "Criar esta linha"}
+                              />
+                            </div>
                           </td>
 
 
