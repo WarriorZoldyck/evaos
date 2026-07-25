@@ -2179,7 +2179,7 @@ export function ImportStatementModal({
         })()}
 
         {step === "summary" && importResult && (
-          <DialogFooter className="gap-2">
+          <DialogFooter className={`gap-2 ${isPage ? "sticky bottom-0 z-30 bg-background/95 backdrop-blur border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3" : ""}`}>
             <Button variant="outline" onClick={handleClose}>Fechar</Button>
             {importResult.created > 0 && (
               <Button onClick={handleViewNew} className="gap-2">
@@ -2188,6 +2188,7 @@ export function ImportStatementModal({
             )}
           </DialogFooter>
         )}
+
     </>
   );
 
