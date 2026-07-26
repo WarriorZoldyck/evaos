@@ -1,51 +1,34 @@
-## Diagnóstico
+## Testes para a correção de resolução de categorias
 
-A lista de categorias nos seletores em cascata (`CategoryCascadeSelect` e o helper `getSubsOf` de `ReconcileStep`) é resolvida **por nome de pai**, não por ID:
+Vou adicionar cobertura automatizada em torno do novo utilitário `src/lib/categoryChain.ts` — que é onde vive a lógica de resolução por ID — e um teste de integração leve no `CategoryCascadeSelect` para garantir que o comportamento visual observado pelo usuário está correto.
 
-- `CategoryCascadeSelect.tsx` (linhas 94–108): `subsFor(parentName)` faz `rootList.find(r => r.name === parentName)` e depois `byParent.get(parent.id)`. Se dois registros compartilham o mesmo `name` (colisão comum: subcategoria homônima em ramos diferentes, ou raízes duplicadas), `find` retorna só o primeiro e o restante da subárvore some do dropdown.
-- `ReconcileStep.tsx` (linha 544): `categories.find(c => c.name === parentName)` tem o mesmo problema para calcular subs a partir de uma raiz.
-- Efeito colateral: ao alternar entre linhas ou avançar/voltar de step, o `useMemo` remonta e resolve novamente o pai por nome; qualquer colisão faz a subcategoria "sumir" mesmo com os dados carregados corretamente em `categoryBase`.
+### 1. Setup de teste (se necessário)
+- Verificar se `vitest`, `@testing-library/react`, `jsdom` e `@testing-library/jest-dom` já estão instalados. Se não, instalar as devDependencies e criar `vitest.config.ts` + `src/test/setup.ts` conforme o guia padrão do projeto.
 
-Não há problema de fetch — `categoryBase` continua com todas as categorias do contexto. O bug é puramente de **resolução por nome vs ID** dentro dos seletores.
+### 2. Testes unitários — `src/lib/categoryChain.test.ts`
+Cobrir os cenários que motivaram o bug:
+- Índice retorna `byParent` e `byName` corretos para árvore com 3 níveis.
+- `resolveChain` escolhe a raiz certa quando **duas raízes compartilham o mesmo nome**, priorizando aquela cujo filho bate com `subcategory`.
+- `resolveChain` funciona com apenas `category` preenchido.
+- `resolveChain` respeita acentos/caixa (normalização) — "Alimentação" vs "alimentacao".
+- `resolveChain` retorna `null`s quando nada bate.
+- `childrenOfId` devolve filhos diretos de um pai e lista vazia para pai inexistente.
 
-Além disso, `mergedCategories` é recalculado a cada render do modal (dependências estáveis, ok), mas o valor selecionado em cada linha (`RowCategoryValue`) guarda apenas nomes. Isso significa que qualquer navegação futura tem que re-resolver pai por nome — perpetuando o bug.
+### 3. Teste de componente — `src/components/lancamentos/import/CategoryCascadeSelect.test.tsx`
+- Montar o componente com uma árvore contendo duas raízes de mesmo nome mas subárvores diferentes.
+- Selecionar a raiz e abrir o dropdown de subcategoria; confirmar que aparecem os filhos corretos da raiz escolhida (não só os do primeiro match por nome).
+- Confirmar que trocar o valor da linha (rerender com novo `value`) reexibe corretamente as opções — simula o "trocar entre linhas" que o usuário reportou.
 
-## O que fazer
+### 4. Execução
+- Rodar `vitest run` via o executor de testes do harness.
+- Rodar `tsgo` (typecheck) para garantir que nenhuma tipagem quebrou.
 
-1. **Resolver pais por ID no `CategoryCascadeSelect`**
-   - Manter a exibição por nome, mas internamente construir um índice `byId` e usar o **ID do pai selecionado** para buscar filhos.
-   - Como o valor atual (`RowCategoryValue`) só armazena nomes, resolver o ID a partir do nome de forma determinística: ao clicar em uma raiz/sub, capturar o ID do item clicado e usá-lo na próxima consulta (`useMemo` derivado do valor + índice completo). Em caso de nomes duplicados na mesma camada, preferir o item cuja cadeia `category → sub → sub2` seja consistente.
-   - Adicionar `parentId` opcional em memória interna (não persistir no valor) para não quebrar consumidores externos do tipo `RowCategoryValue`.
+### 5. Verificação manual assistida (opcional, só se algum teste falhar de forma inconclusiva)
+- Script Playwright abrindo `/lancamentos/importar-extrato` para conferir visualmente o cascade, apenas se os testes automatizados não cobrirem uma regressão observada.
 
-2. **Corrigir `getSubsOf` em `ReconcileStep.tsx`**
-   - Trocar `categories.find(c => c.name === parentName)` por lookup por ID. Preferir uma versão que aceite o `id` do pai; enquanto o valor da linha só tem nome, resolver com o mesmo utilitário do item 1 (função compartilhada `resolveCategoryChain(names, categories) => { rootId, subId, sub2Id }`).
+### Arquivos criados
+- `src/lib/categoryChain.test.ts`
+- `src/components/lancamentos/import/CategoryCascadeSelect.test.tsx`
+- (se ausentes) `vitest.config.ts`, `src/test/setup.ts`
 
-3. **Utilitário compartilhado**
-   - Criar `src/lib/categoryChain.ts` com:
-     - `buildCategoryIndex(categories)` → `{ byId, byParent }`.
-     - `resolveChain({ category, subcategory, subcategory2 }, index)` → retorna a tupla de IDs, priorizando cadeias válidas em caso de nomes duplicados (varrer todas as raízes com o nome pedido e escolher a que possui filho com o nome da sub, e assim por diante).
-     - Usar esse utilitário tanto no cascade selector quanto no `ReconcileStep`.
-
-4. **Garantir estabilidade ao trocar linha/step**
-   - `CategoryCascadeSelect` deve derivar suas listas exclusivamente do índice + valor atual (sem depender de estado interno que se perde ao remontar).
-   - `mergedCategories` já é memoizado; adicionar o índice como `useMemo` no `ImportStatementModal` e passar tanto `categories` quanto `categoryIndex` como props para evitar recomputar em cada popover.
-
-5. **Categorias criadas inline continuam refletindo imediatamente**
-   - Manter o merge `categoryBase + extraCategories`. Como o índice é derivado, novas categorias aparecem em todas as linhas na hora — nenhum reset extra necessário.
-
-## Detalhes técnicos
-
-- Arquivos alterados:
-  - `src/components/lancamentos/import/CategoryCascadeSelect.tsx` — resolver pai por ID via índice, remover `roots.find(r => r.name === parentName)`.
-  - `src/components/lancamentos/import/ReconcileStep.tsx` — usar `resolveChain`/índice em vez de `find` por nome.
-  - `src/components/lancamentos/ImportStatementModal.tsx` — construir e passar o `categoryIndex` memoizado; nada muda no fetch.
-  - Novo: `src/lib/categoryChain.ts` — index + resolvedor de cadeia.
-- Sem migração de banco, sem mudança de contrato de `RowCategoryValue`.
-- Sem alteração no fluxo de hooks/data — `useTransactions` continua igual.
-
-## Verificação
-
-- Abrir importação em conta com categorias que compartilham nome entre ramos diferentes; confirmar que a subárvore inteira aparece após selecionar raiz.
-- Trocar de linha e voltar; garantir que subs e sub-subs continuam visíveis.
-- Avançar `preview → reconcile → summary → voltar` e confirmar que cada linha ainda mostra as opções esperadas.
-- Criar nova categoria inline e conferir que aparece nas demais linhas sem refresh.
+Nenhum código de produção será alterado neste passo — se algum teste falhar, aí sim ajusto a lógica correspondente.
