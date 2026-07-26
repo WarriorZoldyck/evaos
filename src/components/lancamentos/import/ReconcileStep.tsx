@@ -1260,15 +1260,15 @@ export function ReconcileStep({
                       const sug = suggestions[i];
                       const currentCat = rowCategories[i] || { category: "" };
                       const editedDesc = rowDescriptions[i];
-                      const contact = rowContacts[i];
+                      const contact = rowContacts[i] || {};
                       const contactName = contact?.supplier_id
                         ? suppliers.find((s) => s.id === contact.supplier_id)?.name
                         : contact?.client_id
                         ? clients.find((c) => c.id === contact.client_id)?.name
                         : undefined;
                       const isReviewed = !!reviewedRows?.has(i);
-                      const subs = childrenOfChain(currentCat.category);
-                      const subSubs = childrenOfChain(currentCat.category, currentCat.subcategory);
+                      const isReceita = r.type === "receita";
+                      const draftDesc = editedDesc ?? r.description;
 
                       const dupKey = `${r.type}|${Math.abs(r.amount)}|${normalizeText(r.description)}`;
                       const dupCount = duplicateCounts.get(dupKey) || 1;
@@ -1278,37 +1278,80 @@ export function ReconcileStep({
                       );
                       const rowAction = matchActions[i] || "criar";
                       const willBeCreated = rowAction !== "ignorar";
-                      const isExpanded = expandedRowId === i;
+                      const canConfirm = draftDesc.trim().length > 0 && !!currentCat.category;
                       return (
-                        <>
                         <tr
                           key={i}
                           className={`border-b last:border-0 hover:bg-accent/30 transition-opacity ${
                             isReplacing ? "bg-sky-500/5" : ""
-                          } ${isExpanded ? "!border-b-0" : ""}`}
+                          } ${isReviewed ? "bg-emerald-500/[0.04]" : ""}`}
                         >
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
-                            {editedDesc && editedDesc !== r.description ? (
+                            {isReviewed ? (
                               <>
-                                <p className="break-words leading-snug font-medium" title={editedDesc}>{editedDesc}</p>
-                                <p className="text-[10px] text-muted-foreground truncate" title={r.description}>
-                                  Original: {r.description}
-                                </p>
+                                {editedDesc && editedDesc !== r.description ? (
+                                  <>
+                                    <p className="break-words leading-snug font-medium" title={editedDesc}>{editedDesc}</p>
+                                    <p className="text-[10px] text-muted-foreground truncate" title={r.description}>
+                                      Original: {r.description}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <p className="break-words leading-snug" title={r.description}>{r.description}</p>
+                                )}
+                                {contactName && (
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    {contact?.supplier_id ? "Fornecedor" : "Cliente"}: <span className="font-medium">{contactName}</span>
+                                  </p>
+                                )}
                               </>
                             ) : (
-                              <p className="break-words leading-snug" title={r.description}>{r.description}</p>
+                              <div className="space-y-1.5">
+                                <Input
+                                  value={draftDesc}
+                                  onChange={(e) => onDescriptionChange?.(i, e.target.value)}
+                                  placeholder={r.description}
+                                  className="h-8 text-sm"
+                                  aria-label="Descrição do lançamento"
+                                />
+                                {editedDesc && editedDesc !== r.description && (
+                                  <p className="text-[10px] text-muted-foreground truncate" title={r.description}>
+                                    Original: {r.description}
+                                  </p>
+                                )}
+                                <ContactSelectWithCreate
+                                  contacts={isReceita ? clients : suppliers}
+                                  value={(isReceita ? contact.client_id : contact.supplier_id) || ""}
+                                  onChange={(id) =>
+                                    onContactChange?.(i, {
+                                      supplier_id: !isReceita ? (id || null) : null,
+                                      client_id: isReceita ? (id || null) : null,
+                                    })
+                                  }
+                                  type={isReceita ? "client" : "supplier"}
+                                  placeholder={isReceita ? "Cliente (opcional)" : "Fornecedor (opcional)"}
+                                  onContactCreated={(id) => {
+                                    onContactChange?.(i, {
+                                      supplier_id: !isReceita ? id : null,
+                                      client_id: isReceita ? id : null,
+                                    });
+                                    onContactCreated?.(isReceita ? "client" : "supplier", id, draftDesc);
+                                  }}
+                                />
+                              </div>
                             )}
-                            {contactName && (
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {contact?.supplier_id ? "Fornecedor" : "Cliente"}: <span className="font-medium">{contactName}</span>
-                              </p>
-                            )}
-                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                            <div className="flex items-center gap-1 mt-1 flex-wrap">
                               {!willBeCreated && (
                                 <Badge variant="outline" className="text-[9px] gap-0.5 text-muted-foreground bg-muted/40">
                                   <X className="h-2.5 w-2.5" />
                                   Ignorado
+                                </Badge>
+                              )}
+                              {willBeCreated && !isReviewed && (
+                                <Badge variant="outline" className="text-[9px] gap-0.5 border-amber-500/50 text-amber-700 bg-amber-500/5">
+                                  <AlertTriangle className="h-2.5 w-2.5" />
+                                  Rascunho — ative o toggle para criar
                                 </Badge>
                               )}
                               <Badge variant={r.type === "receita" ? "default" : "destructive"} className="text-[9px]">
@@ -1343,7 +1386,7 @@ export function ReconcileStep({
                           </td>
                           <td className="p-2 text-right font-mono whitespace-nowrap align-top">{fmt(r.amount)}</td>
                           <td className="p-2 align-top">
-                            <div className="flex flex-col gap-1">
+                            <div className={`flex flex-col gap-1 ${isReviewed ? "opacity-70 pointer-events-none" : ""}`}>
                               <CategoryCascadeSelect
                                 categories={categories}
                                 value={currentCat}
@@ -1355,97 +1398,82 @@ export function ReconcileStep({
                               {sug && !currentCat.touched && currentCat.category === sug.category && (
                                 <SuggestionWhyPopover suggestion={sug} rowDescription={r.description} />
                               )}
-
-
                             </div>
                           </td>
                           <td className="p-2 text-center align-top">
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex flex-col items-center gap-1.5">
                               <div
                                 className="inline-flex items-center justify-center gap-2 select-none"
                                 title={
-                                  willBeCreated
-                                    ? "Ligado: esta linha será criada ao importar."
-                                    : "Desligado: esta linha será ignorada. Ative para revisar e criar."
+                                  isReviewed
+                                    ? "Confirmado: esta linha será criada ao importar. Desligue para editar."
+                                    : canConfirm
+                                    ? "Ligue para confirmar a edição e travar a linha."
+                                    : "Preencha descrição e categoria antes de confirmar."
                                 }
                               >
                                 <span
                                   className={`text-[11px] font-medium whitespace-nowrap ${
-                                    willBeCreated ? "text-muted-foreground/50" : "text-muted-foreground"
+                                    isReviewed ? "text-muted-foreground/50" : "text-muted-foreground"
                                   }`}
                                 >
-                                  Ignorar
+                                  Editar
                                 </span>
                                 <NeuToggle
-                                  checked={willBeCreated}
+                                  checked={isReviewed}
+                                  disabled={!isReviewed && !canConfirm}
                                   onCheckedChange={(checked) => {
                                     if (checked) {
+                                      const description = draftDesc.trim() || r.description;
+                                      onReviewConfirm?.(i, {
+                                        description,
+                                        category: { ...currentCat, touched: true },
+                                        contact: {
+                                          supplier_id: !isReceita ? (contact.supplier_id || null) : null,
+                                          client_id: isReceita ? (contact.client_id || null) : null,
+                                        },
+                                      });
                                       onActionChange(i, "criar");
-                                      if (!isReviewed) {
-                                        setExpandedRowId(i);
-                                      }
                                     } else {
-                                      onActionChange(i, "ignorar");
-                                      if (expandedRowId === i) setExpandedRowId(null);
+                                      onSetReviewed?.(i, false);
                                     }
                                   }}
-                                  ariaLabel={willBeCreated ? "Ignorar esta linha" : "Criar esta linha"}
+                                  ariaLabel={isReviewed ? "Destravar para editar" : "Confirmar e criar"}
                                 />
                                 <span
                                   className={`text-[11px] font-medium whitespace-nowrap ${
-                                    willBeCreated ? "text-primary" : "text-muted-foreground/50"
+                                    isReviewed ? "text-emerald-700" : "text-muted-foreground/50"
                                   }`}
                                 >
                                   Criar
                                 </span>
                               </div>
-                              {willBeCreated && isReviewed && !isExpanded && (
-                                <div className="flex items-center gap-1">
-                                  <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
-                                    <Check className="h-2.5 w-2.5" /> Revisada
-                                  </Badge>
-                                  <button
-                                    type="button"
-                                    onClick={() => setExpandedRowId(i)}
-                                    className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
-                                  >
-                                    editar
-                                  </button>
-                                </div>
+                              {isReviewed ? (
+                                <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+                                  <Check className="h-2.5 w-2.5" /> Confirmada
+                                </Badge>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (willBeCreated) {
+                                      onActionChange(i, "ignorar");
+                                    } else {
+                                      onActionChange(i, "criar");
+                                    }
+                                  }}
+                                  className="text-[10px] text-muted-foreground hover:text-destructive underline decoration-dotted"
+                                >
+                                  {willBeCreated ? "Ignorar de vez" : "Desfazer ignorar"}
+                                </button>
                               )}
                             </div>
                           </td>
-
-
                         </tr>
-                        {isExpanded && (
-                          <InlineReviewRow
-                            key={`${i}-review`}
-                            rowIdx={i}
-                            row={r}
-                            categories={categories}
-                            suppliers={suppliers}
-                            clients={clients}
-                            initialDescription={rowDescriptions[i] || ""}
-                            initialCategory={rowCategories[i] || { category: "" }}
-                            initialContact={rowContacts[i] || {}}
-                            isReviewed={isReviewed}
-                            onCreateCategory={onCreateCategory}
-                            onContactCreated={onContactCreated}
-                            onCancel={() => {
-                              setExpandedRowId(null);
-                              onReviewCancel?.(i);
-                            }}
-                            onConfirm={(result) => {
-                              onReviewConfirm?.(i, result);
-                              setExpandedRowId(null);
-                            }}
-                          />
-                        )}
-                        </>
                       );
 
                     })}
+
                   </tbody>
                 </table>
               </div>
