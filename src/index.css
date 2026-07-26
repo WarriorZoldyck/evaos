@@ -230,6 +230,14 @@ input[type="number"]::-webkit-outer-spin-button {
       0 1px 3px hsl(215 25% 10% / 0.05),
       0 8px 24px hsl(215 25% 10% / 0.06),
       0 0 0 1px hsl(var(--border) / 0.5);
+  }
+
+  .dark .shadow-premium {
+    box-shadow: 
+      0 1px 3px hsl(220 30% 2% / 0.3),
+      0 8px 24px hsl(220 30% 2% / 0.4),
+      0 0 0 1px hsl(var(--border) / 0.3);
+  }
 }
 
 @layer components {
@@ -302,14 +310,6 @@ input[type="number"]::-webkit-outer-spin-button {
     box-shadow:
       0 1px 2px hsl(var(--neu-dark) / 0.35),
       inset 0 1px 0 hsl(var(--neu-light));
-  }
-}
-
-  .dark .shadow-premium {
-    box-shadow: 
-      0 1px 3px hsl(220 30% 2% / 0.3),
-      0 8px 24px hsl(220 30% 2% / 0.4),
-      0 0 0 1px hsl(var(--border) / 0.3);
   }
 }
 
