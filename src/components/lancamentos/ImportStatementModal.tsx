@@ -1158,6 +1158,25 @@ export function ImportStatementModal({
 
 
 
+  // Disposition of a single row in the reconcile step. The statement is the
+  // source of truth — every parsed row must fall into exactly one bucket
+  // BEFORE we can import. 'pending' means the user hasn't decided yet and
+  // the import must abort with a clear message rather than silently drop it.
+  const getRowDisposition = (i: number): "link" | "create" | "ignore-explicit" | "pending" => {
+    const action = matchActions[i] || "criar";
+    if (action === "vincular") {
+      return matchTargets[i] ? "link" : "pending";
+    }
+    if (action === "ignorar") {
+      return explicitlyIgnored.has(i) ? "ignore-explicit" : "pending";
+    }
+    // 'criar' — accept as long as we have SOMETHING to name the transaction.
+    // Reviewed rows already have a curated description; unreviewed ones fall
+    // back to either the edited draft or the original statement text.
+    const desc = (rowDescriptions[i] || rows[i]?.description || "").trim();
+    return desc ? "create" : "pending";
+  };
+
   const handleImport = async () => {
     if (!user) return;
     if (!targetBankAccount) {
@@ -1174,6 +1193,21 @@ export function ImportStatementModal({
       return;
     }
 
+    // Guardrail: extrato é a fonte da verdade. Nenhuma linha pode ser
+    // descartada sem decisão explícita (vincular / criar / ignorar de vez).
+    const pendingIdxs = rows
+      .map((_, i) => i)
+      .filter((i) => getRowDisposition(i) === "pending");
+    if (pendingIdxs.length > 0) {
+      const total = pendingIdxs.reduce((s, i) => s + Math.abs(rows[i]?.amount || 0), 0);
+      toast({
+        title: `${pendingIdxs.length} lançamento${pendingIdxs.length > 1 ? "s" : ""} do extrato sem decisão`,
+        description: `Total pendente: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Ative "Criar" ou use "Ignorar de vez" em cada linha antes de importar — o extrato é a fonte da verdade.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setImporting(true);
 
     const [accType, ...idParts] = targetBankAccount.split(":");
@@ -1187,15 +1221,16 @@ export function ImportStatementModal({
       ? (detectedCards.find(c => !c.parent_card_id)?.id || detectedCards[0]?.id || null)
       : null;
 
-    // Split rows by action — both debit and card now support vincular
+    // Split rows by action — iterate ALL rows (not selectedRows). The
+    // checkbox `selected` is no longer a discard channel; disposition above
+    // is the only thing that decides what happens.
     const rowsToCreate: ParsedTransaction[] = [];
     const rowsToLink: { row: ParsedTransaction; txId: string }[] = [];
 
-    selectedRows.forEach((r) => {
-      const realIdx = rows.indexOf(r);
-      const action = matchActions[realIdx] || "criar";
-      if (action === "ignorar") return;
-      if (action === "vincular") {
+    rows.forEach((r, realIdx) => {
+      const disp = getRowDisposition(realIdx);
+      if (disp === "ignore-explicit") return;
+      if (disp === "link") {
         const txId = matchTargets[realIdx];
         if (txId) {
           rowsToLink.push({ row: r, txId });
@@ -1203,9 +1238,10 @@ export function ImportStatementModal({
           console.warn("[ImportStatement] 'vincular' sem matchTarget — caindo em 'criar'", { realIdx, row: r });
           rowsToCreate.push(r);
         }
-      } else {
+      } else if (disp === "create") {
         rowsToCreate.push(r);
       }
+      // 'pending' já foi bloqueado acima
     });
 
     // 1) Link existing transactions — mark Pago (debit) or just reconcile (card / already-Pago)
@@ -2120,18 +2156,28 @@ export function ImportStatementModal({
 
 
         {rows.length > 0 && step === "reconcile" && (() => {
-          const counts = { vincular: 0, criar: 0, ignorar: 0 };
+          const counts = { vincular: 0, criar: 0, ignorar: 0, pendente: 0 };
           let netToCreate = 0;
           let netToLink = 0;
           let creditsTotal = 0;
-          selectedRows.forEach((r) => {
-            const i = rows.indexOf(r);
-            const a = matchActions[i] || "criar";
-            counts[a]++;
+          let pendingTotal = 0;
+          rows.forEach((r, i) => {
+            const disp = getRowDisposition(i);
             const signed = signedStatementAmount(r);
-            if (r.type === "receita" && a !== "ignorar") creditsTotal += Math.abs(r.amount);
-            if (a === "criar") netToCreate += signed;
-            if (a === "vincular") netToLink += signed;
+            if (disp === "link") {
+              counts.vincular++;
+              netToLink += signed;
+              if (r.type === "receita") creditsTotal += Math.abs(r.amount);
+            } else if (disp === "create") {
+              counts.criar++;
+              netToCreate += signed;
+              if (r.type === "receita") creditsTotal += Math.abs(r.amount);
+            } else if (disp === "ignore-explicit") {
+              counts.ignorar++;
+            } else {
+              counts.pendente++;
+              pendingTotal += Math.abs(r.amount);
+            }
           });
           const toImport = counts.vincular + counts.criar;
           const selectedNetTotal = netToCreate + netToLink;
@@ -2210,6 +2256,9 @@ export function ImportStatementModal({
               <div className="flex flex-col items-stretch sm:items-end gap-1.5 min-w-[280px]">
                 <span className="text-xs text-muted-foreground text-right">
                   <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
+                  {counts.pendente > 0 && (
+                    <> · <strong className="text-amber-600">{counts.pendente} sem decisão</strong></>
+                  )}
                 </span>
                 <span className="text-xs text-muted-foreground text-right">
                   Selecionado líquido:{" "}
@@ -2250,7 +2299,7 @@ export function ImportStatementModal({
                     </label>
                   </div>
                 )}
-                {toImport === 0 ? (
+                {toImport === 0 && counts.pendente === 0 ? (
                   <Button
                     onClick={handleClose}
                     className="gap-2 mt-1"
@@ -2259,50 +2308,25 @@ export function ImportStatementModal({
                     <Check className="h-4 w-4" />
                     Nada a importar — concluir
                   </Button>
-                ) : (() => {
-                  // Linhas "só no extrato" que ainda não têm decisão explícita:
-                  // - action='criar' sem toggle confirmado (rascunho)
-                  // - action='ignorar' que NÃO é um "ignorar de vez" clicado pelo
-                  //   usuário (heurística: rows sem system match nascem 'ignorar'
-                  //   por padrão; se o usuário não confirmou nem clicou "Ignorar
-                  //   de vez", tratamos como pendente para não descartar em silêncio).
-                  const unreviewedIdxs = rows
-                    .map((_, i) => i)
-                    .filter((i) => {
-                      const hasSystemMatch = !!mergedMatches[i]?.best?.candidate;
-                      if (hasSystemMatch) return false; // trata em outra seção
-                      const action = matchActions[i] || "criar";
-                      if (action === "vincular") return false;
-                      if (action === "criar" && reviewedRows.has(i)) return false;
-                      // criar não revisado OU ignorar sem confirmação explícita
-                      return !reviewedRows.has(i) && !explicitlyIgnored.has(i);
-                    });
-                  const unreviewed = unreviewedIdxs.length;
-                  const unreviewedTotal = unreviewedIdxs.reduce(
-                    (s, i) => s + Math.abs(rows[i]?.amount || 0),
-                    0
-                  );
-                  const blocked = unreviewed > 0;
-                  return (
-                    <div className="flex flex-col items-end gap-1">
-                      {blocked && (
-                        <p className="text-[11px] text-amber-600 dark:text-amber-400 text-right max-w-[320px]">
-                          <strong>{unreviewed}</strong> lançamento{unreviewed > 1 ? "s" : ""} do extrato ({fmt(unreviewedTotal)}) sem decisão. Ative <strong>"Criar"</strong> ou use <strong>"Ignorar de vez"</strong> antes de importar.
-                        </p>
-                      )}
-                      <Button
-                        onClick={handleImport}
-                        disabled={importing || blockedByDivergence || blocked}
-                        className="gap-2 mt-1"
-                        title={blocked ? "Existem linhas do extrato sem decisão — o extrato é a fonte da verdade, então nada pode ser descartado em silêncio." : undefined}
-                      >
-                        {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                        Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
-                        {importType === "cartao" ? " para a fatura" : ""}
-                      </Button>
-                    </div>
-                  );
-                })()}
+                ) : (
+                  <div className="flex flex-col items-end gap-1">
+                    {counts.pendente > 0 && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 text-right max-w-[320px]">
+                        <strong>{counts.pendente}</strong> lançamento{counts.pendente > 1 ? "s" : ""} do extrato ({fmt(pendingTotal)}) sem decisão. Ative <strong>"Criar"</strong> ou use <strong>"Ignorar de vez"</strong> antes de importar — o extrato é a fonte da verdade.
+                      </p>
+                    )}
+                    <Button
+                      onClick={handleImport}
+                      disabled={importing || blockedByDivergence || counts.pendente > 0}
+                      className="gap-2 mt-1"
+                      title={counts.pendente > 0 ? "Existem linhas do extrato sem decisão — nada pode ser descartado em silêncio." : undefined}
+                    >
+                      {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
+                      {importType === "cartao" ? " para a fatura" : ""}
+                    </Button>
+                  </div>
+                )}
               </div>
             </DialogFooter>
           );
