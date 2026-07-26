@@ -2135,6 +2135,10 @@ export type Database = {
         Args: { bank_ids: string[]; wallet_ids: string[] }
         Returns: number
       }
+      get_pending_invitation_owner_name: {
+        Args: { _owner_id: string }
+        Returns: string
+      }
       get_public_tables: {
         Args: never
         Returns: {
