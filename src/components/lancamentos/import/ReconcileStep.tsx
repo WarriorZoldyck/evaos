@@ -45,6 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { RowMatch } from "@/hooks/useImportMatching";
 import type { SuggestionSource } from "@/hooks/useCategorySuggestions";
 import { CategoryPathCombobox } from "@/components/lancamentos/CategoryPathCombobox";
+import { CategoryCascadeSelect } from "@/components/lancamentos/import/CategoryCascadeSelect";
 import { ContactSelectWithCreate } from "@/components/lancamentos/ContactSelectWithCreate";
 import { SuggestionWhyPopover } from "@/components/lancamentos/import/SuggestionWhyPopover";
 
@@ -291,7 +292,7 @@ function InlineReviewRow({
 
             <div className="space-y-1.5">
               <Label className="text-xs">Categoria</Label>
-              <CategoryPathCombobox
+              <CategoryCascadeSelect
                 categories={categories}
                 value={category}
                 type={row.type}
@@ -1274,7 +1275,7 @@ export function ReconcileStep({
                           <td className="p-2 text-right font-mono whitespace-nowrap align-top">{fmt(r.amount)}</td>
                           <td className="p-2 align-top">
                             <div className="flex flex-col gap-1">
-                              <CategoryPathCombobox
+                              <CategoryCascadeSelect
                                 categories={categories}
                                 value={currentCat}
                                 type={r.type}
