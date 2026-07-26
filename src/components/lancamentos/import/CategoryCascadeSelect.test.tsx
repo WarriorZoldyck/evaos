@@ -74,3 +74,52 @@ describe("CategoryCascadeSelect", () => {
   });
 });
 
+describe("CategoryCascadeSelect virtualization", () => {
+  const many: CategoryFlat[] = [
+    { id: "root", name: "Raiz", parent_id: null, type: "despesa" },
+    ...Array.from({ length: 300 }, (_, i) => ({
+      id: `c${i}`,
+      name: `Cat ${String(i).padStart(3, "0")}`,
+      parent_id: "root",
+      type: "despesa" as const,
+    })),
+  ];
+
+  it("renders only a windowed subset when list exceeds threshold", () => {
+    render(
+      <CategoryCascadeSelect
+        categories={many}
+        value={{ category: "Raiz" }}
+        type="despesa"
+        onChange={vi.fn()}
+      />,
+    );
+    const triggers = screen.getAllByRole("combobox");
+    fireEvent.click(triggers[1]!);
+    const options = screen.getAllByRole("option");
+    // 300 subs — virtualization must keep DOM well below that.
+    expect(options.length).toBeLessThan(100);
+    expect(options.length).toBeGreaterThan(0);
+  });
+
+  it("filters options via controlled search input", async () => {
+    render(
+      <CategoryCascadeSelect
+        categories={many}
+        value={{ category: "Raiz" }}
+        type="despesa"
+        onChange={vi.fn()}
+      />,
+    );
+    const triggers = screen.getAllByRole("combobox");
+    fireEvent.click(triggers[1]!);
+    const input = screen.getByPlaceholderText("Buscar subcategoria...");
+    fireEvent.change(input, { target: { value: "Cat 042" } });
+    const options = screen.getAllByRole("option");
+    const names = options.map((o) => o.textContent || "");
+    expect(names.some((n) => n.includes("Cat 042"))).toBe(true);
+    expect(names.filter((n) => n.startsWith("Cat ")).length).toBe(1);
+  });
+});
+
+
