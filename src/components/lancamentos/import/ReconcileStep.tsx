@@ -494,7 +494,7 @@ export function ReconcileStep({
                   className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={() => {
                     onActionChange(i, "criar");
-                    onOpenReview?.(i);
+                    setExpandedRowId(i);
                   }}
                 >
                   <X className="h-3 w-3" /> É outra compra — criar
