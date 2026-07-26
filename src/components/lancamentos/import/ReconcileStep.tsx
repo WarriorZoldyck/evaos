@@ -1052,10 +1052,11 @@ export function ReconcileStep({
                                     if (checked) {
                                       onActionChange(i, "criar");
                                       if (!isReviewed) {
-                                        onOpenReview?.(i);
+                                        setExpandedRowId(i);
                                       }
                                     } else {
                                       onActionChange(i, "ignorar");
+                                      if (expandedRowId === i) setExpandedRowId(null);
                                     }
                                   }}
                                   ariaLabel={willBeCreated ? "Ignorar esta linha" : "Criar esta linha"}
@@ -1068,20 +1069,18 @@ export function ReconcileStep({
                                   Criar
                                 </span>
                               </div>
-                              {willBeCreated && isReviewed && (
+                              {willBeCreated && isReviewed && !isExpanded && (
                                 <div className="flex items-center gap-1">
                                   <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
                                     <Check className="h-2.5 w-2.5" /> Revisada
                                   </Badge>
-                                  {onOpenReview && (
-                                    <button
-                                      type="button"
-                                      onClick={() => onOpenReview(i)}
-                                      className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
-                                    >
-                                      editar
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedRowId(i)}
+                                    className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
+                                  >
+                                    editar
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -1089,6 +1088,31 @@ export function ReconcileStep({
 
 
                         </tr>
+                        {isExpanded && (
+                          <InlineReviewRow
+                            key={`${i}-review`}
+                            rowIdx={i}
+                            row={r}
+                            categories={categories}
+                            suppliers={suppliers}
+                            clients={clients}
+                            initialDescription={rowDescriptions[i] || ""}
+                            initialCategory={rowCategories[i] || { category: "" }}
+                            initialContact={rowContacts[i] || {}}
+                            isReviewed={isReviewed}
+                            onCreateCategory={onCreateCategory}
+                            onContactCreated={onContactCreated}
+                            onCancel={() => {
+                              setExpandedRowId(null);
+                              onReviewCancel?.(i);
+                            }}
+                            onConfirm={(result) => {
+                              onReviewConfirm?.(i, result);
+                              setExpandedRowId(null);
+                            }}
+                          />
+                        )}
+                        </>
                       );
 
                     })}
