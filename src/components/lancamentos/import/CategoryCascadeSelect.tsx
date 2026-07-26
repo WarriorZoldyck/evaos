@@ -29,6 +29,8 @@ import type {
   CategoryFlat,
   RowCategoryValue,
 } from "@/components/lancamentos/CategoryPathCombobox";
+import { buildCategoryIndex, resolveChain, childrenOfId } from "@/lib/categoryChain";
+
 
 interface Props {
   categories: CategoryFlat[];
@@ -81,36 +83,43 @@ export function CategoryCascadeSelect({
   const sub = value?.subcategory || "";
   const sub2 = value?.subcategory2 || "";
 
-  const { roots, subsOf, sub2sOf } = useMemo(() => {
-    const byParent = new Map<string | null, CategoryFlat[]>();
-    for (const c of categories) {
-      const arr = byParent.get(c.parent_id) || [];
-      arr.push(c);
-      byParent.set(c.parent_id, arr);
-    }
-    const rootList = (byParent.get(null) || []).filter(
-      (c) => !strictType || typeAllows(c.type, type),
-    );
-    const subsFor = (parentName: string) => {
-      const parent = rootList.find((r) => r.name === parentName);
-      if (!parent) return [];
-      return (byParent.get(parent.id) || []).filter(
-        (c) => !strictType || typeAllows(c.type, type),
-      );
-    };
-    const sub2sFor = (parentName: string, subName: string) => {
-      const subs = subsFor(parentName);
-      const subCat = subs.find((s) => s.name === subName);
-      if (!subCat) return [];
-      return (byParent.get(subCat.id) || []).filter(
-        (c) => !strictType || typeAllows(c.type, type),
-      );
-    };
-    return { roots: rootList, subsOf: subsFor, sub2sOf: sub2sFor };
-  }, [categories, type, strictType]);
+  const index = useMemo(() => buildCategoryIndex(categories), [categories]);
 
-  const subs = cat ? subsOf(cat) : [];
-  const sub2s = cat && sub ? sub2sOf(cat, sub) : [];
+  // Resolve the chain to concrete IDs so we can look up children by parent ID,
+  // avoiding collisions between different branches that share the same name.
+  const chainIds = useMemo(
+    () => resolveChain({ category: cat, subcategory: sub, subcategory2: sub2 }, index),
+    [cat, sub, sub2, index],
+  );
+
+  const roots = useMemo(
+    () =>
+      childrenOfId(index, null).filter(
+        (c) => !strictType || typeAllows(c.type, type),
+      ),
+    [index, strictType, type],
+  );
+
+  const subs = useMemo(
+    () =>
+      chainIds.rootId
+        ? childrenOfId(index, chainIds.rootId).filter(
+            (c) => !strictType || typeAllows(c.type, type),
+          )
+        : [],
+    [index, chainIds.rootId, strictType, type],
+  );
+
+  const sub2s = useMemo(
+    () =>
+      chainIds.subId
+        ? childrenOfId(index, chainIds.subId).filter(
+            (c) => !strictType || typeAllows(c.type, type),
+          )
+        : [],
+    [index, chainIds.subId, strictType, type],
+  );
+
 
   const [openLevel, setOpenLevel] = useState<null | "cat" | "sub" | "sub2">(null);
   const [creating, setCreating] = useState<{

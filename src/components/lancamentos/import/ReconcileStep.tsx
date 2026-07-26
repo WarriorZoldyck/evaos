@@ -17,6 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NeuToggle } from "@/components/ui/neu-toggle";
+import { buildCategoryIndex, resolveChain, childrenOfId } from "@/lib/categoryChain";
+
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -537,14 +539,26 @@ export function ReconcileStep({
     setManualForRow(null);
   };
 
-  // Hierarchical category helpers
-  const rootCats = useMemo(() => categories.filter((c) => !c.parent_id), [categories]);
-  const childrenOf = (parentName: string | undefined) => {
-    if (!parentName) return [];
-    const parent = categories.find((c) => c.name === parentName);
-    if (!parent) return [];
-    return categories.filter((c) => c.parent_id === parent.id);
+  // Hierarchical category helpers — resolve by ID to survive name collisions
+  // between branches (e.g., "Alimentação" existing as a root and as a leaf under
+  // another parent). Without this, `find(c => c.name === parentName)` would
+  // silently return the wrong record and hide entire subtrees.
+  const categoryIndex = useMemo(() => buildCategoryIndex(categories), [categories]);
+  const rootCats = useMemo(
+    () => childrenOfId(categoryIndex, null),
+    [categoryIndex],
+  );
+  const childrenOfChain = (
+    category: string | undefined,
+    subcategory?: string | undefined,
+  ) => {
+    if (!category) return [];
+    const ids = resolveChain({ category, subcategory }, categoryIndex);
+    const parentId = subcategory ? ids.subId : ids.rootId;
+    if (!parentId) return [];
+    return childrenOfId(categoryIndex, parentId);
   };
+
 
   // Renders a single matched row (used by Q1 + Q2 sections).
   const renderMatchRow = ({ r, i }: { r: ParsedRow; i: number }) => {
@@ -1242,8 +1256,9 @@ export function ReconcileStep({
                         ? clients.find((c) => c.id === contact.client_id)?.name
                         : undefined;
                       const isReviewed = !!reviewedRows?.has(i);
-                      const subs = childrenOf(currentCat.category);
-                      const subSubs = childrenOf(currentCat.subcategory);
+                      const subs = childrenOfChain(currentCat.category);
+                      const subSubs = childrenOfChain(currentCat.category, currentCat.subcategory);
+
                       const dupKey = `${r.type}|${Math.abs(r.amount)}|${normalizeText(r.description)}`;
                       const dupCount = duplicateCounts.get(dupKey) || 1;
                       const replacingCandId = matches[i]?.best?.candidate?.id;
