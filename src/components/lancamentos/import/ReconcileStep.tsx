@@ -836,7 +836,7 @@ export function ReconcileStep({
                               next.add(i);
                               return next;
                             });
-                            onOpenReview?.(i);
+                            setExpandedRowId(i);
                           }}
                           title="Criar como novo lançamento — abre a revisão para renomear e categorizar antes de importar."
                         >
