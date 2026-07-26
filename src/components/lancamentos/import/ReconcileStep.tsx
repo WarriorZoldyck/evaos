@@ -1256,8 +1256,9 @@ export function ReconcileStep({
                         ? clients.find((c) => c.id === contact.client_id)?.name
                         : undefined;
                       const isReviewed = !!reviewedRows?.has(i);
-                      const subs = childrenOf(currentCat.category);
-                      const subSubs = childrenOf(currentCat.subcategory);
+                      const subs = childrenOfChain(currentCat.category);
+                      const subSubs = childrenOfChain(currentCat.category, currentCat.subcategory);
+
                       const dupKey = `${r.type}|${Math.abs(r.amount)}|${normalizeText(r.description)}`;
                       const dupCount = duplicateCounts.get(dupKey) || 1;
                       const replacingCandId = matches[i]?.best?.candidate?.id;
