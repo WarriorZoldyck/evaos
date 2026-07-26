@@ -310,10 +310,8 @@ export function ImportStatementModal({
   const [rowDescriptions, setRowDescriptions] = useState<Record<number, string>>({});
   // Per-row supplier/client selection.
   const [rowContacts, setRowContacts] = useState<Record<number, { supplier_id?: string | null; client_id?: string | null }>>({});
-  // Rows the user has confirmed in the "Revisar novo lançamento" modal.
+  // Rows the user has confirmed in the inline "Revisar novo lançamento" panel.
   const [reviewedRows, setReviewedRows] = useState<Set<number>>(new Set());
-  // Which row idx is being reviewed right now (null = modal closed).
-  const [reviewIdx, setReviewIdx] = useState<number | null>(null);
   // Suppliers & clients used to pre-select / render "Fornecedor: X" hints.
   const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
   const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
