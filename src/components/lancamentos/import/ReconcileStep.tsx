@@ -1397,16 +1397,16 @@ export function ReconcileStep({
 
 
           {/* Q4 — SÓ NO SISTEMA (orphans) */}
-          {isCardMode && !orphansLoading && (remainingOrphans.length > 0 || manuallyResolvedOrphanRows.length > 0) && (
+          {isCardMode && !orphansLoading && (remainingOrphans.length > 0 || linkedOrphans.size > 0) && (
             <section>
               <header className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2 text-destructive">
                   <AlertTriangle className="h-4 w-4" />
                   Só no sistema
                   <Badge variant="secondary" className="text-[10px]">{remainingOrphans.length}</Badge>
-                  {manuallyResolvedOrphanRows.length > 0 && (
+                  {linkedOrphans.size > 0 && (
                     <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700">
-                      {manuallyResolvedOrphanRows.length} resolvido{manuallyResolvedOrphanRows.length === 1 ? "" : "s"}
+                      {linkedOrphans.size} resolvido{linkedOrphans.size === 1 ? "" : "s"} acima
                     </Badge>
                   )}
                   <span className="text-[10px] text-muted-foreground font-normal">
@@ -1428,19 +1428,11 @@ export function ReconcileStep({
                 <Alert className="mb-2 py-2 px-3 bg-emerald-500/5 border-emerald-500/30">
                   <Check className="h-3.5 w-3.5 text-emerald-700" />
                   <AlertDescription className="text-[11px] leading-snug ml-1 text-emerald-800">
-                    Todos os itens desta seção foram resolvidos manualmente.
+                    Todos os itens desta seção foram resolvidos — veja em <strong>“Vinculadas manualmente”</strong> acima.
                   </AlertDescription>
                 </Alert>
               )}
-              {manuallyResolvedOrphanRows.length > 0 && (
-                <div className="mb-2 border border-emerald-500/30 rounded-lg overflow-hidden divide-y bg-emerald-500/[0.04]">
-                  <header className="px-3 py-2 text-xs font-semibold flex items-center gap-2 text-emerald-700 bg-emerald-500/5 border-b border-emerald-500/20">
-                    <Link2 className="h-3.5 w-3.5" /> Resolvidos com “É o mesmo”
-                    <Badge variant="secondary" className="text-[10px]">{manuallyResolvedOrphanRows.length}</Badge>
-                  </header>
-                  {manuallyResolvedOrphanRows.map(renderManualLinkRow)}
-                </div>
-              )}
+
               {showOrphans && (
                 remainingOrphans.length > 0 ? (
                   <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
