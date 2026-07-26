@@ -1275,7 +1275,7 @@ export function ReconcileStep({
                           <td className="p-2 text-right font-mono whitespace-nowrap align-top">{fmt(r.amount)}</td>
                           <td className="p-2 align-top">
                             <div className="flex flex-col gap-1">
-                              <CategoryPathCombobox
+                              <CategoryCascadeSelect
                                 categories={categories}
                                 value={currentCat}
                                 type={r.type}
