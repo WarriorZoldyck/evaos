@@ -17,6 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NeuToggle } from "@/components/ui/neu-toggle";
+import { buildCategoryIndex, resolveChain, childrenOfId } from "@/lib/categoryChain";
+
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
