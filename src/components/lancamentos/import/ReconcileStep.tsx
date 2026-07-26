@@ -360,7 +360,30 @@ export function ReconcileStep({
   // section — we drop the suggested match locally so the row moves to
   // "Só no extrato" and can be categorized/imported.
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<number>>(new Set());
+  // Orphan tx IDs the user has manually linked via "É o mesmo".
+  const [linkedOrphans, setLinkedOrphans] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  // Unified "É o mesmo" handler — used in all three sections.
+  // Marks the extract row as reconciled against the given system tx id.
+  const handleMarkSame = (rowIdx: number, targetTxId: string) => {
+    onTargetChange(rowIdx, targetTxId);
+    onActionChange(rowIdx, "vincular");
+    setDismissedSuggestions((prev) => {
+      const next = new Set(prev);
+      next.add(rowIdx);
+      return next;
+    });
+    setLinkedOrphans((prev) => {
+      const next = new Set(prev);
+      next.add(targetTxId);
+      return next;
+    });
+    toast({
+      title: "Vinculado",
+      description: "Será marcado como conciliado ao importar.",
+    });
+  };
   const [createCatState, setCreateCatState] = useState<
     | { rowIdx: number; level: "category" | "subcategory" | "subcategory2"; parentName?: string; type?: "receita" | "despesa" }
     | null
