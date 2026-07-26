@@ -1320,6 +1320,7 @@ export function ReconcileStep({
               {showOrphans && (
                 <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
                   {orphans
+                    .filter((o) => !linkedOrphans.has(o.id))
                     .slice()
                     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
                     .map((o) => {
