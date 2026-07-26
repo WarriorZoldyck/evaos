@@ -2115,24 +2115,7 @@ export type Database = {
       }
     }
     Views: {
-      hub_owner_profiles: {
-        Row: {
-          avatar_url: string | null
-          full_name: string | null
-          id: string | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          full_name?: string | null
-          id?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          full_name?: string | null
-          id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       compute_cycle_key: { Args: { payment_date: string }; Returns: string }
@@ -2151,6 +2134,14 @@ export type Database = {
       get_accounts_paid_delta: {
         Args: { bank_ids: string[]; wallet_ids: string[] }
         Returns: number
+      }
+      get_hub_owner_profile: {
+        Args: { _owner_id: string }
+        Returns: {
+          avatar_url: string
+          full_name: string
+          id: string
+        }[]
       }
       get_pending_invitation_owner_name: {
         Args: { _owner_id: string }
