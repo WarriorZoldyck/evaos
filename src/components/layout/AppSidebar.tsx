@@ -132,7 +132,7 @@ export function AppSidebar() {
         : `${selectedCount} contextos`;
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" className="sidebar-glass border-r border-sidebar-border">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 shrink-0 rounded-lg overflow-hidden glow-primary-sm">
@@ -152,7 +152,7 @@ export function AppSidebar() {
         <div className="px-3 pb-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-2 rounded-lg bg-sidebar-accent/80 px-3 py-2.5 text-sm text-sidebar-accent-foreground hover:bg-accent transition-all duration-200 border border-transparent hover:border-primary/20">
+              <button className="sidebar-context-pill w-full flex items-center gap-2 rounded-lg bg-sidebar-accent/80 px-3 py-2.5 text-sm text-sidebar-accent-foreground hover:bg-accent transition-all duration-200 border border-transparent hover:border-primary/20">
                 <ContextIcon className="h-4 w-4 text-primary shrink-0" />
                 <span className="truncate flex-1 text-left font-medium">{contextLabel}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -213,7 +213,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Principal</SidebarGroupLabel>
+          <SidebarGroupLabel className="sidebar-group-label text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Principal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainMenuItems.map((item) => (
@@ -222,13 +222,13 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end={item.url === "/"}
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                       {item.hasBadge && pendingCount > 0 && (
-                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
+                        <span className="sidebar-badge-soft ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
                           {pendingCount}
                         </span>
                       )}
@@ -241,7 +241,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Financeiro</SidebarGroupLabel>
+          <SidebarGroupLabel className="sidebar-group-label text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Financeiro</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {visibleFinanceMenuItems.map((item) => (
@@ -249,8 +249,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -263,7 +263,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Cadastros</SidebarGroupLabel>
+          <SidebarGroupLabel className="sidebar-group-label text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Cadastros</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {registrationMenuItems.map((item) => (
@@ -271,8 +271,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -292,13 +292,13 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip="EVA Hub">
                     <NavLink
                       to="/eva-hub"
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <UsersRound className="h-4 w-4" />
                       <span>EVA Hub</span>
                       {pendingInvitationsCount > 0 && (
-                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
+                        <span className="sidebar-badge-soft ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
                           {pendingInvitationsCount}
                         </span>
                       )}
@@ -311,7 +311,7 @@ export function AppSidebar() {
         )}
 
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Novidades</SidebarGroupLabel>
+          <SidebarGroupLabel className="sidebar-group-label text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Novidades</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {comingSoonItems.map((item) => (
@@ -319,12 +319,12 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
-                      <span className="ml-auto text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">Em breve</span>
+                      <span className="sidebar-badge-soft ml-auto text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">Em breve</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -340,8 +340,8 @@ export function AppSidebar() {
             <SidebarMenuButton asChild tooltip="Documentação">
               <NavLink
                 to="/docs"
-                className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
               >
                 <BookOpen className="h-4 w-4" />
                 <span>Documentação</span>
@@ -352,8 +352,8 @@ export function AppSidebar() {
             <SidebarMenuButton asChild tooltip="Configurações">
               <NavLink
                 to="/configuracoes"
-                className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
               >
                 <Settings className="h-4 w-4" />
                 <span>Configurações</span>
@@ -364,7 +364,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               onClick={signOut}
               tooltip="Sair"
-              className="hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all duration-200"
+              className="sidebar-item hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all duration-200"
             >
               <LogOut className="h-4 w-4" />
               <span>Sair</span>

@@ -64,6 +64,15 @@ input[type="number"]::-webkit-outer-spin-button {
     --chart-3: 38 92% 50%;
     --chart-4: 280 65% 60%;
     --chart-5: 0 84% 60%;
+
+    /* Glass Neumorphism (sidebar) — light only */
+    --glass-surface: 210 33% 96%;
+    --glass-border: 0 0% 100% / 0.6;
+    --neu-light: 255 255 255 / 0.9;
+    --neu-dark: 210 25% 78% / 0.5;
+    --sidebar-active-from: 198 100% 96%;
+    --sidebar-active-to: 198 100% 92%;
+    --sidebar-active-fg: 199 100% 36%;
   }
 
   .dark {
@@ -228,6 +237,79 @@ input[type="number"]::-webkit-outer-spin-button {
       0 1px 3px hsl(220 30% 2% / 0.3),
       0 8px 24px hsl(220 30% 2% / 0.4),
       0 0 0 1px hsl(var(--border) / 0.3);
+  }
+}
+
+@layer components {
+  /* ==========================================================================
+     Glass Neumorphism — Sidebar (light mode only, additive)
+     Discreet finishing layer that complements existing Tailwind classes.
+     Never removes or overrides functional utilities; only adds surface polish.
+     ========================================================================== */
+
+  .sidebar-glass {
+    background: hsl(var(--glass-surface) / 0.78);
+    -webkit-backdrop-filter: blur(5px) saturate(1.05);
+    backdrop-filter: blur(5px) saturate(1.05);
+    border-right: 1px solid hsl(var(--glass-border));
+    box-shadow:
+      6px 0 20px -18px hsl(var(--neu-dark)),
+      inset 1px 0 0 hsl(var(--neu-light));
+  }
+
+  .sidebar-item {
+    border-radius: 12px;
+    transition:
+      transform 180ms ease,
+      box-shadow 180ms ease,
+      background-color 180ms ease;
+  }
+  .sidebar-item:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      -2px -2px 6px hsl(var(--neu-light)),
+      2px 2px 6px hsl(var(--neu-dark) / 0.35);
+  }
+  .sidebar-item:active {
+    transform: translateY(0);
+  }
+
+  .sidebar-item-active {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--sidebar-active-from)),
+      hsl(var(--sidebar-active-to))
+    );
+    color: hsl(var(--sidebar-active-fg));
+    box-shadow:
+      inset 1px 1px 2px hsl(var(--neu-light)),
+      inset -1px -1px 3px hsl(var(--neu-dark) / 0.35),
+      0 1px 0 hsl(var(--neu-light));
+  }
+  .sidebar-item-active svg {
+    color: hsl(var(--sidebar-active-fg));
+  }
+
+  .sidebar-context-pill {
+    background: hsl(var(--glass-surface) / 0.82);
+    -webkit-backdrop-filter: blur(4px) saturate(1.05);
+    backdrop-filter: blur(4px) saturate(1.05);
+    border: 1px solid hsl(var(--glass-border));
+    box-shadow:
+      -1px -1px 3px hsl(var(--neu-light)),
+      1px 2px 5px hsl(var(--neu-dark) / 0.3);
+  }
+
+  .sidebar-group-label {
+    color: hsl(215 15% 55%);
+    letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+
+  .sidebar-badge-soft {
+    box-shadow:
+      0 1px 2px hsl(var(--neu-dark) / 0.35),
+      inset 0 1px 0 hsl(var(--neu-light));
   }
 }
 
