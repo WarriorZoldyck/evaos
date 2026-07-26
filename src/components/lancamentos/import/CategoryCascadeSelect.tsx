@@ -34,6 +34,12 @@ interface Props {
     type?: "receita" | "despesa";
   }) => Promise<{ id: string; name: string } | null>;
   className?: string;
+  /**
+   * When true, hide categories whose `type` doesn't match the row (receita/despesa).
+   * On the import screen we default to false so every category from the active
+   * context is visible — the user decides which one to use.
+   */
+  strictType?: boolean;
 }
 
 function typeAllows(catType: string | null, rowType: "receita" | "despesa") {
@@ -52,6 +58,7 @@ export function CategoryCascadeSelect({
   onChange,
   onCreateCategory,
   className,
+  strictType = false,
 }: Props) {
   const cat = value?.category || "";
   const sub = value?.subcategory || "";
