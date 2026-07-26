@@ -685,7 +685,9 @@ export function ImportStatementModal({
             nextActions[i] = res[i].best!.suggested ? "criar" : "vincular";
             nextTargets[i] = res[i].best!.candidate.id;
           } else {
-            nextActions[i] = "criar";
+            // Novos lançamentos nascem desligados — o usuário ativa o toggle
+            // para revisar e confirmar a criação (evita import de lixo).
+            nextActions[i] = "ignorar";
           }
         });
         setMatchActions(nextActions);
