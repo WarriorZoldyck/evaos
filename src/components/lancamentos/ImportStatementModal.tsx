@@ -1403,6 +1403,7 @@ export function ImportStatementModal({
     setRowDescriptions({});
     setRowContacts({});
     setReviewedRows(new Set());
+    setExplicitlyIgnored(new Set());
     
     setImportResult(null);
     setStep("preview");
