@@ -69,11 +69,38 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        surface: {
+          0: "hsl(var(--surface-0))",
+          1: "hsl(var(--surface-1))",
+          2: "hsl(var(--surface-2))",
+          elevated: "hsl(var(--surface-elevated))",
+        },
+        eva: {
+          primary: "hsl(var(--eva-primary))",
+          strong: "hsl(var(--eva-primary-strong))",
+          soft: "hsl(var(--eva-primary-soft))",
+        },
+      },
+      borderColor: {
+        soft: "hsl(var(--border-soft))",
+        strong: "hsl(var(--border-strong))",
+        glass: "hsl(var(--border-glass))",
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "var(--radius-xl)",
+        "2xl": "var(--radius-2xl)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-soft)",
+        medium: "var(--shadow-medium)",
+        strong: "var(--shadow-strong)",
+        "inset-hi": "var(--shadow-inset-hi)",
+      },
+      transitionTimingFunction: {
+        eva: "cubic-bezier(0.22, 0.61, 0.36, 1)",
       },
       keyframes: {
         "accordion-down": {
