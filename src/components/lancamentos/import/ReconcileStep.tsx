@@ -1353,10 +1353,16 @@ export function ReconcileStep({
                               </div>
                             )}
                             <div className="flex items-center gap-1 mt-1 flex-wrap">
-                              {!willBeCreated && (
+                              {!willBeCreated && explicitlyIgnored?.has(i) && (
                                 <Badge variant="outline" className="text-[9px] gap-0.5 text-muted-foreground bg-muted/40">
                                   <X className="h-2.5 w-2.5" />
                                   Ignorado
+                                </Badge>
+                              )}
+                              {!willBeCreated && !explicitlyIgnored?.has(i) && (
+                                <Badge variant="outline" className="text-[9px] gap-0.5 border-destructive/50 text-destructive bg-destructive/5">
+                                  <AlertTriangle className="h-2.5 w-2.5" />
+                                  Sem decisão — bloqueia o Importar
                                 </Badge>
                               )}
                               {willBeCreated && !isReviewed && (
