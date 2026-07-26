@@ -416,18 +416,22 @@ export function ReconcileStep({
     [rows]
   );
 
-  // SPLIT matched rows by tier: exact (Q1) vs tolerance (Q2)
+  // SPLIT matched rows by tier: exact (Q1) vs tolerance (Q2).
+  // We exclude rows the user explicitly confirmed via "É o mesmo" (they show
+  // in the dedicated "Vinculadas manualmente" section for clear feedback).
   const matchedExactRows = indexed.filter(
     ({ i }) =>
       (matchActions[i] || "criar") === "vincular" &&
       matches[i]?.best &&
-      matches[i]!.best!.tier === "exact"
+      matches[i]!.best!.tier === "exact" &&
+      !dismissedSuggestions.has(i)
   );
   const matchedToleranceRows = indexed.filter(
     ({ i }) =>
       (matchActions[i] || "criar") === "vincular" &&
       matches[i]?.best &&
-      matches[i]!.best!.tier === "tolerance"
+      matches[i]!.best!.tier === "tolerance" &&
+      !dismissedSuggestions.has(i)
   );
   // Rows where matcher found a same-value candidate but text differs — user must confirm.
   const suggestedRows = indexed.filter(({ i }) => {
@@ -436,16 +440,17 @@ export function ReconcileStep({
     return a === "criar" && matches[i]?.best?.suggested;
   });
   const suggestedIdxSet = new Set(suggestedRows.map(({ i }) => i));
-  // Rows manually linked to an orphan (vincular + target set, but no automatic match).
+  // Rows manually linked via "É o mesmo": either against an orphan (no match)
+  // OR against an auto-suggested candidate that the user confirmed. Both
+  // deserve explicit visual feedback so the click doesn't feel silent.
   const manualLinkedRows = indexed.filter(({ i }) => {
     const a = matchActions[i] || "criar";
-    return a === "vincular" && !matches[i]?.best && !!matchTargets[i];
-  });
-  const manuallyResolvedOrphanRows = manualLinkedRows.filter(({ i }) => {
-    const targetId = matchTargets[i];
-    return targetId ? linkedOrphans.has(targetId) && orphansById.has(targetId) : false;
+    if (a !== "vincular" || !matchTargets[i]) return false;
+    if (!matches[i]?.best) return true; // orphan link
+    return dismissedSuggestions.has(i); // suggested → user confirmed
   });
   const manualLinkedIdxSet = new Set(manualLinkedRows.map(({ i }) => i));
+
   const newRows = indexed.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
     if (manualLinkedIdxSet.has(i)) return false;
