@@ -1,39 +1,25 @@
-## Ajustes finos na conciliação (rodada 2)
+## Objetivo
 
-### 1. Renomear e re-semantizar "Manter só o do sistema" → **"É o mesmo"**
+Novos lançamentos ("Só no extrato" e "Criar novo" no bloco Provável) devem nascer com o toggle desligado ("ignorar") e um aviso "Revisar". Ativar o toggle abre o modal de revisão; ao confirmar, o toggle fica em "Criar" com badge verde "Revisada". Sem botão separado — o próprio toggle conduz o fluxo.
 
-Você tem razão: se o lançamento do sistema é o mesmo do extrato, o certo é apenas **reconhecer o vínculo** — não descartar nenhum dos dois. Já existe essa ação hoje na seção Provável ("É o mesmo" = `vincular`).
+## Mudanças
 
-- Trocar o botão amarelo "Manter só o do sistema" pela ação existente `vincular` com o rótulo **"É o mesmo"** e o mesmo ícone/estilo do botão da seção Provável.
-- Comportamento: marca a linha do sistema como conciliada (`is_reconciled = true`, `status = 'Pago'` se estava `Pendente`, `reconciled_at = now()`) e **não insere nada novo**. A linha do extrato serve só de "prova" e não vira uma segunda transação.
-- Contadores do rodapé: essa linha entra em **"conciliar"** (não em "ignorar"), então o "Selecionado líquido" continua batendo com o total do banco. Isso resolve a divergência falsa que aparecia nas prints (−R$ 60,00 esperado R$ 8.514,66).
-- "Manter só o do extrato" permanece como está (substitui o lançamento do sistema pelo do extrato preservando o nome da categoria).
-- Tooltip curto ao lado dos dois botões explicando cada um em uma linha.
+### `src/components/lancamentos/import/ReconcileStep.tsx`
 
-### 2. Bug — "Revisar e criar" não abre o modal
+- Linhas novas (extrato-only e "Criar novo" da seção Provável) passam a nascer com `rowActions[i] = "ignorar"` (hoje nascem como `"criar"`).
+- Coluna **Ação** dessas linhas: remover o botão "Revisar e criar" / "É outra compra — criar". Manter apenas o `NeuToggle` já usado nas demais linhas (rótulo "Ignorar" à esquerda, "Criar" à direita).
+- Ao ligar o toggle (ignorar → criar) numa linha ainda não revisada: chamar `onOpenReview(i)` automaticamente. Se o usuário fechar/cancelar o modal sem confirmar, reverter o toggle para "ignorar".
+- Ao confirmar revisão: linha vai para `reviewedRows`, toggle permanece em "criar", badge verde "Revisada" aparece abaixo do toggle, com link "editar" para reabrir o modal.
+- Enquanto o toggle estiver em "ignorar" numa linha nova: mostrar badge âmbar `Revisar` ao lado do combobox de categoria (edição de categoria continua habilitada normalmente).
+- Bloco "Provável → Criar novo": mesmo comportamento — clicar em "Criar novo" define target=null, action="ignorar", e abre o modal. Confirmar → action="criar" + revisada. Cancelar → mantém ignorar.
 
-Provável causa (a confirmar em build): `reviewIdx` aponta para `rows[reviewIdx]` no `ImportStatementModal`, mas o `ReconcileStep` chama `onOpenReview(i)` com o índice da tabela filtrada de "Só no extrato", não o índice global de `rows`. Resultado: `reviewRow` volta `undefined` e o modal não abre.
+### `src/components/lancamentos/ImportStatementModal.tsx`
 
-- Em `ReconcileStep.tsx`, propagar o `i` **original** (o mesmo já usado em `onActionChange(i, …)`, que é o índice global) para o `onOpenReview`. Auditar todos os pontos de chamada.
-- Garantir também que os botões "Criar novo" (Provável) e "É outra compra — criar" chamem `onOpenReview(i)` logo após `onActionChange(i, "criar")` — o "Revisar e criar" fica como caminho manual/fallback.
-- Verificar no console após o fix: clicar em "Revisar e criar" precisa abrir o modal com descrição do extrato pré-preenchida.
+- Cálculo de `blocked` no rodapé: bloquear importação apenas se existir linha com `action === "criar"` e ainda **não** revisada. Linhas em "ignorar" não bloqueiam.
+- Contadores do resumo ("N conciliar + M criar") passam a considerar somente linhas com toggle ativado.
+- Sem mudanças no `ReviewNewEntryModal` em si; a integração via `onOpenReview` / `onConfirm` já existe.
 
-### 3. Compactar a barra de resumo "Sistema × Extrato"
+## Notas técnicas
 
-Hoje o header amarelo ocupa ~180px e empurra a lista para fora da viewport (visível na print image-220).
-
-- Reduzir para uma linha só, alinhamento horizontal:
-  `⚠ Sistema × Extrato — Sistema: −R$ 564,33 · Extrato: R$ 8.514,66 · Diferença: +R$ 7.950,33 · 9/63 conciliadas`
-- Mover "Prováveis causas da divergência" para um `Popover` acionado por um ícone de info ao lado da diferença.
-- Reduzir padding vertical (`py-2` em vez de `py-4`) e remover a linha "Cada linha cai em um dos 4 cenários" ou fundi-la como legenda pequena logo abaixo.
-- Meta: barra em ≤ 56px de altura para liberar espaço para a lista.
-
-### 4. Fora do escopo
-
-- Layout do rodapé (Voltar / Total do banco / Cancelar / Importar), toggle Ignorar/Criar da seção "Só no extrato" e parser continuam como estão.
-- Nenhuma mudança de schema.
-
-### Arquivos afetados
-
-- `src/components/lancamentos/import/ReconcileStep.tsx` — botão "É o mesmo" no lugar de "Manter só do sistema", correção do índice em `onOpenReview`, auto-abertura do modal em "Criar novo"/"É outra compra".
-- `src/components/lancamentos/ImportStatementModal.tsx` — compactação da barra de resumo, popover para causas, contadores atualizados (linha "é o mesmo" conta como `conciliar`), garantir que `reviewIdx` referencia o mesmo array indexado pelo `ReconcileStep`.
+- O bug atual em que "Revisar e criar" parecia inerte é obsoleto — o botão é removido. O disparo do modal fica atrelado ao evento `onCheckedChange` do `NeuToggle`, que já funciona (confirmado no toggle das demais linhas).
+- A reversão em caso de cancelamento usa o `onClose` do `ReviewNewEntryModal`: se a linha não estiver em `reviewedRows` no fechamento, o `ReconcileStep` reseta `rowActions[i]` para `"ignorar"`.
