@@ -152,7 +152,7 @@ export function AppSidebar() {
         <div className="px-3 pb-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-2 rounded-lg bg-sidebar-accent/80 px-3 py-2.5 text-sm text-sidebar-accent-foreground hover:bg-accent transition-all duration-200 border border-transparent hover:border-primary/20">
+              <button className="sidebar-context-pill w-full flex items-center gap-2 rounded-lg bg-sidebar-accent/80 px-3 py-2.5 text-sm text-sidebar-accent-foreground hover:bg-accent transition-all duration-200 border border-transparent hover:border-primary/20">
                 <ContextIcon className="h-4 w-4 text-primary shrink-0" />
                 <span className="truncate flex-1 text-left font-medium">{contextLabel}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
