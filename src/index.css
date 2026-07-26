@@ -64,6 +64,15 @@ input[type="number"]::-webkit-outer-spin-button {
     --chart-3: 38 92% 50%;
     --chart-4: 280 65% 60%;
     --chart-5: 0 84% 60%;
+
+    /* Glass Neumorphism (sidebar) — light only */
+    --glass-surface: 210 33% 96%;
+    --glass-border: 0 0% 100% / 0.6;
+    --neu-light: 255 255 255 / 0.9;
+    --neu-dark: 210 25% 78% / 0.5;
+    --sidebar-active-from: 198 100% 96%;
+    --sidebar-active-to: 198 100% 92%;
+    --sidebar-active-fg: 199 100% 36%;
   }
 
   .dark {
