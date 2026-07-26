@@ -121,6 +121,10 @@ interface ReconcileStepProps {
   onDescriptionChange?: (rowIdx: number, description: string) => void;
   /** Update the pending inline contact of a row (before it's committed). */
   onContactChange?: (rowIdx: number, contact: { supplier_id?: string | null; client_id?: string | null }) => void;
+  /** Set of rows the user consciously marked as "Ignorar de vez". */
+  explicitlyIgnored?: Set<number>;
+  /** Toggle a row into/out of the explicit-ignore set. */
+  onExplicitIgnore?: (rowIdx: number, ignored: boolean) => void;
 
   /** Called when a supplier/client is created inline. */
   onContactCreated?: (type: "supplier" | "client", id: string, name: string) => void;
@@ -360,6 +364,8 @@ export function ReconcileStep({
   onDescriptionChange,
   onContactChange,
   onContactCreated,
+  explicitlyIgnored,
+  onExplicitIgnore,
   suppliers = [],
   clients = [],
 }: ReconcileStepProps) {
@@ -1278,7 +1284,12 @@ export function ReconcileStep({
                       );
                       const rowAction = matchActions[i] || "criar";
                       const willBeCreated = rowAction !== "ignorar";
-                      const canConfirm = draftDesc.trim().length > 0 && !!currentCat.category;
+                      // Categoria é opcional na confirmação: se ficar vazia, a criação
+                      // usa "Sem Categoria" como fallback (o usuário classifica depois).
+                      // Isso evita que uma linha seja silenciosamente descartada só porque
+                      // o toggle "Criar" ficou travado esperando categoria.
+                      const canConfirm = draftDesc.trim().length > 0;
+                      const missingCategory = !currentCat.category;
                       return (
                         <tr
                           key={i}
@@ -1342,10 +1353,16 @@ export function ReconcileStep({
                               </div>
                             )}
                             <div className="flex items-center gap-1 mt-1 flex-wrap">
-                              {!willBeCreated && (
+                              {!willBeCreated && explicitlyIgnored?.has(i) && (
                                 <Badge variant="outline" className="text-[9px] gap-0.5 text-muted-foreground bg-muted/40">
                                   <X className="h-2.5 w-2.5" />
                                   Ignorado
+                                </Badge>
+                              )}
+                              {!willBeCreated && !explicitlyIgnored?.has(i) && (
+                                <Badge variant="outline" className="text-[9px] gap-0.5 border-destructive/50 text-destructive bg-destructive/5">
+                                  <AlertTriangle className="h-2.5 w-2.5" />
+                                  Sem decisão — bloqueia o Importar
                                 </Badge>
                               )}
                               {willBeCreated && !isReviewed && (
@@ -1408,8 +1425,10 @@ export function ReconcileStep({
                                   isReviewed
                                     ? "Confirmado: esta linha será criada ao importar. Desligue para editar."
                                     : canConfirm
-                                    ? "Ligue para confirmar a edição e travar a linha."
-                                    : "Preencha descrição e categoria antes de confirmar."
+                                    ? missingCategory
+                                      ? "Ligue para confirmar. A categoria pode ficar como 'Sem Categoria' e você classifica depois."
+                                      : "Ligue para confirmar a edição e travar a linha."
+                                    : "Preencha a descrição antes de confirmar."
                                 }
                               >
                                 <span
@@ -1458,8 +1477,10 @@ export function ReconcileStep({
                                   onClick={() => {
                                     if (willBeCreated) {
                                       onActionChange(i, "ignorar");
+                                      onExplicitIgnore?.(i, true);
                                     } else {
                                       onActionChange(i, "criar");
+                                      onExplicitIgnore?.(i, false);
                                     }
                                   }}
                                   className="text-[10px] text-muted-foreground hover:text-destructive underline decoration-dotted"

@@ -312,6 +312,9 @@ export function ImportStatementModal({
   const [rowContacts, setRowContacts] = useState<Record<number, { supplier_id?: string | null; client_id?: string | null }>>({});
   // Rows the user has confirmed in the inline "Revisar novo lançamento" panel.
   const [reviewedRows, setReviewedRows] = useState<Set<number>>(new Set());
+  // Rows the user explicitly clicked "Ignorar de vez" — usadas para diferenciar
+  // ignorar-por-default (silencioso, bloqueia o Importar) de ignorar-consciente.
+  const [explicitlyIgnored, setExplicitlyIgnored] = useState<Set<number>>(new Set());
   // Suppliers & clients used to pre-select / render "Fornecedor: X" hints.
   const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
   const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
@@ -1400,6 +1403,7 @@ export function ImportStatementModal({
     setRowDescriptions({});
     setRowContacts({});
     setReviewedRows(new Set());
+    setExplicitlyIgnored(new Set());
     
     setImportResult(null);
     setStep("preview");
@@ -2022,6 +2026,15 @@ export function ImportStatementModal({
                 if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
                 else setClientsList((prev) => [...prev, { id, name }]);
               }}
+              explicitlyIgnored={explicitlyIgnored}
+              onExplicitIgnore={(idx, ignored) => {
+                setExplicitlyIgnored((prev) => {
+                  const next = new Set(prev);
+                  if (ignored) next.add(idx);
+                  else next.delete(idx);
+                  return next;
+                });
+              }}
             />
 
 
@@ -2247,28 +2260,41 @@ export function ImportStatementModal({
                     Nada a importar — concluir
                   </Button>
                 ) : (() => {
+                  // Linhas "só no extrato" que ainda não têm decisão explícita:
+                  // - action='criar' sem toggle confirmado (rascunho)
+                  // - action='ignorar' que NÃO é um "ignorar de vez" clicado pelo
+                  //   usuário (heurística: rows sem system match nascem 'ignorar'
+                  //   por padrão; se o usuário não confirmou nem clicou "Ignorar
+                  //   de vez", tratamos como pendente para não descartar em silêncio).
                   const unreviewedIdxs = rows
                     .map((_, i) => i)
-                    .filter(
-                      (i) =>
-                        (matchActions[i] || "criar") === "criar" &&
-                        !mergedMatches[i]?.best?.candidate && // only "só no extrato" rows need review
-                        !reviewedRows.has(i)
-                    );
+                    .filter((i) => {
+                      const hasSystemMatch = !!mergedMatches[i]?.best?.candidate;
+                      if (hasSystemMatch) return false; // trata em outra seção
+                      const action = matchActions[i] || "criar";
+                      if (action === "vincular") return false;
+                      if (action === "criar" && reviewedRows.has(i)) return false;
+                      // criar não revisado OU ignorar sem confirmação explícita
+                      return !reviewedRows.has(i) && !explicitlyIgnored.has(i);
+                    });
                   const unreviewed = unreviewedIdxs.length;
+                  const unreviewedTotal = unreviewedIdxs.reduce(
+                    (s, i) => s + Math.abs(rows[i]?.amount || 0),
+                    0
+                  );
                   const blocked = unreviewed > 0;
                   return (
                     <div className="flex flex-col items-end gap-1">
                       {blocked && (
-                        <p className="text-[11px] text-amber-600 dark:text-amber-400">
-                          {unreviewed} lançamento{unreviewed > 1 ? "s" : ""} novo{unreviewed > 1 ? "s" : ""} aguarda{unreviewed > 1 ? "m" : ""} revisão antes de importar.
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 text-right max-w-[320px]">
+                          <strong>{unreviewed}</strong> lançamento{unreviewed > 1 ? "s" : ""} do extrato ({fmt(unreviewedTotal)}) sem decisão. Ative <strong>"Criar"</strong> ou use <strong>"Ignorar de vez"</strong> antes de importar.
                         </p>
                       )}
                       <Button
                         onClick={handleImport}
                         disabled={importing || blockedByDivergence || blocked}
                         className="gap-2 mt-1"
-                        title={blocked ? "Ative o toggle 'Criar' das linhas novas para revisar antes de importar." : undefined}
+                        title={blocked ? "Existem linhas do extrato sem decisão — o extrato é a fonte da verdade, então nada pode ser descartado em silêncio." : undefined}
                       >
                         {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                         Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
