@@ -356,6 +356,9 @@ export function ReconcileStep({
   onOpenReview,
   onReviewConfirm,
   onReviewCancel,
+  onSetReviewed,
+  onDescriptionChange,
+  onContactChange,
   onContactCreated,
   suppliers = [],
   clients = [],
@@ -364,8 +367,9 @@ export function ReconcileStep({
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
-  // Row currently expanded for inline review (only one at a time).
+  // Row currently expanded for inline review (legacy — kept only for manual re-open path).
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
+
   // Rows for which the user explicitly clicked "Criar novo" in the "Provável"
   // section — we drop the suggested match locally so the row moves to
   // "Só no extrato" and can be categorized/imported.
