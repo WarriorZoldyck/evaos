@@ -292,7 +292,7 @@ function InlineReviewRow({
 
             <div className="space-y-1.5">
               <Label className="text-xs">Categoria</Label>
-              <CategoryPathCombobox
+              <CategoryCascadeSelect
                 categories={categories}
                 value={category}
                 type={row.type}
