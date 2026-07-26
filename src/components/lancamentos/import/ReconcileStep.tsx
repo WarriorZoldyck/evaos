@@ -978,6 +978,23 @@ export function ReconcileStep({
             </section>
           )}
 
+          {/* VINCULADAS MANUALMENTE — usuário resolveu órfão via "É o mesmo" */}
+          {manualLinkedRows.length > 0 && (
+            <section>
+              <header className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
+                  <Link2 className="h-4 w-4" />
+                  Vinculadas manualmente
+                  <Badge variant="secondary" className="text-[10px]">{manualLinkedRows.length}</Badge>
+                  <span className="text-[10px] text-muted-foreground font-normal">— confirmado pelo usuário via "É o mesmo"</span>
+                </h3>
+              </header>
+              <div className="border border-sky-500/30 rounded-lg overflow-hidden divide-y bg-sky-500/[0.03]">
+                {manualLinkedRows.map(renderManualLinkRow)}
+              </div>
+            </section>
+          )}
+
 
           {/* PROVÁVEL — valor+data batem, mas nome diverge. Confirmar. */}
           {suggestedRows.length > 0 && (
