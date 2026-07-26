@@ -537,14 +537,26 @@ export function ReconcileStep({
     setManualForRow(null);
   };
 
-  // Hierarchical category helpers
-  const rootCats = useMemo(() => categories.filter((c) => !c.parent_id), [categories]);
-  const childrenOf = (parentName: string | undefined) => {
-    if (!parentName) return [];
-    const parent = categories.find((c) => c.name === parentName);
-    if (!parent) return [];
-    return categories.filter((c) => c.parent_id === parent.id);
+  // Hierarchical category helpers — resolve by ID to survive name collisions
+  // between branches (e.g., "Alimentação" existing as a root and as a leaf under
+  // another parent). Without this, `find(c => c.name === parentName)` would
+  // silently return the wrong record and hide entire subtrees.
+  const categoryIndex = useMemo(() => buildCategoryIndex(categories), [categories]);
+  const rootCats = useMemo(
+    () => childrenOfId(categoryIndex, null),
+    [categoryIndex],
+  );
+  const childrenOfChain = (
+    category: string | undefined,
+    subcategory?: string | undefined,
+  ) => {
+    if (!category) return [];
+    const ids = resolveChain({ category, subcategory }, categoryIndex);
+    const parentId = subcategory ? ids.subId : ids.rootId;
+    if (!parentId) return [];
+    return childrenOfId(categoryIndex, parentId);
   };
+
 
   // Renders a single matched row (used by Q1 + Q2 sections).
   const renderMatchRow = ({ r, i }: { r: ParsedRow; i: number }) => {
