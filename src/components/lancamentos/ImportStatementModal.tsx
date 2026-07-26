@@ -2342,72 +2342,6 @@ export function ImportStatementModal({
       />
   );
 
-  const reviewRow = reviewIdx != null ? rows[reviewIdx] : null;
-
-  const reviewModal = (
-    <ReviewNewEntryModal
-      open={reviewIdx != null && !!reviewRow}
-      onClose={() => {
-        // Se o usuário fechar sem confirmar e a linha ainda não foi revisada,
-        // reverte o toggle para "ignorar" (mantém a UX consistente: só linhas
-        // revisadas ficam com o toggle em "criar").
-        const idx = reviewIdx;
-        if (idx != null && !reviewedRows.has(idx)) {
-          setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
-        }
-        setReviewIdx(null);
-      }}
-      row={reviewRow}
-      rawDescription={reviewRow?.description || ""}
-      initialDescription={reviewIdx != null ? (rowDescriptions[reviewIdx] || "") : ""}
-      initialCategory={reviewIdx != null ? (rowCategories[reviewIdx] || { category: "" }) : { category: "" }}
-      initialContact={reviewIdx != null ? (rowContacts[reviewIdx] || {}) : {}}
-      categories={mergedCategories}
-      suppliers={suppliersList}
-      clients={clientsList}
-      onCreateCategory={async ({ name, parentName, type }) => {
-        const trimmed = name.trim();
-        if (!trimmed) return null;
-        const parent = parentName
-          ? mergedCategories.find((c) => c.name.toLowerCase() === parentName.toLowerCase()) || null
-          : null;
-        const { data, error } = await supabase
-          .from("categories")
-          .insert({
-            name: trimmed,
-            parent_id: parent?.id || null,
-            type: type || parent?.type || "despesa",
-            user_id: effectiveUserId,
-          })
-          .select("id, name, parent_id, type")
-          .single();
-        if (error || !data) {
-          toast({ title: "Erro ao criar categoria", description: error?.message, variant: "destructive" });
-          return null;
-        }
-        setExtraCategories((prev) => [...prev, data as any]);
-        return { id: data.id, name: data.name };
-      }}
-      onContactCreated={(type, id, name) => {
-        if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
-        else setClientsList((prev) => [...prev, { id, name }]);
-      }}
-      onConfirm={({ description, category, contact }) => {
-        if (reviewIdx == null) return;
-        const idx = reviewIdx;
-        setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
-        setRowCategories((prev) => ({ ...prev, [idx]: category }));
-        setRowContacts((prev) => ({ ...prev, [idx]: contact }));
-        setReviewedRows((prev) => {
-          const next = new Set(prev);
-          next.add(idx);
-          return next;
-        });
-        setReviewIdx(null);
-      }}
-    />
-  );
-
   if (isPage) {
     return (
       <div className="flex flex-col min-h-[calc(100vh-8rem)]">
@@ -2415,7 +2349,6 @@ export function ImportStatementModal({
           {bodyContent}
         </div>
         {nestedCreateCard}
-        {reviewModal}
       </div>
     );
   }
@@ -2426,7 +2359,6 @@ export function ImportStatementModal({
         {bodyContent}
       </DialogContent>
       {nestedCreateCard}
-      {reviewModal}
     </Dialog>
   );
 }
