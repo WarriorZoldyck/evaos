@@ -2256,6 +2256,9 @@ export function ImportStatementModal({
               <div className="flex flex-col items-stretch sm:items-end gap-1.5 min-w-[280px]">
                 <span className="text-xs text-muted-foreground text-right">
                   <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
+                  {counts.pendente > 0 && (
+                    <> · <strong className="text-amber-600">{counts.pendente} sem decisão</strong></>
+                  )}
                 </span>
                 <span className="text-xs text-muted-foreground text-right">
                   Selecionado líquido:{" "}
