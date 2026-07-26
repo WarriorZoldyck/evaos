@@ -743,7 +743,9 @@ export function ImportStatementModal({
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
         rows.forEach((_, i) => {
-          nextActions[i] = "criar";
+          // Novos lançamentos nascem desligados (ignorar) — o usuário ativa
+          // o toggle para revisar e confirmar a criação.
+          nextActions[i] = "ignorar";
         });
         groupResults.flat().forEach(({ rowIdx, match }) => {
           if (match?.best) {
