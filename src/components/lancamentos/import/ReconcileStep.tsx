@@ -45,6 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { RowMatch } from "@/hooks/useImportMatching";
 import type { SuggestionSource } from "@/hooks/useCategorySuggestions";
 import { CategoryPathCombobox } from "@/components/lancamentos/CategoryPathCombobox";
+import { ContactSelectWithCreate } from "@/components/lancamentos/ContactSelectWithCreate";
 import { SuggestionWhyPopover } from "@/components/lancamentos/import/SuggestionWhyPopover";
 
 
