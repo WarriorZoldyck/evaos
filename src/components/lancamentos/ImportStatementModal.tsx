@@ -1397,7 +1397,7 @@ export function ImportStatementModal({
     setRowDescriptions({});
     setRowContacts({});
     setReviewedRows(new Set());
-    setReviewIdx(null);
+    
     setImportResult(null);
     setStep("preview");
     resetMatches();
