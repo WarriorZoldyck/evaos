@@ -106,11 +106,10 @@ export function useWorkspaceMembers() {
       const wsList: AvailableWorkspace[] = [];
 
       for (const ownerId of ownerIds) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", ownerId)
-          .single();
+        const { data: profileRows } = await supabase
+          .rpc("get_hub_owner_profile", { _owner_id: ownerId });
+        const profile = Array.isArray(profileRows) ? profileRows[0] : profileRows;
+
 
         const memberRecord = (data as WorkspaceMember[]).find((m) => m.owner_id === ownerId);
         if (memberRecord) {
