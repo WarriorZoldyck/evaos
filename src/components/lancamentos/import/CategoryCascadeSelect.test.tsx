@@ -1,0 +1,74 @@
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, within } from "@testing-library/react";
+import { CategoryCascadeSelect } from "./CategoryCascadeSelect";
+import type { CategoryFlat } from "@/components/lancamentos/CategoryPathCombobox";
+
+// Radix Popover/Command need pointer-related APIs jsdom doesn't ship with.
+beforeAll(() => {
+  // @ts-expect-error jsdom polyfill
+  Element.prototype.hasPointerCapture = () => false;
+  // @ts-expect-error jsdom polyfill
+  Element.prototype.scrollIntoView = () => {};
+});
+
+const cats: CategoryFlat[] = [
+  { id: "r1", name: "Alimentação", parent_id: null, type: "despesa" },
+  { id: "r1s1", name: "Restaurante", parent_id: "r1", type: "despesa" },
+  { id: "r2", name: "Alimentação", parent_id: null, type: "despesa" },
+  { id: "r2s1", name: "Mercado", parent_id: "r2", type: "despesa" },
+];
+
+describe("CategoryCascadeSelect", () => {
+  it("shows subcategory of the branch chosen by name — not the first collision", () => {
+    const onChange = vi.fn();
+    // value points to root "Alimentação" + sub "Mercado" (which only exists in r2)
+    render(
+      <CategoryCascadeSelect
+        categories={cats}
+        value={{ category: "Alimentação", subcategory: "Mercado" }}
+        type="despesa"
+        onChange={onChange}
+      />,
+    );
+
+    // Open the subcategory popover (2nd trigger)
+    const triggers = screen.getAllByRole("combobox");
+    fireEvent.click(triggers[1]!);
+
+    // "Mercado" must be visible — proving we picked the r2 branch, not r1
+    expect(screen.getByText("Mercado")).toBeInTheDocument();
+    // "Restaurante" belongs to r1 branch and must NOT appear here
+    expect(screen.queryByText("Restaurante")).not.toBeInTheDocument();
+  });
+
+  it("re-renders subs after value switch (simulates changing row)", () => {
+    const onChange = vi.fn();
+    const { rerender } = render(
+      <CategoryCascadeSelect
+        categories={cats}
+        value={{ category: "Alimentação", subcategory: "Restaurante" }}
+        type="despesa"
+        onChange={onChange}
+      />,
+    );
+
+    let triggers = screen.getAllByRole("combobox");
+    fireEvent.click(triggers[1]!);
+    expect(screen.getByText("Restaurante")).toBeInTheDocument();
+
+    // Close popover and switch to the other branch (as if user moved to another row)
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    rerender(
+      <CategoryCascadeSelect
+        categories={cats}
+        value={{ category: "Alimentação", subcategory: "Mercado" }}
+        type="despesa"
+        onChange={onChange}
+      />,
+    );
+
+    triggers = screen.getAllByRole("combobox");
+    fireEvent.click(triggers[1]!);
+    expect(screen.getByText("Mercado")).toBeInTheDocument();
+  });
+});
