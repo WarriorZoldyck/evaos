@@ -1,34 +1,51 @@
-## Testes para a correção de resolução de categorias
+## Virtualização do seletor de categorias
 
-Vou adicionar cobertura automatizada em torno do novo utilitário `src/lib/categoryChain.ts` — que é onde vive a lógica de resolução por ID — e um teste de integração leve no `CategoryCascadeSelect` para garantir que o comportamento visual observado pelo usuário está correto.
+O `CategoryCascadeSelect` hoje mapeia todos os itens de cada nível dentro de `CommandGroup` (`roots.map`, `subs.map`, `sub2s.map`). Contas com muitas categorias/subcategorias — comum em empresas com plano de contas grande — renderizam centenas de `CommandItem`, deixando o popover lento para abrir, filtrar e rolar.
 
-### 1. Setup de teste (se necessário)
-- Verificar se `vitest`, `@testing-library/react`, `jsdom` e `@testing-library/jest-dom` já estão instalados. Se não, instalar as devDependencies e criar `vitest.config.ts` + `src/test/setup.ts` conforme o guia padrão do projeto.
+### Solução
 
-### 2. Testes unitários — `src/lib/categoryChain.test.ts`
-Cobrir os cenários que motivaram o bug:
-- Índice retorna `byParent` e `byName` corretos para árvore com 3 níveis.
-- `resolveChain` escolhe a raiz certa quando **duas raízes compartilham o mesmo nome**, priorizando aquela cujo filho bate com `subcategory`.
-- `resolveChain` funciona com apenas `category` preenchido.
-- `resolveChain` respeita acentos/caixa (normalização) — "Alimentação" vs "alimentacao".
-- `resolveChain` retorna `null`s quando nada bate.
-- `childrenOfId` devolve filhos diretos de um pai e lista vazia para pai inexistente.
+Introduzir virtualização com `@tanstack/react-virtual` (biblioteca leve, ~3 kB, alinhada ao stack Radix/cmdk) nas três listas do cascade. Manter `CommandInput` para acessibilidade e digitação, mas assumir o filtro em estado controlado para poder repassar apenas os itens já filtrados ao virtualizador.
 
-### 3. Teste de componente — `src/components/lancamentos/import/CategoryCascadeSelect.test.tsx`
-- Montar o componente com uma árvore contendo duas raízes de mesmo nome mas subárvores diferentes.
-- Selecionar a raiz e abrir o dropdown de subcategoria; confirmar que aparecem os filhos corretos da raiz escolhida (não só os do primeiro match por nome).
-- Confirmar que trocar o valor da linha (rerender com novo `value`) reexibe corretamente as opções — simula o "trocar entre linhas" que o usuário reportou.
+### Mudanças
 
-### 4. Execução
-- Rodar `vitest run` via o executor de testes do harness.
-- Rodar `tsgo` (typecheck) para garantir que nenhuma tipagem quebrou.
+1. **Dependência**
+   - `bun add @tanstack/react-virtual`.
 
-### 5. Verificação manual assistida (opcional, só se algum teste falhar de forma inconclusiva)
-- Script Playwright abrindo `/lancamentos/importar-extrato` para conferir visualmente o cascade, apenas se os testes automatizados não cobrirem uma regressão observada.
+2. **Novo componente utilitário** `src/components/lancamentos/import/VirtualCommandList.tsx`
+   - Props: `items: CategoryFlat[]`, `search: string`, `selectedName: string`, `onPick: (name) => void`.
+   - Filtro acento-insensível compartilhado (reaproveitar `normalize`).
+   - `useVirtualizer` com `estimateSize = 28`, `overscan = 8`, container scrollável de `max-h-[280px]`.
+   - Renderiza `CommandItem` posicionado absolutamente para cada índice virtual.
+   - Ativa a virtualização somente quando `items.length > 50` (abaixo disso, renderiza normal — evita overhead).
 
-### Arquivos criados
-- `src/lib/categoryChain.test.ts`
+3. **`CategoryCascadeSelect.tsx`**
+   - Adicionar `useState` para o texto de busca de cada nível (`catSearch`, `subSearch`, `sub2Search`).
+   - Trocar `<Command filter={commandFilter}>` por `<Command shouldFilter={false}>` — o filtro passa a ser feito no `VirtualCommandList` para bater com os itens virtualizados.
+   - Ligar `CommandInput` como controlado (`value`/`onValueChange`).
+   - Substituir cada `CommandGroup` de opções pelo `VirtualCommandList`. Os itens fixos ("— limpar —" e "Nova …") continuam fora, em `CommandGroup` normal.
+   - Manter `CommandEmpty` reativo baseado no comprimento da lista filtrada.
+
+4. **Preservar comportamentos existentes**
+   - Índice por ID (`buildCategoryIndex` + `resolveChain`) permanece intacto.
+   - Criação inline (dialog `Nova …`) e limpeza continuam funcionando.
+   - `strictType` continua respeitado — a lista já chega filtrada por tipo.
+   - Fechamento por clique em item continua via `onPick` → `pickCat/pickSub/pickSub2`.
+
+5. **Testes**
+   - Estender `src/components/lancamentos/import/CategoryCascadeSelect.test.tsx`:
+     - Renderizar com >200 categorias sob a mesma raiz e conferir que apenas um subconjunto de nós é montado (via `screen.getAllByRole("option").length`).
+     - Digitar no `CommandInput` e conferir que apenas os itens que batem com o termo aparecem.
+   - Manter os testes existentes (colisão por nome, troca de linha).
+   - Rodar `bunx vitest run` para confirmar tudo verde.
+
+### Fora do escopo
+
+- Não alterar `ReconcileStep` — ele já consome o cascade e se beneficia automaticamente.
+- Não mudar a API pública do componente.
+- Não introduzir memoização adicional além do necessário para a virtualização.
+
+### Arquivos tocados
+- `src/components/lancamentos/import/CategoryCascadeSelect.tsx`
+- `src/components/lancamentos/import/VirtualCommandList.tsx` (novo)
 - `src/components/lancamentos/import/CategoryCascadeSelect.test.tsx`
-- (se ausentes) `vitest.config.ts`, `src/test/setup.ts`
-
-Nenhum código de produção será alterado neste passo — se algum teste falhar, aí sim ajusto a lógica correspondente.
+- `package.json` (+ `@tanstack/react-virtual`)
