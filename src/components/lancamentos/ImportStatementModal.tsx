@@ -319,7 +319,10 @@ export function ImportStatementModal({
 
   // Locally created categories from inside the reconcile step (dedup by id when merging).
   const [extraCategories, setExtraCategories] = useState<{ id: string; name: string; parent_id: string | null; type: string | null }[]>([]);
-  const categoryBase = allCategories && allCategories.length > 0 ? allCategories : categories;
+  // IMPORTANT: use context-scoped `categories` (Pessoal OR selected Empresa) for the
+  // cascade selector so that name collisions across contexts don't hide sub-trees.
+  // `allCategories` remains used elsewhere (history/name resolution) via a separate path.
+  const categoryBase = categories;
   const mergedCategories = useMemo(() => {
     const ids = new Set(categoryBase.map((c) => c.id));
     return [...categoryBase, ...extraCategories.filter((c) => !ids.has(c.id))];
