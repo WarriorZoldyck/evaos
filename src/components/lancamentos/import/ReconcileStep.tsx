@@ -470,7 +470,7 @@ export function ReconcileStep({
   );
   const orphansTotal = orphans.reduce((s, o) => s + Math.abs(o.amount), 0);
   const systemTotal = isCardMode && systemBill ? Math.abs(systemBill.total) : matchedSystemTotal;
-  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length;
+  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
   const totalsDelta = statementTotal - systemTotal;
   const totalsDivergent = Math.abs(totalsDelta) > 0.05;
   const coverageMatched = matchedExactRows.length + matchedToleranceRows.length;
