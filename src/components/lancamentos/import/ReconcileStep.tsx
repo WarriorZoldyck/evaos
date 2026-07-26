@@ -100,10 +100,20 @@ interface ReconcileStepProps {
   rowDescriptions?: Record<number, string>;
   /** Selected supplier/client per row, applied when creating the transaction. */
   rowContacts?: Record<number, { supplier_id?: string | null; client_id?: string | null }>;
-  /** Rows already reviewed in the "Revisar novo lançamento" modal. */
+  /** Rows already reviewed in the inline "Revisar novo lançamento" panel. */
   reviewedRows?: Set<number>;
-  /** Open the review modal for a specific row idx. */
+  /** DEPRECATED: no-op. Kept for compatibility. */
   onOpenReview?: (rowIdx: number) => void;
+  /** Called when the user confirms the inline review panel. */
+  onReviewConfirm?: (rowIdx: number, result: {
+    description: string;
+    category: RowCategoryValue;
+    contact: { supplier_id?: string | null; client_id?: string | null };
+  }) => void;
+  /** Called when the user cancels the inline review panel (before confirming). */
+  onReviewCancel?: (rowIdx: number) => void;
+  /** Called when a supplier/client is created inline. */
+  onContactCreated?: (type: "supplier" | "client", id: string, name: string) => void;
   /** Suppliers/clients lists to render the small "vinculado a" hint. */
   suppliers?: { id: string; name: string }[];
   clients?: { id: string; name: string }[];
