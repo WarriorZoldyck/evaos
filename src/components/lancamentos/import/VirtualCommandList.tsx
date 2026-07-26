@@ -54,6 +54,9 @@ export function VirtualCommandList({
     getScrollElement: () => parentRef.current,
     estimateSize: () => rowHeight,
     overscan: 8,
+    // jsdom has no layout — provide a sensible initial viewport so tests
+    // (and the first paint) render a windowed set of rows.
+    initialRect: { width: 240, height: maxHeight },
   });
 
   if (filtered.length === 0) return null;
