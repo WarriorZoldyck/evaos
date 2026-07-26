@@ -25,8 +25,9 @@ describe("buildCategoryIndex", () => {
     expect(idx.byId.get("r1s1")?.name).toBe("Restaurante");
     expect(idx.byParent.get("r1")?.length).toBe(1);
     expect(idx.byParent.get(null)?.length).toBe(3);
-    expect(idx.byName.get("alimentação")?.length).toBe(2);
+    expect(idx.byName.get("alimentacao")?.length).toBe(2);
     expect(idx.byName.get("restaurante")?.length).toBe(2);
+
   });
 });
 
