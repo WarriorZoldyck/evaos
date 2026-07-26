@@ -1,12 +1,19 @@
 import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
 import {
   Dialog,
   DialogContent,
@@ -48,8 +55,18 @@ function typeAllows(catType: string | null, rowType: "receita" | "despesa") {
   return t === "ambos" || t === rowType;
 }
 
-const CREATE_TOKEN = "__create_new__";
-const CLEAR_TOKEN = "__clear__";
+function normalize(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+// Accent/case-insensitive filter for cmdk
+const commandFilter = (value: string, search: string) => {
+  if (!search) return 1;
+  return normalize(value).includes(normalize(search)) ? 1 : 0;
+};
 
 export function CategoryCascadeSelect({
   categories,
@@ -71,17 +88,23 @@ export function CategoryCascadeSelect({
       arr.push(c);
       byParent.set(c.parent_id, arr);
     }
-    const rootList = (byParent.get(null) || []).filter((c) => !strictType || typeAllows(c.type, type));
+    const rootList = (byParent.get(null) || []).filter(
+      (c) => !strictType || typeAllows(c.type, type),
+    );
     const subsFor = (parentName: string) => {
       const parent = rootList.find((r) => r.name === parentName);
       if (!parent) return [];
-      return (byParent.get(parent.id) || []).filter((c) => !strictType || typeAllows(c.type, type));
+      return (byParent.get(parent.id) || []).filter(
+        (c) => !strictType || typeAllows(c.type, type),
+      );
     };
     const sub2sFor = (parentName: string, subName: string) => {
       const subs = subsFor(parentName);
       const subCat = subs.find((s) => s.name === subName);
       if (!subCat) return [];
-      return (byParent.get(subCat.id) || []).filter((c) => !strictType || typeAllows(c.type, type));
+      return (byParent.get(subCat.id) || []).filter(
+        (c) => !strictType || typeAllows(c.type, type),
+      );
     };
     return { roots: rootList, subsOf: subsFor, sub2sOf: sub2sFor };
   }, [categories, type, strictType]);
@@ -89,6 +112,7 @@ export function CategoryCascadeSelect({
   const subs = cat ? subsOf(cat) : [];
   const sub2s = cat && sub ? sub2sOf(cat, sub) : [];
 
+  const [openLevel, setOpenLevel] = useState<null | "cat" | "sub" | "sub2">(null);
   const [creating, setCreating] = useState<{
     level: "cat" | "sub" | "sub2";
     parentName?: string;
@@ -96,43 +120,66 @@ export function CategoryCascadeSelect({
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const handleCat = (v: string) => {
-    if (v === CREATE_TOKEN) {
-      setCreating({ level: "cat" });
-      setNewName("");
-      return;
-    }
-    if (v === CLEAR_TOKEN) {
-      onChange({ category: "", subcategory: undefined, subcategory2: undefined, touched: true });
-      return;
-    }
-    onChange({ category: v, subcategory: undefined, subcategory2: undefined, touched: true });
+  const pickCat = (name: string) => {
+    onChange({
+      category: name,
+      subcategory: undefined,
+      subcategory2: undefined,
+      touched: true,
+    });
+    setOpenLevel(null);
+  };
+  const pickSub = (name: string) => {
+    onChange({
+      category: cat,
+      subcategory: name,
+      subcategory2: undefined,
+      touched: true,
+    });
+    setOpenLevel(null);
+  };
+  const pickSub2 = (name: string) => {
+    onChange({
+      category: cat,
+      subcategory: sub,
+      subcategory2: name,
+      touched: true,
+    });
+    setOpenLevel(null);
   };
 
-  const handleSub = (v: string) => {
-    if (v === CREATE_TOKEN) {
-      setCreating({ level: "sub", parentName: cat });
-      setNewName("");
-      return;
-    }
-    if (v === CLEAR_TOKEN) {
-      onChange({ category: cat, subcategory: undefined, subcategory2: undefined, touched: true });
-      return;
-    }
-    onChange({ category: cat, subcategory: v, subcategory2: undefined, touched: true });
+  const clearCat = () => {
+    onChange({
+      category: "",
+      subcategory: undefined,
+      subcategory2: undefined,
+      touched: true,
+    });
+    setOpenLevel(null);
+  };
+  const clearSub = () => {
+    onChange({
+      category: cat,
+      subcategory: undefined,
+      subcategory2: undefined,
+      touched: true,
+    });
+    setOpenLevel(null);
+  };
+  const clearSub2 = () => {
+    onChange({
+      category: cat,
+      subcategory: sub,
+      subcategory2: undefined,
+      touched: true,
+    });
+    setOpenLevel(null);
   };
 
-  const handleSub2 = (v: string) => {
-    if (v === CREATE_TOKEN) {
-      setCreating({ level: "sub2", parentName: sub });
-      setNewName("");
-      return;
-    }
-    if (v === CLEAR_TOKEN) {
-      onChange({ category: cat, subcategory: sub, subcategory2: undefined, touched: true });
-      return;
-    }
-    onChange({ category: cat, subcategory: sub, subcategory2: v, touched: true });
+  const openCreate = (level: "cat" | "sub" | "sub2", parentName?: string) => {
+    setCreating({ level, parentName });
+    setNewName("");
+    setOpenLevel(null);
   };
 
   const doCreate = async () => {
@@ -146,95 +193,251 @@ export function CategoryCascadeSelect({
     setBusy(false);
     if (!created) return;
     if (creating.level === "cat") {
-      onChange({ category: created.name, subcategory: undefined, subcategory2: undefined, touched: true });
+      onChange({
+        category: created.name,
+        subcategory: undefined,
+        subcategory2: undefined,
+        touched: true,
+      });
     } else if (creating.level === "sub") {
-      onChange({ category: cat, subcategory: created.name, subcategory2: undefined, touched: true });
+      onChange({
+        category: cat,
+        subcategory: created.name,
+        subcategory2: undefined,
+        touched: true,
+      });
     } else {
-      onChange({ category: cat, subcategory: sub, subcategory2: created.name, touched: true });
+      onChange({
+        category: cat,
+        subcategory: sub,
+        subcategory2: created.name,
+        touched: true,
+      });
     }
     setCreating(null);
     setNewName("");
   };
 
-  const trigger = "h-8 text-xs";
+  const triggerCls =
+    "h-8 text-xs justify-between font-normal px-2 w-full";
+
+  const renderTrigger = (
+    selected: string,
+    placeholder: string,
+    disabled?: boolean,
+  ) => (
+    <Button
+      variant="outline"
+      role="combobox"
+      disabled={disabled}
+      className={cn(triggerCls, !selected && "text-muted-foreground")}
+    >
+      <span className="truncate">{selected || placeholder}</span>
+      <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+    </Button>
+  );
 
   return (
     <>
       <div className={cn("grid grid-cols-1 sm:grid-cols-3 gap-1.5", className)}>
-        <Select value={cat || undefined} onValueChange={handleCat}>
-          <SelectTrigger className={trigger}>
-            <SelectValue placeholder="Categoria" />
-          </SelectTrigger>
-          <SelectContent className="max-h-[300px]">
-            {cat && (
-              <SelectItem value={CLEAR_TOKEN} className="text-muted-foreground italic text-xs">
-                — limpar —
-              </SelectItem>
-            )}
-            {roots.map((c) => (
-              <SelectItem key={c.id} value={c.name} className="text-xs">
-                {c.name}
-              </SelectItem>
-            ))}
-            {onCreateCategory && (
-              <SelectItem value={CREATE_TOKEN} className="text-primary font-medium text-xs">
-                <span className="flex items-center gap-1.5">
-                  <Plus className="h-3 w-3" /> Nova categoria
-                </span>
-              </SelectItem>
-            )}
-          </SelectContent>
-        </Select>
+        {/* Categoria */}
+        <Popover
+          open={openLevel === "cat"}
+          onOpenChange={(o) => setOpenLevel(o ? "cat" : null)}
+        >
+          <PopoverTrigger asChild>{renderTrigger(cat, "Categoria")}</PopoverTrigger>
+          <PopoverContent
+            className="p-0 w-[--radix-popover-trigger-width] min-w-[220px]"
+            align="start"
+          >
+            <Command filter={commandFilter}>
+              <CommandInput placeholder="Buscar categoria..." className="h-8 text-xs" />
+              <CommandList className="max-h-[280px]">
+                <CommandEmpty className="py-4 text-xs">Nenhuma categoria</CommandEmpty>
+                {cat && (
+                  <>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__clear__"
+                        onSelect={clearCat}
+                        className="text-muted-foreground italic text-xs"
+                      >
+                        — limpar —
+                      </CommandItem>
+                    </CommandGroup>
+                    <CommandSeparator />
+                  </>
+                )}
+                <CommandGroup>
+                  {roots.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={c.name}
+                      onSelect={() => pickCat(c.name)}
+                      className="text-xs"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-3 w-3",
+                          cat === c.name ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      {c.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                {onCreateCategory && (
+                  <>
+                    <CommandSeparator />
+                    <CommandGroup>
+                      <CommandItem
+                        value="__create__"
+                        onSelect={() => openCreate("cat")}
+                        className="text-primary font-medium text-xs"
+                      >
+                        <Plus className="mr-2 h-3 w-3" /> Nova categoria
+                      </CommandItem>
+                    </CommandGroup>
+                  </>
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
-        <Select value={sub || undefined} onValueChange={handleSub} disabled={!cat}>
-          <SelectTrigger className={trigger}>
-            <SelectValue placeholder={cat ? "Subcategoria" : "—"} />
-          </SelectTrigger>
-          <SelectContent className="max-h-[300px]">
-            {sub && (
-              <SelectItem value={CLEAR_TOKEN} className="text-muted-foreground italic text-xs">
-                — limpar —
-              </SelectItem>
-            )}
-            {subs.map((c) => (
-              <SelectItem key={c.id} value={c.name} className="text-xs">
-                {c.name}
-              </SelectItem>
-            ))}
-            {onCreateCategory && cat && (
-              <SelectItem value={CREATE_TOKEN} className="text-primary font-medium text-xs">
-                <span className="flex items-center gap-1.5">
-                  <Plus className="h-3 w-3" /> Nova subcategoria
-                </span>
-              </SelectItem>
-            )}
-          </SelectContent>
-        </Select>
+        {/* Subcategoria */}
+        <Popover
+          open={openLevel === "sub"}
+          onOpenChange={(o) => setOpenLevel(o ? "sub" : null)}
+        >
+          <PopoverTrigger asChild>
+            {renderTrigger(sub, cat ? "Subcategoria" : "—", !cat)}
+          </PopoverTrigger>
+          <PopoverContent
+            className="p-0 w-[--radix-popover-trigger-width] min-w-[220px]"
+            align="start"
+          >
+            <Command filter={commandFilter}>
+              <CommandInput placeholder="Buscar subcategoria..." className="h-8 text-xs" />
+              <CommandList className="max-h-[280px]">
+                <CommandEmpty className="py-4 text-xs">Nenhuma subcategoria</CommandEmpty>
+                {sub && (
+                  <>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__clear__"
+                        onSelect={clearSub}
+                        className="text-muted-foreground italic text-xs"
+                      >
+                        — limpar —
+                      </CommandItem>
+                    </CommandGroup>
+                    <CommandSeparator />
+                  </>
+                )}
+                <CommandGroup>
+                  {subs.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={c.name}
+                      onSelect={() => pickSub(c.name)}
+                      className="text-xs"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-3 w-3",
+                          sub === c.name ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      {c.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                {onCreateCategory && cat && (
+                  <>
+                    <CommandSeparator />
+                    <CommandGroup>
+                      <CommandItem
+                        value="__create__"
+                        onSelect={() => openCreate("sub", cat)}
+                        className="text-primary font-medium text-xs"
+                      >
+                        <Plus className="mr-2 h-3 w-3" /> Nova subcategoria
+                      </CommandItem>
+                    </CommandGroup>
+                  </>
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
 
-        <Select value={sub2 || undefined} onValueChange={handleSub2} disabled={!sub}>
-          <SelectTrigger className={trigger}>
-            <SelectValue placeholder={sub ? "Sub-subcategoria" : "—"} />
-          </SelectTrigger>
-          <SelectContent className="max-h-[300px]">
-            {sub2 && (
-              <SelectItem value={CLEAR_TOKEN} className="text-muted-foreground italic text-xs">
-                — limpar —
-              </SelectItem>
-            )}
-            {sub2s.map((c) => (
-              <SelectItem key={c.id} value={c.name} className="text-xs">
-                {c.name}
-              </SelectItem>
-            ))}
-            {onCreateCategory && sub && (
-              <SelectItem value={CREATE_TOKEN} className="text-primary font-medium text-xs">
-                <span className="flex items-center gap-1.5">
-                  <Plus className="h-3 w-3" /> Nova sub-subcategoria
-                </span>
-              </SelectItem>
-            )}
-          </SelectContent>
-        </Select>
+        {/* Sub-subcategoria */}
+        <Popover
+          open={openLevel === "sub2"}
+          onOpenChange={(o) => setOpenLevel(o ? "sub2" : null)}
+        >
+          <PopoverTrigger asChild>
+            {renderTrigger(sub2, sub ? "Sub-subcategoria" : "—", !sub)}
+          </PopoverTrigger>
+          <PopoverContent
+            className="p-0 w-[--radix-popover-trigger-width] min-w-[220px]"
+            align="start"
+          >
+            <Command filter={commandFilter}>
+              <CommandInput placeholder="Buscar sub-subcategoria..." className="h-8 text-xs" />
+              <CommandList className="max-h-[280px]">
+                <CommandEmpty className="py-4 text-xs">Nenhum item</CommandEmpty>
+                {sub2 && (
+                  <>
+                    <CommandGroup>
+                      <CommandItem
+                        value="__clear__"
+                        onSelect={clearSub2}
+                        className="text-muted-foreground italic text-xs"
+                      >
+                        — limpar —
+                      </CommandItem>
+                    </CommandGroup>
+                    <CommandSeparator />
+                  </>
+                )}
+                <CommandGroup>
+                  {sub2s.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={c.name}
+                      onSelect={() => pickSub2(c.name)}
+                      className="text-xs"
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-3 w-3",
+                          sub2 === c.name ? "opacity-100" : "opacity-0",
+                        )}
+                      />
+                      {c.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                {onCreateCategory && sub && (
+                  <>
+                    <CommandSeparator />
+                    <CommandGroup>
+                      <CommandItem
+                        value="__create__"
+                        onSelect={() => openCreate("sub2", sub)}
+                        className="text-primary font-medium text-xs"
+                      >
+                        <Plus className="mr-2 h-3 w-3" /> Nova sub-subcategoria
+                      </CommandItem>
+                    </CommandGroup>
+                  </>
+                )}
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <Dialog open={!!creating} onOpenChange={(o) => !o && setCreating(null)}>
@@ -267,7 +470,11 @@ export function CategoryCascadeSelect({
                 }}
               />
             </div>
-            <Button onClick={doCreate} disabled={busy || !newName.trim()} className="w-full">
+            <Button
+              onClick={doCreate}
+              disabled={busy || !newName.trim()}
+              className="w-full"
+            >
               {busy ? "Criando..." : "Criar"}
             </Button>
           </div>
