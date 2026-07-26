@@ -1,15 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { CategoryCascadeSelect } from "./CategoryCascadeSelect";
 import type { CategoryFlat } from "@/components/lancamentos/CategoryPathCombobox";
 
 // Radix Popover/Command need pointer-related APIs jsdom doesn't ship with.
 beforeAll(() => {
-  // @ts-expect-error jsdom polyfill
-  Element.prototype.hasPointerCapture = () => false;
-  // @ts-expect-error jsdom polyfill
-  Element.prototype.scrollIntoView = () => {};
+  (Element.prototype as unknown as { hasPointerCapture: () => boolean }).hasPointerCapture = () => false;
+  (Element.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = () => {};
 });
+
 
 const cats: CategoryFlat[] = [
   { id: "r1", name: "Alimentação", parent_id: null, type: "despesa" },
