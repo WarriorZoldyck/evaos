@@ -685,7 +685,9 @@ export function ImportStatementModal({
             nextActions[i] = res[i].best!.suggested ? "criar" : "vincular";
             nextTargets[i] = res[i].best!.candidate.id;
           } else {
-            nextActions[i] = "criar";
+            // Novos lançamentos nascem desligados — o usuário ativa o toggle
+            // para revisar e confirmar a criação (evita import de lixo).
+            nextActions[i] = "ignorar";
           }
         });
         setMatchActions(nextActions);
@@ -741,7 +743,9 @@ export function ImportStatementModal({
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
         rows.forEach((_, i) => {
-          nextActions[i] = "criar";
+          // Novos lançamentos nascem desligados (ignorar) — o usuário ativa
+          // o toggle para revisar e confirmar a criação.
+          nextActions[i] = "ignorar";
         });
         groupResults.flat().forEach(({ rowIdx, match }) => {
           if (match?.best) {
@@ -2230,7 +2234,7 @@ export function ImportStatementModal({
                         onClick={handleImport}
                         disabled={importing || blockedByDivergence || blocked}
                         className="gap-2 mt-1"
-                        title={blocked ? "Revise as linhas novas ('Revisar e criar') antes de importar." : undefined}
+                        title={blocked ? "Ative o toggle 'Criar' das linhas novas para revisar antes de importar." : undefined}
                       >
                         {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                         Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
@@ -2325,7 +2329,16 @@ export function ImportStatementModal({
   const reviewModal = (
     <ReviewNewEntryModal
       open={reviewIdx != null && !!reviewRow}
-      onClose={() => setReviewIdx(null)}
+      onClose={() => {
+        // Se o usuário fechar sem confirmar e a linha ainda não foi revisada,
+        // reverte o toggle para "ignorar" (mantém a UX consistente: só linhas
+        // revisadas ficam com o toggle em "criar").
+        const idx = reviewIdx;
+        if (idx != null && !reviewedRows.has(idx)) {
+          setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
+        }
+        setReviewIdx(null);
+      }}
       row={reviewRow}
       rawDescription={reviewRow?.description || ""}
       initialDescription={reviewIdx != null ? (rowDescriptions[reviewIdx] || "") : ""}
