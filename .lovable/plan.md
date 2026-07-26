@@ -1,22 +1,30 @@
-## Ajuste
+# Edição inline no fluxo Criar (importação de extrato)
 
-Remover a coluna "Revisar" da tabela de "Só no extrato". A pergunta (modal de revisão) já é disparada quando o usuário ativa o toggle "Criar" — não precisa de badge/coluna extra embaixo dizendo "Revisar" ou "Aguardando revisão".
+Trocar o `ReviewNewEntryModal` por um painel de edição **inline** que aparece logo abaixo da linha quando o usuário ativa o toggle **Criar**. Mesmo campos, mesma obrigatoriedade — só sem popup.
 
-## Mudanças
+## Comportamento
 
-### `src/components/lancamentos/import/ReconcileStep.tsx`
+- Toggle **Criar** ligado → linha expande automaticamente mostrando os campos de revisão (Descrição, Fornecedor, Categoria). A linha entra em estado `precisa-revisar`.
+- Usuário preenche → botão **Confirmar** dentro do painel marca a linha como `Revisada ✓` e colapsa o painel.
+- Enquanto não confirmar, a linha conta como pendente e o botão **Importar** do rodapé continua bloqueado (mesma regra de hoje).
+- Toggle **Ignorar** → colapsa o painel e descarta o rascunho de revisão.
+- Badge **Revisada ✓** com link **editar** (já existe hoje) reabre o painel inline em vez de abrir modal.
+- Data e valor continuam apenas visíveis (não editáveis) — mesmo escopo do modal atual.
 
-- Tabela "Só no extrato": remover a coluna `<th>Revisar</th>` do cabeçalho e a `<td>` correspondente de cada linha (o bloco inteiro que renderiza os badges "Revisar" / "Aguardando revisão" / "Revisada").
-- Após revisão, mostrar um selo discreto **verde "Revisada"** ao lado do toggle (na mesma célula da coluna "Ação"), com link "editar" abaixo para reabrir o modal. Sem selo âmbar de "aguardando".
-- Ajustar `min-w` da tabela para o novo número de colunas.
+## Escopo técnico
 
-### Comportamento (já funcional, sem mudança)
+- **`src/components/lancamentos/import/ReconcileStep.tsx`**
+  - Adicionar estado local `expandedRowId` (só uma linha aberta por vez pra não poluir a tabela).
+  - Ao ativar toggle Criar (`só-no-extrato` e `provável — outra compra`), setar `expandedRowId` = linha atual em vez de chamar `onOpenReview`.
+  - Renderizar uma linha secundária (`<tr>` com colspan) logo abaixo, contendo o formulário inline: `Input` descrição, `ContactSelectWithCreate`, `CategoryPathCombobox`, botões **Cancelar** / **Confirmar revisão**.
+  - Reaproveitar toda a lógica de defaults, validação e persistência que hoje mora no `ReviewNewEntryModal` (mover pra um hook ou pra dentro do próprio componente inline).
+- **`src/components/lancamentos/ImportStatementModal.tsx`**
+  - Remover renderização do `ReviewNewEntryModal` e o prop `onOpenReview` (ou deixar como no-op).
+  - Manter as validações de bloqueio do rodapé (linhas Criar sem revisão continuam bloqueando importação).
+- **`src/components/lancamentos/import/ReviewNewEntryModal.tsx`**
+  - Deletar após confirmar que nenhum outro consumidor o usa (`rg ReviewNewEntryModal`).
 
-- Toggle desligado (padrão) = Ignorar, categoria continua editável.
-- Ativar toggle → abre `ReviewNewEntryModal` imediatamente com descrição, fornecedor e categoria.
-- Confirmar revisão → toggle permanece em "Criar" com selo verde "Revisada".
-- Fechar sem confirmar → toggle volta para "Ignorar" (já implementado no `ImportStatementModal`).
+## Fora de escopo
 
-### `src/components/lancamentos/ImportStatementModal.tsx`
-
-Sem mudanças estruturais. O contador `blocked` (linhas em "criar" ainda não revisadas) permanece — mas agora só dispara na prática se o usuário reabrir e cancelar após ter revisado antes, cenário raro.
+- Nenhuma mudança na lógica de matching, de "É o mesmo", "Manter só do extrato", filtro de mês da fatura, ou no cálculo de divergência.
+- Sem mudanças em outras telas.

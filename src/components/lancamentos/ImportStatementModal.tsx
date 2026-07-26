@@ -29,7 +29,7 @@ import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
 import { calculateCreditCardBillTotal, filterCreditCardBillScope, descriptionSimilarity, AUTO_LINK_MIN_SIMILARITY, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { ReconcileStep } from "./import/ReconcileStep";
-import { ReviewNewEntryModal } from "./import/ReviewNewEntryModal";
+
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
 import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -310,10 +310,8 @@ export function ImportStatementModal({
   const [rowDescriptions, setRowDescriptions] = useState<Record<number, string>>({});
   // Per-row supplier/client selection.
   const [rowContacts, setRowContacts] = useState<Record<number, { supplier_id?: string | null; client_id?: string | null }>>({});
-  // Rows the user has confirmed in the "Revisar novo lançamento" modal.
+  // Rows the user has confirmed in the inline "Revisar novo lançamento" panel.
   const [reviewedRows, setReviewedRows] = useState<Set<number>>(new Set());
-  // Which row idx is being reviewed right now (null = modal closed).
-  const [reviewIdx, setReviewIdx] = useState<number | null>(null);
   // Suppliers & clients used to pre-select / render "Fornecedor: X" hints.
   const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
   const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
@@ -1399,7 +1397,7 @@ export function ImportStatementModal({
     setRowDescriptions({});
     setRowContacts({});
     setReviewedRows(new Set());
-    setReviewIdx(null);
+    
     setImportResult(null);
     setStep("preview");
     resetMatches();
@@ -1987,7 +1985,25 @@ export function ImportStatementModal({
               rowDescriptions={rowDescriptions}
               rowContacts={rowContacts}
               reviewedRows={reviewedRows}
-              onOpenReview={(idx) => setReviewIdx(idx)}
+              onReviewConfirm={(idx, { description, category, contact }) => {
+                setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
+                setRowCategories((prev) => ({ ...prev, [idx]: category }));
+                setRowContacts((prev) => ({ ...prev, [idx]: contact }));
+                setReviewedRows((prev) => {
+                  const next = new Set(prev);
+                  next.add(idx);
+                  return next;
+                });
+              }}
+              onReviewCancel={(idx) => {
+                if (!reviewedRows.has(idx)) {
+                  setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
+                }
+              }}
+              onContactCreated={(type, id, name) => {
+                if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
+                else setClientsList((prev) => [...prev, { id, name }]);
+              }}
             />
 
 
@@ -2324,72 +2340,6 @@ export function ImportStatementModal({
       />
   );
 
-  const reviewRow = reviewIdx != null ? rows[reviewIdx] : null;
-
-  const reviewModal = (
-    <ReviewNewEntryModal
-      open={reviewIdx != null && !!reviewRow}
-      onClose={() => {
-        // Se o usuário fechar sem confirmar e a linha ainda não foi revisada,
-        // reverte o toggle para "ignorar" (mantém a UX consistente: só linhas
-        // revisadas ficam com o toggle em "criar").
-        const idx = reviewIdx;
-        if (idx != null && !reviewedRows.has(idx)) {
-          setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
-        }
-        setReviewIdx(null);
-      }}
-      row={reviewRow}
-      rawDescription={reviewRow?.description || ""}
-      initialDescription={reviewIdx != null ? (rowDescriptions[reviewIdx] || "") : ""}
-      initialCategory={reviewIdx != null ? (rowCategories[reviewIdx] || { category: "" }) : { category: "" }}
-      initialContact={reviewIdx != null ? (rowContacts[reviewIdx] || {}) : {}}
-      categories={mergedCategories}
-      suppliers={suppliersList}
-      clients={clientsList}
-      onCreateCategory={async ({ name, parentName, type }) => {
-        const trimmed = name.trim();
-        if (!trimmed) return null;
-        const parent = parentName
-          ? mergedCategories.find((c) => c.name.toLowerCase() === parentName.toLowerCase()) || null
-          : null;
-        const { data, error } = await supabase
-          .from("categories")
-          .insert({
-            name: trimmed,
-            parent_id: parent?.id || null,
-            type: type || parent?.type || "despesa",
-            user_id: effectiveUserId,
-          })
-          .select("id, name, parent_id, type")
-          .single();
-        if (error || !data) {
-          toast({ title: "Erro ao criar categoria", description: error?.message, variant: "destructive" });
-          return null;
-        }
-        setExtraCategories((prev) => [...prev, data as any]);
-        return { id: data.id, name: data.name };
-      }}
-      onContactCreated={(type, id, name) => {
-        if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
-        else setClientsList((prev) => [...prev, { id, name }]);
-      }}
-      onConfirm={({ description, category, contact }) => {
-        if (reviewIdx == null) return;
-        const idx = reviewIdx;
-        setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
-        setRowCategories((prev) => ({ ...prev, [idx]: category }));
-        setRowContacts((prev) => ({ ...prev, [idx]: contact }));
-        setReviewedRows((prev) => {
-          const next = new Set(prev);
-          next.add(idx);
-          return next;
-        });
-        setReviewIdx(null);
-      }}
-    />
-  );
-
   if (isPage) {
     return (
       <div className="flex flex-col min-h-[calc(100vh-8rem)]">
@@ -2397,7 +2347,6 @@ export function ImportStatementModal({
           {bodyContent}
         </div>
         {nestedCreateCard}
-        {reviewModal}
       </div>
     );
   }
@@ -2408,7 +2357,6 @@ export function ImportStatementModal({
         {bodyContent}
       </DialogContent>
       {nestedCreateCard}
-      {reviewModal}
     </Dialog>
   );
 }

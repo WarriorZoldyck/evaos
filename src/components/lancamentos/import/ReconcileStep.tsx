@@ -45,6 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { RowMatch } from "@/hooks/useImportMatching";
 import type { SuggestionSource } from "@/hooks/useCategorySuggestions";
 import { CategoryPathCombobox } from "@/components/lancamentos/CategoryPathCombobox";
+import { ContactSelectWithCreate } from "@/components/lancamentos/ContactSelectWithCreate";
 import { SuggestionWhyPopover } from "@/components/lancamentos/import/SuggestionWhyPopover";
 
 
@@ -99,10 +100,20 @@ interface ReconcileStepProps {
   rowDescriptions?: Record<number, string>;
   /** Selected supplier/client per row, applied when creating the transaction. */
   rowContacts?: Record<number, { supplier_id?: string | null; client_id?: string | null }>;
-  /** Rows already reviewed in the "Revisar novo lançamento" modal. */
+  /** Rows already reviewed in the inline "Revisar novo lançamento" panel. */
   reviewedRows?: Set<number>;
-  /** Open the review modal for a specific row idx. */
+  /** DEPRECATED: no-op. Kept for compatibility. */
   onOpenReview?: (rowIdx: number) => void;
+  /** Called when the user confirms the inline review panel. */
+  onReviewConfirm?: (rowIdx: number, result: {
+    description: string;
+    category: RowCategoryValue;
+    contact: { supplier_id?: string | null; client_id?: string | null };
+  }) => void;
+  /** Called when the user cancels the inline review panel (before confirming). */
+  onReviewCancel?: (rowIdx: number) => void;
+  /** Called when a supplier/client is created inline. */
+  onContactCreated?: (type: "supplier" | "client", id: string, name: string) => void;
   /** Suppliers/clients lists to render the small "vinculado a" hint. */
   suppliers?: { id: string; name: string }[];
   clients?: { id: string; name: string }[];
@@ -157,6 +168,154 @@ function CategoryChain({
   );
 }
 
+function InlineReviewRow({
+  rowIdx,
+  row,
+  categories,
+  suppliers,
+  clients,
+  initialDescription,
+  initialCategory,
+  initialContact,
+  isReviewed,
+  onCreateCategory,
+  onContactCreated,
+  onCancel,
+  onConfirm,
+}: {
+  rowIdx: number;
+  row: ParsedRow;
+  categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+  suppliers: { id: string; name: string }[];
+  clients: { id: string; name: string }[];
+  initialDescription: string;
+  initialCategory: RowCategoryValue;
+  initialContact: { supplier_id?: string | null; client_id?: string | null };
+  isReviewed: boolean;
+  onCreateCategory?: (params: { name: string; parentName?: string; type?: "receita" | "despesa" }) => Promise<{ id: string; name: string } | null>;
+  onContactCreated?: (type: "supplier" | "client", id: string, name: string) => void;
+  onCancel: () => void;
+  onConfirm: (result: {
+    description: string;
+    category: RowCategoryValue;
+    contact: { supplier_id?: string | null; client_id?: string | null };
+  }) => void;
+}) {
+  const rawDescription = row.description;
+  const [description, setDescription] = useState(initialDescription || rawDescription);
+  const [category, setCategory] = useState<RowCategoryValue>(initialCategory || { category: "" });
+  const [supplierId, setSupplierId] = useState<string>(initialContact?.supplier_id || "");
+  const [clientId, setClientId] = useState<string>(initialContact?.client_id || "");
+  const isReceita = row.type === "receita";
+
+  const handleConfirm = () => {
+    const desc = description.trim() || rawDescription;
+    onConfirm({
+      description: desc,
+      category: { ...category, touched: true },
+      contact: {
+        supplier_id: !isReceita ? (supplierId || null) : null,
+        client_id: isReceita ? (clientId || null) : null,
+      },
+    });
+  };
+
+  return (
+    <tr className="border-b last:border-0 bg-primary/[0.03]">
+      <td colSpan={5} className="p-4">
+        <div className="rounded-lg border border-primary/30 bg-background p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              {isReviewed ? "Editar revisão do lançamento" : "Revisar novo lançamento"}
+            </p>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Fechar revisão"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground -mt-1">
+            Confirme a descrição, o {isReceita ? "cliente" : "fornecedor"} e a categoria antes de importar.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor={`review-desc-${rowIdx}`} className="text-xs">Descrição</Label>
+              <Input
+                id={`review-desc-${rowIdx}`}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ex.: Formatura Ana"
+                autoFocus
+                className="h-9"
+              />
+              {rawDescription && rawDescription !== description && (
+                <p className="text-[10px] text-muted-foreground">
+                  Original: <span className="font-mono">{rawDescription}</span>
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">{isReceita ? "Cliente" : "Fornecedor"}</Label>
+              {isReceita ? (
+                <ContactSelectWithCreate
+                  contacts={clients}
+                  value={clientId}
+                  onChange={setClientId}
+                  type="client"
+                  placeholder="Selecione o cliente"
+                  onContactCreated={(id) => {
+                    setClientId(id);
+                    onContactCreated?.("client", id, description);
+                  }}
+                />
+              ) : (
+                <ContactSelectWithCreate
+                  contacts={suppliers}
+                  value={supplierId}
+                  onChange={setSupplierId}
+                  type="supplier"
+                  placeholder="Selecione o fornecedor"
+                  onContactCreated={(id) => {
+                    setSupplierId(id);
+                    onContactCreated?.("supplier", id, description);
+                  }}
+                />
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Categoria</Label>
+              <CategoryPathCombobox
+                categories={categories}
+                value={category}
+                type={row.type}
+                onChange={(v) => setCategory(v)}
+                onCreateCategory={onCreateCategory}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleConfirm} className="gap-1.5">
+              <Check className="h-3.5 w-3.5" />
+              Confirmar revisão
+            </Button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export function ReconcileStep({
   rows,
   matches,
@@ -185,6 +344,9 @@ export function ReconcileStep({
   rowContacts = {},
   reviewedRows,
   onOpenReview,
+  onReviewConfirm,
+  onReviewCancel,
+  onContactCreated,
   suppliers = [],
   clients = [],
 }: ReconcileStepProps) {
@@ -192,6 +354,8 @@ export function ReconcileStep({
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
+  // Row currently expanded for inline review (only one at a time).
+  const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
   // Rows for which the user explicitly clicked "Criar novo" in the "Provável"
   // section — we drop the suggested match locally so the row moves to
   // "Só no extrato" and can be categorized/imported.
@@ -478,7 +642,7 @@ export function ReconcileStep({
                   className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={() => {
                     onActionChange(i, "criar");
-                    onOpenReview?.(i);
+                    setExpandedRowId(i);
                   }}
                 >
                   <X className="h-3 w-3" /> É outra compra — criar
@@ -820,7 +984,7 @@ export function ReconcileStep({
                               next.add(i);
                               return next;
                             });
-                            onOpenReview?.(i);
+                            setExpandedRowId(i);
                           }}
                           title="Criar como novo lançamento — abre a revisão para renomear e categorizar antes de importar."
                         >
@@ -932,12 +1096,14 @@ export function ReconcileStep({
                       );
                       const rowAction = matchActions[i] || "criar";
                       const willBeCreated = rowAction !== "ignorar";
+                      const isExpanded = expandedRowId === i;
                       return (
+                        <>
                         <tr
                           key={i}
                           className={`border-b last:border-0 hover:bg-accent/30 transition-opacity ${
                             isReplacing ? "bg-sky-500/5" : ""
-                          }`}
+                          } ${isExpanded ? "!border-b-0" : ""}`}
                         >
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
@@ -1034,10 +1200,11 @@ export function ReconcileStep({
                                     if (checked) {
                                       onActionChange(i, "criar");
                                       if (!isReviewed) {
-                                        onOpenReview?.(i);
+                                        setExpandedRowId(i);
                                       }
                                     } else {
                                       onActionChange(i, "ignorar");
+                                      if (expandedRowId === i) setExpandedRowId(null);
                                     }
                                   }}
                                   ariaLabel={willBeCreated ? "Ignorar esta linha" : "Criar esta linha"}
@@ -1050,20 +1217,18 @@ export function ReconcileStep({
                                   Criar
                                 </span>
                               </div>
-                              {willBeCreated && isReviewed && (
+                              {willBeCreated && isReviewed && !isExpanded && (
                                 <div className="flex items-center gap-1">
                                   <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
                                     <Check className="h-2.5 w-2.5" /> Revisada
                                   </Badge>
-                                  {onOpenReview && (
-                                    <button
-                                      type="button"
-                                      onClick={() => onOpenReview(i)}
-                                      className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
-                                    >
-                                      editar
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedRowId(i)}
+                                    className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
+                                  >
+                                    editar
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -1071,6 +1236,31 @@ export function ReconcileStep({
 
 
                         </tr>
+                        {isExpanded && (
+                          <InlineReviewRow
+                            key={`${i}-review`}
+                            rowIdx={i}
+                            row={r}
+                            categories={categories}
+                            suppliers={suppliers}
+                            clients={clients}
+                            initialDescription={rowDescriptions[i] || ""}
+                            initialCategory={rowCategories[i] || { category: "" }}
+                            initialContact={rowContacts[i] || {}}
+                            isReviewed={isReviewed}
+                            onCreateCategory={onCreateCategory}
+                            onContactCreated={onContactCreated}
+                            onCancel={() => {
+                              setExpandedRowId(null);
+                              onReviewCancel?.(i);
+                            }}
+                            onConfirm={(result) => {
+                              onReviewConfirm?.(i, result);
+                              setExpandedRowId(null);
+                            }}
+                          />
+                        )}
+                        </>
                       );
 
                     })}
