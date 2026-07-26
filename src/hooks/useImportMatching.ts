@@ -31,7 +31,7 @@ export function useImportMatching() {
       bankAccountId: string | null,
       walletId: string | null,
       creditCardId: string | null = null,
-      options: { merge?: boolean } = {},
+      options: { merge?: boolean; billMonth?: string | null } = {},
     ) => {
       if (lines.length === 0 || (!bankAccountId && !walletId && !creditCardId)) {
         if (!options.merge) setMatches({});
@@ -46,6 +46,20 @@ export function useImportMatching() {
         const minDate = shiftISO(dates[0], -window);
         const maxDate = shiftISO(dates[dates.length - 1], window);
 
+        // Se o usuário informou o mês da fatura, essa é a fonte da verdade
+        // para o range de payment_date — evita puxar candidatos de faturas
+        // vizinhas (mês anterior/próximo).
+        let billStart: string | null = null;
+        let billEnd: string | null = null;
+        if (isCard && options.billMonth) {
+          const [by, bm] = options.billMonth.split("-").map(Number);
+          if (by && bm) {
+            billStart = `${by}-${String(bm).padStart(2, "0")}-01`;
+            const end = new Date(by, bm, 0);
+            billEnd = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+          }
+        }
+
         const selectCols = "id, description, amount, payment_date, competence_date, purchase_date_original, type, status, category, subcategory, subcategory2, contact_name, series_id, installment_number, installments_total, credit_card_id, is_reconciled";
 
         let query = supabase
@@ -57,6 +71,9 @@ export function useImportMatching() {
           query = query.or(
             `and(purchase_date_original.gte.${minDate},purchase_date_original.lte.${maxDate}),and(purchase_date_original.is.null,competence_date.gte.${minDate},competence_date.lte.${maxDate})`
           );
+          if (billStart && billEnd) {
+            query = query.gte("payment_date", billStart).lte("payment_date", billEnd);
+          }
         } else {
           query = query.gte("payment_date", minDate).lte("payment_date", maxDate);
         }
@@ -108,8 +125,10 @@ export function useImportMatching() {
         // o vencimento da fatura como payment_date, sem purchase_date_original.
         // O scoreCandidate depois filtra por similaridade para evitar colisões.
         if (isCard && creditCardId) {
-          const wcMin = shiftISO(dates[0], -45);
-          const wcMax = shiftISO(dates[dates.length - 1], 45);
+          // Se o usuário informou o mês da fatura, a janela é EXATAMENTE
+          // esse mês (fonte da verdade). Caso contrário, ±45 dias das compras.
+          const wcMin = billStart ?? shiftISO(dates[0], -45);
+          const wcMax = billEnd ?? shiftISO(dates[dates.length - 1], 45);
           const { data: wc, error: wcErr } = await supabase
             .from("transactions")
             .select(selectCols)

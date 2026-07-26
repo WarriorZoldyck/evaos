@@ -736,7 +736,7 @@ export function ImportStatementModal({
             };
           });
           // First call (groupIdx=0) doesn't merge; subsequent ones do.
-          const res = await findMatches(lines, null, null, cardId, { merge: groupIdx > 0 });
+          const res = await findMatches(lines, null, null, cardId, { merge: groupIdx > 0, billMonth: billReferenceMonth || null });
           return indices.map((rowIdx, localIdx) => ({ rowIdx, match: res[localIdx] }));
         }),
       ).then((groupResults) => {
@@ -765,7 +765,7 @@ export function ImportStatementModal({
     resetMatches();
     setExtraMatches({});
     setPromotedOrphanIds(new Set());
-  }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches]);
+  }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches, billReferenceMonth]);
 
   // O mês da fatura é perguntado ao usuário ANTES do upload (fonte da verdade).
   // Não pré-preenchemos por heurística — assim evitamos casar contra o mês errado
