@@ -2329,7 +2329,16 @@ export function ImportStatementModal({
   const reviewModal = (
     <ReviewNewEntryModal
       open={reviewIdx != null && !!reviewRow}
-      onClose={() => setReviewIdx(null)}
+      onClose={() => {
+        // Se o usuário fechar sem confirmar e a linha ainda não foi revisada,
+        // reverte o toggle para "ignorar" (mantém a UX consistente: só linhas
+        // revisadas ficam com o toggle em "criar").
+        const idx = reviewIdx;
+        if (idx != null && !reviewedRows.has(idx)) {
+          setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
+        }
+        setReviewIdx(null);
+      }}
       row={reviewRow}
       rawDescription={reviewRow?.description || ""}
       initialDescription={reviewIdx != null ? (rowDescriptions[reviewIdx] || "") : ""}
