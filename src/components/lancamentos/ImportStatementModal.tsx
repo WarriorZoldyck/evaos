@@ -1987,7 +1987,25 @@ export function ImportStatementModal({
               rowDescriptions={rowDescriptions}
               rowContacts={rowContacts}
               reviewedRows={reviewedRows}
-              onOpenReview={(idx) => setReviewIdx(idx)}
+              onReviewConfirm={(idx, { description, category, contact }) => {
+                setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
+                setRowCategories((prev) => ({ ...prev, [idx]: category }));
+                setRowContacts((prev) => ({ ...prev, [idx]: contact }));
+                setReviewedRows((prev) => {
+                  const next = new Set(prev);
+                  next.add(idx);
+                  return next;
+                });
+              }}
+              onReviewCancel={(idx) => {
+                if (!reviewedRows.has(idx)) {
+                  setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
+                }
+              }}
+              onContactCreated={(type, id, name) => {
+                if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
+                else setClientsList((prev) => [...prev, { id, name }]);
+              }}
             />
 
 
