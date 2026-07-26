@@ -1,30 +1,54 @@
-## Sidebar: um único glass + item ativo neumórfico + dark mode
+## Diagnóstico
 
-### Mudanças
+O botão "É o mesmo" existe em **3 locais** de `ReconcileStep.tsx` com comportamentos ligeiramente diferentes:
 
-**1. Um único container glass envolvendo todos os grupos**
-- Em `src/components/ui/sidebar.tsx` (`SidebarContent`, linha 328): adicionar classe `sidebar-content-glass`.
-- Em `SidebarGroup` (linha 343): remover a classe `sidebar-group-glass`.
-- Em `src/index.css`: substituir `.sidebar-group-glass` (que criava um cartão por grupo) por `.sidebar-content-glass` — um único painel glass com bordas arredondadas, blur/saturate, borda clara translúcida e sombra suave, aplicado ao container que envolve toda a lista de grupos. Separadores entre grupos ficam como uma linha `hr` sutil (`sidebar-group-label` já demarca visualmente cada seção).
+1. **Linha 589-606** — seção "Correspondências prováveis" (com match do matcher). Faz `onTargetChange(i, cand.id)` + `onActionChange(i, "vincular")`. Funciona: cai em `matchedToleranceRows`.
+2. **Linha 964-974** — seção "Provável" (matcher achou candidato com descrição diferente / suggested). Mesma dupla de chamadas. Deveria funcionar, mas o filtro `suggestedRows` só remove a linha se `dismissedSuggestions` for atualizado *ou* se a ação sair de `"criar"`. Como muda para `vincular`, sai. **OK em teoria — verificar em runtime.**
+3. **Linha 1374-1392** — seção "Só no sistema" (orphans com valor idêntico no extrato). Faz `onTargetChange(i, o.id)` + `onActionChange(i, "vincular")`, mas **`matches[i]?.best` continua nulo** para essa linha do extrato. Consequência:
+   - Filtros `matchedExactRows` / `matchedToleranceRows` exigem `matches[i]?.best` e ignoram a linha.
+   - Filtro `newRows` mantém a linha (`action === "vincular" && !matches[i]?.best`).
+   - Visualmente: a linha continua em "Só no extrato" **e** o órfão continua em "Só no sistema" (o órfão não some porque `orphans` vem do backend, não é derivado de matchActions).
+   - O total `reconciledRowsTotal` já conta essa linha corretamente e o handler `ImportStatementModal` (linha 1192) faz o link no submit — mas o usuário **não vê feedback** e o card do órfão continua parecendo não vinculado.
 
-**2. Item ativo neumórfico (mesmo idioma do NeuToggle)**
-- Reescrever `.sidebar-item-active` em `src/index.css`:
-  - Fundo `#ecf0f3` (mesma base do toggle) em vez do gradiente azul atual.
-  - Sombra composta idêntica em espírito ao toggle: `-6px -3px 6px rgba(255,255,255,0.9), 6px 3px 10px rgba(209,217,230,0.9)` para o efeito "elevado".
-  - Texto e ícone em azul EVA (`hsl(199 100% 36%)`) para manter identidade.
-  - Remover a faixa `inset 3px 0 0` e o gradiente azul; profundidade agora vem só da sombra.
-- Ajustar `.sidebar-item` para ser transparente por padrão (sem `background`/`border` brancos) para não competir com o glass.
+## Mudanças
 
-**3. Dark mode**
-- `.dark .sidebar-content-glass`: fundo com tint azul escuro translúcido `hsl(215 35% 12% / 0.55)` (não cinza), borda `hsl(210 30% 40% / 0.3)`, sombra escura.
-- `.dark .sidebar-item-active`: base `hsl(215 30% 14%)` com sombras neumórficas escuras (`inset` claro sutil + outer escuro), texto/ícone em ciano EVA (`hsl(190 90% 65%)`).
-- Remover o bloco `.dark .sidebar-group-glass` antigo (não usado mais).
+### `src/components/lancamentos/import/ReconcileStep.tsx`
 
-### Fora do escopo
-- Não altera lógica de detecção de rota ativa, colapso, `NavLink`, ou pill "Pessoal".
-- Não mexe em outras superfícies (`.eva-surface`, cards do dashboard, header).
+**1. Unificar o handler "É o mesmo" em um helper**
+No topo do componente, criar:
+```ts
+const handleMarkSame = (rowIdx: number, targetTxId: string) => {
+  onTargetChange(rowIdx, targetTxId);
+  onActionChange(rowIdx, "vincular");
+  setDismissedSuggestions((prev) => {
+    const next = new Set(prev);
+    next.add(rowIdx);
+    return next;
+  });
+  setLinkedOrphans((prev) => new Set(prev).add(targetTxId));
+};
+```
+Substituir os 3 `onClick` inline (linhas 595-598, 968-971, 1381-1384) por `handleMarkSame(i, ...)`.
 
-### Verificação
-- Preview desktop expandido: um único painel glass claro envolvendo todos os grupos; item ativo destaca-se como um botão "elevado" estilo macOS/neumorphism.
-- Colapsado: mesmo painel único, itens ativos ainda visíveis como pastilha elevada.
-- Dark mode: painel azul-escuro translúcido (não cinza), item ativo com relevo escuro coerente.
+**2. Rastrear órfãos vinculados manualmente**
+Adicionar estado `const [linkedOrphans, setLinkedOrphans] = useState<Set<string>>(new Set());`.
+
+Na seção "Só no sistema" (~linha 1300), filtrar `orphans.filter(o => !linkedOrphans.has(o.id))` para que o card do lançamento suma da lista após "É o mesmo".
+
+**3. Considerar linhas vinculadas manualmente como matched na UI**
+Ajustar os filtros (`matchedToleranceRows` e `newRows`) para tratar linhas com `action === "vincular"` + `matchTargets[i]` como conciliadas, mesmo sem `matches[i]?.best`. Uma opção mínima: adicionar uma quarta lista `manualLinkedRows` e exibi-la dentro de "Correspondências prováveis", e excluí-la de `newRows` via `manualLinkedIdxSet`.
+
+**4. Feedback imediato**
+Adicionar `toast.success("Vinculado — será marcado como conciliado ao importar")` no `handleMarkSame`.
+
+## Fora do escopo
+- Fluxo de "Criar novo" / `ReviewNewEntryModal` / toggle neumórfico.
+- Design da sidebar / EVA Design System.
+- Lógica de matching automática (`useImportMatching`).
+- Handler de submit em `ImportStatementModal` (já processa `vincular` corretamente).
+
+## Verificação
+- Seção "Correspondências prováveis": clicar "É o mesmo" → linha continua verde, contador "conciliar" incrementa.
+- Seção "Provável": clicar "É o mesmo" → linha sai da lista amarela e aparece em conciliadas.
+- Seção "Só no sistema": clicar "É o mesmo" em uma linha do extrato com mesmo valor → o card do órfão some, a linha do extrato entra em conciliadas, toast confirma.
+- Confirmar no submit: `matchActions[i] === "vincular"` + `matchTargets[i]` gera update com `is_reconciled: true` (log já existente).

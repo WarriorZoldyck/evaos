@@ -360,7 +360,30 @@ export function ReconcileStep({
   // section — we drop the suggested match locally so the row moves to
   // "Só no extrato" and can be categorized/imported.
   const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<number>>(new Set());
+  // Orphan tx IDs the user has manually linked via "É o mesmo".
+  const [linkedOrphans, setLinkedOrphans] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  // Unified "É o mesmo" handler — used in all three sections.
+  // Marks the extract row as reconciled against the given system tx id.
+  const handleMarkSame = (rowIdx: number, targetTxId: string) => {
+    onTargetChange(rowIdx, targetTxId);
+    onActionChange(rowIdx, "vincular");
+    setDismissedSuggestions((prev) => {
+      const next = new Set(prev);
+      next.add(rowIdx);
+      return next;
+    });
+    setLinkedOrphans((prev) => {
+      const next = new Set(prev);
+      next.add(targetTxId);
+      return next;
+    });
+    toast({
+      title: "Vinculado",
+      description: "Será marcado como conciliado ao importar.",
+    });
+  };
   const [createCatState, setCreateCatState] = useState<
     | { rowIdx: number; level: "category" | "subcategory" | "subcategory2"; parentName?: string; type?: "receita" | "despesa" }
     | null
@@ -406,8 +429,15 @@ export function ReconcileStep({
     return a === "criar" && matches[i]?.best?.suggested;
   });
   const suggestedIdxSet = new Set(suggestedRows.map(({ i }) => i));
+  // Rows manually linked to an orphan (vincular + target set, but no automatic match).
+  const manualLinkedRows = indexed.filter(({ i }) => {
+    const a = matchActions[i] || "criar";
+    return a === "vincular" && !matches[i]?.best && !!matchTargets[i];
+  });
+  const manualLinkedIdxSet = new Set(manualLinkedRows.map(({ i }) => i));
   const newRows = indexed.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
+    if (manualLinkedIdxSet.has(i)) return false;
     const a = matchActions[i] || "criar";
     if (a === "ignorar") {
       return !matches[i]?.best || dismissedSuggestions.has(i);
@@ -592,10 +622,7 @@ export function ReconcileStep({
                 size="sm"
                 variant="ghost"
                 className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
-                onClick={() => {
-                  onTargetChange(i, cand.id);
-                  onActionChange(i, "vincular");
-                }}
+                onClick={() => handleMarkSame(i, cand.id)}
               >
                 <Link2 className="h-3 w-3" /> É o mesmo
               </Button>
@@ -965,10 +992,7 @@ export function ReconcileStep({
                           size="sm"
                           variant="outline"
                           className="h-7 text-xs gap-1 border-emerald-500/60 text-emerald-700 hover:bg-emerald-500/10"
-                          onClick={() => {
-                            onTargetChange(i, cand.id);
-                            onActionChange(i, "vincular");
-                          }}
+                          onClick={() => handleMarkSame(i, cand.id)}
                         >
                           <Link2 className="h-3 w-3" /> É o mesmo
                         </Button>
@@ -1296,6 +1320,7 @@ export function ReconcileStep({
               {showOrphans && (
                 <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
                   {orphans
+                    .filter((o) => !linkedOrphans.has(o.id))
                     .slice()
                     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
                     .map((o) => {
@@ -1378,10 +1403,7 @@ export function ReconcileStep({
                                             size="sm"
                                             variant="outline"
                                             className="h-6 text-[11px] gap-1 border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10"
-                                            onClick={() => {
-                                              onTargetChange(i, o.id);
-                                              onActionChange(i, "vincular");
-                                            }}
+                                            onClick={() => handleMarkSame(i, o.id)}
                                           >
                                             <Link2 className="h-3 w-3" /> É o mesmo
                                           </Button>
