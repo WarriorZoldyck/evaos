@@ -65,11 +65,11 @@ function normalize(s: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-// Accent/case-insensitive filter for cmdk
-const commandFilter = (value: string, search: string) => {
-  if (!search) return 1;
-  return normalize(value).includes(normalize(search)) ? 1 : 0;
-};
+function matches(name: string, search: string): boolean {
+  if (!search) return true;
+  return normalize(name).includes(normalize(search));
+}
+
 
 export function CategoryCascadeSelect({
   categories,
@@ -123,12 +123,29 @@ export function CategoryCascadeSelect({
 
 
   const [openLevel, setOpenLevel] = useState<null | "cat" | "sub" | "sub2">(null);
+  const [catSearch, setCatSearch] = useState("");
+  const [subSearch, setSubSearch] = useState("");
+  const [sub2Search, setSub2Search] = useState("");
   const [creating, setCreating] = useState<{
     level: "cat" | "sub" | "sub2";
     parentName?: string;
   } | null>(null);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const filteredRoots = useMemo(
+    () => roots.filter((c) => matches(c.name, catSearch)),
+    [roots, catSearch],
+  );
+  const filteredSubs = useMemo(
+    () => subs.filter((c) => matches(c.name, subSearch)),
+    [subs, subSearch],
+  );
+  const filteredSub2s = useMemo(
+    () => sub2s.filter((c) => matches(c.name, sub2Search)),
+    [sub2s, sub2Search],
+  );
+
 
   const pickCat = (name: string) => {
     onChange({
