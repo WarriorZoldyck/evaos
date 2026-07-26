@@ -948,12 +948,14 @@ export function ReconcileStep({
                       );
                       const rowAction = matchActions[i] || "criar";
                       const willBeCreated = rowAction !== "ignorar";
+                      const isExpanded = expandedRowId === i;
                       return (
+                        <>
                         <tr
                           key={i}
                           className={`border-b last:border-0 hover:bg-accent/30 transition-opacity ${
                             isReplacing ? "bg-sky-500/5" : ""
-                          }`}
+                          } ${isExpanded ? "!border-b-0" : ""}`}
                         >
                           <td className="p-2 text-muted-foreground whitespace-nowrap text-xs align-top">{fmtDate(r.date)}</td>
                           <td className="p-2 align-top min-w-[280px]">
