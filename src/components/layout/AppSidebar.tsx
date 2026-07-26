@@ -222,8 +222,8 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end={item.url === "/"}
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -249,8 +249,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -271,8 +271,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -292,8 +292,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip="EVA Hub">
                     <NavLink
                       to="/eva-hub"
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <UsersRound className="h-4 w-4" />
                       <span>EVA Hub</span>
@@ -319,8 +319,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
                       to={item.url}
-                      className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                      activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                      className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                      activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
@@ -340,8 +340,8 @@ export function AppSidebar() {
             <SidebarMenuButton asChild tooltip="Documentação">
               <NavLink
                 to="/docs"
-                className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
               >
                 <BookOpen className="h-4 w-4" />
                 <span>Documentação</span>
@@ -352,8 +352,8 @@ export function AppSidebar() {
             <SidebarMenuButton asChild tooltip="Configurações">
               <NavLink
                 to="/configuracoes"
-                className="hover:bg-sidebar-accent rounded-lg transition-all duration-200"
-                activeClassName="bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+                className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
               >
                 <Settings className="h-4 w-4" />
                 <span>Configurações</span>
@@ -364,7 +364,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               onClick={signOut}
               tooltip="Sair"
-              className="hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all duration-200"
+              className="sidebar-item hover:bg-destructive/10 hover:text-destructive rounded-lg transition-all duration-200"
             >
               <LogOut className="h-4 w-4" />
               <span>Sair</span>
