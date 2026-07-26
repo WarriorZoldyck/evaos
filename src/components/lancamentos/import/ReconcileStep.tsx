@@ -1278,7 +1278,12 @@ export function ReconcileStep({
                       );
                       const rowAction = matchActions[i] || "criar";
                       const willBeCreated = rowAction !== "ignorar";
-                      const canConfirm = draftDesc.trim().length > 0 && !!currentCat.category;
+                      // Categoria é opcional na confirmação: se ficar vazia, a criação
+                      // usa "Sem Categoria" como fallback (o usuário classifica depois).
+                      // Isso evita que uma linha seja silenciosamente descartada só porque
+                      // o toggle "Criar" ficou travado esperando categoria.
+                      const canConfirm = draftDesc.trim().length > 0;
+                      const missingCategory = !currentCat.category;
                       return (
                         <tr
                           key={i}
