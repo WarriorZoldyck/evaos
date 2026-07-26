@@ -2026,6 +2026,15 @@ export function ImportStatementModal({
                 if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
                 else setClientsList((prev) => [...prev, { id, name }]);
               }}
+              explicitlyIgnored={explicitlyIgnored}
+              onExplicitIgnore={(idx, ignored) => {
+                setExplicitlyIgnored((prev) => {
+                  const next = new Set(prev);
+                  if (ignored) next.add(idx);
+                  else next.delete(idx);
+                  return next;
+                });
+              }}
             />
 
 
