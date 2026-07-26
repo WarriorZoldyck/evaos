@@ -473,7 +473,7 @@ export function ReconcileStep({
   const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
   const totalsDelta = statementTotal - systemTotal;
   const totalsDivergent = Math.abs(totalsDelta) > 0.05;
-  const coverageMatched = matchedExactRows.length + matchedToleranceRows.length;
+  const coverageMatched = matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
   const coverageTotal = indexed.length;
   const onlyStatementRows = newRows; // linhas presentes só no extrato
 
