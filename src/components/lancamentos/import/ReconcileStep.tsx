@@ -428,13 +428,16 @@ export function ReconcileStep({
                 size="sm"
                 variant="ghost"
                 className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
-                onClick={() => onActionChange(i, "ignorar")}
+                onClick={() => {
+                  onTargetChange(i, cand.id);
+                  onActionChange(i, "vincular");
+                }}
               >
-                <ShieldCheck className="h-3 w-3" /> Manter só o do sistema
+                <Link2 className="h-3 w-3" /> É o mesmo
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px] text-xs">
-              Descarta esta linha do extrato. O lançamento que já existe no sistema é mantido — nada é criado nem excluído.
+            <TooltipContent side="top" className="max-w-[280px] text-xs">
+              Confirma que a linha do extrato e o lançamento do sistema são a mesma compra. Marca como conciliada — nada é criado nem excluído.
             </TooltipContent>
           </Tooltip>
 
@@ -473,7 +476,10 @@ export function ReconcileStep({
                   size="sm"
                   variant="ghost"
                   className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => onActionChange(i, "criar")}
+                  onClick={() => {
+                    onActionChange(i, "criar");
+                    onOpenReview?.(i);
+                  }}
                 >
                   <X className="h-3 w-3" /> É outra compra — criar
                 </Button>
@@ -482,12 +488,13 @@ export function ReconcileStep({
                 <div className="flex items-start gap-1.5">
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <span>
-                    Desfaz o vínculo e move a linha para <strong>"Só no extrato"</strong> para você <strong>categorizar</strong> antes de importar. O lançamento do sistema continua existindo — pode gerar duplicata proposital.
+                    Desfaz o vínculo, abre a revisão para <strong>renomear e categorizar</strong>, e move a linha para <strong>"Só no extrato"</strong>. O lançamento do sistema continua existindo — pode gerar duplicata proposital.
                   </span>
                 </div>
               </TooltipContent>
             </Tooltip>
           )}
+
         </div>
 
       </div>
