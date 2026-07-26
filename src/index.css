@@ -73,6 +73,37 @@ input[type="number"]::-webkit-outer-spin-button {
     --sidebar-active-from: 198 100% 92%;
     --sidebar-active-to: 199 90% 84%;
     --sidebar-active-fg: 201 100% 28%;
+
+    /* ==========================================================================
+       EVA Design System v1 — Foundation tokens (light)
+       Additive only. Existing tokens above are preserved.
+       ========================================================================== */
+    --surface-0: 210 30% 98%;
+    --surface-1: 0 0% 100%;
+    --surface-2: 210 25% 96%;
+    --surface-elevated: 0 0% 100%;
+
+    --border-soft: 214 25% 90% / 0.9;
+    --border-strong: 199 70% 65% / 0.55;
+    --border-glass: 0 0% 100% / 0.75;
+
+    --shadow-soft: 0 1px 2px hsl(215 25% 20% / 0.04), 0 2px 8px -3px hsl(215 25% 20% / 0.06);
+    --shadow-medium: 0 2px 4px hsl(215 25% 20% / 0.05), 0 8px 20px -6px hsl(215 25% 20% / 0.1);
+    --shadow-strong: 0 6px 16px -6px hsl(215 25% 20% / 0.12), 0 20px 40px -12px hsl(215 25% 20% / 0.18);
+    --shadow-inset-hi: inset 0 1px 0 hsl(0 0% 100% / 0.9);
+
+    --eva-primary: 199 100% 36%;
+    --eva-primary-strong: 201 100% 28%;
+    --eva-primary-soft: 198 100% 96%;
+    --eva-primary-ring: 195 100% 50% / 0.35;
+
+    --radius-sm: 8px;
+    --radius-md: 10px;
+    --radius-lg: 13px;
+    --radius-xl: 16px;
+    --radius-2xl: 20px;
+
+    --ease-eva: cubic-bezier(0.22, 0.61, 0.36, 1);
   }
 
   .dark {
