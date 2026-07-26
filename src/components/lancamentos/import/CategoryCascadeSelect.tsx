@@ -29,6 +29,8 @@ import type {
   CategoryFlat,
   RowCategoryValue,
 } from "@/components/lancamentos/CategoryPathCombobox";
+import { buildCategoryIndex, resolveChain, childrenOfId } from "@/lib/categoryChain";
+
 
 interface Props {
   categories: CategoryFlat[];
