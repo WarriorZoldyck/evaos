@@ -376,32 +376,67 @@ input[type="number"]::-webkit-outer-spin-button {
     margin: 6px 8px;
     padding: 8px 6px 10px;
     border-radius: 14px;
+    overflow: hidden;
     background: linear-gradient(
       180deg,
-      hsl(0 0% 100% / 0.55),
-      hsl(0 0% 100% / 0.32)
+      hsl(200 40% 96% / 0.7),
+      hsl(210 30% 92% / 0.45)
     );
     -webkit-backdrop-filter: blur(14px) saturate(1.25);
     backdrop-filter: blur(14px) saturate(1.25);
-    border: 1px solid hsl(0 0% 100% / 0.6);
+    border: 1px solid hsl(210 25% 82% / 0.7);
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.9),
-      inset 0 -1px 0 hsl(210 30% 80% / 0.25),
-      0 6px 18px -12px hsl(var(--neu-dark) / 0.55),
-      0 1px 0 hsl(0 0% 100% / 0.4);
+      inset 0 -1px 0 hsl(210 30% 78% / 0.3),
+      0 8px 24px -14px hsl(var(--neu-dark) / 0.8),
+      0 0 0 1px hsl(210 20% 85% / 0.4);
   }
   .sidebar-group-glass::before {
     content: "";
     position: absolute;
     inset: 1px 1px auto 1px;
-    height: 40%;
+    height: 30%;
     border-radius: 13px 13px 40% 40% / 13px 13px 100% 100%;
     background: linear-gradient(
       180deg,
-      hsl(0 0% 100% / 0.55),
+      hsl(0 0% 100% / 0.4),
       hsl(0 0% 100% / 0)
     );
     pointer-events: none;
+  }
+
+  /* Collapsed sidebar — tighten card so icons breathe */
+  [data-collapsible="icon"] .sidebar-group-glass,
+  [data-state="collapsed"] .sidebar-group-glass {
+    margin: 4px 4px;
+    padding: 6px 2px;
+    border-radius: 10px;
+  }
+  [data-collapsible="icon"] .sidebar-group-glass::before,
+  [data-state="collapsed"] .sidebar-group-glass::before {
+    display: none;
+  }
+
+  /* Dark mode variant */
+  .dark .sidebar-group-glass {
+    background: linear-gradient(
+      180deg,
+      hsl(215 30% 14% / 0.6),
+      hsl(215 30% 10% / 0.4)
+    );
+    border: 1px solid hsl(210 20% 40% / 0.35);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.06),
+      inset 0 -1px 0 hsl(0 0% 0% / 0.25),
+      0 8px 24px -14px hsl(0 0% 0% / 0.7),
+      0 0 0 1px hsl(210 20% 40% / 0.25);
+  }
+  .dark .sidebar-group-glass::before {
+    background: linear-gradient(
+      180deg,
+      hsl(0 0% 100% / 0.08),
+      hsl(0 0% 100% / 0)
+    );
   }
 
   .sidebar-group-label {
