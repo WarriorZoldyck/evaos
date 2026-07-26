@@ -906,7 +906,7 @@ export function ReconcileStep({
                       <th className="p-2 text-left font-medium">Descrição</th>
                       <th className="p-2 text-right font-medium whitespace-nowrap">Valor</th>
                       <th className="p-2 text-left font-medium min-w-[200px]">Categoria</th>
-                      <th className="p-2 text-center font-medium w-[160px]">Revisar</th>
+                      
                       <th className="p-2 text-center font-medium w-[220px]">Ação</th>
                     </tr>
                   </thead>
@@ -1012,79 +1012,60 @@ export function ReconcileStep({
                             </div>
                           </td>
                           <td className="p-2 text-center align-top">
-                            {!willBeCreated ? (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] gap-1 border-amber-500/60 text-amber-700 bg-amber-500/5"
-                                title="Ative o toggle 'Criar' para revisar descrição, fornecedor e categoria antes de importar."
+                            <div className="flex flex-col items-center gap-1">
+                              <div
+                                className="inline-flex items-center justify-center gap-2 select-none"
+                                title={
+                                  willBeCreated
+                                    ? "Ligado: esta linha será criada ao importar."
+                                    : "Desligado: esta linha será ignorada. Ative para revisar e criar."
+                                }
                               >
-                                <AlertTriangle className="h-2.5 w-2.5" />
-                                Revisar
-                              </Badge>
-                            ) : isReviewed ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
-                                  <Check className="h-2.5 w-2.5" /> Revisada
-                                </Badge>
-                                {onOpenReview && (
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenReview(i)}
-                                    className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
-                                  >
-                                    editar
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <Badge
-                                variant="outline"
-                                className="text-[10px] gap-1 border-amber-500/60 text-amber-700 bg-amber-500/5"
-                              >
-                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                                Aguardando revisão
-                              </Badge>
-                            )}
-                          </td>
-                          <td className="p-2 text-center align-top">
-                            <div
-                              className="inline-flex items-center justify-center gap-2 select-none"
-                              title={
-                                willBeCreated
-                                  ? "Ligado: esta linha será criada ao importar."
-                                  : "Desligado: esta linha será ignorada. Ative para revisar e criar."
-                              }
-                            >
-                              <span
-                                className={`text-[11px] font-medium whitespace-nowrap ${
-                                  willBeCreated ? "text-muted-foreground/50" : "text-muted-foreground"
-                                }`}
-                              >
-                                Ignorar
-                              </span>
-                              <NeuToggle
-                                checked={willBeCreated}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    onActionChange(i, "criar");
-                                    // Abre revisão automaticamente na primeira ativação —
-                                    // se já foi revisada, apenas reativa sem incomodar.
-                                    if (!isReviewed) {
-                                      onOpenReview?.(i);
+                                <span
+                                  className={`text-[11px] font-medium whitespace-nowrap ${
+                                    willBeCreated ? "text-muted-foreground/50" : "text-muted-foreground"
+                                  }`}
+                                >
+                                  Ignorar
+                                </span>
+                                <NeuToggle
+                                  checked={willBeCreated}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      onActionChange(i, "criar");
+                                      if (!isReviewed) {
+                                        onOpenReview?.(i);
+                                      }
+                                    } else {
+                                      onActionChange(i, "ignorar");
                                     }
-                                  } else {
-                                    onActionChange(i, "ignorar");
-                                  }
-                                }}
-                                ariaLabel={willBeCreated ? "Ignorar esta linha" : "Criar esta linha"}
-                              />
-                              <span
-                                className={`text-[11px] font-medium whitespace-nowrap ${
-                                  willBeCreated ? "text-primary" : "text-muted-foreground/50"
-                                }`}
-                              >
-                                Criar
-                              </span>
+                                  }}
+                                  ariaLabel={willBeCreated ? "Ignorar esta linha" : "Criar esta linha"}
+                                />
+                                <span
+                                  className={`text-[11px] font-medium whitespace-nowrap ${
+                                    willBeCreated ? "text-primary" : "text-muted-foreground/50"
+                                  }`}
+                                >
+                                  Criar
+                                </span>
+                              </div>
+                              {willBeCreated && isReviewed && (
+                                <div className="flex items-center gap-1">
+                                  <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
+                                    <Check className="h-2.5 w-2.5" /> Revisada
+                                  </Badge>
+                                  {onOpenReview && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenReview(i)}
+                                      className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dotted"
+                                    >
+                                      editar
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </td>
 
