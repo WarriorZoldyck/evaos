@@ -1,93 +1,115 @@
+# Sidebar Glass Neumorphism — Iteração 2 (intensificar com moderação)
 
 ## Objetivo
+Manter estrutura, lógica e comportamento intactos. Reforçar a camada visual da sidebar para que o Glass Neumorphism fique perceptível de imediato, sem virar concept futurista. Foco principal: destacar o item ativo (hoje quase invisível) e dar aparência premium ao dropdown "Pessoal".
 
-Elevar apenas o **visual** da sidebar com **Glass Neumorphism discreto** (referências: macOS/iOS, Linear, Arc, Raycast), preservando 100% da estrutura, lógica, estados, hooks, rotas, permissões, responsividade e Dark Mode atuais.
+## Escopo
+Somente dois arquivos, já usados na iteração 1:
+- `src/index.css` — ajustar tokens e as classes `.sidebar-*` existentes.
+- `src/components/layout/AppSidebar.tsx` — nenhuma alteração de JSX prevista.
 
-## Restrições (obrigatórias)
+## O que NÃO muda
+- JSX, hooks, rotas, colapso, dropdown de contexto, badges, NavLink customizado, `activeClassName`, logout.
+- Nenhum componente shadcn substituído.
+- Nenhuma classe Tailwind funcional removida.
+- Dark mode permanece sem overrides novos.
+- Sem novos pacotes, sem SVG, sem framer/gsap.
 
-- Não alterar regras de negócio, estados, hooks, rotas, permissões.
-- Não alterar componentes internos do shadcn/ui.
-- Não criar componentes, não instalar libs, não adicionar SVG, não usar Framer Motion.
-- Não substituir componentes nem mudar comportamento do menu.
-- Não modificar Dark Mode nesta etapa.
-- **Nunca remover** classes Tailwind existentes — somente **acrescentar** classes novas.
-- **Preservar o padrão atual de detecção de ativo.** O projeto usa o wrapper custom `src/components/NavLink.tsx` que aceita `className`/`activeClassName` e internamente mapeia para o render-prop `isActive` do React Router v6. **Continuar usando `activeClassName`** nos `NavLink`s da sidebar. Se aparecer algum `<RouterNavLink>` puro, usar `className={({ isActive }) => cn("classes atuais", "sidebar-item", isActive && "sidebar-item-active")}` — **nunca introduzir `activeClassName` em `RouterNavLink`**.
-- Em caso de conflito de estilo, **ajustar apenas a especificidade** via `@layer components` (ou seletor mais específico como `.sidebar-glass .sidebar-item`) — **jamais remover** classes Tailwind existentes.
+## Ajustes visuais (todos dentro das classes já criadas)
 
-## Direção visual (guardrail estético)
+1. **`.sidebar-glass` — vidro perceptível sem embaçar**
+   - `background: hsl(var(--glass-surface) / 0.74);` (era 0.78)
+   - `backdrop-filter: blur(8px) saturate(1.12);` (era 5px/1.05)
+   - Sombra externa mais firme + highlight interno superior:
+     - `box-shadow: 10px 0 32px -22px hsl(var(--neu-dark)), inset 1px 0 0 hsl(var(--neu-light)), inset 0 1px 0 hsl(0 0% 100% / 0.85);`
 
-O resultado deve parecer **evolução natural** da interface atual — o usuário reconhece imediatamente o EVA Finance Hub, apenas com acabamento mais refinado e premium. **Evitar contraste excessivo** entre sidebar e o restante da aplicação. Efeito **elegante, discreto e consistente** com software financeiro profissional. Blur suave, sombras leves, transparências sutis. Sem "wow futurista".
+2. **`.sidebar-item` — hover mais evidente e composição otimizada**
+   - Acrescentar `will-change: transform;` na classe base.
+   - Hover:
+     - `background: hsl(0 0% 100% / 0.55);`
+     - `box-shadow: -3px -3px 8px hsl(var(--neu-light)), 3px 3px 10px hsl(var(--neu-dark) / 0.55);`
+   - Mantém `transform: translateY(-1px)` e transição de 180ms.
 
-## Escopo (somente 2 arquivos)
+3. **`.sidebar-item-active` — botão macOS-like (mudança de maior impacto)**
+   - Tokens no `:root`:
+     - `--sidebar-active-from: 198 100% 92%;` (era 96%)
+     - `--sidebar-active-to: 199 90% 84%;` (era 92%)
+     - `--sidebar-active-fg: 201 100% 28%;` (era 36%)
+   - Sombra composta:
+     - `box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9), inset 0 -1px 0 hsl(199 60% 70% / 0.35), 0 2px 6px -2px hsl(199 80% 40% / 0.28), 0 0 0 1px hsl(199 70% 65% / 0.35);`
+   - Ícone SVG do item ativo em `hsl(199 100% 42%)`.
 
-- `src/index.css` — tokens + classes novas em `@layer components`.
-- `src/components/layout/AppSidebar.tsx` — apenas **append** de classes.
+4. **`.sidebar-context-pill` (dropdown "Pessoal") — aspecto premium**
+   - `background: hsl(0 0% 100% / 0.72);`
+   - `backdrop-filter: blur(10px) saturate(1.1);`
+   - `box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9), -2px -2px 5px hsl(var(--neu-light)), 2px 3px 8px hsl(var(--neu-dark) / 0.4);`
+   - `border: 1px solid hsl(0 0% 100% / 0.75);`
 
-Qualquer outro arquivo permanece intocado.
+5. **`.sidebar-badge-soft`** — sem alteração.
 
-## Paleta
+## Parâmetros consolidados
+| Propriedade   | Iteração 1 | Iteração 2   |
+| ------------- | ---------- | ------------ |
+| Opacidade     | 0.78       | **0.74**     |
+| Blur          | 5px        | **8px**      |
+| Saturate      | 1.05       | **1.12**     |
+| Hover shadow  | leve       | reforçada    |
+| Active shadow | tímido     | macOS-like   |
+| Context pill  | discreto   | premium      |
 
-- Base: `#F2F5FA`
-- Primária EVA: `#00B4D8`
-- Gradiente ativo: `#EAF8FF → #D9F3FF`
-- Texto/ícone ativo: `#0077B6`
+## Critério visual (guarda-corpo de intensidade)
+Após aplicar, comparar mentalmente com a iteração anterior. O objetivo é que a diferença seja perceptível imediatamente, sem transmitir sensação futurista.
 
-## Design tokens novos em `:root` (index.css)
+Se ainda parecer imperceptível, **ajustar apenas** a intensidade das sombras e do destaque do item ativo — **nunca** aumentar transparência (`< 0.72`) ou blur (`> 10px`).
 
-```text
---glass-surface        : 210 33% 96%     /* ~#F2F5FA */
---glass-border         : 0 0% 100% / .6
---neu-light            : 255 255 255 / .9
---neu-dark             : 210 25% 78% / .5
---sidebar-active-from  : 198 100% 96%    /* ~#EAF8FF */
---sidebar-active-to    : 198 100% 92%    /* ~#D9F3FF */
---sidebar-active-fg    : 199 100% 36%    /* ~#0077B6 */
-```
+---
 
-Dark mode sem override. As classes novas só têm efeito no light; no `.dark` os estilos atuais permanecem íntegros.
+## Princípios de Design
 
-## Classes novas (em `@layer components`, index.css)
+A sidebar deve transmitir:
+- Elegância
+- Clareza
+- Profundidade
+- Leveza
+- Precisão
 
-- **`.sidebar-glass`** — fundo `hsl(var(--glass-surface) / .78)`, `backdrop-filter: blur(5px) saturate(1.05)` (com prefixo `-webkit-`), borda direita translúcida, sombra externa suave e highlight interno.
-- **`.sidebar-item`** — `border-radius: 12px`, transição 180ms; hover com `translateY(-1px)` e relevo neumórfico leve.
-- **`.sidebar-item-active`** — gradiente `--sidebar-active-from → --sidebar-active-to`, `color: hsl(var(--sidebar-active-fg))`, `box-shadow` inset duplo + linha inferior de brilho; regra escopada `.sidebar-item-active svg { color: hsl(var(--sidebar-active-fg)); }`.
-- **`.sidebar-context-pill`** — mesma base glass, borda translúcida, sombra dupla suave; **sem alterar** comportamento do dropdown.
-- **`.sidebar-group-label`** — `color: hsl(215 15% 55%); letter-spacing: .08em; font-weight: 600`.
-- **`.sidebar-badge-soft`** — apenas polimento de sombra em badges existentes; **cores originais preservadas**.
+Não deve chamar mais atenção que o conteúdo principal. O objetivo é aumentar a percepção de qualidade do produto, e não criar um elemento visual protagonista.
 
-Todas usam somente `background`, `border`, `box-shadow`, `backdrop-filter`, `transition`, `transform`. Zero JS.
+Sempre que houver dúvida entre um efeito mais forte ou mais discreto, priorizar a opção mais discreta.
 
-## Edições em `AppSidebar.tsx` (apenas append)
+## Referência de qualidade
 
-Sem remover nada. Acrescentar as classes indicadas ao lado das existentes:
+A qualidade visual esperada é semelhante a aplicações como:
+- Apple System Settings
+- Arc Browser
+- Linear
+- Raycast
+- Notion Calendar
 
-1. `<Sidebar …>` → adicionar `sidebar-glass`.
-2. Botão do dropdown de contexto → adicionar `sidebar-context-pill`.
-3. Cada `<NavLink …>` (Principal, Financeiro, Cadastros, EVA Hub, Novidades, Footer):
-   - `className`: adicionar `sidebar-item`.
-   - `activeClassName`: adicionar `sidebar-item-active`.
-4. `<SidebarMenuButton onClick={signOut} …>` (Sair) → adicionar `sidebar-item` (hover destructive atual continua funcionando).
-5. Cada `<SidebarGroupLabel …>` → adicionar `sidebar-group-label`.
-6. Badges numéricos (Análises EVA, EVA Hub, "Em breve") → adicionar `sidebar-badge-soft`.
+Não utilizar como referência interfaces cyberpunk, neon, holográficas ou futuristas. O resultado deve parecer um software financeiro premium.
 
-## Critério de não regressão (checklist antes de concluir)
+## Regra de ouro
 
-Antes de encerrar a implementação, confirmar cada item:
+O usuário não deve perceber "efeitos". Ele deve perceber apenas que a interface ficou mais refinada.
 
-- [ ] Nenhum comportamento da sidebar foi alterado (colapso `icon`, tooltips, dropdown de contexto com checkboxes, navegação, logout, badges de contagem).
-- [ ] Nenhuma classe Tailwind existente foi removida ou substituída — apenas **acrescentadas** novas classes.
-- [ ] Nenhum componente foi substituído (Sidebar, SidebarHeader, SidebarContent, SidebarGroup, SidebarMenuButton, NavLink wrapper, DropdownMenu etc. permanecem exatamente os mesmos).
-- [ ] Nenhuma lógica foi modificada (nenhum `useEffect`, hook, handler, contexto, permissão, plano ou role tocado).
-- [ ] Apenas `src/index.css` e `src/components/layout/AppSidebar.tsx` foram alterados. Nenhum outro arquivo.
-- [ ] Dark Mode permanece visualmente idêntico ao atual (nenhum override em `.dark`).
-- [ ] Nenhum pacote novo instalado; sem SVG novo; sem Framer Motion.
-- [ ] Se em algum momento uma alteração estrutural parecer necessária (mudar componente, mudar hook, mexer em outro arquivo, remover classe existente), **interromper a implementação e explicar o motivo** em vez de prosseguir.
+Os efeitos devem ser sentidos, não vistos. Se algum efeito chamar atenção por si só, ele está forte demais.
 
-## Próximas etapas (fora desta rodada)
+---
 
-Depois da sidebar aprovada, seguimos em ordem: Header → Cards → Inputs → Tabelas → Modais → Botões → Badges → Charts → micro animações. Cada etapa em um plano próprio, para manter consistência visual em toda a aplicação.
+## Checklist de não regressão
+- Colapso/expansão da sidebar continua funcionando.
+- Item ativo detectado exatamente como antes (`NavLink` + `activeClassName`).
+- Dropdown de contexto abre/fecha normalmente.
+- Badges numéricos e "Em breve" seguem no `ml-auto`.
+- "Sair" mantém hover destrutivo.
+- Dark mode inalterado.
+- Nenhum arquivo além de `src/index.css` alterado.
 
-## Entregáveis
+## Detalhes técnicos
+- Todos os valores em HSL.
+- Highlights internos via `inset` no `box-shadow` — sem pseudo-elementos.
+- `will-change: transform` restrito a `.sidebar-item`.
+- Blur máximo 10px: seguro em desktop.
 
-- `src/index.css`: +~50 linhas (tokens + 6 classes em `@layer components`).
-- `src/components/layout/AppSidebar.tsx`: apenas concatenações de className em ~10 pontos.
+## Nota para as próximas etapas (fora do escopo deste plano)
+Após a aprovação desta sidebar, o próximo passo recomendado não é atacar Header/Cards um por um, e sim consolidar um **Design System EVA** com tokens compartilhados (superfícies, interações, destaques, elevação em 4 níveis). Isso será proposto em plano separado quando esta iteração estiver aprovada.
