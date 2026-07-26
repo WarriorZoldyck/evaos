@@ -416,18 +416,22 @@ export function ReconcileStep({
     [rows]
   );
 
-  // SPLIT matched rows by tier: exact (Q1) vs tolerance (Q2)
+  // SPLIT matched rows by tier: exact (Q1) vs tolerance (Q2).
+  // We exclude rows the user explicitly confirmed via "É o mesmo" (they show
+  // in the dedicated "Vinculadas manualmente" section for clear feedback).
   const matchedExactRows = indexed.filter(
     ({ i }) =>
       (matchActions[i] || "criar") === "vincular" &&
       matches[i]?.best &&
-      matches[i]!.best!.tier === "exact"
+      matches[i]!.best!.tier === "exact" &&
+      !dismissedSuggestions.has(i)
   );
   const matchedToleranceRows = indexed.filter(
     ({ i }) =>
       (matchActions[i] || "criar") === "vincular" &&
       matches[i]?.best &&
-      matches[i]!.best!.tier === "tolerance"
+      matches[i]!.best!.tier === "tolerance" &&
+      !dismissedSuggestions.has(i)
   );
   // Rows where matcher found a same-value candidate but text differs — user must confirm.
   const suggestedRows = indexed.filter(({ i }) => {
@@ -436,16 +440,17 @@ export function ReconcileStep({
     return a === "criar" && matches[i]?.best?.suggested;
   });
   const suggestedIdxSet = new Set(suggestedRows.map(({ i }) => i));
-  // Rows manually linked to an orphan (vincular + target set, but no automatic match).
+  // Rows manually linked via "É o mesmo": either against an orphan (no match)
+  // OR against an auto-suggested candidate that the user confirmed. Both
+  // deserve explicit visual feedback so the click doesn't feel silent.
   const manualLinkedRows = indexed.filter(({ i }) => {
     const a = matchActions[i] || "criar";
-    return a === "vincular" && !matches[i]?.best && !!matchTargets[i];
-  });
-  const manuallyResolvedOrphanRows = manualLinkedRows.filter(({ i }) => {
-    const targetId = matchTargets[i];
-    return targetId ? linkedOrphans.has(targetId) && orphansById.has(targetId) : false;
+    if (a !== "vincular" || !matchTargets[i]) return false;
+    if (!matches[i]?.best) return true; // orphan link
+    return dismissedSuggestions.has(i); // suggested → user confirmed
   });
   const manualLinkedIdxSet = new Set(manualLinkedRows.map(({ i }) => i));
+
   const newRows = indexed.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
     if (manualLinkedIdxSet.has(i)) return false;
@@ -706,16 +711,46 @@ export function ReconcileStep({
 
   const renderManualLinkRow = ({ r, i }: { r: ParsedRow; i: number }) => {
     const targetId = matchTargets[i];
-    const o = targetId ? orphansById.get(targetId) : undefined;
-    if (!o) return null;
+    const orphan = targetId ? orphansById.get(targetId) : undefined;
+    const cand = matches[i]?.best?.candidate;
+    // Support both: orphan link ("Só no sistema") and suggested-confirmed
+    // (row from "Provável" where the target is an existing matched candidate).
+    const target = orphan
+      ? {
+          id: orphan.id,
+          description: orphan.description || "(sem descrição)",
+          amount: Number(orphan.amount),
+          competence_date: orphan.competence_date,
+          payment_date: orphan.payment_date,
+          status: orphan.status,
+          category: orphan.category,
+          subcategory: orphan.subcategory,
+          subcategory2: orphan.subcategory2,
+        }
+      : cand
+        ? {
+            id: cand.id,
+            description: cand.description || "(sem descrição)",
+            amount: Number(cand.amount),
+            competence_date: cand.competence_date || cand.payment_date,
+            payment_date: cand.payment_date,
+            status: cand.status,
+            category: (cand as any).category,
+            subcategory: (cand as any).subcategory,
+            subcategory2: (cand as any).subcategory2,
+          }
+        : null;
+    if (!target) return null;
     const undo = () => {
       onActionChange(i, "criar");
       onTargetChange(i, null as any);
-      setLinkedOrphans((prev) => {
-        const next = new Set(prev);
-        next.delete(o.id);
-        return next;
-      });
+      if (targetId) {
+        setLinkedOrphans((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+      }
       setDismissedSuggestions((prev) => {
         const next = new Set(prev);
         next.delete(i);
@@ -738,22 +773,22 @@ export function ReconcileStep({
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5 flex items-center gap-1">
             EVA
-            <Badge variant={o.status === "Pago" ? "default" : "secondary"} className="text-[9px] px-1 py-0 h-3.5">
-              {o.status}
+            <Badge variant={target.status === "Pago" ? "default" : "secondary"} className="text-[9px] px-1 py-0 h-3.5">
+              {target.status}
             </Badge>
           </p>
-          <p className="font-medium text-sm break-words leading-snug" title={o.description}>{o.description || "(sem descrição)"}</p>
+          <p className="font-medium text-sm break-words leading-snug" title={target.description}>{target.description}</p>
           <p className="text-xs text-muted-foreground">
-            <span title="Data da compra (competência)">Compra {fmtDate(o.competence_date)}</span>
-            {o.payment_date && o.payment_date !== o.competence_date && (
-              <span className="opacity-60"> · Pgto {fmtDate(o.payment_date)}</span>
+            <span title="Data da compra (competência)">Compra {fmtDate(target.competence_date)}</span>
+            {target.payment_date && target.payment_date !== target.competence_date && (
+              <span className="opacity-60"> · Pgto {fmtDate(target.payment_date)}</span>
             )}
-            {" · "}<span className="font-mono">{fmt(Number(o.amount))}</span>
+            {" · "}<span className="font-mono">{fmt(Math.abs(target.amount))}</span>
           </p>
           <CategoryChain
-            category={resolveCategoryLabel(o.category)}
-            subcategory={resolveCategoryLabel(o.subcategory)}
-            subcategory2={resolveCategoryLabel(o.subcategory2)}
+            category={resolveCategoryLabel(target.category)}
+            subcategory={resolveCategoryLabel(target.subcategory)}
+            subcategory2={resolveCategoryLabel(target.subcategory2)}
           />
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -770,6 +805,7 @@ export function ReconcileStep({
       </div>
     );
   };
+
 
 
   return (
@@ -987,7 +1023,7 @@ export function ReconcileStep({
           )}
 
           {/* VINCULADAS MANUALMENTE — vínculos manuais fora da seção "Só no sistema" */}
-          {manualLinkedRows.length > 0 && !isCardMode && (
+          {manualLinkedRows.length > 0 && (
             <section>
               <header className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
@@ -1392,16 +1428,16 @@ export function ReconcileStep({
 
 
           {/* Q4 — SÓ NO SISTEMA (orphans) */}
-          {isCardMode && !orphansLoading && (remainingOrphans.length > 0 || manuallyResolvedOrphanRows.length > 0) && (
+          {isCardMode && !orphansLoading && (remainingOrphans.length > 0 || linkedOrphans.size > 0) && (
             <section>
               <header className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2 text-destructive">
                   <AlertTriangle className="h-4 w-4" />
                   Só no sistema
                   <Badge variant="secondary" className="text-[10px]">{remainingOrphans.length}</Badge>
-                  {manuallyResolvedOrphanRows.length > 0 && (
+                  {linkedOrphans.size > 0 && (
                     <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700">
-                      {manuallyResolvedOrphanRows.length} resolvido{manuallyResolvedOrphanRows.length === 1 ? "" : "s"}
+                      {linkedOrphans.size} resolvido{linkedOrphans.size === 1 ? "" : "s"} acima
                     </Badge>
                   )}
                   <span className="text-[10px] text-muted-foreground font-normal">
@@ -1423,19 +1459,11 @@ export function ReconcileStep({
                 <Alert className="mb-2 py-2 px-3 bg-emerald-500/5 border-emerald-500/30">
                   <Check className="h-3.5 w-3.5 text-emerald-700" />
                   <AlertDescription className="text-[11px] leading-snug ml-1 text-emerald-800">
-                    Todos os itens desta seção foram resolvidos manualmente.
+                    Todos os itens desta seção foram resolvidos — veja em <strong>“Vinculadas manualmente”</strong> acima.
                   </AlertDescription>
                 </Alert>
               )}
-              {manuallyResolvedOrphanRows.length > 0 && (
-                <div className="mb-2 border border-emerald-500/30 rounded-lg overflow-hidden divide-y bg-emerald-500/[0.04]">
-                  <header className="px-3 py-2 text-xs font-semibold flex items-center gap-2 text-emerald-700 bg-emerald-500/5 border-b border-emerald-500/20">
-                    <Link2 className="h-3.5 w-3.5" /> Resolvidos com “É o mesmo”
-                    <Badge variant="secondary" className="text-[10px]">{manuallyResolvedOrphanRows.length}</Badge>
-                  </header>
-                  {manuallyResolvedOrphanRows.map(renderManualLinkRow)}
-                </div>
-              )}
+
               {showOrphans && (
                 remainingOrphans.length > 0 ? (
                   <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
