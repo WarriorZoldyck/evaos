@@ -1,23 +1,19 @@
-## Plano
+## Objetivo
+Fazer o botão "É o mesmo" refletir a vinculação imediatamente na UI durante a conciliação da importação.
 
-1. **Padronizar o comportamento do botão “É o mesmo”**
-   - Usar um único handler para todos os lugares onde o botão aparece.
-   - Ao clicar, definir a ação da linha como `vincular` e salvar o lançamento do sistema como destino.
-   - Remover a linha da área onde ela estava causando dúvida visual, quando aplicável.
+## Diagnóstico (a confirmar em build mode com leitura do arquivo)
+Provável causa: `handleMarkSame` em `ReconcileStep.tsx` atualiza `linkedOrphans`, mas o item continua aparecendo em "Só no sistema" (ou "Provável") porque as listas derivadas não filtram por `linkedOrphans`, e/ou o contador `coverageMatched` não incrementa. Sem feedback visual, o usuário acha que o botão não faz nada.
 
-2. **Dar feedback visual imediato para o usuário**
-   - Fazer a linha mudar claramente para um estado conciliado/manual logo após o clique.
-   - Exibir um bloco/linha de confirmação “Vinculado manualmente” com as duas pontas: Extrato ↔ EVA.
-   - Manter botão “Desfazer” para o usuário reverter sem perder controle.
+## Passos
+1. Ler `src/components/lancamentos/import/ReconcileStep.tsx` para confirmar como `linkedOrphans`, a seção "Provável / Só no sistema" e os contadores são calculados.
+2. Ajustar o handler `handleMarkSame` para:
+   - Remover o item da lista "Só no sistema" e da lista "Provável" imediatamente (filtrando pelos IDs em `linkedOrphans`).
+   - Mover o par para a seção "Resolvidos com É o mesmo" já existente, com botão "Desfazer".
+   - Atualizar `coverageMatched` e o resumo do rodapé (`Importar N`) para contar o vínculo.
+3. Garantir que, ao clicar em "Desfazer", o item volte para sua seção original e o contador seja revertido.
+4. Verificar que o estado `linkedOrphans` persiste até o submit e é enviado como par conciliado na importação (sem duplicar criação).
+5. Validar em preview: clicar "É o mesmo" → linha some da seção original, aparece em "Resolvidos", contador sobe; "Desfazer" reverte.
 
-3. **Corrigir o caso que parece “não fazer nada”**
-   - Revisar especialmente o botão “É o mesmo” dentro de “Só no sistema”, porque ali o clique pode estar apenas gravando estado sem deslocar/atualizar a linha de forma perceptível.
-   - Garantir que o lançamento do sistema vinculado não continue aparecendo como pendente na lista “Só no sistema”.
-
-4. **Preservar a importação final**
-   - Confirmar que linhas marcadas como `vincular` continuam entrando em `rowsToLink` no envio final.
-   - Não alterar o fluxo de “Manter só o do extrato” nem o fluxo de criação/categorização.
-
-5. **Validar com logs e preview**
-   - Conferir novamente logs do Vite/console após a alteração.
-   - Se possível, validar no preview que o clique muda a UI imediatamente e que o estado fica reversível.
+## Escopo
+- Apenas `src/components/lancamentos/import/ReconcileStep.tsx` (frontend/UI).
+- Não alterar `useImportMatching`, backend, nem outros botões ("Criar novo", "Outra compra", "Manter só do extrato").
