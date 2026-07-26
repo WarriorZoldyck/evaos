@@ -132,7 +132,7 @@ export function AppSidebar() {
         : `${selectedCount} contextos`;
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" className="sidebar-glass border-r border-sidebar-border">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 shrink-0 rounded-lg overflow-hidden glow-primary-sm">
