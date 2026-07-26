@@ -30,6 +30,7 @@ import type {
   RowCategoryValue,
 } from "@/components/lancamentos/CategoryPathCombobox";
 import { buildCategoryIndex, resolveChain, childrenOfId } from "@/lib/categoryChain";
+import { VirtualCommandList } from "./VirtualCommandList";
 
 
 interface Props {
