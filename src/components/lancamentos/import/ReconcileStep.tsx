@@ -394,6 +394,10 @@ export function ReconcileStep({
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
   );
+  const orphansById = useMemo(
+    () => new Map(orphans.map((o) => [o.id, o])),
+    [orphans],
+  );
 
   const resolveCategoryLabel = (value?: string | null) => {
     if (!value) return value;
@@ -466,10 +470,10 @@ export function ReconcileStep({
   );
   const orphansTotal = orphans.reduce((s, o) => s + Math.abs(o.amount), 0);
   const systemTotal = isCardMode && systemBill ? Math.abs(systemBill.total) : matchedSystemTotal;
-  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length;
+  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
   const totalsDelta = statementTotal - systemTotal;
   const totalsDivergent = Math.abs(totalsDelta) > 0.05;
-  const coverageMatched = matchedExactRows.length + matchedToleranceRows.length;
+  const coverageMatched = matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
   const coverageTotal = indexed.length;
   const onlyStatementRows = newRows; // linhas presentes só no extrato
 
@@ -692,6 +696,73 @@ export function ReconcileStep({
     );
   };
 
+  const renderManualLinkRow = ({ r, i }: { r: ParsedRow; i: number }) => {
+    const targetId = matchTargets[i];
+    const o = targetId ? orphansById.get(targetId) : undefined;
+    if (!o) return null;
+    const undo = () => {
+      onActionChange(i, "criar");
+      onTargetChange(i, null as any);
+      setLinkedOrphans((prev) => {
+        const next = new Set(prev);
+        next.delete(o.id);
+        return next;
+      });
+      setDismissedSuggestions((prev) => {
+        const next = new Set(prev);
+        next.delete(i);
+        return next;
+      });
+    };
+    return (
+      <div key={i} className="grid grid-cols-[minmax(180px,1fr)_auto_minmax(180px,1fr)_auto] gap-4 items-start p-3 hover:bg-accent/30">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Extrato</p>
+          <p className="font-medium text-sm break-words leading-snug" title={r.description}>{r.description}</p>
+          <p className="text-xs text-muted-foreground">{fmtDate(r.date)} · <span className="font-mono">{fmt(r.amount)}</span></p>
+        </div>
+        <div className="flex flex-col items-center gap-0.5 shrink-0">
+          <Link2 className="h-4 w-4 text-sky-600" />
+          <Badge className="text-[9px] px-1 py-0 h-4 gap-0.5 bg-sky-600 hover:bg-sky-700 text-white border-0">
+            manual
+          </Badge>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5 flex items-center gap-1">
+            EVA
+            <Badge variant={o.status === "Pago" ? "default" : "secondary"} className="text-[9px] px-1 py-0 h-3.5">
+              {o.status}
+            </Badge>
+          </p>
+          <p className="font-medium text-sm break-words leading-snug" title={o.description}>{o.description || "(sem descrição)"}</p>
+          <p className="text-xs text-muted-foreground">
+            <span title="Data da compra (competência)">Compra {fmtDate(o.competence_date)}</span>
+            {o.payment_date && o.payment_date !== o.competence_date && (
+              <span className="opacity-60"> · Pgto {fmtDate(o.payment_date)}</span>
+            )}
+            {" · "}<span className="font-mono">{fmt(Number(o.amount))}</span>
+          </p>
+          <CategoryChain
+            category={resolveCategoryLabel(o.category)}
+            subcategory={resolveCategoryLabel(o.subcategory)}
+            subcategory2={resolveCategoryLabel(o.subcategory2)}
+          />
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs gap-1 text-muted-foreground"
+            onClick={undo}
+            title="Desfazer o vínculo manual"
+          >
+            <X className="h-3 w-3" /> Desfazer
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
 
   return (
     <TooltipProvider delayDuration={150}>
@@ -903,6 +974,23 @@ export function ReconcileStep({
 
               <div className="border border-amber-500/30 rounded-lg overflow-hidden divide-y">
                 {matchedToleranceRows.map(renderMatchRow)}
+              </div>
+            </section>
+          )}
+
+          {/* VINCULADAS MANUALMENTE — usuário resolveu órfão via "É o mesmo" */}
+          {manualLinkedRows.length > 0 && (
+            <section>
+              <header className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
+                  <Link2 className="h-4 w-4" />
+                  Vinculadas manualmente
+                  <Badge variant="secondary" className="text-[10px]">{manualLinkedRows.length}</Badge>
+                  <span className="text-[10px] text-muted-foreground font-normal">— confirmado pelo usuário via "É o mesmo"</span>
+                </h3>
+              </header>
+              <div className="border border-sky-500/30 rounded-lg overflow-hidden divide-y bg-sky-500/[0.03]">
+                {manualLinkedRows.map(renderManualLinkRow)}
               </div>
             </section>
           )}
