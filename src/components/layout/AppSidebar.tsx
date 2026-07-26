@@ -228,7 +228,7 @@ export function AppSidebar() {
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                       {item.hasBadge && pendingCount > 0 && (
-                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
+                        <span className="sidebar-badge-soft ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
                           {pendingCount}
                         </span>
                       )}
@@ -298,7 +298,7 @@ export function AppSidebar() {
                       <UsersRound className="h-4 w-4" />
                       <span>EVA Hub</span>
                       {pendingInvitationsCount > 0 && (
-                        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
+                        <span className="sidebar-badge-soft ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground px-1.5">
                           {pendingInvitationsCount}
                         </span>
                       )}
@@ -324,7 +324,7 @@ export function AppSidebar() {
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
-                      <span className="ml-auto text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">Em breve</span>
+                      <span className="sidebar-badge-soft ml-auto text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">Em breve</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
