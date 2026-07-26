@@ -1471,8 +1471,10 @@ export function ReconcileStep({
                                   onClick={() => {
                                     if (willBeCreated) {
                                       onActionChange(i, "ignorar");
+                                      onExplicitIgnore?.(i, true);
                                     } else {
                                       onActionChange(i, "criar");
+                                      onExplicitIgnore?.(i, false);
                                     }
                                   }}
                                   className="text-[10px] text-muted-foreground hover:text-destructive underline decoration-dotted"
