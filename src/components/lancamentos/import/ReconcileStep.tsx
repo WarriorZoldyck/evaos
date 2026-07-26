@@ -1413,8 +1413,10 @@ export function ReconcileStep({
                                   isReviewed
                                     ? "Confirmado: esta linha será criada ao importar. Desligue para editar."
                                     : canConfirm
-                                    ? "Ligue para confirmar a edição e travar a linha."
-                                    : "Preencha descrição e categoria antes de confirmar."
+                                    ? missingCategory
+                                      ? "Ligue para confirmar. A categoria pode ficar como 'Sem Categoria' e você classifica depois."
+                                      : "Ligue para confirmar a edição e travar a linha."
+                                    : "Preencha a descrição antes de confirmar."
                                 }
                               >
                                 <span
