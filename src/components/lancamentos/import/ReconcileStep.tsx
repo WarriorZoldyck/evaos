@@ -711,16 +711,46 @@ export function ReconcileStep({
 
   const renderManualLinkRow = ({ r, i }: { r: ParsedRow; i: number }) => {
     const targetId = matchTargets[i];
-    const o = targetId ? orphansById.get(targetId) : undefined;
-    if (!o) return null;
+    const orphan = targetId ? orphansById.get(targetId) : undefined;
+    const cand = matches[i]?.best?.candidate;
+    // Support both: orphan link ("Só no sistema") and suggested-confirmed
+    // (row from "Provável" where the target is an existing matched candidate).
+    const target = orphan
+      ? {
+          id: orphan.id,
+          description: orphan.description || "(sem descrição)",
+          amount: Number(orphan.amount),
+          competence_date: orphan.competence_date,
+          payment_date: orphan.payment_date,
+          status: orphan.status,
+          category: orphan.category,
+          subcategory: orphan.subcategory,
+          subcategory2: orphan.subcategory2,
+        }
+      : cand
+        ? {
+            id: cand.id,
+            description: cand.description || "(sem descrição)",
+            amount: Number(cand.amount),
+            competence_date: cand.competence_date || cand.payment_date,
+            payment_date: cand.payment_date,
+            status: cand.status,
+            category: (cand as any).category,
+            subcategory: (cand as any).subcategory,
+            subcategory2: (cand as any).subcategory2,
+          }
+        : null;
+    if (!target) return null;
     const undo = () => {
       onActionChange(i, "criar");
       onTargetChange(i, null as any);
-      setLinkedOrphans((prev) => {
-        const next = new Set(prev);
-        next.delete(o.id);
-        return next;
-      });
+      if (targetId) {
+        setLinkedOrphans((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+      }
       setDismissedSuggestions((prev) => {
         const next = new Set(prev);
         next.delete(i);
@@ -743,22 +773,22 @@ export function ReconcileStep({
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5 flex items-center gap-1">
             EVA
-            <Badge variant={o.status === "Pago" ? "default" : "secondary"} className="text-[9px] px-1 py-0 h-3.5">
-              {o.status}
+            <Badge variant={target.status === "Pago" ? "default" : "secondary"} className="text-[9px] px-1 py-0 h-3.5">
+              {target.status}
             </Badge>
           </p>
-          <p className="font-medium text-sm break-words leading-snug" title={o.description}>{o.description || "(sem descrição)"}</p>
+          <p className="font-medium text-sm break-words leading-snug" title={target.description}>{target.description}</p>
           <p className="text-xs text-muted-foreground">
-            <span title="Data da compra (competência)">Compra {fmtDate(o.competence_date)}</span>
-            {o.payment_date && o.payment_date !== o.competence_date && (
-              <span className="opacity-60"> · Pgto {fmtDate(o.payment_date)}</span>
+            <span title="Data da compra (competência)">Compra {fmtDate(target.competence_date)}</span>
+            {target.payment_date && target.payment_date !== target.competence_date && (
+              <span className="opacity-60"> · Pgto {fmtDate(target.payment_date)}</span>
             )}
-            {" · "}<span className="font-mono">{fmt(Number(o.amount))}</span>
+            {" · "}<span className="font-mono">{fmt(Math.abs(target.amount))}</span>
           </p>
           <CategoryChain
-            category={resolveCategoryLabel(o.category)}
-            subcategory={resolveCategoryLabel(o.subcategory)}
-            subcategory2={resolveCategoryLabel(o.subcategory2)}
+            category={resolveCategoryLabel(target.category)}
+            subcategory={resolveCategoryLabel(target.subcategory)}
+            subcategory2={resolveCategoryLabel(target.subcategory2)}
           />
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -775,6 +805,7 @@ export function ReconcileStep({
       </div>
     );
   };
+
 
 
   return (
