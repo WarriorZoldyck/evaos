@@ -2003,6 +2003,21 @@ export function ImportStatementModal({
                   setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
                 }
               }}
+              onSetReviewed={(idx, reviewed) => {
+                setReviewedRows((prev) => {
+                  const next = new Set(prev);
+                  if (reviewed) next.add(idx);
+                  else next.delete(idx);
+                  return next;
+                });
+              }}
+              onDescriptionChange={(idx, description) => {
+                setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
+              }}
+              onContactChange={(idx, contact) => {
+                setRowContacts((prev) => ({ ...prev, [idx]: contact }));
+              }}
+
               onContactCreated={(type, id, name) => {
                 if (type === "supplier") setSuppliersList((prev) => [...prev, { id, name }]);
                 else setClientsList((prev) => [...prev, { id, name }]);
