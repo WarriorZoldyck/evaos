@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Plus } from "lucide-react";
+import { ChevronsUpDown, Plus } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -30,6 +30,7 @@ import type {
   RowCategoryValue,
 } from "@/components/lancamentos/CategoryPathCombobox";
 import { buildCategoryIndex, resolveChain, childrenOfId } from "@/lib/categoryChain";
+import { VirtualCommandList } from "./VirtualCommandList";
 
 
 interface Props {
@@ -64,11 +65,11 @@ function normalize(s: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-// Accent/case-insensitive filter for cmdk
-const commandFilter = (value: string, search: string) => {
-  if (!search) return 1;
-  return normalize(value).includes(normalize(search)) ? 1 : 0;
-};
+function matches(name: string, search: string): boolean {
+  if (!search) return true;
+  return normalize(name).includes(normalize(search));
+}
+
 
 export function CategoryCascadeSelect({
   categories,
@@ -122,12 +123,29 @@ export function CategoryCascadeSelect({
 
 
   const [openLevel, setOpenLevel] = useState<null | "cat" | "sub" | "sub2">(null);
+  const [catSearch, setCatSearch] = useState("");
+  const [subSearch, setSubSearch] = useState("");
+  const [sub2Search, setSub2Search] = useState("");
   const [creating, setCreating] = useState<{
     level: "cat" | "sub" | "sub2";
     parentName?: string;
   } | null>(null);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const filteredRoots = useMemo(
+    () => roots.filter((c) => matches(c.name, catSearch)),
+    [roots, catSearch],
+  );
+  const filteredSubs = useMemo(
+    () => subs.filter((c) => matches(c.name, subSearch)),
+    [subs, subSearch],
+  );
+  const filteredSub2s = useMemo(
+    () => sub2s.filter((c) => matches(c.name, sub2Search)),
+    [sub2s, sub2Search],
+  );
+
 
   const pickCat = (name: string) => {
     onChange({
@@ -259,10 +277,17 @@ export function CategoryCascadeSelect({
             className="p-0 w-[--radix-popover-trigger-width] min-w-[220px]"
             align="start"
           >
-            <Command filter={commandFilter}>
-              <CommandInput placeholder="Buscar categoria..." className="h-8 text-xs" />
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Buscar categoria..."
+                className="h-8 text-xs"
+                value={catSearch}
+                onValueChange={setCatSearch}
+              />
               <CommandList className="max-h-[280px]">
-                <CommandEmpty className="py-4 text-xs">Nenhuma categoria</CommandEmpty>
+                {filteredRoots.length === 0 && (
+                  <CommandEmpty className="py-4 text-xs">Nenhuma categoria</CommandEmpty>
+                )}
                 {cat && (
                   <>
                     <CommandGroup>
@@ -277,24 +302,12 @@ export function CategoryCascadeSelect({
                     <CommandSeparator />
                   </>
                 )}
-                <CommandGroup>
-                  {roots.map((c) => (
-                    <CommandItem
-                      key={c.id}
-                      value={c.name}
-                      onSelect={() => pickCat(c.name)}
-                      className="text-xs"
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-3 w-3",
-                          cat === c.name ? "opacity-100" : "opacity-0",
-                        )}
-                      />
-                      {c.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
+                <VirtualCommandList
+                  items={filteredRoots}
+                  search=""
+                  selectedName={cat}
+                  onPick={pickCat}
+                />
                 {onCreateCategory && (
                   <>
                     <CommandSeparator />
@@ -311,6 +324,7 @@ export function CategoryCascadeSelect({
                 )}
               </CommandList>
             </Command>
+
           </PopoverContent>
         </Popover>
 
@@ -326,10 +340,17 @@ export function CategoryCascadeSelect({
             className="p-0 w-[--radix-popover-trigger-width] min-w-[220px]"
             align="start"
           >
-            <Command filter={commandFilter}>
-              <CommandInput placeholder="Buscar subcategoria..." className="h-8 text-xs" />
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Buscar subcategoria..."
+                className="h-8 text-xs"
+                value={subSearch}
+                onValueChange={setSubSearch}
+              />
               <CommandList className="max-h-[280px]">
-                <CommandEmpty className="py-4 text-xs">Nenhuma subcategoria</CommandEmpty>
+                {filteredSubs.length === 0 && (
+                  <CommandEmpty className="py-4 text-xs">Nenhuma subcategoria</CommandEmpty>
+                )}
                 {sub && (
                   <>
                     <CommandGroup>
@@ -344,24 +365,12 @@ export function CategoryCascadeSelect({
                     <CommandSeparator />
                   </>
                 )}
-                <CommandGroup>
-                  {subs.map((c) => (
-                    <CommandItem
-                      key={c.id}
-                      value={c.name}
-                      onSelect={() => pickSub(c.name)}
-                      className="text-xs"
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-3 w-3",
-                          sub === c.name ? "opacity-100" : "opacity-0",
-                        )}
-                      />
-                      {c.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
+                <VirtualCommandList
+                  items={filteredSubs}
+                  search=""
+                  selectedName={sub}
+                  onPick={pickSub}
+                />
                 {onCreateCategory && cat && (
                   <>
                     <CommandSeparator />
@@ -378,6 +387,7 @@ export function CategoryCascadeSelect({
                 )}
               </CommandList>
             </Command>
+
           </PopoverContent>
         </Popover>
 
@@ -393,10 +403,17 @@ export function CategoryCascadeSelect({
             className="p-0 w-[--radix-popover-trigger-width] min-w-[220px]"
             align="start"
           >
-            <Command filter={commandFilter}>
-              <CommandInput placeholder="Buscar sub-subcategoria..." className="h-8 text-xs" />
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Buscar sub-subcategoria..."
+                className="h-8 text-xs"
+                value={sub2Search}
+                onValueChange={setSub2Search}
+              />
               <CommandList className="max-h-[280px]">
-                <CommandEmpty className="py-4 text-xs">Nenhum item</CommandEmpty>
+                {filteredSub2s.length === 0 && (
+                  <CommandEmpty className="py-4 text-xs">Nenhum item</CommandEmpty>
+                )}
                 {sub2 && (
                   <>
                     <CommandGroup>
@@ -411,24 +428,12 @@ export function CategoryCascadeSelect({
                     <CommandSeparator />
                   </>
                 )}
-                <CommandGroup>
-                  {sub2s.map((c) => (
-                    <CommandItem
-                      key={c.id}
-                      value={c.name}
-                      onSelect={() => pickSub2(c.name)}
-                      className="text-xs"
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-3 w-3",
-                          sub2 === c.name ? "opacity-100" : "opacity-0",
-                        )}
-                      />
-                      {c.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
+                <VirtualCommandList
+                  items={filteredSub2s}
+                  search=""
+                  selectedName={sub2}
+                  onPick={pickSub2}
+                />
                 {onCreateCategory && sub && (
                   <>
                     <CommandSeparator />
@@ -445,6 +450,7 @@ export function CategoryCascadeSelect({
                 )}
               </CommandList>
             </Command>
+
           </PopoverContent>
         </Popover>
       </div>
