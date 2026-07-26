@@ -1,4 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
 
 interface SuggestItem {
   index: number;
