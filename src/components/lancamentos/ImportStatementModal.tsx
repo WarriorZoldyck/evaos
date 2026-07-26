@@ -2234,7 +2234,7 @@ export function ImportStatementModal({
                         onClick={handleImport}
                         disabled={importing || blockedByDivergence || blocked}
                         className="gap-2 mt-1"
-                        title={blocked ? "Revise as linhas novas ('Revisar e criar') antes de importar." : undefined}
+                        title={blocked ? "Ative o toggle 'Criar' das linhas novas para revisar antes de importar." : undefined}
                       >
                         {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                         Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
