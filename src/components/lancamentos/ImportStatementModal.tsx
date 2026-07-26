@@ -1158,6 +1158,25 @@ export function ImportStatementModal({
 
 
 
+  // Disposition of a single row in the reconcile step. The statement is the
+  // source of truth — every parsed row must fall into exactly one bucket
+  // BEFORE we can import. 'pending' means the user hasn't decided yet and
+  // the import must abort with a clear message rather than silently drop it.
+  const getRowDisposition = (i: number): "link" | "create" | "ignore-explicit" | "pending" => {
+    const action = matchActions[i] || "criar";
+    if (action === "vincular") {
+      return matchTargets[i] ? "link" : "pending";
+    }
+    if (action === "ignorar") {
+      return explicitlyIgnored.has(i) ? "ignore-explicit" : "pending";
+    }
+    // 'criar' — accept as long as we have SOMETHING to name the transaction.
+    // Reviewed rows already have a curated description; unreviewed ones fall
+    // back to either the edited draft or the original statement text.
+    const desc = (rowDescriptions[i] || rows[i]?.description || "").trim();
+    return desc ? "create" : "pending";
+  };
+
   const handleImport = async () => {
     if (!user) return;
     if (!targetBankAccount) {
@@ -1174,6 +1193,21 @@ export function ImportStatementModal({
       return;
     }
 
+    // Guardrail: extrato é a fonte da verdade. Nenhuma linha pode ser
+    // descartada sem decisão explícita (vincular / criar / ignorar de vez).
+    const pendingIdxs = rows
+      .map((_, i) => i)
+      .filter((i) => getRowDisposition(i) === "pending");
+    if (pendingIdxs.length > 0) {
+      const total = pendingIdxs.reduce((s, i) => s + Math.abs(rows[i]?.amount || 0), 0);
+      toast({
+        title: `${pendingIdxs.length} lançamento${pendingIdxs.length > 1 ? "s" : ""} do extrato sem decisão`,
+        description: `Total pendente: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Ative "Criar" ou use "Ignorar de vez" em cada linha antes de importar — o extrato é a fonte da verdade.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setImporting(true);
 
     const [accType, ...idParts] = targetBankAccount.split(":");
@@ -1187,15 +1221,16 @@ export function ImportStatementModal({
       ? (detectedCards.find(c => !c.parent_card_id)?.id || detectedCards[0]?.id || null)
       : null;
 
-    // Split rows by action — both debit and card now support vincular
+    // Split rows by action — iterate ALL rows (not selectedRows). The
+    // checkbox `selected` is no longer a discard channel; disposition above
+    // is the only thing that decides what happens.
     const rowsToCreate: ParsedTransaction[] = [];
     const rowsToLink: { row: ParsedTransaction; txId: string }[] = [];
 
-    selectedRows.forEach((r) => {
-      const realIdx = rows.indexOf(r);
-      const action = matchActions[realIdx] || "criar";
-      if (action === "ignorar") return;
-      if (action === "vincular") {
+    rows.forEach((r, realIdx) => {
+      const disp = getRowDisposition(realIdx);
+      if (disp === "ignore-explicit") return;
+      if (disp === "link") {
         const txId = matchTargets[realIdx];
         if (txId) {
           rowsToLink.push({ row: r, txId });
@@ -1203,9 +1238,10 @@ export function ImportStatementModal({
           console.warn("[ImportStatement] 'vincular' sem matchTarget — caindo em 'criar'", { realIdx, row: r });
           rowsToCreate.push(r);
         }
-      } else {
+      } else if (disp === "create") {
         rowsToCreate.push(r);
       }
+      // 'pending' já foi bloqueado acima
     });
 
     // 1) Link existing transactions — mark Pago (debit) or just reconcile (card / already-Pago)
