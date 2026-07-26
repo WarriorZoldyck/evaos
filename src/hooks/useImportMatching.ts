@@ -125,8 +125,10 @@ export function useImportMatching() {
         // o vencimento da fatura como payment_date, sem purchase_date_original.
         // O scoreCandidate depois filtra por similaridade para evitar colisões.
         if (isCard && creditCardId) {
-          const wcMin = shiftISO(dates[0], -45);
-          const wcMax = shiftISO(dates[dates.length - 1], 45);
+          // Se o usuário informou o mês da fatura, a janela é EXATAMENTE
+          // esse mês (fonte da verdade). Caso contrário, ±45 dias das compras.
+          const wcMin = billStart ?? shiftISO(dates[0], -45);
+          const wcMax = billEnd ?? shiftISO(dates[dates.length - 1], 45);
           const { data: wc, error: wcErr } = await supabase
             .from("transactions")
             .select(selectCols)
