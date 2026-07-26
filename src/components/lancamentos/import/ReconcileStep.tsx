@@ -429,8 +429,15 @@ export function ReconcileStep({
     return a === "criar" && matches[i]?.best?.suggested;
   });
   const suggestedIdxSet = new Set(suggestedRows.map(({ i }) => i));
+  // Rows manually linked to an orphan (vincular + target set, but no automatic match).
+  const manualLinkedRows = indexed.filter(({ i }) => {
+    const a = matchActions[i] || "criar";
+    return a === "vincular" && !matches[i]?.best && !!matchTargets[i];
+  });
+  const manualLinkedIdxSet = new Set(manualLinkedRows.map(({ i }) => i));
   const newRows = indexed.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
+    if (manualLinkedIdxSet.has(i)) return false;
     const a = matchActions[i] || "criar";
     if (a === "ignorar") {
       return !matches[i]?.best || dismissedSuggestions.has(i);
