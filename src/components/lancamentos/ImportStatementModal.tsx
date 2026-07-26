@@ -312,6 +312,9 @@ export function ImportStatementModal({
   const [rowContacts, setRowContacts] = useState<Record<number, { supplier_id?: string | null; client_id?: string | null }>>({});
   // Rows the user has confirmed in the inline "Revisar novo lançamento" panel.
   const [reviewedRows, setReviewedRows] = useState<Set<number>>(new Set());
+  // Rows the user explicitly clicked "Ignorar de vez" — usadas para diferenciar
+  // ignorar-por-default (silencioso, bloqueia o Importar) de ignorar-consciente.
+  const [explicitlyIgnored, setExplicitlyIgnored] = useState<Set<number>>(new Set());
   // Suppliers & clients used to pre-select / render "Fornecedor: X" hints.
   const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
   const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
