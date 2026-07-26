@@ -1403,10 +1403,7 @@ export function ReconcileStep({
                                             size="sm"
                                             variant="outline"
                                             className="h-6 text-[11px] gap-1 border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10"
-                                            onClick={() => {
-                                              onTargetChange(i, o.id);
-                                              onActionChange(i, "vincular");
-                                            }}
+                                            onClick={() => handleMarkSame(i, o.id)}
                                           >
                                             <Link2 className="h-3 w-3" /> É o mesmo
                                           </Button>
