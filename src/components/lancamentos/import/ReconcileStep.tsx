@@ -394,6 +394,10 @@ export function ReconcileStep({
     () => new Map(categories.map((c) => [c.id, c.name])),
     [categories],
   );
+  const orphansById = useMemo(
+    () => new Map(orphans.map((o) => [o.id, o])),
+    [orphans],
+  );
 
   const resolveCategoryLabel = (value?: string | null) => {
     if (!value) return value;
