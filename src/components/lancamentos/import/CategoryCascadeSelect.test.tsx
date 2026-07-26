@@ -34,10 +34,11 @@ describe("CategoryCascadeSelect", () => {
     const triggers = screen.getAllByRole("combobox");
     fireEvent.click(triggers[1]!);
 
-    // "Mercado" must be visible — proving we picked the r2 branch, not r1
-    expect(screen.getByText("Mercado")).toBeInTheDocument();
-    // "Restaurante" belongs to r1 branch and must NOT appear here
-    expect(screen.queryByText("Restaurante")).not.toBeInTheDocument();
+    // "Mercado" must be visible as an option — proves we picked r2, not r1
+    const options = screen.getAllByRole("option");
+    const optionNames = options.map((o) => o.textContent);
+    expect(optionNames.some((n) => n?.includes("Mercado"))).toBe(true);
+    expect(optionNames.some((n) => n?.includes("Restaurante"))).toBe(false);
   });
 
   it("re-renders subs after value switch (simulates changing row)", () => {
@@ -53,9 +54,9 @@ describe("CategoryCascadeSelect", () => {
 
     let triggers = screen.getAllByRole("combobox");
     fireEvent.click(triggers[1]!);
-    expect(screen.getByText("Restaurante")).toBeInTheDocument();
+    let optionNames = screen.getAllByRole("option").map((o) => o.textContent);
+    expect(optionNames.some((n) => n?.includes("Restaurante"))).toBe(true);
 
-    // Close popover and switch to the other branch (as if user moved to another row)
     fireEvent.keyDown(document.body, { key: "Escape" });
     rerender(
       <CategoryCascadeSelect
@@ -68,6 +69,8 @@ describe("CategoryCascadeSelect", () => {
 
     triggers = screen.getAllByRole("combobox");
     fireEvent.click(triggers[1]!);
-    expect(screen.getByText("Mercado")).toBeInTheDocument();
+    optionNames = screen.getAllByRole("option").map((o) => o.textContent);
+    expect(optionNames.some((n) => n?.includes("Mercado"))).toBe(true);
   });
 });
+
