@@ -821,8 +821,9 @@ export function ReconcileStep({
                               next.add(i);
                               return next;
                             });
+                            onOpenReview?.(i);
                           }}
-                          title="Criar como novo lançamento — a linha vai para a seção 'Só no extrato' para você categorizar."
+                          title="Criar como novo lançamento — abre a revisão para renomear e categorizar antes de importar."
                         >
                           <Plus className="h-3 w-3" /> Criar novo
                         </Button>
