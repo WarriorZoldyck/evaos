@@ -1,51 +1,45 @@
-## Virtualização do seletor de categorias
+## Objetivo
 
-O `CategoryCascadeSelect` hoje mapeia todos os itens de cada nível dentro de `CommandGroup` (`roots.map`, `subs.map`, `sub2s.map`). Contas com muitas categorias/subcategorias — comum em empresas com plano de contas grande — renderizam centenas de `CommandItem`, deixando o popover lento para abrir, filtrar e rolar.
+Simplificar o fluxo de conciliação: em vez do toggle "Criar" abrir a janelinha `InlineReviewRow` para revisão, a linha já fica editável direto (descrição, categoria, contato) enquanto o toggle está desligado. O toggle passa a funcionar como **confirmar & travar**: ao ligar, salva a edição e bloqueia a linha; ao desligar de novo, destrava para editar. Isso evita erros e garante que ativar o toggle já significa "revisado e pronto para criar".
 
-### Solução
+## Comportamento desejado
 
-Introduzir virtualização com `@tanstack/react-virtual` (biblioteca leve, ~3 kB, alinhada ao stack Radix/cmdk) nas três listas do cascade. Manter `CommandInput` para acessibilidade e digitação, mas assumir o filtro em estado controlado para poder repassar apenas os itens já filtrados ao virtualizador.
+- Toggle **desligado** (padrão em linhas "Provável / Criar"):
+  - Descrição vira campo editável inline (input na célula "Descrição").
+  - `CategoryCascadeSelect` continua editável.
+  - Botão pequeno "Contato" (opcional) permite abrir um popover leve para vincular fornecedor/cliente sem sair da linha.
+  - A linha NÃO cria nada ainda — é ignorada até o toggle ser ligado.
+  - Badge visual "Rascunho / não será criada" para deixar claro.
 
-### Mudanças
+- Toggle **ligado**:
+  - Persiste as edições no estado (`rowDescriptions`, `rowCategories`, `rowContacts`) e marca `reviewedRows.add(i)`.
+  - Campos ficam somente-leitura (texto + badge "Revisada, será criada").
+  - Nenhuma janelinha `InlineReviewRow` abre automaticamente.
 
-1. **Dependência**
-   - `bun add @tanstack/react-virtual`.
+- Toggle desligado novamente:
+  - Remove de `reviewedRows`, volta a exibir os campos editáveis.
+  - Se o usuário quiser cancelar totalmente, existe atalho "Ignorar de vez" (mantém o comportamento atual de `action=ignorar`).
 
-2. **Novo componente utilitário** `src/components/lancamentos/import/VirtualCommandList.tsx`
-   - Props: `items: CategoryFlat[]`, `search: string`, `selectedName: string`, `onPick: (name) => void`.
-   - Filtro acento-insensível compartilhado (reaproveitar `normalize`).
-   - `useVirtualizer` com `estimateSize = 28`, `overscan = 8`, container scrollável de `max-h-[280px]`.
-   - Renderiza `CommandItem` posicionado absolutamente para cada índice virtual.
-   - Ativa a virtualização somente quando `items.length > 50` (abaixo disso, renderiza normal — evita overhead).
+## Escopo de arquivos
 
-3. **`CategoryCascadeSelect.tsx`**
-   - Adicionar `useState` para o texto de busca de cada nível (`catSearch`, `subSearch`, `sub2Search`).
-   - Trocar `<Command filter={commandFilter}>` por `<Command shouldFilter={false}>` — o filtro passa a ser feito no `VirtualCommandList` para bater com os itens virtualizados.
-   - Ligar `CommandInput` como controlado (`value`/`onValueChange`).
-   - Substituir cada `CommandGroup` de opções pelo `VirtualCommandList`. Os itens fixos ("— limpar —" e "Nova …") continuam fora, em `CommandGroup` normal.
-   - Manter `CommandEmpty` reativo baseado no comprimento da lista filtrada.
+- `src/components/lancamentos/import/ReconcileStep.tsx`
+  - Trocar o bloco da célula "Descrição" (linhas ~1280–1332) por um render condicional: input editável quando `!isReviewed`, texto quando `isReviewed`.
+  - Ajustar o `NeuToggle` (linhas ~1368–1382): ao ligar, `onActionChange(i, "criar")` + `reviewedRows.add(i)` + NÃO expandir; ao desligar, remover de `reviewedRows` e voltar a ficar editável (mantém `action=criar` como rascunho; a criação só ocorre se `isReviewed`).
+  - Remover a expansão automática do `InlineReviewRow` (linhas ~1373–1374 e ~1410–1420). Manter o componente disponível para casos avançados (editar contato), mas acessível via link "mais opções" e não como fluxo primário.
+  - Atualizar a lógica de filtragem final para só considerar como "a criar" as linhas com `action==='criar' && reviewedRows.has(i)` (as demais viram rascunho/ignoradas na hora de importar).
+  - Ajustar contadores/resumo (`Criar no sistema`, badges "Pendente revisão" vs "Revisada") para refletir o novo estado.
 
-4. **Preservar comportamentos existentes**
-   - Índice por ID (`buildCategoryIndex` + `resolveChain`) permanece intacto.
-   - Criação inline (dialog `Nova …`) e limpeza continuam funcionando.
-   - `strictType` continua respeitado — a lista já chega filtrada por tipo.
-   - Fechamento por clique em item continua via `onPick` → `pickCat/pickSub/pickSub2`.
+- Mantém `useImportMatching` e demais componentes intactos.
 
-5. **Testes**
-   - Estender `src/components/lancamentos/import/CategoryCascadeSelect.test.tsx`:
-     - Renderizar com >200 categorias sob a mesma raiz e conferir que apenas um subconjunto de nós é montado (via `screen.getAllByRole("option").length`).
-     - Digitar no `CommandInput` e conferir que apenas os itens que batem com o termo aparecem.
-   - Manter os testes existentes (colisão por nome, troca de linha).
-   - Rodar `bunx vitest run` para confirmar tudo verde.
+## Detalhes técnicos
 
-### Fora do escopo
+- Descrição inline usa `<Input>` controlado por `rowDescriptions[i]`, `onChange` chamando o setter existente (`onDescriptionChange` ou equivalente — verificar prop atual).
+- Categoria continua no `CategoryCascadeSelect` já presente.
+- Ao ligar o toggle, disparar um pequeno "flush" (garantir que o valor atual no input está em `rowDescriptions` — se estivermos com estado local por debounce, forçar commit no blur/toggle).
+- Badge "Rascunho — ligue o toggle para confirmar" quando `action==='criar' && !isReviewed`.
+- Botão do rodapé "Importar" deve considerar apenas linhas revisadas como "a criar"; exibir aviso se houver rascunhos ainda desligados ("X linhas em rascunho serão ignoradas — ative o toggle para criar").
 
-- Não alterar `ReconcileStep` — ele já consome o cascade e se beneficia automaticamente.
-- Não mudar a API pública do componente.
-- Não introduzir memoização adicional além do necessário para a virtualização.
+## Fora do escopo
 
-### Arquivos tocados
-- `src/components/lancamentos/import/CategoryCascadeSelect.tsx`
-- `src/components/lancamentos/import/VirtualCommandList.tsx` (novo)
-- `src/components/lancamentos/import/CategoryCascadeSelect.test.tsx`
-- `package.json` (+ `@tanstack/react-virtual`)
+- Não altera a lógica de vinculação ("É o mesmo"), fluxo de duplicatas, nem o `CategoryCascadeSelect`.
+- Não muda o schema do banco nem edge functions.
