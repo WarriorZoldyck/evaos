@@ -1,115 +1,103 @@
-# Sidebar Glass Neumorphism — Iteração 2 (intensificar com moderação)
+# EVA Design System v1 — Fundação Visual
 
-## Objetivo
-Manter estrutura, lógica e comportamento intactos. Reforçar a camada visual da sidebar para que o Glass Neumorphism fique perceptível de imediato, sem virar concept futurista. Foco principal: destacar o item ativo (hoje quase invisível) e dar aparência premium ao dropdown "Pessoal".
+Objetivo: consolidar a linguagem visual da sidebar em um sistema base reutilizável, sem alterar componentes, rotas, hooks ou lógica. Depois desta rodada, todas as próximas telas passam a consumir os mesmos tokens/classes.
 
-## Escopo
-Somente dois arquivos, já usados na iteração 1:
-- `src/index.css` — ajustar tokens e as classes `.sidebar-*` existentes.
-- `src/components/layout/AppSidebar.tsx` — nenhuma alteração de JSX prevista.
+## Escopo desta rodada
+Apenas dois arquivos:
+- `src/index.css` — novos tokens + camada `@layer components` com utilitários visuais
+- `tailwind.config.ts` — mapear novos tokens (radii, shadows, cores semânticas de superfície) para uso via classes
 
-## O que NÃO muda
-- JSX, hooks, rotas, colapso, dropdown de contexto, badges, NavLink customizado, `activeClassName`, logout.
-- Nenhum componente shadcn substituído.
-- Nenhuma classe Tailwind funcional removida.
-- Dark mode permanece sem overrides novos.
-- Sem novos pacotes, sem SVG, sem framer/gsap.
+Nada mais é tocado. Componentes shadcn, JSX, hooks, comportamentos e dark mode permanecem exatamente como estão. Dark mode ganha apenas os valores equivalentes dos tokens novos (mesmos nomes, valores adaptados), sem alterar o visual atual.
 
-## Ajustes visuais (todos dentro das classes já criadas)
+## 1. Escala de superfícies (4 níveis)
 
-1. **`.sidebar-glass` — vidro perceptível sem embaçar**
-   - `background: hsl(var(--glass-surface) / 0.74);` (era 0.78)
-   - `backdrop-filter: blur(8px) saturate(1.12);` (era 5px/1.05)
-   - Sombra externa mais firme + highlight interno superior:
-     - `box-shadow: 10px 0 32px -22px hsl(var(--neu-dark)), inset 1px 0 0 hsl(var(--neu-light)), inset 0 1px 0 hsl(0 0% 100% / 0.85);`
+Tokens novos em `:root` (e equivalentes em `.dark`):
 
-2. **`.sidebar-item` — hover mais evidente e composição otimizada**
-   - Acrescentar `will-change: transform;` na classe base.
-   - Hover:
-     - `background: hsl(0 0% 100% / 0.55);`
-     - `box-shadow: -3px -3px 8px hsl(var(--neu-light)), 3px 3px 10px hsl(var(--neu-dark) / 0.55);`
-   - Mantém `transform: translateY(-1px)` e transição de 180ms.
+```
+--surface-0   → fundo da app (já é --background, apenas alinhar)
+--surface-1   → cards, painéis, containers
+--surface-2   → tabelas, blocos internos dentro de cards
+--surface-elevated → modais, popovers, dropdowns
 
-3. **`.sidebar-item-active` — botão macOS-like (mudança de maior impacto)**
-   - Tokens no `:root`:
-     - `--sidebar-active-from: 198 100% 92%;` (era 96%)
-     - `--sidebar-active-to: 199 90% 84%;` (era 92%)
-     - `--sidebar-active-fg: 201 100% 28%;` (era 36%)
-   - Sombra composta:
-     - `box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9), inset 0 -1px 0 hsl(199 60% 70% / 0.35), 0 2px 6px -2px hsl(199 80% 40% / 0.28), 0 0 0 1px hsl(199 70% 65% / 0.35);`
-   - Ícone SVG do item ativo em `hsl(199 100% 42%)`.
+--border-soft    → bordas neutras (1px translúcida)
+--border-strong  → bordas de foco/ativo
+--border-glass   → bordas com highlight interno (superfícies premium)
 
-4. **`.sidebar-context-pill` (dropdown "Pessoal") — aspecto premium**
-   - `background: hsl(0 0% 100% / 0.72);`
-   - `backdrop-filter: blur(10px) saturate(1.1);`
-   - `box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.9), -2px -2px 5px hsl(var(--neu-light)), 2px 3px 8px hsl(var(--neu-dark) / 0.4);`
-   - `border: 1px solid hsl(0 0% 100% / 0.75);`
+--shadow-soft    → cards padrão
+--shadow-medium  → hover / elementos flutuantes
+--shadow-strong  → modais / popovers elevados
+--shadow-inset-hi → highlight interno superior (acabamento premium)
 
-5. **`.sidebar-badge-soft`** — sem alteração.
+--eva-primary        → 199 100% 36% (azul EVA já usado na sidebar ativa)
+--eva-primary-strong → 201 100% 28%
+--eva-primary-soft   → 198 100% 96%
+--eva-primary-ring   → 195 100% 50% / 0.35
 
-## Parâmetros consolidados
-| Propriedade   | Iteração 1 | Iteração 2   |
-| ------------- | ---------- | ------------ |
-| Opacidade     | 0.78       | **0.74**     |
-| Blur          | 5px        | **8px**      |
-| Saturate      | 1.05       | **1.12**     |
-| Hover shadow  | leve       | reforçada    |
-| Active shadow | tímido     | macOS-like   |
-| Context pill  | discreto   | premium      |
+--radius-sm  → 8px
+--radius-md  → 10px
+--radius-lg  → 13px  (alinhado ao sidebar-item)
+--radius-xl  → 16px
+--radius-2xl → 20px
+```
 
-## Critério visual (guarda-corpo de intensidade)
-Após aplicar, comparar mentalmente com a iteração anterior. O objetivo é que a diferença seja perceptível imediatamente, sem transmitir sensação futurista.
+Os tokens existentes (`--background`, `--card`, `--primary`, `--radius`, `--glass-*`, `--neu-*`, `--sidebar-*`) permanecem intactos. Os novos convivem com eles.
 
-Se ainda parecer imperceptível, **ajustar apenas** a intensidade das sombras e do destaque do item ativo — **nunca** aumentar transparência (`< 0.72`) ou blur (`> 10px`).
+## 2. Utilitários base em `@layer components`
 
----
+Classes reutilizáveis, no mesmo espírito de `.sidebar-glass` / `.sidebar-item`:
 
-## Princípios de Design
+- `.eva-surface` — card padrão (surface-1 + border-soft + shadow-soft + radius-lg + highlight interno leve)
+- `.eva-surface-elevated` — para modais/popovers/dropdowns (shadow-strong + border-glass)
+- `.eva-surface-sunken` — para tabelas/áreas internas (surface-2, sem sombra)
+- `.eva-interactive` — base para botões/pills/chips: transição curta, hover eleva 1px, active volta, focus ring azul EVA
+- `.eva-interactive-primary` — variação com gradiente azul EVA + inset highlight (equivalente ao item ativo da sidebar, para botão principal)
+- `.eva-input` — acabamento consistente para inputs/selects (border-soft, focus ring EVA, radius-md)
+- `.eva-chip` — pill neutro (superfície com border translúcida)
+- `.eva-badge-soft` — badge com sombra interna leve (já existe `.sidebar-badge-soft` como referência)
+- `.eva-divider` — separador sutil translúcido
+- `.eva-focus-ring` — utilitário aplicável em qualquer elemento focável
 
-A sidebar deve transmitir:
-- Elegância
-- Clareza
-- Profundidade
-- Leveza
-- Precisão
+Todas as classes são aditivas: podem ser combinadas com o Tailwind atual sem substituir nada.
 
-Não deve chamar mais atenção que o conteúdo principal. O objetivo é aumentar a percepção de qualidade do produto, e não criar um elemento visual protagonista.
+## 3. Ajustes em `tailwind.config.ts`
 
-Sempre que houver dúvida entre um efeito mais forte ou mais discreto, priorizar a opção mais discreta.
+Somente `extend`, sem remover nada:
+- `colors`: `surface.0/1/2/elevated`, `eva.primary/strong/soft`, `border.soft/strong`
+- `borderRadius`: `xl`, `2xl` mapeando para os tokens novos (mantendo `lg/md/sm` existentes)
+- `boxShadow`: `soft`, `medium`, `strong`, `inset-hi`
+- `transitionTimingFunction`: `eva` (curva única para toda a UI)
 
-## Referência de qualidade
+Isso permite usar `bg-surface-1`, `shadow-soft`, `rounded-xl`, etc., nas próximas rodadas sem escrever CSS custom.
 
-A qualidade visual esperada é semelhante a aplicações como:
-- Apple System Settings
-- Arc Browser
-- Linear
-- Raycast
-- Notion Calendar
+## 4. Dark mode
+Mesmos nomes de tokens, valores calibrados para o dark atual (superfícies mais escuras, bordas mais claras translúcidas, sombras mais discretas). Nenhuma classe nova é aplicada agora, então nada muda visualmente no dark até a próxima rodada.
 
-Não utilizar como referência interfaces cyberpunk, neon, holográficas ou futuristas. O resultado deve parecer um software financeiro premium.
+## 5. O que NÃO acontece nesta rodada
+- Nenhum componente shadcn é editado (button, card, input, dialog, table, badge…)
+- Nenhuma página é editada
+- Nenhum JSX é tocado
+- Nenhuma dependência nova
+- Nenhum SVG, animação pesada, ou refactor de lógica
+- Sidebar continua exatamente como está (já é a referência)
 
-## Regra de ouro
+## 6. Entregável
+Ao final desta rodada:
+- Tokens globais consolidados e documentados no CSS
+- Utilitários `.eva-*` disponíveis para uso
+- Tailwind com aliases prontos
+- Zero mudança visual imediata em telas existentes fora da sidebar (que já usa a linguagem)
 
-O usuário não deve perceber "efeitos". Ele deve perceber apenas que a interface ficou mais refinada.
+## 7. Próximas rodadas (fora deste plano, apenas para contexto)
+Cada uma será um plano separado, aplicando os tokens/classes:
+1. Header + botões primários/secundários
+2. Cards principais do Dashboard
+3. Inputs, selects, dropdowns
+4. Tabelas
+5. Modais e popovers
+6. Badges, empty states, charts
 
-Os efeitos devem ser sentidos, não vistos. Se algum efeito chamar atenção por si só, ele está forte demais.
-
----
-
-## Checklist de não regressão
-- Colapso/expansão da sidebar continua funcionando.
-- Item ativo detectado exatamente como antes (`NavLink` + `activeClassName`).
-- Dropdown de contexto abre/fecha normalmente.
-- Badges numéricos e "Em breve" seguem no `ml-auto`.
-- "Sair" mantém hover destrutivo.
-- Dark mode inalterado.
-- Nenhum arquivo além de `src/index.css` alterado.
-
-## Detalhes técnicos
-- Todos os valores em HSL.
-- Highlights internos via `inset` no `box-shadow` — sem pseudo-elementos.
-- `will-change: transform` restrito a `.sidebar-item`.
-- Blur máximo 10px: seguro em desktop.
-
-## Nota para as próximas etapas (fora do escopo deste plano)
-Após a aprovação desta sidebar, o próximo passo recomendado não é atacar Header/Cards um por um, e sim consolidar um **Design System EVA** com tokens compartilhados (superfícies, interações, destaques, elevação em 4 níveis). Isso será proposto em plano separado quando esta iteração estiver aprovada.
+## Critério de aceite
+- `src/index.css` compila sem quebrar nada
+- Sidebar permanece idêntica visualmente
+- Nenhuma outra tela muda visualmente
+- Novas classes `.eva-*` e tokens estão disponíveis para as próximas rodadas

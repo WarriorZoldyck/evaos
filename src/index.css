@@ -73,6 +73,37 @@ input[type="number"]::-webkit-outer-spin-button {
     --sidebar-active-from: 198 100% 92%;
     --sidebar-active-to: 199 90% 84%;
     --sidebar-active-fg: 201 100% 28%;
+
+    /* ==========================================================================
+       EVA Design System v1 — Foundation tokens (light)
+       Additive only. Existing tokens above are preserved.
+       ========================================================================== */
+    --surface-0: 210 30% 98%;
+    --surface-1: 0 0% 100%;
+    --surface-2: 210 25% 96%;
+    --surface-elevated: 0 0% 100%;
+
+    --border-soft: 214 25% 90% / 0.9;
+    --border-strong: 199 70% 65% / 0.55;
+    --border-glass: 0 0% 100% / 0.75;
+
+    --shadow-soft: 0 1px 2px hsl(215 25% 20% / 0.04), 0 2px 8px -3px hsl(215 25% 20% / 0.06);
+    --shadow-medium: 0 2px 4px hsl(215 25% 20% / 0.05), 0 8px 20px -6px hsl(215 25% 20% / 0.1);
+    --shadow-strong: 0 6px 16px -6px hsl(215 25% 20% / 0.12), 0 20px 40px -12px hsl(215 25% 20% / 0.18);
+    --shadow-inset-hi: inset 0 1px 0 hsl(0 0% 100% / 0.9);
+
+    --eva-primary: 199 100% 36%;
+    --eva-primary-strong: 201 100% 28%;
+    --eva-primary-soft: 198 100% 96%;
+    --eva-primary-ring: 195 100% 50% / 0.35;
+
+    --radius-sm: 8px;
+    --radius-md: 10px;
+    --radius-lg: 13px;
+    --radius-xl: 16px;
+    --radius-2xl: 20px;
+
+    --ease-eva: cubic-bezier(0.22, 0.61, 0.36, 1);
   }
 
   .dark {
@@ -124,6 +155,26 @@ input[type="number"]::-webkit-outer-spin-button {
     --chart-3: 38 92% 50%;
     --chart-4: 280 65% 60%;
     --chart-5: 0 84% 60%;
+
+    /* EVA Design System v1 — dark equivalents */
+    --surface-0: 220 30% 6%;
+    --surface-1: 220 30% 9%;
+    --surface-2: 215 25% 12%;
+    --surface-elevated: 220 28% 11%;
+
+    --border-soft: 215 25% 20% / 0.9;
+    --border-strong: 199 80% 55% / 0.5;
+    --border-glass: 0 0% 100% / 0.08;
+
+    --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.35), 0 2px 8px -3px hsl(0 0% 0% / 0.4);
+    --shadow-medium: 0 2px 4px hsl(0 0% 0% / 0.4), 0 8px 20px -6px hsl(0 0% 0% / 0.5);
+    --shadow-strong: 0 6px 16px -6px hsl(0 0% 0% / 0.55), 0 20px 40px -12px hsl(0 0% 0% / 0.65);
+    --shadow-inset-hi: inset 0 1px 0 hsl(0 0% 100% / 0.05);
+
+    --eva-primary: 195 100% 50%;
+    --eva-primary-strong: 195 100% 60%;
+    --eva-primary-soft: 199 60% 16%;
+    --eva-primary-ring: 195 100% 55% / 0.4;
   }
 }
 
@@ -329,6 +380,120 @@ input[type="number"]::-webkit-outer-spin-button {
     box-shadow:
       0 1px 3px hsl(var(--neu-dark) / 0.28),
       inset 0 1px 0 hsl(var(--neu-light));
+  }
+
+  /* ==========================================================================
+     EVA Design System v1 — Foundation utilities
+     Additive. Combine with Tailwind; do not replace existing classes.
+     ========================================================================== */
+
+  .eva-surface {
+    background: hsl(var(--surface-1));
+    border: 1px solid hsl(var(--border-soft));
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-soft), var(--shadow-inset-hi);
+  }
+
+  .eva-surface-elevated {
+    background: hsl(var(--surface-elevated));
+    border: 1px solid hsl(var(--border-glass));
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-strong), var(--shadow-inset-hi);
+  }
+
+  .eva-surface-sunken {
+    background: hsl(var(--surface-2));
+    border: 1px solid hsl(var(--border-soft));
+    border-radius: var(--radius-md);
+  }
+
+  .eva-interactive {
+    border-radius: var(--radius-md);
+    transition:
+      transform 180ms var(--ease-eva),
+      box-shadow 180ms var(--ease-eva),
+      background-color 180ms var(--ease-eva),
+      border-color 180ms var(--ease-eva);
+    will-change: transform;
+  }
+  .eva-interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-medium);
+  }
+  .eva-interactive:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-soft);
+  }
+  .eva-interactive:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px hsl(var(--surface-0)),
+      0 0 0 4px hsl(var(--eva-primary-ring));
+  }
+
+  .eva-interactive-primary {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--eva-primary)),
+      hsl(var(--eva-primary-strong))
+    );
+    color: hsl(0 0% 100%);
+    border: 1px solid hsl(var(--eva-primary-strong) / 0.6);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.35),
+      0 4px 12px -4px hsl(var(--eva-primary) / 0.5);
+  }
+  .eva-interactive-primary:hover {
+    filter: brightness(1.04);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.4),
+      0 6px 16px -4px hsl(var(--eva-primary) / 0.6);
+  }
+
+  .eva-input {
+    background: hsl(var(--surface-1));
+    border: 1px solid hsl(var(--border-soft));
+    border-radius: var(--radius-md);
+    transition:
+      border-color 160ms var(--ease-eva),
+      box-shadow 160ms var(--ease-eva);
+  }
+  .eva-input:focus,
+  .eva-input:focus-visible,
+  .eva-input:focus-within {
+    outline: none;
+    border-color: hsl(var(--eva-primary) / 0.7);
+    box-shadow: 0 0 0 3px hsl(var(--eva-primary-ring));
+  }
+
+  .eva-chip {
+    background: hsl(var(--surface-1));
+    border: 1px solid hsl(var(--border-soft));
+    border-radius: 999px;
+    box-shadow: var(--shadow-inset-hi);
+  }
+
+  .eva-badge-soft {
+    box-shadow:
+      var(--shadow-soft),
+      var(--shadow-inset-hi);
+  }
+
+  .eva-divider {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--border-soft)),
+      transparent
+    );
+  }
+
+  .eva-focus-ring:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px hsl(var(--surface-0)),
+      0 0 0 4px hsl(var(--eva-primary-ring));
   }
 }
 
