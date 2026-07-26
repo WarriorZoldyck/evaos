@@ -71,20 +71,20 @@ export function CategoryCascadeSelect({
       arr.push(c);
       byParent.set(c.parent_id, arr);
     }
-    const rootList = (byParent.get(null) || []).filter((c) => typeAllows(c.type, type));
+    const rootList = (byParent.get(null) || []).filter((c) => !strictType || typeAllows(c.type, type));
     const subsFor = (parentName: string) => {
       const parent = rootList.find((r) => r.name === parentName);
       if (!parent) return [];
-      return (byParent.get(parent.id) || []).filter((c) => typeAllows(c.type, type));
+      return (byParent.get(parent.id) || []).filter((c) => !strictType || typeAllows(c.type, type));
     };
     const sub2sFor = (parentName: string, subName: string) => {
       const subs = subsFor(parentName);
       const subCat = subs.find((s) => s.name === subName);
       if (!subCat) return [];
-      return (byParent.get(subCat.id) || []).filter((c) => typeAllows(c.type, type));
+      return (byParent.get(subCat.id) || []).filter((c) => !strictType || typeAllows(c.type, type));
     };
     return { roots: rootList, subsOf: subsFor, sub2sOf: sub2sFor };
-  }, [categories, type]);
+  }, [categories, type, strictType]);
 
   const subs = cat ? subsOf(cat) : [];
   const sub2s = cat && sub ? sub2sOf(cat, sub) : [];
