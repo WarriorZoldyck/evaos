@@ -142,8 +142,8 @@ export function useWorkspaceMembers() {
     const ownerIds = [...new Set(data.map((d: any) => d.owner_id))];
     const profilesById = new Map<string, string>();
     for (const oid of ownerIds) {
-      const { data: p } = await supabase.from("profiles").select("full_name").eq("id", oid).single();
-      if (p?.full_name) profilesById.set(oid, p.full_name);
+      const { data: name } = await supabase.rpc("get_pending_invitation_owner_name", { _owner_id: oid });
+      if (name) profilesById.set(oid, name as unknown as string);
     }
     setPendingInvitations(
       data.map((d: any) => ({
