@@ -277,10 +277,17 @@ export function CategoryCascadeSelect({
             className="p-0 w-[--radix-popover-trigger-width] min-w-[220px]"
             align="start"
           >
-            <Command filter={commandFilter}>
-              <CommandInput placeholder="Buscar categoria..." className="h-8 text-xs" />
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Buscar categoria..."
+                className="h-8 text-xs"
+                value={catSearch}
+                onValueChange={setCatSearch}
+              />
               <CommandList className="max-h-[280px]">
-                <CommandEmpty className="py-4 text-xs">Nenhuma categoria</CommandEmpty>
+                {filteredRoots.length === 0 && (
+                  <CommandEmpty className="py-4 text-xs">Nenhuma categoria</CommandEmpty>
+                )}
                 {cat && (
                   <>
                     <CommandGroup>
@@ -295,24 +302,12 @@ export function CategoryCascadeSelect({
                     <CommandSeparator />
                   </>
                 )}
-                <CommandGroup>
-                  {roots.map((c) => (
-                    <CommandItem
-                      key={c.id}
-                      value={c.name}
-                      onSelect={() => pickCat(c.name)}
-                      className="text-xs"
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-3 w-3",
-                          cat === c.name ? "opacity-100" : "opacity-0",
-                        )}
-                      />
-                      {c.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
+                <VirtualCommandList
+                  items={filteredRoots}
+                  search=""
+                  selectedName={cat}
+                  onPick={pickCat}
+                />
                 {onCreateCategory && (
                   <>
                     <CommandSeparator />
@@ -329,6 +324,7 @@ export function CategoryCascadeSelect({
                 )}
               </CommandList>
             </Command>
+
           </PopoverContent>
         </Popover>
 
