@@ -168,6 +168,154 @@ function CategoryChain({
   );
 }
 
+function InlineReviewRow({
+  rowIdx,
+  row,
+  categories,
+  suppliers,
+  clients,
+  initialDescription,
+  initialCategory,
+  initialContact,
+  isReviewed,
+  onCreateCategory,
+  onContactCreated,
+  onCancel,
+  onConfirm,
+}: {
+  rowIdx: number;
+  row: ParsedRow;
+  categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+  suppliers: { id: string; name: string }[];
+  clients: { id: string; name: string }[];
+  initialDescription: string;
+  initialCategory: RowCategoryValue;
+  initialContact: { supplier_id?: string | null; client_id?: string | null };
+  isReviewed: boolean;
+  onCreateCategory?: (params: { name: string; parentName?: string; type?: "receita" | "despesa" }) => Promise<{ id: string; name: string } | null>;
+  onContactCreated?: (type: "supplier" | "client", id: string, name: string) => void;
+  onCancel: () => void;
+  onConfirm: (result: {
+    description: string;
+    category: RowCategoryValue;
+    contact: { supplier_id?: string | null; client_id?: string | null };
+  }) => void;
+}) {
+  const rawDescription = row.description;
+  const [description, setDescription] = useState(initialDescription || rawDescription);
+  const [category, setCategory] = useState<RowCategoryValue>(initialCategory || { category: "" });
+  const [supplierId, setSupplierId] = useState<string>(initialContact?.supplier_id || "");
+  const [clientId, setClientId] = useState<string>(initialContact?.client_id || "");
+  const isReceita = row.type === "receita";
+
+  const handleConfirm = () => {
+    const desc = description.trim() || rawDescription;
+    onConfirm({
+      description: desc,
+      category: { ...category, touched: true },
+      contact: {
+        supplier_id: !isReceita ? (supplierId || null) : null,
+        client_id: isReceita ? (clientId || null) : null,
+      },
+    });
+  };
+
+  return (
+    <tr className="border-b last:border-0 bg-primary/[0.03]">
+      <td colSpan={5} className="p-4">
+        <div className="rounded-lg border border-primary/30 bg-background p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-primary flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" />
+              {isReviewed ? "Editar revisão do lançamento" : "Revisar novo lançamento"}
+            </p>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Fechar revisão"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground -mt-1">
+            Confirme a descrição, o {isReceita ? "cliente" : "fornecedor"} e a categoria antes de importar.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor={`review-desc-${rowIdx}`} className="text-xs">Descrição</Label>
+              <Input
+                id={`review-desc-${rowIdx}`}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Ex.: Formatura Ana"
+                autoFocus
+                className="h-9"
+              />
+              {rawDescription && rawDescription !== description && (
+                <p className="text-[10px] text-muted-foreground">
+                  Original: <span className="font-mono">{rawDescription}</span>
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">{isReceita ? "Cliente" : "Fornecedor"}</Label>
+              {isReceita ? (
+                <ContactSelectWithCreate
+                  contacts={clients}
+                  value={clientId}
+                  onChange={setClientId}
+                  type="client"
+                  placeholder="Selecione o cliente"
+                  onContactCreated={(id) => {
+                    setClientId(id);
+                    onContactCreated?.("client", id, description);
+                  }}
+                />
+              ) : (
+                <ContactSelectWithCreate
+                  contacts={suppliers}
+                  value={supplierId}
+                  onChange={setSupplierId}
+                  type="supplier"
+                  placeholder="Selecione o fornecedor"
+                  onContactCreated={(id) => {
+                    setSupplierId(id);
+                    onContactCreated?.("supplier", id, description);
+                  }}
+                />
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Categoria</Label>
+              <CategoryPathCombobox
+                categories={categories}
+                value={category}
+                type={row.type}
+                onChange={(v) => setCategory(v)}
+                onCreateCategory={onCreateCategory}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button variant="ghost" size="sm" onClick={onCancel}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={handleConfirm} className="gap-1.5">
+              <Check className="h-3.5 w-3.5" />
+              Confirmar revisão
+            </Button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export function ReconcileStep({
   rows,
   matches,
