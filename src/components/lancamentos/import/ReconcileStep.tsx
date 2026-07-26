@@ -121,6 +121,10 @@ interface ReconcileStepProps {
   onDescriptionChange?: (rowIdx: number, description: string) => void;
   /** Update the pending inline contact of a row (before it's committed). */
   onContactChange?: (rowIdx: number, contact: { supplier_id?: string | null; client_id?: string | null }) => void;
+  /** Set of rows the user consciously marked as "Ignorar de vez". */
+  explicitlyIgnored?: Set<number>;
+  /** Toggle a row into/out of the explicit-ignore set. */
+  onExplicitIgnore?: (rowIdx: number, ignored: boolean) => void;
 
   /** Called when a supplier/client is created inline. */
   onContactCreated?: (type: "supplier" | "client", id: string, name: string) => void;
