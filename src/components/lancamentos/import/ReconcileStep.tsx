@@ -428,13 +428,16 @@ export function ReconcileStep({
                 size="sm"
                 variant="ghost"
                 className="h-7 text-xs gap-1 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
-                onClick={() => onActionChange(i, "ignorar")}
+                onClick={() => {
+                  onTargetChange(i, cand.id);
+                  onActionChange(i, "vincular");
+                }}
               >
-                <ShieldCheck className="h-3 w-3" /> Manter só o do sistema
+                <Link2 className="h-3 w-3" /> É o mesmo
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-[260px] text-xs">
-              Descarta esta linha do extrato. O lançamento que já existe no sistema é mantido — nada é criado nem excluído.
+            <TooltipContent side="top" className="max-w-[280px] text-xs">
+              Confirma que a linha do extrato e o lançamento do sistema são a mesma compra. Marca como conciliada — nada é criado nem excluído.
             </TooltipContent>
           </Tooltip>
 
@@ -473,7 +476,10 @@ export function ReconcileStep({
                   size="sm"
                   variant="ghost"
                   className="h-7 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => onActionChange(i, "criar")}
+                  onClick={() => {
+                    onActionChange(i, "criar");
+                    onOpenReview?.(i);
+                  }}
                 >
                   <X className="h-3 w-3" /> É outra compra — criar
                 </Button>
@@ -482,12 +488,13 @@ export function ReconcileStep({
                 <div className="flex items-start gap-1.5">
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <span>
-                    Desfaz o vínculo e move a linha para <strong>"Só no extrato"</strong> para você <strong>categorizar</strong> antes de importar. O lançamento do sistema continua existindo — pode gerar duplicata proposital.
+                    Desfaz o vínculo, abre a revisão para <strong>renomear e categorizar</strong>, e move a linha para <strong>"Só no extrato"</strong>. O lançamento do sistema continua existindo — pode gerar duplicata proposital.
                   </span>
                 </div>
               </TooltipContent>
             </Tooltip>
           )}
+
         </div>
 
       </div>
@@ -569,78 +576,77 @@ export function ReconcileStep({
             </div>
           )}
 
-          {/* Sistema × Extrato — fatura-level summary (card mode) */}
+          {/* Sistema × Extrato — fatura-level summary compacta (card mode) */}
           {isCardMode && (
             <div
-              className={`rounded-lg border p-3 ${
+              className={`rounded-md border px-3 py-2 flex items-center gap-3 flex-wrap text-xs ${
                 totalsDivergent
                   ? "border-amber-500/40 bg-amber-500/5"
                   : "border-emerald-500/40 bg-emerald-500/5"
               }`}
             >
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  {totalsDivergent ? (
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  ) : (
-                    <Check className="h-4 w-4 text-emerald-600" />
-                  )}
-                  Sistema × Extrato
-                </div>
-                <span className="text-[11px] text-muted-foreground">
-                  {coverageMatched}/{coverageTotal} linhas conciliadas
-                </span>
+              <div className="flex items-center gap-1.5 font-semibold text-sm shrink-0">
+                {totalsDivergent ? (
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                ) : (
+                  <Check className="h-4 w-4 text-emerald-600" />
+                )}
+                Sistema × Extrato
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-3 text-xs">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Sistema</p>
-                  <p className="font-mono text-sm">
-                    {systemBill?.loading ? "carregando..." : fmt(-systemTotal)}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {systemCount} lançamento{systemCount === 1 ? "" : "s"} na fatura do sistema
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Extrato</p>
-                  <p className="font-mono text-sm">{fmt(statementTotal)}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {indexed.length} linhas selecionadas
-                  </p>
-                  {statementCreditsTotal > 0 && (
-                    <p className="text-[10px] text-emerald-700">
-                      créditos/restituições − {fmt(statementCreditsTotal)}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Diferença</p>
-                  <p className={`font-mono text-sm ${totalsDivergent ? "text-amber-700" : "text-emerald-700"}`}>
+              <div className="flex items-center gap-3 flex-wrap flex-1">
+                <span>
+                  <span className="text-muted-foreground">Sistema:</span>{" "}
+                  <span className="font-mono font-medium">
+                    {systemBill?.loading ? "…" : fmt(-systemTotal)}
+                  </span>
+                  <span className="text-muted-foreground/70"> ({systemCount})</span>
+                </span>
+                <span className="text-muted-foreground/40">·</span>
+                <span>
+                  <span className="text-muted-foreground">Extrato:</span>{" "}
+                  <span className="font-mono font-medium">{fmt(statementTotal)}</span>
+                  <span className="text-muted-foreground/70"> ({indexed.length})</span>
+                </span>
+                <span className="text-muted-foreground/40">·</span>
+                <span>
+                  <span className="text-muted-foreground">Diferença:</span>{" "}
+                  <span className={`font-mono font-medium ${totalsDivergent ? "text-amber-700" : "text-emerald-700"}`}>
                     {totalsDelta >= 0 ? "+" : ""}
                     {fmt(totalsDelta)}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {totalsDivergent ? "revise as prováveis causas" : "bate certinho"}
-                  </p>
-                </div>
+                  </span>
+                </span>
+                {totalsDivergent && (onlyStatementRows.length > 0 || orphans.length > 0) && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 text-[11px] text-amber-700 hover:underline"
+                        title="Ver prováveis causas da divergência"
+                      >
+                        <Info className="h-3 w-3" /> causas
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-72 text-xs space-y-1">
+                      <p className="font-medium">Prováveis causas da divergência:</p>
+                      {onlyStatementRows.length > 0 && (
+                        <p>• {onlyStatementRows.length} linha{onlyStatementRows.length === 1 ? "" : "s"} só no extrato ({fmt(Math.abs(onlyStatementRows.reduce((s, { r }) => s + signedStatementAmount(r), 0)))})</p>
+                      )}
+                      {orphans.length > 0 && (
+                        <p>• {orphans.length} lançamento{orphans.length === 1 ? "" : "s"} só no sistema ({fmt(orphansTotal)})</p>
+                      )}
+                      {statementCreditsTotal > 0 && (
+                        <p className="text-emerald-700">• créditos/restituições no extrato: −{fmt(statementCreditsTotal)}</p>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
-              {totalsDivergent && (onlyStatementRows.length > 0 || orphans.length > 0) && (
-                <div className="mt-2 text-[11px] text-muted-foreground border-t border-amber-500/20 pt-2 space-y-0.5">
-                  <p className="font-medium text-foreground">Prováveis causas da divergência:</p>
-                  {onlyStatementRows.length > 0 && (
-                    <p>
-                      • {onlyStatementRows.length} linha{onlyStatementRows.length === 1 ? "" : "s"} só no extrato ({fmt(Math.abs(onlyStatementRows.reduce((s, { r }) => s + signedStatementAmount(r), 0)))})
-                    </p>
-                  )}
-                  {orphans.length > 0 && (
-                    <p>
-                      • {orphans.length} lançamento{orphans.length === 1 ? "" : "s"} só no sistema para revisão ({fmt(orphansTotal)})
-                    </p>
-                  )}
-                </div>
-              )}
+              <span className="text-[11px] text-muted-foreground shrink-0">
+                {coverageMatched}/{coverageTotal} conciliadas
+              </span>
             </div>
           )}
+
 
           {/* Matrix legend */}
           <Alert className="py-2 px-3 bg-muted/30 border-muted-foreground/20">
@@ -814,8 +820,9 @@ export function ReconcileStep({
                               next.add(i);
                               return next;
                             });
+                            onOpenReview?.(i);
                           }}
-                          title="Criar como novo lançamento — a linha vai para a seção 'Só no extrato' para você categorizar."
+                          title="Criar como novo lançamento — abre a revisão para renomear e categorizar antes de importar."
                         >
                           <Plus className="h-3 w-3" /> Criar novo
                         </Button>
