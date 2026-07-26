@@ -992,7 +992,7 @@ export function ReconcileStep({
           )}
 
           {/* VINCULADAS MANUALMENTE — vínculos manuais fora da seção "Só no sistema" */}
-          {manualLinkedRows.length > 0 && !isCardMode && (
+          {manualLinkedRows.length > 0 && (
             <section>
               <header className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
