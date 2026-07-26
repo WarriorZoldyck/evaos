@@ -370,6 +370,8 @@ export function ReconcileStep({
   const handleMarkSame = (rowIdx: number, targetTxId: string) => {
     onTargetChange(rowIdx, targetTxId);
     onActionChange(rowIdx, "vincular");
+    setExpandedRowId(null);
+    setManualForRow(null);
     setDismissedSuggestions((prev) => {
       const next = new Set(prev);
       next.add(rowIdx);
@@ -382,7 +384,7 @@ export function ReconcileStep({
     });
     toast({
       title: "Vinculado",
-      description: "Será marcado como conciliado ao importar.",
+      description: "Movemos para resolvidos e será conciliado ao importar.",
     });
   };
   const [createCatState, setCreateCatState] = useState<
@@ -439,6 +441,10 @@ export function ReconcileStep({
     const a = matchActions[i] || "criar";
     return a === "vincular" && !matches[i]?.best && !!matchTargets[i];
   });
+  const manuallyResolvedOrphanRows = manualLinkedRows.filter(({ i }) => {
+    const targetId = matchTargets[i];
+    return targetId ? linkedOrphans.has(targetId) && orphansById.has(targetId) : false;
+  });
   const manualLinkedIdxSet = new Set(manualLinkedRows.map(({ i }) => i));
   const newRows = indexed.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
@@ -477,6 +483,7 @@ export function ReconcileStep({
   const coverageMatched = matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
   const coverageTotal = indexed.length;
   const onlyStatementRows = newRows; // linhas presentes só no extrato
+  const remainingOrphans = orphans.filter((o) => !linkedOrphans.has(o.id));
 
   // Progresso da conciliação (linhas do extrato):
   // - Original = soma de todas as linhas selecionadas do extrato
@@ -979,8 +986,8 @@ export function ReconcileStep({
             </section>
           )}
 
-          {/* VINCULADAS MANUALMENTE — usuário resolveu órfão via "É o mesmo" */}
-          {manualLinkedRows.length > 0 && (
+          {/* VINCULADAS MANUALMENTE — vínculos manuais fora da seção "Só no sistema" */}
+          {manualLinkedRows.length > 0 && !isCardMode && (
             <section>
               <header className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2 text-sky-700">
@@ -1385,31 +1392,54 @@ export function ReconcileStep({
 
 
           {/* Q4 — SÓ NO SISTEMA (orphans) */}
-          {isCardMode && !orphansLoading && orphans.length > 0 && (
+          {isCardMode && !orphansLoading && (remainingOrphans.length > 0 || manuallyResolvedOrphanRows.length > 0) && (
             <section>
               <header className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2 text-destructive">
                   <AlertTriangle className="h-4 w-4" />
                   Só no sistema
-                  <Badge variant="secondary" className="text-[10px]">{orphans.length}</Badge>
+                  <Badge variant="secondary" className="text-[10px]">{remainingOrphans.length}</Badge>
+                  {manuallyResolvedOrphanRows.length > 0 && (
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700">
+                      {manuallyResolvedOrphanRows.length} resolvido{manuallyResolvedOrphanRows.length === 1 ? "" : "s"}
+                    </Badge>
+                  )}
                   <span className="text-[10px] text-muted-foreground font-normal">
-                    — {orphans.reduce((s, o) => s + Math.abs(o.amount), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    — {remainingOrphans.reduce((s, o) => s + Math.abs(o.amount), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                   </span>
                 </h3>
                 <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setShowOrphans((v) => !v)}>
                   {showOrphans ? "Ocultar" : "Mostrar"}
                 </Button>
               </header>
-              <Alert className="mb-2 py-2 px-3 bg-destructive/5 border-destructive/30">
-                <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
-                <AlertDescription className="text-[11px] leading-snug ml-1">
-                  Estes valores <strong>não existem no extrato</strong> deste ciclo. Como o extrato vem direto do banco/cartão e é a fonte da verdade, provavelmente são duplicatas, ghosts, lançamentos manuais errados ou pertencem a outra fatura. Revise e exclua os incorretos para a fatura bater.
-                </AlertDescription>
-              </Alert>
+              {remainingOrphans.length > 0 ? (
+                <Alert className="mb-2 py-2 px-3 bg-destructive/5 border-destructive/30">
+                  <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                  <AlertDescription className="text-[11px] leading-snug ml-1">
+                    Estes valores <strong>não existem no extrato</strong> deste ciclo. Como o extrato vem direto do banco/cartão e é a fonte da verdade, provavelmente são duplicatas, ghosts, lançamentos manuais errados ou pertencem a outra fatura. Revise e exclua os incorretos para a fatura bater.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="mb-2 py-2 px-3 bg-emerald-500/5 border-emerald-500/30">
+                  <Check className="h-3.5 w-3.5 text-emerald-700" />
+                  <AlertDescription className="text-[11px] leading-snug ml-1 text-emerald-800">
+                    Todos os itens desta seção foram resolvidos manualmente.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {manuallyResolvedOrphanRows.length > 0 && (
+                <div className="mb-2 border border-emerald-500/30 rounded-lg overflow-hidden divide-y bg-emerald-500/[0.04]">
+                  <header className="px-3 py-2 text-xs font-semibold flex items-center gap-2 text-emerald-700 bg-emerald-500/5 border-b border-emerald-500/20">
+                    <Link2 className="h-3.5 w-3.5" /> Resolvidos com “É o mesmo”
+                    <Badge variant="secondary" className="text-[10px]">{manuallyResolvedOrphanRows.length}</Badge>
+                  </header>
+                  {manuallyResolvedOrphanRows.map(renderManualLinkRow)}
+                </div>
+              )}
               {showOrphans && (
-                <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
-                  {orphans
-                    .filter((o) => !linkedOrphans.has(o.id))
+                remainingOrphans.length > 0 ? (
+                  <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
+                    {remainingOrphans
                     .slice()
                     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
                     .map((o) => {
@@ -1510,7 +1540,8 @@ export function ReconcileStep({
                         </div>
                       );
                     })}
-                </div>
+                  </div>
+                ) : null
               )}
             </section>
           )}

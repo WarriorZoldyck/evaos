@@ -1,32 +1,23 @@
-## Objetivo
-Voltar, no fluxo de importação de extrato (Análises EVA), ao seletor de categoria em **3 campos em cascata** — Categoria → Subcategoria → Sub-subcategoria — como já existe no formulário de lançamento. O combobox atual (drilldown com popover) está sendo percebido como incompleto e menos claro para descer níveis.
+## Plano
 
-## Onde alterar
-Somente componentes do fluxo de importação — nada muda no formulário de lançamento nem em outros lugares:
+1. **Padronizar o comportamento do botão “É o mesmo”**
+   - Usar um único handler para todos os lugares onde o botão aparece.
+   - Ao clicar, definir a ação da linha como `vincular` e salvar o lançamento do sistema como destino.
+   - Remover a linha da área onde ela estava causando dúvida visual, quando aplicável.
 
-- `src/components/lancamentos/import/ReconcileStep.tsx`
-  - Substituir os 3 usos de `CategoryPathCombobox` (linhas ~294, ~1277, ~1356) por um novo componente cascade em coluna.
-  - Locais afetados:
-    1. Painel `InlineReviewRow` (revisão inline "Criar novo").
-    2. Célula "Categoria" da tabela de novos lançamentos.
-    3. `InlineReviewRow` embutida na tabela (mesmo componente do item 1, alcançado via render).
+2. **Dar feedback visual imediato para o usuário**
+   - Fazer a linha mudar claramente para um estado conciliado/manual logo após o clique.
+   - Exibir um bloco/linha de confirmação “Vinculado manualmente” com as duas pontas: Extrato ↔ EVA.
+   - Manter botão “Desfazer” para o usuário reverter sem perder controle.
 
-- Novo componente: `src/components/lancamentos/import/CategoryCascadeSelect.tsx`
-  - Reutiliza `CategorySelectWithCreate` (mesmo componente do form principal), montando os 3 selects em cascata.
-  - Props idênticas às usadas hoje pelo `CategoryPathCombobox` no import: `categories`, `value`, `type`, `onChange`, `onCreateCategory`.
-  - Internamente:
-    - Deriva `rootCategories`, `subCategories(parentId)`, `subSubCategories(parentId)` a partir da mesma lista `mergedCategories` já passada.
-    - Filtra respeitando `type` (receita/despesa/ambos), como o combobox faz hoje.
-    - Ao trocar categoria pai, zera os filhos.
-    - Cria categoria via `onCreateCategory({ name, parentName, type })` — assinatura já existente.
-  - Layout: `grid grid-cols-3 gap-2` na coluna da tabela; no `InlineReviewRow` mantém o mesmo grid já usado.
+3. **Corrigir o caso que parece “não fazer nada”**
+   - Revisar especialmente o botão “É o mesmo” dentro de “Só no sistema”, porque ali o clique pode estar apenas gravando estado sem deslocar/atualizar a linha de forma perceptível.
+   - Garantir que o lançamento do sistema vinculado não continue aparecendo como pendente na lista “Só no sistema”.
 
-## O que NÃO muda
-- `CategoryPathCombobox.tsx` permanece no repo (usado apenas aqui — pode ser removido depois, mas fica como fallback nesta iteração).
-- Formulário de lançamento (`TransactionFormModal.tsx`) fica intocado.
-- Lógica de sugestão histórica (`SuggestionWhyPopover`, hook `useCategorySuggestions`) e de matching não muda.
-- `mergedCategories` continua sendo a fonte (já contém todas as categorias, incluindo cross-context via `allCategories`).
+4. **Preservar a importação final**
+   - Confirmar que linhas marcadas como `vincular` continuam entrando em `rowsToLink` no envio final.
+   - Não alterar o fluxo de “Manter só o do extrato” nem o fluxo de criação/categorização.
 
-## Racional
-- O usuário confirma que "descer a níveis sub e sub da sub era melhor no seletor" — o padrão de 3 selects já existe no app e é o mesmo que ele usa ao criar lançamento manualmente, então a familiaridade e a visibilidade dos níveis voltam.
-- Ao reaproveitar `CategorySelectWithCreate` a criação inline de categoria/subcategoria continua funcionando sem regressão.
+5. **Validar com logs e preview**
+   - Conferir novamente logs do Vite/console após a alteração.
+   - Se possível, validar no preview que o clique muda a UI imediatamente e que o estado fica reversível.
