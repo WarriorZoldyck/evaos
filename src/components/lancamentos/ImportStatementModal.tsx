@@ -2492,11 +2492,10 @@ export function ImportStatementModal({
 
 
         {rows.length > 0 && step === "reconcile" && (() => {
-          const counts = { vincular: 0, criar: 0, ignorar: 0, pendente: 0 };
+          const counts = { vincular: 0, criar: 0, ignorar: 0 };
           let netToCreate = 0;
           let netToLink = 0;
           let creditsTotal = 0;
-          let pendingTotal = 0;
           rows.forEach((r, i) => {
             const disp = getRowDisposition(i);
             const signed = signedStatementAmount(r);
@@ -2508,11 +2507,8 @@ export function ImportStatementModal({
               counts.criar++;
               netToCreate += signed;
               if (r.type === "receita") creditsTotal += Math.abs(r.amount);
-            } else if (disp === "ignore-explicit") {
-              counts.ignorar++;
             } else {
-              counts.pendente++;
-              pendingTotal += Math.abs(r.amount);
+              counts.ignorar++;
             }
           });
           const toImport = counts.vincular + counts.criar;
