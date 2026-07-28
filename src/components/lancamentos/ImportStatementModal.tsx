@@ -2516,6 +2516,40 @@ export function ImportStatementModal({
           </DialogFooter>
         )}
 
+      <AlertDialog open={confirmDivergenceOpen} onOpenChange={setConfirmDivergenceOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>A importação não bate com o valor da fatura</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Revise se existem linhas duplicadas no extrato, lançamentos ausentes
+                  (IOF internacional, anuidades, cartões adicionais) ou correspondências erradas.
+                </p>
+                {pendingDivergenceInfo && (
+                  <p className="text-destructive font-medium">
+                    Diferença: {pendingDivergenceInfo.diff.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    {" "}— esperado {pendingDivergenceInfo.expected.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar e revisar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setAcknowledgeDivergence(true);
+                setConfirmDivergenceOpen(false);
+                setTimeout(() => handleImport(), 0);
+              }}
+            >
+              Importar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </>
   );
 
