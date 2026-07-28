@@ -1,46 +1,74 @@
-## Diagnóstico
 
-Confirmado no código:
+## Objetivo
 
-- Em `ImportStatementModal.tsx` (linhas ~981 e ~1039), linhas sem match nascem com `matchActions[i] = "ignorar"`. Mas `explicitlyIgnored` fica vazio.
-- Em `ReconcileStep.tsx` (linhas 1365-1370), com `willBeCreated=false` e `explicitlyIgnored.has(i)=false`, a linha exibe o badge vermelho **"Sem decisão — bloqueia o Importar"** e, no rodapé, o botão auxiliar mostra **"Desfazer ignorar"** (linha 1491) — como se o usuário já tivesse ignorado.
-- `getRowDisposition` (linha 1458) marca a linha como `pending`, incrementa `counts.pendente > 0` e o botão Importar (linha 2596) fica desabilitado.
-- O rótulo esquerdo do toggle é **"Editar"** (linha 1442), não "Ignorar", contradizendo o modelo mental do usuário.
+Adicionar um painel lateral à página **Metas** (`/metas`) com 4 cards financeiros do contexto ativo (Pessoal/Empresa) e um "plano de ação" que aparece quando a meta deixa a sobra do ano negativa. O plano começa com heurística local e ganha um botão **"Pedir sugestão à EVA"** que chama a IA sob demanda.
 
-Ou seja: o toggle já é a decisão que o usuário quer (off=ignorar, on=criar), mas o código trata "off" como "pendente" e ainda expõe um botão redundante "Ignorar de vez / Desfazer ignorar".
+## Layout
 
-## Plano
+Reestruturar `src/pages/Metas.tsx` de `max-w-2xl mx-auto` para grid `lg:grid-cols-[320px_1fr]`:
 
-### `src/components/lancamentos/import/ReconcileStep.tsx`
+```text
+┌──────────────┬──────────────────────────────┐
+│  Painel      │  Cofrinhos (conteúdo atual)  │
+│  lateral     │  - Total guardado            │
+│              │  - Lista de metas            │
+│  - Saldo     │                              │
+│  - Gasto ano │                              │
+│  - Projeção  │                              │
+│  - Sobra     │                              │
+│  - Plano ⚠️  │                              │
+└──────────────┴──────────────────────────────┘
+```
 
-1. Trocar o rótulo esquerdo do toggle de **"Editar"** para **"Ignorar"** (linha ~1442). Manter "Criar" à direita. Ajustar `title`/`ariaLabel` para "Ligue para criar, desligue para ignorar esta linha".
-2. Remover o botão auxiliar "Ignorar de vez / Desfazer ignorar" (linhas 1478-1492) — a decisão vive só no toggle.
-3. Remover o badge **"Sem decisão — bloqueia o Importar"** (linhas 1365-1370). Estado OFF passa a exibir um badge neutro discreto **"Será ignorado"** (cinza) para deixar claro que a linha não será importada.
-4. Manter o badge âmbar **"Rascunho — ative o toggle para criar"** apenas quando a linha estiver em `criar` porém ainda não `reviewed` (situação legada de sessão restaurada).
-5. Toggle `onCheckedChange`:
-   - `checked=true` → como hoje: confirma edição, seta ação `criar` e `reviewedRows`.
-   - `checked=false` → seta ação `ignorar`, remove de `reviewedRows` e marca `explicitlyIgnored` (novo callback booleano). Ou seja, desligar é uma decisão consciente.
-6. Estado visual da linha quando OFF: opacidade leve (`opacity-60`) na coluna de descrição/categoria para reforçar "esta linha não será importada", sem bloquear edição (se o usuário quiser editar antes de ligar).
+Em telas < `lg`, painel vai para o topo (empilhado). No lugar demarcado em vermelho pelo usuário, hoje só existe espaço vazio no grid — o painel ocupa exatamente essa coluna.
 
-### `src/components/lancamentos/ImportStatementModal.tsx`
+## Cards do painel
 
-1. No seeding inicial de `matchActions` (linhas ~972-984 e ~1034-1049): linhas sem match continuam nascendo como `"ignorar"`, e agora também são adicionadas a `explicitlyIgnored` desde o início (a posição padrão do toggle já É a decisão de ignorar).
-2. Ao restaurar sessão persistida, aplicar a mesma regra: qualquer linha `matchActions[i] === "ignorar"` sem um `matchTarget` conta como `explicitlyIgnored`.
-3. `getRowDisposition` (linha 1458): remover o retorno `"pending"`. OFF sempre resolve para `ignore-explicit`. `counts.pendente` deixa de existir como conceito de bloqueio.
-4. Botão Importar (linha ~2596): remover a trava por `pendente > 0`. Continua bloqueado apenas por divergência não-confirmada (fluxo existente) e por `rows.length === 0`.
-5. Toast de "Total pendente" (linha ~1492): remover, já não se aplica.
-6. Ligar novos callbacks passados ao `ReconcileStep`: `onExplicitIgnore(i, true)` ao desligar o toggle.
+Um card por métrica, usando `Card` do shadcn com tokens semânticos (sem `text-white` hardcoded):
 
-### O que NÃO muda
+1. **Saldo total do contexto** — soma de saldos atuais das contas filtradas pelo contexto ativo.
+2. **Gasto acumulado no ano** — soma de `transactions` `type=despesa` com `payment_date` entre 01/jan e hoje, filtrado por contexto (exclui transferências internas via `is_internal_transfer=false`).
+3. **Projeção de saídas do ano** — soma de despesas pendentes até 31/dez + projeção de recorrentes via lógica já existente em `useRecurringTransactions`.
+4. **Sobra estimada** — `saldo - projeção`. Se ≤ 0, card fica em `bg-destructive/10 border-destructive/40` e mostra o gap.
 
-- Divergência de totais (extrato vs. decisões) continua exigindo confirmação via botão "Total informado pelo banco".
-- Fluxo de vincular (linhas com match) permanece intacto.
-- Persistência de sessão (`localStorage`) permanece.
+Todos reagem ao seletor global de contexto (via `useCompany()` — já usado na página).
 
-### Verificação
+## Plano de ação (déficit)
 
-- Abrir importação, subir um extrato novo: todas as linhas novas nascem com toggle à esquerda (OFF/Ignorar), rótulo "Ignorar / Criar", sem badge vermelho, sem botão "Desfazer ignorar".
-- Botão Importar habilita imediatamente (respeitando divergência).
-- Ligar um toggle: linha vira "Confirmada" e conta como criação; total resolvido atualiza.
-- Recarregar página: retomada mantém decisões e não regride para "sem decisão".
-- `tsgo` limpo nos dois arquivos.
+Aparece nos dois pontos combinados:
+
+**A) Card fixo no painel** — visível sempre que sobra ≤ 0 OU total de metas ativas > sobra. Mostra:
+- Gap consolidado em R$
+- Top 3 categorias de despesa do ano (heurística local: agrupa `transactions` por `category`, ordena por total, sugere corte proporcional para fechar o gap).
+- Botão **"Pedir sugestão à EVA"** → chama edge function.
+
+**B) Aviso no `GoalFormModal`** — no submit, se a nova/editada meta empurrar a sobra para negativo, abre um `AlertDialog` com o mesmo conteúdo do card, exigindo confirmação para salvar.
+
+## Edge function IA (nova)
+
+`supabase/functions/goal-action-plan/index.ts`:
+- Auth JWT obrigatória (padrão do projeto).
+- Recebe `{ gap_cents, top_categories: [{name, total_cents}], goal_name }`.
+- Chama Lovable AI Gateway (`google/gemini-2.5-flash`, chat completions padrão do projeto — sem AI SDK, seguindo o padrão de `eva-chat`).
+- Retorna `{ suggestions: string[] }` (3-5 ações concretas em pt-BR).
+- Trata 402/429 com toast padrão via `errorMapper`.
+
+Renderiza sugestões com `react-markdown` (já no projeto).
+
+## Hooks/helpers novos
+
+- `src/hooks/useMetasSidebarStats.ts` — agrega saldo/gasto/projeção/sobra a partir de `useAccounts`, `useTransactions` e `useRecurringTransactions` já existentes, memoizado por `contextKey`.
+- `src/hooks/useTopExpenseCategories.ts` — top N categorias do ano no contexto ativo.
+- `src/components/metas/MetasSidebar.tsx` — renderiza os 4 cards + card de plano.
+- `src/components/metas/ActionPlanDialog.tsx` — dialog compartilhado usado tanto pelo botão do painel quanto pelo `GoalFormModal`.
+
+## Escopo fora deste plano
+
+- Sem alterações no schema do banco.
+- Sem mexer em `MetaDetalhe`, apenas na listagem `/metas`.
+- Sem novas permissões/RLS — reusa consultas já autorizadas dos hooks existentes.
+
+## Arquivos afetados
+
+- **Novos**: `MetasSidebar.tsx`, `ActionPlanDialog.tsx`, `useMetasSidebarStats.ts`, `useTopExpenseCategories.ts`, `supabase/functions/goal-action-plan/index.ts`.
+- **Editados**: `src/pages/Metas.tsx` (grid + integração), `src/components/metas/GoalFormModal.tsx` (aviso no submit).
