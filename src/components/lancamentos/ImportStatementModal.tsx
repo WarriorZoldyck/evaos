@@ -1586,6 +1586,13 @@ export function ImportStatementModal({
     onClose();
   };
 
+  // Fluxo terminou (summary ou "nada a importar") — limpa sem confirmação.
+  const handleFinish = () => {
+    clearSession();
+    resetAll();
+    onClose();
+  };
+
   const handleViewNew = () => {
     const params = new URLSearchParams();
     params.set("category", "__sem_categoria__");
