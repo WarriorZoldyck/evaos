@@ -705,6 +705,117 @@ export function ImportStatementModal({
       // desmarca a linha na tela de revisão.
       setRows(parsed);
 
+      // Auto-preencher fornecedor/cliente pelo nome do estabelecimento
+      // (o texto bruto do extrato costuma ser o nome do fornecedor). Quando
+      // reconhecemos o contato, também tentamos herdar a descrição usada
+      // na transação mais recente para aquele contato — caso contrário a
+      // descrição fica em branco (o placeholder mostra o texto original).
+      (async () => {
+        try {
+          const [supRes, cliRes] = await Promise.all([
+            supabase.from("suppliers").select("id, name").eq("user_id", effectiveUserId),
+            supabase.from("clients").select("id, name").eq("user_id", effectiveUserId),
+          ]);
+          const supList: { id: string; name: string }[] = (supRes.data as any) || [];
+          const cliList: { id: string; name: string }[] = (cliRes.data as any) || [];
+          const supByName = new Map(supList.map((s) => [normalizeText(s.name), s]));
+          const cliByName = new Map(cliList.map((c) => [normalizeText(c.name), c]));
+
+          const initContacts: Record<number, { supplier_id?: string | null; client_id?: string | null }> = {};
+          const matchedSupplierIds = new Set<string>();
+          const matchedClientIds = new Set<string>();
+          const rowContact: Record<number, { type: "supplier" | "client"; id: string; name: string }> = {};
+
+          parsed.forEach((r: any, i: number) => {
+            const raw = (r.base_description || r.description || "").trim();
+            if (!raw) return;
+            const key = normalizeText(raw);
+            if (!key) return;
+            if (r.type === "receita") {
+              const hit = cliByName.get(key);
+              if (hit) {
+                initContacts[i] = { client_id: hit.id, supplier_id: null };
+                matchedClientIds.add(hit.id);
+                rowContact[i] = { type: "client", id: hit.id, name: hit.name };
+              }
+            } else {
+              const hit = supByName.get(key);
+              if (hit) {
+                initContacts[i] = { supplier_id: hit.id, client_id: null };
+                matchedSupplierIds.add(hit.id);
+                rowContact[i] = { type: "supplier", id: hit.id, name: hit.name };
+              }
+            }
+          });
+
+          // Buscar última descrição usada para cada contato reconhecido (últimos 180 dias).
+          const initDescriptions: Record<number, string> = {};
+          if (matchedSupplierIds.size > 0 || matchedClientIds.size > 0) {
+            const since = new Date();
+            since.setDate(since.getDate() - 180);
+            const sinceStr = since.toISOString().slice(0, 10);
+            const lastBySupplier = new Map<string, string>();
+            const lastByClient = new Map<string, string>();
+
+            if (matchedSupplierIds.size > 0) {
+              const { data } = await supabase
+                .from("transactions")
+                .select("supplier_id, description, payment_date")
+                .eq("user_id", effectiveUserId)
+                .in("supplier_id", Array.from(matchedSupplierIds))
+                .gte("payment_date", sinceStr)
+                .order("payment_date", { ascending: false });
+              (data || []).forEach((t: any) => {
+                if (t.supplier_id && !lastBySupplier.has(t.supplier_id) && t.description) {
+                  lastBySupplier.set(t.supplier_id, t.description);
+                }
+              });
+            }
+            if (matchedClientIds.size > 0) {
+              const { data } = await supabase
+                .from("transactions")
+                .select("client_id, description, payment_date")
+                .eq("user_id", effectiveUserId)
+                .in("client_id", Array.from(matchedClientIds))
+                .gte("payment_date", sinceStr)
+                .order("payment_date", { ascending: false });
+              (data || []).forEach((t: any) => {
+                if (t.client_id && !lastByClient.has(t.client_id) && t.description) {
+                  lastByClient.set(t.client_id, t.description);
+                }
+              });
+            }
+
+            Object.entries(rowContact).forEach(([idxStr, c]) => {
+              const idx = Number(idxStr);
+              const last = c.type === "supplier" ? lastBySupplier.get(c.id) : lastByClient.get(c.id);
+              if (last && normalizeText(last) !== normalizeText(c.name)) {
+                initDescriptions[idx] = last;
+              } else {
+                // Fornecedor conhecido, mas sem histórico útil → descrição em branco.
+                initDescriptions[idx] = "";
+              }
+            });
+          }
+
+          // Para linhas SEM fornecedor reconhecido, também limpar a descrição
+          // (o texto do extrato continua acessível via placeholder / bloco "Original:").
+          parsed.forEach((_r: any, i: number) => {
+            if (initDescriptions[i] === undefined && rowContact[i] === undefined) {
+              initDescriptions[i] = "";
+            }
+          });
+
+          setRowContacts((prev) => ({ ...initContacts, ...prev }));
+          setRowDescriptions((prev) => ({ ...initDescriptions, ...prev }));
+        } catch (e) {
+          // Falha silenciosa: pré-preenchimento é conveniência, não bloqueia importação.
+          console.warn("[ImportStatement] auto-fill supplier/description failed", e);
+        }
+      })();
+
+
+
 
       // Capture statement total reported by the bank (used to validate the import).
       const parsedStatementTotal = typeof result.statement_total === "number" && result.statement_total > 0
