@@ -140,6 +140,7 @@ export default function Metas() {
         onSave={createGoal}
         onUpdate={updateGoal}
       />
+      </div>
     </div>
   );
 }
