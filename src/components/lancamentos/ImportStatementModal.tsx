@@ -1533,6 +1533,8 @@ export function ImportStatementModal({
         dateTo: dto,
         status: importType === "cartao" ? "Pendente" : "Pago",
       });
+      // Import concluído com sucesso — apagar snapshot persistido.
+      clearSession();
       setStep("summary");
     }
   };
