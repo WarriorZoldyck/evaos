@@ -1492,20 +1492,8 @@ export function ImportStatementModal({
       return;
     }
 
-    // Guardrail: extrato é a fonte da verdade. Nenhuma linha pode ser
-    // descartada sem decisão explícita (vincular / criar / ignorar de vez).
-    const pendingIdxs = rows
-      .map((_, i) => i)
-      .filter((i) => getRowDisposition(i) === "pending");
-    if (pendingIdxs.length > 0) {
-      const total = pendingIdxs.reduce((s, i) => s + Math.abs(rows[i]?.amount || 0), 0);
-      toast({
-        title: `${pendingIdxs.length} lançamento${pendingIdxs.length > 1 ? "s" : ""} do extrato sem decisão`,
-        description: `Total pendente: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Ative "Criar" ou use "Ignorar de vez" em cada linha antes de importar — o extrato é a fonte da verdade.`,
-        variant: "destructive",
-      });
-      return;
-    }
+
+
 
     setImporting(true);
 
