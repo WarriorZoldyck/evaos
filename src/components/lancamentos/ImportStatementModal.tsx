@@ -834,8 +834,25 @@ export function ImportStatementModal({
             if (initDescriptions[i] === undefined) initDescriptions[i] = raw;
           });
 
-          setRowContacts((prev) => ({ ...initContacts, ...prev }));
-          setRowDescriptions((prev) => ({ ...initDescriptions, ...prev }));
+          setRowContacts((prev) => {
+            const next = { ...prev };
+            Object.entries(initContacts).forEach(([k, v]) => {
+              const cur = next[Number(k)];
+              const hasCur = !!(cur && (cur.supplier_id || cur.client_id));
+              if (!hasCur) next[Number(k)] = v;
+            });
+            return next;
+          });
+          setRowDescriptions((prev) => {
+            const next = { ...prev };
+            Object.entries(initDescriptions).forEach(([k, v]) => {
+              const cur = next[Number(k)];
+              if (cur === undefined || (typeof cur === "string" && cur.trim() === "")) {
+                next[Number(k)] = v;
+              }
+            });
+            return next;
+          });
         } catch (e) {
           // Falha silenciosa: pré-preenchimento é conveniência, não bloqueia importação.
           console.warn("[ImportStatement] auto-fill supplier/description failed", e);
