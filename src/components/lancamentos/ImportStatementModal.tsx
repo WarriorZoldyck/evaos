@@ -1465,23 +1465,15 @@ export function ImportStatementModal({
 
 
 
-  // Disposition of a single row in the reconcile step. The statement is the
-  // source of truth — every parsed row must fall into exactly one bucket
-  // BEFORE we can import. 'pending' means the user hasn't decided yet and
-  // the import must abort with a clear message rather than silently drop it.
-  const getRowDisposition = (i: number): "link" | "create" | "ignore-explicit" | "pending" => {
-    const action = matchActions[i] || "criar";
-    if (action === "vincular") {
-      return matchTargets[i] ? "link" : "pending";
-    }
-    if (action === "ignorar") {
-      return explicitlyIgnored.has(i) ? "ignore-explicit" : "pending";
-    }
-    // 'criar' — accept as long as we have SOMETHING to name the transaction.
-    // Reviewed rows already have a curated description; unreviewed ones fall
-    // back to either the edited draft or the original statement text.
-    const desc = (rowDescriptions[i] || rows[i]?.description || "").trim();
-    return desc ? "create" : "pending";
+  // Disposition of a single row. O toggle é a decisão: OFF = ignorar
+  // (explícito), ON = criar. Não existe "pendente" — se veio da fonte
+  // (extrato) sem match, nasce como ignorar; o usuário liga o toggle
+  // para criar. Vincular só existe quando há target.
+  const getRowDisposition = (i: number): "link" | "create" | "ignore-explicit" => {
+    const action = matchActions[i] || "ignorar";
+    if (action === "vincular" && matchTargets[i]) return "link";
+    if (action === "criar") return "create";
+    return "ignore-explicit";
   };
 
   const handleImport = async () => {
