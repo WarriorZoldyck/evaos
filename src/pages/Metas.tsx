@@ -34,7 +34,9 @@ export default function Metas() {
   };
 
   return (
-    <div className="metas-scope space-y-6 animate-fade-in max-w-2xl mx-auto">
+    <div className="metas-scope animate-fade-in grid gap-6 lg:grid-cols-[320px_1fr] max-w-6xl mx-auto">
+      <MetasSidebar goals={goals} />
+      <div className="space-y-6 min-w-0">
       {/* Header enxuto */}
       <div className="flex items-center justify-between gap-4">
         <div>
