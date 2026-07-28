@@ -1037,10 +1037,13 @@ export function ImportStatementModal({
       ).then((groupResults) => {
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
+        const nextIgnored = new Set<number>();
         rows.forEach((_, i) => {
-          // Novos lançamentos nascem desligados (ignorar) — o usuário ativa
-          // o toggle para revisar e confirmar a criação.
+          // Novos lançamentos nascem desligados (toggle à esquerda = Ignorar) e
+          // já são considerados uma decisão explícita. Ligar o toggle transforma
+          // em "Criar".
           nextActions[i] = "ignorar";
+          nextIgnored.add(i);
         });
         groupResults.flat().forEach(({ rowIdx, match }) => {
           if (match?.best) {
@@ -1048,10 +1051,12 @@ export function ImportStatementModal({
             // automaticamente, deixa o usuário confirmar com um clique.
             nextActions[rowIdx] = match.best.suggested ? "criar" : "vincular";
             nextTargets[rowIdx] = match.best.candidate.id;
+            nextIgnored.delete(rowIdx);
           }
         });
         setMatchActions(nextActions);
         setMatchTargets(nextTargets);
+        setExplicitlyIgnored(nextIgnored);
       });
       return;
     }
