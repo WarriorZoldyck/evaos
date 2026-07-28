@@ -34,7 +34,7 @@ interface ContactSelectWithCreateProps {
   placeholder?: string;
   /** "supplier" or "client" */
   type: "supplier" | "client";
-  onContactCreated: (newId: string) => void;
+  onContactCreated: (newId: string, newName: string) => void;
   disabled?: boolean;
 }
 
