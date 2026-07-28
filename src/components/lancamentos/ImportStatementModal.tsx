@@ -2586,15 +2586,7 @@ export function ImportStatementModal({
               )}
 
               <div className="flex items-center gap-2 flex-wrap justify-end">
-                {counts.pendente > 0 && (
-                  <span
-                    className="text-xs text-amber-600 dark:text-amber-400"
-                    title={`${counts.pendente} lançamento(s) do extrato (${fmt(pendingTotal)}) sem decisão — ative "Criar" ou "Ignorar de vez" antes de importar.`}
-                  >
-                    <strong>{counts.pendente}</strong> sem decisão
-                  </span>
-                )}
-                {hasDivergence && counts.pendente === 0 && (
+                {hasDivergence && (
                   <Button
                     variant={acknowledgeDivergence ? "secondary" : "outline"}
                     size="sm"
@@ -2608,7 +2600,7 @@ export function ImportStatementModal({
                     {acknowledgeDivergence ? "✓ Divergência confirmada" : `⚠ Divergência ${fmt(diff!)}`}
                   </Button>
                 )}
-                {toImport === 0 && counts.pendente === 0 ? (
+                {toImport === 0 ? (
                   <Button
                     onClick={handleFinish}
                     className="gap-2"
@@ -2621,13 +2613,11 @@ export function ImportStatementModal({
                 ) : (
                   <Button
                     onClick={handleImport}
-                    disabled={importing || counts.pendente > 0 || blockedByDivergence}
+                    disabled={importing || blockedByDivergence}
                     className="gap-2"
                     size="sm"
                     title={
-                      counts.pendente > 0
-                        ? "Existem linhas do extrato sem decisão — nada pode ser descartado em silêncio."
-                        : blockedByDivergence
+                      blockedByDivergence
                         ? "Confirme a divergência com o total do banco antes de importar."
                         : undefined
                     }
