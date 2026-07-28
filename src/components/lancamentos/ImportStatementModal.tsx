@@ -254,6 +254,8 @@ export function ImportStatementModal({
   const [amountRescaled, setAmountRescaled] = useState<boolean>(false);
   // When divergence > R$ 1,00, user must explicitly acknowledge to import.
   const [acknowledgeDivergence, setAcknowledgeDivergence] = useState(false);
+  const [confirmDivergenceOpen, setConfirmDivergenceOpen] = useState(false);
+  const [pendingDivergenceInfo, setPendingDivergenceInfo] = useState<{ diff: number; expected: number } | null>(null);
 
   // Create-new-card flow (nested modal)
   const [createCardOpen, setCreateCardOpen] = useState(false);
