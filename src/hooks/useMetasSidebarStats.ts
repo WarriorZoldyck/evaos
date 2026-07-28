@@ -15,6 +15,10 @@ export interface MetasSidebarStats {
   projectedYearOut: number;
   leftover: number; // saldo - saídas pendentes até fim do ano
   topCategories: TopCategory[];
+  totalIncomeYear: number;
+  avgIncomeMonth: number;
+  avgSpentMonth: number;
+  allCategories: TopCategory[];
   refetch: () => void;
 }
 
