@@ -2486,7 +2486,7 @@ export function ImportStatementModal({
               </Button>
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleClose}>Fechar</Button>
+              <Button variant="outline" onClick={handleFinish}>Fechar</Button>
               {importResult.created > 0 && (
                 <Button onClick={handleViewNew} className="gap-2">
                   Ver novos para categorizar <ArrowRight className="h-4 w-4" />
