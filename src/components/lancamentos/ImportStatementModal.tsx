@@ -2262,14 +2262,14 @@ export function ImportStatementModal({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleClose}
+                  onClick={handleCancelImport}
                   className="gap-1.5 text-muted-foreground hover:text-destructive"
                 >
                   Cancelar importação
                   <span aria-hidden>✕</span>
                 </Button>
               ) : (
-                <Button variant="outline" onClick={handleClose}>
+                <Button variant="outline" onClick={handleCancelImport}>
                   Cancelar
                 </Button>
               )}
