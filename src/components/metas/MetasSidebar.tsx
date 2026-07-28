@@ -72,19 +72,9 @@ export function MetasSidebar({ goals }: MetasSidebarProps) {
               label="Média de saídas / mês"
               value={fmt(stats.avgSpentMonth)}
             />
-            <StatCard
-              icon={<TrendingUp className="h-4 w-4" />}
-              label="Média de entradas / mês"
-              value={fmt(stats.avgIncomeMonth)}
-            />
           </Section>
 
           <Section title="Saídas">
-            <StatCard
-              icon={<ArrowDownCircle className="h-4 w-4" />}
-              label={`Gasto acumulado ${new Date().getFullYear()}`}
-              value={fmt(stats.spentYear)}
-            />
             <StatCard
               icon={<TrendingDown className="h-4 w-4" />}
               label="Média de saídas / mês"
@@ -92,7 +82,7 @@ export function MetasSidebar({ goals }: MetasSidebarProps) {
             />
             <StatCard
               icon={<CalendarClock className="h-4 w-4" />}
-              label="Projeção do ano (média)"
+              label="Projeção do ano (média × 12)"
               value={fmt(stats.projectedYearOut)}
             />
           </Section>
