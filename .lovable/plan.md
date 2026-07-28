@@ -1,74 +1,49 @@
-
 ## Objetivo
+Aproveitar a área vazia à esquerda da tela de Metas para expandir a sidebar com mais métricas úteis do contexto, incluindo médias e um breakdown completo por categoria.
 
-Adicionar um painel lateral à página **Metas** (`/metas`) com 4 cards financeiros do contexto ativo (Pessoal/Empresa) e um "plano de ação" que aparece quando a meta deixa a sobra do ano negativa. O plano começa com heurística local e ganha um botão **"Pedir sugestão à EVA"** que chama a IA sob demanda.
+## Mudanças
 
-## Layout
+### 1. Layout (`src/pages/Metas.tsx`)
+- Aumentar a largura da coluna da sidebar de `320px` para `380px` e adicionar um `gap` maior (de `gap-6` para `gap-8`) para desgrudar visualmente da coluna principal.
+- Aumentar o `max-w-6xl` para `max-w-7xl` para acomodar a sidebar mais larga sem espremer os cofrinhos.
 
-Reestruturar `src/pages/Metas.tsx` de `max-w-2xl mx-auto` para grid `lg:grid-cols-[320px_1fr]`:
+### 2. Novas métricas (`src/hooks/useMetasSidebarStats.ts`)
+Adicionar ao hook:
+- **`totalIncomeYear`**: soma de todas as receitas (`type = 'receita'`, `status = 'Pago'`) do ano no contexto.
+- **`avgIncomeMonth`**: média mensal de entradas — `totalIncomeYear / (mês atual)`.
+- **`avgSpentMonth`**: média mensal de saídas pagas — `spentYear / (mês atual)`.
+- **`projectedYearOutByAverage`**: nova projeção baseada em média — `avgSpentMonth * 12` (substitui a projeção atual que somava só pendentes conhecidos, dando resultado mais realista para quem não lança tudo com antecedência).
+- **`allCategories`**: lista completa (não só top 3) de categorias com totais gastos no ano, ordenada desc. Já é calculada no `catMap` — apenas expor toda a lista.
 
-```text
-┌──────────────┬──────────────────────────────┐
-│  Painel      │  Cofrinhos (conteúdo atual)  │
-│  lateral     │  - Total guardado            │
-│              │  - Lista de metas            │
-│  - Saldo     │                              │
-│  - Gasto ano │                              │
-│  - Projeção  │                              │
-│  - Sobra     │                              │
-│  - Plano ⚠️  │                              │
-└──────────────┴──────────────────────────────┘
-```
+### 3. Sidebar (`src/components/metas/MetasSidebar.tsx`)
+Reorganizar em seções visuais:
 
-Em telas < `lg`, painel vai para o topo (empilhado). No lugar demarcado em vermelho pelo usuário, hoje só existe espaço vazio no grid — o painel ocupa exatamente essa coluna.
+**Seção "Saldo & Entradas"**
+- Saldo total (mantém)
+- Total de entradas no ano (novo)
+- Média de entradas / mês (novo)
 
-## Cards do painel
+**Seção "Saídas"**
+- Gasto acumulado no ano (mantém)
+- Média de saídas / mês (novo)
+- Projeção de saídas do ano — agora baseada em média (label atualizado: "Projeção do ano (média)")
 
-Um card por métrica, usando `Card` do shadcn com tokens semânticos (sem `text-white` hardcoded):
+**Seção "Resultado"**
+- Sobra estimada (mantém, mas usa a nova projeção por média)
+- Card de alerta de plano de ação (mantém, se `hasDeficit`)
 
-1. **Saldo total do contexto** — soma de saldos atuais das contas filtradas pelo contexto ativo.
-2. **Gasto acumulado no ano** — soma de `transactions` `type=despesa` com `payment_date` entre 01/jan e hoje, filtrado por contexto (exclui transferências internas via `is_internal_transfer=false`).
-3. **Projeção de saídas do ano** — soma de despesas pendentes até 31/dez + projeção de recorrentes via lógica já existente em `useRecurringTransactions`.
-4. **Sobra estimada** — `saldo - projeção`. Se ≤ 0, card fica em `bg-destructive/10 border-destructive/40` e mostra o gap.
+**Seção "Gastos por categoria"** (nova, colapsável/scrollável)
+- Card contendo lista de TODAS as categorias com:
+  - Nome
+  - Valor gasto no ano
+  - Barra de progresso mostrando % do total
+- Ordenada do maior para o menor
+- `max-h-[400px] overflow-y-auto` para não estourar a tela quando houver muitas categorias
 
-Todos reagem ao seletor global de contexto (via `useCompany()` — já usado na página).
+### 4. Ajustes de cálculo
+- `leftover` passa a usar `projectedYearOutByAverage` no lugar de `pendingOutRemaining` para refletir o mesmo racional da nova projeção — evita mostrar sobra otimista quando o usuário não lança pendências futuras.
+- `topCategories` (usado no `ActionPlanDialog`) continua sendo os top 3 da lista completa.
 
-## Plano de ação (déficit)
-
-Aparece nos dois pontos combinados:
-
-**A) Card fixo no painel** — visível sempre que sobra ≤ 0 OU total de metas ativas > sobra. Mostra:
-- Gap consolidado em R$
-- Top 3 categorias de despesa do ano (heurística local: agrupa `transactions` por `category`, ordena por total, sugere corte proporcional para fechar o gap).
-- Botão **"Pedir sugestão à EVA"** → chama edge function.
-
-**B) Aviso no `GoalFormModal`** — no submit, se a nova/editada meta empurrar a sobra para negativo, abre um `AlertDialog` com o mesmo conteúdo do card, exigindo confirmação para salvar.
-
-## Edge function IA (nova)
-
-`supabase/functions/goal-action-plan/index.ts`:
-- Auth JWT obrigatória (padrão do projeto).
-- Recebe `{ gap_cents, top_categories: [{name, total_cents}], goal_name }`.
-- Chama Lovable AI Gateway (`google/gemini-2.5-flash`, chat completions padrão do projeto — sem AI SDK, seguindo o padrão de `eva-chat`).
-- Retorna `{ suggestions: string[] }` (3-5 ações concretas em pt-BR).
-- Trata 402/429 com toast padrão via `errorMapper`.
-
-Renderiza sugestões com `react-markdown` (já no projeto).
-
-## Hooks/helpers novos
-
-- `src/hooks/useMetasSidebarStats.ts` — agrega saldo/gasto/projeção/sobra a partir de `useAccounts`, `useTransactions` e `useRecurringTransactions` já existentes, memoizado por `contextKey`.
-- `src/hooks/useTopExpenseCategories.ts` — top N categorias do ano no contexto ativo.
-- `src/components/metas/MetasSidebar.tsx` — renderiza os 4 cards + card de plano.
-- `src/components/metas/ActionPlanDialog.tsx` — dialog compartilhado usado tanto pelo botão do painel quanto pelo `GoalFormModal`.
-
-## Escopo fora deste plano
-
-- Sem alterações no schema do banco.
-- Sem mexer em `MetaDetalhe`, apenas na listagem `/metas`.
-- Sem novas permissões/RLS — reusa consultas já autorizadas dos hooks existentes.
-
-## Arquivos afetados
-
-- **Novos**: `MetasSidebar.tsx`, `ActionPlanDialog.tsx`, `useMetasSidebarStats.ts`, `useTopExpenseCategories.ts`, `supabase/functions/goal-action-plan/index.ts`.
-- **Editados**: `src/pages/Metas.tsx` (grid + integração), `src/components/metas/GoalFormModal.tsx` (aviso no submit).
+## Fora de escopo
+- Não mexer no `ActionPlanDialog`, `GoalFormModal`, edge function ou lógica de metas em si.
+- Sem novos endpoints/tabelas — tudo derivado das transações já buscadas.
