@@ -2649,10 +2649,9 @@ export function ImportStatementModal({
               onClick={() => {
                 setAcknowledgeDivergence(true);
                 setConfirmDivergenceOpen(false);
-                setTimeout(() => handleImport(), 0);
               }}
             >
-              Importar mesmo assim
+              Concordo, liberar importação
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
