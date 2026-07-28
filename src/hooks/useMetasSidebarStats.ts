@@ -38,6 +38,10 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     projectedYearOut: 0,
     leftover: 0,
     topCategories: [],
+    totalIncomeYear: 0,
+    avgIncomeMonth: 0,
+    avgSpentMonth: 0,
+    allCategories: [],
   });
 
   const contextKey = isPersonal ? "personal" : selectedCompanyId || "none";
