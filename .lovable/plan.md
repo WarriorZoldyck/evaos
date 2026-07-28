@@ -1,29 +1,46 @@
 ## Diagnóstico
 
-Duas causas confirmadas para o comportamento reportado:
+Confirmado no código:
 
-1. **Descrição aparece como "máscara" (placeholder cinza) e fornecedor fica "(opcional)":** No `ImportStatementModal.tsx`, o merge do auto-preenchimento é `{ ...initDescriptions, ...prev }` (linhas 837-838). O `prev` sempre sobrescreve o `initDescriptions`. Quando o usuário já tem uma sessão persistida no `localStorage` (auto-save do fluxo antigo, onde a regra populava strings vazias e contatos vazios), o restore repovoa `rowDescriptions` / `rowContacts` com esses valores vazios; o auto-fill roda depois mas não consegue sobrescrever. Resultado: descrição fica `""` → o `Input` mostra `placeholder={r.description}` em cinza (parece máscara) e `canConfirm=false` → toggle "Criar" desabilitado. Fornecedor idem.
+- Em `ImportStatementModal.tsx` (linhas ~981 e ~1039), linhas sem match nascem com `matchActions[i] = "ignorar"`. Mas `explicitlyIgnored` fica vazio.
+- Em `ReconcileStep.tsx` (linhas 1365-1370), com `willBeCreated=false` e `explicitlyIgnored.has(i)=false`, a linha exibe o badge vermelho **"Sem decisão — bloqueia o Importar"** e, no rodapé, o botão auxiliar mostra **"Desfazer ignorar"** (linha 1491) — como se o usuário já tivesse ignorado.
+- `getRowDisposition` (linha 1458) marca a linha como `pending`, incrementa `counts.pendente > 0` e o botão Importar (linha 2596) fica desabilitado.
+- O rótulo esquerdo do toggle é **"Editar"** (linha 1442), não "Ignorar", contradizendo o modelo mental do usuário.
 
-2. **Efeito colateral do estilo click-to-edit:** com `border-transparent bg-transparent`, o Input vazio fica visualmente indistinguível de um label "com máscara" — reforça a confusão.
+Ou seja: o toggle já é a decisão que o usuário quer (off=ignorar, on=criar), mas o código trata "off" como "pendente" e ainda expõe um botão redundante "Ignorar de vez / Desfazer ignorar".
 
-## Plano de correção
+## Plano
 
-### Arquivo: `src/components/lancamentos/ImportStatementModal.tsx`
+### `src/components/lancamentos/import/ReconcileStep.tsx`
 
-- Trocar o merge de auto-preenchimento para **priorizar valores não-vazios**:
-  - `rowDescriptions`: para cada índice em `initDescriptions`, aplicar só se `prev[i]` estiver ausente **ou** string vazia/whitespace. Preserva edições reais do usuário; sobrescreve os `""` legados salvos por sessões antigas.
-  - `rowContacts`: para cada índice em `initContacts`, aplicar só se `prev[i]` não tiver `supplier_id` nem `client_id` preenchidos.
-- Como esse fluxo só roda logo após parse de um novo upload, não há risco de pisar em edições recentes do usuário.
+1. Trocar o rótulo esquerdo do toggle de **"Editar"** para **"Ignorar"** (linha ~1442). Manter "Criar" à direita. Ajustar `title`/`ariaLabel` para "Ligue para criar, desligue para ignorar esta linha".
+2. Remover o botão auxiliar "Ignorar de vez / Desfazer ignorar" (linhas 1478-1492) — a decisão vive só no toggle.
+3. Remover o badge **"Sem decisão — bloqueia o Importar"** (linhas 1365-1370). Estado OFF passa a exibir um badge neutro discreto **"Será ignorado"** (cinza) para deixar claro que a linha não será importada.
+4. Manter o badge âmbar **"Rascunho — ative o toggle para criar"** apenas quando a linha estiver em `criar` porém ainda não `reviewed` (situação legada de sessão restaurada).
+5. Toggle `onCheckedChange`:
+   - `checked=true` → como hoje: confirma edição, seta ação `criar` e `reviewedRows`.
+   - `checked=false` → seta ação `ignorar`, remove de `reviewedRows` e marca `explicitlyIgnored` (novo callback booleano). Ou seja, desligar é uma decisão consciente.
+6. Estado visual da linha quando OFF: opacidade leve (`opacity-60`) na coluna de descrição/categoria para reforçar "esta linha não será importada", sem bloquear edição (se o usuário quiser editar antes de ligar).
 
-### Arquivo: `src/components/lancamentos/import/ReconcileStep.tsx`
+### `src/components/lancamentos/ImportStatementModal.tsx`
 
-- Ajustar o estilo do `Input` de descrição para não parecer "máscara" quando vazio: manter o visual leve mas com uma borda pontilhada discreta (`border-dashed border-muted-foreground/30`) quando o valor está vazio, e borda normal quando preenchido. Isso deixa claro que o campo é editável mesmo com pouco contraste.
+1. No seeding inicial de `matchActions` (linhas ~972-984 e ~1034-1049): linhas sem match continuam nascendo como `"ignorar"`, e agora também são adicionadas a `explicitlyIgnored` desde o início (a posição padrão do toggle já É a decisão de ignorar).
+2. Ao restaurar sessão persistida, aplicar a mesma regra: qualquer linha `matchActions[i] === "ignorar"` sem um `matchTarget` conta como `explicitlyIgnored`.
+3. `getRowDisposition` (linha 1458): remover o retorno `"pending"`. OFF sempre resolve para `ignore-explicit`. `counts.pendente` deixa de existir como conceito de bloqueio.
+4. Botão Importar (linha ~2596): remover a trava por `pendente > 0`. Continua bloqueado apenas por divergência não-confirmada (fluxo existente) e por `rows.length === 0`.
+5. Toast de "Total pendente" (linha ~1492): remover, já não se aplica.
+6. Ligar novos callbacks passados ao `ReconcileStep`: `onExplicitIgnore(i, true)` ao desligar o toggle.
+
+### O que NÃO muda
+
+- Divergência de totais (extrato vs. decisões) continua exigindo confirmação via botão "Total informado pelo banco".
+- Fluxo de vincular (linhas com match) permanece intacto.
+- Persistência de sessão (`localStorage`) permanece.
 
 ### Verificação
 
-- Após o deploy, o usuário simoespaula deve:
-  1. Recarregar a tela — o auto-fill sobrescreve os `""` legados restaurados da sessão.
-  2. Ver descrição preenchida com o texto do extrato (ex.: "SPAY *POLIMPORT - CO 12/12").
-  3. Ver fornecedor pré-preenchido quando houver match (exato ou fuzzy).
-  4. O toggle "Criar" fica habilitado porque `canConfirm` passa a ser `true`.
-- `tsgo` no arquivo alterado.
+- Abrir importação, subir um extrato novo: todas as linhas novas nascem com toggle à esquerda (OFF/Ignorar), rótulo "Ignorar / Criar", sem badge vermelho, sem botão "Desfazer ignorar".
+- Botão Importar habilita imediatamente (respeitando divergência).
+- Ligar um toggle: linha vira "Confirmada" e conta como criação; total resolvido atualiza.
+- Recarregar página: retomada mantém decisões e não regride para "sem decisão".
+- `tsgo` limpo nos dois arquivos.

@@ -412,7 +412,18 @@ export function ImportStatementModal({
     setRowDescriptions(s.rowDescriptions || {});
     setRowContacts(s.rowContacts || {});
     setReviewedRows(new Set(s.reviewedRows || []));
-    setExplicitlyIgnored(new Set(s.explicitlyIgnored || []));
+    // Backfill: qualquer linha com ação "ignorar" (sem target vinculado) é
+    // considerada decisão explícita — o toggle é a decisão, não há "pendente".
+    const restoredActions = s.matchActions || {};
+    const restoredTargets = s.matchTargets || {};
+    const restoredIgnored = new Set<number>(s.explicitlyIgnored || []);
+    Object.keys(restoredActions).forEach((k) => {
+      const idx = Number(k);
+      if (restoredActions[idx] === "ignorar" && !restoredTargets[idx]) {
+        restoredIgnored.add(idx);
+      }
+    });
+    setExplicitlyIgnored(restoredIgnored);
     setExtraCategories(s.extraCategories || []);
     setPromotedOrphanIds(new Set(s.promotedOrphanIds || []));
     setPendingResume(null);
@@ -971,18 +982,22 @@ export function ImportStatementModal({
       findMatches(lines, bankId, walletId, null).then((res) => {
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
+        const nextIgnored = new Set<number>();
         rows.forEach((_, i) => {
           if (res[i]?.best) {
             nextActions[i] = res[i].best!.suggested ? "criar" : "vincular";
             nextTargets[i] = res[i].best!.candidate.id;
           } else {
-            // Novos lançamentos nascem desligados — o usuário ativa o toggle
-            // para revisar e confirmar a criação (evita import de lixo).
+            // Novos lançamentos nascem desligados (toggle à esquerda = Ignorar).
+            // Isso já é uma decisão consciente por padrão — o usuário liga o
+            // toggle para transformar em "Criar". Sem estado "pendente".
             nextActions[i] = "ignorar";
+            nextIgnored.add(i);
           }
         });
         setMatchActions(nextActions);
         setMatchTargets(nextTargets);
+        setExplicitlyIgnored(nextIgnored);
       });
       return;
     }
@@ -1033,10 +1048,13 @@ export function ImportStatementModal({
       ).then((groupResults) => {
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
+        const nextIgnored = new Set<number>();
         rows.forEach((_, i) => {
-          // Novos lançamentos nascem desligados (ignorar) — o usuário ativa
-          // o toggle para revisar e confirmar a criação.
+          // Novos lançamentos nascem desligados (toggle à esquerda = Ignorar) e
+          // já são considerados uma decisão explícita. Ligar o toggle transforma
+          // em "Criar".
           nextActions[i] = "ignorar";
+          nextIgnored.add(i);
         });
         groupResults.flat().forEach(({ rowIdx, match }) => {
           if (match?.best) {
@@ -1044,10 +1062,12 @@ export function ImportStatementModal({
             // automaticamente, deixa o usuário confirmar com um clique.
             nextActions[rowIdx] = match.best.suggested ? "criar" : "vincular";
             nextTargets[rowIdx] = match.best.candidate.id;
+            nextIgnored.delete(rowIdx);
           }
         });
         setMatchActions(nextActions);
         setMatchTargets(nextTargets);
+        setExplicitlyIgnored(nextIgnored);
       });
       return;
     }
@@ -1445,23 +1465,15 @@ export function ImportStatementModal({
 
 
 
-  // Disposition of a single row in the reconcile step. The statement is the
-  // source of truth — every parsed row must fall into exactly one bucket
-  // BEFORE we can import. 'pending' means the user hasn't decided yet and
-  // the import must abort with a clear message rather than silently drop it.
-  const getRowDisposition = (i: number): "link" | "create" | "ignore-explicit" | "pending" => {
-    const action = matchActions[i] || "criar";
-    if (action === "vincular") {
-      return matchTargets[i] ? "link" : "pending";
-    }
-    if (action === "ignorar") {
-      return explicitlyIgnored.has(i) ? "ignore-explicit" : "pending";
-    }
-    // 'criar' — accept as long as we have SOMETHING to name the transaction.
-    // Reviewed rows already have a curated description; unreviewed ones fall
-    // back to either the edited draft or the original statement text.
-    const desc = (rowDescriptions[i] || rows[i]?.description || "").trim();
-    return desc ? "create" : "pending";
+  // Disposition of a single row. O toggle é a decisão: OFF = ignorar
+  // (explícito), ON = criar. Não existe "pendente" — se veio da fonte
+  // (extrato) sem match, nasce como ignorar; o usuário liga o toggle
+  // para criar. Vincular só existe quando há target.
+  const getRowDisposition = (i: number): "link" | "create" | "ignore-explicit" => {
+    const action = matchActions[i] || "ignorar";
+    if (action === "vincular" && matchTargets[i]) return "link";
+    if (action === "criar") return "create";
+    return "ignore-explicit";
   };
 
   const handleImport = async () => {
@@ -1480,20 +1492,8 @@ export function ImportStatementModal({
       return;
     }
 
-    // Guardrail: extrato é a fonte da verdade. Nenhuma linha pode ser
-    // descartada sem decisão explícita (vincular / criar / ignorar de vez).
-    const pendingIdxs = rows
-      .map((_, i) => i)
-      .filter((i) => getRowDisposition(i) === "pending");
-    if (pendingIdxs.length > 0) {
-      const total = pendingIdxs.reduce((s, i) => s + Math.abs(rows[i]?.amount || 0), 0);
-      toast({
-        title: `${pendingIdxs.length} lançamento${pendingIdxs.length > 1 ? "s" : ""} do extrato sem decisão`,
-        description: `Total pendente: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Ative "Criar" ou use "Ignorar de vez" em cada linha antes de importar — o extrato é a fonte da verdade.`,
-        variant: "destructive",
-      });
-      return;
-    }
+
+
 
     setImporting(true);
 
@@ -2492,11 +2492,10 @@ export function ImportStatementModal({
 
 
         {rows.length > 0 && step === "reconcile" && (() => {
-          const counts = { vincular: 0, criar: 0, ignorar: 0, pendente: 0 };
+          const counts = { vincular: 0, criar: 0, ignorar: 0 };
           let netToCreate = 0;
           let netToLink = 0;
           let creditsTotal = 0;
-          let pendingTotal = 0;
           rows.forEach((r, i) => {
             const disp = getRowDisposition(i);
             const signed = signedStatementAmount(r);
@@ -2508,11 +2507,8 @@ export function ImportStatementModal({
               counts.criar++;
               netToCreate += signed;
               if (r.type === "receita") creditsTotal += Math.abs(r.amount);
-            } else if (disp === "ignore-explicit") {
-              counts.ignorar++;
             } else {
-              counts.pendente++;
-              pendingTotal += Math.abs(r.amount);
+              counts.ignorar++;
             }
           });
           const toImport = counts.vincular + counts.criar;
@@ -2590,15 +2586,7 @@ export function ImportStatementModal({
               )}
 
               <div className="flex items-center gap-2 flex-wrap justify-end">
-                {counts.pendente > 0 && (
-                  <span
-                    className="text-xs text-amber-600 dark:text-amber-400"
-                    title={`${counts.pendente} lançamento(s) do extrato (${fmt(pendingTotal)}) sem decisão — ative "Criar" ou "Ignorar de vez" antes de importar.`}
-                  >
-                    <strong>{counts.pendente}</strong> sem decisão
-                  </span>
-                )}
-                {hasDivergence && counts.pendente === 0 && (
+                {hasDivergence && (
                   <Button
                     variant={acknowledgeDivergence ? "secondary" : "outline"}
                     size="sm"
@@ -2612,7 +2600,7 @@ export function ImportStatementModal({
                     {acknowledgeDivergence ? "✓ Divergência confirmada" : `⚠ Divergência ${fmt(diff!)}`}
                   </Button>
                 )}
-                {toImport === 0 && counts.pendente === 0 ? (
+                {toImport === 0 ? (
                   <Button
                     onClick={handleFinish}
                     className="gap-2"
@@ -2625,13 +2613,11 @@ export function ImportStatementModal({
                 ) : (
                   <Button
                     onClick={handleImport}
-                    disabled={importing || counts.pendente > 0 || blockedByDivergence}
+                    disabled={importing || blockedByDivergence}
                     className="gap-2"
                     size="sm"
                     title={
-                      counts.pendente > 0
-                        ? "Existem linhas do extrato sem decisão — nada pode ser descartado em silêncio."
-                        : blockedByDivergence
+                      blockedByDivergence
                         ? "Confirme a divergência com o total do banco antes de importar."
                         : undefined
                     }
