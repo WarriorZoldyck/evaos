@@ -2544,70 +2544,57 @@ export function ImportStatementModal({
                 </div>
               )}
 
-              <div className="flex flex-col items-stretch sm:items-end gap-1.5 min-w-[280px]">
-                <span className="text-xs text-muted-foreground text-right">
-                  <strong>{counts.vincular}</strong> conciliar · <strong>{counts.criar}</strong> criar · <strong>{counts.ignorar}</strong> ignorar
-                  {counts.pendente > 0 && (
-                    <> · <strong className="text-amber-600">{counts.pendente} sem decisão</strong></>
-                  )}
-                </span>
-                <span className="text-xs text-muted-foreground text-right">
-                  Selecionado líquido:{" "}
-                  <strong className="text-foreground">
-                    {fmt(selectedNetAbs)}
-                  </strong>
-                </span>
-                {creditsTotal > 0 && (
-                  <span className="text-xs text-muted-foreground text-right">
-                    Créditos/restituições: <strong className="text-emerald-600">− {fmt(creditsTotal)}</strong>
-                  </span>
-                )}
-                {diff !== null && (
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {counts.pendente > 0 && (
                   <span
-                    className={`text-xs text-right ${
-                      hasDivergence ? "text-destructive font-medium" : "text-emerald-600"
-                    }`}
+                    className="text-xs text-amber-600 dark:text-amber-400"
+                    title={`${counts.pendente} lançamento(s) do extrato (${fmt(pendingTotal)}) sem decisão — ative "Criar" ou "Ignorar de vez" antes de importar.`}
                   >
-                    {hasDivergence ? "⚠ Divergência" : "✓ Bate com a fatura"}:{" "}
-                    <strong>{fmt(diff)}</strong>
-                    {hasDivergence ? ` (esperado ${fmt(userStatementTotal!)})` : ""}
+                    <strong>{counts.pendente}</strong> sem decisão
                   </span>
                 )}
-                {/* Painel detalhado de divergência foi movido para AlertDialog exibido ao clicar em Importar. */}
+                {hasDivergence && counts.pendente === 0 && (
+                  <Button
+                    variant={acknowledgeDivergence ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setPendingDivergenceInfo({ diff: diff!, expected: userStatementTotal! });
+                      setConfirmDivergenceOpen(true);
+                    }}
+                    className="gap-1.5"
+                    title="Confirme a divergência com o total informado pelo banco antes de importar."
+                  >
+                    {acknowledgeDivergence ? "✓ Divergência confirmada" : `⚠ Divergência ${fmt(diff!)}`}
+                  </Button>
+                )}
                 {toImport === 0 && counts.pendente === 0 ? (
                   <Button
                     onClick={handleFinish}
-                    className="gap-2 mt-1"
+                    className="gap-2"
+                    size="sm"
                     title="Todas as linhas foram tratadas como 'manter só o do sistema' ou 'ignorar' — nada precisa ser salvo."
                   >
                     <Check className="h-4 w-4" />
                     Nada a importar — concluir
                   </Button>
                 ) : (
-                  <div className="flex flex-col items-end gap-1">
-                    {counts.pendente > 0 && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400 text-right max-w-[320px]">
-                        <strong>{counts.pendente}</strong> lançamento{counts.pendente > 1 ? "s" : ""} do extrato ({fmt(pendingTotal)}) sem decisão. Ative <strong>"Criar"</strong> ou use <strong>"Ignorar de vez"</strong> antes de importar — o extrato é a fonte da verdade.
-                      </p>
-                    )}
-                    <Button
-                      onClick={() => {
-                        if (hasDivergence && !acknowledgeDivergence) {
-                          setPendingDivergenceInfo({ diff, expected: userStatementTotal! });
-                          setConfirmDivergenceOpen(true);
-                          return;
-                        }
-                        handleImport();
-                      }}
-                      disabled={importing || counts.pendente > 0}
-                      className="gap-2 mt-1"
-                      title={counts.pendente > 0 ? "Existem linhas do extrato sem decisão — nada pode ser descartado em silêncio." : undefined}
-                    >
-                      {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                      Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
-                      {importType === "cartao" ? " para a fatura" : ""}
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={handleImport}
+                    disabled={importing || counts.pendente > 0 || blockedByDivergence}
+                    className="gap-2"
+                    size="sm"
+                    title={
+                      counts.pendente > 0
+                        ? "Existem linhas do extrato sem decisão — nada pode ser descartado em silêncio."
+                        : blockedByDivergence
+                        ? "Confirme a divergência com o total do banco antes de importar."
+                        : undefined
+                    }
+                  >
+                    {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    Importar {toImport} ({counts.vincular} conciliar + {counts.criar} criar)
+                    {importType === "cartao" ? " para a fatura" : ""}
+                  </Button>
                 )}
               </div>
             </DialogFooter>
