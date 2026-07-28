@@ -163,6 +163,21 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ActionPlanDialog
+        open={planOpen}
+        onClose={() => { setPlanOpen(false); setPendingPayload(null); }}
+        gap={Math.max(0, (Number(targetAmount) || 0) - Math.max(0, stats.leftover))}
+        topCategories={stats.topCategories}
+        goalName={name}
+        title="Essa meta não cabe na sobra"
+      />
+      {planOpen && pendingPayload && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60]">
+          <Button onClick={confirmDespiteDeficit} variant="destructive" className="shadow-lg">
+            Criar mesmo assim
+          </Button>
+        </div>
+      )}
     </Dialog>
   );
 }
