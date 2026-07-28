@@ -1629,6 +1629,33 @@ export function ImportStatementModal({
         {/* Upload area */}
         {rows.length === 0 && (
           <div className="flex flex-col gap-4 py-6">
+            {pendingResume && (
+              <Alert className="border-primary/40 bg-primary/5">
+                <FileText className="h-4 w-4 text-primary" />
+                <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="text-sm">
+                    <p className="font-medium text-foreground">
+                      Retomar importação em andamento?
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Arquivo <strong>{pendingResume.fileName}</strong> · {pendingResume.rowCount} lançamento{pendingResume.rowCount > 1 ? "s" : ""}
+                      {pendingResume.savedAt
+                        ? ` · salvo ${new Date(pendingResume.savedAt).toLocaleString("pt-BR")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button size="sm" variant="outline" onClick={() => { clearSession(); }}>
+                      Descartar
+                    </Button>
+                    <Button size="sm" onClick={resumeSession} className="gap-1.5">
+                      <ArrowRight className="h-4 w-4" />
+                      Retomar
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Pergunta o tipo (e o mês, se cartão) ANTES de subir o arquivo,
                 para garantir que a busca de "só no sistema" use o mês correto. */}
             <div className="grid gap-3 sm:grid-cols-2">
