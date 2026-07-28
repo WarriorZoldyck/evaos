@@ -332,6 +332,125 @@ export function ImportStatementModal({
   }, [categoryBase, extraCategories]);
   const rootCategories = mergedCategories.filter((c) => !c.parent_id);
 
+  // ─────────────────────────────────────────────────────────────
+  // Persistência do rascunho da importação (localStorage).
+  // Só perde progresso se o usuário concluir OU cancelar explicitamente.
+  // Fechar por ESC / navegação / reload preserva a sessão.
+  // ─────────────────────────────────────────────────────────────
+  const SESSION_VERSION = 1;
+  const sessionKey = effectiveUserId ? `eva.import-session.v${SESSION_VERSION}.${effectiveUserId}` : "";
+  const sessionLoadedRef = useRef(false);
+  const [pendingResume, setPendingResume] = useState<null | {
+    fileName: string;
+    rowCount: number;
+    savedAt: string;
+    snapshot: Record<string, unknown>;
+  }>(null);
+
+  const clearSession = () => {
+    try {
+      if (sessionKey) localStorage.removeItem(sessionKey);
+    } catch { /* noop */ }
+    setPendingResume(null);
+  };
+
+  // Load once on mount / when the key becomes known.
+  useEffect(() => {
+    if (!open || !sessionKey || sessionLoadedRef.current) return;
+    sessionLoadedRef.current = true;
+    try {
+      const raw = localStorage.getItem(sessionKey);
+      if (!raw) return;
+      const snap = JSON.parse(raw);
+      if (!snap || snap.version !== SESSION_VERSION) {
+        localStorage.removeItem(sessionKey);
+        return;
+      }
+      if (!Array.isArray(snap.rows) || snap.rows.length === 0) return;
+      // If the modal already has rows (unlikely — mounted fresh), skip.
+      if (rows.length > 0) return;
+      setPendingResume({
+        fileName: snap.fileName || "arquivo",
+        rowCount: snap.rows.length,
+        savedAt: snap.savedAt || "",
+        snapshot: snap,
+      });
+    } catch { /* corrupted snapshot — ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sessionKey]);
+
+  const resumeSession = () => {
+    if (!pendingResume) return;
+    const s = pendingResume.snapshot as any;
+    setRows(s.rows || []);
+    setFileName(s.fileName || "");
+    setStep(s.step || "preview");
+    setImportType(s.importType || "");
+    setTargetBankAccount(s.targetBankAccount || "");
+    setTargetCard(s.targetCard || "");
+    setBillReferenceMonth(s.billReferenceMonth || "");
+    setStatementTotal(s.statementTotal ?? null);
+    setStatementTotalInput(s.statementTotalInput || "");
+    setAmountRescaled(!!s.amountRescaled);
+    setAcknowledgeDivergence(!!s.acknowledgeDivergence);
+    setMatchActions(s.matchActions || {});
+    setMatchTargets(s.matchTargets || {});
+    setReplaceDeleteIds(new Set(s.replaceDeleteIds || []));
+    setRowCategories(s.rowCategories || {});
+    setRowDescriptions(s.rowDescriptions || {});
+    setRowContacts(s.rowContacts || {});
+    setReviewedRows(new Set(s.reviewedRows || []));
+    setExplicitlyIgnored(new Set(s.explicitlyIgnored || []));
+    setExtraCategories(s.extraCategories || []);
+    setPromotedOrphanIds(new Set(s.promotedOrphanIds || []));
+    setPendingResume(null);
+  };
+
+  // Debounced save whenever something meaningful changes.
+  useEffect(() => {
+    if (!open || !sessionKey) return;
+    if (!sessionLoadedRef.current) return; // avoid clobbering before load runs
+    if (pendingResume) return; // user hasn't decided resume/discard yet
+    if (step === "summary") return;
+    if (rows.length === 0) return;
+    const handle = setTimeout(() => {
+      const snap = {
+        version: SESSION_VERSION,
+        savedAt: new Date().toISOString(),
+        fileName,
+        step,
+        importType,
+        targetBankAccount,
+        targetCard,
+        billReferenceMonth,
+        statementTotal,
+        statementTotalInput,
+        amountRescaled,
+        acknowledgeDivergence,
+        rows,
+        matchActions,
+        matchTargets,
+        rowCategories,
+        rowDescriptions,
+        rowContacts,
+        reviewedRows: Array.from(reviewedRows),
+        explicitlyIgnored: Array.from(explicitlyIgnored),
+        replaceDeleteIds: Array.from(replaceDeleteIds),
+        extraCategories,
+        promotedOrphanIds: Array.from(promotedOrphanIds),
+      };
+      try {
+        localStorage.setItem(sessionKey, JSON.stringify(snap));
+      } catch { /* quota exceeded — skip silently */ }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [
+    open, sessionKey, pendingResume, step, rows, fileName, importType, targetBankAccount, targetCard,
+    billReferenceMonth, statementTotal, statementTotalInput, amountRescaled, acknowledgeDivergence,
+    matchActions, matchTargets, rowCategories, rowDescriptions, rowContacts, reviewedRows,
+    explicitlyIgnored, replaceDeleteIds, extraCategories, promotedOrphanIds,
+  ]);
+
   // Load suppliers/clients once the reconcile step is reachable, so the review
   // modal has options to pre-select and let the user create new inline.
   useEffect(() => {
