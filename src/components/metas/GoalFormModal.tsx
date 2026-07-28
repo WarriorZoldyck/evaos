@@ -52,7 +52,6 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
 
   const handleSubmit = async () => {
     if (!name.trim() || !targetAmount) return;
-    setSaving(true);
     const payload = {
       name: name.trim(),
       target_amount: Number(targetAmount),
@@ -63,11 +62,37 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
       auto_reserve_per_expense: Number(perExpense) || 0,
       auto_reserve_per_sale: Number(perSale) || 0,
     };
+
+    // Se a nova meta empurra a sobra para negativo, mostra plano antes de salvar.
+    const targetDelta = editGoal
+      ? Number(targetAmount) - Number(editGoal.target_amount)
+      : Number(targetAmount);
+    const projectedLeftover = stats.leftover - targetDelta;
+    if (!stats.loading && projectedLeftover < 0 && !planOpen) {
+      setPendingPayload(payload);
+      setPlanOpen(true);
+      return;
+    }
+
+    await persist(payload);
+  };
+
+  const persist = async (payload: any) => {
+    setSaving(true);
     const ok = editGoal
       ? await onUpdate(editGoal.id, payload)
       : await onSave(payload);
     setSaving(false);
     if (ok) onClose();
+  };
+
+  const confirmDespiteDeficit = async () => {
+    setPlanOpen(false);
+    if (pendingPayload) {
+      const p = pendingPayload;
+      setPendingPayload(null);
+      await persist(p);
+    }
   };
 
   return (
