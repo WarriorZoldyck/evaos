@@ -1323,7 +1323,9 @@ export function ReconcileStep({
                                   value={draftDesc}
                                   onChange={(e) => onDescriptionChange?.(i, e.target.value)}
                                   placeholder={r.description}
-                                  className="h-8 text-sm border-transparent bg-transparent hover:bg-muted/50 focus:bg-background focus:border-input transition-colors"
+                                  className={`h-8 text-sm bg-transparent hover:bg-muted/50 focus:bg-background focus:border-input transition-colors ${
+                                    draftDesc.trim() === "" ? "border-dashed border-muted-foreground/40" : "border-transparent"
+                                  }`}
                                   aria-label="Descrição do lançamento — clique para editar"
                                   title="Clique para editar a descrição"
                                 />
