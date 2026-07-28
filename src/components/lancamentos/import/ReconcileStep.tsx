@@ -1420,12 +1420,10 @@ export function ReconcileStep({
                                 className="inline-flex items-center justify-center gap-2 select-none"
                                 title={
                                   isReviewed
-                                    ? "Confirmado: esta linha será criada ao importar. Desligue para editar."
+                                    ? "Esta linha será criada ao importar. Desligue para ignorar ou editar."
                                     : canConfirm
-                                    ? missingCategory
-                                      ? "Ligue para confirmar. A categoria pode ficar como 'Sem Categoria' e você classifica depois."
-                                      : "Ligue para confirmar a edição e travar a linha."
-                                    : "Preencha a descrição antes de confirmar."
+                                    ? "Ligue para criar esta linha. Desligado = ignorar (não importa)."
+                                    : "Preencha a descrição antes de ligar o toggle para criar."
                                 }
                               >
                                 <span
@@ -1433,7 +1431,7 @@ export function ReconcileStep({
                                     isReviewed ? "text-muted-foreground/50" : "text-muted-foreground"
                                   }`}
                                 >
-                                  Editar
+                                  Ignorar
                                 </span>
                                 <NeuToggle
                                   checked={isReviewed}
@@ -1450,11 +1448,15 @@ export function ReconcileStep({
                                         },
                                       });
                                       onActionChange(i, "criar");
+                                      onExplicitIgnore?.(i, false);
                                     } else {
+                                      // Desligar = decisão explícita de ignorar esta linha.
                                       onSetReviewed?.(i, false);
+                                      onActionChange(i, "ignorar");
+                                      onExplicitIgnore?.(i, true);
                                     }
                                   }}
-                                  ariaLabel={isReviewed ? "Destravar para editar" : "Confirmar e criar"}
+                                  ariaLabel={isReviewed ? "Desligar para ignorar esta linha" : "Ligar para criar esta linha"}
                                 />
                                 <span
                                   className={`text-[11px] font-medium whitespace-nowrap ${
@@ -1464,26 +1466,10 @@ export function ReconcileStep({
                                   Criar
                                 </span>
                               </div>
-                              {isReviewed ? (
+                              {isReviewed && (
                                 <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
                                   <Check className="h-2.5 w-2.5" /> Confirmada
                                 </Badge>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (willBeCreated) {
-                                      onActionChange(i, "ignorar");
-                                      onExplicitIgnore?.(i, true);
-                                    } else {
-                                      onActionChange(i, "criar");
-                                      onExplicitIgnore?.(i, false);
-                                    }
-                                  }}
-                                  className="text-[10px] text-muted-foreground hover:text-destructive underline decoration-dotted"
-                                >
-                                  {willBeCreated ? "Ignorar de vez" : "Desfazer ignorar"}
-                                </button>
                               )}
                             </div>
                           </td>
