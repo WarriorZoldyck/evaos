@@ -971,18 +971,22 @@ export function ImportStatementModal({
       findMatches(lines, bankId, walletId, null).then((res) => {
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
+        const nextIgnored = new Set<number>();
         rows.forEach((_, i) => {
           if (res[i]?.best) {
             nextActions[i] = res[i].best!.suggested ? "criar" : "vincular";
             nextTargets[i] = res[i].best!.candidate.id;
           } else {
-            // Novos lançamentos nascem desligados — o usuário ativa o toggle
-            // para revisar e confirmar a criação (evita import de lixo).
+            // Novos lançamentos nascem desligados (toggle à esquerda = Ignorar).
+            // Isso já é uma decisão consciente por padrão — o usuário liga o
+            // toggle para transformar em "Criar". Sem estado "pendente".
             nextActions[i] = "ignorar";
+            nextIgnored.add(i);
           }
         });
         setMatchActions(nextActions);
         setMatchTargets(nextTargets);
+        setExplicitlyIgnored(nextIgnored);
       });
       return;
     }
