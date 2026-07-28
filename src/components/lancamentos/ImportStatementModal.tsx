@@ -2442,7 +2442,7 @@ export function ImportStatementModal({
                 )}
                 {toImport === 0 && counts.pendente === 0 ? (
                   <Button
-                    onClick={handleClose}
+                    onClick={handleFinish}
                     className="gap-2 mt-1"
                     title="Todas as linhas foram tratadas como 'manter só o do sistema' ou 'ignorar' — nada precisa ser salvo."
                   >
