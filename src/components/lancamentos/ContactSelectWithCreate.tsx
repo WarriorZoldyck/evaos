@@ -96,7 +96,7 @@ export function ContactSelectWithCreate({
     setLocalExtras((prev) => [...prev, { id: data.id, name: newName.trim() }]);
     setNewName("");
     setCreateOpen(false);
-    onContactCreated(data.id);
+    onContactCreated(data.id, newName.trim());
   };
 
   return (
