@@ -1567,6 +1567,19 @@ export function ImportStatementModal({
   };
 
   const handleClose = () => {
+    // Fechamento implícito/explícito: NÃO reseta em memória nem apaga o rascunho.
+    // O snapshot persistido no localStorage garante retomada em outra sessão.
+    onClose();
+  };
+
+  const handleCancelImport = () => {
+    if (rows.length > 0) {
+      const ok = window.confirm(
+        "Cancelar a importação vai descartar todo o progresso desta conciliação. Deseja continuar?"
+      );
+      if (!ok) return;
+    }
+    clearSession();
     resetAll();
     onClose();
   };
