@@ -33,6 +33,16 @@ import { ReconcileStep } from "./import/ReconcileStep";
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
 import { CreditCardFormModal } from "@/components/contas/CreditCardFormModal";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AlertTriangle, Plus } from "lucide-react";
 
 interface ParsedTransaction {
@@ -254,6 +264,8 @@ export function ImportStatementModal({
   const [amountRescaled, setAmountRescaled] = useState<boolean>(false);
   // When divergence > R$ 1,00, user must explicitly acknowledge to import.
   const [acknowledgeDivergence, setAcknowledgeDivergence] = useState(false);
+  const [confirmDivergenceOpen, setConfirmDivergenceOpen] = useState(false);
+  const [pendingDivergenceInfo, setPendingDivergenceInfo] = useState<{ diff: number; expected: number } | null>(null);
 
   // Create-new-card flow (nested modal)
   const [createCardOpen, setCreateCardOpen] = useState(false);
@@ -2450,23 +2462,7 @@ export function ImportStatementModal({
                     {hasDivergence ? ` (esperado ${fmt(userStatementTotal!)})` : ""}
                   </span>
                 )}
-                {hasDivergence && (
-                  <div className="rounded border border-destructive/40 bg-destructive/5 p-2 text-[11px] text-left text-destructive max-w-[360px]">
-                    <p className="font-medium mb-1">A importação não bate com o valor da fatura.</p>
-                    <p className="text-muted-foreground mb-2">
-                      Revise se existem linhas duplicadas no extrato, lançamentos ausentes
-                      (IOF internacional, anuidades, cartões adicionais) ou correspondências erradas.
-                    </p>
-                    <label className="flex items-start gap-2 cursor-pointer">
-                      <Checkbox
-                        checked={acknowledgeDivergence}
-                        onCheckedChange={(c) => setAcknowledgeDivergence(!!c)}
-                        className="mt-0.5"
-                      />
-                      <span>Entendi a divergência e quero importar mesmo assim.</span>
-                    </label>
-                  </div>
-                )}
+                {/* Painel detalhado de divergência foi movido para AlertDialog exibido ao clicar em Importar. */}
                 {toImport === 0 && counts.pendente === 0 ? (
                   <Button
                     onClick={handleFinish}
@@ -2484,8 +2480,15 @@ export function ImportStatementModal({
                       </p>
                     )}
                     <Button
-                      onClick={handleImport}
-                      disabled={importing || blockedByDivergence || counts.pendente > 0}
+                      onClick={() => {
+                        if (hasDivergence && !acknowledgeDivergence) {
+                          setPendingDivergenceInfo({ diff, expected: userStatementTotal! });
+                          setConfirmDivergenceOpen(true);
+                          return;
+                        }
+                        handleImport();
+                      }}
+                      disabled={importing || counts.pendente > 0}
                       className="gap-2 mt-1"
                       title={counts.pendente > 0 ? "Existem linhas do extrato sem decisão — nada pode ser descartado em silêncio." : undefined}
                     >
@@ -2522,6 +2525,40 @@ export function ImportStatementModal({
             </div>
           </DialogFooter>
         )}
+
+      <AlertDialog open={confirmDivergenceOpen} onOpenChange={setConfirmDivergenceOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>A importação não bate com o valor da fatura</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  Revise se existem linhas duplicadas no extrato, lançamentos ausentes
+                  (IOF internacional, anuidades, cartões adicionais) ou correspondências erradas.
+                </p>
+                {pendingDivergenceInfo && (
+                  <p className="text-destructive font-medium">
+                    Diferença: {pendingDivergenceInfo.diff.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                    {" "}— esperado {pendingDivergenceInfo.expected.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar e revisar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setAcknowledgeDivergence(true);
+                setConfirmDivergenceOpen(false);
+                setTimeout(() => handleImport(), 0);
+              }}
+            >
+              Importar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </>
   );

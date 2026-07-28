@@ -1,81 +1,43 @@
+## Diagnóstico
+
+1. **Ocupa muito espaço.** Hoje, sempre que `hasDivergence` é true, o rodapé (`ImportStatementModal.tsx:2453-2469`) renderiza um bloco vermelho grande com título, descrição e checkbox — visível durante toda a conciliação. Isso empurra o botão de importar para fora da tela em telas pequenas (visto no screenshot).
+2. **"Entendi a divergência" parece não habilitar.** O botão Importar está desabilitado por três condições combinadas (`disabled={importing || blockedByDivergence || counts.pendente > 0}`). No cenário atual há **133 linhas "sem decisão"** — `counts.pendente > 0` continua bloqueando o botão mesmo depois de marcar o acknowledge. Do ponto de vista do usuário, parece que o checkbox não funcionou; na verdade é outra trava agindo em paralelo, sem sinalização clara de que existem dois bloqueios diferentes.
+
 ## Objetivo
 
-Manter a sessão de conciliação viva quando o usuário sai da tela ou recarrega. Só perde o progresso se ele **cancelar** ou **concluir** a importação.
-
-## Comportamento
-
-- Ao subir o PDF/parse: começa uma "sessão de importação" salva no `localStorage`.
-- Ao mudar qualquer campo relevante (linhas, matches, categorias, descrições, contatos, `explicitlyIgnored`, `reviewedRows`, etc.): salva com debounce.
-- Ao reabrir a página (`/lancamentos/importar`, ou reabrir o modal): se houver sessão salva, exibe um banner no topo do wizard:
-  > "Retomar importação de `<nome do arquivo>` (`<N>` linhas, iniciada em `<data/hora>`)? [Retomar] [Descartar]".
-  - **Retomar** → restaura estado (`rows`, `step`, matches, decisões etc.) e continua exatamente de onde parou.
-  - **Descartar** → apaga a sessão e começa do zero.
-- Limpa a sessão automaticamente quando:
-  - `handleImport` finaliza com sucesso (chega no `summary`).
-  - Usuário clica em **Cancelar/Fechar** de forma explícita — via um botão "Cancelar importação" no rodapé (novo, discreto) — não pela navegação/ESC/reload.
-- Fechar por navegação, ESC, refresh, back do browser: **mantém** a sessão.
-
-## Escopo do que persiste
-
-Uma única chave por usuário: `eva.import-session.v1.<user_id>`. Objeto:
-
-```
-{
-  version: 1,
-  savedAt: ISO,
-  fileName,
-  step,
-  importType, targetBankAccount, targetCard, billReferenceMonth,
-  statementTotal, statementTotalInput, amountRescaled,
-  acknowledgeDivergence,
-  rows,                       // ParsedTransaction[]
-  matchActions, matchTargets,
-  rowCategories, rowDescriptions, rowContacts,
-  reviewedRows: number[],     // Set serializado
-  explicitlyIgnored: number[],
-  replaceDeleteIds: string[],
-  extraCategories,
-  promotedOrphanIds: string[],
-}
-```
-
-Não persiste: `orphans`, `matches`, `suggestions`, `suppliersList/clientsList`, `importResult` — são recomputáveis a partir de `rows` + IDs alvo. O arquivo bruto (PDF) não é salvo; se o usuário quiser reprocessar, descarta e recomeça.
+- Durante a conciliação, mostrar a divergência apenas como uma linha compacta (uma frase colorida no bloco de totais que já existe). Nenhum painel grande.
+- Só abrir o alerta detalhado + "Entendi a divergência" quando o usuário clicar em **Importar** e houver divergência — via `AlertDialog` de confirmação.
+- Deixar explícito no rodapé que "sem decisão" é uma trava separada; enquanto houver linhas sem decisão o botão continua bloqueado (correto — extrato é a fonte da verdade), e nem chega a abrir o diálogo de divergência.
 
 ## Alterações
 
-### `src/components/lancamentos/ImportStatementModal.tsx`
-1. Novo helper `useImportSessionPersistence(state, userId)`:
-   - `useEffect` com debounce (~400 ms) que serializa o snapshot no `localStorage` sempre que qualquer dependência muda, mas só quando `rows.length > 0` e `step !== "summary"`.
-   - Expõe `clearSession()`.
-2. Ao montar (após ter `user.id`): tenta ler a chave. Se existir e `rows.length > 0`:
-   - Mantém o estado local vazio, mas seta `pendingResume = snapshot`.
-   - Renderiza um banner no topo (dentro do wizard) com botões "Retomar" / "Descartar".
-   - **Retomar**: aplica `setRows/setStep/...` a partir do snapshot; limpa `pendingResume`.
-   - **Descartar**: `clearSession()` e limpa `pendingResume`.
-3. `handleImport` (final do fluxo com sucesso → `step = summary`): chama `clearSession()`.
-4. Novo botão "Cancelar importação" no rodapé do wizard (visível quando `rows.length > 0`), que confirma e chama `clearSession()` + `onClose()`.
-5. `onClose` padrão (usado por ESC, click fora, back, navegação) **NÃO** limpa a sessão — só fecha o modal.
+### `src/components/lancamentos/ImportStatementModal.tsx` (bloco do rodapé, ~2340-2500)
 
-### `src/pages/ImportarExtrato.tsx`
-- Nenhuma mudança de lógica; apenas garantir que `goBack()` continue chamando `onClose` sem sinalizar cancelamento.
-
-## Edge cases
-
-- Sessão de outra conta bancária/tipo: chave inclui `user_id`; ao retomar, se `targetBankAccount` não existir mais (conta apagada), mostra aviso e obriga escolher outra antes de continuar.
-- Snapshot muito grande: `rows` limitado a milhares de linhas → OK para `localStorage` (limite ~5 MB). Se `JSON.stringify` falhar por quota, faz `try/catch`, mostra toast discreto "Não foi possível salvar rascunho" e segue.
-- Versão futura: campo `version: 1` para invalidar snapshots antigos silenciosamente.
-- Multi-abas: última escrita vence (comportamento aceitável; não é fluxo comum).
+1. **Remover** o painel `hasDivergence && (<div className="rounded border border-destructive/40 …">…</div>)` (2453-2469). Manter apenas a linha compacta existente (2442-2452) que já mostra "⚠ Divergência: R$ X (esperado R$ Y)".
+2. **Não usar mais `blockedByDivergence` no `disabled` do botão.** O botão Importar passa a ser desabilitado somente por `importing || counts.pendente > 0`. Se a única trava for a divergência, o botão fica clicável e a confirmação acontece no diálogo.
+3. **Novo estado** `const [confirmDivergenceOpen, setConfirmDivergenceOpen] = useState(false)` perto dos demais estados do wizard.
+4. **Novo handler** `handleImportClick`:
+   - Se `hasDivergence && !acknowledgeDivergence` → `setConfirmDivergenceOpen(true)` e retorna.
+   - Caso contrário → chama `handleImport()` diretamente.
+   O `onClick` do botão passa a ser `handleImportClick`.
+5. **Novo `AlertDialog`** renderizado dentro do wizard (após o rodapé), controlado por `confirmDivergenceOpen`:
+   - Título: "A importação não bate com o valor da fatura".
+   - Corpo: mesmo texto que hoje está inline (revisar duplicados, IOF internacional, anuidades, cartões adicionais) + linha com "Diferença: {fmt(diff)} — esperado {fmt(userStatementTotal)}".
+   - Ações:
+     - `Cancel`: fecha o diálogo, não muda estado.
+     - `Action` "Importar mesmo assim": faz `setAcknowledgeDivergence(true); setConfirmDivergenceOpen(false); handleImport();`.
+6. **Resetar** `acknowledgeDivergence` para `false` sempre que o `statementTotalInput` ou `rows` mudarem de forma que reavaliem a divergência (já é resetado no `onChange` do input em 2405; manter).
+7. **Sem mudanças de props ou de fluxo de sessão** — o `acknowledgeDivergence` continua sendo persistido no snapshot.
 
 ## Fora de escopo
 
-- Persistir o PDF original.
-- Sincronizar rascunho no Supabase (fica só no navegador).
-- Múltiplas sessões simultâneas (só uma por usuário).
+- Mudar a lógica de contagem de "sem decisão" — continua obrigatória por padrão do fluxo.
+- Alterar o cálculo de divergência (>R$ 1,00 continua o gatilho).
+- Qualquer outra tela.
 
 ## Verificação
 
-1. Subir PDF, preencher metade, dar F5 → banner "Retomar" aparece com o nome do arquivo; ao clicar, tudo volta.
-2. Sair para outra rota e voltar para `/lancamentos/importar` → mesmo banner.
-3. Clicar em "Cancelar importação" → confirma e a sessão some (F5 não oferece retomar).
-4. Concluir importação até o `summary` → sessão some automaticamente.
-5. Fechar por ESC/back → ao reabrir, banner "Retomar" continua disponível.
+1. Abrir uma importação com divergência: o rodapé mostra só a linha "⚠ Divergência: -R$ X"; nenhum painel grande.
+2. Com `counts.pendente > 0`: botão Importar segue desabilitado e o aviso âmbar de "sem decisão" continua visível — como hoje.
+3. Zerar as pendências e clicar Importar com divergência: abre o `AlertDialog`; ao confirmar, importa. Ao cancelar, volta ao rodapé sem alterar nada.
+4. Sem divergência: clicar Importar segue direto, sem diálogo.
