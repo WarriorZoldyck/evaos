@@ -1,58 +1,81 @@
-## Diagnóstico
+## Objetivo
 
-Rodei duas leituras do modal e o motivo dos 2 lançamentos continuarem sumindo, mesmo após a reimportação com o bloqueio da última rodada, é claro:
+Manter a sessão de conciliação viva quando o usuário sai da tela ou recarrega. Só perde o progresso se ele **cancelar** ou **concluir** a importação.
 
-1. **`handleImport` só olha `selectedRows`** (`ImportStatementModal.tsx` linha 1194):
-   ```ts
-   const selectedRows = rows.filter((r) => r.selected);
-   ...
-   selectedRows.forEach((r) => {
-     const action = matchActions[realIdx] || "criar";
-     if (action === "ignorar") return;   // ← descarta em silêncio
-     ...
-   });
-   ```
-   Qualquer linha com `selected=false` (checkbox desmarcado) ou com `action='ignorar'` (default para linhas "só no extrato") desaparece sem alerta. O bloqueio do rodapé que adicionei antes só contava linhas SEM system match — e mesmo assim ele confia em `explicitlyIgnored`, então uma linha `ignorar` default passa como "pendente" só se o cálculo do rodapé chegar até ela, mas o `handleImport` continua descartando.
+## Comportamento
 
-2. **Contagem do rodapé (`Importar N`) usa `selectedRows.length`** (linha 2114 / 2110), então quando o usuário desmarca o checkbox, o botão diz "Importar 61" e ninguém percebe que faltam 2.
+- Ao subir o PDF/parse: começa uma "sessão de importação" salva no `localStorage`.
+- Ao mudar qualquer campo relevante (linhas, matches, categorias, descrições, contatos, `explicitlyIgnored`, `reviewedRows`, etc.): salva com debounce.
+- Ao reabrir a página (`/lancamentos/importar`, ou reabrir o modal): se houver sessão salva, exibe um banner no topo do wizard:
+  > "Retomar importação de `<nome do arquivo>` (`<N>` linhas, iniciada em `<data/hora>`)? [Retomar] [Descartar]".
+  - **Retomar** → restaura estado (`rows`, `step`, matches, decisões etc.) e continua exatamente de onde parou.
+  - **Descartar** → apaga a sessão e começa do zero.
+- Limpa a sessão automaticamente quando:
+  - `handleImport` finaliza com sucesso (chega no `summary`).
+  - Usuário clica em **Cancelar/Fechar** de forma explícita — via um botão "Cancelar importação" no rodapé (novo, discreto) — não pela navegação/ESC/reload.
+- Fechar por navegação, ESC, refresh, back do browser: **mantém** a sessão.
 
-3. **Nunca há um "toImport" único e coerente**: `handleImport`, o texto do botão e o bloqueio de rodapé usam contagens diferentes → dá pra clicar em Importar com linhas silenciosamente fora.
+## Escopo do que persiste
 
-## Correção
+Uma única chave por usuário: `eva.import-session.v1.<user_id>`. Objeto:
 
-Um único princípio, aplicado em três pontos:
+```
+{
+  version: 1,
+  savedAt: ISO,
+  fileName,
+  step,
+  importType, targetBankAccount, targetCard, billReferenceMonth,
+  statementTotal, statementTotalInput, amountRescaled,
+  acknowledgeDivergence,
+  rows,                       // ParsedTransaction[]
+  matchActions, matchTargets,
+  rowCategories, rowDescriptions, rowContacts,
+  reviewedRows: number[],     // Set serializado
+  explicitlyIgnored: number[],
+  replaceDeleteIds: string[],
+  extraCategories,
+  promotedOrphanIds: string[],
+}
+```
 
-> **Extrato é a fonte da verdade. Nenhuma linha do extrato pode ser descartada sem decisão explícita (`vincular`, `criar` confirmado ou `explicitlyIgnored`).**
+Não persiste: `orphans`, `matches`, `suggestions`, `suppliersList/clientsList`, `importResult` — são recomputáveis a partir de `rows` + IDs alvo. O arquivo bruto (PDF) não é salvo; se o usuário quiser reprocessar, descarta e recomeça.
 
-### 1. `handleImport` (ImportStatementModal.tsx ~1161–1210)
-- Trocar o loop de `selectedRows.forEach` por **`rows.forEach`** (ignora o estado `selected` — ele deixa de ser um filtro de importação e vira apenas "está incluído no lote").
-- Antes de qualquer split, computar `pendingIdxs = rows.map((_,i)=>i).filter(i => needsDecision(i))` reusando a mesma função `needsDecision` que o rodapé usa (extrair para um `useMemo`/helper local `getRowDisposition(i): 'link' | 'create' | 'ignore-explicit' | 'pending'`).
-- Se `pendingIdxs.length > 0`: **abortar** com toast vermelho listando quantas linhas e o valor total (`fmt(sumPending)`), e rolar para a primeira pendente. Nunca chegar ao insert.
-- Para linhas `criar` sem `reviewedRows.has(i)` mas com descrição preenchida → aceitar como criar (fallback já era a intenção); sem descrição → cai em `pendingIdxs`.
-- Linhas `action==='ignorar' && !explicitlyIgnored.has(i)` → sempre em `pendingIdxs` (nunca silenciosamente descartadas).
+## Alterações
 
-### 2. Unificar o "toImport"
-- Criar `const dispositions = useMemo(() => rows.map((_, i) => getRowDisposition(i)), [rows, matchActions, matchTargets, reviewedRows, explicitlyIgnored, matches])`.
-- Derivar `toCreate`, `toLink`, `toIgnoreExplicit`, `pending` a partir daí.
-- Botão do rodapé (linha 2110): `disabled = importing || pending > 0 || blockedByDivergence || !targetBankAccount || ...` e label = `Importar ${toCreate + toLink} (${toLink} conciliar + ${toCreate} criar)`.
-- Remover o filtro por `selectedRows.length === 0` do disabled — se o usuário desmarcou tudo mas há pendentes, o bloqueio de pendentes já cobre; se marcou "Ignorar de vez" em tudo, `pending=0` e `toCreate+toLink=0` → botão fica desativado com tooltip "Nada a importar".
+### `src/components/lancamentos/ImportStatementModal.tsx`
+1. Novo helper `useImportSessionPersistence(state, userId)`:
+   - `useEffect` com debounce (~400 ms) que serializa o snapshot no `localStorage` sempre que qualquer dependência muda, mas só quando `rows.length > 0` e `step !== "summary"`.
+   - Expõe `clearSession()`.
+2. Ao montar (após ter `user.id`): tenta ler a chave. Se existir e `rows.length > 0`:
+   - Mantém o estado local vazio, mas seta `pendingResume = snapshot`.
+   - Renderiza um banner no topo (dentro do wizard) com botões "Retomar" / "Descartar".
+   - **Retomar**: aplica `setRows/setStep/...` a partir do snapshot; limpa `pendingResume`.
+   - **Descartar**: `clearSession()` e limpa `pendingResume`.
+3. `handleImport` (final do fluxo com sucesso → `step = summary`): chama `clearSession()`.
+4. Novo botão "Cancelar importação" no rodapé do wizard (visível quando `rows.length > 0`), que confirma e chama `clearSession()` + `onClose()`.
+5. `onClose` padrão (usado por ESC, click fora, back, navegação) **NÃO** limpa a sessão — só fecha o modal.
 
-### 3. `ReconcileStep.tsx` — remover o checkbox como caminho de descarte
-- O checkbox por linha (linha 1796) hoje serve como "não faz nada com essa linha", o que colide com a nova regra. Duas opções:
-  - **Preferida:** remover o checkbox individual da tabela de conciliação (mantendo só a etapa anterior, se existir, para escolher quais linhas do PDF entram no lote). Se a linha entrou no fluxo de conciliação, ela precisa de decisão.
-  - Alternativa mínima (se remover for muito invasivo em outro passo): manter checkbox só como atalho visual, mas ignorá-lo em `handleImport` (já feito no item 1).
-- Ajustar contadores do rodapé/cabeçalho (`selectedRows.length` → `rows.length` ou `toCreate+toLink+toIgnoreExplicit`).
+### `src/pages/ImportarExtrato.tsx`
+- Nenhuma mudança de lógica; apenas garantir que `goBack()` continue chamando `onClose` sem sinalizar cancelamento.
 
-### 4. Recuperação dos R$ 118,61 já perdidos
-- Reabrir a fatura de 21/07/2026 do MASTERCARD BLACK (`espclin`).
-- Reimportar o mesmo PDF — com a correção, se o usuário tentar clicar Importar deixando as 2 linhas fora, o modal agora **abortará** com a lista exata.
+## Edge cases
 
-## Fora do escopo
-- Sem mudanças em schema, edge functions ou no algoritmo de matching.
-- Sem mexer no `useImportMatching` nem no `CategoryCascadeSelect`.
+- Sessão de outra conta bancária/tipo: chave inclui `user_id`; ao retomar, se `targetBankAccount` não existir mais (conta apagada), mostra aviso e obriga escolher outra antes de continuar.
+- Snapshot muito grande: `rows` limitado a milhares de linhas → OK para `localStorage` (limite ~5 MB). Se `JSON.stringify` falhar por quota, faz `try/catch`, mostra toast discreto "Não foi possível salvar rascunho" e segue.
+- Versão futura: campo `version: 1` para invalidar snapshots antigos silenciosamente.
+- Multi-abas: última escrita vence (comportamento aceitável; não é fluxo comum).
 
-## Como verificar
-1. Reabrir a fatura afetada, reimportar o PDF, deixar propositalmente 1 linha sem confirmar → botão fica desabilitado com "1 lançamento (R$ X) sem decisão".
-2. Desmarcar o checkbox de uma linha → mesmo bloqueio (checkbox não descarta mais).
-3. Marcar "Ignorar de vez" nas 2 linhas divergentes → botão libera e importa só o resto, sem sumiço silencioso.
-4. Fluxo feliz (todas revisadas) → soma criada + vinculada bate exatamente com o total do extrato.
+## Fora de escopo
+
+- Persistir o PDF original.
+- Sincronizar rascunho no Supabase (fica só no navegador).
+- Múltiplas sessões simultâneas (só uma por usuário).
+
+## Verificação
+
+1. Subir PDF, preencher metade, dar F5 → banner "Retomar" aparece com o nome do arquivo; ao clicar, tudo volta.
+2. Sair para outra rota e voltar para `/lancamentos/importar` → mesmo banner.
+3. Clicar em "Cancelar importação" → confirma e a sessão some (F5 não oferece retomar).
+4. Concluir importação até o `summary` → sessão some automaticamente.
+5. Fechar por ESC/back → ao reabrir, banner "Retomar" continua disponível.
