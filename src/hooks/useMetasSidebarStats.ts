@@ -15,6 +15,10 @@ export interface MetasSidebarStats {
   projectedYearOut: number;
   leftover: number; // saldo - saídas pendentes até fim do ano
   topCategories: TopCategory[];
+  totalIncomeYear: number;
+  avgIncomeMonth: number;
+  avgSpentMonth: number;
+  allCategories: TopCategory[];
   refetch: () => void;
 }
 
@@ -34,6 +38,10 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     projectedYearOut: 0,
     leftover: 0,
     topCategories: [],
+    totalIncomeYear: 0,
+    avgIncomeMonth: 0,
+    avgSpentMonth: 0,
+    allCategories: [],
   });
 
   const contextKey = isPersonal ? "personal" : selectedCompanyId || "none";
@@ -88,38 +96,43 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     // Transações do ano no contexto
     const txs = (txRes.data || []).filter((t: any) => !t.is_internal_transfer);
     let spentYear = 0;
-    let projectedOut = 0;
-    let pendingOutRemaining = 0;
+    let totalIncomeYear = 0;
     const catMap = new Map<string, number>();
 
     for (const t of txs) {
       const amt = Number(t.amount || 0);
-      if (t.type !== "despesa") continue;
-      if (t.status === "Pago") {
+      if (t.status !== "Pago") continue;
+      if (t.type === "despesa") {
         spentYear += amt;
-        projectedOut += amt;
         const key = t.category || "Sem categoria";
         catMap.set(key, (catMap.get(key) || 0) + amt);
-      } else if (t.status === "Pendente") {
-        projectedOut += amt;
-        if (t.payment_date >= TODAY) pendingOutRemaining += amt;
+      } else if (t.type === "receita") {
+        totalIncomeYear += amt;
       }
     }
 
-    const leftover = totalBalance - pendingOutRemaining;
+    const monthsElapsed = Math.max(1, new Date().getMonth() + 1);
+    const avgIncomeMonth = totalIncomeYear / monthsElapsed;
+    const avgSpentMonth = spentYear / monthsElapsed;
+    const projectedYearOut = avgSpentMonth * 12;
+    const leftover = totalBalance - projectedYearOut;
 
-    const topCategories = Array.from(catMap.entries())
+    const allCategories = Array.from(catMap.entries())
       .map(([name, total]) => ({ name, total }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 3);
+      .sort((a, b) => b.total - a.total);
+    const topCategories = allCategories.slice(0, 3);
 
     setState({
       loading: false,
       totalBalance,
       spentYear,
-      projectedYearOut: projectedOut,
+      projectedYearOut,
       leftover,
       topCategories,
+      totalIncomeYear,
+      avgIncomeMonth,
+      avgSpentMonth,
+      allCategories,
     });
   }, [effectiveUserId, contextKey, applyCtx]);
 
