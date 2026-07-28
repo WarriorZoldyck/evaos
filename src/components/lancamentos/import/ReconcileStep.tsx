@@ -283,9 +283,9 @@ function InlineReviewRow({
                   onChange={setClientId}
                   type="client"
                   placeholder="Selecione o cliente"
-                  onContactCreated={(id) => {
+                  onContactCreated={(id, name) => {
                     setClientId(id);
-                    onContactCreated?.("client", id, description);
+                    onContactCreated?.("client", id, name);
                   }}
                 />
               ) : (
@@ -295,9 +295,9 @@ function InlineReviewRow({
                   onChange={setSupplierId}
                   type="supplier"
                   placeholder="Selecione o fornecedor"
-                  onContactCreated={(id) => {
+                  onContactCreated={(id, name) => {
                     setSupplierId(id);
-                    onContactCreated?.("supplier", id, description);
+                    onContactCreated?.("supplier", id, name);
                   }}
                 />
               )}
