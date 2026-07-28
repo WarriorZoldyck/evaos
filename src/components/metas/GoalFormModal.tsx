@@ -29,6 +29,9 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
   const [perExpense, setPerExpense] = useState("");
   const [perSale, setPerSale] = useState("");
   const [saving, setSaving] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<any>(null);
+  const stats = useMetasSidebarStats();
 
   useEffect(() => {
     if (editGoal) {
