@@ -2452,23 +2452,7 @@ export function ImportStatementModal({
                     {hasDivergence ? ` (esperado ${fmt(userStatementTotal!)})` : ""}
                   </span>
                 )}
-                {hasDivergence && (
-                  <div className="rounded border border-destructive/40 bg-destructive/5 p-2 text-[11px] text-left text-destructive max-w-[360px]">
-                    <p className="font-medium mb-1">A importação não bate com o valor da fatura.</p>
-                    <p className="text-muted-foreground mb-2">
-                      Revise se existem linhas duplicadas no extrato, lançamentos ausentes
-                      (IOF internacional, anuidades, cartões adicionais) ou correspondências erradas.
-                    </p>
-                    <label className="flex items-start gap-2 cursor-pointer">
-                      <Checkbox
-                        checked={acknowledgeDivergence}
-                        onCheckedChange={(c) => setAcknowledgeDivergence(!!c)}
-                        className="mt-0.5"
-                      />
-                      <span>Entendi a divergência e quero importar mesmo assim.</span>
-                    </label>
-                  </div>
-                )}
+                {/* Painel detalhado de divergência foi movido para AlertDialog exibido ao clicar em Importar. */}
                 {toImport === 0 && counts.pendente === 0 ? (
                   <Button
                     onClick={handleFinish}
