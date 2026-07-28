@@ -332,6 +332,125 @@ export function ImportStatementModal({
   }, [categoryBase, extraCategories]);
   const rootCategories = mergedCategories.filter((c) => !c.parent_id);
 
+  // ─────────────────────────────────────────────────────────────
+  // Persistência do rascunho da importação (localStorage).
+  // Só perde progresso se o usuário concluir OU cancelar explicitamente.
+  // Fechar por ESC / navegação / reload preserva a sessão.
+  // ─────────────────────────────────────────────────────────────
+  const SESSION_VERSION = 1;
+  const sessionKey = effectiveUserId ? `eva.import-session.v${SESSION_VERSION}.${effectiveUserId}` : "";
+  const sessionLoadedRef = useRef(false);
+  const [pendingResume, setPendingResume] = useState<null | {
+    fileName: string;
+    rowCount: number;
+    savedAt: string;
+    snapshot: Record<string, unknown>;
+  }>(null);
+
+  const clearSession = () => {
+    try {
+      if (sessionKey) localStorage.removeItem(sessionKey);
+    } catch { /* noop */ }
+    setPendingResume(null);
+  };
+
+  // Load once on mount / when the key becomes known.
+  useEffect(() => {
+    if (!open || !sessionKey || sessionLoadedRef.current) return;
+    sessionLoadedRef.current = true;
+    try {
+      const raw = localStorage.getItem(sessionKey);
+      if (!raw) return;
+      const snap = JSON.parse(raw);
+      if (!snap || snap.version !== SESSION_VERSION) {
+        localStorage.removeItem(sessionKey);
+        return;
+      }
+      if (!Array.isArray(snap.rows) || snap.rows.length === 0) return;
+      // If the modal already has rows (unlikely — mounted fresh), skip.
+      if (rows.length > 0) return;
+      setPendingResume({
+        fileName: snap.fileName || "arquivo",
+        rowCount: snap.rows.length,
+        savedAt: snap.savedAt || "",
+        snapshot: snap,
+      });
+    } catch { /* corrupted snapshot — ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sessionKey]);
+
+  const resumeSession = () => {
+    if (!pendingResume) return;
+    const s = pendingResume.snapshot as any;
+    setRows(s.rows || []);
+    setFileName(s.fileName || "");
+    setStep(s.step || "preview");
+    setImportType(s.importType || "");
+    setTargetBankAccount(s.targetBankAccount || "");
+    setTargetCard(s.targetCard || "");
+    setBillReferenceMonth(s.billReferenceMonth || "");
+    setStatementTotal(s.statementTotal ?? null);
+    setStatementTotalInput(s.statementTotalInput || "");
+    setAmountRescaled(!!s.amountRescaled);
+    setAcknowledgeDivergence(!!s.acknowledgeDivergence);
+    setMatchActions(s.matchActions || {});
+    setMatchTargets(s.matchTargets || {});
+    setReplaceDeleteIds(new Set(s.replaceDeleteIds || []));
+    setRowCategories(s.rowCategories || {});
+    setRowDescriptions(s.rowDescriptions || {});
+    setRowContacts(s.rowContacts || {});
+    setReviewedRows(new Set(s.reviewedRows || []));
+    setExplicitlyIgnored(new Set(s.explicitlyIgnored || []));
+    setExtraCategories(s.extraCategories || []);
+    setPromotedOrphanIds(new Set(s.promotedOrphanIds || []));
+    setPendingResume(null);
+  };
+
+  // Debounced save whenever something meaningful changes.
+  useEffect(() => {
+    if (!open || !sessionKey) return;
+    if (!sessionLoadedRef.current) return; // avoid clobbering before load runs
+    if (pendingResume) return; // user hasn't decided resume/discard yet
+    if (step === "summary") return;
+    if (rows.length === 0) return;
+    const handle = setTimeout(() => {
+      const snap = {
+        version: SESSION_VERSION,
+        savedAt: new Date().toISOString(),
+        fileName,
+        step,
+        importType,
+        targetBankAccount,
+        targetCard,
+        billReferenceMonth,
+        statementTotal,
+        statementTotalInput,
+        amountRescaled,
+        acknowledgeDivergence,
+        rows,
+        matchActions,
+        matchTargets,
+        rowCategories,
+        rowDescriptions,
+        rowContacts,
+        reviewedRows: Array.from(reviewedRows),
+        explicitlyIgnored: Array.from(explicitlyIgnored),
+        replaceDeleteIds: Array.from(replaceDeleteIds),
+        extraCategories,
+        promotedOrphanIds: Array.from(promotedOrphanIds),
+      };
+      try {
+        localStorage.setItem(sessionKey, JSON.stringify(snap));
+      } catch { /* quota exceeded — skip silently */ }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [
+    open, sessionKey, pendingResume, step, rows, fileName, importType, targetBankAccount, targetCard,
+    billReferenceMonth, statementTotal, statementTotalInput, amountRescaled, acknowledgeDivergence,
+    matchActions, matchTargets, rowCategories, rowDescriptions, rowContacts, reviewedRows,
+    explicitlyIgnored, replaceDeleteIds, extraCategories, promotedOrphanIds,
+  ]);
+
   // Load suppliers/clients once the reconcile step is reachable, so the review
   // modal has options to pre-select and let the user create new inline.
   useEffect(() => {
@@ -1414,6 +1533,8 @@ export function ImportStatementModal({
         dateTo: dto,
         status: importType === "cartao" ? "Pendente" : "Pago",
       });
+      // Import concluído com sucesso — apagar snapshot persistido.
+      clearSession();
       setStep("summary");
     }
   };
@@ -1448,6 +1569,26 @@ export function ImportStatementModal({
   };
 
   const handleClose = () => {
+    // Fechamento implícito/explícito: NÃO reseta em memória nem apaga o rascunho.
+    // O snapshot persistido no localStorage garante retomada em outra sessão.
+    onClose();
+  };
+
+  const handleCancelImport = () => {
+    if (rows.length > 0) {
+      const ok = window.confirm(
+        "Cancelar a importação vai descartar todo o progresso desta conciliação. Deseja continuar?"
+      );
+      if (!ok) return;
+    }
+    clearSession();
+    resetAll();
+    onClose();
+  };
+
+  // Fluxo terminou (summary ou "nada a importar") — limpa sem confirmação.
+  const handleFinish = () => {
+    clearSession();
     resetAll();
     onClose();
   };
@@ -1458,7 +1599,7 @@ export function ImportStatementModal({
     if (importResult?.dateFrom) params.set("dateFrom", importResult.dateFrom);
     if (importResult?.dateTo) params.set("dateTo", importResult.dateTo);
     params.set("status", importResult?.status || "Pago");
-    handleClose();
+    handleFinish();
     navigate(`/lancamentos?${params.toString()}`);
   };
 
@@ -1488,6 +1629,33 @@ export function ImportStatementModal({
         {/* Upload area */}
         {rows.length === 0 && (
           <div className="flex flex-col gap-4 py-6">
+            {pendingResume && (
+              <Alert className="border-primary/40 bg-primary/5">
+                <FileText className="h-4 w-4 text-primary" />
+                <AlertDescription className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="text-sm">
+                    <p className="font-medium text-foreground">
+                      Retomar importação em andamento?
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Arquivo <strong>{pendingResume.fileName}</strong> · {pendingResume.rowCount} lançamento{pendingResume.rowCount > 1 ? "s" : ""}
+                      {pendingResume.savedAt
+                        ? ` · salvo ${new Date(pendingResume.savedAt).toLocaleString("pt-BR")}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button size="sm" variant="outline" onClick={() => { clearSession(); }}>
+                      Descartar
+                    </Button>
+                    <Button size="sm" onClick={resumeSession} className="gap-1.5">
+                      <ArrowRight className="h-4 w-4" />
+                      Retomar
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Pergunta o tipo (e o mês, se cartão) ANTES de subir o arquivo,
                 para garantir que a busca de "só no sistema" use o mês correto. */}
             <div className="grid gap-3 sm:grid-cols-2">
@@ -2121,14 +2289,14 @@ export function ImportStatementModal({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleClose}
+                  onClick={handleCancelImport}
                   className="gap-1.5 text-muted-foreground hover:text-destructive"
                 >
                   Cancelar importação
                   <span aria-hidden>✕</span>
                 </Button>
               ) : (
-                <Button variant="outline" onClick={handleClose}>
+                <Button variant="outline" onClick={handleCancelImport}>
                   Cancelar
                 </Button>
               )}
@@ -2212,7 +2380,7 @@ export function ImportStatementModal({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={handleClose}
+                    onClick={handleCancelImport}
                     className="gap-1.5 text-muted-foreground hover:text-destructive"
                   >
                     Cancelar importação
@@ -2301,7 +2469,7 @@ export function ImportStatementModal({
                 )}
                 {toImport === 0 && counts.pendente === 0 ? (
                   <Button
-                    onClick={handleClose}
+                    onClick={handleFinish}
                     className="gap-2 mt-1"
                     title="Todas as linhas foram tratadas como 'manter só o do sistema' ou 'ignorar' — nada precisa ser salvo."
                   >
@@ -2345,7 +2513,7 @@ export function ImportStatementModal({
               </Button>
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleClose}>Fechar</Button>
+              <Button variant="outline" onClick={handleFinish}>Fechar</Button>
               {importResult.created > 0 && (
                 <Button onClick={handleViewNew} className="gap-2">
                   Ver novos para categorizar <ArrowRight className="h-4 w-4" />
