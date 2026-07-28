@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Goal } from "@/hooks/useGoals";
+import { useMetasSidebarStats } from "@/hooks/useMetasSidebarStats";
+import { ActionPlanDialog } from "./ActionPlanDialog";
 
 interface GoalFormModalProps {
   open: boolean;
@@ -27,6 +29,9 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
   const [perExpense, setPerExpense] = useState("");
   const [perSale, setPerSale] = useState("");
   const [saving, setSaving] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [pendingPayload, setPendingPayload] = useState<any>(null);
+  const stats = useMetasSidebarStats();
 
   useEffect(() => {
     if (editGoal) {
@@ -47,7 +52,6 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
 
   const handleSubmit = async () => {
     if (!name.trim() || !targetAmount) return;
-    setSaving(true);
     const payload = {
       name: name.trim(),
       target_amount: Number(targetAmount),
@@ -58,11 +62,37 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
       auto_reserve_per_expense: Number(perExpense) || 0,
       auto_reserve_per_sale: Number(perSale) || 0,
     };
+
+    // Se a nova meta empurra a sobra para negativo, mostra plano antes de salvar.
+    const targetDelta = editGoal
+      ? Number(targetAmount) - Number(editGoal.target_amount)
+      : Number(targetAmount);
+    const projectedLeftover = stats.leftover - targetDelta;
+    if (!stats.loading && projectedLeftover < 0 && !planOpen) {
+      setPendingPayload(payload);
+      setPlanOpen(true);
+      return;
+    }
+
+    await persist(payload);
+  };
+
+  const persist = async (payload: any) => {
+    setSaving(true);
     const ok = editGoal
       ? await onUpdate(editGoal.id, payload)
       : await onSave(payload);
     setSaving(false);
     if (ok) onClose();
+  };
+
+  const confirmDespiteDeficit = async () => {
+    setPlanOpen(false);
+    if (pendingPayload) {
+      const p = pendingPayload;
+      setPendingPayload(null);
+      await persist(p);
+    }
   };
 
   return (
@@ -133,6 +163,21 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
           </Button>
         </DialogFooter>
       </DialogContent>
+      <ActionPlanDialog
+        open={planOpen}
+        onClose={() => { setPlanOpen(false); setPendingPayload(null); }}
+        gap={Math.max(0, (Number(targetAmount) || 0) - Math.max(0, stats.leftover))}
+        topCategories={stats.topCategories}
+        goalName={name}
+        title="Essa meta não cabe na sobra"
+      />
+      {planOpen && pendingPayload && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60]">
+          <Button onClick={confirmDespiteDeficit} variant="destructive" className="shadow-lg">
+            Criar mesmo assim
+          </Button>
+        </div>
+      )}
     </Dialog>
   );
 }

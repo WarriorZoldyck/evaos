@@ -7,6 +7,7 @@ import { useGoals, type Goal } from "@/hooks/useGoals";
 import { useCompany } from "@/contexts/CompanyContext";
 import { GoalListItem } from "@/components/metas/GoalListItem";
 import { GoalFormModal } from "@/components/metas/GoalFormModal";
+import { MetasSidebar } from "@/components/metas/MetasSidebar";
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -33,7 +34,9 @@ export default function Metas() {
   };
 
   return (
-    <div className="metas-scope space-y-6 animate-fade-in max-w-2xl mx-auto">
+    <div className="metas-scope animate-fade-in grid gap-6 lg:grid-cols-[320px_1fr] max-w-6xl mx-auto">
+      <MetasSidebar goals={goals} />
+      <div className="space-y-6 min-w-0">
       {/* Header enxuto */}
       <div className="flex items-center justify-between gap-4">
         <div>
@@ -137,6 +140,7 @@ export default function Metas() {
         onSave={createGoal}
         onUpdate={updateGoal}
       />
+      </div>
     </div>
   );
 }
