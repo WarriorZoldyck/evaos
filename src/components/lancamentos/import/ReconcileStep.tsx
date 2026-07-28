@@ -1323,8 +1323,9 @@ export function ReconcileStep({
                                   value={draftDesc}
                                   onChange={(e) => onDescriptionChange?.(i, e.target.value)}
                                   placeholder={r.description}
-                                  className="h-8 text-sm"
-                                  aria-label="Descrição do lançamento"
+                                  className="h-8 text-sm border-transparent bg-transparent hover:bg-muted/50 focus:bg-background focus:border-input transition-colors"
+                                  aria-label="Descrição do lançamento — clique para editar"
+                                  title="Clique para editar a descrição"
                                 />
                                 {editedDesc && editedDesc !== r.description && (
                                   <p className="text-[10px] text-muted-foreground truncate" title={r.description}>

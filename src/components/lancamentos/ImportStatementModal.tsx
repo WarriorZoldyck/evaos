@@ -789,21 +789,49 @@ export function ImportStatementModal({
             Object.entries(rowContact).forEach(([idxStr, c]) => {
               const idx = Number(idxStr);
               const last = c.type === "supplier" ? lastBySupplier.get(c.id) : lastByClient.get(c.id);
+              const r: any = parsed[idx];
               if (last && normalizeText(last) !== normalizeText(c.name)) {
                 initDescriptions[idx] = last;
               } else {
-                // Fornecedor conhecido, mas sem histórico útil → descrição em branco.
-                initDescriptions[idx] = "";
+                // Fornecedor conhecido, sem histórico útil → usa o nome limpo
+                // do estabelecimento (base_description) ou o texto do extrato.
+                initDescriptions[idx] = r?.base_description || r?.description || "";
               }
             });
           }
 
-          // Para linhas SEM fornecedor reconhecido, também limpar a descrição
-          // (o texto do extrato continua acessível via placeholder / bloco "Original:").
-          parsed.forEach((_r: any, i: number) => {
-            if (initDescriptions[i] === undefined && rowContact[i] === undefined) {
-              initDescriptions[i] = "";
+          // Para linhas SEM contato exato: tentar match fuzzy (substring, ≥4 chars)
+          // contra fornecedores/clientes cadastrados. Se encontrar, pré-preenche
+          // contato. Em qualquer caso, a descrição vem preenchida com o texto do
+          // extrato (base_description quando disponível), nunca em branco.
+          parsed.forEach((r: any, i: number) => {
+            if (rowContact[i]) return;
+            const raw = (r.base_description || r.description || "").trim();
+            const key = normalizeText(raw);
+            if (!key) {
+              if (initDescriptions[i] === undefined) initDescriptions[i] = raw;
+              return;
             }
+            if (key.length >= 4) {
+              const list = r.type === "receita" ? cliList : supList;
+              let best: { id: string; name: string; score: number } | null = null;
+              for (const c of list) {
+                const nk = normalizeText(c.name);
+                if (!nk || nk.length < 4) continue;
+                if (key.includes(nk) || nk.includes(key)) {
+                  const score = Math.min(nk.length, key.length);
+                  if (!best || score > best.score) best = { id: c.id, name: c.name, score };
+                }
+              }
+              if (best) {
+                if (r.type === "receita") {
+                  initContacts[i] = { client_id: best.id, supplier_id: null };
+                } else {
+                  initContacts[i] = { supplier_id: best.id, client_id: null };
+                }
+              }
+            }
+            if (initDescriptions[i] === undefined) initDescriptions[i] = raw;
           });
 
           setRowContacts((prev) => ({ ...initContacts, ...prev }));
