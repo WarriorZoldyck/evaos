@@ -7,6 +7,7 @@ import { useGoals, type Goal } from "@/hooks/useGoals";
 import { useCompany } from "@/contexts/CompanyContext";
 import { GoalListItem } from "@/components/metas/GoalListItem";
 import { GoalFormModal } from "@/components/metas/GoalFormModal";
+import { MetasSidebar } from "@/components/metas/MetasSidebar";
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
