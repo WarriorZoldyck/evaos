@@ -1342,12 +1342,12 @@ export function ReconcileStep({
                                   }
                                   type={isReceita ? "client" : "supplier"}
                                   placeholder={isReceita ? "Cliente (opcional)" : "Fornecedor (opcional)"}
-                                  onContactCreated={(id) => {
+                                  onContactCreated={(id, name) => {
                                     onContactChange?.(i, {
                                       supplier_id: !isReceita ? id : null,
                                       client_id: isReceita ? id : null,
                                     });
-                                    onContactCreated?.(isReceita ? "client" : "supplier", id, draftDesc);
+                                    onContactCreated?.(isReceita ? "client" : "supplier", id, name);
                                   }}
                                 />
                               </div>
