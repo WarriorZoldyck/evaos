@@ -34,7 +34,7 @@ interface ContactSelectWithCreateProps {
   placeholder?: string;
   /** "supplier" or "client" */
   type: "supplier" | "client";
-  onContactCreated: (newId: string) => void;
+  onContactCreated: (newId: string, newName: string) => void;
   disabled?: boolean;
 }
 
@@ -96,7 +96,7 @@ export function ContactSelectWithCreate({
     setLocalExtras((prev) => [...prev, { id: data.id, name: newName.trim() }]);
     setNewName("");
     setCreateOpen(false);
-    onContactCreated(data.id);
+    onContactCreated(data.id, newName.trim());
   };
 
   return (
