@@ -2470,8 +2470,15 @@ export function ImportStatementModal({
                       </p>
                     )}
                     <Button
-                      onClick={handleImport}
-                      disabled={importing || blockedByDivergence || counts.pendente > 0}
+                      onClick={() => {
+                        if (hasDivergence && !acknowledgeDivergence) {
+                          setPendingDivergenceInfo({ diff, expected: userStatementTotal! });
+                          setConfirmDivergenceOpen(true);
+                          return;
+                        }
+                        handleImport();
+                      }}
+                      disabled={importing || counts.pendente > 0}
                       className="gap-2 mt-1"
                       title={counts.pendente > 0 ? "Existem linhas do extrato sem decisão — nada pode ser descartado em silêncio." : undefined}
                     >
