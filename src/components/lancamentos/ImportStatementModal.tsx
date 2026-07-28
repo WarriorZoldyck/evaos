@@ -412,7 +412,18 @@ export function ImportStatementModal({
     setRowDescriptions(s.rowDescriptions || {});
     setRowContacts(s.rowContacts || {});
     setReviewedRows(new Set(s.reviewedRows || []));
-    setExplicitlyIgnored(new Set(s.explicitlyIgnored || []));
+    // Backfill: qualquer linha com ação "ignorar" (sem target vinculado) é
+    // considerada decisão explícita — o toggle é a decisão, não há "pendente".
+    const restoredActions = s.matchActions || {};
+    const restoredTargets = s.matchTargets || {};
+    const restoredIgnored = new Set<number>(s.explicitlyIgnored || []);
+    Object.keys(restoredActions).forEach((k) => {
+      const idx = Number(k);
+      if (restoredActions[idx] === "ignorar" && !restoredTargets[idx]) {
+        restoredIgnored.add(idx);
+      }
+    });
+    setExplicitlyIgnored(restoredIgnored);
     setExtraCategories(s.extraCategories || []);
     setPromotedOrphanIds(new Set(s.promotedOrphanIds || []));
     setPendingResume(null);
