@@ -1,87 +1,62 @@
+## Objetivo
 
-## Escopo
+Reduzir o esforço de digitação na conciliação: pré-preencher Descrição e Fornecedor automaticamente para cada linha do extrato, deixando ambos editáveis apenas quando o usuário clicar no campo.
 
-Três ajustes na tela de conciliação (`ReconcileStep` + `ImportStatementModal`):
+## Comportamento atual (verificado)
 
-1. Refatorar o rodapé para eliminar o painel de divergência inline e usar apenas botões compactos.
-2. Corrigir o bug de "fornecedor cai na descrição" no parse do extrato.
-3. Corrigir o bug do "Criar novo fornecedor/cliente" que salva a descrição no lugar do nome digitado.
+- `ImportStatementModal` já faz o pós-processamento pós-parse e passa `initialRowContacts` / `initialRowDescriptions` para o `ReconcileStep`, mas hoje o fallback deixa descrição em branco quando não há histórico do fornecedor.
+- Fornecedor: quando encontra match por nome normalizado, já vem preenchido; quando não encontra, fica vazio e o usuário precisa criar/selecionar.
+- Descrição: só vem preenchida se existe transação anterior do mesmo fornecedor nos últimos ~180 dias; senão fica vazia (com o texto do extrato só como placeholder).
 
----
+Resultado prático: nas telas enviadas, quase todas as linhas aparecem sem descrição e sem fornecedor, exigindo digitação repetida.
 
-## 1. Rodapé enxuto + confirmação de divergência
+## Mudanças propostas
 
-Hoje o rodapé mostra o resumo de divergência (`⚠ Divergência: -R$ X`) em texto inline, o que ainda ocupa espaço e polui a UI.
+### 1. Descrição sempre pré-preenchida
 
-**Novo layout do rodapé** (`ImportStatementModal.tsx`, área do `ReconcileStep`):
+No pós-processamento do parse em `ImportStatementModal.tsx`:
 
-```
-[ Voltar ]  [ Cancelar importação ]        [ Total informado pelo banco ]  [ Importar N (R$ Y) ]
-```
+- Regra nova para `initialRowDescriptions[i]`:
+  1. Se existe `lastDescription` do fornecedor casado → usa ela.
+  2. Senão, se existe `base_description` (nome limpo do fornecedor, sem parcela) → usa ela.
+  3. Senão → usa `r.description` bruta.
+- Ou seja, o campo Descrição nunca começa vazio; sempre traz o melhor palpite disponível.
 
-- **Voltar / Cancelar importação:** mantidos como estão.
-- **Total informado pelo banco:** novo botão à esquerda do "Importar".
-  - Só aparece quando há divergência entre soma do extrato e soma resolvida.
-  - Rótulo: `Total informado pelo banco: R$ X`.
-  - Estilo `outline` discreto (não é ação primária).
-  - Ao clicar, abre um `AlertDialog` com:
-    - Título: "Confirmar divergência".
-    - Corpo: total do banco, total resolvido, diferença (positiva/negativa), texto curto explicando que o extrato é a fonte da verdade e pedindo confirmação.
-    - Ações: `Cancelar` | `Concordo, importar mesmo assim`.
-  - Ao confirmar, `divergenceAcknowledged` vira `true` e o dialog fecha.
-- **Importar N (R$ Y):** habilitado quando `counts.pendente === 0` **e** (não há divergência **ou** `divergenceAcknowledged === true`).
-  - Se ainda houver pendências: desabilitado com tooltip existente ("X linhas sem decisão").
-  - Se houver divergência não confirmada: desabilitado, com tooltip "Confirme a divergência com o total do banco antes de importar".
+### 2. Fornecedor sempre pré-preenchido quando houver match plausível
 
-**Remover:**
-- O bloco inline `⚠ Divergência …` do rodapé.
-- O `AlertDialog` atual disparado no `onClick` do Importar (a confirmação passa a ser um passo explícito via o novo botão).
+Ainda em `ImportStatementModal.tsx`:
 
-**Estados:**
-- Já existe `divergenceAcknowledged`; renomear apenas se necessário.
-- Remover `confirmDivergenceOpen` / `pendingDivergenceInfo` (substituídos pelo novo dialog controlado pelo botão).
+- Mantém o match exato por nome normalizado (já existente).
+- Adiciona um segundo passo (fallback) quando não houver match exato:
+  - Normaliza `base_description` (ou `r.description` sem sufixo de parcela).
+  - Faz um match "starts-with" / "contains" contra `suppliers`/`clients` (mesmo `user_id`, respeitando tipo receita/despesa), preferindo o nome mais longo que casa.
+  - Se encontrar um único candidato razoável, usa como `initialRowContacts[i]`.
+- Se nenhum match: deixa fornecedor vazio (comportamento atual), mas a descrição já traz o texto do extrato pela regra 1.
 
----
+### 3. UX de edição "click-to-edit" na linha
 
-## 2. Fornecedor no campo certo + descrição limpa
+Em `ReconcileStep.tsx`, quando a linha ainda não foi confirmada (toggle "Criar" desativado):
 
-Em `ImportStatementModal.tsx`, após o parse e o bloco de installments (~L601-650), adicionar pós-processamento:
+- **Descrição:** trocar o `Input` sempre visível por um texto exibido "como label" (com o valor pré-preenchido). Ao clicar no texto, ele vira `Input` focado (autofocus, seleciona o conteúdo). Ao dar blur/Enter, volta a virar texto.
+- **Fornecedor:** trocar o `Select` sempre aberto por um chip/texto exibindo o nome do fornecedor pré-preenchido (ou "Fornecedor (opcional)" se vazio). Ao clicar, abre o `ContactSelectWithCreate` (mantém a lógica existente de criar novo). Ao selecionar, fecha e volta a exibir como chip.
+- Visualmente: usar um hover discreto (`hover:bg-muted/40`, cursor-text no texto de descrição, cursor-pointer no chip do fornecedor) e um ícone `Pencil` pequeno à direita para deixar claro que é editável.
+- Quando o toggle "Criar" é ativado, mantém o comportamento atual (campos travados, `pointer-events-none`).
 
-- Para cada linha `r`:
-  - Calcular `cleanName` = `base_description` (se houver) ou `r.description`, normalizado (trim, sem acentos, upper).
-  - Procurar em `suppliers` (despesa) ou `clients` (receita) por match exato de nome normalizado.
-  - Se encontrar: registrar em `initialRowContacts[i]` o `supplier_id` / `client_id`.
-- Buscar a última descrição usada para cada contato encontrado, em uma única query:
-  ```ts
-  supabase.from("transactions")
-    .select("supplier_id, client_id, description, payment_date")
-    .or("supplier_id.in.(...),client_id.in.(...)")
-    .gte("payment_date", <hoje - 90d>)
-    .order("payment_date", { ascending: false });
-  ```
-  Reduzir para `Map<contactId, lastDescription>`.
-- Se `lastDescription` existir **e** for diferente do nome do contato → usar como `initialRowDescriptions[i]`. Caso contrário, deixar em branco (o placeholder do input já mostra `r.description` como referência).
-- Se **não** houver contato encontrado: não pré-preencher contato e **deixar a descrição em branco** (o texto original continua acessível via placeholder e via o bloco "Original:" já existente em `ReconcileStep` L1329-1333) — assim o usuário abre "Criar novo" e digita o nome real sem herdar a descrição.
+### 4. Coerência com o restante do fluxo
 
-Passar dois novos props ao `ReconcileStep`:
-- `initialRowContacts` e `initialRowDescriptions`
+- O placeholder "Original: …" já mostrado na linha continua útil como referência mesmo com a descrição pré-preenchida — mantido.
+- Auto-save de sessão (`localStorage`) não muda: os valores pré-preenchidos já entram como `rowDescriptions` / `rowContacts` no estado do `ImportStatementModal`, então são persistidos automaticamente.
+- Regra de "sem decisão bloqueia o Importar" não muda: pré-preencher não conta como decisão — o usuário ainda precisa ativar o toggle "Criar", vincular ou "Ignorar de vez".
 
-E usá-los como valor inicial dos estados `rowContacts` / `rowDescriptions` já mantidos no `ImportStatementModal` (não no `ReconcileStep`, para preservar o auto-save de sessão).
+## Arquivos afetados
 
----
-
-## 3. Correção da criação inline de fornecedor/cliente
-
-- `src/components/lancamentos/ContactSelectWithCreate.tsx`: alterar assinatura de `onContactCreated` para `(id: string, name: string)` e chamar `onContactCreated(data.id, newName.trim())` após o insert.
-- `src/components/lancamentos/import/ReconcileStep.tsx`: nas duas chamadas (linhas ~300 e ~1345), receber `(id, name)` e propagar `onContactCreated?.(type, id, name)` — remover o uso de `draftDesc` como nome.
-- `src/components/lancamentos/TransactionFormModal.tsx`: ajustar a chamada existente para a nova assinatura (só ignorar o segundo argumento se não for necessário lá).
-
----
+- `src/components/lancamentos/ImportStatementModal.tsx` — ajustar regra de `initialRowDescriptions` e adicionar fallback de match de fornecedor.
+- `src/components/lancamentos/import/ReconcileStep.tsx` — transformar descrição e fornecedor em campos click-to-edit enquanto a linha não estiver confirmada.
 
 ## Verificação
 
-- `tsgo` nos três arquivos alterados.
+- `tsgo` nos dois arquivos.
 - Fluxo manual:
-  1. Importar extrato com uma parcela conhecida (fornecedor existente) → confirmar que o campo Fornecedor vem preenchido e Descrição vem em branco (ou com a descrição usada anteriormente para o fornecedor).
-  2. Criar fornecedor inline digitando "Padaria X" → combobox exibe "Padaria X", não a descrição da linha.
-  3. Provocar divergência artificial (marcar "Ignorar de vez" em uma linha grande): confirmar que o rodapé mostra o botão "Total informado pelo banco: R$ …", que o Importar está desabilitado, e que o dialog de confirmação libera o Importar.
+  1. Importar extrato onde vários itens são do mesmo fornecedor já cadastrado → fornecedor vem selecionado, descrição vem com o último texto usado.
+  2. Importar itens sem fornecedor cadastrado → descrição vem com o texto do extrato, fornecedor vazio; clicar na descrição permite editar; clicar no fornecedor abre o seletor com opção "Criar novo".
+  3. Ativar o toggle "Criar" → campos ficam travados como hoje; desativar → voltam a ser clicáveis.
