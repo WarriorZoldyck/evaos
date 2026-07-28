@@ -1599,7 +1599,7 @@ export function ImportStatementModal({
     if (importResult?.dateFrom) params.set("dateFrom", importResult.dateFrom);
     if (importResult?.dateTo) params.set("dateTo", importResult.dateTo);
     params.set("status", importResult?.status || "Pago");
-    handleClose();
+    handleFinish();
     navigate(`/lancamentos?${params.toString()}`);
   };
 
