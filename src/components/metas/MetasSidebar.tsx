@@ -59,10 +59,18 @@ export function MetasSidebar({ goals }: MetasSidebarProps) {
               tone="primary"
             />
             <StatCard
-              icon={<ArrowUpCircle className="h-4 w-4" />}
-              label={`Entradas ${new Date().getFullYear()}`}
-              value={fmt(stats.totalIncomeYear)}
+              icon={<TrendingUp className="h-4 w-4" />}
+              label="Média de entradas / mês"
+              value={fmt(stats.avgIncomeMonth)}
               tone="success"
+            />
+          </Section>
+
+          <Section title="Saídas">
+            <StatCard
+              icon={<TrendingDown className="h-4 w-4" />}
+              label="Média de saídas / mês"
+              value={fmt(stats.avgSpentMonth)}
             />
             <StatCard
               icon={<TrendingUp className="h-4 w-4" />}
