@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCashFlowMonthly } from "@/hooks/useCashFlowMonthly";
+import type { DRECategoryRow } from "@/hooks/useDREData";
 
 export interface CategoryBreakdown {
   name: string;
@@ -16,30 +18,19 @@ export interface MetasSidebarStats {
   leftover: number;
   incomeCategories: CategoryBreakdown[];
   expenseCategories: CategoryBreakdown[];
-  topCategories: CategoryBreakdown[]; // top 3 expenses (for ActionPlanDialog)
+  topCategories: CategoryBreakdown[];
   refetch: () => void;
 }
 
 const YEAR = new Date().getFullYear();
-const YEAR_START = `${YEAR}-01-01`;
-const YEAR_END = `${YEAR}-12-31`;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function useMetasSidebarStats(): MetasSidebarStats {
   const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
 
-  const [state, setState] = useState<Omit<MetasSidebarStats, "refetch">>({
-    loading: true,
-    totalBalance: 0,
-    avgIncomeMonth: 0,
-    avgSpentMonth: 0,
-    leftover: 0,
-    incomeCategories: [],
-    expenseCategories: [],
-    topCategories: [],
-  });
+  const cashFlow = useCashFlowMonthly("caixa", { year: YEAR, granularity: "monthly" });
 
+  const [balanceState, setBalanceState] = useState({ loading: true, totalBalance: 0 });
   const contextKey = isPersonal ? "personal" : selectedCompanyId || "none";
 
   const applyCtx = useCallback(
@@ -51,23 +42,13 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     [isPersonal, selectedCompanyId],
   );
 
-  const fetchAll = useCallback(async () => {
+  const fetchBalance = useCallback(async () => {
     if (!effectiveUserId) return;
-    setState((s) => ({ ...s, loading: true }));
+    setBalanceState((s) => ({ ...s, loading: true }));
 
-    const [banksRes, walletsRes, txRes, catsRes] = await Promise.all([
+    const [banksRes, walletsRes] = await Promise.all([
       applyCtx(supabase.from("bank_accounts").select("id,initial_balance").eq("user_id", effectiveUserId)),
       applyCtx(supabase.from("wallets").select("id,initial_balance").eq("user_id", effectiveUserId)),
-      applyCtx(
-        supabase
-          .from("transactions")
-          .select("amount,type,status,category,payment_date,is_internal_transfer")
-          .eq("user_id", effectiveUserId)
-          .gte("payment_date", YEAR_START)
-          .lte("payment_date", YEAR_END)
-          .limit(5000),
-      ),
-      supabase.from("categories").select("id,name").eq("user_id", effectiveUserId),
     ]);
 
     const banks = banksRes.data || [];
@@ -81,70 +62,60 @@ export function useMetasSidebarStats(): MetasSidebarStats {
 
     let paidDelta = 0;
     if (bankIds.length > 0 || walletIds.length > 0) {
-      const { data: deltaData } = await supabase.rpc("get_accounts_paid_delta", {
+      const { data } = await supabase.rpc("get_accounts_paid_delta", {
         bank_ids: bankIds,
         wallet_ids: walletIds,
       });
-      paidDelta = Number(deltaData || 0);
+      paidDelta = Number(data || 0);
     }
-    const totalBalance = initialSum + paidDelta;
+    setBalanceState({ loading: false, totalBalance: initialSum + paidDelta });
+  }, [effectiveUserId, contextKey, applyCtx]);
 
-    const catNameById = new Map<string, string>();
-    for (const c of catsRes.data || []) catNameById.set(c.id, c.name);
-    const resolveCatName = (raw: string | null | undefined): string => {
-      if (!raw) return "Sem categoria";
-      if (UUID_RE.test(raw)) return catNameById.get(raw) || "Sem categoria";
-      return raw;
-    };
+  useEffect(() => {
+    fetchBalance();
+  }, [fetchBalance]);
 
-    const txs = (txRes.data || []).filter((t: any) => !t.is_internal_transfer && t.status === "Pago");
-
-    let totalIncomeYear = 0;
-    let totalSpentYear = 0;
-    const incomeMap = new Map<string, number>();
-    const expenseMap = new Map<string, number>();
-
-    for (const t of txs) {
-      const amt = Number(t.amount || 0);
-      const key = resolveCatName(t.category);
-      if (t.type === "receita") {
-        totalIncomeYear += amt;
-        incomeMap.set(key, (incomeMap.get(key) || 0) + amt);
-      } else if (t.type === "despesa") {
-        totalSpentYear += amt;
-        expenseMap.set(key, (expenseMap.get(key) || 0) + amt);
-      }
-    }
-
+  const derived = useMemo(() => {
     const monthsElapsed = Math.max(1, new Date().getMonth() + 1);
     const monthsRemaining = Math.max(0, 12 - monthsElapsed);
+
+    const sumTotals = (t: Record<string, number>) =>
+      Object.values(t).reduce((s, v) => s + (Number(v) || 0), 0);
+
+    const totalIncomeYear = sumTotals(cashFlow.monthlyRevenueTotals || {});
+    const totalSpentYear = sumTotals(cashFlow.monthlyExpenseTotals || {});
+
     const avgIncomeMonth = totalIncomeYear / monthsElapsed;
     const avgSpentMonth = totalSpentYear / monthsElapsed;
-    const leftover = totalBalance + (avgIncomeMonth - avgSpentMonth) * monthsRemaining;
 
-    const toSorted = (m: Map<string, number>): CategoryBreakdown[] =>
-      Array.from(m.entries())
-        .map(([name, total]) => ({ name, total: total / monthsElapsed }))
+    const rowsToCategories = (rows: DRECategoryRow[]): CategoryBreakdown[] =>
+      rows
+        .map((r) => ({
+          name: r.categoryName,
+          total: sumTotals(r.monthlyTotals) / monthsElapsed,
+        }))
+        .filter((c) => c.total !== 0)
         .sort((a, b) => b.total - a.total);
 
-    const expenseCategories = toSorted(expenseMap);
-    const incomeCategories = toSorted(incomeMap);
+    const incomeCategories = rowsToCategories(cashFlow.revenueRows || []);
+    const expenseCategories = rowsToCategories(cashFlow.expenseRows || []);
+    const leftover =
+      balanceState.totalBalance + (avgIncomeMonth - avgSpentMonth) * monthsRemaining;
 
-    setState({
-      loading: false,
-      totalBalance,
+    return {
       avgIncomeMonth,
       avgSpentMonth,
       leftover,
       incomeCategories,
       expenseCategories,
       topCategories: expenseCategories.slice(0, 3),
-    });
-  }, [effectiveUserId, contextKey, applyCtx]);
+    };
+  }, [cashFlow.monthlyRevenueTotals, cashFlow.monthlyExpenseTotals, cashFlow.revenueRows, cashFlow.expenseRows, balanceState.totalBalance]);
 
-  useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
-
-  return { ...state, refetch: fetchAll };
+  return {
+    loading: cashFlow.loading || balanceState.loading,
+    totalBalance: balanceState.totalBalance,
+    ...derived,
+    refetch: fetchBalance,
+  };
 }
