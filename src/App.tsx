@@ -13,7 +13,7 @@ import Auth from "@/pages/Auth";
 import Dashboard from "@/pages/Dashboard";
 import Lancamentos from "@/pages/Lancamentos";
 import ImportarExtrato from "@/pages/ImportarExtrato";
-import PlanoDeCaixa from "@/pages/PlanoDeCaixa";
+import FluxoDeCaixa from "@/pages/FluxoDeCaixa";
 import DRE from "@/pages/DRE";
 import Precificacao from "@/pages/Precificacao";
 import Contas from "@/pages/Contas";
@@ -78,7 +78,7 @@ const App = () => {
                 <Route path="/lancamentos" element={<Lancamentos />} />
                 <Route path="/lancamentos/importar-extrato" element={<ImportarExtrato />} />
                 <Route path="/analises-eva" element={<AnalisesEva />} />
-                <Route path="/plano-de-caixa" element={<PlanoDeCaixa />} />
+                <Route path="/fluxo-de-caixa" element={<FluxoDeCaixa />} />
                 <Route path="/dre" element={<DRE />} />
                 <Route path="/precificacao" element={<Precificacao />} />
                 <Route path="/contas" element={<Contas />} />
