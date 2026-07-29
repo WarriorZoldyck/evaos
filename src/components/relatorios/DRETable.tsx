@@ -13,6 +13,7 @@ interface DRETableProps {
   monthlyExpenseTotals: Record<string, number>;
   monthlyResults: Record<string, number>;
   loading: boolean;
+  subtractOnExpand?: boolean;
 }
 
 const INDENT_PX = 20;
@@ -28,6 +29,7 @@ function CategoryRows({
   toggle,
   colorClass,
   rowCounter,
+  subtractOnExpand,
 }: {
   rows: DRECategoryRow[];
   periods: string[];
@@ -36,13 +38,26 @@ function CategoryRows({
   toggle: (id: string) => void;
   colorClass: string;
   rowCounter: { current: number };
+  subtractOnExpand?: boolean;
 }) {
   return (
     <>
       {rows.map((row) => {
         const hasChildren = row.children.length > 0;
         const isOpen = expanded.has(row.categoryId);
-        const total = Object.values(row.monthlyTotals).reduce((s, v) => s + v, 0);
+        const showResidual = subtractOnExpand && hasChildren && isOpen;
+
+        const displayPer: Record<string, number> = {};
+        periods.forEach((p) => {
+          const own = row.monthlyTotals[p] || 0;
+          if (showResidual) {
+            const childSum = row.children.reduce((s, c) => s + (c.monthlyTotals[p] || 0), 0);
+            displayPer[p] = own - childSum;
+          } else {
+            displayPer[p] = own;
+          }
+        });
+        const total = Object.values(displayPer).reduce((s, v) => s + v, 0);
         const idx = rowCounter.current++;
         const isEven = idx % 2 === 0;
 
@@ -67,11 +82,16 @@ function CategoryRows({
                     <span className="w-3.5 shrink-0" />
                   )}
                   {row.categoryName.toUpperCase()}
+                  {showResidual && (
+                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                      · apenas nesta categoria
+                    </span>
+                  )}
                 </span>
               </td>
               {periods.map((p) => (
                 <td key={p} className={cn("text-right text-xs py-2 tabular-nums", colorClass)}>
-                  {fmt(row.monthlyTotals[p] || 0)}
+                  {fmt(displayPer[p] || 0)}
                 </td>
               ))}
               <td className={cn("text-right text-xs py-2 pr-3 font-semibold tabular-nums", colorClass)}>
@@ -87,6 +107,7 @@ function CategoryRows({
                 toggle={toggle}
                 colorClass={colorClass}
                 rowCounter={rowCounter}
+                subtractOnExpand={subtractOnExpand}
               />
             )}
           </Fragment>
