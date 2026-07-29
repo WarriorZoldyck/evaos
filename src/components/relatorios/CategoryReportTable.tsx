@@ -2,7 +2,12 @@ import { useState, Fragment, useRef } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { CategoryGroup } from "@/hooks/useCashFlowData";
+export interface CategoryGroup {
+  categoryId: string;
+  categoryName: string;
+  total: number;
+  children: CategoryGroup[];
+}
 
 interface Props {
   revenueGroups: CategoryGroup[];
