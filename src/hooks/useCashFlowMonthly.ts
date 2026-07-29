@@ -24,7 +24,7 @@ interface CategoryRecord {
 interface TxRow {
   id: string;
   amount: number | string;
-  type: string;
+  type: "receita" | "despesa";
   status: string;
   category: string | null;
   subcategory: string | null;
