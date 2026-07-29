@@ -1,26 +1,18 @@
-## Objetivo
-Alinhar os cálculos da sidebar de Metas (Saldo, Média de entradas/mês, Média de saídas/mês, categorias) para usar exatamente a mesma fonte da tabela **Fluxo de Caixa por Categoria — 2026**, para que os valores batam com a primeira linha de RECEITAS e a de DESPESAS.
+## Ajuste UX — Fluxo de Caixa: subtrair filhos ao expandir
 
-## Diagnóstico
-Hoje `useMetasSidebarStats` faz sua própria consulta em `transactions`, com filtros diferentes do `useCashFlowMonthly`:
-- Não usa `applyCompanyFilter` (ignora `viewAll` / `selectedCompanyIds` / `personalSelected`)
-- Não passa por `splitContextNeutralTransfers` (regra oficial de transferências)
-- Resolve categorias por lookup direto (sem colapso case-insensitive)
+Quando o usuário abre um pai (ex.: ALIMENTAÇÃO), a linha do pai continua mostrando o total agregado — dá a impressão de que "está somando de novo" com os filhos que aparecem abaixo. O cálculo está certo, é só percepção.
 
-Resultado: valores da sidebar divergem da tabela do Fluxo de Caixa que está ao lado.
+### Solução
+No componente `CategoryRows` (`src/components/relatorios/DRETable.tsx`), quando um pai está **expandido**:
+- Cada célula de período do pai passa a mostrar `totalPai[p] - Σ filhos_diretos[p]` — ou seja, apenas o resíduo (transações lançadas direto no pai, sem subcategoria).
+- A coluna "Total" à direita idem.
+- Rótulo do pai muda para incluir uma dica sutil quando há resíduo: `ALIMENTAÇÃO · (apenas nesta categoria)` — texto atenuado (`text-muted-foreground`).
+- Se o resíduo for zero em todas as células, os valores aparecem como `R$ 0,00` normalmente (não some a linha, para não perder o cabeçalho de grupo).
 
-## Mudança
-Substituir a coleta própria pelo mesmo hook do Fluxo de Caixa.
+Quando **fechado**, mantém o comportamento atual (soma total).
 
-**`src/hooks/useMetasSidebarStats.ts`**
-1. Consumir `useCashFlowMonthly("caixa", { year: anoAtual, granularity: "monthly" })` para receitas e despesas.
-2. Derivar:
-   - `totalIncomeYear = sum(monthlyRevenueTotals)`
-   - `totalSpentYear  = sum(monthlyExpenseTotals)`
-   - `avgIncomeMonth  = totalIncomeYear / monthsElapsed`
-   - `avgSpentMonth   = totalSpentYear  / monthsElapsed`
-3. `incomeCategories` / `expenseCategories`: mapear a partir de `revenueRows` / `expenseRows` (nível raiz), `total = soma dos 12 meses / monthsElapsed`, ordenado desc.
-4. Manter Saldo total como está hoje (`initial_balance` + `get_accounts_paid_delta`) — não vem do fluxo.
-5. Manter `leftover` com a fórmula atual, agora usando as médias alinhadas.
+O mesmo tratamento vale para qualquer nível (recursivo) — não só ALIMENTAÇÃO.
 
-Nenhuma outra tela é afetada — apenas o hook. A UI de Metas continua igual.
+### Fora do escopo
+- Nenhuma mudança no hook `useCashFlowMonthly` (dados continuam iguais).
+- Não mexer no DRE — apenas Fluxo de Caixa, se possível localizar via prop; caso `DRETable` seja compartilhado com `DRE.tsx`, adicionar prop opcional `subtractOnExpand?: boolean` (default `false`) e ligar `true` só em `FluxoDeCaixa.tsx`.
