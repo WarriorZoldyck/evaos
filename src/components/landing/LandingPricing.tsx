@@ -16,7 +16,7 @@ const plans = [
       "EVA via WhatsApp",
       "Precificação FHC",
       "DRE automático",
-      "Plano de caixa",
+      "Fluxo de caixa",
       "Suporte por email",
     ],
     cta: "Assinar agora",
