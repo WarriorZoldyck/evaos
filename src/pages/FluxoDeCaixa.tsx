@@ -122,6 +122,7 @@ export default function FluxoDeCaixa() {
             monthlyExpenseTotals={monthlyExpenseTotals}
             monthlyResults={monthlyResults}
             loading={loading}
+            subtractOnExpand
           />
         </CardContent>
       </Card>
