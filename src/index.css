@@ -567,3 +567,49 @@ input[type="number"]::-webkit-outer-spin-button {
   --accent: 152 30% 16%;
   --accent-foreground: 152 40% 88%;
 }
+
+/* Neumorphism card — global base style for surface cards (light + dark) */
+@layer components {
+  .neu-card {
+    background: hsl(var(--background));
+    border-radius: 1.75rem;
+    border: 1px solid hsl(var(--border) / 0.4);
+    box-shadow:
+      12px 12px 28px hsl(215 30% 60% / 0.18),
+      -12px -12px 28px hsl(0 0% 100% / 0.9);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+  }
+  .neu-card-interactive {
+    cursor: pointer;
+  }
+  .neu-card-interactive:hover {
+    box-shadow:
+      14px 14px 32px hsl(215 30% 60% / 0.22),
+      -14px -14px 32px hsl(0 0% 100% / 1);
+  }
+  .neu-card-active,
+  .neu-card-interactive:active {
+    box-shadow:
+      inset 6px 6px 14px hsl(215 30% 60% / 0.22),
+      inset -6px -6px 14px hsl(0 0% 100% / 0.9);
+  }
+  .dark .neu-card {
+    background: hsl(var(--card));
+    border-color: hsl(var(--border) / 0.6);
+    box-shadow:
+      12px 12px 28px hsl(0 0% 0% / 0.55),
+      -12px -12px 28px hsl(210 20% 22% / 0.35);
+  }
+  .dark .neu-card-interactive:hover {
+    box-shadow:
+      14px 14px 32px hsl(0 0% 0% / 0.6),
+      -14px -14px 32px hsl(210 20% 24% / 0.45);
+  }
+  .dark .neu-card-active,
+  .dark .neu-card-interactive:active {
+    box-shadow:
+      inset 6px 6px 14px hsl(0 0% 0% / 0.55),
+      inset -6px -6px 14px hsl(210 20% 22% / 0.35);
+  }
+}
+
