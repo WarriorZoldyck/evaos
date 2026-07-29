@@ -62,7 +62,7 @@ const mainMenuItems = [
 ];
 
 const financeMenuItems = [
-  { title: "Plano de Caixa", url: "/plano-de-caixa", icon: BarChart3 },
+  { title: "Fluxo de Caixa", url: "/fluxo-de-caixa", icon: BarChart3 },
   { title: "DRE Competência", url: "/dre", icon: FileText },
   { title: "Precificação", url: "/precificacao", icon: Calculator },
 ];
@@ -202,7 +202,7 @@ export function AppSidebar() {
                 <>
                   <DropdownMenuSeparator />
                   <div className="px-2 py-1.5 text-[10px] text-muted-foreground">
-                    Multi-seleção ativa em Dashboard, Plano de Caixa e DRE
+                    Multi-seleção ativa em Dashboard, Fluxo de Caixa e DRE
                   </div>
                 </>
               )}

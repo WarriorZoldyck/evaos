@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function PlanoDeCaixa() {
+export default function FluxoDeCaixa() {
   const [filters, setFilters] = useState<CashFlowMonthlyFilters>({
     year: new Date().getFullYear(),
     granularity: "monthly",
@@ -39,7 +39,7 @@ export default function PlanoDeCaixa() {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-display text-foreground">Plano de Caixa</h1>
+          <h1 className="text-2xl font-bold font-display text-foreground">Fluxo de Caixa</h1>
           <p className="text-muted-foreground text-sm mt-1">Regime de caixa — somente transações pagas</p>
           <Collapsible>
             <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-primary hover:underline mt-1">
@@ -47,7 +47,7 @@ export default function PlanoDeCaixa() {
               Como funciona?
             </CollapsibleTrigger>
             <CollapsibleContent className="mt-2 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed max-w-lg">
-              O <strong>Plano de Caixa</strong> utiliza o <strong>regime de caixa</strong>: considera apenas transações com status <strong>"Pago"</strong>, agrupadas pela <strong>data de pagamento</strong>. A visão mês a mês permite comparar a evolução do fluxo real do seu caixa ao longo do ano.
+              O <strong>Fluxo de Caixa</strong> utiliza o <strong>regime de caixa</strong>: considera apenas transações com status <strong>"Pago"</strong>, agrupadas pela <strong>data de pagamento</strong>. A visão mês a mês permite comparar a evolução do fluxo real do seu caixa ao longo do ano.
             </CollapsibleContent>
           </Collapsible>
         </div>

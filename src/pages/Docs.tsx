@@ -51,7 +51,7 @@ const navGroups: NavGroup[] = [
     label: "Relatórios",
     items: [
       { id: "dashboard", title: "Dashboard", icon: LayoutDashboard },
-      { id: "cashflow", title: "Plano de Caixa", icon: BarChart3 },
+      { id: "cashflow", title: "Fluxo de Caixa", icon: BarChart3 },
       { id: "dre", title: "DRE", icon: FileText },
     ],
   },
@@ -300,7 +300,7 @@ export default function Docs() {
               <li><strong className="text-foreground">Dashboard interativo</strong> — cards clicáveis (Entradas, Saídas, Previstas, Saldo Atual, Faturamento) com drill-down e detalhamento por categoria</li>
               <li><strong className="text-foreground">Lançamentos</strong> — CRUD completo com parcelamento, recorrências, transferências internas e importação de extrato</li>
               <li><strong className="text-foreground">Análises EVA</strong> — staging para lançamentos criados via IA, com aprovação individual/lote</li>
-              <li><strong className="text-foreground">Plano de Caixa</strong> — fluxo de caixa mensal com projeção</li>
+              <li><strong className="text-foreground">Fluxo de Caixa</strong> — fluxo de caixa mensal com projeção</li>
               <li><strong className="text-foreground">DRE</strong> — Demonstrativo de Resultado por competência</li>
               <li><strong className="text-foreground">Precificação</strong> — cálculo de preço sugerido por procedimento com custos fixos e margem</li>
               <li><strong className="text-foreground">Integrações bancárias</strong> — Pluggy (Open Finance), Itaú, Asaas</li>
@@ -476,8 +476,8 @@ export default function Docs() {
             <p className="text-xs text-muted-foreground/70">O cabeçalho (título + seletor de conta + filtro de período) fica fixo no topo enquanto você rola.</p>
           </Section>
 
-          {/* ---- Plano de Caixa ---- */}
-          <Section id="cashflow" title="Plano de Caixa" icon={BarChart3}>
+          {/* ---- Fluxo de Caixa ---- */}
+          <Section id="cashflow" title="Fluxo de Caixa" icon={BarChart3}>
             <p>
               Fluxo de caixa por período agrupado por mês (ou semana), com entradas, saídas e saldo acumulado.
               Inclui projeção de recorrências e pendentes futuros nas colunas seguintes.

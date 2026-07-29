@@ -47,7 +47,7 @@ const features = [
   },
   {
     icon: TrendingUp,
-    title: "Plano de caixa",
+    title: "Fluxo de caixa",
     description: "Projeção de fluxo de caixa futuro para tomar decisões financeiras com segurança.",
   },
 ];
