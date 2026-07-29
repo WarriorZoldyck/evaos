@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 
-export interface TopCategory {
+export interface CategoryBreakdown {
   name: string;
   total: number;
 }
@@ -11,21 +11,19 @@ export interface TopCategory {
 export interface MetasSidebarStats {
   loading: boolean;
   totalBalance: number;
-  spentYear: number;
-  projectedYearOut: number;
-  leftover: number; // saldo - saídas pendentes até fim do ano
-  topCategories: TopCategory[];
-  totalIncomeYear: number;
   avgIncomeMonth: number;
   avgSpentMonth: number;
-  allCategories: TopCategory[];
+  leftover: number;
+  incomeCategories: CategoryBreakdown[];
+  expenseCategories: CategoryBreakdown[];
+  topCategories: CategoryBreakdown[]; // top 3 expenses (for ActionPlanDialog)
   refetch: () => void;
 }
 
 const YEAR = new Date().getFullYear();
 const YEAR_START = `${YEAR}-01-01`;
 const YEAR_END = `${YEAR}-12-31`;
-const TODAY = new Date().toISOString().slice(0, 10);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function useMetasSidebarStats(): MetasSidebarStats {
   const effectiveUserId = useEffectiveUserId();
@@ -34,14 +32,12 @@ export function useMetasSidebarStats(): MetasSidebarStats {
   const [state, setState] = useState<Omit<MetasSidebarStats, "refetch">>({
     loading: true,
     totalBalance: 0,
-    spentYear: 0,
-    projectedYearOut: 0,
-    leftover: 0,
-    topCategories: [],
-    totalIncomeYear: 0,
     avgIncomeMonth: 0,
     avgSpentMonth: 0,
-    allCategories: [],
+    leftover: 0,
+    incomeCategories: [],
+    expenseCategories: [],
+    topCategories: [],
   });
 
   const contextKey = isPersonal ? "personal" : selectedCompanyId || "none";
@@ -59,18 +55,19 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     if (!effectiveUserId) return;
     setState((s) => ({ ...s, loading: true }));
 
-    const [banksRes, walletsRes, txRes] = await Promise.all([
+    const [banksRes, walletsRes, txRes, catsRes] = await Promise.all([
       applyCtx(supabase.from("bank_accounts").select("id,initial_balance").eq("user_id", effectiveUserId)),
       applyCtx(supabase.from("wallets").select("id,initial_balance").eq("user_id", effectiveUserId)),
       applyCtx(
         supabase
           .from("transactions")
-          .select("amount,type,status,category,payment_date,is_internal_transfer,credit_card_id")
+          .select("amount,type,status,category,payment_date,is_internal_transfer")
           .eq("user_id", effectiveUserId)
           .gte("payment_date", YEAR_START)
           .lte("payment_date", YEAR_END)
           .limit(5000),
       ),
+      supabase.from("categories").select("id,name").eq("user_id", effectiveUserId),
     ]);
 
     const banks = banksRes.data || [];
@@ -78,7 +75,6 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     const bankIds = banks.map((b: any) => b.id);
     const walletIds = wallets.map((w: any) => w.id);
 
-    // Saldo atual: initial + delta pago via RPC (respeita RLS + evita limite 1000)
     const initialSum =
       banks.reduce((s: number, b: any) => s + Number(b.initial_balance || 0), 0) +
       wallets.reduce((s: number, w: any) => s + Number(w.initial_balance || 0), 0);
@@ -93,46 +89,56 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     }
     const totalBalance = initialSum + paidDelta;
 
-    // Transações do ano no contexto
-    const txs = (txRes.data || []).filter((t: any) => !t.is_internal_transfer);
-    let spentYear = 0;
+    const catNameById = new Map<string, string>();
+    for (const c of catsRes.data || []) catNameById.set(c.id, c.name);
+    const resolveCatName = (raw: string | null | undefined): string => {
+      if (!raw) return "Sem categoria";
+      if (UUID_RE.test(raw)) return catNameById.get(raw) || "Sem categoria";
+      return raw;
+    };
+
+    const txs = (txRes.data || []).filter((t: any) => !t.is_internal_transfer && t.status === "Pago");
+
     let totalIncomeYear = 0;
-    const catMap = new Map<string, number>();
+    let totalSpentYear = 0;
+    const incomeMap = new Map<string, number>();
+    const expenseMap = new Map<string, number>();
 
     for (const t of txs) {
       const amt = Number(t.amount || 0);
-      if (t.status !== "Pago") continue;
-      if (t.type === "despesa") {
-        spentYear += amt;
-        const key = t.category || "Sem categoria";
-        catMap.set(key, (catMap.get(key) || 0) + amt);
-      } else if (t.type === "receita") {
+      const key = resolveCatName(t.category);
+      if (t.type === "receita") {
         totalIncomeYear += amt;
+        incomeMap.set(key, (incomeMap.get(key) || 0) + amt);
+      } else if (t.type === "despesa") {
+        totalSpentYear += amt;
+        expenseMap.set(key, (expenseMap.get(key) || 0) + amt);
       }
     }
 
     const monthsElapsed = Math.max(1, new Date().getMonth() + 1);
+    const monthsRemaining = Math.max(0, 12 - monthsElapsed);
     const avgIncomeMonth = totalIncomeYear / monthsElapsed;
-    const avgSpentMonth = spentYear / monthsElapsed;
-    const projectedYearOut = avgSpentMonth * 12;
-    const leftover = totalBalance - projectedYearOut;
+    const avgSpentMonth = totalSpentYear / monthsElapsed;
+    const leftover = totalBalance + (avgIncomeMonth - avgSpentMonth) * monthsRemaining;
 
-    const allCategories = Array.from(catMap.entries())
-      .map(([name, total]) => ({ name, total }))
-      .sort((a, b) => b.total - a.total);
-    const topCategories = allCategories.slice(0, 3);
+    const toSorted = (m: Map<string, number>): CategoryBreakdown[] =>
+      Array.from(m.entries())
+        .map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total);
+
+    const expenseCategories = toSorted(expenseMap);
+    const incomeCategories = toSorted(incomeMap);
 
     setState({
       loading: false,
       totalBalance,
-      spentYear,
-      projectedYearOut,
-      leftover,
-      topCategories,
-      totalIncomeYear,
       avgIncomeMonth,
       avgSpentMonth,
-      allCategories,
+      leftover,
+      incomeCategories,
+      expenseCategories,
+      topCategories: expenseCategories.slice(0, 3),
     });
   }, [effectiveUserId, contextKey, applyCtx]);
 

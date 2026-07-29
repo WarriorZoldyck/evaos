@@ -34,7 +34,7 @@ export default function Metas() {
   };
 
   return (
-    <div className="metas-scope animate-fade-in grid gap-12 lg:grid-cols-[380px_minmax(0,720px)] justify-start pl-2">
+    <div className="metas-scope animate-fade-in grid gap-16 lg:grid-cols-[360px_minmax(0,720px)] justify-start pl-2">
       <MetasSidebar goals={goals} />
       <div className="space-y-6 min-w-0">
       {/* Header enxuto */}
