@@ -1,49 +1,37 @@
-## Objetivo
-Aproveitar a área vazia à esquerda da tela de Metas para expandir a sidebar com mais métricas úteis do contexto, incluindo médias e um breakdown completo por categoria.
+## Ajustes na sidebar de Metas
 
-## Mudanças
+### 1. Simplificar métricas (só mês vigente, base = fluxo de caixa)
+Em `src/hooks/useMetasSidebarStats.ts`:
+- Reaproveitar o mesmo pipeline do `useCashFlowData` / `useCashFlowMonthly` (fonte oficial de fluxo de caixa) em vez da query própria de `transactions`, para as médias baterem com o que o usuário vê no Fluxo de Caixa.
+- Calcular **média mensal de entradas** e **média mensal de saídas** dividindo o total do ano corrente (ou dos últimos N meses fechados, alinhado ao Fluxo de Caixa) pelos meses decorridos.
+- Manter: `totalBalance` (saldo atual do contexto), `avgIncomeMonth`, `avgSpentMonth`, `leftover = totalBalance − avgSpentMonth*mesesRestantes` (recalcular para refletir "sobra até dez/mês vigente" corretamente).
+- Remover do estado retornado: `spentYear`, `projectedYearOut`, `totalIncomeYear`, `topCategories`, `allCategories` puros — passam a ser derivados sob demanda (ver item 3).
+- Corrigir reatividade ao trocar contexto: garantir que a chave do `useEffect` inclua `selectedCompanyId` e `isPersonal` (já inclui via `contextKey`, mas validar que `useGoals` e a página `Metas` também refazem fetch por contexto — hoje as metas parecem não trocar quando o contexto muda; ajustar `useGoals` para filtrar por `company_id`/personal e reexecutar).
 
-### 1. Layout (`src/pages/Metas.tsx`)
-- Aumentar a largura da coluna da sidebar de `320px` para `380px` e adicionar um `gap` maior (de `gap-6` para `gap-8`) para desgrudar visualmente da coluna principal.
-- Aumentar o `max-w-6xl` para `max-w-7xl` para acomodar a sidebar mais larga sem espremer os cofrinhos.
+### 2. Categorias por tipo, sob demanda
+Em vez de listar tudo:
+- Novo hook (ou extensão do atual) retorna `categoriesByType(type: "receita" | "despesa")` que só busca quando chamado.
+- Substituir a busca por `category` (texto) por join com a tabela `categories` para exibir **nome real** (bug atual: mostra UUID). Se o campo `transactions.category` armazena UUID, resolver via `useCategories` (map id→name); se armazena texto legado, manter fallback.
+- Filtrar por `type` (entradas para receitas, saídas para despesas).
 
-### 2. Novas métricas (`src/hooks/useMetasSidebarStats.ts`)
-Adicionar ao hook:
-- **`totalIncomeYear`**: soma de todas as receitas (`type = 'receita'`, `status = 'Pago'`) do ano no contexto.
-- **`avgIncomeMonth`**: média mensal de entradas — `totalIncomeYear / (mês atual)`.
-- **`avgSpentMonth`**: média mensal de saídas pagas — `spentYear / (mês atual)`.
-- **`projectedYearOutByAverage`**: nova projeção baseada em média — `avgSpentMonth * 12` (substitui a projeção atual que somava só pendentes conhecidos, dando resultado mais realista para quem não lança tudo com antecedência).
-- **`allCategories`**: lista completa (não só top 3) de categorias com totais gastos no ano, ordenada desc. Já é calculada no `catMap` — apenas expor toda a lista.
+### 3. Interação: expandir ao clicar em Entradas/Saídas
+Em `src/components/metas/MetasSidebar.tsx`:
+- Cards "Média de entradas / mês" e "Média de saídas / mês" ficam clicáveis (accordion controlado por estado local `expanded: 'income' | 'expense' | null`).
+- Ao expandir, renderizar logo abaixo do card clicado uma lista de categorias daquele tipo (com barra de proporção como hoje), carregada lazy.
+- Só um aberto por vez; clicar de novo fecha. Layout permanece responsivo (o painel cresce naturalmente na coluna esquerda).
+- Remover a seção fixa "Gastos por categoria".
 
-### 3. Sidebar (`src/components/metas/MetasSidebar.tsx`)
-Reorganizar em seções visuais:
+### 4. Contexto correto nas metas
+- Auditar `useGoals` para garantir filtro `company_id = selectedCompanyId` (ou `is null` quando `isPersonal`) e refetch ao trocar contexto.
+- `MetasSidebar` já recebe `goals`; nada muda nele além de reagir corretamente.
 
-**Seção "Saldo & Entradas"**
-- Saldo total (mantém)
-- Total de entradas no ano (novo)
-- Média de entradas / mês (novo)
+### 5. Visual neumórfico (novo padrão global de cards da sidebar)
+Aplicar aos `StatCard` e cards da sidebar de Metas:
+- Fundo `#e0e0e0` (claro) / equivalente tokenizado no dark; `border-radius: ~28px`; sombra dupla `20px 20px 60px` (escura) + `-20px -20px 60px` (clara).
+- Criar utilitário Tailwind/CSS (`.neu-card` em `src/index.css`) usando tokens HSL para funcionar em light/dark. Documentar como padrão a seguir daqui em diante (adicionar memória `mem://style/component-design/neumorphism`).
+- Ajustar `StatCard` para usar a nova classe, mantendo variantes de tom (`primary`, `success`, `danger`) só no texto do valor.
 
-**Seção "Saídas"**
-- Gasto acumulado no ano (mantém)
-- Média de saídas / mês (novo)
-- Projeção de saídas do ano — agora baseada em média (label atualizado: "Projeção do ano (média)")
-
-**Seção "Resultado"**
-- Sobra estimada (mantém, mas usa a nova projeção por média)
-- Card de alerta de plano de ação (mantém, se `hasDeficit`)
-
-**Seção "Gastos por categoria"** (nova, colapsável/scrollável)
-- Card contendo lista de TODAS as categorias com:
-  - Nome
-  - Valor gasto no ano
-  - Barra de progresso mostrando % do total
-- Ordenada do maior para o menor
-- `max-h-[400px] overflow-y-auto` para não estourar a tela quando houver muitas categorias
-
-### 4. Ajustes de cálculo
-- `leftover` passa a usar `projectedYearOutByAverage` no lugar de `pendingOutRemaining` para refletir o mesmo racional da nova projeção — evita mostrar sobra otimista quando o usuário não lança pendências futuras.
-- `topCategories` (usado no `ActionPlanDialog`) continua sendo os top 3 da lista completa.
-
-## Fora de escopo
-- Não mexer no `ActionPlanDialog`, `GoalFormModal`, edge function ou lógica de metas em si.
-- Sem novos endpoints/tabelas — tudo derivado das transações já buscadas.
+### Detalhes técnicos
+- Arquivos alterados: `src/hooks/useMetasSidebarStats.ts`, `src/components/metas/MetasSidebar.tsx`, `src/hooks/useGoals.ts` (se filtro de contexto faltar), `src/index.css` (classe neumórfica), possível novo `src/hooks/useCategoryBreakdown.ts` para lazy load por tipo.
+- Sem mudança em edge functions, schema ou `ActionPlanDialog` (segue usando `gap`/`topCategories` — passaremos as top 3 despesas derivadas quando o accordion de saídas estiver expandido, ou recalculamos on-demand ao abrir o plano).
+- Memória nova: registrar padrão neumórfico como base visual dos cards a partir de agora.
