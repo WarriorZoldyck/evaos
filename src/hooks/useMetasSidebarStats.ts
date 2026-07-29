@@ -124,7 +124,7 @@ export function useMetasSidebarStats(): MetasSidebarStats {
 
     const toSorted = (m: Map<string, number>): CategoryBreakdown[] =>
       Array.from(m.entries())
-        .map(([name, total]) => ({ name, total }))
+        .map(([name, total]) => ({ name, total: total / monthsElapsed }))
         .sort((a, b) => b.total - a.total);
 
     const expenseCategories = toSorted(expenseMap);
