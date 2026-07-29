@@ -129,6 +129,7 @@ function SectionBlock({
   isSectionOpen,
   sectionClassName,
   colorClass,
+  subtractOnExpand,
 }: {
   sectionId: string;
   label: string;
@@ -141,6 +142,7 @@ function SectionBlock({
   isSectionOpen: boolean;
   sectionClassName: string;
   colorClass: string;
+  subtractOnExpand?: boolean;
 }) {
   const grand = Object.values(totals).reduce((s, v) => s + v, 0);
   const rowCounter = useRef(0);
@@ -174,6 +176,7 @@ function SectionBlock({
           toggle={toggle}
           colorClass={colorClass}
           rowCounter={rowCounter}
+          subtractOnExpand={subtractOnExpand}
         />
       )}
     </>
@@ -213,6 +216,7 @@ export function DRETable({
   monthlyExpenseTotals,
   monthlyResults,
   loading,
+  subtractOnExpand,
 }: DRETableProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sections, setSections] = useState<Set<string>>(new Set());
@@ -277,6 +281,7 @@ export function DRETable({
             isSectionOpen={sections.has("__revenue__")}
             sectionClassName="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-b"
             colorClass="text-emerald-700 dark:text-emerald-400"
+            subtractOnExpand={subtractOnExpand}
           />
 
           {/* Expense section - collapsible */}
@@ -292,6 +297,7 @@ export function DRETable({
             isSectionOpen={sections.has("__expense__")}
             sectionClassName="bg-destructive/10 text-destructive border-b"
             colorClass="text-destructive"
+            subtractOnExpand={subtractOnExpand}
           />
 
           {/* Result */}
