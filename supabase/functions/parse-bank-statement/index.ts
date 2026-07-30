@@ -150,7 +150,7 @@ function parseCSV(content: string): ParsedTransaction[] {
   return transactions;
 }
 
-const SYSTEM_PROMPT = `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
+const CARD_SYSTEM_PROMPT = `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
 
 Return ONLY a valid JSON object (no markdown, no wrapping text) with this COMPACT shape:
 
