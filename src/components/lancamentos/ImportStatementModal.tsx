@@ -1703,6 +1703,24 @@ export function ImportStatementModal({
       const finalDesc = editedDesc || r.description;
       const contact = rowContacts[realIdx] || {};
 
+      // Fase 2A — grava a impressão digital só em modo conta/débito. Se o
+      // usuário forçou a criação de uma linha já importada, deixa null para não
+      // colidir com o índice único.
+      const importFingerprint =
+        importType === "debito" && targetBankAccount && !duplicateRows.has(realIdx)
+          ? buildImportFingerprint({
+              accountKey: targetBankAccount,
+              date: r.date,
+              amount: r.amount,
+              type: r.type,
+              description: r.description,
+            })
+          : null;
+
+      // Fase 2B — transferência interna sugerida e não desfeita pelo usuário.
+      const isInternalTransfer =
+        importType === "debito" && !!transferRows[realIdx] && !transferDismissed.has(realIdx);
+
       return {
         description: finalDesc,
         amount: r.amount,
