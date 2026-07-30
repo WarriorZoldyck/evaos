@@ -1,45 +1,31 @@
-## Fase 2 — Motor de conciliação para conta corrente
+## Objetivo
 
-A Fase 1 (parser dedicado) já está pronta. A Fase 2 melhora o que acontece **depois** do parse, na tela de conciliação, para extratos de conta/débito. O cartão continua intocado: toda a lógica nova entra em caminhos condicionados a `importType === "debito"`.
+O campo **Cliente/Fornecedor** na tela de conciliação hoje é um `Select` simples: com centenas de contatos vira uma lista rolável sem busca. Vamos deixá-lo igual ao seletor de categoria — popover com barra de busca, lista virtualizada e "Criar novo" a partir do que foi digitado.
 
-Entrego em três etapas independentes, na ordem abaixo.
+## O que muda
 
----
+Arquivo: `src/components/lancamentos/ContactSelectWithCreate.tsx` (reescrita interna do componente, **sem mudar as props**, então `ReconcileStep` e `TransactionFormModal` continuam funcionando sem alteração).
 
-### Etapa 2A — Deduplicação de extrato (maior risco hoje)
+Nova estrutura, espelhando `CategoryCascadeSelect`:
 
-Hoje nada impede o usuário de importar o mesmo extrato duas vezes e duplicar meses inteiros de lançamentos.
+1. **Trigger** — botão no mesmo estilo do gatilho de categoria (texto do contato selecionado ou placeholder, ícone `ChevronsUpDown`, borda pontilhada quando vazio, para casar com o visual atual da tabela).
+2. **Popover + Command** — `CommandInput` com placeholder "Buscar cliente..." / "Buscar fornecedor...", foco automático ao abrir.
+3. **Busca sem acento** — mesma função `normalize` (NFD + remoção de diacríticos) usada em categoria, com filtro controlado e o filtro interno do `cmdk` desligado (`shouldFilter={false}`), como já é feito lá.
+4. **Lista virtualizada** — reutiliza `VirtualCommandList` (o mesmo componente da categoria) para manter o seletor fluido com muitos contatos.
+5. **Item "— limpar —"** no topo, igual ao de categoria, para desvincular o contato da linha.
+6. **"Criar novo"** — sempre visível no rodapé da lista; quando há texto digitado, mostra `Criar "GUILHERME GALDINI"` e já abre o diálogo com o nome pré-preenchido (mantém a correção anterior de criar exatamente o que o usuário digitou, não a descrição do extrato).
+7. **Estado vazio** — `CommandEmpty` com "Nenhum contato encontrado" + atalho de criação.
 
-- Nova coluna `import_fingerprint` (texto) na tabela de lançamentos, com índice único parcial por usuário — mesma linha de extrato nunca entra duas vezes.
-- A impressão digital é calculada a partir de: conta destino + data + valor + descrição normalizada (sem acento, sem espaços duplos, maiúsculas) + tipo.
-- Ao entrar na etapa de conciliação, o sistema consulta as impressões digitais já existentes e marca as linhas repetidas com um selo **"Já importado"**, deixando-as desligadas por padrão (não serão criadas).
-- O usuário ainda pode forçar a criação ligando o toggle — nesse caso o registro entra sem impressão digital, para não brigar com o índice.
+A lógica de criação no Supabase (`suppliers`/`clients`, `effectiveUserId`, toast, `localExtras`, callback `onContactCreated`) permanece exatamente como está.
 
-### Etapa 2B — Transferências internas
+## Detalhes técnicos
 
-Extrato de conta traz TED/PIX/transferências entre as contas do próprio usuário. Hoje elas viram receita ou despesa comum e inflam o DRE.
+- Props mantidas: `contacts`, `value`, `onChange`, `placeholder`, `type`, `onContactCreated`, `disabled`.
+- `value` continua sendo o `id` do contato; `onChange("")` no "limpar".
+- Popover com `align="start"` e largura mínima do gatilho, para não estourar o layout apertado da tabela de conciliação.
+- Sem migração e sem mudança de dados — é só UI.
 
-- Detector por descrição (PIX ENVIADO/RECEBIDO, TED, DOC, TRANSF, RESGATE, APLICAÇÃO) combinado com o nome/CNPJ das outras contas do usuário.
-- Linha detectada ganha selo **"Transferência?"** e, ao criar, já nasce com a marcação de transferência interna, ficando fora do DRE (mesma regra já existente no sistema).
-- Detecção é sugestão, nunca imposição: um clique desfaz.
+## Verificação
 
-### Etapa 2C — Auto-preenchimento por histórico (paridade com o cartão)
-
-O cartão já pré-preenche fornecedor, descrição e categoria pelo histórico; conta ainda não.
-
-- Reaproveitar a busca de histórico de 180 dias já usada no fluxo de cartão, aplicada às linhas de conta.
-- Pré-preencher fornecedor (fuzzy), descrição e categoria/subcategoria quando houver lançamento parecido no passado.
-- Campos continuam editáveis com o mesmo padrão "clique para editar" já existente.
-
----
-
-### Detalhes técnicos
-
-- **Banco:** migração adicionando `import_fingerprint text` em `public.transactions` + `CREATE UNIQUE INDEX ... ON public.transactions (user_id, import_fingerprint) WHERE import_fingerprint IS NOT NULL`. Sem mudança de RLS (a tabela já é escopada por `user_id`).
-- **Frontend:** `src/components/lancamentos/ImportStatementModal.tsx` (efeito de matching do modo débito, montagem do payload de criação) e `src/components/lancamentos/import/ReconcileStep.tsx` (novos selos e estados de linha). Helpers puros novos em `src/lib/import/` (`fingerprint.ts`, `transferDetect.ts`) com testes em Vitest.
-- **Escopo protegido:** nenhuma alteração no caminho `importType === "cartao"`, no motor `useImportMatching` para cartão, nem na Edge Function da Fase 1.
-- Cada etapa termina com typecheck + testes verdes antes de eu seguir para a próxima.
-
-### Fase 3 (depois, não incluída aqui)
-
-Conciliar uma linha de extrato contra múltiplos lançamentos do sistema (rateio/lote).
+- Typecheck do projeto.
+- Conferir na conciliação: abrir o campo, digitar parte de um nome com acento (ex.: "simoes"/"simões"), selecionar, limpar e criar um contato novo a partir da busca.
