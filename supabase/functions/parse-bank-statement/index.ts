@@ -658,8 +658,10 @@ serve(async (req) => {
         }
       }
 
-      // Signal 2: 70%+ of amounts are integers > 100 (no decimals at all)
-      if (!shouldRescale && integerRatio >= 0.7) {
+      // Signal 2: 70%+ of amounts are integers > 100 (no decimals at all).
+      // Não vale para conta corrente: salários, transferências e pagamentos
+      // redondos (1500, 5000) são comuns e o /100 destruiria os valores.
+      if (!shouldRescale && statementKind !== "conta" && integerRatio >= 0.7) {
         shouldRescale = true;
         reason = `${integerBig}/${total} amounts are integers > 100 (${(integerRatio * 100).toFixed(0)}%) — AI likely dropped decimals`;
       }
