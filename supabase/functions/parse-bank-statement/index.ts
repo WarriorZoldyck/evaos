@@ -47,6 +47,19 @@ function isExcludedCardStatementLine(description: string): boolean {
     || /\blancamentos\s+atuais\b/.test(d);
 }
 
+// Linhas de saldo/resumo de extrato de conta corrente — não são movimentos.
+function isAccountSummaryLine(description: string): boolean {
+  const d = normalizeForRules(description);
+  return /^saldo\b/.test(d)
+    || /\bsaldo\s+(anterior|do\s+dia|disponivel|bloqueado|em\s+conta|final|atual)\b/.test(d)
+    || /\blimite\s+da\s+conta\b/.test(d)
+    || /\bprovisao\s+de\s+encargos\b/.test(d)
+    || /\b(juros|iof)\s+acumulados\s+ate\s+a\s+data\b/.test(d)
+    || /\btotal\s+(geral|do\s+periodo)\b/.test(d);
+}
+
+
+
 function absCentsDelta(a: number, b: number): number {
   return Math.abs(Math.round(a * 100) - Math.round(b * 100));
 }
@@ -63,9 +76,11 @@ function extractOFXAccountDigits(content: string): string | undefined {
   return undefined;
 }
 
-function parseOFX(content: string): ParsedTransaction[] {
+function parseOFX(content: string, kind: StatementKind = "cartao"): ParsedTransaction[] {
   const transactions: ParsedTransaction[] = [];
-  const accountDigits = extractOFXAccountDigits(content);
+  // Em extrato de conta corrente o ACCTID é o número da conta — nunca deve
+  // virar "últimos 4 dígitos do cartão".
+  const accountDigits = kind === "conta" ? undefined : extractOFXAccountDigits(content);
   const stmtTrnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
   let match;
 
@@ -148,7 +163,7 @@ function parseCSV(content: string): ParsedTransaction[] {
   return transactions;
 }
 
-const SYSTEM_PROMPT = `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
+const CARD_SYSTEM_PROMPT = `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided PDF.
 
 Return ONLY a valid JSON object (no markdown, no wrapping text) with this COMPACT shape:
 
@@ -196,12 +211,58 @@ EXCLUDE (NOT real transactions):
 
 Return ONLY the JSON object, no markdown fences, no prose.`;
 
+const ACCOUNT_SYSTEM_PROMPT = `You are a BANK CHECKING ACCOUNT statement parser (extrato de conta corrente). Extract EVERY movement line from the provided PDF — both money out (débitos) and money in (créditos).
+
+Return ONLY a valid JSON object (no markdown, no wrapping text) with this COMPACT shape:
+
+{
+  "meta": {
+    "from":  "YYYY-MM-DD" | null,   // first day of the statement period ("Período: 01/01/2026 a 31/01/2026")
+    "to":    "YYYY-MM-DD" | null,   // last day of the statement period
+    "total": null,
+    "cards": {}
+  },
+  "txs": [
+    { "d": "DD/MM/YYYY", "desc": "…", "a": 425.00, "t": "d", "c": null }
+  ]
+}
+
+Field rules for each tx:
+- "d": the line's date EXACTLY as printed. Brazilian statements use DD/MM/YYYY (never MM/DD). If the year is not printed on the line, emit "DD/MM" and fill meta.from/meta.to so the year can be derived.
+- "desc": the full history/description text of the line (campo Histórico / Descrição / MEMO), without the value and without the balance.
+- "a": positive number in REAIS with TWO decimals. "R$ 1.613,37" → 1613.37 (NEVER 161337, NEVER 1613). "R$ 84,00" → 84.00.
+- "t": "d" when the value is in the DÉBITO column (or the printed value is negative) — money leaving the account. "r" when the value is in the CRÉDITO column (or positive) — money entering the account.
+- "c": ALWAYS null. This is a bank account, not a card.
+
+CRITICAL — columns:
+- These statements usually have columns: Data | Descrição | Docto | Situação | Crédito (R$) | Débito (R$) | Saldo (R$).
+- The "Saldo" column is a RUNNING BALANCE — it is NOT a transaction value. NEVER use it as "a".
+- Use the Crédito/Débito columns to decide both "a" and "t". If a single "Valor" column is used instead, the sign defines "t".
+
+INCLUDE (all of these ARE real movements of the account — never skip them):
+- PIX ENVIADO / PIX RECEBIDO, TED, DOC, transferências (inclusive "TRANSFERENCIA PROGRAMADA PARA: <conta>")
+- PAGAMENTO DE BOLETO (qualquer banco), DEBITO AUTOMATICO, "DEBITO AUT. FATURA CARTAO ... FINAL 1234" (é uma saída real da conta)
+- TARIFA / MENSALIDADE PACOTE SERVICOS, IOF, JUROS, encargos, seguros
+- APLICAÇÃO e RESGATE (RESG POUP, aplicação automática), REMUNERACAO APLICACAO AUTOMATICA (mesmo R$ 0,01)
+- Compras no débito, saques, depósitos, estornos
+
+EXCLUDE (not movement lines):
+- Cabeçalhos, rodapés, totalizadores e "Saldo anterior" / "Saldo do dia" / "Saldo disponível" / "Limite da conta"
+- Blocos de resumo (juros acumulados, IOF acumulados, provisão de encargos)
+
+PRESERVE DUPLICATES: if the same date + value + description appears N times, emit it N times. Never collapse repeated lines.
+
+Return ONLY the JSON object, no markdown fences, no prose.`;
+
+type StatementKind = "conta" | "cartao";
+
 async function callAIGateway(
   apiKey: string,
   base64: string,
   model: string,
   maxTokens: number,
   timeoutMs: number,
+  kind: StatementKind,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -216,7 +277,7 @@ async function callAIGateway(
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT },
           {
             role: "user",
             content: [
@@ -229,7 +290,9 @@ async function callAIGateway(
               },
               {
                 type: "text",
-                text: "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
+                text: kind === "conta"
+                  ? "This is a BANK CHECKING ACCOUNT statement (extrato de conta corrente). Extract every debit AND credit line into the compact { meta, txs } JSON shape. Ignore the running balance column. Emit meta once, then all txs. Return ONLY the JSON object."
+                  : "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
               },
             ],
           },
@@ -243,7 +306,7 @@ async function callAIGateway(
   }
 }
 
-async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[]> {
+async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cartao"): Promise<ParsedTransaction[]> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) {
     throw new Error("LOVABLE_API_KEY not configured");
@@ -269,7 +332,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
     let response: Response;
     const startedAt = Date.now();
     try {
-      response = await callAIGateway(apiKey, base64, model, maxTokens, timeoutMs);
+      response = await callAIGateway(apiKey, base64, model, maxTokens, timeoutMs, kind);
     } catch (err) {
       const aborted = err instanceof DOMException && err.name === "AbortError";
       console.error(`AI Gateway ${model} ${aborted ? "timed out" : "failed"} after ${Date.now() - startedAt}ms:`, err);
@@ -294,7 +357,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
     }
 
     try {
-      const parsed = await parseAIResponse(await response.json());
+      const parsed = await parseAIResponse(await response.json(), kind);
       console.log(`Model ${model} produced ${parsed.length} transactions in ${Date.now() - startedAt}ms`);
       if (parsed.length > 0) return parsed;
       if (i === attempts.length - 1) return parsed;
@@ -310,7 +373,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[
 }
 
 
-async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
+async function parseAIResponse(result: any, kind: StatementKind = "cartao"): Promise<ParsedTransaction[]> {
   const content = result.choices?.[0]?.message?.content || "";
   const finishReason = result.choices?.[0]?.finish_reason || "unknown";
   console.log(`AI response: finish_reason=${finishReason}, content_length=${content.length}`);
@@ -319,10 +382,10 @@ async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
   if (jsonMatch) {
     jsonStr = jsonMatch[1].trim();
   }
-  return parseTxJson(jsonStr, finishReason);
+  return parseTxJson(jsonStr, finishReason, kind);
 }
 
-function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[] {
+function parseTxJson(jsonStr: string, finishReason: string, kind: StatementKind = "cartao"): ParsedTransaction[] {
   let parsed: any;
   try {
     parsed = JSON.parse(jsonStr);
@@ -365,6 +428,40 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
       throw new Error("Expected { meta, txs } or array of transactions");
     }
 
+    const isAccount = kind === "conta";
+    const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+    const metaFrom: string | undefined = meta?.from && isoRe.test(String(meta.from)) ? String(meta.from) : undefined;
+    const metaTo: string | undefined = meta?.to && isoRe.test(String(meta.to)) ? String(meta.to) : undefined;
+
+    // Normaliza a data de uma linha de extrato de conta para ISO.
+    // Aceita DD/MM/AAAA, DD/MM/AA, AAAA-MM-DD e DD/MM (usa o período do extrato).
+    const normalizeAccountDate = (raw: string): string | undefined => {
+      const s = (raw || "").trim();
+      if (!s) return undefined;
+      if (isoRe.test(s)) return s;
+      const full = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+      if (full) {
+        let y = Number(full[3]);
+        if (y < 100) y += 2000;
+        return `${y}-${String(Number(full[2])).padStart(2, "0")}-${String(Number(full[1])).padStart(2, "0")}`;
+      }
+      const dm = s.match(/^(\d{1,2})[\/.-](\d{1,2})$/);
+      if (!dm) return undefined;
+      const day = Number(dm[1]);
+      const month = Number(dm[2]);
+      const refIso = metaTo || metaFrom;
+      const refYear = refIso ? Number(refIso.slice(0, 4)) : new Date().getFullYear();
+      const build = (y: number) => `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      let iso = build(refYear);
+      if (metaFrom && metaTo) {
+        const ms = (a: string) => new Date(a + "T00:00:00").getTime();
+        const tolerance = 75 * 86400000;
+        if (ms(iso) > ms(metaTo) + tolerance) iso = build(refYear - 1);
+        else if (ms(iso) < ms(metaFrom) - tolerance) iso = build(refYear + 1);
+      }
+      return iso;
+    };
+
     const metaDue: string | undefined = meta?.due && /^\d{4}-\d{2}-\d{2}$/.test(meta.due) ? meta.due : undefined;
     const metaClose: string | undefined = meta?.close && /^\d{4}-\d{2}-\d{2}$/.test(meta.close) ? meta.close : undefined;
     let metaTotal: number | undefined;
@@ -396,7 +493,9 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
 
     return txArray.map((t: any) => {
       // Compact fields (d/desc/a/t/c) take precedence, fall back to legacy field names.
-      const rawCard = t.c ?? t.card_digits;
+      // Em extrato de conta NUNCA inferimos cartão — "FINAL 7014" no histórico
+      // é apenas texto, não destino do lançamento.
+      const rawCard = isAccount ? null : (t.c ?? t.card_digits);
       let detectedDigits: string | undefined;
       if (rawCard) {
         const digits = String(rawCard).replace(/\D/g, "");
@@ -407,18 +506,23 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
       let isReceita = rawTypeStr === "r" || rawTypeStr === "receita";
 
       const rawDate = t.d ? String(t.d).trim() : (t.raw_date ? String(t.raw_date).trim() : undefined);
-      const dateField = String(t.date || rawDate || "");
+      let dateField = String(t.date || rawDate || "");
+      if (isAccount) {
+        dateField = normalizeAccountDate(dateField) || "";
+      }
 
       // Fallbacks for legacy per-tx statement fields (if AI ignored meta).
-      const statementDueDate = metaDue ?? (t.statement_due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_due_date)) ? String(t.statement_due_date) : undefined);
-      const statementCloseDate = metaClose ?? (t.statement_close_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_close_date)) ? String(t.statement_close_date) : undefined);
-      let statementTotal = metaTotal;
-      if (statementTotal === undefined && t.statement_total !== undefined && t.statement_total !== null && t.statement_total !== "") {
+      const statementDueDate = isAccount ? undefined : (metaDue ?? (t.statement_due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_due_date)) ? String(t.statement_due_date) : undefined));
+      const statementCloseDate = isAccount ? undefined : (metaClose ?? (t.statement_close_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_close_date)) ? String(t.statement_close_date) : undefined));
+      let statementTotal = isAccount ? undefined : metaTotal;
+      if (!isAccount && statementTotal === undefined && t.statement_total !== undefined && t.statement_total !== null && t.statement_total !== "") {
         const n = Number(String(t.statement_total).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
         if (Number.isFinite(n) && n > 0) statementTotal = n;
       }
-      const cardholderName = (detectedDigits && metaCards[detectedDigits])
-        || (t.cardholder_name ? String(t.cardholder_name).trim() : undefined);
+      const cardholderName = isAccount
+        ? undefined
+        : ((detectedDigits && metaCards[detectedDigits])
+          || (t.cardholder_name ? String(t.cardholder_name).trim() : undefined));
 
       const amount = Math.abs(Number(t.a ?? t.amount) || 0);
       const description = String(t.desc ?? t.description ?? "Sem descrição");
@@ -440,6 +544,15 @@ function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[]
         ...(rawDate ? { raw_statement_date: rawDate } : {}),
       };
     }).filter((t: ParsedTransaction) => {
+      if (isAccount) {
+        // Em conta corrente só descartamos linhas de saldo/resumo — tarifas,
+        // IOF, boletos, débito de fatura e transferências são movimentos reais.
+        if (isAccountSummaryLine(t.description)) {
+          console.log(`Excluded account summary line: desc="${t.description.slice(0, 120)}" amount=${t.amount}`);
+          return false;
+        }
+        return t.amount > 0 && !!t.date;
+      }
       if (isExcludedCardStatementLine(t.description)) {
         console.log(`Excluded non-transaction statement line: desc="${t.description.slice(0, 120)}" amount=${t.amount}`);
         return false;
@@ -492,15 +605,18 @@ serve(async (req) => {
     }
 
     const fileName = file.name.toLowerCase();
+    const rawKind = String(formData.get("statementKind") || formData.get("importType") || "cartao").toLowerCase();
+    const statementKind: StatementKind = (rawKind === "conta" || rawKind === "debito" || rawKind === "banco") ? "conta" : "cartao";
+    console.log(`Parsing ${fileName} as statementKind=${statementKind}`);
     let transactions: ParsedTransaction[] = [];
 
     if (fileName.endsWith(".pdf")) {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      transactions = await parsePDFWithAI(bytes);
+      transactions = await parsePDFWithAI(bytes, statementKind);
     } else {
       const content = await file.text();
       if (fileName.endsWith(".ofx") || fileName.endsWith(".qfx")) {
-        transactions = parseOFX(content);
+        transactions = parseOFX(content, statementKind);
       } else if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
         transactions = parseCSV(content);
       } else {
@@ -542,8 +658,10 @@ serve(async (req) => {
         }
       }
 
-      // Signal 2: 70%+ of amounts are integers > 100 (no decimals at all)
-      if (!shouldRescale && integerRatio >= 0.7) {
+      // Signal 2: 70%+ of amounts are integers > 100 (no decimals at all).
+      // Não vale para conta corrente: salários, transferências e pagamentos
+      // redondos (1500, 5000) são comuns e o /100 destruiria os valores.
+      if (!shouldRescale && statementKind !== "conta" && integerRatio >= 0.7) {
         shouldRescale = true;
         reason = `${integerBig}/${total} amounts are integers > 100 (${(integerRatio * 100).toFixed(0)}%) — AI likely dropped decimals`;
       }
