@@ -360,7 +360,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cart
 }
 
 
-async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
+async function parseAIResponse(result: any, kind: StatementKind = "cartao"): Promise<ParsedTransaction[]> {
   const content = result.choices?.[0]?.message?.content || "";
   const finishReason = result.choices?.[0]?.finish_reason || "unknown";
   console.log(`AI response: finish_reason=${finishReason}, content_length=${content.length}`);
@@ -369,10 +369,10 @@ async function parseAIResponse(result: any): Promise<ParsedTransaction[]> {
   if (jsonMatch) {
     jsonStr = jsonMatch[1].trim();
   }
-  return parseTxJson(jsonStr, finishReason);
+  return parseTxJson(jsonStr, finishReason, kind);
 }
 
-function parseTxJson(jsonStr: string, finishReason: string): ParsedTransaction[] {
+function parseTxJson(jsonStr: string, finishReason: string, kind: StatementKind = "cartao"): ParsedTransaction[] {
   let parsed: any;
   try {
     parsed = JSON.parse(jsonStr);
