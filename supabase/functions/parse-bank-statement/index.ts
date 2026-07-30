@@ -264,7 +264,7 @@ async function callAIGateway(
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT },
           {
             role: "user",
             content: [
@@ -277,7 +277,9 @@ async function callAIGateway(
               },
               {
                 type: "text",
-                text: "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
+                text: kind === "conta"
+                  ? "This is a BANK CHECKING ACCOUNT statement (extrato de conta corrente). Extract every debit AND credit line into the compact { meta, txs } JSON shape. Ignore the running balance column. Emit meta once, then all txs. Return ONLY the JSON object."
+                  : "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
               },
             ],
           },
