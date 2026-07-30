@@ -198,6 +198,51 @@ EXCLUDE (NOT real transactions):
 
 Return ONLY the JSON object, no markdown fences, no prose.`;
 
+const ACCOUNT_SYSTEM_PROMPT = `You are a BANK CHECKING ACCOUNT statement parser (extrato de conta corrente). Extract EVERY movement line from the provided PDF — both money out (débitos) and money in (créditos).
+
+Return ONLY a valid JSON object (no markdown, no wrapping text) with this COMPACT shape:
+
+{
+  "meta": {
+    "from":  "YYYY-MM-DD" | null,   // first day of the statement period ("Período: 01/01/2026 a 31/01/2026")
+    "to":    "YYYY-MM-DD" | null,   // last day of the statement period
+    "total": null,
+    "cards": {}
+  },
+  "txs": [
+    { "d": "DD/MM/YYYY", "desc": "…", "a": 425.00, "t": "d", "c": null }
+  ]
+}
+
+Field rules for each tx:
+- "d": the line's date EXACTLY as printed. Brazilian statements use DD/MM/YYYY (never MM/DD). If the year is not printed on the line, emit "DD/MM" and fill meta.from/meta.to so the year can be derived.
+- "desc": the full history/description text of the line (campo Histórico / Descrição / MEMO), without the value and without the balance.
+- "a": positive number in REAIS with TWO decimals. "R$ 1.613,37" → 1613.37 (NEVER 161337, NEVER 1613). "R$ 84,00" → 84.00.
+- "t": "d" when the value is in the DÉBITO column (or the printed value is negative) — money leaving the account. "r" when the value is in the CRÉDITO column (or positive) — money entering the account.
+- "c": ALWAYS null. This is a bank account, not a card.
+
+CRITICAL — columns:
+- These statements usually have columns: Data | Descrição | Docto | Situação | Crédito (R$) | Débito (R$) | Saldo (R$).
+- The "Saldo" column is a RUNNING BALANCE — it is NOT a transaction value. NEVER use it as "a".
+- Use the Crédito/Débito columns to decide both "a" and "t". If a single "Valor" column is used instead, the sign defines "t".
+
+INCLUDE (all of these ARE real movements of the account — never skip them):
+- PIX ENVIADO / PIX RECEBIDO, TED, DOC, transferências (inclusive "TRANSFERENCIA PROGRAMADA PARA: <conta>")
+- PAGAMENTO DE BOLETO (qualquer banco), DEBITO AUTOMATICO, "DEBITO AUT. FATURA CARTAO ... FINAL 1234" (é uma saída real da conta)
+- TARIFA / MENSALIDADE PACOTE SERVICOS, IOF, JUROS, encargos, seguros
+- APLICAÇÃO e RESGATE (RESG POUP, aplicação automática), REMUNERACAO APLICACAO AUTOMATICA (mesmo R$ 0,01)
+- Compras no débito, saques, depósitos, estornos
+
+EXCLUDE (not movement lines):
+- Cabeçalhos, rodapés, totalizadores e "Saldo anterior" / "Saldo do dia" / "Saldo disponível" / "Limite da conta"
+- Blocos de resumo (juros acumulados, IOF acumulados, provisão de encargos)
+
+PRESERVE DUPLICATES: if the same date + value + description appears N times, emit it N times. Never collapse repeated lines.
+
+Return ONLY the JSON object, no markdown fences, no prose.`;
+
+type StatementKind = "conta" | "cartao";
+
 async function callAIGateway(
   apiKey: string,
   base64: string,
