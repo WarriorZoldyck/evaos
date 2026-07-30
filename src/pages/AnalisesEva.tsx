@@ -110,6 +110,7 @@ function pendingToTransaction(item: AIPendingTransaction): Transaction {
     purchase_date_original: null,
     transfer_id: null,
     created_by_user_id: null,
+    import_fingerprint: null,
   };
 }
 // ── Single item card ──
