@@ -293,7 +293,7 @@ async function callAIGateway(
   }
 }
 
-async function parsePDFWithAI(fileBytes: Uint8Array): Promise<ParsedTransaction[]> {
+async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cartao"): Promise<ParsedTransaction[]> {
   const apiKey = Deno.env.get("LOVABLE_API_KEY");
   if (!apiKey) {
     throw new Error("LOVABLE_API_KEY not configured");
