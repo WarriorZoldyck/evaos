@@ -344,7 +344,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cart
     }
 
     try {
-      const parsed = await parseAIResponse(await response.json());
+      const parsed = await parseAIResponse(await response.json(), kind);
       console.log(`Model ${model} produced ${parsed.length} transactions in ${Date.now() - startedAt}ms`);
       if (parsed.length > 0) return parsed;
       if (i === attempts.length - 1) return parsed;
