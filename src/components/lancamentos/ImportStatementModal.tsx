@@ -28,6 +28,8 @@ import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
 import { calculateCreditCardBillTotal, filterCreditCardBillScope, descriptionSimilarity, AUTO_LINK_MIN_SIMILARITY, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
+import { buildImportFingerprint } from "@/lib/import/fingerprint";
+import { detectInternalTransfer, type TransferAccountRef } from "@/lib/import/transferDetect";
 import { ReconcileStep } from "./import/ReconcileStep";
 
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
@@ -327,6 +329,12 @@ export function ImportStatementModal({
   // Rows the user explicitly clicked "Ignorar de vez" — usadas para diferenciar
   // ignorar-por-default (silencioso, bloqueia o Importar) de ignorar-consciente.
   const [explicitlyIgnored, setExplicitlyIgnored] = useState<Set<number>>(new Set());
+  // Fase 2A — linhas do extrato que JÁ existem no sistema com a mesma impressão
+  // digital de importação (mesmo extrato importado novamente).
+  const [duplicateRows, setDuplicateRows] = useState<Set<number>>(new Set());
+  // Fase 2B — linhas detectadas como transferência interna (sugestão).
+  const [transferRows, setTransferRows] = useState<Record<number, string>>({});
+  const [transferDismissed, setTransferDismissed] = useState<Set<number>>(new Set());
   // Suppliers & clients used to pre-select / render "Fornecedor: X" hints.
   const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
   const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
@@ -1079,6 +1087,88 @@ export function ImportStatementModal({
     setPromotedOrphanIds(new Set());
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches, billReferenceMonth]);
 
+  // ── FASE 2A — DEDUPE DE EXTRATO (somente conta/débito) ────────────────────
+  // Calcula a impressão digital de cada linha e verifica quais já existem no
+  // sistema. Linhas repetidas nascem desligadas e ganham o selo "Já importado".
+  useEffect(() => {
+    if (importType !== "debito" || rows.length === 0 || !targetBankAccount) {
+      setDuplicateRows(new Set());
+      return;
+    }
+    let cancelled = false;
+    const fps = rows.map((r) =>
+      buildImportFingerprint({
+        accountKey: targetBankAccount,
+        date: r.date,
+        amount: r.amount,
+        type: r.type,
+        description: r.description,
+      }),
+    );
+    (async () => {
+      const found = new Set<string>();
+      // Consulta em blocos para não estourar o tamanho da URL.
+      for (let i = 0; i < fps.length; i += 100) {
+        const chunk = fps.slice(i, i + 100);
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("import_fingerprint")
+          .eq("user_id", effectiveUserId)
+          .in("import_fingerprint", chunk);
+        if (error) {
+          console.error("[ImportStatement] dedupe query error", error);
+          return;
+        }
+        (data || []).forEach((t: { import_fingerprint: string | null }) => {
+          if (t.import_fingerprint) found.add(t.import_fingerprint);
+        });
+      }
+      if (cancelled) return;
+      const dupes = new Set<number>();
+      fps.forEach((fp, idx) => {
+        if (found.has(fp)) dupes.add(idx);
+      });
+      setDuplicateRows(dupes);
+      if (dupes.size > 0) {
+        // Linha repetida nunca nasce marcada para criar/vincular.
+        setMatchActions((prev) => {
+          const next = { ...prev };
+          dupes.forEach((idx) => {
+            next[idx] = "ignorar";
+          });
+          return next;
+        });
+        setExplicitlyIgnored((prev) => {
+          const next = new Set(prev);
+          dupes.forEach((idx) => next.add(idx));
+          return next;
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [importType, rows, targetBankAccount, effectiveUserId]);
+
+  // ── FASE 2B — TRANSFERÊNCIAS INTERNAS (somente conta/débito) ──────────────
+  useEffect(() => {
+    if (importType !== "debito" || rows.length === 0 || !targetBankAccount) {
+      setTransferRows({});
+      return;
+    }
+    const others: TransferAccountRef[] = [
+      ...bankAccounts.map((a) => ({ key: `bank:${a.id}`, name: a.name })),
+      ...wallets.map((w) => ({ key: `wallet:${w.id}`, name: w.name })),
+    ].filter((a) => a.key !== targetBankAccount);
+
+    const next: Record<number, string> = {};
+    rows.forEach((r, idx) => {
+      const det = detectInternalTransfer(r.description, others);
+      if (det.isTransfer) next[idx] = det.reason || "Possível transferência interna";
+    });
+    setTransferRows(next);
+  }, [importType, rows, targetBankAccount, bankAccounts, wallets]);
+
   // O mês da fatura é perguntado ao usuário ANTES do upload (fonte da verdade).
   // Não pré-preenchemos por heurística — assim evitamos casar contra o mês errado
   // quando o parser interpreta datas de forma ambígua.
@@ -1613,6 +1703,24 @@ export function ImportStatementModal({
       const finalDesc = editedDesc || r.description;
       const contact = rowContacts[realIdx] || {};
 
+      // Fase 2A — grava a impressão digital só em modo conta/débito. Se o
+      // usuário forçou a criação de uma linha já importada, deixa null para não
+      // colidir com o índice único.
+      const importFingerprint =
+        importType === "debito" && targetBankAccount && !duplicateRows.has(realIdx)
+          ? buildImportFingerprint({
+              accountKey: targetBankAccount,
+              date: r.date,
+              amount: r.amount,
+              type: r.type,
+              description: r.description,
+            })
+          : null;
+
+      // Fase 2B — transferência interna sugerida e não desfeita pelo usuário.
+      const isInternalTransfer =
+        importType === "debito" && !!transferRows[realIdx] && !transferDismissed.has(realIdx);
+
       return {
         description: finalDesc,
         amount: r.amount,
@@ -1638,6 +1746,8 @@ export function ImportStatementModal({
         installments_total: r.installments_total || null,
         original_amount: r.original_amount || null,
         purchase_date_original: purchaseDateOriginal || null,
+        import_fingerprint: importFingerprint,
+        is_internal_transfer: isInternalTransfer || null,
       };
 
     });
@@ -2400,6 +2510,17 @@ export function ImportStatementModal({
                 else setClientsList((prev) => [...prev, { id, name }]);
               }}
               explicitlyIgnored={explicitlyIgnored}
+              duplicateRows={duplicateRows}
+              transferRows={transferRows}
+              transferDismissed={transferDismissed}
+              onTransferDismiss={(idx, dismissed) =>
+                setTransferDismissed((prev) => {
+                  const next = new Set(prev);
+                  if (dismissed) next.add(idx);
+                  else next.delete(idx);
+                  return next;
+                })
+              }
               onExplicitIgnore={(idx, ignored) => {
                 setExplicitlyIgnored((prev) => {
                   const next = new Set(prev);
