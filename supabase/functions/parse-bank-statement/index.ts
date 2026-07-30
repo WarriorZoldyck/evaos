@@ -605,15 +605,18 @@ serve(async (req) => {
     }
 
     const fileName = file.name.toLowerCase();
+    const rawKind = String(formData.get("statementKind") || formData.get("importType") || "cartao").toLowerCase();
+    const statementKind: StatementKind = (rawKind === "conta" || rawKind === "debito" || rawKind === "banco") ? "conta" : "cartao";
+    console.log(`Parsing ${fileName} as statementKind=${statementKind}`);
     let transactions: ParsedTransaction[] = [];
 
     if (fileName.endsWith(".pdf")) {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      transactions = await parsePDFWithAI(bytes);
+      transactions = await parsePDFWithAI(bytes, statementKind);
     } else {
       const content = await file.text();
       if (fileName.endsWith(".ofx") || fileName.endsWith(".qfx")) {
-        transactions = parseOFX(content);
+        transactions = parseOFX(content, statementKind);
       } else if (fileName.endsWith(".csv") || fileName.endsWith(".txt")) {
         transactions = parseCSV(content);
       } else {
