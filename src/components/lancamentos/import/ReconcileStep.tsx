@@ -374,6 +374,10 @@ export function ReconcileStep({
   onContactCreated,
   explicitlyIgnored,
   onExplicitIgnore,
+  duplicateRows,
+  transferRows,
+  transferDismissed,
+  onTransferDismiss,
   suppliers = [],
   clients = [],
 }: ReconcileStepProps) {
