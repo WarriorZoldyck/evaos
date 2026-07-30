@@ -249,6 +249,7 @@ async function callAIGateway(
   model: string,
   maxTokens: number,
   timeoutMs: number,
+  kind: StatementKind,
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
