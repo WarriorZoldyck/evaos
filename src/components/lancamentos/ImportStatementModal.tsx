@@ -28,6 +28,8 @@ import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
 import { calculateCreditCardBillTotal, filterCreditCardBillScope, descriptionSimilarity, AUTO_LINK_MIN_SIMILARITY, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
+import { buildImportFingerprint } from "@/lib/import/fingerprint";
+import { detectInternalTransfer, type TransferAccountRef } from "@/lib/import/transferDetect";
 import { ReconcileStep } from "./import/ReconcileStep";
 
 import { useCategorySuggestions } from "@/hooks/useCategorySuggestions";
