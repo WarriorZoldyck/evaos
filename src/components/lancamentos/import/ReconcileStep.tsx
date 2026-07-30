@@ -50,6 +50,14 @@ import { CategoryPathCombobox } from "@/components/lancamentos/CategoryPathCombo
 import { CategoryCascadeSelect } from "@/components/lancamentos/import/CategoryCascadeSelect";
 import { ContactSelectWithCreate } from "@/components/lancamentos/ContactSelectWithCreate";
 import { SuggestionWhyPopover } from "@/components/lancamentos/import/SuggestionWhyPopover";
+import { GroupMatchDialog, type GroupDialogRow } from "@/components/lancamentos/import/GroupMatchDialog";
+import {
+  collectGroupedRows,
+  collectGroupedSystemIds,
+  sumAmounts,
+  type GroupsMap,
+} from "@/lib/import/grouping";
+import type { CandidateTx } from "@/lib/import/matching";
 
 
 export interface ParsedRow {
@@ -139,6 +147,14 @@ interface ReconcileStepProps {
   /** Suppliers/clients lists to render the small "vinculado a" hint. */
   suppliers?: { id: string; name: string }[];
   clients?: { id: string; name: string }[];
+  /** Fase 3 — grupos de conciliação em lote, indexados pela linha-líder. */
+  groups?: GroupsMap;
+  /** Pool de lançamentos do sistema na janela do extrato (base do agrupamento). */
+  groupCandidates?: CandidateTx[];
+  /** Confirma um grupo (1↔N). */
+  onGroupConfirm?: (leaderIdx: number, state: { systemIds: string[]; extraRowIdx: number[] }) => void;
+  /** Desfaz um grupo confirmado. */
+  onGroupUndo?: (leaderIdx: number) => void;
 }
 
 
@@ -380,10 +396,15 @@ export function ReconcileStep({
   onTransferDismiss,
   suppliers = [],
   clients = [],
+  groups = {},
+  groupCandidates = [],
+  onGroupConfirm,
+  onGroupUndo,
 }: ReconcileStepProps) {
 
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
+  const [groupForRow, setGroupForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
   // Row currently expanded for inline review (legacy — kept only for manual re-open path).
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
