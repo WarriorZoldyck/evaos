@@ -26,6 +26,14 @@ import {
 } from "@/components/ui/select";
 import type { TransactionInsert } from "@/hooks/useTransactions";
 import { useImportMatching, type RowMatch } from "@/hooks/useImportMatching";
+import {
+  buildAllGroupPlans,
+  collectGroupedRows,
+  collectGroupedSystemIds,
+  type GroupsMap,
+  type GroupState,
+  type GroupSystemTx,
+} from "@/lib/import/grouping";
 import { calculateCreditCardBillTotal, filterCreditCardBillScope, descriptionSimilarity, AUTO_LINK_MIN_SIMILARITY, type CandidateTx } from "@/lib/import/matching";
 import { getCreditCardDueDate } from "@/lib/creditCardDueDate";
 import { buildImportFingerprint } from "@/lib/import/fingerprint";
@@ -297,7 +305,9 @@ export function ImportStatementModal({
   const [matchTargets, setMatchTargets] = useState<Record<number, string>>({}); // row idx → tx id
   // IDs of system transactions to delete on import (from "Manter só o do extrato").
   const [replaceDeleteIds, setReplaceDeleteIds] = useState<Set<string>>(new Set());
-  const { matches, findMatches, loading: matchLoading, reset: resetMatches } = useImportMatching();
+  const { matches, findMatches, loading: matchLoading, reset: resetMatches, pool: matchPool } = useImportMatching();
+  // Fase 3 — grupos de conciliação em lote (linha-líder → estado do grupo).
+  const [groups, setGroups] = useState<GroupsMap>({});
 
   // Orphans = transactions already in the system, in the bill window, that DID NOT match any
   // line of the statement. They are potential errors/duplications: the statement is the source
@@ -415,6 +425,7 @@ export function ImportStatementModal({
     setAcknowledgeDivergence(!!s.acknowledgeDivergence);
     setMatchActions(s.matchActions || {});
     setMatchTargets(s.matchTargets || {});
+    setGroups(s.groups || {});
     setReplaceDeleteIds(new Set(s.replaceDeleteIds || []));
     setRowCategories(s.rowCategories || {});
     setRowDescriptions(s.rowDescriptions || {});
@@ -466,6 +477,7 @@ export function ImportStatementModal({
         rowContacts,
         reviewedRows: Array.from(reviewedRows),
         explicitlyIgnored: Array.from(explicitlyIgnored),
+        groups,
         replaceDeleteIds: Array.from(replaceDeleteIds),
         extraCategories,
         promotedOrphanIds: Array.from(promotedOrphanIds),
@@ -479,7 +491,7 @@ export function ImportStatementModal({
     open, sessionKey, pendingResume, step, rows, fileName, importType, targetBankAccount, targetCard,
     billReferenceMonth, statementTotal, statementTotalInput, amountRescaled, acknowledgeDivergence,
     matchActions, matchTargets, rowCategories, rowDescriptions, rowContacts, reviewedRows,
-    explicitlyIgnored, replaceDeleteIds, extraCategories, promotedOrphanIds,
+    explicitlyIgnored, replaceDeleteIds, extraCategories, promotedOrphanIds, groups,
   ]);
 
   // Load suppliers/clients once the reconcile step is reachable, so the review
@@ -1556,6 +1568,24 @@ export function ImportStatementModal({
 
 
 
+  /** Fingerprint por índice de linha — usado no commit dos grupos (Fase 3). */
+  const rowFingerprints = useMemo(() => {
+    if (importType !== "debito" || !targetBankAccount) return {} as Record<number, string>;
+    const out: Record<number, string> = {};
+    rows.forEach((r, i) => {
+      out[i] = buildImportFingerprint({
+        accountKey: targetBankAccount,
+        date: r.date,
+        amount: r.amount,
+        type: r.type,
+        description: r.description,
+      });
+    });
+    return out;
+  }, [rows, importType, targetBankAccount]);
+
+  const groupedRowIdxSet = useMemo(() => collectGroupedRows(groups), [groups]);
+
   // Disposition of a single row. O toggle é a decisão: OFF = ignorar
   // (explícito), ON = criar. Não existe "pendente" — se veio da fonte
   // (extrato) sem match, nasce como ignorar; o usuário liga o toggle
@@ -1606,6 +1636,9 @@ export function ImportStatementModal({
     const rowsToLink: { row: ParsedTransaction; txId: string }[] = [];
 
     rows.forEach((r, realIdx) => {
+      // Linhas presas a um grupo são resolvidas pelo plano de grupos abaixo —
+      // nunca viram criação nem vínculo simples.
+      if (groupedRowIdxSet.has(realIdx)) return;
       const disp = getRowDisposition(realIdx);
       if (disp === "ignore-explicit") return;
       if (disp === "link") {
@@ -1650,6 +1683,36 @@ export function ImportStatementModal({
         })
       );
     }
+
+    // 1b) Conciliação em lote (Fase 3) — atualiza os lançamentos do grupo.
+    let groupOk = 0;
+    let groupFail = 0;
+    {
+      const systemById = new Map<string, GroupSystemTx>();
+      matchPool.forEach((c) => systemById.set(String(c.id), { id: String(c.id), amount: Number(c.amount) }));
+      const plans = buildAllGroupPlans(groups, rows, systemById, rowFingerprints);
+      if (plans.length > 0) {
+        await Promise.all(
+          plans.map(async (u) => {
+            const payload: Record<string, unknown> = { is_reconciled: true };
+            if (importType === "debito") {
+              payload.status = "Pago";
+              payload.payment_date = u.payment_date;
+              if (u.import_fingerprint) payload.import_fingerprint = u.import_fingerprint;
+            }
+            const { error } = await supabase.from("transactions").update(payload).eq("id", u.id);
+            if (error) {
+              console.error("[ImportStatement] group link error", error);
+              groupFail++;
+            } else {
+              groupOk++;
+            }
+          }),
+        );
+      }
+    }
+    void groupOk;
+    void groupFail;
 
     // 2) Create new transactions (legacy path)
     const transactions: TransactionInsert[] = rowsToCreate.map((r) => {
@@ -2510,6 +2573,18 @@ export function ImportStatementModal({
                 else setClientsList((prev) => [...prev, { id, name }]);
               }}
               explicitlyIgnored={explicitlyIgnored}
+              groups={groups}
+              groupCandidates={matchPool}
+              onGroupConfirm={(leaderIdx, state) =>
+                setGroups((prev) => ({ ...prev, [leaderIdx]: state }))
+              }
+              onGroupUndo={(leaderIdx) =>
+                setGroups((prev) => {
+                  const next = { ...prev };
+                  delete next[leaderIdx];
+                  return next;
+                })
+              }
               duplicateRows={duplicateRows}
               transferRows={transferRows}
               transferDismissed={transferDismissed}
