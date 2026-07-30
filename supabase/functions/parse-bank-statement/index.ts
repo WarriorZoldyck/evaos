@@ -319,7 +319,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cart
     let response: Response;
     const startedAt = Date.now();
     try {
-      response = await callAIGateway(apiKey, base64, model, maxTokens, timeoutMs);
+      response = await callAIGateway(apiKey, base64, model, maxTokens, timeoutMs, kind);
     } catch (err) {
       const aborted = err instanceof DOMException && err.name === "AbortError";
       console.error(`AI Gateway ${model} ${aborted ? "timed out" : "failed"} after ${Date.now() - startedAt}ms:`, err);
