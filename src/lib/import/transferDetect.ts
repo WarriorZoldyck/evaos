@@ -21,19 +21,24 @@ export interface TransferDetection {
   reason?: string;
 }
 
-const TRANSFER_KEYWORDS = [
-  "PIX ENVIADO",
-  "PIX RECEBIDO",
-  "PIX TRANSF",
-  "TED",
-  "DOC ",
-  "TRANSFERENCIA",
+/**
+ * Palavras que, sozinhas, JÁ indicam movimento interno (não há terceiro
+ * envolvido). PIX/TED comuns ficam de fora: a maioria é pagamento a terceiros.
+ */
+const STRONG_INTERNAL_KEYWORDS = [
   "TRANSF ENTRE CONTAS",
-  "TRANSF ",
-  "RESGATE",
-  "APLICACAO",
+  "TRANSFERENCIA ENTRE CONTAS",
+  "TRANSF CONTA CORRENTE",
+  "RESGATE APLIC",
+  "RESGATE AUTOMATICO",
+  "RESGATE INVEST",
+  "APLICACAO AUTOMATICA",
   "APLIC AUTOMATICA",
+  "APLICACAO INVEST",
 ];
+
+/** Palavras que só reforçam a suspeita quando a contraparte também bate. */
+const TRANSFER_HINTS = ["PIX", "TED", "DOC", "TRANSF"];
 
 function normalize(raw: string): string {
   return (raw || "")
@@ -59,7 +64,8 @@ export function detectInternalTransfer(
   const desc = normalize(description);
   if (!desc) return { isTransfer: false };
 
-  const keyword = TRANSFER_KEYWORDS.find((k) => desc.includes(k));
+  const strong = STRONG_INTERNAL_KEYWORDS.find((k) => desc.includes(k));
+  const hasHint = TRANSFER_HINTS.some((k) => desc.includes(k));
 
   // 1) Contraparte explícita: nome ou documento de outra conta do usuário.
   for (const acc of accounts) {
@@ -76,10 +82,13 @@ export function detectInternalTransfer(
     }
   }
 
-  // 2) Só a palavra-chave: sugere transferência, sem contraparte definida.
-  if (keyword) {
-    return { isTransfer: true, reason: `Movimento do tipo "${keyword.trim()}"` };
+  // 2) Movimento interno explícito (resgate/aplicação/entre contas).
+  if (strong) {
+    return { isTransfer: true, reason: `Movimento interno: "${strong}"` };
   }
+
+  // PIX/TED/DOC solto NÃO é transferência interna — quase sempre é terceiro.
+  void hasHint;
 
   return { isTransfer: false };
 }
