@@ -17,12 +17,19 @@ interface VirtualCommandListProps {
   search: string;
   selectedName: string;
   onPick: (name: string) => void;
+  /**
+   * Optional item-level callback. Preferred when names can repeat (contatos),
+   * since it hands back the whole item instead of just the name.
+   */
+  onPickItem?: (item: CategoryFlat) => void;
   /** Threshold above which virtualization kicks in. */
   virtualizeAfter?: number;
   /** Row height estimate in px. */
   rowHeight?: number;
   /** Max height (px) of the scrollable container. */
   maxHeight?: number;
+  /** Marks the selected row by id — more reliable than matching by name. */
+  selectedId?: string;
 }
 
 /**
