@@ -2510,6 +2510,17 @@ export function ImportStatementModal({
                 else setClientsList((prev) => [...prev, { id, name }]);
               }}
               explicitlyIgnored={explicitlyIgnored}
+              duplicateRows={duplicateRows}
+              transferRows={transferRows}
+              transferDismissed={transferDismissed}
+              onTransferDismiss={(idx, dismissed) =>
+                setTransferDismissed((prev) => {
+                  const next = new Set(prev);
+                  if (dismissed) next.add(idx);
+                  else next.delete(idx);
+                  return next;
+                })
+              }
               onExplicitIgnore={(idx, ignored) => {
                 setExplicitlyIgnored((prev) => {
                   const next = new Set(prev);
