@@ -1368,6 +1368,46 @@ export function ReconcileStep({
                               </div>
                             )}
                             <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              {duplicateRows?.has(i) && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="text-[9px] gap-0.5 cursor-help border-sky-500/50 text-sky-700 bg-sky-500/5">
+                                      <Check className="h-2.5 w-2.5" /> Já importado
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs max-w-[260px]">
+                                    Esta linha já existe no sistema (mesma conta, data, valor e descrição).
+                                    Foi ignorada para evitar duplicidade — ative o toggle só se for uma
+                                    despesa realmente repetida.
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              {transferRows?.[i] && !transferDismissed?.has(i) && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[9px] gap-0.5 cursor-pointer border-violet-500/50 text-violet-700 bg-violet-500/5"
+                                      onClick={() => onTransferDismiss?.(i, true)}
+                                    >
+                                      <ArrowLeftRight className="h-2.5 w-2.5" /> Transferência interna
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs max-w-[260px]">
+                                    {transferRows[i]}. Não entra no DRE. Clique no selo para tratar como
+                                    receita/despesa normal.
+                                  </TooltipContent>
+                                </Tooltip>
+                              )}
+                              {transferRows?.[i] && transferDismissed?.has(i) && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] gap-0.5 cursor-pointer text-muted-foreground"
+                                  onClick={() => onTransferDismiss?.(i, false)}
+                                >
+                                  Marcar como transferência
+                                </Badge>
+                              )}
                               {!willBeCreated && (
                                 <Badge variant="outline" className="text-[9px] gap-0.5 text-muted-foreground bg-muted/40">
                                   <X className="h-2.5 w-2.5" />
