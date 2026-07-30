@@ -1087,6 +1087,88 @@ export function ImportStatementModal({
     setPromotedOrphanIds(new Set());
   }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches, billReferenceMonth]);
 
+  // ── FASE 2A — DEDUPE DE EXTRATO (somente conta/débito) ────────────────────
+  // Calcula a impressão digital de cada linha e verifica quais já existem no
+  // sistema. Linhas repetidas nascem desligadas e ganham o selo "Já importado".
+  useEffect(() => {
+    if (importType !== "debito" || rows.length === 0 || !targetBankAccount) {
+      setDuplicateRows(new Set());
+      return;
+    }
+    let cancelled = false;
+    const fps = rows.map((r) =>
+      buildImportFingerprint({
+        accountKey: targetBankAccount,
+        date: r.date,
+        amount: r.amount,
+        type: r.type,
+        description: r.description,
+      }),
+    );
+    (async () => {
+      const found = new Set<string>();
+      // Consulta em blocos para não estourar o tamanho da URL.
+      for (let i = 0; i < fps.length; i += 100) {
+        const chunk = fps.slice(i, i + 100);
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("import_fingerprint")
+          .eq("user_id", effectiveUserId)
+          .in("import_fingerprint", chunk);
+        if (error) {
+          console.error("[ImportStatement] dedupe query error", error);
+          return;
+        }
+        (data || []).forEach((t: { import_fingerprint: string | null }) => {
+          if (t.import_fingerprint) found.add(t.import_fingerprint);
+        });
+      }
+      if (cancelled) return;
+      const dupes = new Set<number>();
+      fps.forEach((fp, idx) => {
+        if (found.has(fp)) dupes.add(idx);
+      });
+      setDuplicateRows(dupes);
+      if (dupes.size > 0) {
+        // Linha repetida nunca nasce marcada para criar/vincular.
+        setMatchActions((prev) => {
+          const next = { ...prev };
+          dupes.forEach((idx) => {
+            next[idx] = "ignorar";
+          });
+          return next;
+        });
+        setExplicitlyIgnored((prev) => {
+          const next = new Set(prev);
+          dupes.forEach((idx) => next.add(idx));
+          return next;
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [importType, rows, targetBankAccount, effectiveUserId]);
+
+  // ── FASE 2B — TRANSFERÊNCIAS INTERNAS (somente conta/débito) ──────────────
+  useEffect(() => {
+    if (importType !== "debito" || rows.length === 0 || !targetBankAccount) {
+      setTransferRows({});
+      return;
+    }
+    const others: TransferAccountRef[] = [
+      ...bankAccounts.map((a) => ({ key: `bank:${a.id}`, name: a.name })),
+      ...wallets.map((w) => ({ key: `wallet:${w.id}`, name: w.name })),
+    ].filter((a) => a.key !== targetBankAccount);
+
+    const next: Record<number, string> = {};
+    rows.forEach((r, idx) => {
+      const det = detectInternalTransfer(r.description, others);
+      if (det.isTransfer) next[idx] = det.reason || "Possível transferência interna";
+    });
+    setTransferRows(next);
+  }, [importType, rows, targetBankAccount, bankAccounts, wallets]);
+
   // O mês da fatura é perguntado ao usuário ANTES do upload (fonte da verdade).
   // Não pré-preenchemos por heurística — assim evitamos casar contra o mês errado
   // quando o parser interpreta datas de forma ambígua.
