@@ -24,6 +24,8 @@ function shiftISO(iso: string, days: number): string {
 export function useImportMatching() {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<Record<number, RowMatch>>({});
+  /** Todos os candidatos da janela (sem filtro por valor) — base da conciliação em lote. */
+  const [pool, setPool] = useState<CandidateTx[]>([]);
 
   const findMatches = useCallback(
     async (
@@ -34,7 +36,10 @@ export function useImportMatching() {
       options: { merge?: boolean; billMonth?: string | null } = {},
     ) => {
       if (lines.length === 0 || (!bankAccountId && !walletId && !creditCardId)) {
-        if (!options.merge) setMatches({});
+        if (!options.merge) {
+          setMatches({});
+          setPool([]);
+        }
         return {};
       }
 
@@ -226,7 +231,10 @@ export function useImportMatching() {
     []
   );
 
-  const reset = useCallback(() => setMatches({}), []);
+  const reset = useCallback(() => {
+    setMatches({});
+    setPool([]);
+  }, []);
 
-  return { matches, findMatches, loading, reset };
+  return { matches, findMatches, loading, reset, pool };
 }
