@@ -125,6 +125,14 @@ interface ReconcileStepProps {
   explicitlyIgnored?: Set<number>;
   /** Toggle a row into/out of the explicit-ignore set. */
   onExplicitIgnore?: (rowIdx: number, ignored: boolean) => void;
+  /** Linhas cuja impressão digital já existe no sistema (extrato reimportado). */
+  duplicateRows?: Set<number>;
+  /** Linhas sugeridas como transferência interna → motivo da sugestão. */
+  transferRows?: Record<number, string>;
+  /** Linhas em que o usuário recusou a sugestão de transferência. */
+  transferDismissed?: Set<number>;
+  /** Aceita/recusa a sugestão de transferência interna de uma linha. */
+  onTransferDismiss?: (rowIdx: number, dismissed: boolean) => void;
 
   /** Called when a supplier/client is created inline. */
   onContactCreated?: (type: "supplier" | "client", id: string, name: string) => void;
