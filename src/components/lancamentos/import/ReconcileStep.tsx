@@ -468,17 +468,43 @@ export function ReconcileStep({
     [rows]
   );
 
+  // Fase 3 — linhas e lançamentos presos em grupos de conciliação em lote.
+  // Elas saem das listas de classificação normais (não viram "criar"/"ignorar")
+  // e passam a viver na seção "Agrupadas".
+  const groupedRowIdx = useMemo(() => collectGroupedRows(groups), [groups]);
+  const groupedSystemIds = useMemo(() => collectGroupedSystemIds(groups), [groups]);
+  const indexedUngrouped = useMemo(
+    () => indexed.filter(({ i }) => !groupedRowIdx.has(i)),
+    [indexed, groupedRowIdx],
+  );
+  const groupLeaders = useMemo(
+    () =>
+      Object.keys(groups)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .filter((i) => rows[i]),
+    [groups, rows],
+  );
+  const groupCandidatesById = useMemo(
+    () => new Map(groupCandidates.map((c) => [String(c.id), c])),
+    [groupCandidates],
+  );
+  const groupedStatementTotal = useMemo(
+    () => sumAmounts([...groupedRowIdx].map((i) => rows[i]?.amount ?? 0)),
+    [groupedRowIdx, rows],
+  );
+
   // SPLIT matched rows by tier: exact (Q1) vs tolerance (Q2).
   // We exclude rows the user explicitly confirmed via "É o mesmo" (they show
   // in the dedicated "Vinculadas manualmente" section for clear feedback).
-  const matchedExactRows = indexed.filter(
+  const matchedExactRows = indexedUngrouped.filter(
     ({ i }) =>
       (matchActions[i] || "criar") === "vincular" &&
       matches[i]?.best &&
       matches[i]!.best!.tier === "exact" &&
       !dismissedSuggestions.has(i)
   );
-  const matchedToleranceRows = indexed.filter(
+  const matchedToleranceRows = indexedUngrouped.filter(
     ({ i }) =>
       (matchActions[i] || "criar") === "vincular" &&
       matches[i]?.best &&
@@ -486,7 +512,7 @@ export function ReconcileStep({
       !dismissedSuggestions.has(i)
   );
   // Rows where matcher found a same-value candidate but text differs — user must confirm.
-  const suggestedRows = indexed.filter(({ i }) => {
+  const suggestedRows = indexedUngrouped.filter(({ i }) => {
     if (dismissedSuggestions.has(i)) return false;
     const a = matchActions[i] || "criar";
     return a === "criar" && matches[i]?.best?.suggested;
@@ -495,7 +521,7 @@ export function ReconcileStep({
   // Rows manually linked via "É o mesmo": either against an orphan (no match)
   // OR against an auto-suggested candidate that the user confirmed. Both
   // deserve explicit visual feedback so the click doesn't feel silent.
-  const manualLinkedRows = indexed.filter(({ i }) => {
+  const manualLinkedRows = indexedUngrouped.filter(({ i }) => {
     const a = matchActions[i] || "criar";
     if (a !== "vincular" || !matchTargets[i]) return false;
     if (!matches[i]?.best) return true; // orphan link
@@ -503,7 +529,7 @@ export function ReconcileStep({
   });
   const manualLinkedIdxSet = new Set(manualLinkedRows.map(({ i }) => i));
 
-  const newRows = indexed.filter(({ i }) => {
+  const newRows = indexedUngrouped.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
     if (manualLinkedIdxSet.has(i)) return false;
     const a = matchActions[i] || "criar";
@@ -513,7 +539,7 @@ export function ReconcileStep({
     return a === "criar" || (a === "vincular" && !matches[i]?.best);
   });
   const newRowIdxSet = new Set(newRows.map(({ i }) => i));
-  const ignoredRows = indexed.filter(({ i }) => {
+  const ignoredRows = indexedUngrouped.filter(({ i }) => {
     if (newRowIdxSet.has(i)) return false;
     return matchActions[i] === "ignorar";
   });
@@ -537,21 +563,34 @@ export function ReconcileStep({
   const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
   const totalsDelta = statementTotal - systemTotal;
   const totalsDivergent = Math.abs(totalsDelta) > 0.05;
-  const coverageMatched = matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
+  const groupedSystemTotal = sumAmounts(
+    [...groupedSystemIds].map((id) => groupCandidatesById.get(id)?.amount ?? 0),
+  );
+  const coverageMatched =
+    matchedExactRows.length +
+    matchedToleranceRows.length +
+    manualLinkedRows.length +
+    indexed.filter(({ i }) => groupedRowIdx.has(i)).length;
   const coverageTotal = indexed.length;
   const onlyStatementRows = newRows; // linhas presentes só no extrato
-  const remainingOrphans = orphans.filter((o) => !linkedOrphans.has(o.id));
+  const remainingOrphans = orphans.filter(
+    (o) => !linkedOrphans.has(o.id) && !groupedSystemIds.has(String(o.id)),
+  );
 
   // Progresso da conciliação (linhas do extrato):
   // - Original = soma de todas as linhas selecionadas do extrato
   // - Conciliado = soma das linhas com ação "vincular" (exact + tolerance + "É o mesmo")
   // - Restante = original − conciliado (o que ainda precisa virar novo/ignorado)
-  const reconciledRowsTotal = indexed
-    .filter(({ i }) => (matchActions[i] || "criar") === "vincular")
-    .reduce((s, { r }) => s + signedStatementAmount(r), 0);
-  const reconciledRowsCount = indexed.filter(
-    ({ i }) => (matchActions[i] || "criar") === "vincular"
-  ).length;
+  const reconciledRowsTotal =
+    indexedUngrouped
+      .filter(({ i }) => (matchActions[i] || "criar") === "vincular")
+      .reduce((s, { r }) => s + signedStatementAmount(r), 0) +
+    indexed
+      .filter(({ i }) => groupedRowIdx.has(i))
+      .reduce((s, { r }) => s + signedStatementAmount(r), 0);
+  const reconciledRowsCount =
+    indexedUngrouped.filter(({ i }) => (matchActions[i] || "criar") === "vincular").length +
+    indexed.filter(({ i }) => groupedRowIdx.has(i)).length;
   const remainingTotal = Math.max(0, statementTotal - Math.abs(reconciledRowsTotal));
   const remainingCount = Math.max(0, coverageTotal - reconciledRowsCount);
 
