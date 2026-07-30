@@ -554,18 +554,18 @@ export function ReconcileStep({
     (s, { r }) => s + (r.type === "receita" ? Math.abs(r.amount) : 0),
     0,
   );
+  const groupedSystemTotal = sumAmounts(
+    [...groupedSystemIds].map((id) => groupCandidatesById.get(id)?.amount ?? 0),
+  );
   const matchedSystemTotal = [...matchedExactRows, ...matchedToleranceRows].reduce(
     (s, { i }) => s + Math.abs(Number(matches[i]!.best!.candidate.amount)),
     0
   );
   const orphansTotal = orphans.reduce((s, o) => s + Math.abs(o.amount), 0);
-  const systemTotal = isCardMode && systemBill ? Math.abs(systemBill.total) : matchedSystemTotal;
-  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
+  const systemTotal = isCardMode && systemBill ? Math.abs(systemBill.total) : matchedSystemTotal + groupedSystemTotal;
+  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length + groupedSystemIds.size;
   const totalsDelta = statementTotal - systemTotal;
   const totalsDivergent = Math.abs(totalsDelta) > 0.05;
-  const groupedSystemTotal = sumAmounts(
-    [...groupedSystemIds].map((id) => groupCandidatesById.get(id)?.amount ?? 0),
-  );
   const coverageMatched =
     matchedExactRows.length +
     matchedToleranceRows.length +
