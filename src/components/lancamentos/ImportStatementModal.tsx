@@ -329,6 +329,12 @@ export function ImportStatementModal({
   // Rows the user explicitly clicked "Ignorar de vez" — usadas para diferenciar
   // ignorar-por-default (silencioso, bloqueia o Importar) de ignorar-consciente.
   const [explicitlyIgnored, setExplicitlyIgnored] = useState<Set<number>>(new Set());
+  // Fase 2A — linhas do extrato que JÁ existem no sistema com a mesma impressão
+  // digital de importação (mesmo extrato importado novamente).
+  const [duplicateRows, setDuplicateRows] = useState<Set<number>>(new Set());
+  // Fase 2B — linhas detectadas como transferência interna (sugestão).
+  const [transferRows, setTransferRows] = useState<Record<number, string>>({});
+  const [transferDismissed, setTransferDismissed] = useState<Set<number>>(new Set());
   // Suppliers & clients used to pre-select / render "Fornecedor: X" hints.
   const [suppliersList, setSuppliersList] = useState<{ id: string; name: string }[]>([]);
   const [clientsList, setClientsList] = useState<{ id: string; name: string }[]>([]);
