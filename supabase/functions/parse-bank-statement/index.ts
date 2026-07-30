@@ -47,6 +47,19 @@ function isExcludedCardStatementLine(description: string): boolean {
     || /\blancamentos\s+atuais\b/.test(d);
 }
 
+// Linhas de saldo/resumo de extrato de conta corrente — não são movimentos.
+function isAccountSummaryLine(description: string): boolean {
+  const d = normalizeForRules(description);
+  return /^saldo\b/.test(d)
+    || /\bsaldo\s+(anterior|do\s+dia|disponivel|bloqueado|em\s+conta|final|atual)\b/.test(d)
+    || /\blimite\s+da\s+conta\b/.test(d)
+    || /\bprovisao\s+de\s+encargos\b/.test(d)
+    || /\b(juros|iof)\s+acumulados\s+ate\s+a\s+data\b/.test(d)
+    || /\btotal\s+(geral|do\s+periodo)\b/.test(d);
+}
+
+
+
 function absCentsDelta(a: number, b: number): number {
   return Math.abs(Math.round(a * 100) - Math.round(b * 100));
 }
