@@ -63,9 +63,11 @@ function extractOFXAccountDigits(content: string): string | undefined {
   return undefined;
 }
 
-function parseOFX(content: string): ParsedTransaction[] {
+function parseOFX(content: string, kind: StatementKind = "cartao"): ParsedTransaction[] {
   const transactions: ParsedTransaction[] = [];
-  const accountDigits = extractOFXAccountDigits(content);
+  // Em extrato de conta corrente o ACCTID é o número da conta — nunca deve
+  // virar "últimos 4 dígitos do cartão".
+  const accountDigits = kind === "conta" ? undefined : extractOFXAccountDigits(content);
   const stmtTrnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
   let match;
 
