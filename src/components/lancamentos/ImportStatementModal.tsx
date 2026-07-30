@@ -1746,6 +1746,8 @@ export function ImportStatementModal({
         installments_total: r.installments_total || null,
         original_amount: r.original_amount || null,
         purchase_date_original: purchaseDateOriginal || null,
+        import_fingerprint: importFingerprint,
+        is_internal_transfer: isInternalTransfer || null,
       };
 
     });
