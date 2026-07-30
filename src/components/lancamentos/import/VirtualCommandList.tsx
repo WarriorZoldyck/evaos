@@ -42,15 +42,21 @@ export function VirtualCommandList({
   search,
   selectedName,
   onPick,
+  onPickItem,
   virtualizeAfter = 50,
   rowHeight = 28,
   maxHeight = 260,
+  selectedId,
 }: VirtualCommandListProps) {
   const filtered = useMemo(() => {
     if (!search) return items;
     const q = normalize(search);
     return items.filter((i) => normalize(i.name).includes(q));
   }, [items, search]);
+
+  const pick = (c: CategoryFlat) => (onPickItem ? onPickItem(c) : onPick(c.name));
+  const isSelected = (c: CategoryFlat) =>
+    selectedId ? selectedId === c.id : selectedName === c.name;
 
   const parentRef = useRef<HTMLDivElement | null>(null);
 
@@ -74,14 +80,15 @@ export function VirtualCommandList({
         {filtered.map((c) => (
           <CommandItem
             key={c.id}
-            value={c.name}
-            onSelect={() => onPick(c.name)}
+            value={c.id}
+            keywords={[c.name]}
+            onSelect={() => pick(c)}
             className="text-xs"
           >
             <Check
               className={cn(
                 "mr-2 h-3 w-3",
-                selectedName === c.name ? "opacity-100" : "opacity-0",
+                isSelected(c) ? "opacity-100" : "opacity-0",
               )}
             />
             {c.name}
@@ -117,14 +124,15 @@ export function VirtualCommandList({
                 }}
               >
                 <CommandItem
-                  value={c.name}
-                  onSelect={() => onPick(c.name)}
+                  value={c.id}
+                  keywords={[c.name]}
+                  onSelect={() => pick(c)}
                   className="text-xs"
                 >
                   <Check
                     className={cn(
                       "mr-2 h-3 w-3",
-                      selectedName === c.name ? "opacity-100" : "opacity-0",
+                      isSelected(c) ? "opacity-100" : "opacity-0",
                     )}
                   />
                   {c.name}
