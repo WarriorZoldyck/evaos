@@ -1715,6 +1715,7 @@ export type Database = {
           description: string
           external_id: string | null
           id: string
+          import_fingerprint: string | null
           installment_number: number | null
           installments: number | null
           installments_total: number | null
@@ -1754,6 +1755,7 @@ export type Database = {
           description: string
           external_id?: string | null
           id?: string
+          import_fingerprint?: string | null
           installment_number?: number | null
           installments?: number | null
           installments_total?: number | null
@@ -1793,6 +1795,7 @@ export type Database = {
           description?: string
           external_id?: string | null
           id?: string
+          import_fingerprint?: string | null
           installment_number?: number | null
           installments?: number | null
           installments_total?: number | null
