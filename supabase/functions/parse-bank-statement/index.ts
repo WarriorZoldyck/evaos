@@ -480,7 +480,9 @@ function parseTxJson(jsonStr: string, finishReason: string, kind: StatementKind 
 
     return txArray.map((t: any) => {
       // Compact fields (d/desc/a/t/c) take precedence, fall back to legacy field names.
-      const rawCard = t.c ?? t.card_digits;
+      // Em extrato de conta NUNCA inferimos cartão — "FINAL 7014" no histórico
+      // é apenas texto, não destino do lançamento.
+      const rawCard = isAccount ? null : (t.c ?? t.card_digits);
       let detectedDigits: string | undefined;
       if (rawCard) {
         const digits = String(rawCard).replace(/\D/g, "");
@@ -491,18 +493,23 @@ function parseTxJson(jsonStr: string, finishReason: string, kind: StatementKind 
       let isReceita = rawTypeStr === "r" || rawTypeStr === "receita";
 
       const rawDate = t.d ? String(t.d).trim() : (t.raw_date ? String(t.raw_date).trim() : undefined);
-      const dateField = String(t.date || rawDate || "");
+      let dateField = String(t.date || rawDate || "");
+      if (isAccount) {
+        dateField = normalizeAccountDate(dateField) || "";
+      }
 
       // Fallbacks for legacy per-tx statement fields (if AI ignored meta).
-      const statementDueDate = metaDue ?? (t.statement_due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_due_date)) ? String(t.statement_due_date) : undefined);
-      const statementCloseDate = metaClose ?? (t.statement_close_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_close_date)) ? String(t.statement_close_date) : undefined);
-      let statementTotal = metaTotal;
-      if (statementTotal === undefined && t.statement_total !== undefined && t.statement_total !== null && t.statement_total !== "") {
+      const statementDueDate = isAccount ? undefined : (metaDue ?? (t.statement_due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_due_date)) ? String(t.statement_due_date) : undefined));
+      const statementCloseDate = isAccount ? undefined : (metaClose ?? (t.statement_close_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_close_date)) ? String(t.statement_close_date) : undefined));
+      let statementTotal = isAccount ? undefined : metaTotal;
+      if (!isAccount && statementTotal === undefined && t.statement_total !== undefined && t.statement_total !== null && t.statement_total !== "") {
         const n = Number(String(t.statement_total).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
         if (Number.isFinite(n) && n > 0) statementTotal = n;
       }
-      const cardholderName = (detectedDigits && metaCards[detectedDigits])
-        || (t.cardholder_name ? String(t.cardholder_name).trim() : undefined);
+      const cardholderName = isAccount
+        ? undefined
+        : ((detectedDigits && metaCards[detectedDigits])
+          || (t.cardholder_name ? String(t.cardholder_name).trim() : undefined));
 
       const amount = Math.abs(Number(t.a ?? t.amount) || 0);
       const description = String(t.desc ?? t.description ?? "Sem descrição");
@@ -524,6 +531,15 @@ function parseTxJson(jsonStr: string, finishReason: string, kind: StatementKind 
         ...(rawDate ? { raw_statement_date: rawDate } : {}),
       };
     }).filter((t: ParsedTransaction) => {
+      if (isAccount) {
+        // Em conta corrente só descartamos linhas de saldo/resumo — tarifas,
+        // IOF, boletos, débito de fatura e transferências são movimentos reais.
+        if (isAccountSummaryLine(t.description)) {
+          console.log(`Excluded account summary line: desc="${t.description.slice(0, 120)}" amount=${t.amount}`);
+          return false;
+        }
+        return t.amount > 0 && !!t.date;
+      }
       if (isExcludedCardStatementLine(t.description)) {
         console.log(`Excluded non-transaction statement line: desc="${t.description.slice(0, 120)}" amount=${t.amount}`);
         return false;
