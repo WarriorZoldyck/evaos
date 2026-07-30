@@ -415,6 +415,40 @@ function parseTxJson(jsonStr: string, finishReason: string, kind: StatementKind 
       throw new Error("Expected { meta, txs } or array of transactions");
     }
 
+    const isAccount = kind === "conta";
+    const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+    const metaFrom: string | undefined = meta?.from && isoRe.test(String(meta.from)) ? String(meta.from) : undefined;
+    const metaTo: string | undefined = meta?.to && isoRe.test(String(meta.to)) ? String(meta.to) : undefined;
+
+    // Normaliza a data de uma linha de extrato de conta para ISO.
+    // Aceita DD/MM/AAAA, DD/MM/AA, AAAA-MM-DD e DD/MM (usa o período do extrato).
+    const normalizeAccountDate = (raw: string): string | undefined => {
+      const s = (raw || "").trim();
+      if (!s) return undefined;
+      if (isoRe.test(s)) return s;
+      const full = s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+      if (full) {
+        let y = Number(full[3]);
+        if (y < 100) y += 2000;
+        return `${y}-${String(Number(full[2])).padStart(2, "0")}-${String(Number(full[1])).padStart(2, "0")}`;
+      }
+      const dm = s.match(/^(\d{1,2})[\/.-](\d{1,2})$/);
+      if (!dm) return undefined;
+      const day = Number(dm[1]);
+      const month = Number(dm[2]);
+      const refIso = metaTo || metaFrom;
+      const refYear = refIso ? Number(refIso.slice(0, 4)) : new Date().getFullYear();
+      const build = (y: number) => `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      let iso = build(refYear);
+      if (metaFrom && metaTo) {
+        const ms = (a: string) => new Date(a + "T00:00:00").getTime();
+        const tolerance = 75 * 86400000;
+        if (ms(iso) > ms(metaTo) + tolerance) iso = build(refYear - 1);
+        else if (ms(iso) < ms(metaFrom) - tolerance) iso = build(refYear + 1);
+      }
+      return iso;
+    };
+
     const metaDue: string | undefined = meta?.due && /^\d{4}-\d{2}-\d{2}$/.test(meta.due) ? meta.due : undefined;
     const metaClose: string | undefined = meta?.close && /^\d{4}-\d{2}-\d{2}$/.test(meta.close) ? meta.close : undefined;
     let metaTotal: number | undefined;
