@@ -559,6 +559,7 @@ export function ImportStatementModal({
 
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("statementKind", importType === "debito" ? "conta" : "cartao");
 
       const invokePromise = supabase.functions.invoke('parse-bank-statement', {
         body: formData,
