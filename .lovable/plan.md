@@ -1,31 +1,57 @@
-## Objetivo
+## Antes da Fase 3
 
-O campo **Cliente/Fornecedor** na tela de conciliação hoje é um `Select` simples: com centenas de contatos vira uma lista rolável sem busca. Vamos deixá-lo igual ao seletor de categoria — popover com barra de busca, lista virtualizada e "Criar novo" a partir do que foi digitado.
+Verifiquei o código: as Fases 1 e 2 já estão inteiras e valem para os dois modos (conta e cartão):
 
-## O que muda
+- Parser dedicado por `statementKind` ("conta" | "cartao") — feito.
+- Deduplicação por `import_fingerprint` + índice único — feito.
+- Detecção de transferência interna (`transferDetect.ts`) — feito.
+- Fuzzy de contato, descrição pelo histórico de 180 dias e sugestão de categoria — já rodam para todas as linhas, sem depender do modo.
 
-Arquivo: `src/components/lancamentos/ContactSelectWithCreate.tsx` (reescrita interna do componente, **sem mudar as props**, então `ReconcileStep` e `TransactionFormModal` continuam funcionando sem alteração).
+Ou seja, não há dívida técnica bloqueando. O único item pendente é **validação com dado real**: subir o extrato Santander de janeiro na conta `simoespaula` e conferir créditos, débitos e datas. Sugiro fazer isso em paralelo, sem travar a Fase 3.
 
-Nova estrutura, espelhando `CategoryCascadeSelect`:
+## Fase 3 — Conciliação em lote (1↔N)
 
-1. **Trigger** — botão no mesmo estilo do gatilho de categoria (texto do contato selecionado ou placeholder, ícone `ChevronsUpDown`, borda pontilhada quando vazio, para casar com o visual atual da tabela).
-2. **Popover + Command** — `CommandInput` com placeholder "Buscar cliente..." / "Buscar fornecedor...", foco automático ao abrir.
-3. **Busca sem acento** — mesma função `normalize` (NFD + remoção de diacríticos) usada em categoria, com filtro controlado e o filtro interno do `cmdk` desligado (`shouldFilter={false}`), como já é feito lá.
-4. **Lista virtualizada** — reutiliza `VirtualCommandList` (o mesmo componente da categoria) para manter o seletor fluido com muitos contatos.
-5. **Item "— limpar —"** no topo, igual ao de categoria, para desvincular o contato da linha.
-6. **"Criar novo"** — sempre visível no rodapé da lista; quando há texto digitado, mostra `Criar "GUILHERME GALDINI"` e já abre o diálogo com o nome pré-preenchido (mantém a correção anterior de criar exatamente o que o usuário digitou, não a descrição do extrato).
-7. **Estado vazio** — `CommandEmpty` com "Nenhum contato encontrado" + atalho de criação.
+Hoje cada linha do extrato só pode virar: vínculo 1-para-1, criação nova, ou ignorar. Faltam os dois casos reais mais comuns:
 
-A lógica de criação no Supabase (`suppliers`/`clients`, `effectiveUserId`, toast, `localExtras`, callback `onContactCreated`) permanece exatamente como está.
+**Caso A — 1 linha do extrato ↔ N lançamentos do sistema.**
+Exemplo: um débito único de R$ 3.400 no banco que no sistema está lançado como 3 contas a pagar separadas.
 
-## Detalhes técnicos
+**Caso B — N linhas do extrato ↔ 1 lançamento do sistema.**
+Exemplo: uma nota de R$ 1.200 no sistema paga em duas transferências no extrato.
 
-- Props mantidas: `contacts`, `value`, `onChange`, `placeholder`, `type`, `onContactCreated`, `disabled`.
-- `value` continua sendo o `id` do contato; `onChange("")` no "limpar".
-- Popover com `align="start"` e largura mínima do gatilho, para não estourar o layout apertado da tabela de conciliação.
-- Sem migração e sem mudança de dados — é só UI.
+### Como vai funcionar na tela
 
-## Verificação
+Na linha do extrato, ao lado de "É o mesmo", entra a ação **"Agrupar…"**. Ela abre um painel com:
 
-- Typecheck do projeto.
-- Conferir na conciliação: abrir o campo, digitar parte de um nome com acento (ex.: "simoes"/"simões"), selecionar, limpar e criar um contato novo a partir da busca.
+- a linha do extrato fixada no topo (data, descrição, valor);
+- a lista de candidatos do sistema na janela de datas, com checkbox;
+- um contador ao vivo: `selecionado R$ X / extrato R$ Y — falta R$ Z`;
+- o botão de confirmar só habilita quando a soma bate dentro da tolerância de centavos já usada no motor atual.
+
+Para o Caso B, o mesmo painel permite marcar **outras linhas do extrato** para somarem contra um único lançamento do sistema, com o mesmo contador invertido.
+
+Grupos confirmados descem para a seção "Resolvidos", com badge **"Agrupado (N)"** e opção de desfazer — igual ao comportamento atual de "É o mesmo".
+
+### Efeito na importação
+
+- Nenhuma transação nova é criada para linhas agrupadas: os lançamentos do sistema envolvidos são marcados como conciliados e recebem a data efetiva do extrato.
+- O `import_fingerprint` da linha é gravado no grupo, para o extrato não voltar duplicado numa reimportação.
+- O balanço final (extrato como fonte absoluta) passa a contar o grupo pelo valor do extrato, e não pela soma dos lançamentos — evitando a divergência falsa que já corrigimos antes.
+
+### Parte técnica
+
+- `src/lib/import/grouping.ts` (novo): funções puras `sumCandidates`, `validateGroupBalance`, `buildGroupPlan`, com testes em `grouping.test.ts`.
+- `src/hooks/useImportMatching.ts`: expor os candidatos da janela por linha (hoje só o melhor + alternativas), para alimentar o painel.
+- `src/components/lancamentos/import/GroupMatchDialog.tsx` (novo): painel de agrupamento, reaproveitando `VirtualCommandList` para listas grandes.
+- `src/components/lancamentos/import/ReconcileStep.tsx`: novo estado `groups: Record<number, { systemIds: string[]; extraRowIdx: number[] }>`, ação "Agrupar…", badge e desfazer; integrar `groups` no cálculo de resolvidos/pendentes e na cobertura.
+- `src/components/lancamentos/ImportStatementModal.tsx`: incluir `groups` no snapshot de sessão do localStorage e aplicar o plano de grupo no commit da importação (update de `is_reconciled`, `payment_date`, `import_fingerprint`).
+- Sem migração de banco: as colunas necessárias já existem.
+
+### Ordem de execução
+
+1. `grouping.ts` + testes.
+2. Exposição de candidatos no hook.
+3. `GroupMatchDialog`.
+4. Integração no `ReconcileStep` (estado, badges, resolvidos).
+5. Commit da importação + persistência de sessão.
+6. Typecheck e suíte de testes.

@@ -12,6 +12,7 @@ import {
   Info,
   ShieldCheck,
   AlertTriangle,
+  Layers,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,14 @@ import { CategoryPathCombobox } from "@/components/lancamentos/CategoryPathCombo
 import { CategoryCascadeSelect } from "@/components/lancamentos/import/CategoryCascadeSelect";
 import { ContactSelectWithCreate } from "@/components/lancamentos/ContactSelectWithCreate";
 import { SuggestionWhyPopover } from "@/components/lancamentos/import/SuggestionWhyPopover";
+import { GroupMatchDialog, type GroupDialogRow } from "@/components/lancamentos/import/GroupMatchDialog";
+import {
+  collectGroupedRows,
+  collectGroupedSystemIds,
+  sumAmounts,
+  type GroupsMap,
+} from "@/lib/import/grouping";
+import type { CandidateTx } from "@/lib/import/matching";
 
 
 export interface ParsedRow {
@@ -139,6 +148,14 @@ interface ReconcileStepProps {
   /** Suppliers/clients lists to render the small "vinculado a" hint. */
   suppliers?: { id: string; name: string }[];
   clients?: { id: string; name: string }[];
+  /** Fase 3 — grupos de conciliação em lote, indexados pela linha-líder. */
+  groups?: GroupsMap;
+  /** Pool de lançamentos do sistema na janela do extrato (base do agrupamento). */
+  groupCandidates?: CandidateTx[];
+  /** Confirma um grupo (1↔N). */
+  onGroupConfirm?: (leaderIdx: number, state: { systemIds: string[]; extraRowIdx: number[] }) => void;
+  /** Desfaz um grupo confirmado. */
+  onGroupUndo?: (leaderIdx: number) => void;
 }
 
 
@@ -380,10 +397,15 @@ export function ReconcileStep({
   onTransferDismiss,
   suppliers = [],
   clients = [],
+  groups = {},
+  groupCandidates = [],
+  onGroupConfirm,
+  onGroupUndo,
 }: ReconcileStepProps) {
 
   const isCardMode = mode === "card";
   const [manualForRow, setManualForRow] = useState<number | null>(null);
+  const [groupForRow, setGroupForRow] = useState<number | null>(null);
   const [showOrphans, setShowOrphans] = useState(true);
   // Row currently expanded for inline review (legacy — kept only for manual re-open path).
   const [expandedRowId, setExpandedRowId] = useState<number | null>(null);
@@ -447,17 +469,88 @@ export function ReconcileStep({
     [rows]
   );
 
+  // Fase 3 — linhas e lançamentos presos em grupos de conciliação em lote.
+  // Elas saem das listas de classificação normais (não viram "criar"/"ignorar")
+  // e passam a viver na seção "Agrupadas".
+  const groupedRowIdx = useMemo(() => collectGroupedRows(groups), [groups]);
+  const groupedSystemIds = useMemo(() => collectGroupedSystemIds(groups), [groups]);
+  const indexedUngrouped = useMemo(
+    () => indexed.filter(({ i }) => !groupedRowIdx.has(i)),
+    [indexed, groupedRowIdx],
+  );
+  const groupLeaders = useMemo(
+    () =>
+      Object.keys(groups)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .filter((i) => rows[i]),
+    [groups, rows],
+  );
+  const groupCandidatesById = useMemo(
+    () => new Map(groupCandidates.map((c) => [String(c.id), c])),
+    [groupCandidates],
+  );
+  /** IDs já usados por outro vínculo (match confirmado, "É o mesmo" ou outro grupo). */
+  const claimedSystemIds = useMemo(() => {
+    const out = new Set<string>();
+    Object.entries(matchTargets || {}).forEach(([k, id]) => {
+      if (id && (matchActions[Number(k)] || "criar") === "vincular") out.add(String(id));
+    });
+    Object.entries(matches || {}).forEach(([k, m]) => {
+      const idx = Number(k);
+      if ((matchActions[idx] || "criar") === "vincular" && m?.best?.candidate?.id) {
+        out.add(String(m.best.candidate.id));
+      }
+    });
+    Object.entries(groups).forEach(([k, g]) => {
+      if (Number(k) === groupForRow) return; // permite editar o próprio grupo
+      g.systemIds.forEach((id) => out.add(String(id)));
+    });
+    return out;
+  }, [matchTargets, matchActions, matches, groups, groupForRow]);
+
+  const availableGroupCandidates = useMemo(
+    () => groupCandidates.filter((c) => !claimedSystemIds.has(String(c.id))),
+    [groupCandidates, claimedSystemIds],
+  );
+
+  /** Linhas do extrato ainda livres para entrar no grupo em edição (Caso B). */
+  const availableGroupRows: GroupDialogRow[] = useMemo(() => {
+    if (groupForRow === null) return [];
+    const ownExtras = new Set(groups[groupForRow]?.extraRowIdx ?? []);
+    return rows
+      .map((r, i) => ({ r, i }))
+      .filter(({ r, i }) => {
+        if (!r.selected || i === groupForRow) return false;
+        if (ownExtras.has(i)) return true;
+        if (groupedRowIdx.has(i)) return false;
+        return (matchActions[i] || "criar") !== "vincular";
+      })
+      .map(({ r, i }) => ({
+        index: i,
+        date: r.date,
+        description: r.description,
+        amount: r.amount,
+        type: r.type,
+      }));
+  }, [rows, groupForRow, groups, groupedRowIdx, matchActions]);
+
+  const groupedStatementTotal = useMemo(
+    () => sumAmounts([...groupedRowIdx].map((i) => rows[i]?.amount ?? 0)),
+    [groupedRowIdx, rows],
+  );
+
   // SPLIT matched rows by tier: exact (Q1) vs tolerance (Q2).
   // We exclude rows the user explicitly confirmed via "É o mesmo" (they show
   // in the dedicated "Vinculadas manualmente" section for clear feedback).
-  const matchedExactRows = indexed.filter(
+  const matchedExactRows = indexedUngrouped.filter(
     ({ i }) =>
       (matchActions[i] || "criar") === "vincular" &&
       matches[i]?.best &&
       matches[i]!.best!.tier === "exact" &&
       !dismissedSuggestions.has(i)
   );
-  const matchedToleranceRows = indexed.filter(
+  const matchedToleranceRows = indexedUngrouped.filter(
     ({ i }) =>
       (matchActions[i] || "criar") === "vincular" &&
       matches[i]?.best &&
@@ -465,7 +558,7 @@ export function ReconcileStep({
       !dismissedSuggestions.has(i)
   );
   // Rows where matcher found a same-value candidate but text differs — user must confirm.
-  const suggestedRows = indexed.filter(({ i }) => {
+  const suggestedRows = indexedUngrouped.filter(({ i }) => {
     if (dismissedSuggestions.has(i)) return false;
     const a = matchActions[i] || "criar";
     return a === "criar" && matches[i]?.best?.suggested;
@@ -474,7 +567,7 @@ export function ReconcileStep({
   // Rows manually linked via "É o mesmo": either against an orphan (no match)
   // OR against an auto-suggested candidate that the user confirmed. Both
   // deserve explicit visual feedback so the click doesn't feel silent.
-  const manualLinkedRows = indexed.filter(({ i }) => {
+  const manualLinkedRows = indexedUngrouped.filter(({ i }) => {
     const a = matchActions[i] || "criar";
     if (a !== "vincular" || !matchTargets[i]) return false;
     if (!matches[i]?.best) return true; // orphan link
@@ -482,7 +575,7 @@ export function ReconcileStep({
   });
   const manualLinkedIdxSet = new Set(manualLinkedRows.map(({ i }) => i));
 
-  const newRows = indexed.filter(({ i }) => {
+  const newRows = indexedUngrouped.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
     if (manualLinkedIdxSet.has(i)) return false;
     const a = matchActions[i] || "criar";
@@ -492,7 +585,7 @@ export function ReconcileStep({
     return a === "criar" || (a === "vincular" && !matches[i]?.best);
   });
   const newRowIdxSet = new Set(newRows.map(({ i }) => i));
-  const ignoredRows = indexed.filter(({ i }) => {
+  const ignoredRows = indexedUngrouped.filter(({ i }) => {
     if (newRowIdxSet.has(i)) return false;
     return matchActions[i] === "ignorar";
   });
@@ -507,30 +600,43 @@ export function ReconcileStep({
     (s, { r }) => s + (r.type === "receita" ? Math.abs(r.amount) : 0),
     0,
   );
+  const groupedSystemTotal = sumAmounts(
+    [...groupedSystemIds].map((id) => groupCandidatesById.get(id)?.amount ?? 0),
+  );
   const matchedSystemTotal = [...matchedExactRows, ...matchedToleranceRows].reduce(
     (s, { i }) => s + Math.abs(Number(matches[i]!.best!.candidate.amount)),
     0
   );
   const orphansTotal = orphans.reduce((s, o) => s + Math.abs(o.amount), 0);
-  const systemTotal = isCardMode && systemBill ? Math.abs(systemBill.total) : matchedSystemTotal;
-  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
+  const systemTotal = isCardMode && systemBill ? Math.abs(systemBill.total) : matchedSystemTotal + groupedSystemTotal;
+  const systemCount = isCardMode && systemBill ? systemBill.count : matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length + groupedSystemIds.size;
   const totalsDelta = statementTotal - systemTotal;
   const totalsDivergent = Math.abs(totalsDelta) > 0.05;
-  const coverageMatched = matchedExactRows.length + matchedToleranceRows.length + manualLinkedRows.length;
+  const coverageMatched =
+    matchedExactRows.length +
+    matchedToleranceRows.length +
+    manualLinkedRows.length +
+    indexed.filter(({ i }) => groupedRowIdx.has(i)).length;
   const coverageTotal = indexed.length;
   const onlyStatementRows = newRows; // linhas presentes só no extrato
-  const remainingOrphans = orphans.filter((o) => !linkedOrphans.has(o.id));
+  const remainingOrphans = orphans.filter(
+    (o) => !linkedOrphans.has(o.id) && !groupedSystemIds.has(String(o.id)),
+  );
 
   // Progresso da conciliação (linhas do extrato):
   // - Original = soma de todas as linhas selecionadas do extrato
   // - Conciliado = soma das linhas com ação "vincular" (exact + tolerance + "É o mesmo")
   // - Restante = original − conciliado (o que ainda precisa virar novo/ignorado)
-  const reconciledRowsTotal = indexed
-    .filter(({ i }) => (matchActions[i] || "criar") === "vincular")
-    .reduce((s, { r }) => s + signedStatementAmount(r), 0);
-  const reconciledRowsCount = indexed.filter(
-    ({ i }) => (matchActions[i] || "criar") === "vincular"
-  ).length;
+  const reconciledRowsTotal =
+    indexedUngrouped
+      .filter(({ i }) => (matchActions[i] || "criar") === "vincular")
+      .reduce((s, { r }) => s + signedStatementAmount(r), 0) +
+    indexed
+      .filter(({ i }) => groupedRowIdx.has(i))
+      .reduce((s, { r }) => s + signedStatementAmount(r), 0);
+  const reconciledRowsCount =
+    indexedUngrouped.filter(({ i }) => (matchActions[i] || "criar") === "vincular").length +
+    indexed.filter(({ i }) => groupedRowIdx.has(i)).length;
   const remainingTotal = Math.max(0, statementTotal - Math.abs(reconciledRowsTotal));
   const remainingCount = Math.max(0, coverageTotal - reconciledRowsCount);
 
@@ -1083,6 +1189,95 @@ export function ReconcileStep({
           )}
 
 
+          {/* AGRUPADAS — conciliação em lote 1↔N (Fase 3) */}
+          {groupLeaders.length > 0 && (
+            <section>
+              <header className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-indigo-700">
+                  <Layers className="h-4 w-4" />
+                  Agrupadas
+                  <Badge variant="secondary" className="text-[10px]">{groupLeaders.length}</Badge>
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    — uma linha do extrato conciliada contra vários lançamentos (ou o inverso)
+                  </span>
+                </h3>
+              </header>
+              <div className="border border-indigo-500/30 rounded-lg overflow-hidden divide-y bg-indigo-500/[0.03]">
+                {groupLeaders.map((leaderIdx) => {
+                  const g = groups[leaderIdx];
+                  const leaderRow = rows[leaderIdx];
+                  const memberRows = [leaderIdx, ...g.extraRowIdx].filter((i) => rows[i]);
+                  const stTotal = sumAmounts(memberRows.map((i) => rows[i].amount));
+                  const sysTxs = g.systemIds
+                    .map((id) => groupCandidatesById.get(String(id)))
+                    .filter(Boolean) as CandidateTx[];
+                  const sysTotal = sumAmounts(sysTxs.map((c) => Number(c.amount)));
+                  return (
+                    <div key={leaderIdx} className="p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
+                            Extrato ({memberRows.length} linha{memberRows.length === 1 ? "" : "s"})
+                          </p>
+                          {memberRows.map((i) => (
+                            <p key={i} className="text-xs break-words leading-snug">
+                              <span className="text-muted-foreground">{fmtDate(rows[i].date)}</span>{" "}
+                              {rows[i].description}{" "}
+                              <span className="font-mono">{fmt(rows[i].amount)}</span>
+                            </p>
+                          ))}
+                        </div>
+                        <div className="min-w-0 text-right">
+                          <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">
+                            Sistema ({sysTxs.length})
+                          </p>
+                          {sysTxs.map((c) => (
+                            <p key={c.id} className="text-xs break-words leading-snug">
+                              {c.description}{" "}
+                              <span className="font-mono">{fmt(Number(c.amount))}</span>
+                            </p>
+                          ))}
+                          {sysTxs.length === 0 && (
+                            <p className="text-xs text-muted-foreground italic">lançamentos selecionados</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge className="text-[10px] gap-1 bg-indigo-600 hover:bg-indigo-700 text-white border-0">
+                            <Layers className="h-2.5 w-2.5" />
+                            Agrupado ({memberRows.length}↔{g.systemIds.length})
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            extrato {fmt(stTotal)} · sistema {fmt(sysTotal)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[11px]"
+                            onClick={() => setGroupForRow(leaderIdx)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-[11px] text-muted-foreground"
+                            onClick={() => onGroupUndo?.(leaderIdx)}
+                          >
+                            Desfazer
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {/* PROVÁVEL — valor+data batem, mas nome diverge. Confirmar. */}
           {suggestedRows.length > 0 && (
             <section>
@@ -1222,7 +1417,31 @@ export function ReconcileStep({
                       <Sparkles className="h-4 w-4" />
                       Só no extrato — o que fazer?
                       <Badge variant="secondary" className="text-[10px]">{total}</Badge>
-                      {suggestLoading && (
+                      <GroupMatchDialog
+          open={groupForRow !== null}
+          onOpenChange={(o) => { if (!o) setGroupForRow(null); }}
+          leader={
+            groupForRow !== null && rows[groupForRow]
+              ? {
+                  index: groupForRow,
+                  date: rows[groupForRow].date,
+                  description: rows[groupForRow].description,
+                  amount: rows[groupForRow].amount,
+                  type: rows[groupForRow].type,
+                }
+              : null
+          }
+          otherRows={availableGroupRows}
+          candidates={availableGroupCandidates}
+          initial={groupForRow !== null ? groups[groupForRow] : undefined}
+          onConfirm={(state) => {
+            if (groupForRow === null) return;
+            onGroupConfirm?.(groupForRow, state);
+            setGroupForRow(null);
+          }}
+        />
+
+        {suggestLoading && (
                         <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-normal">
                           <Loader2 className="h-3 w-3 animate-spin" /> sugerindo categorias...
                         </span>
@@ -1522,6 +1741,25 @@ export function ReconcileStep({
                                 <Badge className="text-[10px] gap-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0">
                                   <Check className="h-2.5 w-2.5" /> Confirmada
                                 </Badge>
+                              )}
+                              {onGroupConfirm && !isCardMode && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 text-[11px] gap-1 text-indigo-700 hover:bg-indigo-500/10"
+                                      onClick={() => setGroupForRow(i)}
+                                    >
+                                      <Layers className="h-3 w-3" /> Agrupar…
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="max-w-[260px] text-xs">
+                                    Concilia esta linha contra <strong>vários</strong> lançamentos do
+                                    sistema — ou soma outras linhas do extrato contra um único
+                                    lançamento. Nada novo é criado.
+                                  </TooltipContent>
+                                </Tooltip>
                               )}
                             </div>
                           </td>

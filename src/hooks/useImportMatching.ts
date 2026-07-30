@@ -24,6 +24,8 @@ function shiftISO(iso: string, days: number): string {
 export function useImportMatching() {
   const [loading, setLoading] = useState(false);
   const [matches, setMatches] = useState<Record<number, RowMatch>>({});
+  /** Todos os candidatos da janela (sem filtro por valor) — base da conciliação em lote. */
+  const [pool, setPool] = useState<CandidateTx[]>([]);
 
   const findMatches = useCallback(
     async (
@@ -34,7 +36,10 @@ export function useImportMatching() {
       options: { merge?: boolean; billMonth?: string | null } = {},
     ) => {
       if (lines.length === 0 || (!bankAccountId && !walletId && !creditCardId)) {
-        if (!options.merge) setMatches({});
+        if (!options.merge) {
+          setMatches({});
+          setPool([]);
+        }
         return {};
       }
 
@@ -162,11 +167,24 @@ export function useImportMatching() {
 
 
 
+        // Pool completo da janela — usado pela conciliação em lote (1↔N),
+        // onde a soma de vários lançamentos bate com UMA linha do extrato
+        // (e por isso o filtro por valor individual abaixo não serve).
+        if (options.merge) {
+          setPool((prev) => {
+            const seen = new Set(prev.map((c) => c.id));
+            return [...prev, ...rawCandidates.filter((c) => !seen.has(c.id))];
+          });
+        } else {
+          setPool(rawCandidates);
+        }
+
         // Amount filter applied in-memory using AMOUNT_TOLERANCE (covers ±0.02).
         const lineAmounts = lines.map((l) => Math.abs(l.amount));
         const candidates = rawCandidates.filter((c) =>
           lineAmounts.some((a) => Math.abs(c.amount - a) <= AMOUNT_TOLERANCE),
         );
+
 
 
         const claimed = new Set<string>();
@@ -213,7 +231,10 @@ export function useImportMatching() {
     []
   );
 
-  const reset = useCallback(() => setMatches({}), []);
+  const reset = useCallback(() => {
+    setMatches({});
+    setPool([]);
+  }, []);
 
-  return { matches, findMatches, loading, reset };
+  return { matches, findMatches, loading, reset, pool };
 }
