@@ -410,40 +410,10 @@ export function TransactionFormModal({
     }
   }, [watchCompetenceDate, form]);
 
-  // Parcelamento no cartão: quando o usuário ainda não informou uma data de
-  // pagamento própria, a 1ª parcela cai no vencimento da fatura do ciclo.
-  // Refletimos isso já no formulário para que a PRÉVIA e o que é GRAVADO
-  // usem exatamente a mesma data-âncora.
   const watchIsInstallmentTop = form.watch("is_installment");
   const watchPaymentMethodTop = form.watch("payment_method");
   const watchCreditCardIdTop = form.watch("credit_card_id");
-  useEffect(() => {
-    if (isEditing) return;
-    if (paymentDateManuallyEdited.current) return;
-    if (!watchIsInstallmentTop) return;
-    if (watchPaymentMethodTop !== "Cartão de Crédito" || !watchCreditCardIdTop) return;
-    if (!watchCompetenceDate) return;
-    const card = filteredCreditCards.find((c: any) => c.id === watchCreditCardIdTop) as CreditCard | undefined;
-    if (!card?.closing_day || !card?.due_day) return;
-    const dueISO = getCreditCardDueDate(
-      format(watchCompetenceDate, "yyyy-MM-dd"),
-      card.closing_day,
-      card.due_day,
-    );
-    const current = form.getValues("payment_date");
-    const currentISO = current ? format(current, "yyyy-MM-dd") : null;
-    if (currentISO !== dueISO) {
-      form.setValue("payment_date", new Date(dueISO + "T12:00:00"));
-    }
-  }, [
-    isEditing,
-    watchIsInstallmentTop,
-    watchPaymentMethodTop,
-    watchCreditCardIdTop,
-    watchCompetenceDate,
-    filteredCreditCards,
-    form,
-  ]);
+
 
 
   useEffect(() => {
