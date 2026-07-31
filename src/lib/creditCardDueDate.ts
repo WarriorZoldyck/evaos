@@ -73,3 +73,53 @@ export function getInstallmentDueDate(
   advanced.setMonth(advanced.getMonth() + (installmentNumber - 1));
   return getCreditCardDueDate(toISO(advanced), closingDay, dueDay);
 }
+
+/**
+ * Fonte única das datas de parcelas.
+ *
+ * A 1ª parcela é ancorada em `anchorISO` (a data de pagamento efetiva) e as
+ * demais avançam mês a mês (ou a cada N dias). Datas editadas manualmente
+ * (`customDates`, chave = número da parcela, 1-based) sempre prevalecem.
+ *
+ * Isso garante que a prévia exibida no formulário e o que é gravado no banco
+ * usem exatamente o mesmo cálculo.
+ */
+export function buildInstallmentDates(
+  anchorISO: string,
+  count: number,
+  options: {
+    intervalType?: "monthly" | "custom_days";
+    customDays?: number;
+    customDates?: Record<number, string>;
+  } = {}
+): string[] {
+  const { intervalType = "monthly", customDays = 30, customDates } = options;
+  const anchor = parseISO(anchorISO);
+  const out: string[] = [];
+
+  for (let idx = 0; idx < count; idx++) {
+    const custom = customDates?.[idx + 1];
+    if (custom) {
+      out.push(custom);
+      continue;
+    }
+    if (intervalType === "custom_days") {
+      const d = new Date(anchor);
+      d.setDate(d.getDate() + idx * customDays);
+      out.push(toISO(d));
+    } else {
+      out.push(
+        toISO(
+          clampDay(
+            anchor.getFullYear(),
+            anchor.getMonth() + idx,
+            anchor.getDate()
+          )
+        )
+      );
+    }
+  }
+
+  return out;
+}
+
