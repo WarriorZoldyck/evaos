@@ -719,30 +719,48 @@ export function TransactionFormModal({
       const instCustomDays = data.installment_custom_days || 30;
       const installments: TransactionInsert[] = [];
 
-      // If paying with credit card, payment_date for each installment must
-      // follow the card billing cycle (competence + (n-1) months → due date).
+      // Datas das parcelas: fonte única (buildInstallmentDates).
+      // A 1ª parcela é ancorada na Data de Pagamento efetiva do formulário —
+      // a mesma que a tabela de prévia exibe. O ciclo do cartão só define a
+      // âncora quando o usuário NÃO informou uma data de pagamento própria
+      // (aí payment_date ainda acompanha a competência).
       const installmentCard = data.payment_method === "Cartão de Crédito" && data.credit_card_id
         ? filteredCreditCards.find((c: any) => c.id === data.credit_card_id) as CreditCard | undefined
         : undefined;
 
+      const paymentISO = format(data.payment_date, "yyyy-MM-dd");
+      const competenceISO = format(data.competence_date, "yyyy-MM-dd");
+      const paymentDateIsExplicit =
+        paymentDateManuallyEdited.current || paymentISO !== competenceISO;
+
+      let anchorISO = paymentISO;
+      if (
+        !paymentDateIsExplicit &&
+        installmentCard?.closing_day &&
+        installmentCard?.due_day
+      ) {
+        anchorISO = getCreditCardDueDate(
+          competenceISO,
+          installmentCard.closing_day,
+          installmentCard.due_day,
+        );
+      }
+
+      const customDatesISO: Record<number, string> = {};
+      Object.entries(customInstallmentDates).forEach(([k, d]) => {
+        customDatesISO[Number(k)] = format(d, "yyyy-MM-dd");
+      });
+
+      const installmentDates = buildInstallmentDates(anchorISO, count, {
+        intervalType: instIntervalType as "monthly" | "custom_days",
+        customDays: instCustomDays,
+        customDates: customDatesISO,
+      });
+
       for (let idx = 0; idx < count; idx++) {
-        let payDate: Date;
-        if (installmentCard && installmentCard.closing_day && installmentCard.due_day) {
-          const compISO = format(data.competence_date, "yyyy-MM-dd");
-          const dueISO = getInstallmentDueDate(
-            compISO,
-            installmentCard.closing_day,
-            installmentCard.due_day,
-            idx + 1,
-          );
-          payDate = new Date(dueISO + "T12:00:00");
-        } else {
-          const defaultPayDate = instIntervalType === "custom_days"
-            ? addDays(data.payment_date, idx * instCustomDays)
-            : addMonths(data.payment_date, idx);
-          payDate = customInstallmentDates[idx + 1] ?? defaultPayDate;
-        }
+        const payISO = installmentDates[idx];
         const compDate = data.competence_date;
+
         const instNum = idx + 1;
 
         let amount = installmentAmount;
