@@ -8,7 +8,7 @@ import { CalendarIcon, Loader2, User, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ptBR } from "date-fns/locale";
 import { cn, addBusinessDays } from "@/lib/utils";
-import { getInstallmentDueDate } from "@/lib/creditCardDueDate";
+import { getInstallmentDueDate, getCreditCardDueDate, buildInstallmentDates } from "@/lib/creditCardDueDate";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany, type Company } from "@/contexts/CompanyContext";
