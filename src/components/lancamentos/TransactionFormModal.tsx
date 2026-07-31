@@ -781,7 +781,8 @@ export function TransactionFormModal({
           ...baseData,
           amount,
           original_amount: total,
-          payment_date: format(payDate, "yyyy-MM-dd"),
+          payment_date: payISO,
+
           competence_date: format(compDate, "yyyy-MM-dd"),
           series_id: seriesId,
           installment_number: instNum,
