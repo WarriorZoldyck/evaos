@@ -8,7 +8,7 @@ import { CalendarIcon, Loader2, User, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ptBR } from "date-fns/locale";
 import { cn, addBusinessDays } from "@/lib/utils";
-import { getInstallmentDueDate } from "@/lib/creditCardDueDate";
+import { getInstallmentDueDate, getCreditCardDueDate, buildInstallmentDates } from "@/lib/creditCardDueDate";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany, type Company } from "@/contexts/CompanyContext";
@@ -410,6 +410,12 @@ export function TransactionFormModal({
     }
   }, [watchCompetenceDate, form]);
 
+  const watchIsInstallmentTop = form.watch("is_installment");
+  const watchPaymentMethodTop = form.watch("payment_method");
+  const watchCreditCardIdTop = form.watch("credit_card_id");
+
+
+
   useEffect(() => {
     if (open) {
       paymentDateManuallyEdited.current = false;
@@ -532,6 +538,39 @@ export function TransactionFormModal({
           return full || { id: c.id, name: c.name, last_four_digits: c.last_four_digits, closing_day: 0, due_day: 0, bank_account_id: "" };
         })
     : creditCards;
+
+  // Parcelamento no cartão: quando o usuário ainda não informou uma data de
+  // pagamento própria, a 1ª parcela cai no vencimento da fatura do ciclo.
+  // Refletimos isso já no formulário para que a PRÉVIA e o que é GRAVADO
+  // usem exatamente a mesma data-âncora.
+  useEffect(() => {
+    if (isEditing) return;
+    if (paymentDateManuallyEdited.current) return;
+    if (!watchIsInstallmentTop) return;
+    if (watchPaymentMethodTop !== "Cartão de Crédito" || !watchCreditCardIdTop) return;
+    if (!watchCompetenceDate) return;
+    const card = filteredCreditCards.find((c: any) => c.id === watchCreditCardIdTop) as CreditCard | undefined;
+    if (!card?.closing_day || !card?.due_day) return;
+    const dueISO = getCreditCardDueDate(
+      format(watchCompetenceDate, "yyyy-MM-dd"),
+      card.closing_day,
+      card.due_day,
+    );
+    const current = form.getValues("payment_date");
+    const currentISO = current ? format(current, "yyyy-MM-dd") : null;
+    if (currentISO !== dueISO) {
+      form.setValue("payment_date", new Date(dueISO + "T12:00:00"));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isEditing,
+    watchIsInstallmentTop,
+    watchPaymentMethodTop,
+    watchCreditCardIdTop,
+    watchCompetenceDate,
+  ]);
+
+
 
   // Filter card terminals by form context
   const filteredCardTerminals = allCardTerminals
@@ -719,30 +758,48 @@ export function TransactionFormModal({
       const instCustomDays = data.installment_custom_days || 30;
       const installments: TransactionInsert[] = [];
 
-      // If paying with credit card, payment_date for each installment must
-      // follow the card billing cycle (competence + (n-1) months → due date).
+      // Datas das parcelas: fonte única (buildInstallmentDates).
+      // A 1ª parcela é ancorada na Data de Pagamento efetiva do formulário —
+      // a mesma que a tabela de prévia exibe. O ciclo do cartão só define a
+      // âncora quando o usuário NÃO informou uma data de pagamento própria
+      // (aí payment_date ainda acompanha a competência).
       const installmentCard = data.payment_method === "Cartão de Crédito" && data.credit_card_id
         ? filteredCreditCards.find((c: any) => c.id === data.credit_card_id) as CreditCard | undefined
         : undefined;
 
+      const paymentISO = format(data.payment_date, "yyyy-MM-dd");
+      const competenceISO = format(data.competence_date, "yyyy-MM-dd");
+      const paymentDateIsExplicit =
+        paymentDateManuallyEdited.current || paymentISO !== competenceISO;
+
+      let anchorISO = paymentISO;
+      if (
+        !paymentDateIsExplicit &&
+        installmentCard?.closing_day &&
+        installmentCard?.due_day
+      ) {
+        anchorISO = getCreditCardDueDate(
+          competenceISO,
+          installmentCard.closing_day,
+          installmentCard.due_day,
+        );
+      }
+
+      const customDatesISO: Record<number, string> = {};
+      Object.entries(customInstallmentDates).forEach(([k, d]) => {
+        customDatesISO[Number(k)] = format(d, "yyyy-MM-dd");
+      });
+
+      const installmentDates = buildInstallmentDates(anchorISO, count, {
+        intervalType: instIntervalType as "monthly" | "custom_days",
+        customDays: instCustomDays,
+        customDates: customDatesISO,
+      });
+
       for (let idx = 0; idx < count; idx++) {
-        let payDate: Date;
-        if (installmentCard && installmentCard.closing_day && installmentCard.due_day) {
-          const compISO = format(data.competence_date, "yyyy-MM-dd");
-          const dueISO = getInstallmentDueDate(
-            compISO,
-            installmentCard.closing_day,
-            installmentCard.due_day,
-            idx + 1,
-          );
-          payDate = new Date(dueISO + "T12:00:00");
-        } else {
-          const defaultPayDate = instIntervalType === "custom_days"
-            ? addDays(data.payment_date, idx * instCustomDays)
-            : addMonths(data.payment_date, idx);
-          payDate = customInstallmentDates[idx + 1] ?? defaultPayDate;
-        }
+        const payISO = installmentDates[idx];
         const compDate = data.competence_date;
+
         const instNum = idx + 1;
 
         let amount = installmentAmount;
@@ -763,7 +820,8 @@ export function TransactionFormModal({
           ...baseData,
           amount,
           original_amount: total,
-          payment_date: format(payDate, "yyyy-MM-dd"),
+          payment_date: payISO,
+
           competence_date: format(compDate, "yyyy-MM-dd"),
           series_id: seriesId,
           installment_number: instNum,
