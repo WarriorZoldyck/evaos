@@ -1313,6 +1313,7 @@ export function ImportStatementModal({
   // ORPHAN DETECTOR (card mode) — flag system transactions that DON'T appear in the statement.
   // The bank statement is the source of truth: any extra line in the system is a likely error.
   useEffect(() => {
+    if (isReviewMode) return; // revisão de lote: não há "só no sistema" a detectar
     if (importType !== "cartao" || step !== "reconcile" || rows.length === 0 || matchLoading) {
       if (importType !== "cartao") setSystemBill({ total: 0, count: 0, loading: false });
       return;
