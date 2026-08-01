@@ -157,6 +157,32 @@ function resolveCategoryName(
 }
 
 
+/** Lançamento já existente no sistema, reaberto para revisão na tela de conciliação. */
+export interface ReviewBatchItem {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: "receita" | "despesa";
+  category?: string | null;
+  subcategory?: string | null;
+  subcategory2?: string | null;
+  supplier_id?: string | null;
+  client_id?: string | null;
+  payment_date?: string | null;
+  competence_date?: string | null;
+  status?: string | null;
+  credit_card_id?: string | null;
+}
+
+export interface ReviewBatch {
+  /** Chave estável do lote — usada para isolar o rascunho no localStorage. */
+  key: string;
+  /** Rótulo exibido no lugar do nome do arquivo. */
+  label: string;
+  items: ReviewBatchItem[];
+}
+
 interface ImportStatementModalProps {
   open: boolean;
   onClose: () => void;
@@ -171,6 +197,12 @@ interface ImportStatementModalProps {
   refetchAccounts?: () => Promise<void> | void;
   /** "modal" (default) renders inside a Dialog. "page" renders full-bleed for a dedicated route. */
   variant?: "modal" | "page";
+  /**
+   * Modo "Revisar importação": em vez de subir um arquivo, a tela abre já com
+   * lançamentos existentes carregados e vinculados a si mesmos. Ao salvar, os
+   * lançamentos são ATUALIZADOS (categoria/descrição/fornecedor) — nada é criado.
+   */
+  reviewBatch?: ReviewBatch | null;
 }
 
 /** Detects descriptions that look like a credit-card BILL PAYMENT (not a card purchase). */
@@ -253,7 +285,9 @@ export function ImportStatementModal({
   companies,
   refetchAccounts,
   variant = "modal",
+  reviewBatch = null,
 }: ImportStatementModalProps) {
+  const isReviewMode = !!reviewBatch && reviewBatch.items.length > 0;
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
@@ -368,7 +402,11 @@ export function ImportStatementModal({
   // Fechar por ESC / navegação / reload preserva a sessão.
   // ─────────────────────────────────────────────────────────────
   const SESSION_VERSION = 1;
-  const sessionKey = effectiveUserId ? `eva.import-session.v${SESSION_VERSION}.${effectiveUserId}` : "";
+  const sessionKey = effectiveUserId
+    ? isReviewMode
+      ? `eva.import-review.v${SESSION_VERSION}.${effectiveUserId}.${reviewBatch!.key}`
+      : `eva.import-session.v${SESSION_VERSION}.${effectiveUserId}`
+    : "";
   const sessionLoadedRef = useRef(false);
   const [pendingResume, setPendingResume] = useState<null | {
     fileName: string;
@@ -447,6 +485,93 @@ export function ImportStatementModal({
     setPromotedOrphanIds(new Set(s.promotedOrphanIds || []));
     setPendingResume(null);
   };
+
+  // ── MODO REVISÃO ──────────────────────────────────────────────────────────
+  // Retoma automaticamente o rascunho do lote (sem perguntar) e, na primeira
+  // abertura, semeia as linhas a partir dos lançamentos existentes.
+  const reviewSeededRef = useRef(false);
+  useEffect(() => {
+    if (!isReviewMode || !pendingResume) return;
+    reviewSeededRef.current = true;
+    resumeSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReviewMode, pendingResume]);
+
+  useEffect(() => {
+    if (!open || !isReviewMode || !reviewBatch) return;
+    if (reviewSeededRef.current) return;
+    if (pendingResume) return;
+    if (!sessionLoadedRef.current) return; // espera a checagem de rascunho
+    if (mergedCategories.length === 0) return; // precisa da árvore para resolver o caminho
+    reviewSeededRef.current = true;
+
+    const items = reviewBatch.items;
+    setRows(
+      items.map((it) => ({
+        date: it.date,
+        description: it.description,
+        amount: Math.abs(it.amount),
+        type: it.type,
+        selected: true,
+      })),
+    );
+    setFileName(reviewBatch.label);
+    setImportType("cartao");
+    setStep("reconcile");
+
+    const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
+    const nextTargets: Record<number, string> = {};
+    const nextCats: Record<number, RowCategoryValue> = {};
+    const nextDescs: Record<number, string> = {};
+    const nextContacts: Record<number, { supplier_id?: string | null; client_id?: string | null }> = {};
+    const nextMatches: Record<number, RowMatch> = {};
+
+    items.forEach((it, i) => {
+      nextActions[i] = "vincular";
+      nextTargets[i] = it.id;
+      const leaf = it.subcategory2 || it.subcategory || it.category;
+      if (leaf) nextCats[i] = { ...resolveCategoryPath(leaf, mergedCategories), touched: false };
+      nextDescs[i] = it.description;
+      nextContacts[i] = { supplier_id: it.supplier_id || null, client_id: it.client_id || null };
+      nextMatches[i] = {
+        best: {
+          candidate: {
+            id: it.id,
+            description: it.description,
+            amount: Math.abs(it.amount),
+            payment_date: it.payment_date || it.date,
+            competence_date: it.competence_date || it.date,
+            type: it.type,
+            status: it.status || "Pendente",
+            category: it.category ?? null,
+            subcategory: it.subcategory ?? null,
+            subcategory2: it.subcategory2 ?? null,
+            contact_name: null,
+            series_id: null,
+            installment_number: null,
+            installments_total: null,
+            credit_card_id: it.credit_card_id ?? null,
+          },
+          score: 100,
+          dayDiff: 0,
+          similarity: 1,
+          amountDiff: 0,
+        } as unknown as RowMatch["best"],
+        alternatives: [],
+      };
+    });
+
+    setMatchActions(nextActions);
+    setMatchTargets(nextTargets);
+    setRowCategories(nextCats);
+    setRowDescriptions(nextDescs);
+    setRowContacts(nextContacts);
+    setExtraMatches(nextMatches);
+    setExplicitlyIgnored(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isReviewMode, reviewBatch, pendingResume, mergedCategories.length]);
+
+
 
   // Debounced save whenever something meaningful changes.
   useEffect(() => {
@@ -1188,6 +1313,7 @@ export function ImportStatementModal({
   // ORPHAN DETECTOR (card mode) — flag system transactions that DON'T appear in the statement.
   // The bank statement is the source of truth: any extra line in the system is a likely error.
   useEffect(() => {
+    if (isReviewMode) return; // revisão de lote: não há "só no sistema" a detectar
     if (importType !== "cartao" || step !== "reconcile" || rows.length === 0 || matchLoading) {
       if (importType !== "cartao") setSystemBill({ total: 0, count: 0, loading: false });
       return;
@@ -1324,6 +1450,7 @@ export function ImportStatementModal({
   // Casos ambíguos (>1 candidato do mesmo valor de um lado) permanecem para o
   // usuário resolver com o botão "É o mesmo".
   useEffect(() => {
+    if (isReviewMode) return;
     if (importType !== "cartao" || step !== "reconcile") return;
     if (orphansLoading || matchLoading) return;
     if (orphans.length === 0 || rows.length === 0) return;
@@ -1597,7 +1724,79 @@ export function ImportStatementModal({
     return "ignore-explicit";
   };
 
+  /**
+   * MODO REVISÃO — não cria nem apaga nada: apenas atualiza os lançamentos
+   * já existentes com categoria, descrição e fornecedor revisados.
+   */
+  const handleReviewSave = async () => {
+    setImporting(true);
+    let ok = 0;
+    let fail = 0;
+
+    await Promise.all(
+      rows.map(async (r, i) => {
+        const txId = matchTargets[i];
+        if (!txId) return;
+        const payload: Record<string, unknown> = {};
+
+        const rowCat = rowCategories[i];
+        const categoryName = resolveCategoryName(rowCat?.category, mergedCategories);
+        if (categoryName) {
+          payload.category = categoryName;
+          payload.subcategory = resolveCategoryName(rowCat?.subcategory, mergedCategories) || null;
+          payload.subcategory2 = resolveCategoryName(rowCat?.subcategory2, mergedCategories) || null;
+        }
+
+        const desc = (rowDescriptions[i] || "").trim();
+        if (desc && desc !== r.description) payload.description = desc;
+
+        const contact = rowContacts[i];
+        if (contact) {
+          payload.supplier_id = contact.supplier_id || null;
+          payload.client_id = contact.client_id || null;
+        }
+
+        if (Object.keys(payload).length === 0) return;
+
+        const { error } = await supabase.from("transactions").update(payload).eq("id", txId);
+        if (error) {
+          console.error("[ImportStatement] review update error", error);
+          fail++;
+        } else {
+          ok++;
+        }
+      }),
+    );
+
+    setImporting(false);
+
+    const allDates = rows.map((r) => r.date).sort();
+    window.dispatchEvent(new Event("transaction-created"));
+    setImportResult({
+      linked: ok,
+      created: 0,
+      ignored: 0,
+      failed: fail,
+      dateFrom: allDates[0] || "",
+      dateTo: allDates[allDates.length - 1] || "",
+      status: "Pendente",
+    });
+    clearSession();
+    setStep("summary");
+    if (fail > 0) {
+      toast({
+        title: "Alguns lançamentos não foram atualizados",
+        description: `${fail} falha(s). Tente novamente para os que restaram.`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleImport = async () => {
+    if (isReviewMode) {
+      await handleReviewSave();
+      return;
+    }
     if (!user) return;
     if (!targetBankAccount) {
       toast({ title: "Selecione a conta destino", variant: "destructive" });
@@ -2689,7 +2888,25 @@ export function ImportStatementModal({
         })()}
 
 
-        {rows.length > 0 && step === "reconcile" && (() => {
+        {/* RODAPÉ — MODO REVISÃO: sem divergência de extrato, só salvar. */}
+        {rows.length > 0 && step === "reconcile" && isReviewMode && (
+          <DialogFooter className={`gap-3 ${isPage ? "sticky bottom-0 z-30 bg-card border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between items-center flex-wrap" : "sm:justify-end"}`}>
+            <div className="text-xs text-muted-foreground">
+              Revisão de {rows.length} lançamento{rows.length === 1 ? "" : "s"} já registrados — salvar apenas atualiza categoria, descrição e fornecedor.
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={handleClose}>
+                Sair sem salvar
+              </Button>
+              <Button onClick={handleImport} disabled={importing} className="gap-2" size="sm">
+                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Salvar revisão ({rows.length})
+              </Button>
+            </div>
+          </DialogFooter>
+        )}
+
+        {rows.length > 0 && step === "reconcile" && !isReviewMode && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
           let netToCreate = 0;
           let netToLink = 0;
