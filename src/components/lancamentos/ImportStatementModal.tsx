@@ -157,6 +157,32 @@ function resolveCategoryName(
 }
 
 
+/** Lançamento já existente no sistema, reaberto para revisão na tela de conciliação. */
+export interface ReviewBatchItem {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  type: "receita" | "despesa";
+  category?: string | null;
+  subcategory?: string | null;
+  subcategory2?: string | null;
+  supplier_id?: string | null;
+  client_id?: string | null;
+  payment_date?: string | null;
+  competence_date?: string | null;
+  status?: string | null;
+  credit_card_id?: string | null;
+}
+
+export interface ReviewBatch {
+  /** Chave estável do lote — usada para isolar o rascunho no localStorage. */
+  key: string;
+  /** Rótulo exibido no lugar do nome do arquivo. */
+  label: string;
+  items: ReviewBatchItem[];
+}
+
 interface ImportStatementModalProps {
   open: boolean;
   onClose: () => void;
