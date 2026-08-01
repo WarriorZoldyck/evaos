@@ -1724,7 +1724,79 @@ export function ImportStatementModal({
     return "ignore-explicit";
   };
 
+  /**
+   * MODO REVISÃO — não cria nem apaga nada: apenas atualiza os lançamentos
+   * já existentes com categoria, descrição e fornecedor revisados.
+   */
+  const handleReviewSave = async () => {
+    setImporting(true);
+    let ok = 0;
+    let fail = 0;
+
+    await Promise.all(
+      rows.map(async (r, i) => {
+        const txId = matchTargets[i];
+        if (!txId) return;
+        const payload: Record<string, unknown> = {};
+
+        const rowCat = rowCategories[i];
+        const categoryName = resolveCategoryName(rowCat?.category, mergedCategories);
+        if (categoryName) {
+          payload.category = categoryName;
+          payload.subcategory = resolveCategoryName(rowCat?.subcategory, mergedCategories) || null;
+          payload.subcategory2 = resolveCategoryName(rowCat?.subcategory2, mergedCategories) || null;
+        }
+
+        const desc = (rowDescriptions[i] || "").trim();
+        if (desc && desc !== r.description) payload.description = desc;
+
+        const contact = rowContacts[i];
+        if (contact) {
+          payload.supplier_id = contact.supplier_id || null;
+          payload.client_id = contact.client_id || null;
+        }
+
+        if (Object.keys(payload).length === 0) return;
+
+        const { error } = await supabase.from("transactions").update(payload).eq("id", txId);
+        if (error) {
+          console.error("[ImportStatement] review update error", error);
+          fail++;
+        } else {
+          ok++;
+        }
+      }),
+    );
+
+    setImporting(false);
+
+    const allDates = rows.map((r) => r.date).sort();
+    window.dispatchEvent(new Event("transaction-created"));
+    setImportResult({
+      linked: ok,
+      created: 0,
+      ignored: 0,
+      failed: fail,
+      dateFrom: allDates[0] || "",
+      dateTo: allDates[allDates.length - 1] || "",
+      status: "Pendente",
+    });
+    clearSession();
+    setStep("summary");
+    if (fail > 0) {
+      toast({
+        title: "Alguns lançamentos não foram atualizados",
+        description: `${fail} falha(s). Tente novamente para os que restaram.`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleImport = async () => {
+    if (isReviewMode) {
+      await handleReviewSave();
+      return;
+    }
     if (!user) return;
     if (!targetBankAccount) {
       toast({ title: "Selecione a conta destino", variant: "destructive" });
