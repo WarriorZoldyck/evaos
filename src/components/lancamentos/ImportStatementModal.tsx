@@ -1450,6 +1450,7 @@ export function ImportStatementModal({
   // Casos ambíguos (>1 candidato do mesmo valor de um lado) permanecem para o
   // usuário resolver com o botão "É o mesmo".
   useEffect(() => {
+    if (isReviewMode) return;
     if (importType !== "cartao" || step !== "reconcile") return;
     if (orphansLoading || matchLoading) return;
     if (orphans.length === 0 || rows.length === 0) return;
