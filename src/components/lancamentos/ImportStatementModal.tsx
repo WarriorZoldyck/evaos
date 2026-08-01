@@ -402,7 +402,11 @@ export function ImportStatementModal({
   // Fechar por ESC / navegação / reload preserva a sessão.
   // ─────────────────────────────────────────────────────────────
   const SESSION_VERSION = 1;
-  const sessionKey = effectiveUserId ? `eva.import-session.v${SESSION_VERSION}.${effectiveUserId}` : "";
+  const sessionKey = effectiveUserId
+    ? isReviewMode
+      ? `eva.import-review.v${SESSION_VERSION}.${effectiveUserId}.${reviewBatch!.key}`
+      : `eva.import-session.v${SESSION_VERSION}.${effectiveUserId}`
+    : "";
   const sessionLoadedRef = useRef(false);
   const [pendingResume, setPendingResume] = useState<null | {
     fileName: string;
