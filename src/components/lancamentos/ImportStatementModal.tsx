@@ -197,6 +197,12 @@ interface ImportStatementModalProps {
   refetchAccounts?: () => Promise<void> | void;
   /** "modal" (default) renders inside a Dialog. "page" renders full-bleed for a dedicated route. */
   variant?: "modal" | "page";
+  /**
+   * Modo "Revisar importação": em vez de subir um arquivo, a tela abre já com
+   * lançamentos existentes carregados e vinculados a si mesmos. Ao salvar, os
+   * lançamentos são ATUALIZADOS (categoria/descrição/fornecedor) — nada é criado.
+   */
+  reviewBatch?: ReviewBatch | null;
 }
 
 /** Detects descriptions that look like a credit-card BILL PAYMENT (not a card purchase). */
