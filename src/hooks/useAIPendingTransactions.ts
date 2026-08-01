@@ -259,21 +259,34 @@ export function useAIPendingTransactions() {
   }
 
   const keepOneMutation = useMutation({
-    mutationFn: async ({ keepId }: { keepId: string }) => {
-      // Only move the clicked item to pending. The others remain as duplicate_suspect
-      // so the user can decide each one individually (or use "Rejeitar Todos").
+    mutationFn: async ({ keepId, clusterIds = [] }: { keepId: string; clusterIds?: string[] }) => {
       const { error: keepError } = await supabase
         .from("ai_pending_transactions")
         .update({ status: "pending" })
         .eq("id", keepId);
       if (keepError) throw keepError;
+
+      const others = clusterIds.filter((id) => id !== keepId);
+      if (others.length > 0) {
+        const { error: rejectError } = await supabase
+          .from("ai_pending_transactions")
+          .update({ status: "rejected", reviewed_at: new Date().toISOString() })
+          .in("id", others);
+        if (rejectError) throw rejectError;
+      }
+      return others.length;
     },
-    onSuccess: () => {
-      toast.success("Item mantido e movido para Pendentes. Os demais continuam aguardando sua decisão.");
+    onSuccess: (rejectedCount) => {
+      toast.success(
+        rejectedCount
+          ? `Lançamento mantido. ${rejectedCount} duplicado${rejectedCount > 1 ? "s" : ""} rejeitado${rejectedCount > 1 ? "s" : ""}.`
+          : "Lançamento mantido e movido para Pendentes.",
+      );
       invalidateAll();
     },
     onError: (err: any) => toast.error("Erro: " + err.message),
   });
+
 
   const keepAllMutation = useMutation({
     mutationFn: async (ids: string[]) => {
