@@ -486,6 +486,93 @@ export function ImportStatementModal({
     setPendingResume(null);
   };
 
+  // ── MODO REVISÃO ──────────────────────────────────────────────────────────
+  // Retoma automaticamente o rascunho do lote (sem perguntar) e, na primeira
+  // abertura, semeia as linhas a partir dos lançamentos existentes.
+  const reviewSeededRef = useRef(false);
+  useEffect(() => {
+    if (!isReviewMode || !pendingResume) return;
+    reviewSeededRef.current = true;
+    resumeSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReviewMode, pendingResume]);
+
+  useEffect(() => {
+    if (!open || !isReviewMode || !reviewBatch) return;
+    if (reviewSeededRef.current) return;
+    if (pendingResume) return;
+    if (!sessionLoadedRef.current) return; // espera a checagem de rascunho
+    if (mergedCategories.length === 0) return; // precisa da árvore para resolver o caminho
+    reviewSeededRef.current = true;
+
+    const items = reviewBatch.items;
+    setRows(
+      items.map((it) => ({
+        date: it.date,
+        description: it.description,
+        amount: Math.abs(it.amount),
+        type: it.type,
+        selected: true,
+      })),
+    );
+    setFileName(reviewBatch.label);
+    setImportType("cartao");
+    setStep("reconcile");
+
+    const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
+    const nextTargets: Record<number, string> = {};
+    const nextCats: Record<number, RowCategoryValue> = {};
+    const nextDescs: Record<number, string> = {};
+    const nextContacts: Record<number, { supplier_id?: string | null; client_id?: string | null }> = {};
+    const nextMatches: Record<number, RowMatch> = {};
+
+    items.forEach((it, i) => {
+      nextActions[i] = "vincular";
+      nextTargets[i] = it.id;
+      const leaf = it.subcategory2 || it.subcategory || it.category;
+      if (leaf) nextCats[i] = { ...resolveCategoryPath(leaf, mergedCategories), touched: false };
+      nextDescs[i] = it.description;
+      nextContacts[i] = { supplier_id: it.supplier_id || null, client_id: it.client_id || null };
+      nextMatches[i] = {
+        best: {
+          candidate: {
+            id: it.id,
+            description: it.description,
+            amount: Math.abs(it.amount),
+            payment_date: it.payment_date || it.date,
+            competence_date: it.competence_date || it.date,
+            type: it.type,
+            status: it.status || "Pendente",
+            category: it.category ?? null,
+            subcategory: it.subcategory ?? null,
+            subcategory2: it.subcategory2 ?? null,
+            contact_name: null,
+            series_id: null,
+            installment_number: null,
+            installments_total: null,
+            credit_card_id: it.credit_card_id ?? null,
+          },
+          score: 100,
+          dayDiff: 0,
+          similarity: 1,
+          amountDiff: 0,
+        } as unknown as RowMatch["best"],
+        alternatives: [],
+      };
+    });
+
+    setMatchActions(nextActions);
+    setMatchTargets(nextTargets);
+    setRowCategories(nextCats);
+    setRowDescriptions(nextDescs);
+    setRowContacts(nextContacts);
+    setExtraMatches(nextMatches);
+    setExplicitlyIgnored(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isReviewMode, reviewBatch, pendingResume, mergedCategories.length]);
+
+
+
   // Debounced save whenever something meaningful changes.
   useEffect(() => {
     if (!open || !sessionKey) return;
