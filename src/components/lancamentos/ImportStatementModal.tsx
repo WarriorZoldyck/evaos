@@ -285,7 +285,9 @@ export function ImportStatementModal({
   companies,
   refetchAccounts,
   variant = "modal",
+  reviewBatch = null,
 }: ImportStatementModalProps) {
+  const isReviewMode = !!reviewBatch && reviewBatch.items.length > 0;
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
   const { selectedCompanyId, isPersonal } = useCompany();
