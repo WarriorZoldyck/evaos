@@ -322,6 +322,24 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_simoespaula_categorias_20260801: {
+        Row: {
+          backed_up_at: string
+          category: string | null
+          id: string
+        }
+        Insert: {
+          backed_up_at?: string
+          category?: string | null
+          id: string
+        }
+        Update: {
+          backed_up_at?: string
+          category?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       bank_accounts: {
         Row: {
           account_number: string | null
