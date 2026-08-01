@@ -2888,7 +2888,25 @@ export function ImportStatementModal({
         })()}
 
 
-        {rows.length > 0 && step === "reconcile" && (() => {
+        {/* RODAPÉ — MODO REVISÃO: sem divergência de extrato, só salvar. */}
+        {rows.length > 0 && step === "reconcile" && isReviewMode && (
+          <DialogFooter className={`gap-3 ${isPage ? "sticky bottom-0 z-30 bg-card border-t border-border -mx-4 md:-mx-6 px-4 md:px-6 py-3 sm:justify-between items-center flex-wrap" : "sm:justify-end"}`}>
+            <div className="text-xs text-muted-foreground">
+              Revisão de {rows.length} lançamento{rows.length === 1 ? "" : "s"} já registrados — salvar apenas atualiza categoria, descrição e fornecedor.
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={handleClose}>
+                Sair sem salvar
+              </Button>
+              <Button onClick={handleImport} disabled={importing} className="gap-2" size="sm">
+                {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Salvar revisão ({rows.length})
+              </Button>
+            </div>
+          </DialogFooter>
+        )}
+
+        {rows.length > 0 && step === "reconcile" && !isReviewMode && (() => {
           const counts = { vincular: 0, criar: 0, ignorar: 0 };
           let netToCreate = 0;
           let netToLink = 0;
