@@ -33,7 +33,19 @@ export function useImportMatching() {
       bankAccountId: string | null,
       walletId: string | null,
       creditCardId: string | null = null,
-      options: { merge?: boolean; billMonth?: string | null; cardFamilyIds?: string[] } = {},
+      options: {
+        merge?: boolean;
+        billMonth?: string | null;
+        cardFamilyIds?: string[];
+        /**
+         * Índices GLOBAIS das linhas (posição em `rows` do modal) correspondentes
+         * a cada item de `lines`. Sem isso, quando o extrato é processado em
+         * grupos (fatura consolidada com vários cartões), o resultado voltaria
+         * chaveado pela posição local do grupo (0..n) e a tela leria o match de
+         * outra linha — pares cruzados.
+         */
+        rowIndices?: number[];
+      } = {},
     ) => {
       if (lines.length === 0 || (!bankAccountId && !walletId && !creditCardId)) {
         if (!options.merge) {
@@ -229,7 +241,7 @@ export function useImportMatching() {
             claimed.add(best.candidate.id);
             matchedCount++;
           }
-          result[i] = { best, alternatives };
+          result[options.rowIndices?.[i] ?? i] = { best, alternatives };
         }
 
         console.info(
