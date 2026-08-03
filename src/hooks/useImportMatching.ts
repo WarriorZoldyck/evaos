@@ -209,8 +209,11 @@ export function useImportMatching() {
           // Fallback largo (dias) só para candidatos de cartão sem
           // purchase_date_original — cobre fatura anterior/próxima paga.
           cardBillWindow: isCard ? 45 : 0,
+          // Desempate: candidato do MESMO cartão da linha ganha de um irmão.
+          preferredCardId: creditCardId,
         };
 
+        let matchedCount = 0;
         for (const { i, l } of order) {
           const available = candidates.filter((c) => !claimed.has(c.id));
           const perLineOpts = {
@@ -222,9 +225,23 @@ export function useImportMatching() {
           const alternatives = available
             .filter((c) => c.id !== best?.candidate.id)
             .slice(0, 5);
-          if (best) claimed.add(best.candidate.id);
+          if (best) {
+            claimed.add(best.candidate.id);
+            matchedCount++;
+          }
           result[i] = { best, alternatives };
         }
+
+        console.info(
+          "[conciliação] escopo=%s família=%o linhas=%d candidatos(janela)=%d candidatos(valor)=%d match=%d",
+          isCard ? "cartão" : "conta",
+          familyIds,
+          lines.length,
+          rawCandidates.length,
+          candidates.length,
+          matchedCount,
+        );
+
 
         if (options.merge) {
           setMatches((prev) => ({ ...prev, ...result }));
