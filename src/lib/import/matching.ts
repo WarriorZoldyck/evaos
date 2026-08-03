@@ -199,6 +199,13 @@ export interface ScoreOptions {
   lineInstallmentNumber?: number | null;
   /** Optional installment total of the statement line (for strict matching). */
   lineInstallmentsTotal?: number | null;
+  /**
+   * Cartão da linha do extrato. Numa fatura consolidada buscamos candidatos em
+   * toda a família (pai + filhos), então usamos isso apenas como DESEMPATE:
+   * candidato do mesmo cartão ganha de um cartão irmão com valor/data iguais.
+   */
+  preferredCardId?: string | null;
+
 }
 
 /** Returns score >= 0 for a candidate; null means not a match. */
