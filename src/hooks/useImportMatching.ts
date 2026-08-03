@@ -145,7 +145,7 @@ export function useImportMatching() {
           const { data: wc, error: wcErr } = await supabase
             .from("transactions")
             .select(selectCols)
-            .eq("credit_card_id", creditCardId)
+            .in("credit_card_id", familyIds)
             .gte("payment_date", wcMin)
             .lte("payment_date", wcMax)
             .limit(2000);
