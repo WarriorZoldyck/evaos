@@ -1177,10 +1177,17 @@ export function ImportStatementModal({
         return;
       }
 
-      // Group rows by card id
+      // Group rows by card id. Linhas sem cartão detectado usam o cartão
+      // selecionado pelo usuário (ou o pai da família detectada) em vez de
+      // ficarem de fora da conciliação.
+      const fallbackCardId =
+        targetCard ||
+        detectedCards.find((c) => !c.parent_card_id)?.id ||
+        detectedCards[0]?.id ||
+        null;
       const groups = new Map<string, number[]>();
       rows.forEach((r, i) => {
-        const cardId = isMultiCard ? r.matched_card_id : targetCard;
+        const cardId = (isMultiCard ? r.matched_card_id : targetCard) || fallbackCardId;
         if (!cardId) return;
         const arr = groups.get(cardId) || [];
         arr.push(i);
@@ -1207,10 +1214,15 @@ export function ImportStatementModal({
             };
           });
           // First call (groupIdx=0) doesn't merge; subsequent ones do.
-          const res = await findMatches(lines, null, null, cardId, { merge: groupIdx > 0, billMonth: billReferenceMonth || null });
+          const res = await findMatches(lines, null, null, cardId, {
+            merge: groupIdx > 0,
+            billMonth: billReferenceMonth || null,
+            cardFamilyIds: cardFamilyMap.get(cardId) || [cardId],
+          });
           return indices.map((rowIdx, localIdx) => ({ rowIdx, match: res[localIdx] }));
         }),
       ).then((groupResults) => {
+
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
         const nextIgnored = new Set<number>();
