@@ -33,7 +33,7 @@ export function useImportMatching() {
       bankAccountId: string | null,
       walletId: string | null,
       creditCardId: string | null = null,
-      options: { merge?: boolean; billMonth?: string | null } = {},
+      options: { merge?: boolean; billMonth?: string | null; cardFamilyIds?: string[] } = {},
     ) => {
       if (lines.length === 0 || (!bankAccountId && !walletId && !creditCardId)) {
         if (!options.merge) {
@@ -46,7 +46,14 @@ export function useImportMatching() {
       setLoading(true);
       try {
         const isCard = !!creditCardId;
+        // Fatura consolidada: pai + filhos vêm no MESMO PDF. A busca de
+        // candidatos precisa cobrir toda a família, senão uma linha do cartão
+        // filho nunca encontra o lançamento que está no pai (e vice-versa).
+        const familyIds = Array.from(
+          new Set([...(options.cardFamilyIds || []), ...(creditCardId ? [creditCardId] : [])]),
+        );
         const window = isCard ? Math.min(CARD_DATE_WINDOW_DAYS, 3) : DATE_WINDOW_DAYS;
+
         const dates = lines.map((l) => l.date).sort();
         const minDate = shiftISO(dates[0], -window);
         const maxDate = shiftISO(dates[dates.length - 1], window);
