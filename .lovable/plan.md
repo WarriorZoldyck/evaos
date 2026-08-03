@@ -1,32 +1,41 @@
-# Verificar de verdade a conciliação da fatura (simoespaula)
+# Explicar a divergência de R$ 21,70 na conciliação
 
-## O que você apontou está correto
+## Situação
 
-DROGASIL R$ 19,80 e APPLECOMBILL R$ 51,90 são lançamentos diferentes — nome diferente e valor diferente. Eles nunca deveriam ter aparecido pareados. Isso confirma o diagnóstico: o par exibido não vinha do motor de comparação, vinha da tela lendo o resultado da posição errada (numeração local do grupo de cartão em vez da numeração global da linha).
+Os pares agora estão coerentes (nome e valor iguais dos dois lados) — a correção de numeração resolveu o cruzamento. Sobrou uma diferença de **R$ 21,70** entre o total informado pelo banco e a soma das linhas com decisão.
 
-## Estado atual
+O que já está confirmado nos dados da conta: na fatura com vencimento 15/03/2026 existem hoje **49 lançamentos**, R$ 3.471,16 no total (38 no VISA SANTANDER e 11 no VISA GEOVANNA). Isso é consistente com o que a tela mostra em "conciliar".
 
-A correção de numeração já foi aplicada e o teste de regressão criado passa: uma linha na posição global 7, enviada sozinha em um grupo, volta chaveada em 7 e não em 0.
+O que **não** dá para afirmar sem olhar as linhas do extrato carregado na sessão: qual linha específica gera os R$ 21,70. As hipóteses possíveis (todas ainda não verificadas) são estorno/crédito somado com sinal invertido, linha ignorada que entrava no total do banco, arredondamento de parcela, ou uma linha do extrato lida com centavos errados.
 
-O que ainda **não** foi feito é a prova com os dados reais da conta dela. Enquanto isso não acontecer, a afirmação "está certo" é baseada só em teste sintético — e é justo desconfiar.
+Adivinhar aqui não ajuda — e essa mesma pergunta vai voltar na próxima fatura. A resposta certa é a tela saber explicar sozinha.
 
-## Como provar
+## O que será feito
 
-1. Reabrir o extrato da fatura Santander (vencimento 15/03/2026) na conta simoespaula, no ambiente de preview.
-2. Conferir, linha a linha, na seção "Igual — pode conciliar": descrição do extrato e descrição do lançamento EVA precisam ser da mesma compra, e o valor precisa ser idêntico nos dois lados.
-3. Conferir os números de cabeçalho: cobertura e divergência recalculadas (antes: 48/129 e R$ 23.135,20 — números inflados pelo pareamento errado).
-4. Registrar evidência em captura de tela do resultado.
+**1. Detalhamento da divergência na própria tela**
 
-## Endurecer contra a classe do erro
+O bloco "Divergência -R$ X" deixa de ser só um aviso e passa a abrir um detalhamento com:
 
-Além de olhar, adicionar uma trava que impede o sintoma de voltar sem alarde:
+- Total informado pelo banco.
+- Soma das linhas que vão ser conciliadas.
+- Soma das linhas que vão ser criadas.
+- Soma das linhas ignoradas (a causa mais comum de diferença).
+- Soma das linhas sem decisão, se houver.
+- A conta fechando: banco − (conciliar + criar) = divergência.
 
-- Na montagem do par exibido, validar que o candidato tem o **mesmo valor** da linha do extrato quando ela é classificada como "valor idêntico". Se não tiver, a linha não entra na seção verde — cai em "revisar" em vez de sugerir uma conciliação errada.
-- Cobrir isso com teste: par com valores diferentes nunca pode ser classificado como idêntico.
+Abaixo, a lista das linhas que compõem cada bucket, com data, descrição e valor, para o usuário bater a olho qual delas está sobrando ou faltando.
+
+**2. Destacar créditos e estornos**
+
+Linhas de valor negativo (estorno, pagamento de fatura anterior, crédito) ganham marcação visível e entram no somatório com o sinal correto. Se o sinal for a causa, isso fica evidente na hora.
+
+**3. Validar com o caso real**
+
+Abrir a fatura de vencimento 15/03/2026 da conta dela e usar o detalhamento para nomear exatamente de onde vêm os R$ 21,70 — e então dizer se é dado do extrato, decisão do usuário ou bug.
 
 ## Detalhes técnicos
 
-- Verificação via Playwright contra `localhost:8080` com a sessão da conta, navegando até a tela de conciliação e capturando o painel de pares.
-- Trava de coerência em `ReconcileStep.tsx`, no ponto onde a linha é classificada em tiers (`igual` / `aproximado` / `sem match`): comparar `Math.abs(line.amount) - candidate.amount` contra `AMOUNT_TOLERANCE` antes de marcar como idêntico.
-- Teste em `src/lib/import/matching.test.ts` ou no arquivo do hook.
+- `ReconcileStep.tsx` / rodapé do `ImportStatementModal.tsx`: transformar o badge de divergência em botão que abre um `Dialog` com os totais por bucket derivados de `rows` + `matchActions`.
+- Cálculo puro extraído para `src/lib/import/reconcileTotals.ts` (`buildDivergenceBreakdown`), com teste cobrindo linha ignorada, linha negativa e linha sem decisão.
+- Comparações em centavos (`Math.round(v * 100)`) para não acumular erro de ponto flutuante no somatório.
 - Sem migração de banco.
