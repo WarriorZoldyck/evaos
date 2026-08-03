@@ -283,6 +283,9 @@ export function scoreCandidate(
   if (contactSim >= 0.5) score += 10;
   if (sharesToken(line.description, c.description)) score += 10;
   score += Math.round(bestSim * 30);
+  // Desempate entre cartões da mesma família (fatura consolidada).
+  if (opts.preferredCardId && c.credit_card_id === opts.preferredCardId) score += 3;
+
 
   const amountDiff = Math.abs(c.amount - Math.abs(line.amount));
   const tier: "exact" | "tolerance" = amountDiff <= EXACT_AMOUNT_TOLERANCE ? "exact" : "tolerance";
