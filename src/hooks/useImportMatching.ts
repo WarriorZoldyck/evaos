@@ -91,7 +91,8 @@ export function useImportMatching() {
         }
 
         if (creditCardId) {
-          query = query.eq("credit_card_id", creditCardId);
+          query = query.in("credit_card_id", familyIds);
+
         } else {
           query = query.is("credit_card_id", null);
           if (bankAccountId) query = query.eq("bank_account_id", bankAccountId);
