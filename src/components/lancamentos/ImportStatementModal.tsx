@@ -647,6 +647,25 @@ export function ImportStatementModal({
 
   const isMultiCard = detectedCards.length > 1;
 
+  /**
+   * Mapa cartão → família (pai + todos os filhos). Fatura consolidada Santander:
+   * o mesmo PDF traz o cartão-pai e os adicionais, e os lançamentos do sistema
+   * podem estar em qualquer um deles. A conciliação precisa buscar na família
+   * inteira, senão a linha de um adicional nunca acha o lançamento existente.
+   */
+  const cardFamilyMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    creditCards.forEach((c) => {
+      const rootId = c.parent_card_id || c.id;
+      const family = creditCards
+        .filter((x) => x.id === rootId || x.parent_card_id === rootId)
+        .map((x) => x.id);
+      map.set(c.id, family.length ? family : [c.id]);
+    });
+    return map;
+  }, [creditCards]);
+
+
   // Per-card summary for display
   const cardSummary = useMemo(() => {
     const summary: Record<string, { count: number; total: number }> = {};
