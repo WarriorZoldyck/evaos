@@ -1253,7 +1253,7 @@ export function ImportStatementModal({
     resetMatches();
     setExtraMatches({});
     setPromotedOrphanIds(new Set());
-  }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches, billReferenceMonth]);
+  }, [importType, targetBankAccount, targetCard, isMultiCard, detectedCards, cardFamilyMap, rows, findMatches, resetMatches, billReferenceMonth]);
 
   // ── FASE 2A — DEDUPE DE EXTRATO (somente conta/débito) ────────────────────
   // Calcula a impressão digital de cada linha e verifica quais já existem no
