@@ -1214,12 +1214,16 @@ export function ImportStatementModal({
             };
           });
           // First call (groupIdx=0) doesn't merge; subsequent ones do.
+          // `rowIndices` garante que o resultado volte chaveado pelo índice
+          // global da linha — sem isso os grupos colidem em 0..n e a tela
+          // exibe o candidato de outra linha.
           const res = await findMatches(lines, null, null, cardId, {
             merge: groupIdx > 0,
             billMonth: billReferenceMonth || null,
             cardFamilyIds: cardFamilyMap.get(cardId) || [cardId],
+            rowIndices: indices,
           });
-          return indices.map((rowIdx, localIdx) => ({ rowIdx, match: res[localIdx] }));
+          return indices.map((rowIdx) => ({ rowIdx, match: res[rowIdx] }));
         }),
       ).then((groupResults) => {
 
