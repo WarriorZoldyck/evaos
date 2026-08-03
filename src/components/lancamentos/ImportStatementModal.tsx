@@ -647,6 +647,25 @@ export function ImportStatementModal({
 
   const isMultiCard = detectedCards.length > 1;
 
+  /**
+   * Mapa cartão → família (pai + todos os filhos). Fatura consolidada Santander:
+   * o mesmo PDF traz o cartão-pai e os adicionais, e os lançamentos do sistema
+   * podem estar em qualquer um deles. A conciliação precisa buscar na família
+   * inteira, senão a linha de um adicional nunca acha o lançamento existente.
+   */
+  const cardFamilyMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    creditCards.forEach((c) => {
+      const rootId = c.parent_card_id || c.id;
+      const family = creditCards
+        .filter((x) => x.id === rootId || x.parent_card_id === rootId)
+        .map((x) => x.id);
+      map.set(c.id, family.length ? family : [c.id]);
+    });
+    return map;
+  }, [creditCards]);
+
+
   // Per-card summary for display
   const cardSummary = useMemo(() => {
     const summary: Record<string, { count: number; total: number }> = {};
@@ -1158,10 +1177,17 @@ export function ImportStatementModal({
         return;
       }
 
-      // Group rows by card id
+      // Group rows by card id. Linhas sem cartão detectado usam o cartão
+      // selecionado pelo usuário (ou o pai da família detectada) em vez de
+      // ficarem de fora da conciliação.
+      const fallbackCardId =
+        targetCard ||
+        detectedCards.find((c) => !c.parent_card_id)?.id ||
+        detectedCards[0]?.id ||
+        null;
       const groups = new Map<string, number[]>();
       rows.forEach((r, i) => {
-        const cardId = isMultiCard ? r.matched_card_id : targetCard;
+        const cardId = (isMultiCard ? r.matched_card_id : targetCard) || fallbackCardId;
         if (!cardId) return;
         const arr = groups.get(cardId) || [];
         arr.push(i);
@@ -1188,10 +1214,15 @@ export function ImportStatementModal({
             };
           });
           // First call (groupIdx=0) doesn't merge; subsequent ones do.
-          const res = await findMatches(lines, null, null, cardId, { merge: groupIdx > 0, billMonth: billReferenceMonth || null });
+          const res = await findMatches(lines, null, null, cardId, {
+            merge: groupIdx > 0,
+            billMonth: billReferenceMonth || null,
+            cardFamilyIds: cardFamilyMap.get(cardId) || [cardId],
+          });
           return indices.map((rowIdx, localIdx) => ({ rowIdx, match: res[localIdx] }));
         }),
       ).then((groupResults) => {
+
         const nextActions: Record<number, "vincular" | "criar" | "ignorar"> = {};
         const nextTargets: Record<number, string> = {};
         const nextIgnored = new Set<number>();
@@ -1222,7 +1253,7 @@ export function ImportStatementModal({
     resetMatches();
     setExtraMatches({});
     setPromotedOrphanIds(new Set());
-  }, [importType, targetBankAccount, targetCard, isMultiCard, rows, findMatches, resetMatches, billReferenceMonth]);
+  }, [importType, targetBankAccount, targetCard, isMultiCard, detectedCards, cardFamilyMap, rows, findMatches, resetMatches, billReferenceMonth]);
 
   // ── FASE 2A — DEDUPE DE EXTRATO (somente conta/débito) ────────────────────
   // Calcula a impressão digital de cada linha e verifica quais já existem no

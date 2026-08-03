@@ -33,7 +33,7 @@ export function useImportMatching() {
       bankAccountId: string | null,
       walletId: string | null,
       creditCardId: string | null = null,
-      options: { merge?: boolean; billMonth?: string | null } = {},
+      options: { merge?: boolean; billMonth?: string | null; cardFamilyIds?: string[] } = {},
     ) => {
       if (lines.length === 0 || (!bankAccountId && !walletId && !creditCardId)) {
         if (!options.merge) {
@@ -46,7 +46,14 @@ export function useImportMatching() {
       setLoading(true);
       try {
         const isCard = !!creditCardId;
+        // Fatura consolidada: pai + filhos vêm no MESMO PDF. A busca de
+        // candidatos precisa cobrir toda a família, senão uma linha do cartão
+        // filho nunca encontra o lançamento que está no pai (e vice-versa).
+        const familyIds = Array.from(
+          new Set([...(options.cardFamilyIds || []), ...(creditCardId ? [creditCardId] : [])]),
+        );
         const window = isCard ? Math.min(CARD_DATE_WINDOW_DAYS, 3) : DATE_WINDOW_DAYS;
+
         const dates = lines.map((l) => l.date).sort();
         const minDate = shiftISO(dates[0], -window);
         const maxDate = shiftISO(dates[dates.length - 1], window);
@@ -84,7 +91,8 @@ export function useImportMatching() {
         }
 
         if (creditCardId) {
-          query = query.eq("credit_card_id", creditCardId);
+          query = query.in("credit_card_id", familyIds);
+
         } else {
           query = query.is("credit_card_id", null);
           if (bankAccountId) query = query.eq("bank_account_id", bankAccountId);
@@ -137,7 +145,7 @@ export function useImportMatching() {
           const { data: wc, error: wcErr } = await supabase
             .from("transactions")
             .select(selectCols)
-            .eq("credit_card_id", creditCardId)
+            .in("credit_card_id", familyIds)
             .gte("payment_date", wcMin)
             .lte("payment_date", wcMax)
             .limit(2000);
@@ -201,8 +209,11 @@ export function useImportMatching() {
           // Fallback largo (dias) só para candidatos de cartão sem
           // purchase_date_original — cobre fatura anterior/próxima paga.
           cardBillWindow: isCard ? 45 : 0,
+          // Desempate: candidato do MESMO cartão da linha ganha de um irmão.
+          preferredCardId: creditCardId,
         };
 
+        let matchedCount = 0;
         for (const { i, l } of order) {
           const available = candidates.filter((c) => !claimed.has(c.id));
           const perLineOpts = {
@@ -214,9 +225,23 @@ export function useImportMatching() {
           const alternatives = available
             .filter((c) => c.id !== best?.candidate.id)
             .slice(0, 5);
-          if (best) claimed.add(best.candidate.id);
+          if (best) {
+            claimed.add(best.candidate.id);
+            matchedCount++;
+          }
           result[i] = { best, alternatives };
         }
+
+        console.info(
+          "[conciliação] escopo=%s família=%o linhas=%d candidatos(janela)=%d candidatos(valor)=%d match=%d",
+          isCard ? "cartão" : "conta",
+          familyIds,
+          lines.length,
+          rawCandidates.length,
+          candidates.length,
+          matchedCount,
+        );
+
 
         if (options.merge) {
           setMatches((prev) => ({ ...prev, ...result }));
