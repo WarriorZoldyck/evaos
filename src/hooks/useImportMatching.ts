@@ -241,7 +241,7 @@ export function useImportMatching() {
             claimed.add(best.candidate.id);
             matchedCount++;
           }
-          result[i] = { best, alternatives };
+          result[options.rowIndices?.[i] ?? i] = { best, alternatives };
         }
 
         console.info(
