@@ -29,9 +29,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Categorias() {
   const { isPersonal } = useCompany();
   const {
-    categories, tree, loading, search, setSearch,
+    categories, tree, orphans, loading, search, setSearch,
     createCategory, updateCategory, moveCategory, deleteCategory,
   } = useCategories();
+
 
   const [formOpen, setFormOpen] = useState(false);
   const [parentId, setParentId] = useState<string | null>(null);
@@ -138,6 +139,32 @@ export default function Categorias() {
   // Split tree into revenue and expense
   const revenueTree = tree.filter(cat => cat.type === "receita" || cat.type === "ambos");
   const expenseTree = tree.filter(cat => cat.type === "despesa" || cat.type === "ambos");
+  const revenueOrphans = orphans.filter(cat => cat.type === "receita" || cat.type === "ambos");
+  const expenseOrphans = orphans.filter(cat => cat.type === "despesa" || cat.type === "ambos");
+
+  const renderOrphans = (items: Category[]) =>
+    items.length > 0 && (
+      <div className="mt-4 pt-3 border-t border-border/50">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+          Sem grupo
+        </p>
+        <div className="space-y-0.5">
+          {items.map((cat) => (
+            <CategoryTreeItem
+              key={cat.id}
+              category={cat}
+              level={0}
+              onAdd={openCreateChild}
+              onEdit={openEdit}
+              onDelete={setDeleteTarget}
+              onDrop={handleDrop}
+              draggedId={draggedId}
+            />
+          ))}
+        </div>
+      </div>
+    );
+
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -245,7 +272,9 @@ export default function Categorias() {
                     ))}
                   </div>
                 )}
+                {renderOrphans(revenueOrphans)}
               </div>
+
             </CardContent>
           </Card>
 
@@ -294,7 +323,9 @@ export default function Categorias() {
                     ))}
                   </div>
                 )}
+                {renderOrphans(expenseOrphans)}
               </div>
+
             </CardContent>
           </Card>
         </div>
