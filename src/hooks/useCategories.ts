@@ -165,15 +165,32 @@ export function useCategories() {
       newSortOrder = siblings.length > 0 ? Math.max(...siblings.map(s => s.sort_order)) + 1 : 0;
     }
 
+    // Keep the whole subtree in the parent's context (Pessoal/Empresa)
+    const parent = newParentId ? categories.find(c => c.id === newParentId) : null;
+    const targetCompanyId = parent ? parent.company_id : (selectedCompanyId || null);
+    const moved = categories.find(c => c.id === id);
+    const needsContextFix = (moved?.company_id ?? null) !== (targetCompanyId ?? null);
+
     const { error } = await supabase
       .from("categories")
-      .update({ parent_id: newParentId, sort_order: newSortOrder })
+      .update({ parent_id: newParentId, sort_order: newSortOrder, company_id: targetCompanyId })
       .eq("id", id);
 
     if (error) {
       toast({ title: "Erro ao mover categoria", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
+
+    if (needsContextFix) {
+      const descendants = getDescendantIds(id);
+      if (descendants.length > 0) {
+        await supabase
+          .from("categories")
+          .update({ company_id: targetCompanyId })
+          .in("id", descendants);
+      }
+    }
+
 
     // Reindex siblings for clean ordering
     const updatedSiblings = [
