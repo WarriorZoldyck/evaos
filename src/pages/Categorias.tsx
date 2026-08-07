@@ -29,9 +29,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function Categorias() {
   const { isPersonal } = useCompany();
   const {
-    categories, tree, loading, search, setSearch,
+    categories, tree, orphans, loading, search, setSearch,
     createCategory, updateCategory, moveCategory, deleteCategory,
   } = useCategories();
+
 
   const [formOpen, setFormOpen] = useState(false);
   const [parentId, setParentId] = useState<string | null>(null);
