@@ -323,7 +323,9 @@ export default function Categorias() {
                     ))}
                   </div>
                 )}
+                {renderOrphans(expenseOrphans)}
               </div>
+
             </CardContent>
           </Card>
         </div>
