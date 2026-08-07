@@ -235,9 +235,18 @@ export function useCategories() {
 
   const tree = search ? buildFilteredTree(categories, search) : buildTree(categories);
 
+  // Categories whose parent is not visible in the current context — shown as "Sem grupo"
+  const loadedIds = new Set(categories.map((c) => c.id));
+  const orphans = categories
+    .filter((c) => c.parent_id && !loadedIds.has(c.parent_id))
+    .filter((c) => !search || c.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((c) => ({ ...c, children: buildTree(categories, c.id) }));
+
   return {
     categories,
     tree,
+    orphans,
     loading,
     search,
     setSearch,
@@ -247,6 +256,7 @@ export function useCategories() {
     deleteCategory,
     refetch: fetchCategories,
   };
+
 }
 
 function buildFilteredTree(items: Category[], search: string): Category[] {
