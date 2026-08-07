@@ -59,13 +59,17 @@ export function useCategories() {
     const siblings = categories.filter(c => c.parent_id === (data.parent_id || null));
     const maxSort = siblings.length > 0 ? Math.max(...siblings.map(s => s.sort_order)) + 1 : 0;
 
+    // Subcategories always inherit the parent's context (Pessoal/Empresa)
+    const parent = data.parent_id ? categories.find(c => c.id === data.parent_id) : null;
+    const companyId = parent ? parent.company_id : (selectedCompanyId || null);
+
     const { error } = await supabase.from("categories").insert({
       name: data.name,
       parent_id: data.parent_id || null,
       type: data.type || "ambos",
       dre_section: data.dre_section || null,
       user_id: effectiveUserId,
-      company_id: selectedCompanyId || null,
+      company_id: companyId,
       sort_order: maxSort,
     });
     if (error) {
@@ -76,6 +80,7 @@ export function useCategories() {
     fetchCategories();
     return true;
   };
+
 
   const updateCategory = async (id: string, data: { name?: string; type?: string; dre_section?: string | null }) => {
     const { error } = await supabase.from("categories").update(data).eq("id", id);
