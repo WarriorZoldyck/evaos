@@ -36,8 +36,8 @@ export default function PrecificacaoV2() {
   const handleEdit = (proc: ProcedureV2) => { setEditingProcedure(proc); setModalOpen(true); };
 
   const handleSaveProcedure = async (data: {
-    name: string; execution_time: number; desired_price: number;
-    items: { description: string; value: number }[];
+    name: string; execution_time: number; desired_price: number; quantity: number;
+    items: { description: string; value: number; unit_type: "sessao" | "unitario" }[];
   }) => {
     if (editingProcedure) return updateProcedure(editingProcedure.id, data);
     return createProcedure(data);
