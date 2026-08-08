@@ -143,7 +143,7 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           const calc = calcProcedure(proc);
           const isSelected = selectedId === proc.id;
           const isNegative = calc.lucro < 0;
-          const invalidMargin = invalidMarginId === proc.id;
+          const rowInvalid = invalidMargin?.id === proc.id ? invalidMargin : null;
 
           return (
             <TableRow
