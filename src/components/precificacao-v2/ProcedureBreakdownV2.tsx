@@ -14,6 +14,7 @@ interface Props {
 
 export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProcedure }: Props) {
   const calc = calcProcedure(procedure);
+  const qty = Math.max(1, procedure.quantity ?? 1);
 
   return (
     <Card>
