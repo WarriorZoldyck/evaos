@@ -24,9 +24,11 @@ interface ProcedureTableV2Props {
   onDuplicate: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
   onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number; quantity?: number }) => void;
+  calcParts?: (input: { execution_time: number; quantity: number; items: { value: number; unit_type: ProcedureV2["items"][number]["unit_type"] }[] }) => { qty: number; cf: number; cv: number };
+  taxRate?: number;
 }
 
-function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0, className }: {
+function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0, className, invalid }: {
   value: number;
   onCommit: (v: number) => void;
   prefix?: string;
@@ -34,6 +36,7 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
   step?: number;
   min?: number;
   className?: string;
+  invalid?: boolean;
 }) {
   const [localValue, setLocalValue] = useState(String(value));
   const [focused, setFocused] = useState(false);
@@ -81,7 +84,7 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
         type="number"
         min={min}
         step={step}
-        className="w-24 h-7 text-right text-sm"
+        className={`w-24 h-7 text-right text-sm ${invalid ? "border-destructive text-destructive" : ""}`}
         value={displayValue}
         onFocus={() => {
           setFocused(true);
@@ -99,7 +102,9 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
   );
 }
 
-export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSelect, onEdit, onDuplicate, onDelete, onInlineUpdate }: ProcedureTableV2Props) {
+export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSelect, onEdit, onDuplicate, onDelete, onInlineUpdate, calcParts, taxRate = 0 }: ProcedureTableV2Props) {
+  const [invalidMarginId, setInvalidMarginId] = useState<string | null>(null);
+
   if (procedures.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-8">Nenhum procedimento cadastrado.</p>;
   }
@@ -111,6 +116,7 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           <TableHead>Procedimento</TableHead>
           <TableHead className="text-right">Qtd</TableHead>
           <TableHead className="text-right">Tempo (h)</TableHead>
+          <TableHead className="text-right">Lucr. %</TableHead>
           <TableHead className="text-right">Preço</TableHead>
           <TableHead className="text-right">Preço/un.</TableHead>
 
@@ -119,7 +125,6 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           <TableHead className="text-right">NF</TableHead>
           <TableHead className="text-right">Líquido</TableHead>
           <TableHead className="text-right">Lucr./h</TableHead>
-          <TableHead className="text-right">Lucr. %</TableHead>
           <TableHead className="w-[50px]" />
         </TableRow>
       </TableHeader>
@@ -128,6 +133,7 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           const calc = calcProcedure(proc);
           const isSelected = selectedId === proc.id;
           const isNegative = calc.lucro < 0;
+          const invalidMargin = invalidMarginId === proc.id;
 
           return (
             <TableRow
@@ -157,6 +163,27 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                 ) : <span>{proc.execution_time}h</span>}
               </TableCell>
               <TableCell className="text-right">
+                {onInlineUpdate && calcParts ? (
+                  <LiveNumberInput
+                    value={Number(calc.lucratividadePct.toFixed(1))}
+                    step={0.5}
+                    min={-1000}
+                    suffix="%"
+                    invalid={invalidMargin}
+                    onCommit={(pct) => {
+                      const divisor = 1 - pct / 100 - taxRate / 100;
+                      if (divisor <= 0) {
+                        setInvalidMarginId(proc.id);
+                        return;
+                      }
+                      setInvalidMarginId((cur) => (cur === proc.id ? null : cur));
+                      const parts = calcParts(proc);
+                      onInlineUpdate(proc.id, { desired_price: Math.round(((parts.cf + parts.cv) / divisor) * 100) / 100 });
+                    }}
+                  />
+                ) : <span className={isNegative ? "text-destructive" : ""}>{fmtPct(calc.lucratividadePct)}</span>}
+              </TableCell>
+              <TableCell className="text-right">
                 {onInlineUpdate ? (
                   <LiveNumberInput
                     value={proc.desired_price}
@@ -176,7 +203,6 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                 {fmt(calc.liquido)}
               </TableCell>
               <TableCell className={`text-right ${isNegative ? "text-destructive" : ""}`}>{fmt(calc.lucratividadeHora)}</TableCell>
-              <TableCell className={`text-right ${isNegative ? "text-destructive" : ""}`}>{fmtPct(calc.lucratividadePct)}</TableCell>
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
