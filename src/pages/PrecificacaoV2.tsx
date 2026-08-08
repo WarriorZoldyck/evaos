@@ -9,7 +9,6 @@ import { CostItemsTab } from "@/components/precificacao-v2/CostItemsTab";
 import { CostSummaryCards } from "@/components/precificacao-v2/CostSummaryCards";
 import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2";
 import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
-import { ProcedureBreakdownV2 } from "@/components/precificacao-v2/ProcedureBreakdownV2";
 import { ProcedureSimulator } from "@/components/precificacao-v2/ProcedureSimulator";
 
 
@@ -107,25 +106,18 @@ export default function PrecificacaoV2() {
         </CardContent>
       </Card>
 
-      {/* Breakdown + Simulador */}
+      {/* Simulador */}
       {selectedProcedure && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <ProcedureBreakdownV2
-            procedure={selectedProcedure}
-            custoHora={custoHoraPorSala}
-            taxRate={taxRate}
-            calcProcedure={calcProcedure}
-          />
-          <ProcedureSimulator
-            procedure={selectedProcedure}
-            taxRate={taxRate}
-            calcParts={calcParts}
-            calcFrom={calcFrom}
-            suggestPrice={suggestPrice}
-            onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
-          />
-        </div>
+        <ProcedureSimulator
+          procedure={selectedProcedure}
+          taxRate={taxRate}
+          calcParts={calcParts}
+          calcFrom={calcFrom}
+          suggestPrice={suggestPrice}
+          onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
+        />
       )}
+
 
 
       {/* Seção 4: Despesas em Tabs */}
