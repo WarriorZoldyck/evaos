@@ -137,6 +137,16 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
               <TableCell className="text-right">
                 {onInlineUpdate ? (
                   <LiveNumberInput
+                    value={proc.quantity ?? 1}
+                    step={1}
+                    min={1}
+                    onCommit={(v) => onInlineUpdate(proc.id, { quantity: Math.max(1, Math.round(v)) })}
+                  />
+                ) : <span>{proc.quantity ?? 1}</span>}
+              </TableCell>
+              <TableCell className="text-right">
+                {onInlineUpdate ? (
+                  <LiveNumberInput
                     value={proc.execution_time}
                     step={0.5}
                     suffix="h"
