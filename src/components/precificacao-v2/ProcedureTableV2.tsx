@@ -185,15 +185,14 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                         const divisor = 1 - pct / 100 - taxRate / 100;
                         if (divisor <= 0) {
                           const maxPct = Math.max(0, Math.round((100 - taxRate - 0.1) * 10) / 10);
-                          setInvalidMargin((cur) => {
-                            if (cur?.id === proc.id && cur.attempted === pct) return cur;
+                          if (!(rowInvalid && rowInvalid.attempted === pct)) {
                             toast.error("Lucratividade impossível", {
                               description: taxRate > 0
                                 ? `Com alíquota de ${fmtPct(taxRate)}, a lucratividade máxima é ${fmtPct(maxPct)}.`
                                 : `A lucratividade precisa ser menor que 100%.`,
                             });
-                            return { id: proc.id, attempted: pct, maxPct };
-                          });
+                          }
+                          setInvalidMargin({ id: proc.id, attempted: pct, maxPct });
                           return;
                         }
                         setInvalidMargin((cur) => (cur?.id === proc.id ? null : cur));
