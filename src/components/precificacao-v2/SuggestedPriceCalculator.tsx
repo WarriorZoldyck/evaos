@@ -26,9 +26,14 @@ export function SuggestedPriceCalculator({ custoHora, taxRate, procedures = [] }
   const marginNum = parseFloat(margin) || 0;
   const qtyNum = Math.max(1, Math.round(parseFloat(qty) || 1));
 
+  const baseProcedure = procedures.find((p) => p.id === baseId) ?? null;
+
   // Calculated defaults
   const defaultCf = custoHora * timeNum;
-  const defaultCv = 0;
+  const defaultCv = baseProcedure
+    ? baseProcedure.items.reduce((s, i) => s + (i.unit_type === "unitario" ? i.value * qtyNum : i.value), 0)
+    : 0;
+
 
   // Override states (null = use calculated)
   const [cfOverride, setCfOverride] = useState<string | null>(null);
