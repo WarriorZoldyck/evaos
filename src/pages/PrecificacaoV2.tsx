@@ -9,7 +9,6 @@ import { CostItemsTab } from "@/components/precificacao-v2/CostItemsTab";
 import { CostSummaryCards } from "@/components/precificacao-v2/CostSummaryCards";
 import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2";
 import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
-import { ProcedureBreakdownV2 } from "@/components/precificacao-v2/ProcedureBreakdownV2";
 import { ProcedureSimulator } from "@/components/precificacao-v2/ProcedureSimulator";
 
 
