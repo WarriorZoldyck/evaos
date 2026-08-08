@@ -3,7 +3,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Edit, Copy, Trash2, Eye } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MoreHorizontal, Edit, Copy, Trash2, Eye, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import type { ProcedureV2 } from "@/hooks/usePricingV2";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -103,7 +105,15 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
 }
 
 export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSelect, onEdit, onDuplicate, onDelete, onInlineUpdate, calcParts, taxRate = 0 }: ProcedureTableV2Props) {
-  const [invalidMarginId, setInvalidMarginId] = useState<string | null>(null);
+  const [invalidMargin, setInvalidMargin] = useState<{ id: string; attempted: number; maxPct: number } | null>(null);
+
+  const applyMargin = (proc: ProcedureV2, pct: number) => {
+    if (!onInlineUpdate || !calcParts) return;
+    const divisor = 1 - pct / 100 - taxRate / 100;
+    if (divisor <= 0) return;
+    const parts = calcParts(proc);
+    onInlineUpdate(proc.id, { desired_price: Math.round(((parts.cf + parts.cv) / divisor) * 100) / 100 });
+  };
 
   if (procedures.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-8">Nenhum procedimento cadastrado.</p>;
@@ -133,7 +143,7 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           const calc = calcProcedure(proc);
           const isSelected = selectedId === proc.id;
           const isNegative = calc.lucro < 0;
-          const invalidMargin = invalidMarginId === proc.id;
+          const rowInvalid = invalidMargin?.id === proc.id ? invalidMargin : null;
 
           return (
             <TableRow
@@ -164,23 +174,60 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
               </TableCell>
               <TableCell className="text-right">
                 {onInlineUpdate && calcParts ? (
-                  <LiveNumberInput
-                    value={Number(calc.lucratividadePct.toFixed(1))}
-                    step={0.5}
-                    min={-1000}
-                    suffix="%"
-                    invalid={invalidMargin}
-                    onCommit={(pct) => {
-                      const divisor = 1 - pct / 100 - taxRate / 100;
-                      if (divisor <= 0) {
-                        setInvalidMarginId(proc.id);
-                        return;
-                      }
-                      setInvalidMarginId((cur) => (cur === proc.id ? null : cur));
-                      const parts = calcParts(proc);
-                      onInlineUpdate(proc.id, { desired_price: Math.round(((parts.cf + parts.cv) / divisor) * 100) / 100 });
-                    }}
-                  />
+                  <div className="flex items-center justify-end gap-1">
+                    <LiveNumberInput
+                      value={Number(calc.lucratividadePct.toFixed(1))}
+                      step={0.5}
+                      min={-1000}
+                      suffix="%"
+                      invalid={!!rowInvalid}
+                      onCommit={(pct) => {
+                        const divisor = 1 - pct / 100 - taxRate / 100;
+                        if (divisor <= 0) {
+                          const maxPct = Math.max(0, Math.round((100 - taxRate - 0.1) * 10) / 10);
+                          if (!(rowInvalid && rowInvalid.attempted === pct)) {
+                            toast.error("Lucratividade impossível", {
+                              description: taxRate > 0
+                                ? `Com alíquota de ${fmtPct(taxRate)}, a lucratividade máxima é ${fmtPct(maxPct)}.`
+                                : `A lucratividade precisa ser menor que 100%.`,
+                            });
+                          }
+                          setInvalidMargin({ id: proc.id, attempted: pct, maxPct });
+                          return;
+                        }
+                        setInvalidMargin((cur) => (cur?.id === proc.id ? null : cur));
+                        applyMargin(proc, pct);
+                      }}
+                    />
+                    {rowInvalid && (
+                      <Popover>
+                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-72 bg-popover z-50 text-left" onClick={(e) => e.stopPropagation()}>
+                          <p className="text-sm font-medium text-destructive">Cenário impossível</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {taxRate > 0
+                              ? `Você pediu ${fmtPct(rowInvalid.attempted)} de lucratividade, mas com alíquota de ${fmtPct(taxRate)} a margem máxima possível é ${fmtPct(rowInvalid.maxPct)}. Acima disso o preço tenderia ao infinito.`
+                              : `Você pediu ${fmtPct(rowInvalid.attempted)} de lucratividade. A margem precisa ser menor que 100%, senão o preço tenderia ao infinito.`}
+                          </p>
+                          <Button
+                            size="sm"
+                            className="w-full mt-3"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              applyMargin(proc, rowInvalid.maxPct);
+                              setInvalidMargin(null);
+                            }}
+                          >
+                            Usar margem máxima ({fmtPct(rowInvalid.maxPct)})
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
                 ) : <span className={isNegative ? "text-destructive" : ""}>{fmtPct(calc.lucratividadePct)}</span>}
               </TableCell>
               <TableCell className="text-right">
