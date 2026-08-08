@@ -107,17 +107,6 @@ export default function PrecificacaoV2() {
         </CardContent>
       </Card>
 
-      {/* Simulador */}
-      {selectedProcedure && (
-        <ProcedureSimulator
-          procedure={selectedProcedure}
-          taxRate={taxRate}
-          calcParts={calcParts}
-          calcFrom={calcFrom}
-          suggestPrice={suggestPrice}
-          onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
-        />
-      )}
 
 
 
