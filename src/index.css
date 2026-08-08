@@ -550,7 +550,7 @@ input[type="number"]::-webkit-outer-spin-button {
   }
 }
 
-/* Metas module — palette scoped to /metas routes (Mercado Pago green) */
+/* Metas module — palette scoped to /metas routes (EVA cyan) */
 .metas-scope {
   --primary: 190 90% 42%;
   --primary-foreground: 0 0% 100%;
