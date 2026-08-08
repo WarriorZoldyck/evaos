@@ -23,41 +23,92 @@ Mobile/tablet: empilha na ordem visão geral → meta → chat → progresso →
 - `src/components/metas/MetasSidebar.tsx`: mantém os mesmos dados reais (`useMetasSidebarStats`), só ganha nova apresentação (cards glass, ícone, valor grande). A expansão por categorias e o `ActionPlanDialog` continuam funcionando.
 - Novos componentes em `src/components/metas/planejamento/`: `FinancialMetricCard`, `ActiveGoalCard`, `GoalScoreRing`, `GoalStatusBadge`, `CurrentGoalCard`, `GoalChat`, `ChatMessage`, `ChatInput`, `SuggestionChip`, `GoalProgressPanel`, `GoalChart`, `ActionPlan`, `ActionPlanItem`.
 
-## Fonte única de dados da meta
+## Camadas (sem lógica financeira em componente visual)
 
-Um hook `usePlanningGoal(goals, stats)` deriva de uma única estrutura:
-
-```ts
-{ id, title, type, targetAmount, currentAmount, deadline, monthlyContribution, score, status }
+```text
+UI (componentes burros)
+  ↓ estado + ações
+Goal Planning Logic (funções puras + hooks)
+  ↓ contexto estruturado
+AssistantService (interface)  →  LocalAssistantService (temporário)
 ```
 
-A meta ativa é a primeira meta real do usuário (contexto Pessoal/Empresa atual). Card lateral, card central, ring de score, barra de progresso e gráfico leem todos daqui — sem duplicação de estado, sem valores hardcoded.
+## Meta ativa (sem acoplamento à "primeira meta")
 
-## Atingibilidade e score
+Hook `useActiveGoal(goals)` expõe `{ activeGoalId, setActiveGoalId, activeGoal }`. A seleção é explícita (clique na lista de cofrinhos, e futuramente rota/persistência). Fallback nesta entrega: se `activeGoalId` for nulo, usa a primeira meta — apenas como valor inicial, nunca como regra embutida nos componentes.
 
-Camada pura em `src/lib/goalPlanning.ts` (com testes):
-- meses restantes até o prazo, aporte necessário = (alvo − guardado) / meses;
-- compara com a sobra mensal estimada (`stats.leftover` / meses restantes);
-- retorna `ATINGIVEL | ATINGIVEL_COM_AJUSTES | EM_RISCO | NAO_ATINGIVEL` + score 0–100.
-- sem prazo ou sem dados suficientes: "Precisamos de mais informações para avaliar sua meta." Nada de números inventados.
+`usePlanningGoal(activeGoal, stats)` deriva o modelo de apresentação:
 
-## Chat
+```ts
+{ id, title, targetAmount, currentAmount, deadline,
+  monthlyCapacity, requiredContribution, monthsRemaining,
+  score, status, explanation }
+```
 
-`GoalChat` é puramente visual/estado; recebe um `sendMessage(history) => Promise<AssistantReply>` por prop. Nesta entrega a implementação é um resolvedor local (`localGoalPlanner`) que interpreta respostas de prazo e de aporte mensal ("consigo guardar R$ 800") e devolve texto + um patch opcional da meta (aporte, prazo, status, score, plano). Trocar por chamada ao agente real depois é substituir só essa função.
+## Goal Score determinístico e explicável
 
-Inclui: mensagens usuário/EVA, timestamps, scroll interno, estado "EVA está pensando…", chips de resposta rápida (Até 6 meses / 1 ano / 2 anos / 3 anos ou mais), input com envio por Enter e animação suave de entrada.
+`src/lib/goalPlanning.ts` (funções puras + testes). Nenhum score vem da IA.
 
-Quando o chat devolve um patch, progresso, score e plano de ação atualizam na hora (estado local da sessão — nada é gravado no banco sem ação explícita do usuário).
+```ts
+type GoalScoreBreakdown = {
+  monthsRemaining: number | null;
+  accumulated: number;
+  remainingAmount: number;
+  requiredContribution: number | null;  // remaining / monthsRemaining
+  monthlyCapacity: number;              // sobra mensal estimada
+  capacityGap: number;                  // capacity - required
+  coverageRatio: number | null;         // capacity / required
+};
+type GoalStatus = "ATINGIVEL" | "ATINGIVEL_COM_AJUSTES" | "EM_RISCO" | "NAO_ATINGIVEL" | "DADOS_INSUFICIENTES";
+computeGoalScore(input): { score: number; status: GoalStatus; breakdown: GoalScoreBreakdown }
+```
 
-## Plano de ação
+Score 0–100 derivado de `coverageRatio` e do progresso acumulado, com faixas fixas para o status. Sem prazo ou sem dados suficientes → `DADOS_INSUFICIENTES` e mensagem "Precisamos de mais informações para avaliar sua meta". O breakdown é exibível item a item na UI (aporte necessário, capacidade mensal, meses restantes, acumulado, distância).
 
-Itens derivados das maiores categorias de gasto (`stats.topCategories`) + aporte mensal necessário, com estados Concluído / Em andamento / Pendente. "Ver plano completo" abre o `ActionPlanDialog` existente (IA já integrada).
+## AssistantService
+
+```ts
+interface GoalPlanningContext {
+  goal: PlanningGoal | null;
+  financialStats: MetasSidebarStats;
+  topCategories: CategoryBreakdown[];
+  conversationHistory: ChatMessage[];
+}
+interface AssistantReply { text: string; goalPatch?: Partial<PlanningGoal>; actions?: ActionPlanItem[]; }
+interface AssistantService { sendMessage(ctx: GoalPlanningContext): Promise<AssistantReply>; }
+```
+
+`LocalAssistantService` é a implementação temporária: interpreta prazo e aporte informados pelo usuário e responde **sempre** a partir do contexto financeiro real (capacidade, categorias, breakdown). Nunca calcula score — delega a `computeGoalScore`. `GoalChat` recebe o service por prop/injeção e não conhece o mock; trocar pelo agente EVA real é registrar outra implementação.
+
+## Plano de ação estruturado
+
+```ts
+type ActionPlanKind = "REDUCE_EXPENSE" | "INCREASE_INCOME" | "INCREASE_CONTRIBUTION"
+  | "EXTEND_DEADLINE" | "REDUCE_TARGET" | "INVESTMENT";
+type ActionPlanItem = {
+  id: string; kind: ActionPlanKind; title: string; description: string;
+  status: "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDO";
+  estimatedMonthlyImpact: number | null; category?: string; amount?: number;
+  source: "SISTEMA" | "IA";
+};
+```
+
+Gerador puro `buildActionPlan(breakdown, topCategories)` produz itens do sistema; itens vindos do assistente entram com `source: "IA"`. "Ver plano completo" abre o `ActionPlanDialog` existente.
+
+## Meta não atingível → área de resolução
+
+Em vez de só um status negativo, o painel mostra o bloco "Como podemos tornar essa meta possível?" com opções acionáveis (Aumentar prazo, Reduzir gastos, Aumentar renda, Aumentar aporte, Combinar estratégias). Cada opção despacha uma ação tipada que recalcula o cenário localmente (`applyResolution(goal, action)` puro) e atualiza score, progresso e plano na hora — sem gravar no banco sem confirmação explícita.
+
+## Componentes (pequenos, apenas apresentação)
+
+`src/components/metas/planejamento/`: `FinancialMetricCard`, `ActiveGoalCard`, `GoalScoreRing`, `GoalScoreBreakdownList`, `GoalStatusBadge`, `GoalChat`, `ChatMessage`, `ChatInput`, `SuggestionChip`, `GoalProgressPanel`, `GoalChart`, `ActionPlanList`, `ActionPlanItemRow`, `GoalResolutionPanel`.
 
 ## Estilo
 
-- Novos utilitários em `src/index.css` no escopo `.metas-scope`: `.glass-card` (branco translúcido + backdrop-blur + borda sutil), variação neumórfica suave reaproveitando `.neu-card`, e ajuste do `--primary` do escopo para o ciano EVA em vez do verde atual.
-- Somente tokens semânticos nos componentes; sem cores hardcoded.
+- Novos utilitários em `src/index.css` no escopo `.metas-scope`: `.glass-card` (translúcido + backdrop-blur + borda sutil), variação neumórfica suave reaproveitando `.neu-card`, e ajuste do `--primary` do escopo para o ciano EVA em vez do verde atual.
+- Somente tokens semânticos; sem cores hardcoded e sem valores financeiros hardcoded.
 - Microinterações curtas (hover de card, entrada de mensagem, animação do ring).
+
 
 ## Não muda
 
