@@ -320,9 +320,14 @@ export function usePricingV2() {
         ...p,
         execution_time: Number(p.execution_time) || 1,
         desired_price: Number(p.desired_price) || 0,
+        quantity: Number((p as { quantity?: number }).quantity) || 1,
         items: (items || [])
           .filter((i) => i.procedure_id === p.id)
-          .map((i) => ({ ...i, value: Number(i.value) || 0 })),
+          .map((i) => ({
+            ...i,
+            value: Number(i.value) || 0,
+            unit_type: ((i as { unit_type?: string }).unit_type === "unitario" ? "unitario" : "sessao") as ItemUnitType,
+          })),
       }))
     );
   }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
