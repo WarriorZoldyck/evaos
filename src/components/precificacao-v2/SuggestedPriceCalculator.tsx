@@ -82,10 +82,42 @@ export function SuggestedPriceCalculator({ custoHora, taxRate, procedures = [] }
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Informe o tempo e a margem desejada. Clique nos valores abaixo para simular cenários diferentes.
+          Escolha um procedimento como base (opcional), informe quantidade, tempo e a margem desejada.
         </p>
 
-        <div className="grid grid-cols-2 gap-4">
+        {procedures.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Procedimento base</Label>
+            <Select
+              value={baseId || "none"}
+              onValueChange={(v) => {
+                if (v === "none") { setBaseId(""); return; }
+                setBaseId(v);
+                const p = procedures.find((x) => x.id === v);
+                if (p) {
+                  setTime(String(p.execution_time));
+                  setQty(String(Math.max(1, p.quantity ?? 1)));
+                  setCvOverride(null);
+                  setCfOverride(null);
+                }
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Nenhum (manual)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum (manual)</SelectItem>
+                {procedures.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Quantidade</Label>
+            <Input type="number" min={1} step={1} value={qty} onChange={(e) => setQty(e.target.value)} />
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tempo (horas)</Label>
             <Input type="number" min={0.25} step={0.25} value={time} onChange={(e) => setTime(e.target.value)} />
@@ -95,6 +127,7 @@ export function SuggestedPriceCalculator({ custoHora, taxRate, procedures = [] }
             <Input type="number" min={0} max={99} step={0.5} value={margin} onChange={(e) => setMargin(e.target.value)} />
           </div>
         </div>
+
 
         <Separator />
 
