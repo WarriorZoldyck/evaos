@@ -552,21 +552,69 @@ input[type="number"]::-webkit-outer-spin-button {
 
 /* Metas module — palette scoped to /metas routes (Mercado Pago green) */
 .metas-scope {
-  --primary: 152 60% 42%;
+  --primary: 190 90% 42%;
   --primary-foreground: 0 0% 100%;
-  --primary-glow: 152 70% 55%;
-  --ring: 152 60% 42%;
-  --accent: 152 50% 94%;
-  --accent-foreground: 152 60% 20%;
+  --primary-glow: 190 85% 60%;
+  --ring: 190 90% 42%;
+  --accent: 190 60% 94%;
+  --accent-foreground: 190 70% 20%;
 }
 .dark .metas-scope {
-  --primary: 152 55% 48%;
-  --primary-foreground: 152 40% 8%;
-  --primary-glow: 152 65% 60%;
-  --ring: 152 55% 48%;
-  --accent: 152 30% 16%;
-  --accent-foreground: 152 40% 88%;
+  --primary: 190 80% 58%;
+  --primary-foreground: 200 60% 8%;
+  --primary-glow: 190 85% 68%;
+  --ring: 190 80% 58%;
+  --accent: 190 40% 16%;
+  --accent-foreground: 190 60% 88%;
 }
+
+/* Glass + soft neumorphism — escopo do Planejamento Inteligente */
+@layer components {
+  .glass-card {
+    background: hsl(var(--background) / 0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-radius: 1.5rem;
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow:
+      8px 8px 20px hsl(215 30% 60% / 0.14),
+      -8px -8px 20px hsl(0 0% 100% / 0.75);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+  }
+  .glass-card-interactive {
+    cursor: pointer;
+  }
+  .glass-card-interactive:hover {
+    box-shadow:
+      10px 10px 24px hsl(215 30% 60% / 0.2),
+      -10px -10px 24px hsl(0 0% 100% / 0.9);
+  }
+  .glass-card-active,
+  .glass-card-interactive:active {
+    box-shadow:
+      inset 5px 5px 12px hsl(215 30% 60% / 0.18),
+      inset -5px -5px 12px hsl(0 0% 100% / 0.8);
+  }
+  .dark .glass-card {
+    background: hsl(var(--card) / 0.6);
+    border-color: hsl(var(--border) / 0.6);
+    box-shadow:
+      8px 8px 22px hsl(0 0% 0% / 0.5),
+      -8px -8px 22px hsl(210 20% 22% / 0.3);
+  }
+  .dark .glass-card-interactive:hover {
+    box-shadow:
+      10px 10px 26px hsl(0 0% 0% / 0.58),
+      -10px -10px 26px hsl(210 20% 24% / 0.4);
+  }
+  .dark .glass-card-active,
+  .dark .glass-card-interactive:active {
+    box-shadow:
+      inset 5px 5px 12px hsl(0 0% 0% / 0.5),
+      inset -5px -5px 12px hsl(210 20% 22% / 0.3);
+  }
+}
+
 
 /* Neumorphism card — global base style for surface cards (light + dark) */
 @layer components {
