@@ -33,50 +33,68 @@ Goal Planning Logic (funções puras + hooks)
 AssistantService (interface)  →  LocalAssistantService (temporário)
 ```
 
-## Meta ativa (sem acoplamento à "primeira meta")
+## Meta ativa (seleção de interface)
 
-Hook `useActiveGoal(goals)` expõe `{ activeGoalId, setActiveGoalId, activeGoal }`. A seleção é explícita (clique na lista de cofrinhos, e futuramente rota/persistência). Fallback nesta entrega: se `activeGoalId` for nulo, usa a primeira meta — apenas como valor inicial, nunca como regra embutida nos componentes.
+Hook `useActiveGoal(goals)` expõe `{ activeGoalId, setActiveGoalId, activeGoal }`. `activeGoalId` é estado de UI nesta versão — nada é persistido no banco. Fallback: quando nulo, usa a primeira meta apenas como valor inicial, nunca como regra embutida nos componentes.
 
-`usePlanningGoal(activeGoal, stats)` deriva o modelo de apresentação:
+## Capacidade vs aporte (conceitos distintos)
 
-```ts
-{ id, title, targetAmount, currentAmount, deadline,
-  monthlyCapacity, requiredContribution, monthsRemaining,
-  score, status, explanation }
-```
+- `monthlyCapacity`: capacidade financeira mensal estimada do usuário (derivada de `useMetasSidebarStats`).
+- `monthlyContribution`: aporte mensal planejado **para aquela meta**.
+
+Nunca se assume que toda a sobra vai para a meta. Quando não há aporte planejado, a avaliação usa a capacidade como base e o breakdown marca `contributionSource: "PLANEJADO" | "CAPACIDADE"`, deixando isso explícito na UI.
 
 ## Goal Score determinístico e explicável
 
-`src/lib/goalPlanning.ts` (funções puras + testes). Nenhum score vem da IA.
+`src/lib/goalPlanning.ts` — funções puras, constantes nomeadas, nenhum score vindo da IA.
 
 ```ts
+const SCORE_WEIGHT_COVERAGE = 0.7;
+const SCORE_WEIGHT_PROGRESS = 0.3;
+const COVERAGE_ATINGIVEL = 1;
+const COVERAGE_COM_AJUSTES = 0.75;
+const COVERAGE_EM_RISCO = 0.4;
+
+type GoalStatus = "CONCLUIDA" | "ATINGIVEL" | "ATINGIVEL_COM_AJUSTES"
+  | "EM_RISCO" | "NAO_ATINGIVEL" | "DADOS_INSUFICIENTES";
+
 type GoalScoreBreakdown = {
-  monthsRemaining: number | null;
-  accumulated: number;
-  remainingAmount: number;
-  requiredContribution: number | null;  // remaining / monthsRemaining
-  monthlyCapacity: number;              // sobra mensal estimada
-  capacityGap: number;                  // capacity - required
-  coverageRatio: number | null;         // capacity / required
+  monthsRemaining: number | null; accumulated: number; remainingAmount: number;
+  requiredContribution: number | null;   // faltante / meses restantes
+  monthlyCapacity: number; monthlyContribution: number;
+  effectiveContribution: number; contributionSource: "PLANEJADO" | "CAPACIDADE";
+  capacityGap: number | null;            // efetivo - necessário
+  coverageRatio: number | null;          // efetivo / necessário
 };
-type GoalStatus = "ATINGIVEL" | "ATINGIVEL_COM_AJUSTES" | "EM_RISCO" | "NAO_ATINGIVEL" | "DADOS_INSUFICIENTES";
-computeGoalScore(input): { score: number; status: GoalStatus; breakdown: GoalScoreBreakdown }
+computeGoalScore({ goal, monthlyCapacity, now }): { score, status, breakdown }
 ```
 
-Score 0–100 derivado de `coverageRatio` e do progresso acumulado, com faixas fixas para o status. Sem prazo ou sem dados suficientes → `DADOS_INSUFICIENTES` e mensagem "Precisamos de mais informações para avaliar sua meta". O breakdown é exibível item a item na UI (aporte necessário, capacidade mensal, meses restantes, acumulado, distância).
+Fórmula: `score = round((0.7 * clamp(coverageRatio,0,1) + 0.3 * progresso) * 100)`; status por faixas fixas de `coverageRatio`. `now` é injetável para determinismo.
+
+Testes em `src/lib/goalPlanning.test.ts` cobrindo: meta concluída, prazo ausente, prazo vencido, capacidade zero, aporte necessário zero, aporte planejado presente vs ausente, cobertura em cada faixa de status, e cada ação de resolução (`applyResolution`).
 
 ## AssistantService
 
 ```ts
 interface GoalPlanningContext {
   goal: PlanningGoal | null;
+  scoreResult: GoalScoreResult;
   financialStats: MetasSidebarStats;
   topCategories: CategoryBreakdown[];
   conversationHistory: ChatMessage[];
 }
-interface AssistantReply { text: string; goalPatch?: Partial<PlanningGoal>; actions?: ActionPlanItem[]; }
+interface AssistantReply {
+  text: string;
+  goalPatch?: Partial<PlanningGoal>;
+  resolutionActions?: GoalResolutionAction[];  // EXTEND_DEADLINE | REDUCE_TARGET | INCREASE_CONTRIBUTION | REDUCE_EXPENSE | INCREASE_INCOME
+  actions?: ActionPlanItem[];
+}
 interface AssistantService { sendMessage(ctx: GoalPlanningContext): Promise<AssistantReply>; }
 ```
+
+As `resolutionActions` retornadas são aplicadas pelo app via `applyResolution` (pura), recalculando score/plano localmente. `GoalChat` depende **somente** da interface `AssistantService`, recebida por prop; não importa `LocalAssistantService` nem conhece o mock.
+
+
 
 `LocalAssistantService` é a implementação temporária: interpreta prazo e aporte informados pelo usuário e responde **sempre** a partir do contexto financeiro real (capacidade, categorias, breakdown). Nunca calcula score — delega a `computeGoalScore`. `GoalChat` recebe o service por prop/injeção e não conhece o mock; trocar pelo agente EVA real é registrar outra implementação.
 
