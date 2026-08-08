@@ -65,17 +65,7 @@ export default function Precificacao() {
             FHC completo com custo de vida pessoal integrado — cadastre todos os custos e calcule lucratividade por procedimento
           </p>
         </div>
-        <ExportPricingButton
-          procedures={procedures}
-          costItems={costItems}
-          groupTotals={groupTotals}
-          custoHora={custoHora}
-          fmm={fmm}
-          taxRate={taxRate}
-          hoursPerMonth={hoursPerMonth}
-          numRooms={numRooms}
-          calcProcedure={calcProcedure}
-        />
+        <ExportPricingButton procedures={procedures} calcProcedure={calcProcedure} />
       </div>
 
       {/* Seção 1: Config */}
