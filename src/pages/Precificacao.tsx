@@ -10,6 +10,8 @@ import { CostSummaryCards } from "@/components/precificacao-v2/CostSummaryCards"
 import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2";
 import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
 import { ProcedureBreakdownV2 } from "@/components/precificacao-v2/ProcedureBreakdownV2";
+import { ProcedureSimulator } from "@/components/precificacao-v2/ProcedureSimulator";
+
 import { SuggestedPriceCalculator } from "@/components/precificacao-v2/SuggestedPriceCalculator";
 import { ProcedureComparisonChart } from "@/components/precificacao-v2/ProcedureComparisonChart";
 
