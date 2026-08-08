@@ -80,11 +80,12 @@ export function ExportPricingButton({
 
       // Procedures
       addLine("PROCEDIMENTOS");
-      addLine("Nome", "Tempo (h)", "Preço", "CF", "CV", "NF", "Lucro", "Lucro/h", "Lucro %");
+      addLine("Nome", "Qtd", "Tempo (h)", "Preço", "CF", "CV", "NF", "Lucro", "Lucro/h", "Lucro %");
       for (const proc of procedures) {
         const calc = calcProcedure(proc);
         addLine(
           proc.name,
+          proc.quantity ?? 1,
           proc.execution_time,
           proc.desired_price.toFixed(2),
           calc.cf.toFixed(2),
