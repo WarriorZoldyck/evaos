@@ -30,10 +30,18 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
           <span className="font-bold">{fmt(procedure.desired_price)}</span>
         </div>
 
+        {qty > 1 && (
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground">Preço por unidade</span>
+            <span className="font-medium">{fmt(procedure.desired_price / qty)}</span>
+          </div>
+        )}
+
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Quantidade</span>
           <span className="font-medium">{qty}</span>
         </div>
+
 
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Tempo de Execução</span>
