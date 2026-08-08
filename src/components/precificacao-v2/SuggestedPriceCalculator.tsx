@@ -181,6 +181,11 @@ export function SuggestedPriceCalculator({ custoHora, taxRate, procedures = [] }
                 <span>Preço Sugerido</span>
                 <span>{fmt(suggestedPrice)}</span>
               </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Preço por unidade ({qtyNum}×)</span>
+                <span>{fmt(suggestedPrice / qtyNum)}</span>
+              </div>
+
               <div className="flex justify-between text-emerald-600 font-medium">
                 <span>Lucro ({marginNum.toFixed(1)}%)</span>
                 <span>{fmt(profit)}</span>
