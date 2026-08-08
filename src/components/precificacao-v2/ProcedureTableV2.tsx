@@ -165,6 +165,10 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                   />
                 ) : <span>{fmt(proc.desired_price)}</span>}
               </TableCell>
+              <TableCell className="text-right text-muted-foreground">
+                {fmt(proc.desired_price / Math.max(1, proc.quantity ?? 1))}
+              </TableCell>
+
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cf)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cv)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.nf)}</TableCell>
