@@ -23,10 +23,10 @@ export default function PrecificacaoV2() {
     config, costItems, procedures, loading,
     groupTotals, custoHora, fmm, fmmPorSala, custoHoraPorSala,
     hoursPerMonth, numRooms, taxRate,
-    selectedProcedure, selectedProcedureId, setSelectedProcedureId,
+    selectedProcedureId, setSelectedProcedureId,
     saveConfig, addCostItem, updateCostItem, deleteCostItem,
     createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
-    calcParts, calcFrom, suggestPrice,
+    calcParts,
 
     inlineUpdateProcedure,
   } = usePricingV2();
