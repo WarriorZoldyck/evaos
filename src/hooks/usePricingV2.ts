@@ -29,11 +29,14 @@ export interface CostItem {
   sort_order: number;
 }
 
+export type ItemUnitType = "sessao" | "unitario";
+
 export interface ProcedureV2Item {
   id: string;
   procedure_id: string;
   description: string;
   value: number;
+  unit_type: ItemUnitType;
 }
 
 export interface ProcedureV2 {
@@ -42,6 +45,7 @@ export interface ProcedureV2 {
   name: string;
   execution_time: number;
   desired_price: number;
+  quantity: number;
   created_at: string | null;
   items: ProcedureV2Item[];
 }
