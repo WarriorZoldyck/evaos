@@ -72,6 +72,20 @@ describe("CategoryCascadeSelect", () => {
     optionNames = screen.getAllByRole("option").map((o) => o.textContent);
     expect(optionNames.some((n) => n?.includes("Mercado"))).toBe(true);
   });
+
+  it("keeps a legacy orphan visible in the Sem grupo section", () => {
+    render(
+      <CategoryCascadeSelect
+        categories={[...cats, { id: "orphan", name: "Legada", parent_id: "missing", type: "despesa" }]}
+        value={undefined}
+        type="despesa"
+        onChange={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getAllByRole("combobox")[0]);
+    expect(screen.getByText("Sem grupo")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Legada/ })).toBeInTheDocument();
+  });
 });
 
 describe("CategoryCascadeSelect virtualization", () => {

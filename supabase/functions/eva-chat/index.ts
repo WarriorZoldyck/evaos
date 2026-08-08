@@ -1032,14 +1032,21 @@ ${historicalPatternsBlock}`;
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        const existing = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase() && c.parent_id === (parentId || null) && (companyId ? c.company_id === companyId : !c.company_id));
+        const parent = parentId ? categories.find((c: any) => c.id === parentId) : null;
+        if (parentId && !parent) {
+          return new Response(JSON.stringify({ reply: "Categoria pai não encontrada neste contexto.", action: null }), {
+            status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const targetCompanyId = parent ? parent.company_id : companyId;
+        const existing = categories.find((c: any) => c.name.toLowerCase() === categoryName.toLowerCase() && c.parent_id === (parentId || null) && (targetCompanyId ? c.company_id === targetCompanyId : !c.company_id));
         if (existing) {
           return new Response(JSON.stringify({ reply: `A categoria "${categoryName}" já existe!`, action: null }), {
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
         const { data: newCat, error: catErr } = await supabase.from("categories").insert({
-          user_id: userId, name: categoryName, type: parentId ? null : categoryType, parent_id: parentId, company_id: companyId,
+          user_id: userId, name: categoryName, type: parentId ? null : categoryType, parent_id: parentId, company_id: targetCompanyId,
         }).select("id, name").single();
         if (catErr) {
           return new Response(JSON.stringify({ reply: `Erro ao criar "${categoryName}".`, action: null }), {

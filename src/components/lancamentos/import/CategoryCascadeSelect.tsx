@@ -101,6 +101,16 @@ export function CategoryCascadeSelect({
     [index, strictType, type],
   );
 
+  const orphans = useMemo(() => {
+    const loadedIds = new Set(categories.map((c) => c.id));
+    return categories.filter(
+      (c) =>
+        c.parent_id !== null &&
+        !loadedIds.has(c.parent_id) &&
+        (!strictType || typeAllows(c.type, type)),
+    );
+  }, [categories, strictType, type]);
+
   const subs = useMemo(
     () =>
       chainIds.rootId
@@ -136,6 +146,10 @@ export function CategoryCascadeSelect({
   const filteredRoots = useMemo(
     () => roots.filter((c) => matches(c.name, catSearch)),
     [roots, catSearch],
+  );
+  const filteredOrphans = useMemo(
+    () => orphans.filter((c) => matches(c.name, catSearch)),
+    [orphans, catSearch],
   );
   const filteredSubs = useMemo(
     () => subs.filter((c) => matches(c.name, subSearch)),
@@ -285,7 +299,7 @@ export function CategoryCascadeSelect({
                 onValueChange={setCatSearch}
               />
               <CommandList className="max-h-[280px]">
-                {filteredRoots.length === 0 && (
+                {filteredRoots.length === 0 && filteredOrphans.length === 0 && (
                   <CommandEmpty className="py-4 text-xs">Nenhuma categoria</CommandEmpty>
                 )}
                 {cat && (
@@ -308,6 +322,18 @@ export function CategoryCascadeSelect({
                   selectedName={cat}
                   onPick={pickCat}
                 />
+                {filteredOrphans.length > 0 && (
+                  <>
+                    <CommandSeparator />
+                    <p className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Sem grupo</p>
+                    <VirtualCommandList
+                      items={filteredOrphans}
+                      search=""
+                      selectedName={cat}
+                      onPick={pickCat}
+                    />
+                  </>
+                )}
                 {onCreateCategory && (
                   <>
                     <CommandSeparator />

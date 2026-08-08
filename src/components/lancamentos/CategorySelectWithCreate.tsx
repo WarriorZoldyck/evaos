@@ -79,17 +79,6 @@ export function CategorySelectWithCreate({
 
     const type = parentId ? undefined : activeTab;
 
-    // Subcategories inherit the parent's context (Pessoal/Empresa)
-    let companyId: string | null = formCompanyId || null;
-    if (parentId) {
-      const { data: parent } = await supabase
-        .from("categories")
-        .select("company_id")
-        .eq("id", parentId)
-        .maybeSingle();
-      if (parent) companyId = parent.company_id ?? null;
-    }
-
     const { data, error } = await supabase
       .from("categories")
       .insert({
@@ -97,7 +86,8 @@ export function CategorySelectWithCreate({
         parent_id: parentId || null,
         type: type || "ambos",
         user_id: effectiveUserId,
-        company_id: companyId,
+        // The database validates the parent and derives its context atomically.
+        company_id: parentId ? null : (formCompanyId || null),
       })
 
       .select("id")

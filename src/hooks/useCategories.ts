@@ -59,9 +59,8 @@ export function useCategories() {
     const siblings = categories.filter(c => c.parent_id === (data.parent_id || null));
     const maxSort = siblings.length > 0 ? Math.max(...siblings.map(s => s.sort_order)) + 1 : 0;
 
-    // Subcategories always inherit the parent's context (Pessoal/Empresa)
-    const parent = data.parent_id ? categories.find(c => c.id === data.parent_id) : null;
-    const companyId = parent ? parent.company_id : (selectedCompanyId || null);
+    // The database resolves and validates a child's context atomically from parent_id.
+    const companyId = data.parent_id ? null : (selectedCompanyId || null);
 
     const { error } = await supabase.from("categories").insert({
       name: data.name,
@@ -165,11 +164,8 @@ export function useCategories() {
       newSortOrder = siblings.length > 0 ? Math.max(...siblings.map(s => s.sort_order)) + 1 : 0;
     }
 
-    // Keep the whole subtree in the parent's context (Pessoal/Empresa)
-    const parent = newParentId ? categories.find(c => c.id === newParentId) : null;
-    const targetCompanyId = parent ? parent.company_id : (selectedCompanyId || null);
-    const moved = categories.find(c => c.id === id);
-    const needsContextFix = (moved?.company_id ?? null) !== (targetCompanyId ?? null);
+    // The database validates the parent and derives company_id atomically.
+    const targetCompanyId = newParentId ? null : (selectedCompanyId || null);
 
     const { error } = await supabase
       .from("categories")
@@ -180,17 +176,6 @@ export function useCategories() {
       toast({ title: "Erro ao mover categoria", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
-
-    if (needsContextFix) {
-      const descendants = getDescendantIds(id);
-      if (descendants.length > 0) {
-        await supabase
-          .from("categories")
-          .update({ company_id: targetCompanyId })
-          .in("id", descendants);
-      }
-    }
-
 
     // Reindex siblings for clean ordering
     const updatedSiblings = [
