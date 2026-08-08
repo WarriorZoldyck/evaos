@@ -155,7 +155,7 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
               <span>{fmt(cf)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">CV (materiais)</span>
+              <span className="text-muted-foreground">CV (materiais, qtd {qtyNum})</span>
               <span>{fmt(cv)}</span>
             </div>
             <div className="flex justify-between">
