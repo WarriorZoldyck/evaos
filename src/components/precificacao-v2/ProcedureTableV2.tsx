@@ -109,6 +109,7 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
       <TableHeader>
         <TableRow>
           <TableHead>Procedimento</TableHead>
+          <TableHead className="text-right">Qtd</TableHead>
           <TableHead className="text-right">Tempo (h)</TableHead>
           <TableHead className="text-right">Preço</TableHead>
           <TableHead className="text-right">CF</TableHead>
