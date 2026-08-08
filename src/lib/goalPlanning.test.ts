@@ -107,7 +107,8 @@ describe("computeGoalScore", () => {
     expect(r.breakdown.contributionSource).toBe("PLANEJADO");
     expect(r.breakdown.effectiveContribution).toBe(300);
     expect(r.breakdown.monthlyCapacity).toBe(5000);
-    expect(r.status).toBe("EM_RISCO");
+    // 300 cobre apenas ~27% do aporte necessário (~1.090,91/mês)
+    expect(r.status).toBe("NAO_ATINGIVEL");
   });
 
   it("faixas de status por cobertura", () => {
