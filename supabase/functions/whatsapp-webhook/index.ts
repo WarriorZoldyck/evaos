@@ -4787,8 +4787,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }
 
         // Validate parent exists if subcategory
+        let parentCat: any = null;
         if (parentId) {
-          const parentCat = categories.find((c) => c.id === parentId);
+          parentCat = categories.find((c) => c.id === parentId);
           if (!parentCat) {
             return respond({
               success: false, intent: "gerenciar_categoria",
@@ -4820,7 +4821,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             name: categoryName,
             type: parentId ? null : categoryType,
             parent_id: parentId || null,
-            company_id: companyId,
+            company_id: parentCat ? parentCat.company_id : companyId,
           })
           .select("id, name")
           .single();

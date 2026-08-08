@@ -361,6 +361,45 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_categories_integrity_20260808: {
+        Row: {
+          backed_up_at: string
+          company_id: string | null
+          created_at: string | null
+          dre_section: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          sort_order: number
+          type: string | null
+          user_id: string
+        }
+        Insert: {
+          backed_up_at?: string
+          company_id?: string | null
+          created_at?: string | null
+          dre_section?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          sort_order?: number
+          type?: string | null
+          user_id: string
+        }
+        Update: {
+          backed_up_at?: string
+          company_id?: string | null
+          created_at?: string | null
+          dre_section?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          sort_order?: number
+          type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       backup_simoespaula_categorias_20260801: {
         Row: {
           backed_up_at: string

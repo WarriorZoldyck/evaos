@@ -34,6 +34,7 @@ export default function Configuracoes() {
   const [companyCnpj, setCompanyCnpj] = useState("");
   const [savingCompany, setSavingCompany] = useState(false);
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
+  const [companyDeleteTarget, setCompanyDeleteTarget] = useState<{ id: string; name: string; links: number } | null>(null);
 
   // Profile state
   const [fullName, setFullName] = useState("");
@@ -164,6 +165,17 @@ export default function Configuracoes() {
     } catch (err: any) {
       toast.error(err.message || "Erro ao remover empresa");
     }
+  };
+
+  const prepareCompanyDelete = async (id: string, name: string) => {
+    const tables = ["categories", "transactions", "recurring_transactions", "bank_accounts", "credit_cards", "wallets", "card_terminals"] as const;
+    const results = await Promise.all(
+      tables.map((table) =>
+        supabase.from(table).select("id", { count: "exact", head: true }).eq("company_id", id),
+      ),
+    );
+    const links = results.reduce((total, result) => total + (result.count ?? 0), 0);
+    setCompanyDeleteTarget({ id, name, links });
   };
 
   const handleDeleteAccount = async () => {
@@ -345,7 +357,7 @@ export default function Configuracoes() {
                 <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEditCompany(c)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteCompany(c.id)}>
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => prepareCompanyDelete(c.id, c.name)} title="Excluir empresa">
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -353,6 +365,33 @@ export default function Configuracoes() {
           ))}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!companyDeleteTarget} onOpenChange={(open) => !open && setCompanyDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {companyDeleteTarget?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {companyDeleteTarget?.links
+                ? `Esta empresa possui ${companyDeleteTarget.links} registro(s) vinculado(s). Transfira ou remova esses dados antes de excluir a empresa.`
+                : "A empresa não possui registros financeiros vinculados. Esta ação não pode ser desfeita."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={(companyDeleteTarget?.links ?? 0) > 0}
+              onClick={() => {
+                if (!companyDeleteTarget) return;
+                handleDeleteCompany(companyDeleteTarget.id);
+                setCompanyDeleteTarget(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir empresa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Assinatura */}
       <Card>
