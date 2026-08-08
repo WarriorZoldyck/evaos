@@ -130,8 +130,9 @@ Em vez de só um status negativo, o painel mostra o bloco "Como podemos tornar e
 
 ## Não muda
 
-Rotas, providers, auth, hooks de dados, Supabase, cálculos financeiros, sidebar, header, outras páginas. Nenhuma dependência nova (ring em SVG, gráfico com o Recharts já presente).
+Nada fora de `/metas`: rotas, providers, auth, hooks de dados de outras telas, Supabase, sidebar, header e demais páginas permanecem intactos. Nenhuma dependência nova (ring em SVG, gráfico com o Recharts já presente).
 
 ## Verificação final
 
-Typecheck + lint, checagem visual em 1440/1280/tablet/mobile via preview, sem overflow horizontal e sem erros no console.
+Typecheck, lint, testes (`goalPlanning.test.ts` + suíte existente) e conferência visual em 1440px, 1280px, tablet e mobile — corrigindo erros de console, TypeScript, overflow e responsividade antes de finalizar.
+
