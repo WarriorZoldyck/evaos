@@ -103,15 +103,26 @@ export default function PrecificacaoV2() {
         </CardContent>
       </Card>
 
-      {/* Breakdown */}
+      {/* Breakdown + Simulador */}
       {selectedProcedure && (
-        <ProcedureBreakdownV2
-          procedure={selectedProcedure}
-          custoHora={custoHoraPorSala}
-          taxRate={taxRate}
-          calcProcedure={calcProcedure}
-        />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ProcedureBreakdownV2
+            procedure={selectedProcedure}
+            custoHora={custoHoraPorSala}
+            taxRate={taxRate}
+            calcProcedure={calcProcedure}
+          />
+          <ProcedureSimulator
+            procedure={selectedProcedure}
+            taxRate={taxRate}
+            calcParts={calcParts}
+            calcFrom={calcFrom}
+            suggestPrice={suggestPrice}
+            onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
+          />
+        </div>
       )}
+
 
       {/* Seção 4: Despesas em Tabs */}
       <Card>
