@@ -454,7 +454,7 @@ export function usePricingV2() {
   // ─── Inline update (local + simple DB, no delete/re-insert) ───
   const inlineDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const inlineUpdateProcedure = (id: string, data: { desired_price?: number; execution_time?: number }) => {
+  const inlineUpdateProcedure = (id: string, data: { desired_price?: number; execution_time?: number; quantity?: number }) => {
     // 1. Update local state immediately
     setProcedures((prev) =>
       prev.map((p) =>
@@ -463,6 +463,7 @@ export function usePricingV2() {
               ...p,
               desired_price: data.desired_price ?? p.desired_price,
               execution_time: data.execution_time ?? p.execution_time,
+              quantity: data.quantity ?? p.quantity,
             }
           : p
       )
@@ -477,6 +478,7 @@ export function usePricingV2() {
       const updatePayload: Record<string, number> = {};
       if (data.desired_price !== undefined) updatePayload.desired_price = data.desired_price;
       if (data.execution_time !== undefined) updatePayload.execution_time = data.execution_time;
+      if (data.quantity !== undefined) updatePayload.quantity = Math.max(1, Math.round(data.quantity));
 
       const { error } = await supabase
         .from("pricing_v2_procedures")
