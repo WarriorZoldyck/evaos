@@ -96,7 +96,11 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
             <Input id="v2-proc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Restauração em resina" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="v2-proc-qty">Quantidade *</Label>
+              <Input id="v2-proc-qty" type="number" min={1} step={1} value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="v2-proc-time">Tempo (horas) *</Label>
               <Input id="v2-proc-time" type="number" min={0.25} step={0.25} value={time} onChange={(e) => setTime(e.target.value)} />
@@ -106,6 +110,9 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
               <Input id="v2-proc-price" type="number" min={0} step={0.01} value={desiredPrice} onChange={(e) => setDesiredPrice(e.target.value)} />
             </div>
           </div>
+          <p className="text-[11px] text-muted-foreground -mt-2">
+            Materiais "por unidade" são multiplicados pela quantidade. Tempo e valor cobrado continuam manuais.
+          </p>
 
           <Separator />
 
@@ -121,7 +128,16 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
               {items.map((item, idx) => (
                 <div key={idx} className="flex gap-2 items-center">
                   <Input placeholder="Descrição" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} className="flex-1" />
-                  <Input type="number" min={0} step={0.01} placeholder="R$" value={item.value} onChange={(e) => updateItem(idx, "value", e.target.value)} className="w-28" />
+                  <Input type="number" min={0} step={0.01} placeholder="R$" value={item.value} onChange={(e) => updateItem(idx, "value", e.target.value)} className="w-24" />
+                  <Select value={item.unit_type} onValueChange={(v) => updateItem(idx, "unit_type", v)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sessao">Por sessão</SelectItem>
+                      <SelectItem value="unitario">Por unidade</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
