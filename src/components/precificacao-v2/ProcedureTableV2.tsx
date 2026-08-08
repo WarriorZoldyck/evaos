@@ -23,7 +23,7 @@ interface ProcedureTableV2Props {
   onEdit: (proc: ProcedureV2) => void;
   onDuplicate: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
-  onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number }) => void;
+  onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number; quantity?: number }) => void;
 }
 
 function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0, className }: {
@@ -109,6 +109,7 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
       <TableHeader>
         <TableRow>
           <TableHead>Procedimento</TableHead>
+          <TableHead className="text-right">Qtd</TableHead>
           <TableHead className="text-right">Tempo (h)</TableHead>
           <TableHead className="text-right">Preço</TableHead>
           <TableHead className="text-right">CF</TableHead>
@@ -133,6 +134,16 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
               onClick={() => onSelect(isSelected ? null : proc.id)}
             >
               <TableCell className="font-medium">{proc.name}</TableCell>
+              <TableCell className="text-right">
+                {onInlineUpdate ? (
+                  <LiveNumberInput
+                    value={proc.quantity ?? 1}
+                    step={1}
+                    min={1}
+                    onCommit={(v) => onInlineUpdate(proc.id, { quantity: Math.max(1, Math.round(v)) })}
+                  />
+                ) : <span>{proc.quantity ?? 1}</span>}
+              </TableCell>
               <TableCell className="text-right">
                 {onInlineUpdate ? (
                   <LiveNumberInput

@@ -29,11 +29,14 @@ export interface CostItem {
   sort_order: number;
 }
 
+export type ItemUnitType = "sessao" | "unitario";
+
 export interface ProcedureV2Item {
   id: string;
   procedure_id: string;
   description: string;
   value: number;
+  unit_type: ItemUnitType;
 }
 
 export interface ProcedureV2 {
@@ -42,6 +45,7 @@ export interface ProcedureV2 {
   name: string;
   execution_time: number;
   desired_price: number;
+  quantity: number;
   created_at: string | null;
   items: ProcedureV2Item[];
 }
@@ -316,9 +320,14 @@ export function usePricingV2() {
         ...p,
         execution_time: Number(p.execution_time) || 1,
         desired_price: Number(p.desired_price) || 0,
+        quantity: Number((p as { quantity?: number }).quantity) || 1,
         items: (items || [])
           .filter((i) => i.procedure_id === p.id)
-          .map((i) => ({ ...i, value: Number(i.value) || 0 })),
+          .map((i) => ({
+            ...i,
+            value: Number(i.value) || 0,
+            unit_type: ((i as { unit_type?: string }).unit_type === "unitario" ? "unitario" : "sessao") as ItemUnitType,
+          })),
       }))
     );
   }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
@@ -327,12 +336,13 @@ export function usePricingV2() {
     name: string;
     execution_time: number;
     desired_price: number;
-    items: { description: string; value: number }[];
+    quantity?: number;
+    items: { description: string; value: number; unit_type?: ItemUnitType }[];
   }) => {
     if (!user) return false;
     const { data: proc, error } = await supabase
       .from("pricing_v2_procedures")
-      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, user_id: effectiveUserId, company_id: selectedCompanyId || null })
+      .insert({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, quantity: data.quantity ?? 1, user_id: effectiveUserId, company_id: selectedCompanyId || null })
       .select()
       .single();
 
@@ -343,7 +353,7 @@ export function usePricingV2() {
 
     if (data.items.length > 0) {
       await supabase.from("pricing_v2_procedure_items").insert(
-        data.items.map((i) => ({ procedure_id: proc.id, description: i.description, value: i.value }))
+        data.items.map((i) => ({ procedure_id: proc.id, description: i.description, value: i.value, unit_type: i.unit_type ?? "sessao" }))
       );
     }
 
@@ -356,14 +366,15 @@ export function usePricingV2() {
     name: string;
     execution_time: number;
     desired_price: number;
-    items: { description: string; value: number }[];
+    quantity?: number;
+    items: { description: string; value: number; unit_type?: ItemUnitType }[];
   }) => {
     if (updatingProcRef.current.has(id)) return false;
     updatingProcRef.current.add(id);
     try {
       const { error } = await supabase
         .from("pricing_v2_procedures")
-        .update({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price })
+        .update({ name: data.name, execution_time: data.execution_time, desired_price: data.desired_price, quantity: data.quantity ?? 1 })
         .eq("id", id);
       if (error) {
         toast({ title: "Erro ao atualizar", description: mapDatabaseError(error), variant: "destructive" });
@@ -372,7 +383,7 @@ export function usePricingV2() {
       await supabase.from("pricing_v2_procedure_items").delete().eq("procedure_id", id);
       if (data.items.length > 0) {
         await supabase.from("pricing_v2_procedure_items").insert(
-          data.items.map((i) => ({ procedure_id: id, description: i.description, value: i.value }))
+          data.items.map((i) => ({ procedure_id: id, description: i.description, value: i.value, unit_type: i.unit_type ?? "sessao" }))
         );
       }
       toast({ title: "Procedimento atualizado!" });
@@ -388,13 +399,13 @@ export function usePricingV2() {
     if (!proc || !user) return false;
     const { data: newProc, error } = await supabase
       .from("pricing_v2_procedures")
-      .insert({ name: `${proc.name} (cópia)`, execution_time: proc.execution_time, desired_price: proc.desired_price, user_id: effectiveUserId, company_id: selectedCompanyId || null })
+      .insert({ name: `${proc.name} (cópia)`, execution_time: proc.execution_time, desired_price: proc.desired_price, quantity: proc.quantity ?? 1, user_id: effectiveUserId, company_id: selectedCompanyId || null })
       .select()
       .single();
     if (error || !newProc) return false;
     if (proc.items.length > 0) {
       await supabase.from("pricing_v2_procedure_items").insert(
-        proc.items.map((i) => ({ procedure_id: newProc.id, description: i.description, value: i.value }))
+        proc.items.map((i) => ({ procedure_id: newProc.id, description: i.description, value: i.value, unit_type: i.unit_type ?? "sessao" }))
       );
     }
     toast({ title: "Procedimento duplicado!" });
@@ -417,8 +428,9 @@ export function usePricingV2() {
 
   // ─── Calc for procedure (source of truth — uses custoHoraPorSala) ───
   const calcProcedure = (proc: ProcedureV2) => {
+    const qty = Math.max(1, proc.quantity ?? 1);
     const cf = custoHoraPorSala * proc.execution_time;
-    const cv = proc.items.reduce((s, i) => s + i.value, 0);
+    const cv = proc.items.reduce((s, i) => s + (i.unit_type === "unitario" ? i.value * qty : i.value), 0);
     const nf = proc.desired_price * (taxRate / 100);
     const liquido = proc.desired_price - cf - cv - nf;
     const lucro = liquido;
@@ -442,7 +454,7 @@ export function usePricingV2() {
   // ─── Inline update (local + simple DB, no delete/re-insert) ───
   const inlineDebounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const inlineUpdateProcedure = (id: string, data: { desired_price?: number; execution_time?: number }) => {
+  const inlineUpdateProcedure = (id: string, data: { desired_price?: number; execution_time?: number; quantity?: number }) => {
     // 1. Update local state immediately
     setProcedures((prev) =>
       prev.map((p) =>
@@ -451,6 +463,7 @@ export function usePricingV2() {
               ...p,
               desired_price: data.desired_price ?? p.desired_price,
               execution_time: data.execution_time ?? p.execution_time,
+              quantity: data.quantity ?? p.quantity,
             }
           : p
       )
@@ -465,6 +478,7 @@ export function usePricingV2() {
       const updatePayload: Record<string, number> = {};
       if (data.desired_price !== undefined) updatePayload.desired_price = data.desired_price;
       if (data.execution_time !== undefined) updatePayload.execution_time = data.execution_time;
+      if (data.quantity !== undefined) updatePayload.quantity = Math.max(1, Math.round(data.quantity));
 
       const { error } = await supabase
         .from("pricing_v2_procedures")

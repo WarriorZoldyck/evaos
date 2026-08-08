@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Plus, Trash2 } from "lucide-react";
-import type { ProcedureV2 } from "@/hooks/usePricingV2";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ProcedureV2, ItemUnitType } from "@/hooks/usePricingV2";
 
 interface Props {
   open: boolean;
@@ -19,17 +20,19 @@ interface Props {
     name: string;
     execution_time: number;
     desired_price: number;
-    items: { description: string; value: number }[];
+    quantity: number;
+    items: { description: string; value: number; unit_type: ItemUnitType }[];
   }) => Promise<boolean>;
 }
 
-interface ItemRow { description: string; value: string }
+interface ItemRow { description: string; value: string; unit_type: ItemUnitType }
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora, taxRate, onSave }: Props) {
   const [name, setName] = useState("");
   const [time, setTime] = useState("1");
+  const [quantity, setQuantity] = useState("1");
   const [desiredPrice, setDesiredPrice] = useState("");
   const [items, setItems] = useState<ItemRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -38,23 +41,28 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
     if (procedure) {
       setName(procedure.name);
       setTime(String(procedure.execution_time));
+      setQuantity(String(procedure.quantity ?? 1));
       setDesiredPrice(procedure.desired_price > 0 ? String(procedure.desired_price) : "");
-      setItems(procedure.items.map((i) => ({ description: i.description, value: String(i.value) })));
+      setItems(procedure.items.map((i) => ({ description: i.description, value: String(i.value), unit_type: i.unit_type ?? "sessao" })));
     } else {
-      setName(""); setTime("1"); setDesiredPrice(""); setItems([]);
+      setName(""); setTime("1"); setQuantity("1"); setDesiredPrice(""); setItems([]);
     }
   }, [procedure, open]);
 
-  const addItem = () => setItems([...items, { description: "", value: "" }]);
+  const addItem = () => setItems([...items, { description: "", value: "", unit_type: "sessao" }]);
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
   const updateItem = (idx: number, field: keyof ItemRow, val: string) => {
     const u = [...items]; u[idx] = { ...u[idx], [field]: val }; setItems(u);
   };
 
   const timeNum = parseFloat(String(time).replace(",", ".")) || 0;
+  const qtyNum = Math.max(1, parseInt(quantity) || 1);
   const priceNum = parseFloat(String(desiredPrice).replace(",", ".")) || 0;
   const cf = custoHora * timeNum;
-  const cv = items.reduce((s, i) => s + (parseFloat(String(i.value).replace(",", ".")) || 0), 0);
+  const cv = items.reduce((s, i) => {
+    const v = parseFloat(String(i.value).replace(",", ".")) || 0;
+    return s + (i.unit_type === "unitario" ? v * qtyNum : v);
+  }, 0);
   const nf = priceNum * (taxRate / 100);
   const lucro = priceNum - cf - cv - nf;
   const lucratividadePct = priceNum > 0 ? (lucro / priceNum) * 100 : 0;
@@ -67,7 +75,8 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
       name: name.trim(),
       execution_time: timeNum,
       desired_price: priceNum,
-      items: items.filter((i) => i.description.trim()).map((i) => ({ description: i.description.trim(), value: parseFloat(i.value) || 0 })),
+      quantity: qtyNum,
+      items: items.filter((i) => i.description.trim()).map((i) => ({ description: i.description.trim(), value: parseFloat(i.value) || 0, unit_type: i.unit_type })),
     });
     setSaving(false);
     if (success) onOpenChange(false);
@@ -87,7 +96,11 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
             <Input id="v2-proc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Restauração em resina" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="v2-proc-qty">Quantidade *</Label>
+              <Input id="v2-proc-qty" type="number" min={1} step={1} value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="v2-proc-time">Tempo (horas) *</Label>
               <Input id="v2-proc-time" type="number" min={0.25} step={0.25} value={time} onChange={(e) => setTime(e.target.value)} />
@@ -97,6 +110,9 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
               <Input id="v2-proc-price" type="number" min={0} step={0.01} value={desiredPrice} onChange={(e) => setDesiredPrice(e.target.value)} />
             </div>
           </div>
+          <p className="text-[11px] text-muted-foreground -mt-2">
+            Materiais "por unidade" são multiplicados pela quantidade. Tempo e valor cobrado continuam manuais.
+          </p>
 
           <Separator />
 
@@ -112,7 +128,16 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
               {items.map((item, idx) => (
                 <div key={idx} className="flex gap-2 items-center">
                   <Input placeholder="Descrição" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} className="flex-1" />
-                  <Input type="number" min={0} step={0.01} placeholder="R$" value={item.value} onChange={(e) => updateItem(idx, "value", e.target.value)} className="w-28" />
+                  <Input type="number" min={0} step={0.01} placeholder="R$" value={item.value} onChange={(e) => updateItem(idx, "value", e.target.value)} className="w-24" />
+                  <Select value={item.unit_type} onValueChange={(v) => updateItem(idx, "unit_type", v)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sessao">Por sessão</SelectItem>
+                      <SelectItem value="unitario">Por unidade</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
@@ -130,7 +155,7 @@ export function ProcedureFormModalV2({ open, onOpenChange, procedure, custoHora,
               <span>{fmt(cf)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">CV (materiais)</span>
+              <span className="text-muted-foreground">CV (materiais, qtd {qtyNum})</span>
               <span>{fmt(cv)}</span>
             </div>
             <div className="flex justify-between">

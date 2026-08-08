@@ -1246,18 +1246,21 @@ export type Database = {
           description: string
           id: string
           procedure_id: string
+          unit_type: string
           value: number
         }
         Insert: {
           description?: string
           id?: string
           procedure_id: string
+          unit_type?: string
           value?: number
         }
         Update: {
           description?: string
           id?: string
           procedure_id?: string
+          unit_type?: string
           value?: number
         }
         Relationships: [
@@ -1278,6 +1281,7 @@ export type Database = {
           execution_time: number
           id: string
           name: string
+          quantity: number
           user_id: string
         }
         Insert: {
@@ -1287,6 +1291,7 @@ export type Database = {
           execution_time?: number
           id?: string
           name: string
+          quantity?: number
           user_id: string
         }
         Update: {
@@ -1296,6 +1301,7 @@ export type Database = {
           execution_time?: number
           id?: string
           name?: string
+          quantity?: number
           user_id?: string
         }
         Relationships: [

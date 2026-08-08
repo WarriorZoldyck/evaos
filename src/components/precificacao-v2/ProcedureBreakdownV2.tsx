@@ -14,6 +14,7 @@ interface Props {
 
 export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProcedure }: Props) {
   const calc = calcProcedure(procedure);
+  const qty = Math.max(1, procedure.quantity ?? 1);
 
   return (
     <Card>
@@ -27,6 +28,11 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
         <div className="flex justify-between items-center">
           <span className="text-muted-foreground">Valor Cobrado</span>
           <span className="font-bold">{fmt(procedure.desired_price)}</span>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <span className="text-muted-foreground">Quantidade</span>
+          <span className="font-medium">{qty}</span>
         </div>
 
         <div className="flex justify-between items-center">
@@ -44,12 +50,21 @@ export function ProcedureBreakdownV2({ procedure, custoHora, taxRate, calcProced
         {procedure.items.length > 0 && (
           <div className="space-y-1">
             <span className="text-muted-foreground">(-) Custos Variáveis (CV):</span>
-            {procedure.items.map((item) => (
-              <div key={item.id} className="flex justify-between pl-4">
-                <span className="text-muted-foreground">{item.description}</span>
-                <span className="text-destructive">-{fmt(item.value)}</span>
-              </div>
-            ))}
+            {procedure.items.map((item) => {
+              const isUnit = item.unit_type === "unitario";
+              const total = isUnit ? item.value * qty : item.value;
+              return (
+                <div key={item.id} className="flex justify-between pl-4">
+                  <span className="text-muted-foreground">
+                    {item.description}{" "}
+                    <span className="text-xs">
+                      {isUnit ? `(${fmt(item.value)} × ${qty})` : "(por sessão)"}
+                    </span>
+                  </span>
+                  <span className="text-destructive">-{fmt(total)}</span>
+                </div>
+              );
+            })}
             <div className="flex justify-between pl-4 font-medium">
               <span>Subtotal CV</span>
               <span className="text-destructive">-{fmt(calc.cv)}</span>
