@@ -10,6 +10,8 @@ import { CostSummaryCards } from "@/components/precificacao-v2/CostSummaryCards"
 import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2";
 import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
 import { ProcedureBreakdownV2 } from "@/components/precificacao-v2/ProcedureBreakdownV2";
+import { ProcedureSimulator } from "@/components/precificacao-v2/ProcedureSimulator";
+
 import { SuggestedPriceCalculator } from "@/components/precificacao-v2/SuggestedPriceCalculator";
 import { ProcedureComparisonChart } from "@/components/precificacao-v2/ProcedureComparisonChart";
 
@@ -30,6 +32,8 @@ export default function Precificacao() {
     selectedProcedure, selectedProcedureId, setSelectedProcedureId,
     saveConfig, addCostItem, updateCostItem, deleteCostItem,
     createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
+    calcParts, calcFrom, suggestPrice,
+
     inlineUpdateProcedure,
   } = usePricingV2();
 
@@ -121,15 +125,25 @@ export default function Precificacao() {
           </CardContent>
         </Card>
 
-        {/* Breakdown ao lado */}
-        <div className="lg:col-span-1">
+        {/* Breakdown + Simulador ao lado */}
+        <div className="lg:col-span-1 space-y-6">
           {selectedProcedure ? (
-            <ProcedureBreakdownV2
-              procedure={selectedProcedure}
-              custoHora={custoHoraPorSala}
-              taxRate={taxRate}
-              calcProcedure={calcProcedure}
-            />
+            <>
+              <ProcedureBreakdownV2
+                procedure={selectedProcedure}
+                custoHora={custoHoraPorSala}
+                taxRate={taxRate}
+                calcProcedure={calcProcedure}
+              />
+              <ProcedureSimulator
+                procedure={selectedProcedure}
+                taxRate={taxRate}
+                calcParts={calcParts}
+                calcFrom={calcFrom}
+                suggestPrice={suggestPrice}
+                onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
+              />
+            </>
           ) : (
             <Card className="h-full flex items-center justify-center">
               <CardContent className="py-8">
@@ -140,13 +154,14 @@ export default function Precificacao() {
             </Card>
           )}
         </div>
+
       </div>
 
       {/* Comparativo de Procedimentos */}
       <ProcedureComparisonChart procedures={procedures} calcProcedure={calcProcedure} />
 
       {/* Calculadora de Preço Sugerido */}
-      <SuggestedPriceCalculator custoHora={custoHora} taxRate={taxRate} />
+      <SuggestedPriceCalculator custoHora={custoHoraPorSala} taxRate={taxRate} procedures={procedures} />
 
       {/* Seção 4: Despesas em Tabs */}
       <Card>

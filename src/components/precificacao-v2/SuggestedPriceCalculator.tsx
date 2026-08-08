@@ -5,24 +5,35 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Target, RotateCcw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ProcedureV2 } from "@/hooks/usePricingV2";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 interface Props {
   custoHora: number;
   taxRate: number;
+  procedures?: ProcedureV2[];
 }
 
-export function SuggestedPriceCalculator({ custoHora, taxRate }: Props) {
+export function SuggestedPriceCalculator({ custoHora, taxRate, procedures = [] }: Props) {
   const [time, setTime] = useState("1");
   const [margin, setMargin] = useState("30");
+  const [qty, setQty] = useState("1");
+  const [baseId, setBaseId] = useState<string>("");
 
   const timeNum = parseFloat(time) || 0;
   const marginNum = parseFloat(margin) || 0;
+  const qtyNum = Math.max(1, Math.round(parseFloat(qty) || 1));
+
+  const baseProcedure = procedures.find((p) => p.id === baseId) ?? null;
 
   // Calculated defaults
   const defaultCf = custoHora * timeNum;
-  const defaultCv = 0;
+  const defaultCv = baseProcedure
+    ? baseProcedure.items.reduce((s, i) => s + (i.unit_type === "unitario" ? i.value * qtyNum : i.value), 0)
+    : 0;
+
 
   // Override states (null = use calculated)
   const [cfOverride, setCfOverride] = useState<string | null>(null);
@@ -71,10 +82,42 @@ export function SuggestedPriceCalculator({ custoHora, taxRate }: Props) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-xs text-muted-foreground">
-          Informe o tempo e a margem desejada. Clique nos valores abaixo para simular cenários diferentes.
+          Escolha um procedimento como base (opcional), informe quantidade, tempo e a margem desejada.
         </p>
 
-        <div className="grid grid-cols-2 gap-4">
+        {procedures.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Procedimento base</Label>
+            <Select
+              value={baseId || "none"}
+              onValueChange={(v) => {
+                if (v === "none") { setBaseId(""); return; }
+                setBaseId(v);
+                const p = procedures.find((x) => x.id === v);
+                if (p) {
+                  setTime(String(p.execution_time));
+                  setQty(String(Math.max(1, p.quantity ?? 1)));
+                  setCvOverride(null);
+                  setCfOverride(null);
+                }
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Nenhum (manual)" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Nenhum (manual)</SelectItem>
+                {procedures.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Quantidade</Label>
+            <Input type="number" min={1} step={1} value={qty} onChange={(e) => setQty(e.target.value)} />
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Tempo (horas)</Label>
             <Input type="number" min={0.25} step={0.25} value={time} onChange={(e) => setTime(e.target.value)} />
@@ -84,6 +127,7 @@ export function SuggestedPriceCalculator({ custoHora, taxRate }: Props) {
             <Input type="number" min={0} max={99} step={0.5} value={margin} onChange={(e) => setMargin(e.target.value)} />
           </div>
         </div>
+
 
         <Separator />
 
@@ -137,6 +181,11 @@ export function SuggestedPriceCalculator({ custoHora, taxRate }: Props) {
                 <span>Preço Sugerido</span>
                 <span>{fmt(suggestedPrice)}</span>
               </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Preço por unidade ({qtyNum}×)</span>
+                <span>{fmt(suggestedPrice / qtyNum)}</span>
+              </div>
+
               <div className="flex justify-between text-emerald-600 font-medium">
                 <span>Lucro ({marginNum.toFixed(1)}%)</span>
                 <span>{fmt(profit)}</span>

@@ -112,6 +112,8 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           <TableHead className="text-right">Qtd</TableHead>
           <TableHead className="text-right">Tempo (h)</TableHead>
           <TableHead className="text-right">Preço</TableHead>
+          <TableHead className="text-right">Preço/un.</TableHead>
+
           <TableHead className="text-right">CF</TableHead>
           <TableHead className="text-right">CV</TableHead>
           <TableHead className="text-right">NF</TableHead>
@@ -163,6 +165,10 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                   />
                 ) : <span>{fmt(proc.desired_price)}</span>}
               </TableCell>
+              <TableCell className="text-right text-muted-foreground">
+                {fmt(proc.desired_price / Math.max(1, proc.quantity ?? 1))}
+              </TableCell>
+
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cf)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.cv)}</TableCell>
               <TableCell className="text-right text-muted-foreground">{fmt(calc.nf)}</TableCell>

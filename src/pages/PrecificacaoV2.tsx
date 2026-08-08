@@ -10,6 +10,8 @@ import { CostSummaryCards } from "@/components/precificacao-v2/CostSummaryCards"
 import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2";
 import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
 import { ProcedureBreakdownV2 } from "@/components/precificacao-v2/ProcedureBreakdownV2";
+import { ProcedureSimulator } from "@/components/precificacao-v2/ProcedureSimulator";
+
 
 const GROUPS: CostGroup[] = ["fixos_clinica", "variaveis_clinica", "pessoais"];
 const GROUP_TAB_LABELS: Record<CostGroup, string> = {
@@ -26,6 +28,8 @@ export default function PrecificacaoV2() {
     selectedProcedure, selectedProcedureId, setSelectedProcedureId,
     saveConfig, addCostItem, updateCostItem, deleteCostItem,
     createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
+    calcParts, calcFrom, suggestPrice,
+
     inlineUpdateProcedure,
   } = usePricingV2();
 
@@ -103,15 +107,26 @@ export default function PrecificacaoV2() {
         </CardContent>
       </Card>
 
-      {/* Breakdown */}
+      {/* Breakdown + Simulador */}
       {selectedProcedure && (
-        <ProcedureBreakdownV2
-          procedure={selectedProcedure}
-          custoHora={custoHoraPorSala}
-          taxRate={taxRate}
-          calcProcedure={calcProcedure}
-        />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <ProcedureBreakdownV2
+            procedure={selectedProcedure}
+            custoHora={custoHoraPorSala}
+            taxRate={taxRate}
+            calcProcedure={calcProcedure}
+          />
+          <ProcedureSimulator
+            procedure={selectedProcedure}
+            taxRate={taxRate}
+            calcParts={calcParts}
+            calcFrom={calcFrom}
+            suggestPrice={suggestPrice}
+            onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
+          />
+        </div>
       )}
+
 
       {/* Seção 4: Despesas em Tabs */}
       <Card>

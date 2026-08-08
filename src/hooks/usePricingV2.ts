@@ -427,17 +427,32 @@ export function usePricingV2() {
   };
 
   // ─── Calc for procedure (source of truth — uses custoHoraPorSala) ───
-  const calcProcedure = (proc: ProcedureV2) => {
-    const qty = Math.max(1, proc.quantity ?? 1);
-    const cf = custoHoraPorSala * proc.execution_time;
-    const cv = proc.items.reduce((s, i) => s + (i.unit_type === "unitario" ? i.value * qty : i.value), 0);
-    const nf = proc.desired_price * (taxRate / 100);
-    const liquido = proc.desired_price - cf - cv - nf;
-    const lucro = liquido;
-    const lucratividadeHora = proc.execution_time > 0 ? lucro / proc.execution_time : 0;
-    const lucratividadePct = proc.desired_price > 0 ? (lucro / proc.desired_price) * 100 : 0;
-    return { cf, cv, nf, liquido, lucro, lucratividadeHora, lucratividadePct };
+  const calcParts = (input: { execution_time: number; quantity: number; items: { value: number; unit_type: ItemUnitType }[] }) => {
+    const qty = Math.max(1, input.quantity ?? 1);
+    const cf = custoHoraPorSala * (input.execution_time || 0);
+    const cv = input.items.reduce((s, i) => s + (i.unit_type === "unitario" ? i.value * qty : i.value), 0);
+    return { qty, cf, cv };
   };
+
+  /** Reverse calc: price that yields the target profit margin (%) */
+  const suggestPrice = (parts: { cf: number; cv: number }, targetMarginPct: number) => {
+    const divisor = 1 - targetMarginPct / 100 - taxRate / 100;
+    if (divisor <= 0) return null;
+    return (parts.cf + parts.cv) / divisor;
+  };
+
+  const calcFrom = (input: { execution_time: number; quantity: number; desired_price: number; items: { value: number; unit_type: ItemUnitType }[] }) => {
+    const { qty, cf, cv } = calcParts(input);
+    const nf = input.desired_price * (taxRate / 100);
+    const liquido = input.desired_price - cf - cv - nf;
+    const lucro = liquido;
+    const lucratividadeHora = input.execution_time > 0 ? lucro / input.execution_time : 0;
+    const lucratividadePct = input.desired_price > 0 ? (lucro / input.desired_price) * 100 : 0;
+    return { qty, cf, cv, nf, liquido, lucro, lucratividadeHora, lucratividadePct };
+  };
+
+  const calcProcedure = (proc: ProcedureV2) => calcFrom(proc);
+
 
   // ─── Init ───
   useEffect(() => {
@@ -518,6 +533,10 @@ export function usePricingV2() {
     duplicateProcedure,
     deleteProcedure,
     calcProcedure,
+    calcParts,
+    calcFrom,
+    suggestPrice,
+
     inlineUpdateProcedure,
     refetch: async () => {
       await fetchConfig();
