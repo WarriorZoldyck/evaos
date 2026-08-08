@@ -5,20 +5,26 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Target, RotateCcw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ProcedureV2 } from "@/hooks/usePricingV2";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 interface Props {
   custoHora: number;
   taxRate: number;
+  procedures?: ProcedureV2[];
 }
 
-export function SuggestedPriceCalculator({ custoHora, taxRate }: Props) {
+export function SuggestedPriceCalculator({ custoHora, taxRate, procedures = [] }: Props) {
   const [time, setTime] = useState("1");
   const [margin, setMargin] = useState("30");
+  const [qty, setQty] = useState("1");
+  const [baseId, setBaseId] = useState<string>("");
 
   const timeNum = parseFloat(time) || 0;
   const marginNum = parseFloat(margin) || 0;
+  const qtyNum = Math.max(1, Math.round(parseFloat(qty) || 1));
 
   // Calculated defaults
   const defaultCf = custoHora * timeNum;
