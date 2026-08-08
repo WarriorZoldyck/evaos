@@ -533,6 +533,10 @@ export function usePricingV2() {
     duplicateProcedure,
     deleteProcedure,
     calcProcedure,
+    calcParts,
+    calcFrom,
+    suggestPrice,
+
     inlineUpdateProcedure,
     refetch: async () => {
       await fetchConfig();
