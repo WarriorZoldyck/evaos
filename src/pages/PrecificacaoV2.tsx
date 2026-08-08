@@ -9,7 +9,6 @@ import { CostItemsTab } from "@/components/precificacao-v2/CostItemsTab";
 import { CostSummaryCards } from "@/components/precificacao-v2/CostSummaryCards";
 import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2";
 import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
-import { ProcedureSimulator } from "@/components/precificacao-v2/ProcedureSimulator";
 
 
 const GROUPS: CostGroup[] = ["fixos_clinica", "variaveis_clinica", "pessoais"];
@@ -89,7 +88,7 @@ export default function PrecificacaoV2() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className="max-h-[288px] overflow-auto">
             <ProcedureTableV2
               procedures={procedures}
               calcProcedure={calcProcedure}
@@ -101,6 +100,8 @@ export default function PrecificacaoV2() {
               onInlineUpdate={(id, data) => {
                 inlineUpdateProcedure(id, data);
               }}
+              calcParts={calcParts}
+              taxRate={taxRate}
             />
           </div>
         </CardContent>
