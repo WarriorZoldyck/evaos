@@ -161,7 +161,7 @@ export default function Precificacao() {
       <ProcedureComparisonChart procedures={procedures} calcProcedure={calcProcedure} />
 
       {/* Calculadora de Preço Sugerido */}
-      <SuggestedPriceCalculator custoHora={custoHora} taxRate={taxRate} />
+      <SuggestedPriceCalculator custoHora={custoHoraPorSala} taxRate={taxRate} procedures={procedures} />
 
       {/* Seção 4: Despesas em Tabs */}
       <Card>
