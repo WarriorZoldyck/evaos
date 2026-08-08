@@ -23,7 +23,7 @@ interface ProcedureTableV2Props {
   onEdit: (proc: ProcedureV2) => void;
   onDuplicate: (id: string) => Promise<boolean>;
   onDelete: (id: string) => Promise<boolean>;
-  onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number }) => void;
+  onInlineUpdate?: (id: string, data: { desired_price?: number; execution_time?: number; quantity?: number }) => void;
 }
 
 function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0, className }: {
