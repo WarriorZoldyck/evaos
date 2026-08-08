@@ -105,7 +105,15 @@ function LiveNumberInput({ value, onCommit, prefix, suffix, step = 0.01, min = 0
 }
 
 export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSelect, onEdit, onDuplicate, onDelete, onInlineUpdate, calcParts, taxRate = 0 }: ProcedureTableV2Props) {
-  const [invalidMarginId, setInvalidMarginId] = useState<string | null>(null);
+  const [invalidMargin, setInvalidMargin] = useState<{ id: string; attempted: number; maxPct: number } | null>(null);
+
+  const applyMargin = (proc: ProcedureV2, pct: number) => {
+    if (!onInlineUpdate || !calcParts) return;
+    const divisor = 1 - pct / 100 - taxRate / 100;
+    if (divisor <= 0) return;
+    const parts = calcParts(proc);
+    onInlineUpdate(proc.id, { desired_price: Math.round(((parts.cf + parts.cv) / divisor) * 100) / 100 });
+  };
 
   if (procedures.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-8">Nenhum procedimento cadastrado.</p>;
