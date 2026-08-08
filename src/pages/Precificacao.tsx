@@ -121,15 +121,25 @@ export default function Precificacao() {
           </CardContent>
         </Card>
 
-        {/* Breakdown ao lado */}
-        <div className="lg:col-span-1">
+        {/* Breakdown + Simulador ao lado */}
+        <div className="lg:col-span-1 space-y-6">
           {selectedProcedure ? (
-            <ProcedureBreakdownV2
-              procedure={selectedProcedure}
-              custoHora={custoHoraPorSala}
-              taxRate={taxRate}
-              calcProcedure={calcProcedure}
-            />
+            <>
+              <ProcedureBreakdownV2
+                procedure={selectedProcedure}
+                custoHora={custoHoraPorSala}
+                taxRate={taxRate}
+                calcProcedure={calcProcedure}
+              />
+              <ProcedureSimulator
+                procedure={selectedProcedure}
+                taxRate={taxRate}
+                calcParts={calcParts}
+                calcFrom={calcFrom}
+                suggestPrice={suggestPrice}
+                onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
+              />
+            </>
           ) : (
             <Card className="h-full flex items-center justify-center">
               <CardContent className="py-8">
@@ -140,6 +150,7 @@ export default function Precificacao() {
             </Card>
           )}
         </div>
+
       </div>
 
       {/* Comparativo de Procedimentos */}
