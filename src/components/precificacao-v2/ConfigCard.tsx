@@ -49,7 +49,7 @@ export function ConfigCard({ hoursPerMonth, numRooms, taxRate, daysPerWeek, hour
     const hVal = parseFloat(hpd);
     await onSave(
       parseInt(hours) || 160,
-      parseFloat(rooms) || 1,
+      Math.max(1, Math.round(parseFloat(rooms) || 1)),
       parseFloat(tax) || 8.44,
       dVal > 0 ? dVal : null,
       hVal > 0 ? hVal : null
@@ -82,8 +82,7 @@ export function ConfigCard({ hoursPerMonth, numRooms, taxRate, daysPerWeek, hour
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="v2-rooms">Qtd. de salas</Label>
-            <Input id="v2-rooms" type="number" min={0.1} step={0.01} value={rooms} onChange={(e) => setRooms(e.target.value)} />
-            <p className="text-[10px] text-muted-foreground">Aceita decimais (ex: 0,546)</p>
+            <Input id="v2-rooms" type="number" min={1} step={1} value={rooms} onChange={(e) => setRooms(e.target.value.replace(/[^0-9]/g, ""))} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="v2-tax">Alíquota IR (%)</Label>
