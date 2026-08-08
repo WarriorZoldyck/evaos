@@ -93,72 +93,57 @@ export default function Precificacao() {
         custoHoraPorSala={custoHoraPorSala}
       />
 
-      {/* Seção 3: Procedimentos + Breakdown lado a lado */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Calculator className="h-5 w-5 text-primary" />
-                Procedimentos
-              </CardTitle>
-              <Button onClick={handleNew} size="sm" className="gap-1">
-                <Plus className="h-4 w-4" /> Novo Procedimento
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="max-h-[400px] overflow-y-auto">
-              <ProcedureTableV2
-                procedures={procedures}
-                calcProcedure={calcProcedure}
-                selectedId={selectedProcedureId}
-                onSelect={setSelectedProcedureId}
-                onEdit={handleEdit}
-                onDuplicate={duplicateProcedure}
-                onDelete={deleteProcedure}
-                onInlineUpdate={(id, data) => {
-                  inlineUpdateProcedure(id, data);
-                }}
-              />
-            </div>
+      {/* Seção 3: Procedimentos */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-primary" />
+              Procedimentos
+            </CardTitle>
+            <Button onClick={handleNew} size="sm" className="gap-1">
+              <Plus className="h-4 w-4" /> Novo Procedimento
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-[400px] overflow-y-auto">
+            <ProcedureTableV2
+              procedures={procedures}
+              calcProcedure={calcProcedure}
+              selectedId={selectedProcedureId}
+              onSelect={setSelectedProcedureId}
+              onEdit={handleEdit}
+              onDuplicate={duplicateProcedure}
+              onDelete={deleteProcedure}
+              onInlineUpdate={(id, data) => {
+                inlineUpdateProcedure(id, data);
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Simulador do procedimento selecionado */}
+      {selectedProcedure ? (
+        <ProcedureSimulator
+          procedure={selectedProcedure}
+          taxRate={taxRate}
+          calcParts={calcParts}
+          calcFrom={calcFrom}
+          suggestPrice={suggestPrice}
+          onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
+        />
+      ) : (
+        <Card>
+          <CardContent className="py-6">
+            <p className="text-sm text-muted-foreground text-center">
+              Selecione um procedimento para simular preço e lucratividade
+            </p>
           </CardContent>
         </Card>
+      )}
 
-        {/* Breakdown + Simulador ao lado */}
-        <div className="lg:col-span-1 space-y-6">
-          {selectedProcedure ? (
-            <>
-              <ProcedureBreakdownV2
-                procedure={selectedProcedure}
-                custoHora={custoHoraPorSala}
-                taxRate={taxRate}
-                calcProcedure={calcProcedure}
-              />
-              <ProcedureSimulator
-                procedure={selectedProcedure}
-                taxRate={taxRate}
-                calcParts={calcParts}
-                calcFrom={calcFrom}
-                suggestPrice={suggestPrice}
-                onApplyPrice={(p) => inlineUpdateProcedure(selectedProcedure.id, { desired_price: p })}
-              />
-            </>
-          ) : (
-            <Card className="h-full flex items-center justify-center">
-              <CardContent className="py-8">
-                <p className="text-sm text-muted-foreground text-center">
-                  Selecione um procedimento para ver o detalhamento
-                </p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-      </div>
-
-      {/* Comparativo de Procedimentos */}
-      <ProcedureComparisonChart procedures={procedures} calcProcedure={calcProcedure} />
 
       {/* Calculadora de Preço Sugerido */}
       <SuggestedPriceCalculator custoHora={custoHoraPorSala} taxRate={taxRate} procedures={procedures} />
