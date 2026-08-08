@@ -28,6 +28,8 @@ export default function PrecificacaoV2() {
     selectedProcedure, selectedProcedureId, setSelectedProcedureId,
     saveConfig, addCostItem, updateCostItem, deleteCostItem,
     createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
+    calcParts, calcFrom, suggestPrice,
+
     inlineUpdateProcedure,
   } = usePricingV2();
 
