@@ -15,8 +15,11 @@ import { ActionPlanDialog } from "@/components/metas/ActionPlanDialog";
 import {
   FinancialOverview,
   OverviewDetailPanel,
+  sumSimulated,
   type OverviewExpanded,
+  type SelectedCategory,
 } from "@/components/metas/planejamento/FinancialOverview";
+
 import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
 import { GoalChat } from "@/components/metas/planejamento/GoalChat";
@@ -59,14 +62,22 @@ export default function Metas() {
   } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [expanded, setExpanded] = useState<OverviewExpanded>(null);
-  const [cuts, setCuts] = useState<Record<string, number>>({});
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const selectedCat =
-    stats.expenseCategories.find((c) => c.name === selectedCategory) ?? null;
-  const totalSimulatedMonthly = stats.expenseCategories.reduce(
-    (sum, c) => sum + (c.total * (cuts[c.name] ?? 0)) / 100,
-    0,
-  );
+  const [expenseCuts, setExpenseCuts] = useState<Record<string, number>>({});
+  const [incomeBoosts, setIncomeBoosts] = useState<Record<string, number>>({});
+  const [selected, setSelected] = useState<SelectedCategory | null>(null);
+  const [anchorTop, setAnchorTop] = useState<number | null>(null);
+  const handleAnchorChange = useCallback((top: number | null) => setAnchorTop(top), []);
+
+  const selectedList =
+    selected?.kind === "income" ? stats.incomeCategories : stats.expenseCategories;
+  const selectedCat = selected
+    ? selectedList.find((c) => c.name === selected.name) ?? null
+    : null;
+  const selectedPercents = selected?.kind === "income" ? incomeBoosts : expenseCuts;
+  const totalSimulatedMonthly = selected
+    ? sumSimulated(selectedList, selectedPercents)
+    : 0;
+
 
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
 
@@ -148,8 +159,8 @@ export default function Metas() {
         className={cn(
           "grid gap-4 items-start",
           selectedCat
-            ? "lg:grid-cols-[280px_minmax(280px,340px)_minmax(0,1fr)]"
-            : "lg:grid-cols-[300px_minmax(0,1fr)]",
+            ? "lg:grid-cols-[230px_minmax(280px,330px)_minmax(0,1fr)]"
+            : "lg:grid-cols-[240px_minmax(0,1fr)]",
         )}
       >
         {/* Coluna esquerda */}
@@ -160,28 +171,43 @@ export default function Metas() {
             expanded={expanded}
             onToggle={(which) => {
               setExpanded((cur) => (cur === which ? null : which));
-              if (which === "expense") setSelectedCategory(null);
+              setSelected(null);
             }}
-            cuts={cuts}
-            selectedCategory={selectedCategory}
-            onSelectCategory={(name) =>
-              setSelectedCategory((cur) => (cur === name ? null : name))
+            expenseCuts={expenseCuts}
+            incomeBoosts={incomeBoosts}
+            selected={selected}
+            onSelectCategory={(kind, name) =>
+              setSelected((cur) =>
+                cur && cur.kind === kind && cur.name === name ? null : { kind, name },
+              )
             }
+            onClear={(kind) =>
+              kind === "income" ? setIncomeBoosts({}) : setExpenseCuts({})
+            }
+            onAnchorChange={handleAnchorChange}
           />
         </div>
 
         {/* Painel lateral: simulador da categoria selecionada */}
-        {selectedCat && (
-          <div className="min-w-0">
+        {selectedCat && selected && (
+          <div
+            className="min-w-0 lg:[margin-top:var(--panel-top,0px)]"
+            style={{ ["--panel-top" as string]: `${Math.max(0, anchorTop ?? 0)}px` }}
+          >
             <OverviewDetailPanel
+              mode={selected.kind}
               category={selectedCat}
-              percent={cuts[selectedCat.name] ?? 0}
+              percent={selectedPercents[selectedCat.name] ?? 0}
               totalSimulatedMonthly={totalSimulatedMonthly}
-              onPercentChange={(p) =>
-                setCuts((prev) => ({ ...prev, [selectedCat.name]: p }))
+              onPercentChange={(p) => {
+                const setter =
+                  selected.kind === "income" ? setIncomeBoosts : setExpenseCuts;
+                setter((prev) => ({ ...prev, [selectedCat.name]: p }));
+              }}
+              onReset={() =>
+                selected.kind === "income" ? setIncomeBoosts({}) : setExpenseCuts({})
               }
-              onReset={() => setCuts({})}
-              onClose={() => setSelectedCategory(null)}
+              onClose={() => setSelected(null)}
               onCreateGoal={(draft) => {
                 setPrefill(draft);
                 setFormOpen(true);
@@ -189,6 +215,7 @@ export default function Metas() {
             />
           </div>
         )}
+
 
 
         {/* Centro */}
