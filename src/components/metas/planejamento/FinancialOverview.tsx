@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
-  Wallet, TrendingDown, TrendingUp, PiggyBank, ChevronDown, Sparkles, RotateCcw,
+  Wallet, TrendingDown, TrendingUp, PiggyBank, ChevronDown, Sparkles, RotateCcw, X,
 } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import type { CategoryBreakdown, MetasSidebarStats } from "@/hooks/useMetasSidebarStats";
@@ -12,7 +12,7 @@ import { formatBRL } from "@/lib/goalPlanning";
 import { simulateSavings, deadlineFromMonths } from "@/lib/savingsSimulator";
 import { cn } from "@/lib/utils";
 
-type Expanded = "income" | "expense" | null;
+export type OverviewExpanded = "income" | "expense" | null;
 
 export interface GoalDraft {
   name: string;
@@ -24,17 +24,14 @@ export interface GoalDraft {
 interface Props {
   stats: MetasSidebarStats;
   monthlyCapacity: number;
-  onCreateGoal?: (draft: GoalDraft) => void;
+  expanded: OverviewExpanded;
+  onToggle: (which: Exclude<OverviewExpanded, null>) => void;
 }
 
 const PLAN_MONTHS = 12;
 
-export function FinancialOverview({ stats, monthlyCapacity, onCreateGoal }: Props) {
+export function FinancialOverview({ stats, monthlyCapacity, expanded, onToggle }: Props) {
   const { isPersonal } = useCompany();
-  const [expanded, setExpanded] = useState<Expanded>(null);
-
-  const toggle = (which: Exclude<Expanded, null>) =>
-    setExpanded((cur) => (cur === which ? null : which));
 
   if (stats.loading) {
     return (
@@ -71,7 +68,7 @@ export function FinancialOverview({ stats, monthlyCapacity, onCreateGoal }: Prop
         tone="success"
         interactive
         active={expanded === "income"}
-        onClick={() => toggle("income")}
+        onClick={() => onToggle("income")}
         rightSlot={
           <ChevronDown
             className={cn(
@@ -81,13 +78,6 @@ export function FinancialOverview({ stats, monthlyCapacity, onCreateGoal }: Prop
           />
         }
       />
-      {expanded === "income" && (
-        <CategoryList
-          items={stats.incomeCategories}
-          emptyLabel="Sem receitas categorizadas neste ano."
-          barClass="bg-emerald-500/70"
-        />
-      )}
 
       <FinancialMetricCard
         icon={<TrendingDown className="h-4 w-4" />}
@@ -95,7 +85,7 @@ export function FinancialOverview({ stats, monthlyCapacity, onCreateGoal }: Prop
         value={formatBRL(stats.avgSpentMonth)}
         interactive
         active={expanded === "expense"}
-        onClick={() => toggle("expense")}
+        onClick={() => onToggle("expense")}
         rightSlot={
           <ChevronDown
             className={cn(
@@ -105,9 +95,6 @@ export function FinancialOverview({ stats, monthlyCapacity, onCreateGoal }: Prop
           />
         }
       />
-      {expanded === "expense" && (
-        <SavingsPanel items={stats.expenseCategories} onCreateGoal={onCreateGoal} />
-      )}
 
       <FinancialMetricCard
         icon={<PiggyBank className="h-4 w-4" />}
@@ -122,6 +109,48 @@ export function FinancialOverview({ stats, monthlyCapacity, onCreateGoal }: Prop
         value={formatBRL(stats.leftover)}
         tone={stats.leftover < 0 ? "danger" : "default"}
       />
+    </div>
+  );
+}
+
+/** Painel lateral: entradas por categoria ou simulador de cortes nas saídas. */
+export function OverviewDetailPanel({
+  kind,
+  stats,
+  onClose,
+  onCreateGoal,
+}: {
+  kind: Exclude<OverviewExpanded, null>;
+  stats: MetasSidebarStats;
+  onClose: () => void;
+  onCreateGoal?: (draft: GoalDraft) => void;
+}) {
+  return (
+    <div className="animate-in fade-in slide-in-from-left-1 duration-200 space-y-2">
+      <div className="flex items-center justify-between px-1">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          {kind === "income" ? "Entradas por categoria" : "Simulador de economia"}
+        </h3>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          aria-label="Fechar painel"
+          onClick={onClose}
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {kind === "income" ? (
+        <CategoryList
+          items={stats.incomeCategories}
+          emptyLabel="Sem receitas categorizadas neste ano."
+          barClass="bg-emerald-500/70"
+        />
+      ) : (
+        <SavingsPanel items={stats.expenseCategories} onCreateGoal={onCreateGoal} />
+      )}
     </div>
   );
 }
@@ -142,6 +171,8 @@ function SavingsPanel({
       simulateSavings({
         targetAmount: 0,
         months: PLAN_MONTHS,
+        // Os totais já vêm como média mensal do hook — não dividir de novo.
+        monthsInPeriod: 1,
         categories: items.map((i) => ({ name: i.name, total: i.total })),
         cuts: Object.entries(cuts).map(([name, percent]) => ({ name, percent })),
       }),
@@ -162,12 +193,12 @@ function SavingsPanel({
   }
 
   return (
-    <div className="glass-card p-4 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+    <div className="glass-card p-4 space-y-3">
       <p className="text-[11px] text-muted-foreground">
         Clique numa categoria e simule quanto quer cortar por mês.
       </p>
 
-      <div className="max-h-[340px] overflow-y-auto space-y-2.5 pr-1">
+      <div className="max-h-[420px] overflow-y-auto space-y-2.5 pr-1">
         {result.lines.map((line) => {
           const pct = totalMonthly > 0 ? (line.monthlyAvg / totalMonthly) * 100 : 0;
           const open = openName === line.name;
@@ -282,11 +313,11 @@ function CategoryList({
 }) {
   const total = items.reduce((s, c) => s + c.total, 0);
   return (
-    <div className="glass-card p-4 animate-in fade-in slide-in-from-top-1 duration-200">
+    <div className="glass-card p-4">
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground py-2 text-center">{emptyLabel}</p>
       ) : (
-        <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1">
+        <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1">
           {items.map((c) => {
             const pct = total > 0 ? (c.total / total) * 100 : 0;
             return (
@@ -294,7 +325,7 @@ function CategoryList({
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="truncate font-medium text-foreground">{c.name}</span>
                   <span className="font-mono text-muted-foreground shrink-0">
-                    {formatBRL(c.total)}
+                    {formatBRL(c.total)}/mês
                   </span>
                 </div>
                 <div className="h-1.5 rounded-full bg-muted overflow-hidden">

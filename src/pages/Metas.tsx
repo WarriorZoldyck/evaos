@@ -12,7 +12,12 @@ import { usePlanningGoal } from "@/hooks/usePlanningGoal";
 
 import { GoalFormModal } from "@/components/metas/GoalFormModal";
 import { ActionPlanDialog } from "@/components/metas/ActionPlanDialog";
-import { FinancialOverview } from "@/components/metas/planejamento/FinancialOverview";
+import {
+  FinancialOverview,
+  OverviewDetailPanel,
+  type OverviewExpanded,
+} from "@/components/metas/planejamento/FinancialOverview";
+import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
 import { GoalChat } from "@/components/metas/planejamento/GoalChat";
 import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorList";
@@ -53,6 +58,7 @@ export default function Metas() {
     monthly?: number;
   } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [expanded, setExpanded] = useState<OverviewExpanded>(null);
 
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
 
@@ -130,21 +136,38 @@ export default function Metas() {
         </Button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <div
+        className={cn(
+          "grid gap-4",
+          expanded
+            ? "lg:grid-cols-[280px_minmax(280px,340px)_minmax(0,1fr)]"
+            : "lg:grid-cols-[300px_minmax(0,1fr)]",
+        )}
+      >
         {/* Coluna esquerda */}
         <div className="min-w-0 space-y-2.5">
           <FinancialOverview
             stats={stats}
             monthlyCapacity={monthlyCapacity}
-            onCreateGoal={(draft) => {
-              setPrefill(draft);
-              setFormOpen(true);
-            }}
+            expanded={expanded}
+            onToggle={(which) => setExpanded((cur) => (cur === which ? null : which))}
           />
         </div>
 
-
-
+        {/* Painel lateral (detalhe / simulador) */}
+        {expanded && (
+          <div className="min-w-0">
+            <OverviewDetailPanel
+              kind={expanded}
+              stats={stats}
+              onClose={() => setExpanded(null)}
+              onCreateGoal={(draft) => {
+                setPrefill(draft);
+                setFormOpen(true);
+              }}
+            />
+          </div>
+        )}
 
         {/* Centro */}
         <div className="min-w-0 space-y-4">
@@ -179,53 +202,54 @@ export default function Metas() {
                 onOpen={(g: Goal) => navigate(`/metas/${g.id}`)}
                 onCreate={() => openCreate()}
               />
+              {!planningGoal && (
+                <div className="glass-card p-5">
+                  <p className="text-sm text-muted-foreground">
+                    Selecione um cofrinho para ver progresso, score e plano de ação.
+                  </p>
+                </div>
+              )}
             </>
           )}
         </div>
 
         {/* Painéis da meta ativa */}
-        <div className="min-w-0 space-y-4 lg:col-span-2 xl:grid xl:grid-cols-3 xl:gap-4 xl:space-y-0 xl:items-start">
-          {planningGoal && scoreResult ? (
-            <>
-              <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
+        {planningGoal && scoreResult && (
+          <div
+            className={cn(
+              "min-w-0 space-y-4 xl:grid xl:gap-4 xl:space-y-0 xl:items-start xl:grid-cols-3",
+              expanded ? "lg:col-span-3" : "lg:col-span-2",
+            )}
+          >
+            <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
 
-
-              {showResolution && (
-                <GoalResolutionPanel
-                  breakdown={scoreResult.breakdown}
-                  topCategories={stats.topCategories}
-                  onResolve={dispatchResolution}
-                  onCombine={() => setPlanOpen(true)}
-                  onReset={resetScenario}
-                  isSimulated={isSimulated}
-                />
-              )}
-
-              <ActionPlanList
-                items={actionPlan}
-                footer={
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-2"
-                    onClick={() => setPlanOpen(true)}
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Ver plano completo
-                  </Button>
-                }
+            {showResolution && (
+              <GoalResolutionPanel
+                breakdown={scoreResult.breakdown}
+                topCategories={stats.topCategories}
+                onResolve={dispatchResolution}
+                onCombine={() => setPlanOpen(true)}
+                onReset={resetScenario}
+                isSimulated={isSimulated}
               />
-            </>
-          ) : (
-            !loading && (
-              <div className="glass-card p-5">
-                <p className="text-sm text-muted-foreground">
-                  Crie um cofrinho para ver progresso, score e plano de ação.
-                </p>
-              </div>
-            )
-          )}
-        </div>
+            )}
+
+            <ActionPlanList
+              items={actionPlan}
+              footer={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2"
+                  onClick={() => setPlanOpen(true)}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Ver plano completo
+                </Button>
+              }
+            />
+          </div>
+        )}
       </div>
 
       <GoalFormModal
