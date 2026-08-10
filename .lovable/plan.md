@@ -29,4 +29,6 @@ Hoje existe um único painel lateral que só aparece quando uma categoria está 
 - `src/pages/Metas.tsx`: trocar `selected: SelectedCategory | null` por dois estados (`selectedIncome`, `selectedExpense`), auto-selecionar a maior categoria de cada lista quando os dados chegam, renderizar `OverviewDetailPanel` duas vezes (income e expense) numa coluna fixa e remover `anchorTop`/`--panel-top` e a grid condicional.
 - `src/components/metas/planejamento/FinancialOverview.tsx`: `onSelectCategory` passa a apenas definir a categoria (sem toggle para `null`); `CategoryList` recebe a seleção por tipo; remover o `onAnchorChange`/refs de âncora e o botão de fechar do `OverviewDetailPanel`; adicionar estado vazio quando não houver categorias.
 - O total simulado de cada painel continua somando os percentuais da sua própria lista (economia total / ganho total), sem mistura entre entradas e saídas.
+- Limite por modo: `maxPercent = mode === "income" ? 1000 : 100`, aplicado no slider e no clamp do campo mascarado; o valor digitado em reais continua sendo a fonte da verdade quando ultrapassa o teto do slider.
 - Sem mudanças fora da página de Metas.
+
