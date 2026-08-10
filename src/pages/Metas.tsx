@@ -127,8 +127,9 @@ export default function Metas() {
 
       <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)_340px] lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* Coluna esquerda */}
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-4">
           <FinancialOverview stats={stats} monthlyCapacity={monthlyCapacity} />
+          <InstallmentCalculator />
         </div>
 
         {/* Centro */}
