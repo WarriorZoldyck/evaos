@@ -170,8 +170,8 @@ export default function Metas() {
             monthlyCapacity={monthlyCapacity}
             expanded={expanded}
             onToggle={(which) => {
-              setExpanded((cur) => (cur === which ? null : which));
-              setSelected(null);
+              setExpanded((cur) => ({ ...cur, [which]: !cur[which] }));
+              setSelected((cur) => (cur?.kind === which ? null : cur));
             }}
             expenseCuts={expenseCuts}
             incomeBoosts={incomeBoosts}
