@@ -68,6 +68,19 @@ export default function Metas() {
   const [anchorTop, setAnchorTop] = useState<number | null>(null);
   const handleAnchorChange = useCallback((top: number | null) => setAnchorTop(top), []);
 
+  // Abre o simulador já na maior categoria de saídas assim que os dados chegam.
+  const autoPicked = useRef(false);
+  useEffect(() => {
+    if (autoPicked.current || stats.loading) return;
+    const biggest = stats.expenseCategories[0] ?? stats.incomeCategories[0];
+    if (!biggest) return;
+    autoPicked.current = true;
+    setSelected({
+      kind: stats.expenseCategories[0] ? "expense" : "income",
+      name: biggest.name,
+    });
+  }, [stats.loading, stats.expenseCategories, stats.incomeCategories]);
+
   const selectedList =
     selected?.kind === "income" ? stats.incomeCategories : stats.expenseCategories;
   const selectedCat = selected
