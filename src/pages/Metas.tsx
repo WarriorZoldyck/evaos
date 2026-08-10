@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LifeBuoy, Plus, Sparkles, Plane, Wrench } from "lucide-react";
+import { LifeBuoy, Plus, Sparkles, Plane, Wrench, TrendingUp, TrendingDown } from "lucide-react";
+import { FinancialMetricCard } from "@/components/metas/planejamento/FinancialMetricCard";
 
 import { useGoals, type Goal } from "@/hooks/useGoals";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -15,6 +16,8 @@ import { ActionPlanDialog } from "@/components/metas/ActionPlanDialog";
 import {
   FinancialOverview,
   OverviewDetailPanel,
+  SimulatedCategoryList,
+  SimulationSummary,
   sumSimulated,
   type OverviewExpanded,
 } from "@/components/metas/planejamento/FinancialOverview";
@@ -81,9 +84,16 @@ export default function Metas() {
   const totalIncomeSimulated = sumSimulated(stats.incomeCategories, incomeBoosts);
   const totalExpenseSimulated = sumSimulated(stats.expenseCategories, expenseCuts);
 
-
-
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
+
+  // Espelho simulado dos números reais da coluna de contexto.
+  const simulatedIncome = stats.avgIncomeMonth + totalIncomeSimulated;
+  const simulatedExpense = Math.max(0, stats.avgSpentMonth - totalExpenseSimulated);
+  const simulatedCapacity = simulatedIncome - simulatedExpense;
+  const monthsRemaining = Math.max(0, 12 - (new Date().getMonth() + 1));
+  const simulatedLeftover =
+    stats.leftover +
+    (simulatedCapacity - (stats.avgIncomeMonth - stats.avgSpentMonth)) * monthsRemaining;
 
   const { activeGoalId, setActiveGoalId, activeGoal } = useActiveGoal(goals);
   const {
@@ -199,6 +209,21 @@ export default function Metas() {
             }}
           />
 
+          <FinancialMetricCard
+            icon={<TrendingUp className="h-4 w-4" />}
+            label="Média de entradas simulada"
+            value={formatBRL(simulatedIncome)}
+            tone="success"
+          />
+
+          <SimulatedCategoryList
+            items={stats.incomeCategories}
+            percents={incomeBoosts}
+            kind="income"
+            selected={selectedIncome}
+            onSelect={setSelectedIncome}
+          />
+
           <OverviewDetailPanel
             mode="expense"
             category={selectedExpenseCat}
@@ -216,7 +241,30 @@ export default function Metas() {
               setFormOpen(true);
             }}
           />
+
+          <FinancialMetricCard
+            icon={<TrendingDown className="h-4 w-4" />}
+            label="Média de saídas simulada"
+            value={formatBRL(simulatedExpense)}
+          />
+
+          <SimulatedCategoryList
+            items={stats.expenseCategories}
+            percents={expenseCuts}
+            kind="expense"
+            selected={selectedExpense}
+            onSelect={setSelectedExpense}
+          />
+
+          <SimulationSummary
+            baseCapacity={stats.avgIncomeMonth - stats.avgSpentMonth}
+            simulatedCapacity={simulatedCapacity}
+            baseLeftover={stats.leftover}
+            simulatedLeftover={simulatedLeftover}
+          />
         </div>
+
+
 
 
 
@@ -340,36 +388,37 @@ export default function Metas() {
 
 function EmptyState({ onPick }: { onPick: (s: { name: string; target: number }) => void }) {
   return (
-    <div className="glass-card p-4 space-y-3 max-w-md">
-      <div className="flex items-center gap-3">
-        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-          <LifeBuoy className="h-4.5 w-4.5 text-primary" strokeWidth={1.5} />
+    <div className="glass-card p-6 space-y-5 w-full">
+      <div className="flex items-center gap-4">
+        <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+          <LifeBuoy className="h-7 w-7 text-primary" strokeWidth={1.5} />
         </div>
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold">Nenhum cofrinho ainda</h2>
-          <p className="text-muted-foreground text-xs">
+          <h2 className="text-lg font-semibold font-display">Nenhum cofrinho ainda</h2>
+          <p className="text-muted-foreground text-sm">
             Crie o primeiro para a EVA montar o plano com seus números reais.
           </p>
         </div>
       </div>
 
-      <div className="divide-y divide-border/60">
+      <div className="space-y-2">
         {SUGGESTIONS.map((s) => (
           <button
             key={s.name}
             onClick={() => onPick({ name: s.name, target: s.target })}
-            className="w-full flex items-center gap-3 py-2 text-left hover:bg-accent/40 transition-colors rounded-lg px-1"
+            className="w-full flex items-center gap-3 p-3 text-left rounded-xl border border-border/60 bg-background/40 hover:bg-accent/40 transition-colors"
           >
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <s.icon className="h-4 w-4 text-primary" strokeWidth={1.75} />
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <s.icon className="h-5 w-5 text-primary" strokeWidth={1.75} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-foreground text-xs">{s.name}</p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="font-medium text-foreground text-sm">{s.name}</p>
+              <p className="text-xs text-muted-foreground">
                 Sugestão: {formatBRL(s.target)}
               </p>
             </div>
-            <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
+
           </button>
         ))}
       </div>
