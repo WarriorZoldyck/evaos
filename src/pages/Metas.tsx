@@ -208,6 +208,21 @@ export default function Metas() {
             }}
           />
 
+          <FinancialMetricCard
+            icon={<TrendingUp className="h-4 w-4" />}
+            label="Média de entradas simulada"
+            value={formatBRL(simulatedIncome)}
+            tone="success"
+          />
+
+          <SimulatedCategoryList
+            items={stats.incomeCategories}
+            percents={incomeBoosts}
+            kind="income"
+            selected={selectedIncome}
+            onSelect={setSelectedIncome}
+          />
+
           <OverviewDetailPanel
             mode="expense"
             category={selectedExpenseCat}
@@ -225,7 +240,30 @@ export default function Metas() {
               setFormOpen(true);
             }}
           />
+
+          <FinancialMetricCard
+            icon={<TrendingDown className="h-4 w-4" />}
+            label="Média de saídas simulada"
+            value={formatBRL(simulatedExpense)}
+          />
+
+          <SimulatedCategoryList
+            items={stats.expenseCategories}
+            percents={expenseCuts}
+            kind="expense"
+            selected={selectedExpense}
+            onSelect={setSelectedExpense}
+          />
+
+          <SimulationSummary
+            baseCapacity={stats.avgIncomeMonth - stats.avgSpentMonth}
+            simulatedCapacity={simulatedCapacity}
+            baseLeftover={stats.leftover}
+            simulatedLeftover={simulatedLeftover}
+          />
         </div>
+
+
 
 
 
