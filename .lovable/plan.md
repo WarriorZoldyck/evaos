@@ -17,6 +17,13 @@ Hoje existe um único painel lateral que só aparece quando uma categoria está 
 - O botão de fechar (X) sai do cabeçalho do simulador, já que ele é permanente. O "Limpar" (zerar percentuais) continua.
 - O alinhamento dinâmico por `offsetTop` deixa de ser necessário: os dois cards ficam empilhados no topo da coluna.
 
+## Limite de aumento nas entradas
+
+- O simulador de ganhos deixa de travar em 100%: o slider vai de 0% a 1000% (passo maior, ex. 10%).
+- Acima de 1000% o percentual deixa de ser o comando: o usuário digita o valor alvo de faturamento no campo em reais e o percentual apenas reflete o que foi digitado (sem clamp para baixo).
+- O simulador de economia continua limitado a 100% (não dá para cortar mais do que se gasta).
+
+
 ## Detalhes técnicos
 
 - `src/pages/Metas.tsx`: trocar `selected: SelectedCategory | null` por dois estados (`selectedIncome`, `selectedExpense`), auto-selecionar a maior categoria de cada lista quando os dados chegam, renderizar `OverviewDetailPanel` duas vezes (income e expense) numa coluna fixa e remover `anchorTop`/`--panel-top` e a grid condicional.
