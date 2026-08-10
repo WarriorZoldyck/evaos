@@ -17,8 +17,8 @@ import {
   OverviewDetailPanel,
   sumSimulated,
   type OverviewExpanded,
-  type SelectedCategory,
 } from "@/components/metas/planejamento/FinancialOverview";
+
 
 import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
