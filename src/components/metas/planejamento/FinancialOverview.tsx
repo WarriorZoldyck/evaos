@@ -86,7 +86,7 @@ export function FinancialOverview({
   }
 
   return (
-    <div className="space-y-3" ref={rootRef}>
+    <div className="space-y-3">
       <div className="px-1">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Visão do contexto
