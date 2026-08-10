@@ -5004,7 +5004,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       console.log("=== EVA FEEDBACK ===", JSON.stringify({
         userId,
         feedback_type: feedbackType,
-        message: String(messageText || "").slice(0, 500),
+        message: String(trimmedMsg || "").slice(0, 500),
       }));
       const FEEDBACK_REPLY: Record<string, string> = {
         sugestao: "Anotei sua sugestão e já vou levar para a equipe do EVA OS. Obrigada por ajudar a melhorar! 💙",
