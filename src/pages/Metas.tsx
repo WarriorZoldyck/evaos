@@ -83,9 +83,16 @@ export default function Metas() {
   const totalIncomeSimulated = sumSimulated(stats.incomeCategories, incomeBoosts);
   const totalExpenseSimulated = sumSimulated(stats.expenseCategories, expenseCuts);
 
-
-
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
+
+  // Espelho simulado dos números reais da coluna de contexto.
+  const simulatedIncome = stats.avgIncomeMonth + totalIncomeSimulated;
+  const simulatedExpense = Math.max(0, stats.avgSpentMonth - totalExpenseSimulated);
+  const simulatedCapacity = simulatedIncome - simulatedExpense;
+  const monthsRemaining = Math.max(0, 12 - (new Date().getMonth() + 1));
+  const simulatedLeftover =
+    stats.leftover +
+    (simulatedCapacity - (stats.avgIncomeMonth - stats.avgSpentMonth)) * monthsRemaining;
 
   const { activeGoalId, setActiveGoalId, activeGoal } = useActiveGoal(goals);
   const {
