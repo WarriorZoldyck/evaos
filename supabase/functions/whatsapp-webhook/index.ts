@@ -2158,7 +2158,17 @@ ${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.i
 - Lançamentos marcados com (PENDENTE-APROVAÇÃO) estão na fila de aprovação e podem ser editados.
 
 Para conversa:
-{"intent":"conversa","friendly_message":"..."}
+{"intent":"conversa","feedback_type":"sugestao|elogio|critica|bug|null","friendly_message":"..."}
+
+REGRA — SUGESTÕES E FEEDBACK SOBRE O PRODUTO (NUNCA VIRAM LANÇAMENTO):
+- Se a mensagem for uma opinião, sugestão, elogio, crítica ou relato de problema sobre o EVA OS / sobre você (EVA), retorne intent="conversa" com o campo "feedback_type" preenchido.
+- Exemplos que SÃO feedback: "seria legal se você me lembrasse dos boletos", "sugestão: colocar gráfico no app", "vocês deveriam permitir editar categoria por aqui", "não gostei da nova tela de metas", "adorei o relatório novo", "o app travou quando abri o extrato", "você errou a categoria de novo".
+- Exemplos que NÃO são feedback: "gastei 50 no mercado", "quanto gastei esse mês", "cria a categoria Farmácia", "muda o valor daquele lançamento pra 80" — são lançamento/consulta/gerenciar_categoria normalmente.
+- Classificação: "sugestao" (ideia/pedido de melhoria), "elogio" (agradecimento/positivo), "critica" (insatisfação sem bug claro), "bug" (algo que não funcionou ou está errado no sistema).
+- Nunca crie lançamento a partir de uma mensagem de feedback, mesmo que ela cite valores (ex: "seria bom avisar quando eu gastar mais de R$ 500").
+- Se a mensagem MISTURAR uma operação real com feedback (ex: "registra 50 no mercado, e acho que a EVA devia avisar antes"), execute a operação normalmente (intent="lancamento"/"consulta"/etc.) e agradeça o feedback dentro da friendly_message. Nesse caso NÃO use intent="conversa".
+- Ao responder um feedback: agradeça de forma curta, mostre que entendeu o ponto e diga que vai encaminhar para a equipe do EVA OS. Nunca prometa prazo nem diga que já foi implementado.
+
 
 IMPORTANTE:
 - O valor (amount) deve ser sempre positivo
