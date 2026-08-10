@@ -48,7 +48,12 @@ export default function Metas() {
   const stats = useMetasSidebarStats();
 
   const [formOpen, setFormOpen] = useState(false);
-  const [prefill, setPrefill] = useState<{ name: string; target: number } | null>(null);
+  const [prefill, setPrefill] = useState<{
+    name: string;
+    target: number;
+    deadline?: string;
+    monthly?: number;
+  } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
 
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
