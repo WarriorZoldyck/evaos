@@ -384,9 +384,6 @@ function CategoryList({
   simulatedLabel,
   selected,
   onSelect,
-  totalSimulated,
-  totalLabel,
-  onClearAll,
 }: {
   items: CategoryBreakdown[];
   emptyLabel: string;
@@ -396,9 +393,6 @@ function CategoryList({
   simulatedLabel: (percent: number, value: number) => string;
   selected: string | null;
   onSelect: (name: string) => void;
-  totalSimulated: number;
-  totalLabel: string;
-  onClearAll: () => void;
 }) {
   const total = items.reduce((s, c) => s + c.total, 0);
   return (
