@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
-  Wallet, TrendingDown, TrendingUp, PiggyBank, ChevronDown, Sparkles, RotateCcw, X,
+  Wallet, TrendingDown, TrendingUp, PiggyBank, ChevronDown, Sparkles, RotateCcw,
 } from "lucide-react";
+
 import { useCompany } from "@/contexts/CompanyContext";
 import type { CategoryBreakdown, MetasSidebarStats } from "@/hooks/useMetasSidebarStats";
 import { FinancialMetricCard } from "./FinancialMetricCard";
