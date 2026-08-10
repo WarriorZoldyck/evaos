@@ -54,15 +54,15 @@ export function ActionPlanDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <TrendingDown className="h-5 w-5 text-destructive" />
-            {title || "Não vai sobrar — plano de ação"}
+      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogHeader className="p-5 pb-3 border-b border-border/60 shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <TrendingDown className="h-5 w-5 text-destructive shrink-0" />
+            <span className="min-w-0">{title || "Não vai sobrar — plano de ação"}</span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
           <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3">
             <p className="text-xs font-semibold text-destructive uppercase tracking-wide">Déficit estimado</p>
             <p className="text-2xl font-bold font-mono text-destructive mt-1">{fmt(gap)}</p>
@@ -81,9 +81,9 @@ export function ActionPlanDialog({
                 const suggestedCut = Math.min(c.total, (gap * c.total) / Math.max(totalTop, 1));
                 return (
                   <div key={c.name} className="rounded-md border border-border p-3 space-y-1">
-                    <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="font-medium truncate">{c.name}</span>
-                      <span className="font-mono text-muted-foreground">{fmt(c.total)}</span>
+                      <span className="font-mono text-muted-foreground shrink-0">{fmt(c.total)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Cortar ~<strong className="text-foreground">{fmt(suggestedCut)}</strong> ({share.toFixed(0)}% do gasto) já ajuda a fechar o buraco.
@@ -94,23 +94,29 @@ export function ActionPlanDialog({
             </div>
           )}
 
+          {aiError && (
+            <div className="rounded-lg bg-destructive/10 border border-destructive/30 p-3">
+              <p className="text-xs text-destructive">{aiError}</p>
+            </div>
+          )}
+
           {aiText && (
-            <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 space-y-1">
+            <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 space-y-2">
               <p className="text-xs font-semibold text-primary uppercase tracking-wide flex items-center gap-1">
                 <Sparkles className="h-3 w-3" /> Plano sugerido pela EVA
               </p>
-              <div className="prose prose-sm dark:prose-invert max-w-none text-sm">
+              <div className="text-sm leading-relaxed text-foreground space-y-3 [&_p]:m-0 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_strong]:text-foreground [&_strong]:font-semibold">
                 <ReactMarkdown>{aiText}</ReactMarkdown>
               </div>
             </div>
           )}
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose}>Fechar</Button>
-          <Button onClick={askEva} disabled={aiLoading} className="gap-2">
+        <DialogFooter className="shrink-0 border-t border-border/60 p-4 gap-2 sm:gap-2 flex-col-reverse sm:flex-row bg-background">
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">Fechar</Button>
+          <Button onClick={askEva} disabled={aiLoading} className="w-full sm:w-auto gap-2">
             {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {aiText ? "Pedir de novo" : "Pedir sugestão à EVA"}
+            {aiLoading ? "Consultando a EVA..." : aiText ? "Pedir de novo" : "Pedir sugestão à EVA"}
           </Button>
         </DialogFooter>
       </DialogContent>
