@@ -119,6 +119,10 @@ export default function Precificacao() {
       {/* Calculadora de Preço Sugerido */}
       <SuggestedPriceCalculator custoHora={custoHoraPorSala} taxRate={taxRate} procedures={procedures} />
 
+      {/* Calculadora de parcelamento */}
+      <InstallmentCalculator />
+
+
       {/* Seção 4: Despesas em Tabs */}
       <Card>
         <CardHeader className="pb-3">
