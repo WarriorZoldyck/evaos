@@ -12,7 +12,7 @@ import { formatBRL } from "@/lib/goalPlanning";
 import { deadlineFromMonths } from "@/lib/savingsSimulator";
 import { cn } from "@/lib/utils";
 
-export type OverviewExpanded = "income" | "expense" | null;
+export type OverviewExpanded = { income: boolean; expense: boolean };
 export type SimulationKind = "income" | "expense";
 
 export interface SelectedCategory {
@@ -29,11 +29,29 @@ export interface GoalDraft {
 
 const PLAN_MONTHS = 12;
 
+/** Formata dígitos crus (centavos) como "1.234,56". */
+function maskFromDigits(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  const padded = digits.padStart(3, "0");
+  const cents = padded.slice(-2);
+  const units = padded.slice(0, -2);
+  return `${units.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${cents}`;
+}
+
+function maskFromNumber(value: number): string {
+  return maskFromDigits(String(Math.round((value || 0) * 100)));
+}
+
+function numberFromMask(masked: string): number {
+  const digits = masked.replace(/\D/g, "");
+  return digits ? Number(digits) / 100 : 0;
+}
+
 interface Props {
   stats: MetasSidebarStats;
   monthlyCapacity: number;
   expanded: OverviewExpanded;
-  onToggle: (which: Exclude<OverviewExpanded, null>) => void;
+  onToggle: (which: SimulationKind) => void;
   /** Percentual de corte simulado por categoria de saída. */
   expenseCuts: Record<string, number>;
   /** Percentual de aumento simulado por categoria de entrada. */
@@ -115,20 +133,20 @@ export function FinancialOverview({
           value={formatBRL(stats.avgIncomeMonth)}
           tone="success"
           interactive
-          active={expanded === "income"}
+          active={expanded.income}
           onClick={() => onToggle("income")}
           rightSlot={
             <ChevronDown
               className={cn(
                 "h-4 w-4 text-muted-foreground transition-transform",
-                expanded === "income" && "rotate-180",
+                expanded.income && "rotate-180",
               )}
             />
           }
         />
       </div>
 
-      {expanded === "income" && (
+      {expanded.income && (
         <CategoryList
           items={stats.incomeCategories}
           emptyLabel="Sem receitas categorizadas neste ano."
@@ -138,9 +156,6 @@ export function FinancialOverview({
           simulatedLabel={(pct, value) => `aumento de ${pct}% · + ${formatBRL(value)}/mês`}
           selected={selected?.kind === "income" ? selected.name : null}
           onSelect={(name) => onSelectCategory("income", name)}
-          totalSimulated={totalIncomeBoost}
-          totalLabel="Ganho total simulado"
-          onClearAll={() => onClear("income")}
         />
       )}
 
@@ -150,20 +165,20 @@ export function FinancialOverview({
           label="Média de saídas / mês"
           value={formatBRL(stats.avgSpentMonth)}
           interactive
-          active={expanded === "expense"}
+          active={expanded.expense}
           onClick={() => onToggle("expense")}
           rightSlot={
             <ChevronDown
               className={cn(
                 "h-4 w-4 text-muted-foreground transition-transform",
-                expanded === "expense" && "rotate-180",
+                expanded.expense && "rotate-180",
               )}
             />
           }
         />
       </div>
 
-      {expanded === "expense" && (
+      {expanded.expense && (
         <CategoryList
           items={stats.expenseCategories}
           emptyLabel="Sem despesas categorizadas neste ano."
@@ -173,11 +188,9 @@ export function FinancialOverview({
           simulatedLabel={(pct, value) => `corte de ${pct}% · + ${formatBRL(value)}/mês`}
           selected={selected?.kind === "expense" ? selected.name : null}
           onSelect={(name) => onSelectCategory("expense", name)}
-          totalSimulated={totalExpenseSaving}
-          totalLabel="Economia total simulada"
-          onClearAll={() => onClear("expense")}
         />
       )}
+
 
       <FinancialMetricCard
         icon={<PiggyBank className="h-4 w-4" />}
@@ -233,28 +246,26 @@ export function OverviewDetailPanel({
   const projected = isIncome ? original + delta : Math.max(0, original - delta);
   const target = Math.round(totalSimulatedMonthly * PLAN_MONTHS * 100) / 100;
 
-  // Rascunho local: o campo só é convertido em percentual no blur/Enter,
-  // caso contrário cada tecla digitada reescreveria o valor.
-  const [draft, setDraft] = useState<string>(String(Math.round(projected * 100) / 100));
+  // Campo com máscara de moeda: guardamos centavos como inteiro e formatamos.
+  const [draft, setDraft] = useState<string>(() => maskFromNumber(projected));
   useEffect(() => {
-    setDraft(String(Math.round(projected * 100) / 100));
+    setDraft(maskFromNumber(projected));
   }, [projected]);
 
-  const commitDraft = () => {
+  const applyMasked = (raw: string) => {
+    const masked = maskFromDigits(raw);
+    setDraft(masked);
     if (original <= 0) return;
-    const v = Number(draft.replace(",", "."));
-    if (draft.trim() === "" || !Number.isFinite(v)) {
-      setDraft(String(Math.round(projected * 100) / 100));
-      return;
-    }
+    const value = numberFromMask(masked);
     const clamped = isIncome
-      ? Math.min(original * 2, Math.max(original, v))
-      : Math.min(original, Math.max(0, v));
-    const raw = isIncome
+      ? Math.min(original * 2, Math.max(original, value))
+      : Math.min(original, Math.max(0, value));
+    const pct = isIncome
       ? ((clamped - original) / original) * 100
       : ((original - clamped) / original) * 100;
-    onPercentChange(Math.min(100, Math.max(0, Math.round(raw * 100) / 100)));
+    onPercentChange(Math.min(100, Math.max(0, Math.round(pct * 100) / 100)));
   };
+
 
 
   return (
@@ -300,24 +311,17 @@ export function OverviewDetailPanel({
             <span className="text-[11px] text-muted-foreground shrink-0">
               {isIncome ? "Novo faturamento alvo" : "Novo gasto alvo"}
             </span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min={isIncome ? original : 0}
-              max={isIncome ? original * 2 : original}
-              step={10}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitDraft}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  commitDraft();
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              className="flex-1 h-8 rounded-lg bg-background/60 border border-border px-2 text-xs font-mono text-foreground"
-            />
+            <div className="flex-1 flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
+              <span className="text-[11px] text-muted-foreground font-mono">R$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={draft}
+                onChange={(e) => applyMasked(e.target.value)}
+                className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
+              />
+            </div>
+
 
           </div>
         </div>
@@ -389,9 +393,6 @@ function CategoryList({
   simulatedLabel,
   selected,
   onSelect,
-  totalSimulated,
-  totalLabel,
-  onClearAll,
 }: {
   items: CategoryBreakdown[];
   emptyLabel: string;
@@ -401,9 +402,6 @@ function CategoryList({
   simulatedLabel: (percent: number, value: number) => string;
   selected: string | null;
   onSelect: (name: string) => void;
-  totalSimulated: number;
-  totalLabel: string;
-  onClearAll: () => void;
 }) {
   const total = items.reduce((s, c) => s + c.total, 0);
   return (
@@ -450,30 +448,6 @@ function CategoryList({
               );
             })}
           </div>
-
-          {totalSimulated > 0 && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground truncate">
-                  {totalLabel}
-                </p>
-                <p className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                  {formatBRL(totalSimulated)}<span className="text-[10px] font-normal">/mês</span>
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  {formatBRL(totalSimulated * PLAN_MONTHS)} em {PLAN_MONTHS} meses
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-[11px] shrink-0"
-                onClick={onClearAll}
-              >
-                Limpar tudo
-              </Button>
-            </div>
-          )}
         </>
       )}
     </div>
