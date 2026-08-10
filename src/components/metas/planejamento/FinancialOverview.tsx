@@ -293,24 +293,17 @@ export function OverviewDetailPanel({
             <span className="text-[11px] text-muted-foreground shrink-0">
               {isIncome ? "Novo faturamento alvo" : "Novo gasto alvo"}
             </span>
-            <input
-              type="number"
-              inputMode="decimal"
-              min={isIncome ? original : 0}
-              max={isIncome ? original * 2 : original}
-              step={10}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={commitDraft}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  commitDraft();
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              className="flex-1 h-8 rounded-lg bg-background/60 border border-border px-2 text-xs font-mono text-foreground"
-            />
+            <div className="flex-1 flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
+              <span className="text-[11px] text-muted-foreground font-mono">R$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={draft}
+                onChange={(e) => applyMasked(e.target.value)}
+                className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
+              />
+            </div>
+
 
           </div>
         </div>
