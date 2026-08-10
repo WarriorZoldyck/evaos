@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,8 +17,8 @@ import {
   OverviewDetailPanel,
   sumSimulated,
   type OverviewExpanded,
-  type SelectedCategory,
 } from "@/components/metas/planejamento/FinancialOverview";
+
 
 import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
@@ -64,32 +64,23 @@ export default function Metas() {
   const [expanded, setExpanded] = useState<OverviewExpanded>({ income: true, expense: true });
   const [expenseCuts, setExpenseCuts] = useState<Record<string, number>>({});
   const [incomeBoosts, setIncomeBoosts] = useState<Record<string, number>>({});
-  const [selected, setSelected] = useState<SelectedCategory | null>(null);
-  const [anchorTop, setAnchorTop] = useState<number | null>(null);
-  const handleAnchorChange = useCallback((top: number | null) => setAnchorTop(top), []);
+  const [selectedIncome, setSelectedIncome] = useState<string | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
 
-  // Abre o simulador já na maior categoria de saídas assim que os dados chegam.
-  const autoPicked = useRef(false);
+  // Cada simulador nasce aberto na maior categoria da sua lista.
   useEffect(() => {
-    if (autoPicked.current || stats.loading) return;
-    const biggest = stats.expenseCategories[0] ?? stats.incomeCategories[0];
-    if (!biggest) return;
-    autoPicked.current = true;
-    setSelected({
-      kind: stats.expenseCategories[0] ? "expense" : "income",
-      name: biggest.name,
-    });
-  }, [stats.loading, stats.expenseCategories, stats.incomeCategories]);
+    if (stats.loading) return;
+    setSelectedIncome((cur) => cur ?? stats.incomeCategories[0]?.name ?? null);
+    setSelectedExpense((cur) => cur ?? stats.expenseCategories[0]?.name ?? null);
+  }, [stats.loading, stats.incomeCategories, stats.expenseCategories]);
 
-  const selectedList =
-    selected?.kind === "income" ? stats.incomeCategories : stats.expenseCategories;
-  const selectedCat = selected
-    ? selectedList.find((c) => c.name === selected.name) ?? null
-    : null;
-  const selectedPercents = selected?.kind === "income" ? incomeBoosts : expenseCuts;
-  const totalSimulatedMonthly = selected
-    ? sumSimulated(selectedList, selectedPercents)
-    : 0;
+  const selectedIncomeCat =
+    stats.incomeCategories.find((c) => c.name === selectedIncome) ?? null;
+  const selectedExpenseCat =
+    stats.expenseCategories.find((c) => c.name === selectedExpense) ?? null;
+  const totalIncomeSimulated = sumSimulated(stats.incomeCategories, incomeBoosts);
+  const totalExpenseSimulated = sumSimulated(stats.expenseCategories, expenseCuts);
+
 
 
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
@@ -168,66 +159,65 @@ export default function Metas() {
         </Button>
       </div>
 
-      <div
-        className={cn(
-          "grid gap-4 items-start",
-          selectedCat
-            ? "lg:grid-cols-[230px_minmax(280px,330px)_minmax(0,1fr)]"
-            : "lg:grid-cols-[240px_minmax(0,1fr)]",
-        )}
-      >
+      <div className="grid gap-4 items-start lg:grid-cols-[230px_minmax(280px,330px)_minmax(0,1fr)]">
         {/* Coluna esquerda */}
         <div className="min-w-0 space-y-2.5">
           <FinancialOverview
             stats={stats}
             monthlyCapacity={monthlyCapacity}
             expanded={expanded}
-            onToggle={(which) => {
-              setExpanded((cur) => ({ ...cur, [which]: !cur[which] }));
-              setSelected((cur) => (cur?.kind === which ? null : cur));
-            }}
+            onToggle={(which) =>
+              setExpanded((cur) => ({ ...cur, [which]: !cur[which] }))
+            }
             expenseCuts={expenseCuts}
             incomeBoosts={incomeBoosts}
-            selected={selected}
+            selectedIncome={selectedIncome}
+            selectedExpense={selectedExpense}
             onSelectCategory={(kind, name) =>
-              setSelected((cur) =>
-                cur && cur.kind === kind && cur.name === name ? null : { kind, name },
-              )
+              kind === "income" ? setSelectedIncome(name) : setSelectedExpense(name)
             }
-            onClear={(kind) =>
-              kind === "income" ? setIncomeBoosts({}) : setExpenseCuts({})
-            }
-            onAnchorChange={handleAnchorChange}
           />
         </div>
 
-        {/* Painel lateral: simulador da categoria selecionada */}
-        {selectedCat && selected && (
-          <div
-            className="min-w-0 lg:[margin-top:var(--panel-top,0px)]"
-            style={{ ["--panel-top" as string]: `${Math.max(0, anchorTop ?? 0)}px` }}
-          >
-            <OverviewDetailPanel
-              mode={selected.kind}
-              category={selectedCat}
-              percent={selectedPercents[selectedCat.name] ?? 0}
-              totalSimulatedMonthly={totalSimulatedMonthly}
-              onPercentChange={(p) => {
-                const setter =
-                  selected.kind === "income" ? setIncomeBoosts : setExpenseCuts;
-                setter((prev) => ({ ...prev, [selectedCat.name]: p }));
-              }}
-              onReset={() =>
-                selected.kind === "income" ? setIncomeBoosts({}) : setExpenseCuts({})
-              }
-              onClose={() => setSelected(null)}
-              onCreateGoal={(draft) => {
-                setPrefill(draft);
-                setFormOpen(true);
-              }}
-            />
-          </div>
-        )}
+        {/* Coluna fixa: os dois simuladores sempre visíveis */}
+        <div className="min-w-0 space-y-3">
+          <OverviewDetailPanel
+            mode="income"
+            category={selectedIncomeCat}
+            percent={
+              selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0
+            }
+            totalSimulatedMonthly={totalIncomeSimulated}
+            onPercentChange={(p) => {
+              if (!selectedIncomeCat) return;
+              setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
+            }}
+            onReset={() => setIncomeBoosts({})}
+            onCreateGoal={(draft) => {
+              setPrefill(draft);
+              setFormOpen(true);
+            }}
+          />
+
+          <OverviewDetailPanel
+            mode="expense"
+            category={selectedExpenseCat}
+            percent={
+              selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0
+            }
+            totalSimulatedMonthly={totalExpenseSimulated}
+            onPercentChange={(p) => {
+              if (!selectedExpenseCat) return;
+              setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
+            }}
+            onReset={() => setExpenseCuts({})}
+            onCreateGoal={(draft) => {
+              setPrefill(draft);
+              setFormOpen(true);
+            }}
+          />
+        </div>
+
 
 
 
