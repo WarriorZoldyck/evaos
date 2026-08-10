@@ -439,30 +439,6 @@ function CategoryList({
               );
             })}
           </div>
-
-          {totalSimulated > 0 && (
-            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground truncate">
-                  {totalLabel}
-                </p>
-                <p className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                  {formatBRL(totalSimulated)}<span className="text-[10px] font-normal">/mês</span>
-                </p>
-                <p className="text-[10px] text-muted-foreground">
-                  {formatBRL(totalSimulated * PLAN_MONTHS)} em {PLAN_MONTHS} meses
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-[11px] shrink-0"
-                onClick={onClearAll}
-              >
-                Limpar tudo
-              </Button>
-            </div>
-          )}
         </>
       )}
     </div>
