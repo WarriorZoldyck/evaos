@@ -56,11 +56,9 @@ interface Props {
   expenseCuts: Record<string, number>;
   /** Percentual de aumento simulado por categoria de entrada. */
   incomeBoosts: Record<string, number>;
-  selected: SelectedCategory | null;
+  selectedIncome: string | null;
+  selectedExpense: string | null;
   onSelectCategory: (kind: SimulationKind, name: string) => void;
-  onClear: (kind: SimulationKind) => void;
-  /** Reporta o offsetTop (px) do card ativo para alinhar o painel lateral. */
-  onAnchorChange?: (top: number | null) => void;
 }
 
 export function FinancialOverview({
@@ -70,33 +68,12 @@ export function FinancialOverview({
   onToggle,
   expenseCuts,
   incomeBoosts,
-  selected,
+  selectedIncome,
+  selectedExpense,
   onSelectCategory,
-  onClear,
-  onAnchorChange,
 }: Props) {
   const { isPersonal } = useCompany();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const incomeRef = useRef<HTMLDivElement>(null);
-  const expenseRef = useRef<HTMLDivElement>(null);
 
-  const totalIncomeBoost = sumSimulated(stats.incomeCategories, incomeBoosts);
-  const totalExpenseSaving = sumSimulated(stats.expenseCategories, expenseCuts);
-
-  useEffect(() => {
-    if (!onAnchorChange) return;
-    if (!selected) {
-      onAnchorChange(null);
-      return;
-    }
-    const el = selected.kind === "income" ? incomeRef.current : expenseRef.current;
-    const root = rootRef.current;
-    if (!el || !root) {
-      onAnchorChange(null);
-      return;
-    }
-    onAnchorChange(el.getBoundingClientRect().top - root.getBoundingClientRect().top);
-  }, [selected, expanded, onAnchorChange, stats.loading, stats.incomeCategories, stats.expenseCategories]);
 
   if (stats.loading) {
     return (
