@@ -216,7 +216,7 @@ export function sumSimulated(
   return items.reduce((sum, c) => sum + (c.total * (percents[c.name] ?? 0)) / 100, 0);
 }
 
-/** Painel lateral: simulador de corte (saídas) ou de aumento (entradas). */
+/** Painel fixo: simulador de corte (saídas) ou de aumento (entradas). */
 export function OverviewDetailPanel({
   mode,
   category,
@@ -224,21 +224,21 @@ export function OverviewDetailPanel({
   totalSimulatedMonthly,
   onPercentChange,
   onReset,
-  onClose,
   onCreateGoal,
 }: {
   mode: SimulationKind;
-  category: CategoryBreakdown;
+  category: CategoryBreakdown | null;
   percent: number;
   /** Soma da simulação de todas as categorias do mesmo tipo. */
   totalSimulatedMonthly: number;
   onPercentChange: (percent: number) => void;
   onReset: () => void;
-  onClose: () => void;
   onCreateGoal?: (draft: GoalDraft) => void;
 }) {
   const isIncome = mode === "income";
-  const original = category.total;
+  // Entradas podem crescer muito além de 100%; saídas no máximo zeram.
+  const maxPercent = isIncome ? 1000 : 100;
+  const original = category?.total ?? 0;
   const delta = useMemo(
     () => Math.round(original * (percent / 100) * 100) / 100,
     [original, percent],
@@ -257,33 +257,42 @@ export function OverviewDetailPanel({
     setDraft(masked);
     if (original <= 0) return;
     const value = numberFromMask(masked);
+    // Nas entradas o valor digitado manda: sem teto, só não pode ficar abaixo da média.
     const clamped = isIncome
-      ? Math.min(original * 2, Math.max(original, value))
+      ? Math.max(original, value)
       : Math.min(original, Math.max(0, value));
     const pct = isIncome
       ? ((clamped - original) / original) * 100
       : ((original - clamped) / original) * 100;
-    onPercentChange(Math.min(100, Math.max(0, Math.round(pct * 100) / 100)));
+    onPercentChange(Math.max(0, Math.round(pct * 100) / 100));
   };
 
+  const header = (
+    <div className="flex items-center justify-between px-1">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        {isIncome ? "Simulador de ganhos" : "Simulador de economia"}
+      </h3>
+    </div>
+  );
 
+  if (!category) {
+    return (
+      <div className="space-y-2">
+        {header}
+        <div className="glass-card p-4">
+          <p className="text-xs text-muted-foreground text-center py-4">
+            {isIncome
+              ? "Sem receitas categorizadas para simular."
+              : "Sem despesas categorizadas para simular."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="animate-in fade-in slide-in-from-left-1 duration-200 space-y-2">
-      <div className="flex items-center justify-between px-1">
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          {isIncome ? "Simulador de ganhos" : "Simulador de economia"}
-        </h3>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          aria-label="Fechar simulador"
-          onClick={onClose}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+    <div className="space-y-2">
+      {header}
 
       <div className="glass-card p-4 space-y-4">
         <div>
@@ -301,10 +310,10 @@ export function OverviewDetailPanel({
             <span className="font-mono font-semibold text-foreground">{Math.round(percent)}%</span>
           </div>
           <Slider
-            value={[percent]}
+            value={[Math.min(percent, maxPercent)]}
             min={0}
-            max={100}
-            step={5}
+            max={maxPercent}
+            step={isIncome ? 10 : 5}
             onValueChange={([v]) => onPercentChange(v)}
           />
           <div className="flex items-center gap-2">
@@ -321,10 +330,14 @@ export function OverviewDetailPanel({
                 className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
               />
             </div>
-
-
           </div>
+          {isIncome && percent > maxPercent && (
+            <p className="text-[11px] text-muted-foreground">
+              Acima de {maxPercent}% o valor digitado é quem manda.
+            </p>
+          )}
         </div>
+
 
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5">
           <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
