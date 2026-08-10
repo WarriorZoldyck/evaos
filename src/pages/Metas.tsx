@@ -64,32 +64,23 @@ export default function Metas() {
   const [expanded, setExpanded] = useState<OverviewExpanded>({ income: true, expense: true });
   const [expenseCuts, setExpenseCuts] = useState<Record<string, number>>({});
   const [incomeBoosts, setIncomeBoosts] = useState<Record<string, number>>({});
-  const [selected, setSelected] = useState<SelectedCategory | null>(null);
-  const [anchorTop, setAnchorTop] = useState<number | null>(null);
-  const handleAnchorChange = useCallback((top: number | null) => setAnchorTop(top), []);
+  const [selectedIncome, setSelectedIncome] = useState<string | null>(null);
+  const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
 
-  // Abre o simulador já na maior categoria de saídas assim que os dados chegam.
-  const autoPicked = useRef(false);
+  // Cada simulador nasce aberto na maior categoria da sua lista.
   useEffect(() => {
-    if (autoPicked.current || stats.loading) return;
-    const biggest = stats.expenseCategories[0] ?? stats.incomeCategories[0];
-    if (!biggest) return;
-    autoPicked.current = true;
-    setSelected({
-      kind: stats.expenseCategories[0] ? "expense" : "income",
-      name: biggest.name,
-    });
-  }, [stats.loading, stats.expenseCategories, stats.incomeCategories]);
+    if (stats.loading) return;
+    setSelectedIncome((cur) => cur ?? stats.incomeCategories[0]?.name ?? null);
+    setSelectedExpense((cur) => cur ?? stats.expenseCategories[0]?.name ?? null);
+  }, [stats.loading, stats.incomeCategories, stats.expenseCategories]);
 
-  const selectedList =
-    selected?.kind === "income" ? stats.incomeCategories : stats.expenseCategories;
-  const selectedCat = selected
-    ? selectedList.find((c) => c.name === selected.name) ?? null
-    : null;
-  const selectedPercents = selected?.kind === "income" ? incomeBoosts : expenseCuts;
-  const totalSimulatedMonthly = selected
-    ? sumSimulated(selectedList, selectedPercents)
-    : 0;
+  const selectedIncomeCat =
+    stats.incomeCategories.find((c) => c.name === selectedIncome) ?? null;
+  const selectedExpenseCat =
+    stats.expenseCategories.find((c) => c.name === selectedExpense) ?? null;
+  const totalIncomeSimulated = sumSimulated(stats.incomeCategories, incomeBoosts);
+  const totalExpenseSimulated = sumSimulated(stats.expenseCategories, expenseCuts);
+
 
 
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
