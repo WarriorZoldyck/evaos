@@ -26,12 +26,14 @@ export function ActionPlanDialog({
 }: ActionPlanDialogProps) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiText, setAiText] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const totalTop = topCategories.reduce((s, c) => s + c.total, 0);
 
   const askEva = async () => {
     setAiLoading(true);
     setAiText(null);
+    setAiError(null);
     try {
       const { data, error } = await supabase.functions.invoke("goal-action-plan", {
         body: {
@@ -44,9 +46,13 @@ export function ActionPlanDialog({
       setAiText(data?.plan || "Sem sugestões no momento.");
     } catch (e: any) {
       const msg = e?.message || "Erro ao consultar a EVA.";
-      if (msg.includes("402")) toast.error("Créditos de IA esgotados. Adicione mais em Configurações.");
-      else if (msg.includes("429")) toast.error("Muitas requisições. Tente novamente em instantes.");
-      else toast.error(msg);
+      const friendly = msg.includes("402")
+        ? "Créditos de IA esgotados. Adicione mais em Configurações."
+        : msg.includes("429")
+          ? "Muitas requisições. Tente novamente em instantes."
+          : msg;
+      setAiError(friendly);
+      toast.error(friendly);
     } finally {
       setAiLoading(false);
     }
