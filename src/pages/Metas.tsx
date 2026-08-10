@@ -15,6 +15,8 @@ import { ActionPlanDialog } from "@/components/metas/ActionPlanDialog";
 import {
   FinancialOverview,
   OverviewDetailPanel,
+  SimulatedCategoryList,
+  SimulationSummary,
   sumSimulated,
   type OverviewExpanded,
 } from "@/components/metas/planejamento/FinancialOverview";
