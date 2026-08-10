@@ -126,12 +126,25 @@ export default function Metas() {
         </Button>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)_340px] lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[240px_300px_minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)]">
         {/* Coluna esquerda */}
-        <div className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-2.5">
           <FinancialOverview stats={stats} monthlyCapacity={monthlyCapacity} />
           <InstallmentCalculator />
         </div>
+
+        {/* Simulador */}
+        <div className="min-w-0">
+          <SavingsSimulator
+            categories={stats.expenseCategories}
+            loading={stats.loading}
+            onCreateGoal={(draft) => {
+              setPrefill(draft);
+              setFormOpen(true);
+            }}
+          />
+        </div>
+
 
         {/* Centro */}
         <div className="min-w-0 space-y-4">
