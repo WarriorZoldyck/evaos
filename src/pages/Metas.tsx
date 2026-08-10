@@ -19,6 +19,7 @@ import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorLi
 import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
+import { InstallmentCalculator } from "@/components/metas/planejamento/InstallmentCalculator";
 
 import { needsResolution, formatBRL } from "@/lib/goalPlanning";
 import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
@@ -127,8 +128,9 @@ export default function Metas() {
 
       <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)_340px] lg:grid-cols-[320px_minmax(0,1fr)]">
         {/* Coluna esquerda */}
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-4">
           <FinancialOverview stats={stats} monthlyCapacity={monthlyCapacity} />
+          <InstallmentCalculator />
         </div>
 
         {/* Centro */}
