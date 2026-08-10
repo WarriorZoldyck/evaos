@@ -58,6 +58,7 @@ export default function Metas() {
     monthly?: number;
   } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [expanded, setExpanded] = useState<OverviewExpanded>(null);
 
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
 
