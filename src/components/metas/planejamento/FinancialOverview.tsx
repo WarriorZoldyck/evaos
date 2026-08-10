@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -233,6 +233,30 @@ export function OverviewDetailPanel({
   const projected = isIncome ? original + delta : Math.max(0, original - delta);
   const target = Math.round(totalSimulatedMonthly * PLAN_MONTHS * 100) / 100;
 
+  // Rascunho local: o campo só é convertido em percentual no blur/Enter,
+  // caso contrário cada tecla digitada reescreveria o valor.
+  const [draft, setDraft] = useState<string>(String(Math.round(projected * 100) / 100));
+  useEffect(() => {
+    setDraft(String(Math.round(projected * 100) / 100));
+  }, [projected]);
+
+  const commitDraft = () => {
+    if (original <= 0) return;
+    const v = Number(draft.replace(",", "."));
+    if (draft.trim() === "" || !Number.isFinite(v)) {
+      setDraft(String(Math.round(projected * 100) / 100));
+      return;
+    }
+    const clamped = isIncome
+      ? Math.min(original * 2, Math.max(original, v))
+      : Math.min(original, Math.max(0, v));
+    const raw = isIncome
+      ? ((clamped - original) / original) * 100
+      : ((original - clamped) / original) * 100;
+    onPercentChange(Math.min(100, Math.max(0, Math.round(raw * 100) / 100)));
+  };
+
+
   return (
     <div className="animate-in fade-in slide-in-from-left-1 duration-200 space-y-2">
       <div className="flex items-center justify-between px-1">
@@ -263,7 +287,7 @@ export function OverviewDetailPanel({
             <span className="text-muted-foreground">
               {isIncome ? "Quanto quer aumentar" : "Quanto quer cortar"}
             </span>
-            <span className="font-mono font-semibold text-foreground">{percent}%</span>
+            <span className="font-mono font-semibold text-foreground">{Math.round(percent)}%</span>
           </div>
           <Slider
             value={[percent]}
@@ -278,20 +302,23 @@ export function OverviewDetailPanel({
             </span>
             <input
               type="number"
+              inputMode="decimal"
               min={isIncome ? original : 0}
               max={isIncome ? original * 2 : original}
               step={10}
-              value={Math.round(projected * 100) / 100}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (!Number.isFinite(v) || original <= 0) return;
-                const raw = isIncome
-                  ? ((v - original) / original) * 100
-                  : ((original - v) / original) * 100;
-                onPercentChange(Math.round(Math.min(100, Math.max(0, raw))));
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitDraft}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitDraft();
+                  (e.target as HTMLInputElement).blur();
+                }
               }}
               className="flex-1 h-8 rounded-lg bg-background/60 border border-border px-2 text-xs font-mono text-foreground"
             />
+
           </div>
         </div>
 
