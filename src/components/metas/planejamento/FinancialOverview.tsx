@@ -93,7 +93,7 @@ export function FinancialOverview({
           Visão do contexto
         </h2>
         <p className="text-xs text-muted-foreground mt-0.5">
-          {isPersonal ? "Pessoal" : "Empresa"}
+          {isPersonal ? "Pessoal" : "Empresa"} · números reais
         </p>
       </div>
 
