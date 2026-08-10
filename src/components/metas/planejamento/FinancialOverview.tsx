@@ -33,7 +33,7 @@ interface Props {
   stats: MetasSidebarStats;
   monthlyCapacity: number;
   expanded: OverviewExpanded;
-  onToggle: (which: Exclude<OverviewExpanded, null>) => void;
+  onToggle: (which: SimulationKind) => void;
   /** Percentual de corte simulado por categoria de saída. */
   expenseCuts: Record<string, number>;
   /** Percentual de aumento simulado por categoria de entrada. */
