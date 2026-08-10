@@ -4995,13 +4995,38 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }, 200);
     }
 
-    // conversa
+    // conversa (inclui sugestões/feedback sobre o produto)
+    const VALID_FEEDBACK_TYPES = ["sugestao", "elogio", "critica", "bug"];
+    const feedbackType = VALID_FEEDBACK_TYPES.includes(aiParsed.feedback_type)
+      ? aiParsed.feedback_type
+      : null;
+    if (feedbackType) {
+      console.log("=== EVA FEEDBACK ===", JSON.stringify({
+        userId,
+        feedback_type: feedbackType,
+        message: String(messageText || "").slice(0, 500),
+      }));
+      const FEEDBACK_REPLY: Record<string, string> = {
+        sugestao: "Anotei sua sugestão e já vou levar para a equipe do EVA OS. Obrigada por ajudar a melhorar! 💙",
+        elogio: "Que bom ler isso! 😄 Vou compartilhar com a equipe do EVA OS. Obrigada!",
+        critica: "Obrigada por contar — anotei seu ponto e vou encaminhar para a equipe do EVA OS. 💙",
+        bug: "Obrigada por avisar! Registrei o problema e já vou repassar para a equipe do EVA OS dar uma olhada. 🔧",
+      };
+      return respond({
+        success: true,
+        intent: "conversa",
+        message: aiParsed.friendly_message || FEEDBACK_REPLY[feedbackType],
+        transaction: null,
+      }, 200);
+    }
+
     return respond({
       success: true,
       intent: "conversa",
       message: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos e consultas financeiras. 😊",
       transaction: null,
     }, 200);
+
   } catch (error) {
     console.error("Webhook error:", error);
     return buildResponse({
