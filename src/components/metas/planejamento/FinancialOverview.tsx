@@ -12,7 +12,7 @@ import { formatBRL } from "@/lib/goalPlanning";
 import { deadlineFromMonths } from "@/lib/savingsSimulator";
 import { cn } from "@/lib/utils";
 
-export type OverviewExpanded = "income" | "expense" | null;
+export type OverviewExpanded = { income: boolean; expense: boolean };
 export type SimulationKind = "income" | "expense";
 
 export interface SelectedCategory {
