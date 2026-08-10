@@ -1,10 +1,10 @@
 # Metas: corrigir números, abrir o simulador ao lado e arrumar o layout
 
-## 1. Números errados nas categorias (bug confirmado)
+## 1. Valores das categorias (manter a média mensal correta)
 
-`useMetasSidebarStats` já devolve cada categoria **como média mensal** (soma do ano dividida pelos meses decorridos). O painel de saídas passa esse valor para `simulateSavings`, que **divide de novo por 12**. Resultado: Alimentação aparece como R$ 608,66/mês quando a média real é bem maior (a conta tem mais de R$ 7 mil no ano).
+A referência continua sendo a **média por mês** de cada categoria, exatamente como já era exibido antes do simulador.
 
-Correção: o simulador passa a receber o valor já mensal, sem dividir de novo (`monthsInPeriod = 1` ou uma entrada explícita `monthlyAvg`). Assim a lista volta a mostrar exatamente o mesmo número que aparecia antes, e o corte percentual é aplicado sobre ele.
+Hoje há uma divisão dupla: `useMetasSidebarStats` já entrega a média mensal (total do ano ÷ meses decorridos) e `simulateSavings` divide de novo por 12, achatando os números. Correção: o simulador recebe o valor já mensal e não divide de novo, então a lista mostra a mesma média mensal de antes, e o corte percentual é aplicado sobre ela.
 
 ## 2. Simulador abre ao lado, não embaixo
 
