@@ -20,6 +20,7 @@ import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressP
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
 import { InstallmentCalculator } from "@/components/metas/planejamento/InstallmentCalculator";
+import { SavingsSimulator } from "@/components/metas/planejamento/SavingsSimulator";
 
 import { needsResolution, formatBRL } from "@/lib/goalPlanning";
 import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
@@ -47,7 +48,12 @@ export default function Metas() {
   const stats = useMetasSidebarStats();
 
   const [formOpen, setFormOpen] = useState(false);
-  const [prefill, setPrefill] = useState<{ name: string; target: number } | null>(null);
+  const [prefill, setPrefill] = useState<{
+    name: string;
+    target: number;
+    deadline?: string;
+    monthly?: number;
+  } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
 
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
@@ -126,12 +132,25 @@ export default function Metas() {
         </Button>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)_340px] lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[240px_300px_minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)]">
         {/* Coluna esquerda */}
-        <div className="min-w-0 space-y-4">
+        <div className="min-w-0 space-y-2.5">
           <FinancialOverview stats={stats} monthlyCapacity={monthlyCapacity} />
           <InstallmentCalculator />
         </div>
+
+        {/* Simulador */}
+        <div className="min-w-0">
+          <SavingsSimulator
+            categories={stats.expenseCategories}
+            loading={stats.loading}
+            onCreateGoal={(draft) => {
+              setPrefill(draft);
+              setFormOpen(true);
+            }}
+          />
+        </div>
+
 
         {/* Centro */}
         <div className="min-w-0 space-y-4">
@@ -170,11 +189,12 @@ export default function Metas() {
           )}
         </div>
 
-        {/* Coluna direita */}
-        <div className="min-w-0 space-y-4 xl:col-auto lg:col-span-2 xl:col-span-1">
+        {/* Painéis da meta ativa */}
+        <div className="min-w-0 space-y-4 lg:col-span-2 xl:col-span-3 xl:grid xl:grid-cols-3 xl:gap-4 xl:space-y-0 xl:items-start">
           {planningGoal && scoreResult ? (
             <>
               <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
+
 
               {showResolution && (
                 <GoalResolutionPanel
@@ -225,10 +245,10 @@ export default function Metas() {
             ? ({
                 id: "", user_id: "", company_id: null,
                 name: prefill.name, target_amount: prefill.target,
-                current_amount: 0, deadline: null,
-                auto_reserve_enabled: false, auto_reserve_frequency: null,
+                current_amount: 0, deadline: prefill.deadline || null,
+                auto_reserve_enabled: Boolean(prefill.monthly), auto_reserve_frequency: null,
                 auto_reserve_per_expense: 0, auto_reserve_per_sale: 0,
-                auto_reserve_amount: 0, icon: "", created_at: "",
+                auto_reserve_amount: prefill.monthly || 0, icon: "", created_at: "",
               } as Goal)
             : null
         }
