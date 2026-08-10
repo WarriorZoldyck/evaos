@@ -228,28 +228,26 @@ export function OverviewDetailPanel({
   const projected = isIncome ? original + delta : Math.max(0, original - delta);
   const target = Math.round(totalSimulatedMonthly * PLAN_MONTHS * 100) / 100;
 
-  // Rascunho local: o campo só é convertido em percentual no blur/Enter,
-  // caso contrário cada tecla digitada reescreveria o valor.
-  const [draft, setDraft] = useState<string>(String(Math.round(projected * 100) / 100));
+  // Campo com máscara de moeda: guardamos centavos como inteiro e formatamos.
+  const [draft, setDraft] = useState<string>(() => maskFromNumber(projected));
   useEffect(() => {
-    setDraft(String(Math.round(projected * 100) / 100));
+    setDraft(maskFromNumber(projected));
   }, [projected]);
 
-  const commitDraft = () => {
+  const applyMasked = (raw: string) => {
+    const masked = maskFromDigits(raw);
+    setDraft(masked);
     if (original <= 0) return;
-    const v = Number(draft.replace(",", "."));
-    if (draft.trim() === "" || !Number.isFinite(v)) {
-      setDraft(String(Math.round(projected * 100) / 100));
-      return;
-    }
+    const value = numberFromMask(masked);
     const clamped = isIncome
-      ? Math.min(original * 2, Math.max(original, v))
-      : Math.min(original, Math.max(0, v));
-    const raw = isIncome
+      ? Math.min(original * 2, Math.max(original, value))
+      : Math.min(original, Math.max(0, value));
+    const pct = isIncome
       ? ((clamped - original) / original) * 100
       : ((original - clamped) / original) * 100;
-    onPercentChange(Math.min(100, Math.max(0, Math.round(raw * 100) / 100)));
+    onPercentChange(Math.min(100, Math.max(0, Math.round(pct * 100) / 100)));
   };
+
 
 
   return (
