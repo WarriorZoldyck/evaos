@@ -233,6 +233,30 @@ export function OverviewDetailPanel({
   const projected = isIncome ? original + delta : Math.max(0, original - delta);
   const target = Math.round(totalSimulatedMonthly * PLAN_MONTHS * 100) / 100;
 
+  // Rascunho local: o campo só é convertido em percentual no blur/Enter,
+  // caso contrário cada tecla digitada reescreveria o valor.
+  const [draft, setDraft] = useState<string>(String(Math.round(projected * 100) / 100));
+  useEffect(() => {
+    setDraft(String(Math.round(projected * 100) / 100));
+  }, [projected]);
+
+  const commitDraft = () => {
+    if (original <= 0) return;
+    const v = Number(draft.replace(",", "."));
+    if (draft.trim() === "" || !Number.isFinite(v)) {
+      setDraft(String(Math.round(projected * 100) / 100));
+      return;
+    }
+    const clamped = isIncome
+      ? Math.min(original * 2, Math.max(original, v))
+      : Math.min(original, Math.max(0, v));
+    const raw = isIncome
+      ? ((clamped - original) / original) * 100
+      : ((original - clamped) / original) * 100;
+    onPercentChange(Math.min(100, Math.max(0, Math.round(raw * 100) / 100)));
+  };
+
+
   return (
     <div className="animate-in fade-in slide-in-from-left-1 duration-200 space-y-2">
       <div className="flex items-center justify-between px-1">
