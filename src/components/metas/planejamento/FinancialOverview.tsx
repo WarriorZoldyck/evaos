@@ -103,25 +103,23 @@ export function FinancialOverview({
         tone="primary"
       />
 
-      <div ref={incomeRef}>
-        <FinancialMetricCard
-          icon={<TrendingUp className="h-4 w-4" />}
-          label="Média de entradas / mês"
-          value={formatBRL(stats.avgIncomeMonth)}
-          tone="success"
-          interactive
-          active={expanded.income}
-          onClick={() => onToggle("income")}
-          rightSlot={
-            <ChevronDown
-              className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform",
-                expanded.income && "rotate-180",
-              )}
-            />
-          }
-        />
-      </div>
+      <FinancialMetricCard
+        icon={<TrendingUp className="h-4 w-4" />}
+        label="Média de entradas / mês"
+        value={formatBRL(stats.avgIncomeMonth)}
+        tone="success"
+        interactive
+        active={expanded.income}
+        onClick={() => onToggle("income")}
+        rightSlot={
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground transition-transform",
+              expanded.income && "rotate-180",
+            )}
+          />
+        }
+      />
 
       {expanded.income && (
         <CategoryList
@@ -131,29 +129,27 @@ export function FinancialOverview({
           hint="Clique numa categoria para simular um aumento."
           simulated={incomeBoosts}
           simulatedLabel={(pct, value) => `aumento de ${pct}% · + ${formatBRL(value)}/mês`}
-          selected={selected?.kind === "income" ? selected.name : null}
+          selected={selectedIncome}
           onSelect={(name) => onSelectCategory("income", name)}
         />
       )}
 
-      <div ref={expenseRef}>
-        <FinancialMetricCard
-          icon={<TrendingDown className="h-4 w-4" />}
-          label="Média de saídas / mês"
-          value={formatBRL(stats.avgSpentMonth)}
-          interactive
-          active={expanded.expense}
-          onClick={() => onToggle("expense")}
-          rightSlot={
-            <ChevronDown
-              className={cn(
-                "h-4 w-4 text-muted-foreground transition-transform",
-                expanded.expense && "rotate-180",
-              )}
-            />
-          }
-        />
-      </div>
+      <FinancialMetricCard
+        icon={<TrendingDown className="h-4 w-4" />}
+        label="Média de saídas / mês"
+        value={formatBRL(stats.avgSpentMonth)}
+        interactive
+        active={expanded.expense}
+        onClick={() => onToggle("expense")}
+        rightSlot={
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground transition-transform",
+              expanded.expense && "rotate-180",
+            )}
+          />
+        }
+      />
 
       {expanded.expense && (
         <CategoryList
@@ -163,10 +159,11 @@ export function FinancialOverview({
           hint="Clique numa categoria para simular um corte."
           simulated={expenseCuts}
           simulatedLabel={(pct, value) => `corte de ${pct}% · + ${formatBRL(value)}/mês`}
-          selected={selected?.kind === "expense" ? selected.name : null}
+          selected={selectedExpense}
           onSelect={(name) => onSelectCategory("expense", name)}
         />
       )}
+
 
 
       <FinancialMetricCard
