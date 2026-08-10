@@ -138,9 +138,6 @@ export function FinancialOverview({
           simulatedLabel={(pct, value) => `aumento de ${pct}% · + ${formatBRL(value)}/mês`}
           selected={selected?.kind === "income" ? selected.name : null}
           onSelect={(name) => onSelectCategory("income", name)}
-          totalSimulated={totalIncomeBoost}
-          totalLabel="Ganho total simulado"
-          onClearAll={() => onClear("income")}
         />
       )}
 
@@ -173,11 +170,9 @@ export function FinancialOverview({
           simulatedLabel={(pct, value) => `corte de ${pct}% · + ${formatBRL(value)}/mês`}
           selected={selected?.kind === "expense" ? selected.name : null}
           onSelect={(name) => onSelectCategory("expense", name)}
-          totalSimulated={totalExpenseSaving}
-          totalLabel="Economia total simulada"
-          onClearAll={() => onClear("expense")}
         />
       )}
+
 
       <FinancialMetricCard
         icon={<PiggyBank className="h-4 w-4" />}
