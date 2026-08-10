@@ -245,10 +245,10 @@ export default function Metas() {
             ? ({
                 id: "", user_id: "", company_id: null,
                 name: prefill.name, target_amount: prefill.target,
-                current_amount: 0, deadline: null,
-                auto_reserve_enabled: false, auto_reserve_frequency: null,
+                current_amount: 0, deadline: prefill.deadline || null,
+                auto_reserve_enabled: Boolean(prefill.monthly), auto_reserve_frequency: null,
                 auto_reserve_per_expense: 0, auto_reserve_per_sale: 0,
-                auto_reserve_amount: 0, icon: "", created_at: "",
+                auto_reserve_amount: prefill.monthly || 0, icon: "", created_at: "",
               } as Goal)
             : null
         }
