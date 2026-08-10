@@ -189,11 +189,12 @@ export default function Metas() {
           )}
         </div>
 
-        {/* Coluna direita */}
-        <div className="min-w-0 space-y-4 xl:col-auto lg:col-span-2 xl:col-span-1">
+        {/* Painéis da meta ativa */}
+        <div className="min-w-0 space-y-4 lg:col-span-2 xl:col-span-3 xl:grid xl:grid-cols-3 xl:gap-4 xl:space-y-0 xl:items-start">
           {planningGoal && scoreResult ? (
             <>
               <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
+
 
               {showResolution && (
                 <GoalResolutionPanel
