@@ -12,7 +12,12 @@ import { usePlanningGoal } from "@/hooks/usePlanningGoal";
 
 import { GoalFormModal } from "@/components/metas/GoalFormModal";
 import { ActionPlanDialog } from "@/components/metas/ActionPlanDialog";
-import { FinancialOverview } from "@/components/metas/planejamento/FinancialOverview";
+import {
+  FinancialOverview,
+  OverviewDetailPanel,
+  type OverviewExpanded,
+} from "@/components/metas/planejamento/FinancialOverview";
+import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
 import { GoalChat } from "@/components/metas/planejamento/GoalChat";
 import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorList";
