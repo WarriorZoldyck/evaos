@@ -29,15 +29,15 @@ export function FinancialMetricCard({
   rightSlot,
 }: FinancialMetricCardProps) {
   const content = (
-    <div className="p-4 space-y-1.5">
+    <div className="px-3 py-2.5 space-y-1">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground min-w-0">
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide font-semibold text-muted-foreground min-w-0">
           {icon}
           <span className="truncate">{label}</span>
         </div>
         {rightSlot}
       </div>
-      <p className={cn("text-xl font-bold font-mono truncate", TONES[tone])}>{value}</p>
+      <p className={cn("text-base font-bold font-mono truncate", TONES[tone])}>{value}</p>
     </div>
   );
 
