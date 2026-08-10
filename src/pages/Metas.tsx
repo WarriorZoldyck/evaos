@@ -138,8 +138,8 @@ export default function Metas() {
 
       <div
         className={cn(
-          "grid gap-4",
-          expanded
+          "grid gap-4 items-start",
+          selectedCat
             ? "lg:grid-cols-[280px_minmax(280px,340px)_minmax(0,1fr)]"
             : "lg:grid-cols-[300px_minmax(0,1fr)]",
         )}
@@ -150,17 +150,30 @@ export default function Metas() {
             stats={stats}
             monthlyCapacity={monthlyCapacity}
             expanded={expanded}
-            onToggle={(which) => setExpanded((cur) => (cur === which ? null : which))}
+            onToggle={(which) => {
+              setExpanded((cur) => (cur === which ? null : which));
+              if (which === "expense") setSelectedCategory(null);
+            }}
+            cuts={cuts}
+            selectedCategory={selectedCategory}
+            onSelectCategory={(name) =>
+              setSelectedCategory((cur) => (cur === name ? null : name))
+            }
           />
         </div>
 
-        {/* Painel lateral (detalhe / simulador) */}
-        {expanded && (
+        {/* Painel lateral: simulador da categoria selecionada */}
+        {selectedCat && (
           <div className="min-w-0">
             <OverviewDetailPanel
-              kind={expanded}
-              stats={stats}
-              onClose={() => setExpanded(null)}
+              category={selectedCat}
+              percent={cuts[selectedCat.name] ?? 0}
+              totalSimulatedMonthly={totalSimulatedMonthly}
+              onPercentChange={(p) =>
+                setCuts((prev) => ({ ...prev, [selectedCat.name]: p }))
+              }
+              onReset={() => setCuts({})}
+              onClose={() => setSelectedCategory(null)}
               onCreateGoal={(draft) => {
                 setPrefill(draft);
                 setFormOpen(true);
@@ -168,6 +181,7 @@ export default function Metas() {
             />
           </div>
         )}
+
 
         {/* Centro */}
         <div className="min-w-0 space-y-4">
