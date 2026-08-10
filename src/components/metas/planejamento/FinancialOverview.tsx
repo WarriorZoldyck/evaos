@@ -288,7 +288,10 @@ export function OverviewDetailPanel({
               {isIncome ? "Quanto quer aumentar" : "Quanto quer cortar"}
             </span>
             <span className="font-mono font-semibold text-foreground">{Math.round(percent)}%</span>
-
+          </div>
+          <Slider
+            value={[percent]}
+            min={0}
             max={100}
             step={5}
             onValueChange={([v]) => onPercentChange(v)}
@@ -299,20 +302,23 @@ export function OverviewDetailPanel({
             </span>
             <input
               type="number"
+              inputMode="decimal"
               min={isIncome ? original : 0}
               max={isIncome ? original * 2 : original}
               step={10}
-              value={Math.round(projected * 100) / 100}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                if (!Number.isFinite(v) || original <= 0) return;
-                const raw = isIncome
-                  ? ((v - original) / original) * 100
-                  : ((original - v) / original) * 100;
-                onPercentChange(Math.round(Math.min(100, Math.max(0, raw))));
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitDraft}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitDraft();
+                  (e.target as HTMLInputElement).blur();
+                }
               }}
               className="flex-1 h-8 rounded-lg bg-background/60 border border-border px-2 text-xs font-mono text-foreground"
             />
+
           </div>
         </div>
 
