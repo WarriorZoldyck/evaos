@@ -11,6 +11,8 @@ import { ProcedureTableV2 } from "@/components/precificacao-v2/ProcedureTableV2"
 import { ProcedureFormModalV2 } from "@/components/precificacao-v2/ProcedureFormModalV2";
 
 import { SuggestedPriceCalculator } from "@/components/precificacao-v2/SuggestedPriceCalculator";
+import { InstallmentCalculator } from "@/components/precificacao-v2/InstallmentCalculator";
+
 
 import { ExportPricingButton } from "@/components/precificacao-v2/ExportPricingButton";
 
@@ -116,6 +118,10 @@ export default function Precificacao() {
 
       {/* Calculadora de Preço Sugerido */}
       <SuggestedPriceCalculator custoHora={custoHoraPorSala} taxRate={taxRate} procedures={procedures} />
+
+      {/* Calculadora de parcelamento */}
+      <InstallmentCalculator />
+
 
       {/* Seção 4: Despesas em Tabs */}
       <Card>

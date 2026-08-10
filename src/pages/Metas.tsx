@@ -19,8 +19,6 @@ import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorLi
 import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
-import { InstallmentCalculator } from "@/components/metas/planejamento/InstallmentCalculator";
-import { SavingsSimulator } from "@/components/metas/planejamento/SavingsSimulator";
 
 import { needsResolution, formatBRL } from "@/lib/goalPlanning";
 import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
@@ -132,24 +130,20 @@ export default function Metas() {
         </Button>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[240px_300px_minmax(0,1fr)] lg:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
         {/* Coluna esquerda */}
         <div className="min-w-0 space-y-2.5">
-          <FinancialOverview stats={stats} monthlyCapacity={monthlyCapacity} />
-          <InstallmentCalculator />
-        </div>
-
-        {/* Simulador */}
-        <div className="min-w-0">
-          <SavingsSimulator
-            categories={stats.expenseCategories}
-            loading={stats.loading}
+          <FinancialOverview
+            stats={stats}
+            monthlyCapacity={monthlyCapacity}
             onCreateGoal={(draft) => {
               setPrefill(draft);
               setFormOpen(true);
             }}
           />
         </div>
+
+
 
 
         {/* Centro */}
@@ -190,7 +184,7 @@ export default function Metas() {
         </div>
 
         {/* Painéis da meta ativa */}
-        <div className="min-w-0 space-y-4 lg:col-span-2 xl:col-span-3 xl:grid xl:grid-cols-3 xl:gap-4 xl:space-y-0 xl:items-start">
+        <div className="min-w-0 space-y-4 lg:col-span-2 xl:grid xl:grid-cols-3 xl:gap-4 xl:space-y-0 xl:items-start">
           {planningGoal && scoreResult ? (
             <>
               <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
