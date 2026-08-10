@@ -19,8 +19,6 @@ import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorLi
 import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
-import { InstallmentCalculator } from "@/components/metas/planejamento/InstallmentCalculator";
-import { SavingsSimulator } from "@/components/metas/planejamento/SavingsSimulator";
 
 import { needsResolution, formatBRL } from "@/lib/goalPlanning";
 import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
