@@ -372,6 +372,145 @@ export function OverviewDetailPanel({
   );
 }
 
+/** Espelho simulado das barrinhas de categoria (valor já com corte/aumento). */
+export function SimulatedCategoryList({
+  items,
+  percents,
+  kind,
+  selected,
+  onSelect,
+}: {
+  items: CategoryBreakdown[];
+  percents: Record<string, number>;
+  kind: SimulationKind;
+  selected: string | null;
+  onSelect: (name: string) => void;
+}) {
+  const isIncome = kind === "income";
+  const projectedOf = (c: CategoryBreakdown) => {
+    const pct = percents[c.name] ?? 0;
+    const delta = (c.total * pct) / 100;
+    return isIncome ? c.total + delta : Math.max(0, c.total - delta);
+  };
+  const total = items.reduce((s, c) => s + projectedOf(c), 0);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="glass-card p-4 space-y-2">
+      <p className="text-[11px] text-muted-foreground">
+        {isIncome ? "Entradas simuladas por categoria" : "Saídas simuladas por categoria"}
+      </p>
+      <div className="max-h-[240px] overflow-y-auto space-y-2 pr-1">
+        {items.map((c) => {
+          const projected = projectedOf(c);
+          const pct = total > 0 ? (projected / total) * 100 : 0;
+          const sim = percents[c.name] ?? 0;
+          const isSelected = selected === c.name;
+          return (
+            <button
+              key={c.name}
+              type="button"
+              onClick={() => onSelect(c.name)}
+              className={cn(
+                "w-full text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
+                isSelected && "bg-accent/40 ring-1 ring-primary/40",
+              )}
+            >
+              <div className="space-y-1">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium text-foreground">{c.name}</span>
+                  <span
+                    className={cn(
+                      "font-mono shrink-0",
+                      sim > 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    {formatBRL(projected)}/mês
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full",
+                      sim > 0 ? "bg-emerald-500/70" : isIncome ? "bg-emerald-500/40" : "bg-primary/40",
+                    )}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Cards espelhados: capacidade e sobra recalculadas com a simulação. */
+export function SimulationSummary({
+  baseCapacity,
+  simulatedCapacity,
+  baseLeftover,
+  simulatedLeftover,
+}: {
+  baseCapacity: number;
+  simulatedCapacity: number;
+  baseLeftover: number;
+  simulatedLeftover: number;
+}) {
+  const diff = (a: number, b: number) => {
+    const d = a - b;
+    if (Math.abs(d) < 0.01) return null;
+    return `${d > 0 ? "+" : "−"} ${formatBRL(Math.abs(d))}`;
+  };
+
+  const Row = ({
+    label,
+    value,
+    delta,
+    danger,
+  }: { label: string; value: number; delta: string | null; danger: boolean }) => (
+    <div className="glass-card px-4 py-3 space-y-1">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+        <PiggyBank className="h-4 w-4" />
+        <span className="truncate">{label}</span>
+      </div>
+      <p
+        className={cn(
+          "text-lg font-bold font-mono truncate",
+          danger ? "text-destructive" : "text-emerald-600 dark:text-emerald-400",
+        )}
+      >
+        {formatBRL(value)}
+      </p>
+      {delta && <p className="text-[11px] font-mono text-muted-foreground">{delta} vs. real</p>}
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+        Resultado simulado
+      </h3>
+      <Row
+        label="Capacidade mensal simulada"
+        value={simulatedCapacity}
+        delta={diff(simulatedCapacity, baseCapacity)}
+        danger={simulatedCapacity <= 0}
+      />
+      <Row
+        label="Sobra simulada até dez"
+        value={simulatedLeftover}
+        delta={diff(simulatedLeftover, baseLeftover)}
+        danger={simulatedLeftover < 0}
+      />
+    </div>
+  );
+}
+
 function CategoryList({
   items,
   emptyLabel,
