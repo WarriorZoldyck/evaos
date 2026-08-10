@@ -61,7 +61,7 @@ export default function Metas() {
     monthly?: number;
   } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
-  const [expanded, setExpanded] = useState<OverviewExpanded>(null);
+  const [expanded, setExpanded] = useState<OverviewExpanded>({ income: true, expense: true });
   const [expenseCuts, setExpenseCuts] = useState<Record<string, number>>({});
   const [incomeBoosts, setIncomeBoosts] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<SelectedCategory | null>(null);
