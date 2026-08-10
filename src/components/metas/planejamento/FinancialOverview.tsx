@@ -115,20 +115,20 @@ export function FinancialOverview({
           value={formatBRL(stats.avgIncomeMonth)}
           tone="success"
           interactive
-          active={expanded === "income"}
+          active={expanded.income}
           onClick={() => onToggle("income")}
           rightSlot={
             <ChevronDown
               className={cn(
                 "h-4 w-4 text-muted-foreground transition-transform",
-                expanded === "income" && "rotate-180",
+                expanded.income && "rotate-180",
               )}
             />
           }
         />
       </div>
 
-      {expanded === "income" && (
+      {expanded.income && (
         <CategoryList
           items={stats.incomeCategories}
           emptyLabel="Sem receitas categorizadas neste ano."
@@ -150,20 +150,20 @@ export function FinancialOverview({
           label="Média de saídas / mês"
           value={formatBRL(stats.avgSpentMonth)}
           interactive
-          active={expanded === "expense"}
+          active={expanded.expense}
           onClick={() => onToggle("expense")}
           rightSlot={
             <ChevronDown
               className={cn(
                 "h-4 w-4 text-muted-foreground transition-transform",
-                expanded === "expense" && "rotate-180",
+                expanded.expense && "rotate-180",
               )}
             />
           }
         />
       </div>
 
-      {expanded === "expense" && (
+      {expanded.expense && (
         <CategoryList
           items={stats.expenseCategories}
           emptyLabel="Sem despesas categorizadas neste ano."
