@@ -287,11 +287,8 @@ export function OverviewDetailPanel({
             <span className="text-muted-foreground">
               {isIncome ? "Quanto quer aumentar" : "Quanto quer cortar"}
             </span>
-            <span className="font-mono font-semibold text-foreground">{percent}%</span>
-          </div>
-          <Slider
-            value={[percent]}
-            min={0}
+            <span className="font-mono font-semibold text-foreground">{Math.round(percent)}%</span>
+
             max={100}
             step={5}
             onValueChange={([v]) => onPercentChange(v)}
