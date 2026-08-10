@@ -29,6 +29,24 @@ export interface GoalDraft {
 
 const PLAN_MONTHS = 12;
 
+/** Formata dígitos crus (centavos) como "1.234,56". */
+function maskFromDigits(raw: string): string {
+  const digits = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  const padded = digits.padStart(3, "0");
+  const cents = padded.slice(-2);
+  const units = padded.slice(0, -2);
+  return `${units.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${cents}`;
+}
+
+function maskFromNumber(value: number): string {
+  return maskFromDigits(String(Math.round((value || 0) * 100)));
+}
+
+function numberFromMask(masked: string): number {
+  const digits = masked.replace(/\D/g, "");
+  return digits ? Number(digits) / 100 : 0;
+}
+
 interface Props {
   stats: MetasSidebarStats;
   monthlyCapacity: number;
