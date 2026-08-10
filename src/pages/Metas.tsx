@@ -2,7 +2,8 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LifeBuoy, Plus, Sparkles, Plane, Wrench } from "lucide-react";
+import { LifeBuoy, Plus, Sparkles, Plane, Wrench, TrendingUp, TrendingDown } from "lucide-react";
+import { FinancialMetricCard } from "@/components/metas/planejamento/FinancialMetricCard";
 
 import { useGoals, type Goal } from "@/hooks/useGoals";
 import { useCompany } from "@/contexts/CompanyContext";
