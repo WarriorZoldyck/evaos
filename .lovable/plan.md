@@ -3,7 +3,8 @@
 ## 1. Simulador nasce do detalhamento das saídas
 Hoje o simulador é um card fixo ao lado, com nome da meta e "quanto juntar". Passa a ser um fluxo natural:
 
-- Ao expandir "Média de saídas / mês", cada categoria da lista vira interativa: clicar abre um slider de corte (0-100%) na própria linha, mostrando quanto sobra por mês com aquele corte.
+- Ao expandir "Média de saídas / mês", cada categoria da lista vira interativa: clicar abre um slider de corte (0-100%) na própria linha.
+- Cada linha passa a mostrar a média mensal daquela categoria (total do ano / 12), coerente com o valor da "Média de saídas / mês" — é sobre esse número que o usuário decide o corte, vendo em tempo real quanto economiza e quanto sobra por mês.
 - Conforme o usuário mexe nos sliders, aparece um rodapé fixo dentro do painel: "Economia simulada: R$ X / mês · R$ Y em 12 meses" e um botão "Criar meta com essa economia".
 - Sem campos de nome/valor alvo no simulador. O valor alvo é derivado da economia (economia mensal x prazo padrão de 12 meses) e o usuário ajusta tudo no formulário de meta, que já abre pré-preenchido com aporte mensal, prazo e um nome sugerido editável.
 - O card `SavingsSimulator` separado deixa de existir; a coluna esquerda volta a ocupar a largura antiga e o layout da página volta a duas colunas (visão do contexto + centro/painéis).
