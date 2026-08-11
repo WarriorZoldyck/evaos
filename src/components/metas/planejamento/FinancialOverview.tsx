@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import {
-  Wallet, TrendingDown, TrendingUp, PiggyBank, ChevronDown, Sparkles, RotateCcw,
+  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw,
 } from "lucide-react";
 
 import { useCompany } from "@/contexts/CompanyContext";
@@ -13,7 +12,6 @@ import { formatBRL } from "@/lib/goalPlanning";
 import { deadlineFromMonths } from "@/lib/savingsSimulator";
 import { cn } from "@/lib/utils";
 
-export type OverviewExpanded = { income: boolean; expense: boolean };
 export type SimulationKind = "income" | "expense";
 
 export interface SelectedCategory {
@@ -48,138 +46,26 @@ function numberFromMask(masked: string): number {
   return digits ? Number(digits) / 100 : 0;
 }
 
-interface Props {
-  stats: MetasSidebarStats;
-  monthlyCapacity: number;
-  expanded: OverviewExpanded;
-  onToggle: (which: SimulationKind) => void;
-  /** Percentual de corte simulado por categoria de saída. */
-  expenseCuts: Record<string, number>;
-  /** Percentual de aumento simulado por categoria de entrada. */
-  incomeBoosts: Record<string, number>;
-  selectedIncome: string | null;
-  selectedExpense: string | null;
-  onSelectCategory: (kind: SimulationKind, name: string) => void;
-}
-
-export function FinancialOverview({
-  stats,
-  monthlyCapacity,
-  expanded,
-  onToggle,
-  expenseCuts,
-  incomeBoosts,
-  selectedIncome,
-  selectedExpense,
-  onSelectCategory,
-}: Props) {
-  const { isPersonal } = useCompany();
-
-
-  if (stats.loading) {
-    return (
-      <div className="space-y-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 w-full rounded-[1.5rem]" />
-        ))}
-      </div>
-    );
-  }
-
+export function OverviewSkeleton() {
   return (
     <div className="space-y-3">
-      <div className="px-1">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Visão do contexto
-        </h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {isPersonal ? "Pessoal" : "Empresa"} · números reais
-        </p>
-      </div>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Skeleton key={i} className="h-20 w-full rounded-[1.5rem]" />
+      ))}
+    </div>
+  );
+}
 
-      <FinancialMetricCard
-        icon={<Wallet className="h-4 w-4" />}
-        label="Saldo total"
-        value={formatBRL(stats.totalBalance)}
-        tone="primary"
-      />
-
-      <FinancialMetricCard
-        icon={<TrendingUp className="h-4 w-4" />}
-        label="Média de entradas / mês"
-        value={formatBRL(stats.avgIncomeMonth)}
-        tone="success"
-        interactive
-        active={expanded.income}
-        onClick={() => onToggle("income")}
-        rightSlot={
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              expanded.income && "rotate-180",
-            )}
-          />
-        }
-      />
-
-      {expanded.income && (
-        <CategoryList
-          items={stats.incomeCategories}
-          emptyLabel="Sem receitas categorizadas neste ano."
-          barClass="bg-emerald-500/70"
-          hint="Clique numa categoria para simular um aumento."
-          simulated={incomeBoosts}
-          simulatedLabel={(pct, value) => `aumento de ${pct}% · + ${formatBRL(value)}/mês`}
-          selected={selectedIncome}
-          onSelect={(name) => onSelectCategory("income", name)}
-        />
-      )}
-
-      <FinancialMetricCard
-        icon={<TrendingDown className="h-4 w-4" />}
-        label="Média de saídas / mês"
-        value={formatBRL(stats.avgSpentMonth)}
-        interactive
-        active={expanded.expense}
-        onClick={() => onToggle("expense")}
-        rightSlot={
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              expanded.expense && "rotate-180",
-            )}
-          />
-        }
-      />
-
-      {expanded.expense && (
-        <CategoryList
-          items={stats.expenseCategories}
-          emptyLabel="Sem despesas categorizadas neste ano."
-          barClass="bg-primary/70"
-          hint="Clique numa categoria para simular um corte."
-          simulated={expenseCuts}
-          simulatedLabel={(pct, value) => `corte de ${pct}% · + ${formatBRL(value)}/mês`}
-          selected={selectedExpense}
-          onSelect={(name) => onSelectCategory("expense", name)}
-        />
-      )}
-
-
-
-      <FinancialMetricCard
-        icon={<PiggyBank className="h-4 w-4" />}
-        label="Capacidade mensal estimada"
-        value={formatBRL(monthlyCapacity)}
-        tone={monthlyCapacity <= 0 ? "danger" : "success"}
-      />
-
-      <FinancialMetricCard
-        icon={<PiggyBank className="h-4 w-4" />}
-        label="Sobra estimada até dez"
-        value={formatBRL(stats.leftover)}
-        tone={stats.leftover < 0 ? "danger" : "default"}
-      />
+export function OverviewHeader() {
+  const { isPersonal } = useCompany();
+  return (
+    <div className="px-1">
+      <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        Visão do contexto
+      </h2>
+      <p className="text-xs text-muted-foreground mt-0.5">
+        {isPersonal ? "Pessoal" : "Empresa"} · números reais
+      </p>
     </div>
   );
 }
@@ -191,41 +77,93 @@ export function sumSimulated(
   return items.reduce((sum, c) => sum + (c.total * (percents[c.name] ?? 0)) / 100, 0);
 }
 
+/** Bloco real: card de média + lista de categorias reais. */
+export function RealAverageBlock({
+  kind,
+  stats,
+  simulated,
+  selected,
+  onSelect,
+}: {
+  kind: SimulationKind;
+  stats: MetasSidebarStats;
+  simulated: Record<string, number>;
+  selected: string | null;
+  onSelect: (name: string) => void;
+}) {
+  const isIncome = kind === "income";
+  return (
+    <div className="space-y-2.5">
+      <FinancialMetricCard
+        icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+        label={isIncome ? "Média de entradas / mês" : "Média de saídas / mês"}
+        value={formatBRL(isIncome ? stats.avgIncomeMonth : stats.avgSpentMonth)}
+        tone={isIncome ? "success" : "default"}
+      />
+      <CategoryList
+        items={isIncome ? stats.incomeCategories : stats.expenseCategories}
+        emptyLabel={
+          isIncome
+            ? "Sem receitas categorizadas neste ano."
+            : "Sem despesas categorizadas neste ano."
+        }
+        barClass={isIncome ? "bg-emerald-500/70" : "bg-primary/70"}
+        hint={
+          isIncome
+            ? "Clique numa categoria para simular um aumento."
+            : "Clique numa categoria para simular um corte."
+        }
+        simulated={simulated}
+        simulatedLabel={(pct, value) =>
+          isIncome
+            ? `aumento de ${pct}% · + ${formatBRL(value)}/mês`
+            : `corte de ${pct}% · + ${formatBRL(value)}/mês`
+        }
+        selected={selected}
+        onSelect={onSelect}
+      />
+    </div>
+  );
+}
+
 /** Painel fixo: simulador de corte (saídas) ou de aumento (entradas). */
 export function OverviewDetailPanel({
   mode,
   category,
   percent,
   totalSimulatedMonthly,
+  newAverage,
   onPercentChange,
   onReset,
-  onCreateGoal,
 }: {
   mode: SimulationKind;
   category: CategoryBreakdown | null;
   percent: number;
   /** Soma da simulação de todas as categorias do mesmo tipo. */
   totalSimulatedMonthly: number;
+  /** Nova média mensal do bloco (entradas ou saídas) já simulada. */
+  newAverage: number;
   onPercentChange: (percent: number) => void;
   onReset: () => void;
-  onCreateGoal?: (draft: GoalDraft) => void;
 }) {
   const isIncome = mode === "income";
-  // Entradas podem crescer muito além de 100%; saídas no máximo zeram.
-  const maxPercent = isIncome ? 1000 : 100;
   const original = category?.total ?? 0;
   const delta = useMemo(
     () => Math.round(original * (percent / 100) * 100) / 100,
     [original, percent],
   );
   const projected = isIncome ? original + delta : Math.max(0, original - delta);
-  const target = Math.round(totalSimulatedMonthly * PLAN_MONTHS * 100) / 100;
 
   // Campo com máscara de moeda: guardamos centavos como inteiro e formatamos.
   const [draft, setDraft] = useState<string>(() => maskFromNumber(projected));
   useEffect(() => {
     setDraft(maskFromNumber(projected));
   }, [projected]);
+
+  const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(percent)));
+  useEffect(() => {
+    setPctDraft(String(Math.round(percent)));
+  }, [percent]);
 
   const applyMasked = (raw: string) => {
     const masked = maskFromDigits(raw);
@@ -242,11 +180,29 @@ export function OverviewDetailPanel({
     onPercentChange(Math.max(0, Math.round(pct * 100) / 100));
   };
 
+  const applyPercent = (raw: string) => {
+    setPctDraft(raw);
+    const value = Number(raw.replace(",", "."));
+    if (!Number.isFinite(value)) return;
+    // Saídas não podem cortar mais do que 100%; entradas não têm teto.
+    const clamped = isIncome ? Math.max(0, value) : Math.min(100, Math.max(0, value));
+    onPercentChange(Math.round(clamped * 100) / 100);
+  };
+
   const header = (
     <div className="flex items-center justify-between px-1">
       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
         {isIncome ? "Simulador de ganhos" : "Simulador de economia"}
       </h3>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-6 px-2"
+        aria-label="Limpar simulação"
+        onClick={onReset}
+      >
+        <RotateCcw className="h-3.5 w-3.5" />
+      </Button>
     </div>
   );
 
@@ -270,32 +226,29 @@ export function OverviewDetailPanel({
       {header}
 
       <div className="glass-card p-4 space-y-4">
-        <div>
-          <p className="text-sm font-semibold text-foreground truncate">{category.name}</p>
-          <p className="text-[11px] text-muted-foreground">
-            Média atual · <span className="font-mono">{formatBRL(original)}/mês</span>
-          </p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground truncate">{category.name}</p>
+            <p className="text-[11px] text-muted-foreground">
+              Média atual · <span className="font-mono">{formatBRL(original)}/mês</span>
+            </p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-[11px] text-muted-foreground">
+              {isIncome ? "Nova média de entradas" : "Nova média de saídas"}
+            </p>
+            <p className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
+              {formatBRL(newAverage)}
+            </p>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
-              {isIncome ? "Quanto quer aumentar" : "Quanto quer cortar"}
-            </span>
-            <span className="font-mono font-semibold text-foreground">{Math.round(percent)}%</span>
-          </div>
-          <Slider
-            value={[Math.min(percent, maxPercent)]}
-            min={0}
-            max={maxPercent}
-            step={isIncome ? 10 : 5}
-            onValueChange={([v]) => onPercentChange(v)}
-          />
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground shrink-0">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="space-y-1">
+            <span className="text-[11px] text-muted-foreground block">
               {isIncome ? "Novo faturamento alvo" : "Novo gasto alvo"}
             </span>
-            <div className="flex-1 flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
+            <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
               <span className="text-[11px] text-muted-foreground font-mono">R$</span>
               <input
                 type="text"
@@ -305,14 +258,26 @@ export function OverviewDetailPanel({
                 className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
               />
             </div>
-          </div>
-          {isIncome && percent > maxPercent && (
-            <p className="text-[11px] text-muted-foreground">
-              Acima de {maxPercent}% o valor digitado é quem manda.
-            </p>
-          )}
-        </div>
+          </label>
 
+          <label className="space-y-1">
+            <span className="text-[11px] text-muted-foreground block">
+              {isIncome ? "Aumentar (%)" : "Cortar (%)"}
+            </span>
+            <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
+              <input
+                type="number"
+                min={0}
+                max={isIncome ? undefined : 100}
+                step={1}
+                value={pctDraft}
+                onChange={(e) => applyPercent(e.target.value)}
+                className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
+              />
+              <span className="text-[11px] text-muted-foreground font-mono">%</span>
+            </div>
+          </label>
+        </div>
 
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5">
           <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
@@ -320,9 +285,6 @@ export function OverviewDetailPanel({
           </p>
           <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
             {formatBRL(totalSimulatedMonthly)}<span className="text-xs font-normal">/mês</span>
-          </p>
-          <p className="text-[11px] text-muted-foreground">
-            {formatBRL(totalSimulatedMonthly * PLAN_MONTHS)} em {PLAN_MONTHS} meses
           </p>
           <div className="pt-1.5 mt-1 border-t border-emerald-500/20 space-y-1">
             <div className="flex items-center justify-between text-[11px]">
@@ -336,36 +298,6 @@ export function OverviewDetailPanel({
               <span className="font-mono">{formatBRL(projected)}/mês</span>
             </div>
           </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            className="flex-1 gap-1.5 h-8 text-xs"
-            disabled={totalSimulatedMonthly <= 0}
-            onClick={() =>
-              onCreateGoal?.({
-                name: isIncome
-                  ? `Aumentar ${category.name}`
-                  : `Economia em ${category.name}`,
-                target,
-                deadline: deadlineFromMonths(PLAN_MONTHS),
-                monthly: Math.round(totalSimulatedMonthly * 100) / 100,
-              })
-            }
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            {isIncome ? "Criar meta de ganhos" : "Criar meta com essa economia"}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 px-2"
-            aria-label="Limpar simulação"
-            onClick={onReset}
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-          </Button>
         </div>
       </div>
     </div>
@@ -401,7 +333,7 @@ export function SimulatedCategoryList({
       <p className="text-[11px] text-muted-foreground">
         {isIncome ? "Entradas simuladas por categoria" : "Saídas simuladas por categoria"}
       </p>
-      <div className="max-h-[240px] overflow-y-auto space-y-2 pr-1">
+      <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1">
         {items.map((c) => {
           const projected = projectedOf(c);
           const pct = total > 0 ? (projected / total) * 100 : 0;
@@ -455,11 +387,17 @@ export function SimulationSummary({
   simulatedCapacity,
   baseLeftover,
   simulatedLeftover,
+  simulatedGain,
+  simulatedSaving,
+  onCreateGoal,
 }: {
   baseCapacity: number;
   simulatedCapacity: number;
   baseLeftover: number;
   simulatedLeftover: number;
+  simulatedGain: number;
+  simulatedSaving: number;
+  onCreateGoal?: (draft: GoalDraft) => void;
 }) {
   const diff = (a: number, b: number) => {
     const d = a - b;
@@ -467,12 +405,54 @@ export function SimulationSummary({
     return `${d > 0 ? "+" : "−"} ${formatBRL(Math.abs(d))}`;
   };
 
-  const Row = ({
-    label,
-    value,
-    delta,
-    danger,
-  }: { label: string; value: number; delta: string | null; danger: boolean }) => (
+  const monthly = Math.round((simulatedGain + simulatedSaving) * 100) / 100;
+
+  return (
+    <div className="space-y-2.5">
+      <SummaryRow
+        label="Capacidade mensal simulada"
+        value={simulatedCapacity}
+        delta={diff(simulatedCapacity, baseCapacity)}
+        danger={simulatedCapacity <= 0}
+      />
+      <SummaryRow
+        label="Sobra simulada até dez"
+        value={simulatedLeftover}
+        delta={diff(simulatedLeftover, baseLeftover)}
+        danger={simulatedLeftover < 0}
+      />
+      <Button
+        className="w-full gap-1.5"
+        disabled={monthly <= 0}
+        onClick={() =>
+          onCreateGoal?.({
+            name: "Meta com base na simulação",
+            target: Math.round(monthly * PLAN_MONTHS * 100) / 100,
+            deadline: deadlineFromMonths(PLAN_MONTHS),
+            monthly,
+          })
+        }
+      >
+        <Sparkles className="h-4 w-4" />
+        Criar meta com base nisso
+      </Button>
+      {monthly > 0 && (
+        <p className="text-[11px] text-muted-foreground px-1">
+          Junta {formatBRL(simulatedGain)}/mês de ganho e {formatBRL(simulatedSaving)}/mês de
+          economia · {formatBRL(monthly * PLAN_MONTHS)} em {PLAN_MONTHS} meses.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  delta,
+  danger,
+}: { label: string; value: number; delta: string | null; danger: boolean }) {
+  return (
     <div className="glass-card px-4 py-3 space-y-1">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
         <PiggyBank className="h-4 w-4" />
@@ -489,25 +469,38 @@ export function SimulationSummary({
       {delta && <p className="text-[11px] font-mono text-muted-foreground">{delta} vs. real</p>}
     </div>
   );
+}
 
+export function RealBalanceCard({ value }: { value: number }) {
   return (
-    <div className="space-y-2">
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
-        Resultado simulado
-      </h3>
-      <Row
-        label="Capacidade mensal simulada"
-        value={simulatedCapacity}
-        delta={diff(simulatedCapacity, baseCapacity)}
-        danger={simulatedCapacity <= 0}
-      />
-      <Row
-        label="Sobra simulada até dez"
-        value={simulatedLeftover}
-        delta={diff(simulatedLeftover, baseLeftover)}
-        danger={simulatedLeftover < 0}
-      />
-    </div>
+    <FinancialMetricCard
+      icon={<Wallet className="h-4 w-4" />}
+      label="Saldo total"
+      value={formatBRL(value)}
+      tone="primary"
+    />
+  );
+}
+
+export function RealCapacityCard({ value }: { value: number }) {
+  return (
+    <FinancialMetricCard
+      icon={<PiggyBank className="h-4 w-4" />}
+      label="Capacidade mensal estimada"
+      value={formatBRL(value)}
+      tone={value <= 0 ? "danger" : "success"}
+    />
+  );
+}
+
+export function RealLeftoverCard({ value }: { value: number }) {
+  return (
+    <FinancialMetricCard
+      icon={<PiggyBank className="h-4 w-4" />}
+      label="Sobra estimada até dez"
+      value={formatBRL(value)}
+      tone={value < 0 ? "danger" : "default"}
+    />
   );
 }
 
@@ -539,43 +532,41 @@ function CategoryList({
       {items.length === 0 ? (
         <p className="text-xs text-muted-foreground py-2 text-center">{emptyLabel}</p>
       ) : (
-        <>
-          <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1">
-            {items.map((c) => {
-              const pct = total > 0 ? (c.total / total) * 100 : 0;
-              const sim = simulated[c.name] ?? 0;
-              const isSelected = selected === c.name;
-              return (
-                <button
-                  key={c.name}
-                  type="button"
-                  onClick={() => onSelect(c.name)}
-                  className={cn(
-                    "w-full text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
-                    isSelected && "bg-accent/40 ring-1 ring-primary/40",
-                  )}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate font-medium text-foreground">{c.name}</span>
-                      <span className="font-mono text-muted-foreground shrink-0">
-                        {formatBRL(c.total)}/mês
-                      </span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div className={cn("h-full rounded-full", barClass)} style={{ width: `${pct}%` }} />
-                    </div>
-                    {sim > 0 && (
-                      <p className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
-                        {simulatedLabel(sim, (c.total * sim) / 100)}
-                      </p>
-                    )}
+        <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1">
+          {items.map((c) => {
+            const pct = total > 0 ? (c.total / total) * 100 : 0;
+            const sim = simulated[c.name] ?? 0;
+            const isSelected = selected === c.name;
+            return (
+              <button
+                key={c.name}
+                type="button"
+                onClick={() => onSelect(c.name)}
+                className={cn(
+                  "w-full text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
+                  isSelected && "bg-accent/40 ring-1 ring-primary/40",
+                )}
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate font-medium text-foreground">{c.name}</span>
+                    <span className="font-mono text-muted-foreground shrink-0">
+                      {formatBRL(c.total)}/mês
+                    </span>
                   </div>
-                </button>
-              );
-            })}
-          </div>
-        </>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className={cn("h-full rounded-full", barClass)} style={{ width: `${pct}%` }} />
+                  </div>
+                  {sim > 0 && (
+                    <p className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
+                      {simulatedLabel(sim, (c.total * sim) / 100)}
+                    </p>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );
