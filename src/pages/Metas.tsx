@@ -25,8 +25,6 @@ import {
   sumSimulated,
 } from "@/components/metas/planejamento/FinancialOverview";
 
-
-
 import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
 import { GoalChat } from "@/components/metas/planejamento/GoalChat";
@@ -35,7 +33,7 @@ import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressP
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
 
-import { needsResolution, formatBRL } from "@/lib/goalPlanning";
+import { needsResolution } from "@/lib/goalPlanning";
 import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
 import type {
   AssistantReply,
@@ -43,16 +41,26 @@ import type {
   GoalPlanningContext,
 } from "@/services/assistant/AssistantService";
 
-const SUGGESTIONS = [
-  { icon: Sparkles, name: "Reserva de emergência", target: 10000 },
-  { icon: Plane, name: "Viagem dos sonhos", target: 5000 },
-  { icon: Wrench, name: "Troca de equipamento", target: 3000 },
-];
-
 const CHAT_CHIPS = ["Até 6 meses", "1 ano", "2 anos", "Consigo guardar R$ 800 por mês"];
 
 // Injeção da implementação temporária — a UI conhece apenas a interface.
 const assistantService = new LocalAssistantService();
+
+/** Linha pareada: número real à esquerda, versão simulada à direita. */
+function PairRow({
+  real,
+  simulated,
+}: {
+  real: React.ReactNode;
+  simulated: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-3 items-start lg:grid-cols-2">
+      <div className="min-w-0 space-y-2.5">{real}</div>
+      <div className="min-w-0 space-y-2.5">{simulated}</div>
+    </div>
+  );
+}
 
 export default function Metas() {
   const navigate = useNavigate();
@@ -68,7 +76,6 @@ export default function Metas() {
     monthly?: number;
   } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
-  const [expanded, setExpanded] = useState<OverviewExpanded>({ income: true, expense: true });
   const [expenseCuts, setExpenseCuts] = useState<Record<string, number>>({});
   const [incomeBoosts, setIncomeBoosts] = useState<Record<string, number>>({});
   const [selectedIncome, setSelectedIncome] = useState<string | null>(null);
@@ -88,16 +95,16 @@ export default function Metas() {
   const totalIncomeSimulated = sumSimulated(stats.incomeCategories, incomeBoosts);
   const totalExpenseSimulated = sumSimulated(stats.expenseCategories, expenseCuts);
 
-  const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
+  // Base única para real e simulado (pode ser negativa quando as saídas superam as entradas).
+  const monthlyCapacityRaw = stats.avgIncomeMonth - stats.avgSpentMonth;
+  const monthlyCapacity = Math.max(0, monthlyCapacityRaw);
 
-  // Espelho simulado dos números reais da coluna de contexto.
   const simulatedIncome = stats.avgIncomeMonth + totalIncomeSimulated;
   const simulatedExpense = Math.max(0, stats.avgSpentMonth - totalExpenseSimulated);
   const simulatedCapacity = simulatedIncome - simulatedExpense;
   const monthsRemaining = Math.max(0, 12 - (new Date().getMonth() + 1));
   const simulatedLeftover =
-    stats.leftover +
-    (simulatedCapacity - (stats.avgIncomeMonth - stats.avgSpentMonth)) * monthsRemaining;
+    stats.leftover + (simulatedCapacity - monthlyCapacityRaw) * monthsRemaining;
 
   const { activeGoalId, setActiveGoalId, activeGoal } = useActiveGoal(goals);
   const {
@@ -173,186 +180,200 @@ export default function Metas() {
         </Button>
       </div>
 
-      <div className="grid gap-4 items-start lg:grid-cols-[230px_minmax(280px,330px)_minmax(0,1fr)]">
-        {/* Coluna esquerda */}
-        <div className="min-w-0 space-y-2.5">
-          <FinancialOverview
-            stats={stats}
-            monthlyCapacity={monthlyCapacity}
-            expanded={expanded}
-            onToggle={(which) =>
-              setExpanded((cur) => ({ ...cur, [which]: !cur[which] }))
+      {/* Real x simulado, pareados linha a linha */}
+      {stats.loading ? (
+        <OverviewSkeleton />
+      ) : (
+        <div className="space-y-3">
+          <PairRow
+            real={
+              <>
+                <OverviewHeader />
+                <RealBalanceCard value={stats.totalBalance} />
+              </>
             }
-            expenseCuts={expenseCuts}
-            incomeBoosts={incomeBoosts}
-            selectedIncome={selectedIncome}
-            selectedExpense={selectedExpense}
-            onSelectCategory={(kind, name) =>
-              kind === "income" ? setSelectedIncome(name) : setSelectedExpense(name)
+            simulated={
+              <div className="px-1">
+                <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Simulação
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Ajuste ao lado e compare com o real
+                </p>
+              </div>
             }
           />
-        </div>
 
-        {/* Coluna fixa: os dois simuladores sempre visíveis */}
-        <div className="min-w-0 space-y-3">
-          <OverviewDetailPanel
-            mode="income"
-            category={selectedIncomeCat}
-            percent={
-              selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0
+          <PairRow
+            real={
+              <RealAverageBlock
+                kind="income"
+                stats={stats}
+                simulated={incomeBoosts}
+                selected={selectedIncome}
+                onSelect={setSelectedIncome}
+              />
             }
-            totalSimulatedMonthly={totalIncomeSimulated}
-            onPercentChange={(p) => {
-              if (!selectedIncomeCat) return;
-              setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
-            }}
-            onReset={() => setIncomeBoosts({})}
-            onCreateGoal={(draft) => {
-              setPrefill(draft);
-              setFormOpen(true);
-            }}
-          />
-
-          <FinancialMetricCard
-            icon={<TrendingUp className="h-4 w-4" />}
-            label="Média de entradas simulada"
-            value={formatBRL(simulatedIncome)}
-            tone="success"
-          />
-
-          <SimulatedCategoryList
-            items={stats.incomeCategories}
-            percents={incomeBoosts}
-            kind="income"
-            selected={selectedIncome}
-            onSelect={setSelectedIncome}
-          />
-
-          <OverviewDetailPanel
-            mode="expense"
-            category={selectedExpenseCat}
-            percent={
-              selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0
-            }
-            totalSimulatedMonthly={totalExpenseSimulated}
-            onPercentChange={(p) => {
-              if (!selectedExpenseCat) return;
-              setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
-            }}
-            onReset={() => setExpenseCuts({})}
-            onCreateGoal={(draft) => {
-              setPrefill(draft);
-              setFormOpen(true);
-            }}
-          />
-
-          <FinancialMetricCard
-            icon={<TrendingDown className="h-4 w-4" />}
-            label="Média de saídas simulada"
-            value={formatBRL(simulatedExpense)}
-          />
-
-          <SimulatedCategoryList
-            items={stats.expenseCategories}
-            percents={expenseCuts}
-            kind="expense"
-            selected={selectedExpense}
-            onSelect={setSelectedExpense}
-          />
-
-          <SimulationSummary
-            baseCapacity={stats.avgIncomeMonth - stats.avgSpentMonth}
-            simulatedCapacity={simulatedCapacity}
-            baseLeftover={stats.leftover}
-            simulatedLeftover={simulatedLeftover}
-          />
-        </div>
-
-
-
-
-
-
-        {/* Centro */}
-        <div className="min-w-0 space-y-4">
-          {loading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <Skeleton key={i} className="h-40 w-full rounded-[1.5rem]" />
-              ))}
-            </div>
-          ) : goals.length === 0 ? (
-            <EmptyState onPick={openCreate} />
-          ) : (
-            <>
-              {planningGoal && scoreResult && (
-                <ActiveGoalCard
-                  goal={planningGoal}
-                  scoreResult={scoreResult}
-                  isSimulated={isSimulated}
+            simulated={
+              <>
+                <OverviewDetailPanel
+                  mode="income"
+                  category={selectedIncomeCat}
+                  percent={selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0}
+                  totalSimulatedMonthly={totalIncomeSimulated}
+                  newAverage={simulatedIncome}
+                  onPercentChange={(p) => {
+                    if (!selectedIncomeCat) return;
+                    setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
+                  }}
+                  onReset={() => setIncomeBoosts({})}
                 />
-              )}
-              <GoalChat
-                service={assistantService}
-                buildContext={buildContext}
-                onReply={handleReply}
-                suggestions={CHAT_CHIPS}
-                disabled={!planningGoal}
+                <SimulatedCategoryList
+                  items={stats.incomeCategories}
+                  percents={incomeBoosts}
+                  kind="income"
+                  selected={selectedIncome}
+                  onSelect={setSelectedIncome}
+                />
+              </>
+            }
+          />
+
+          <PairRow
+            real={
+              <RealAverageBlock
+                kind="expense"
+                stats={stats}
+                simulated={expenseCuts}
+                selected={selectedExpense}
+                onSelect={setSelectedExpense}
               />
-              <GoalSelectorList
-                goals={goals}
-                activeGoalId={activeGoalId}
-                onSelect={setActiveGoalId}
-                onOpen={(g: Goal) => navigate(`/metas/${g.id}`)}
-                onCreate={() => openCreate()}
+            }
+            simulated={
+              <>
+                <OverviewDetailPanel
+                  mode="expense"
+                  category={selectedExpenseCat}
+                  percent={selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0}
+                  totalSimulatedMonthly={totalExpenseSimulated}
+                  newAverage={simulatedExpense}
+                  onPercentChange={(p) => {
+                    if (!selectedExpenseCat) return;
+                    setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
+                  }}
+                  onReset={() => setExpenseCuts({})}
+                />
+                <SimulatedCategoryList
+                  items={stats.expenseCategories}
+                  percents={expenseCuts}
+                  kind="expense"
+                  selected={selectedExpense}
+                  onSelect={setSelectedExpense}
+                />
+              </>
+            }
+          />
+
+          <PairRow
+            real={
+              <>
+                <RealCapacityCard value={monthlyCapacityRaw} />
+                <RealLeftoverCard value={stats.leftover} />
+              </>
+            }
+            simulated={
+              <SimulationSummary
+                baseCapacity={monthlyCapacityRaw}
+                simulatedCapacity={simulatedCapacity}
+                baseLeftover={stats.leftover}
+                simulatedLeftover={simulatedLeftover}
+                simulatedGain={totalIncomeSimulated}
+                simulatedSaving={totalExpenseSimulated}
+                onCreateGoal={(draft) => {
+                  setPrefill(draft);
+                  setFormOpen(true);
+                }}
               />
-              {!planningGoal && (
-                <div className="glass-card p-5">
-                  <p className="text-sm text-muted-foreground">
-                    Selecione um cofrinho para ver progresso, score e plano de ação.
-                  </p>
+            }
+          />
+        </div>
+      )}
+
+      {/* Cofrinhos e plano */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Skeleton key={i} className="h-40 w-full rounded-[1.5rem]" />
+            ))}
+          </div>
+        ) : goals.length === 0 ? null : (
+          <>
+            <div className="grid gap-4 lg:grid-cols-2 items-start">
+              <div className="min-w-0 space-y-4">
+                {planningGoal && scoreResult && (
+                  <ActiveGoalCard
+                    goal={planningGoal}
+                    scoreResult={scoreResult}
+                    isSimulated={isSimulated}
+                  />
+                )}
+                <GoalChat
+                  service={assistantService}
+                  buildContext={buildContext}
+                  onReply={handleReply}
+                  suggestions={CHAT_CHIPS}
+                  disabled={!planningGoal}
+                />
+                <GoalSelectorList
+                  goals={goals}
+                  activeGoalId={activeGoalId}
+                  onSelect={setActiveGoalId}
+                  onOpen={(g: Goal) => navigate(`/metas/${g.id}`)}
+                  onCreate={() => openCreate()}
+                />
+                {!planningGoal && (
+                  <div className="glass-card p-5">
+                    <p className="text-sm text-muted-foreground">
+                      Selecione um cofrinho para ver progresso, score e plano de ação.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {planningGoal && scoreResult && (
+                <div className={cn("min-w-0 space-y-4")}>
+                  <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
+
+                  {showResolution && (
+                    <GoalResolutionPanel
+                      breakdown={scoreResult.breakdown}
+                      topCategories={stats.topCategories}
+                      onResolve={dispatchResolution}
+                      onCombine={() => setPlanOpen(true)}
+                      onReset={resetScenario}
+                      isSimulated={isSimulated}
+                    />
+                  )}
+
+                  <ActionPlanList
+                    items={actionPlan}
+                    footer={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2"
+                        onClick={() => setPlanOpen(true)}
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Ver plano completo
+                      </Button>
+                    }
+                  />
                 </div>
               )}
-            </>
-          )}
-        </div>
-
-        {/* Painéis da meta ativa */}
-        {planningGoal && scoreResult && (
-          <div
-            className={cn(
-              "min-w-0 space-y-4 xl:grid xl:gap-4 xl:space-y-0 xl:items-start xl:grid-cols-3",
-              expanded ? "lg:col-span-3" : "lg:col-span-2",
-            )}
-          >
-            <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
-
-            {showResolution && (
-              <GoalResolutionPanel
-                breakdown={scoreResult.breakdown}
-                topCategories={stats.topCategories}
-                onResolve={dispatchResolution}
-                onCombine={() => setPlanOpen(true)}
-                onReset={resetScenario}
-                isSimulated={isSimulated}
-              />
-            )}
-
-            <ActionPlanList
-              items={actionPlan}
-              footer={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2"
-                  onClick={() => setPlanOpen(true)}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Ver plano completo
-                </Button>
-              }
-            />
-          </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -387,46 +408,5 @@ export default function Metas() {
         title="Como tornar essa meta possível"
       />
     </div>
-  );
-}
-
-function EmptyState({ onPick }: { onPick: (s: { name: string; target: number }) => void }) {
-  return (
-    <div className="glass-card p-6 space-y-5 w-full">
-      <div className="flex items-center gap-4">
-        <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
-          <LifeBuoy className="h-7 w-7 text-primary" strokeWidth={1.5} />
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold font-display">Nenhum cofrinho ainda</h2>
-          <p className="text-muted-foreground text-sm">
-            Crie o primeiro para a EVA montar o plano com seus números reais.
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s.name}
-            onClick={() => onPick({ name: s.name, target: s.target })}
-            className="w-full flex items-center gap-3 p-3 text-left rounded-xl border border-border/60 bg-background/40 hover:bg-accent/40 transition-colors"
-          >
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <s.icon className="h-5 w-5 text-primary" strokeWidth={1.75} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-foreground text-sm">{s.name}</p>
-              <p className="text-xs text-muted-foreground">
-                Sugestão: {formatBRL(s.target)}
-              </p>
-            </div>
-            <Plus className="h-4 w-4 text-muted-foreground shrink-0" />
-
-          </button>
-        ))}
-      </div>
-    </div>
-
   );
 }
