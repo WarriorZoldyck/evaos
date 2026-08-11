@@ -2,8 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LifeBuoy, Plus, Sparkles, Plane, Wrench, TrendingUp, TrendingDown } from "lucide-react";
-import { FinancialMetricCard } from "@/components/metas/planejamento/FinancialMetricCard";
+import { Plus, Sparkles } from "lucide-react";
 
 import { useGoals, type Goal } from "@/hooks/useGoals";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -14,13 +13,18 @@ import { usePlanningGoal } from "@/hooks/usePlanningGoal";
 import { GoalFormModal } from "@/components/metas/GoalFormModal";
 import { ActionPlanDialog } from "@/components/metas/ActionPlanDialog";
 import {
-  FinancialOverview,
+  OverviewSkeleton,
+  OverviewHeader,
+  RealBalanceCard,
+  RealAverageBlock,
+  RealCapacityCard,
+  RealLeftoverCard,
   OverviewDetailPanel,
   SimulatedCategoryList,
   SimulationSummary,
   sumSimulated,
-  type OverviewExpanded,
 } from "@/components/metas/planejamento/FinancialOverview";
+
 
 
 import { cn } from "@/lib/utils";
