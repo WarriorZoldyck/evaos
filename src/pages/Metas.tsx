@@ -82,13 +82,23 @@ export default function Metas() {
   const [incomeBoosts, setIncomeBoosts] = useState<Record<string, number>>({});
   const [selectedIncome, setSelectedIncome] = useState<string | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
+  // Um bloco aberto por vez, compartilhado pelas duas colunas.
+  const [openBlock, setOpenBlock] = useState<"income" | "expense" | null>("expense");
 
-  // Cada simulador nasce aberto na maior categoria da sua lista.
+  const openIncome = () => {
+    setOpenBlock((cur) => (cur === "income" ? null : "income"));
+  };
+  const openExpense = () => {
+    setOpenBlock((cur) => (cur === "expense" ? null : "expense"));
+  };
+
+  // Cada bloco nasce apontando para a maior categoria da sua lista.
   useEffect(() => {
     if (stats.loading) return;
     setSelectedIncome((cur) => cur ?? stats.incomeCategories[0]?.name ?? null);
     setSelectedExpense((cur) => cur ?? stats.expenseCategories[0]?.name ?? null);
   }, [stats.loading, stats.incomeCategories, stats.expenseCategories]);
+
 
   const selectedIncomeCat =
     stats.incomeCategories.find((c) => c.name === selectedIncome) ?? null;
