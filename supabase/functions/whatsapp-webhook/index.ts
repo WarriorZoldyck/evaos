@@ -2110,6 +2110,7 @@ TIPOS DE CONSULTA:
 - "listar_lancamentos" = listar lançamentos filtrados por fornecedor, cliente, descrição, ou qualquer critério específico
 - "listar_cartoes" = listar cartões de crédito cadastrados
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
+- "metas_mes" = acompanhamento das METAS ORÇAMENTÁRIAS do mês (quanto já foi gasto/recebido vs a meta, quanto falta e em que categorias não dá para gastar mais). Use quando o usuário falar em "meta", "metas do mês", "orçamento", "quanto ainda posso gastar", "estou dentro da meta?", "quanto falta para bater a meta".
 - Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
 - Se o usuário pedir lançamentos de um fornecedor específico (ex: "lançamentos do Moscato", "quanto paguei no Dentais"), use "listar_lancamentos" com contact_filter.
 - Se o usuário pedir lançamentos de UMA categoria nomeada (ex: "gastos com Alimentação"), use "gastos_categoria" com category_filter.
