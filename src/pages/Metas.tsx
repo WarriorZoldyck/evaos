@@ -23,7 +23,6 @@ import {
   OverviewDetailPanel,
   PairedCategoryList,
   SimulationSummary,
-  CreateGoalFromSimulation,
   GainTotalCard,
   SavingGoalCard,
   sumSimulated,
@@ -33,13 +32,12 @@ import {
 import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
 import { GoalChat } from "@/components/metas/planejamento/GoalChat";
-import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorList";
 import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
 import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
 import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
-import { toast } from "sonner";
+import { ObjectivesPanel } from "@/components/metas/planejamento/ObjectivesPanel";
 
 
 import { needsResolution } from "@/lib/goalPlanning";
@@ -202,7 +200,14 @@ export default function Metas() {
         </Button>
       </div>
 
-      {/* Real x meta, pareados linha a linha + resumo lateral */}
+      {/* Nível 1 — Metas Orçamentárias (fluxo de caixa) */}
+      <div className="px-1">
+        <h2 className="text-sm font-semibold text-foreground">Metas Orçamentárias</h2>
+        <p className="text-xs text-muted-foreground">
+          Quanto entra e quanto sai por categoria — define a sobra do mês.
+        </p>
+      </div>
+
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
@@ -285,12 +290,22 @@ export default function Metas() {
                 </>
               }
               simulated={
-                <SimulationSummary
-                  baseCapacity={monthlyCapacityRaw}
-                  simulatedCapacity={simulatedCapacity}
-                  baseLeftover={stats.leftover}
-                  simulatedLeftover={simulatedLeftover}
-                />
+                <>
+                  <SimulationSummary
+                    baseCapacity={monthlyCapacityRaw}
+                    simulatedCapacity={simulatedCapacity}
+                    baseLeftover={stats.leftover}
+                    simulatedLeftover={simulatedLeftover}
+                  />
+                  <Button
+                    className="w-full gap-1.5"
+                    onClick={() => setSimGoalOpen(true)}
+                    disabled={simulatedCapacity <= 0}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Usar o que vai sobrar
+                  </Button>
+                </>
               }
             />
           </div>
@@ -306,13 +321,6 @@ export default function Metas() {
               items={stats.expenseCategories}
               percents={expenseCuts}
             />
-            <CreateGoalFromSimulation
-              simulatedGain={totalIncomeSimulated}
-              simulatedSaving={totalExpenseSimulated}
-              onCreateGoal={() => setSimGoalOpen(true)}
-            />
-
-
             {openBlock === "income" && (
               <OverviewDetailPanel
                 mode="income"
@@ -352,7 +360,19 @@ export default function Metas() {
       )}
 
 
-      {/* Cofrinhos e plano */}
+      {/* Nível 2 — Objetivos (destino da sobra) */}
+      {!loading && (
+        <ObjectivesPanel
+          goals={goals}
+          leftoverMonthly={Math.max(0, simulatedCapacity)}
+          activeGoalId={activeGoalId}
+          onSelect={setActiveGoalId}
+          onOpenGoal={(id) => navigate(`/metas/${id}`)}
+          onCreate={() => openCreate()}
+        />
+      )}
+
+      {/* Acompanhamento do objetivo selecionado */}
       <div className="space-y-4">
         {loading ? (
           <div className="space-y-3">
@@ -377,13 +397,6 @@ export default function Metas() {
                   onReply={handleReply}
                   suggestions={CHAT_CHIPS}
                   disabled={!planningGoal}
-                />
-                <GoalSelectorList
-                  goals={goals}
-                  activeGoalId={activeGoalId}
-                  onSelect={setActiveGoalId}
-                  onOpen={(g: Goal) => navigate(`/metas/${g.id}`)}
-                  onCreate={() => openCreate()}
                 />
                 {!planningGoal && (
                   <div className="glass-card p-5">
@@ -471,18 +484,7 @@ export default function Metas() {
         baseLeftover={stats.leftover}
         simulatedLeftover={simulatedLeftover}
         goals={goals}
-        onConfirm={(draft) => {
-          setPrefill(draft);
-          setFormOpen(true);
-        }}
-        onReinforceGoals={(perGoal) =>
-          toast.success(
-            `Plano definido: reforce ${perGoal.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}/mês em cada meta existente.`,
-          )
-        }
+        onCreate={(draft) => createGoal(draft)}
       />
 
     </div>

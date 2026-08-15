@@ -10,9 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { Goal } from "@/hooks/useGoals";
 import { useMetasSidebarStats } from "@/hooks/useMetasSidebarStats";
 import { ActionPlanDialog } from "./ActionPlanDialog";
+import { GOAL_TYPE_LABELS, GOAL_TYPE_ORDER } from "@/lib/allocation";
 
 export interface GoalPrefill {
   name?: string;
+  goal_type?: string;
   target_amount?: number;
   deadline?: string | null;
   auto_reserve_amount?: number;
@@ -37,6 +39,9 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
   const [reserveAmount, setReserveAmount] = useState("");
   const [perExpense, setPerExpense] = useState("");
   const [perSale, setPerSale] = useState("");
+  const [goalType, setGoalType] = useState<string>("sonho");
+  const [allocationMode, setAllocationMode] = useState<string>("fixed");
+  const [allocationPercent, setAllocationPercent] = useState("");
   const [saving, setSaving] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [pendingPayload, setPendingPayload] = useState<any>(null);
@@ -52,6 +57,9 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
       setReserveAmount(String(editGoal.auto_reserve_amount || ""));
       setPerExpense(String(editGoal.auto_reserve_per_expense || ""));
       setPerSale(String(editGoal.auto_reserve_per_sale || ""));
+      setGoalType(editGoal.goal_type || "sonho");
+      setAllocationMode(editGoal.allocation_mode || "fixed");
+      setAllocationPercent(String(editGoal.allocation_percent || ""));
     } else if (prefill) {
       setName(prefill.name || "");
       setTargetAmount(prefill.target_amount ? String(prefill.target_amount) : "");
@@ -60,10 +68,13 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
       setFrequency("monthly");
       setReserveAmount(prefill.auto_reserve_amount ? String(prefill.auto_reserve_amount) : "");
       setPerExpense(""); setPerSale("");
+      setGoalType(prefill.goal_type || "sonho");
+      setAllocationMode("fixed"); setAllocationPercent("");
     } else {
       setName(""); setTargetAmount(""); setDeadline("");
       setAutoReserve(false); setFrequency("monthly");
       setReserveAmount(""); setPerExpense(""); setPerSale("");
+      setGoalType("sonho"); setAllocationMode("fixed"); setAllocationPercent("");
     }
   }, [editGoal, prefill, open]);
 
@@ -79,6 +90,9 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
       auto_reserve_amount: Number(reserveAmount) || 0,
       auto_reserve_per_expense: Number(perExpense) || 0,
       auto_reserve_per_sale: Number(perSale) || 0,
+      goal_type: goalType,
+      allocation_mode: allocationMode,
+      allocation_percent: allocationMode === "percent" ? Number(allocationPercent) || 0 : 0,
     };
 
     // Se a nova meta empurra a sobra para negativo, mostra plano antes de salvar.
@@ -125,6 +139,18 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
             <Label>Nome da meta</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Reserva de emergência" />
           </div>
+          <div className="space-y-2">
+            <Label>Tipo de objetivo</Label>
+            <Select value={goalType} onValueChange={setGoalType}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {GOAL_TYPE_ORDER.map((t) => (
+                  <SelectItem key={t} value={t}>{GOAL_TYPE_LABELS[t]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Valor da meta (R$)</Label>
@@ -160,6 +186,31 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
                   <Input type="number" value={reserveAmount} onChange={(e) => setReserveAmount(e.target.value)} placeholder="100" />
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Como alocar a sobra</Label>
+                <Select value={allocationMode} onValueChange={setAllocationMode}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixed">Valor fixo mensal</SelectItem>
+                    <SelectItem value="percent">Percentual da sobra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {allocationMode === "percent" && (
+                <div className="space-y-2">
+                  <Label className="text-xs">Percentual da sobra (%)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={allocationPercent}
+                    onChange={(e) => setAllocationPercent(e.target.value)}
+                    placeholder="30"
+                  />
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label className="text-xs">Por gasto (R$)</Label>

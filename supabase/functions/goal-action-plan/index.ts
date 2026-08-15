@@ -64,7 +64,10 @@ serve(async (req) => {
     const systemPrompt =
       "Você é a EVA, uma assistente financeira brasileira, objetiva e empática. " +
       "Responda SEMPRE em português do Brasil, em markdown, com no máximo 5 sugestões práticas. " +
-      "Use bullets curtos. Nunca invente números.";
+      "Use bullets curtos. Nunca invente números. " +
+      "Vocabulário obrigatório: 'metas orçamentárias' são as metas de entradas e saídas por categoria (fluxo de caixa) " +
+      "e 'objetivos' são o destino da sobra (reserva de emergência, sonho, investimento, quitar dívida). Nunca confunda os dois.";
+
 
     const userPrompt =
       `${goalName ? `A meta é: "${goalName}". ` : ""}` +

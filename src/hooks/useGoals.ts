@@ -20,6 +20,9 @@ export interface Goal {
   auto_reserve_per_sale: number;
   auto_reserve_amount: number;
   icon: string;
+  goal_type: string;
+  allocation_mode: string;
+  allocation_percent: number;
   created_at: string;
 }
 
@@ -69,6 +72,9 @@ export function useGoals() {
     auto_reserve_amount?: number;
     auto_reserve_per_expense?: number;
     auto_reserve_per_sale?: number;
+    goal_type?: string;
+    allocation_mode?: string;
+    allocation_percent?: number;
   }) => {
     if (!user) return false;
     const { error } = await supabase.from("goals").insert({
@@ -80,6 +86,9 @@ export function useGoals() {
       auto_reserve_amount: data.auto_reserve_amount ?? 0,
       auto_reserve_per_expense: data.auto_reserve_per_expense ?? 0,
       auto_reserve_per_sale: data.auto_reserve_per_sale ?? 0,
+      goal_type: data.goal_type ?? "sonho",
+      allocation_mode: data.allocation_mode ?? "fixed",
+      allocation_percent: data.allocation_percent ?? 0,
       user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
     } as any);
