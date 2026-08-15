@@ -309,11 +309,9 @@ export default function Metas() {
             <CreateGoalFromSimulation
               simulatedGain={totalIncomeSimulated}
               simulatedSaving={totalExpenseSimulated}
-              onCreateGoal={(draft) => {
-                setPrefill(draft);
-                setFormOpen(true);
-              }}
+              onCreateGoal={() => setSimGoalOpen(true)}
             />
+
 
             {openBlock === "income" && (
               <OverviewDetailPanel
