@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
-  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw, ChevronDown,
+  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw, ChevronDown, CalendarClock,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 
@@ -12,6 +12,7 @@ import type { CategoryBreakdown, MetasSidebarStats } from "@/hooks/useMetasSideb
 import { FinancialMetricCard } from "./FinancialMetricCard";
 import { formatBRL } from "@/lib/goalPlanning";
 import { deadlineFromMonths } from "@/lib/savingsSimulator";
+import { buildCategoryProgress, type BudgetStatus, type CategoryProgress } from "@/lib/budgetProgress";
 import { cn } from "@/lib/utils";
 
 export type SimulationKind = "income" | "expense";
