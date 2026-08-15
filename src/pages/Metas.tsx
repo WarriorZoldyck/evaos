@@ -22,6 +22,8 @@ import {
   OverviewDetailPanel,
   SimulatedCategoryList,
   SimulationSummary,
+  GainTotalCard,
+  SavingGoalCard,
   sumSimulated,
 } from "@/components/metas/planejamento/FinancialOverview";
 
