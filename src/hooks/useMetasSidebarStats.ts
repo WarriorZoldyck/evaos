@@ -7,7 +7,10 @@ import type { DRECategoryRow } from "@/hooks/useDREData";
 
 export interface CategoryBreakdown {
   name: string;
+  /** Média mensal do ano corrente. */
   total: number;
+  /** Total já efetivado (pago) no mês corrente. */
+  monthTotal: number;
 }
 
 export interface MetasSidebarStats {
@@ -15,6 +18,9 @@ export interface MetasSidebarStats {
   totalBalance: number;
   avgIncomeMonth: number;
   avgSpentMonth: number;
+  /** Realizado do mês corrente. */
+  incomeMonth: number;
+  spentMonth: number;
   leftover: number;
   incomeCategories: CategoryBreakdown[];
   expenseCategories: CategoryBreakdown[];
@@ -23,6 +29,7 @@ export interface MetasSidebarStats {
 }
 
 const YEAR = new Date().getFullYear();
+const CURRENT_PERIOD = `${YEAR}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
 export function useMetasSidebarStats(): MetasSidebarStats {
   const effectiveUserId = useEffectiveUserId();
