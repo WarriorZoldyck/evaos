@@ -290,8 +290,16 @@ export default function Metas() {
           </div>
 
           <aside className="min-w-0 space-y-3 md:sticky md:top-4">
-            <GainTotalCard monthly={totalIncomeSimulated} />
-            <SavingGoalCard monthly={totalExpenseSimulated} />
+            <GainTotalCard
+              monthly={totalIncomeSimulated}
+              items={stats.incomeCategories}
+              percents={incomeBoosts}
+            />
+            <SavingGoalCard
+              monthly={totalExpenseSimulated}
+              items={stats.expenseCategories}
+              percents={expenseCuts}
+            />
             <CreateGoalFromSimulation
               simulatedGain={totalIncomeSimulated}
               simulatedSaving={totalExpenseSimulated}
@@ -300,6 +308,35 @@ export default function Metas() {
                 setFormOpen(true);
               }}
             />
+
+            {openBlock === "income" && (
+              <OverviewDetailPanel
+                mode="income"
+                category={selectedIncomeCat}
+                percent={selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0}
+                newAverage={simulatedIncome}
+                onPercentChange={(p) => {
+                  if (!selectedIncomeCat) return;
+                  setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
+                }}
+                onReset={() => setIncomeBoosts({})}
+              />
+            )}
+
+            {openBlock === "expense" && (
+              <OverviewDetailPanel
+                mode="expense"
+                category={selectedExpenseCat}
+                percent={selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0}
+                newAverage={simulatedExpense}
+                onPercentChange={(p) => {
+                  if (!selectedExpenseCat) return;
+                  setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
+                }}
+                onReset={() => setExpenseCuts({})}
+              />
+            )}
+
           </aside>
         </div>
       )}
