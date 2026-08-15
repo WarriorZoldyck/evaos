@@ -363,29 +363,32 @@ export function OverviewDetailPanel({
   );
 }
 
-/** Espelho simulado das barrinhas de categoria (valor já com corte/aumento). */
+/** Espelho da meta: barrinhas de categoria com o valor já ajustado. */
 export function SimulatedCategoryList({
   items,
   percents,
   kind,
   selected,
   onSelect,
+  open = true,
 }: {
   items: CategoryBreakdown[];
   percents: Record<string, number>;
   kind: SimulationKind;
   selected: string | null;
   onSelect: (name: string) => void;
+  open?: boolean;
 }) {
   const isIncome = kind === "income";
   const projectedOf = (c: CategoryBreakdown) => {
     const pct = percents[c.name] ?? 0;
     const delta = (c.total * pct) / 100;
-    return isIncome ? c.total + delta : Math.max(0, c.total - delta);
+    return Math.max(0, isIncome ? c.total + delta : c.total - delta);
   };
   const total = items.reduce((s, c) => s + projectedOf(c), 0);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 || !open) return null;
+
 
   return (
     <div className="glass-card p-4 space-y-2">
