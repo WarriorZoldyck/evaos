@@ -11,15 +11,24 @@ import type { Goal } from "@/hooks/useGoals";
 import { useMetasSidebarStats } from "@/hooks/useMetasSidebarStats";
 import { ActionPlanDialog } from "./ActionPlanDialog";
 
+export interface GoalPrefill {
+  name?: string;
+  target_amount?: number;
+  deadline?: string | null;
+  auto_reserve_amount?: number;
+}
+
 interface GoalFormModalProps {
   open: boolean;
   onClose: () => void;
   editGoal: Goal | null;
+  /** Valores iniciais para uma NOVA meta (ex.: vindos da simulação). */
+  prefill?: GoalPrefill | null;
   onSave: (data: any) => Promise<boolean>;
   onUpdate: (id: string, data: any) => Promise<boolean>;
 }
 
-export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: GoalFormModalProps) {
+export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpdate }: GoalFormModalProps) {
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -43,12 +52,21 @@ export function GoalFormModal({ open, onClose, editGoal, onSave, onUpdate }: Goa
       setReserveAmount(String(editGoal.auto_reserve_amount || ""));
       setPerExpense(String(editGoal.auto_reserve_per_expense || ""));
       setPerSale(String(editGoal.auto_reserve_per_sale || ""));
+    } else if (prefill) {
+      setName(prefill.name || "");
+      setTargetAmount(prefill.target_amount ? String(prefill.target_amount) : "");
+      setDeadline(prefill.deadline || "");
+      setAutoReserve(Boolean(prefill.auto_reserve_amount));
+      setFrequency("monthly");
+      setReserveAmount(prefill.auto_reserve_amount ? String(prefill.auto_reserve_amount) : "");
+      setPerExpense(""); setPerSale("");
     } else {
       setName(""); setTargetAmount(""); setDeadline("");
       setAutoReserve(false); setFrequency("monthly");
       setReserveAmount(""); setPerExpense(""); setPerSale("");
     }
-  }, [editGoal, open]);
+  }, [editGoal, prefill, open]);
+
 
   const handleSubmit = async () => {
     if (!name.trim() || !targetAmount) return;

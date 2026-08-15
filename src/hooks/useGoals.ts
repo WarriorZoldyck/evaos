@@ -60,15 +60,30 @@ export function useGoals() {
 
   useEffect(() => { fetchGoals(); }, [fetchGoals]);
 
-  const createGoal = async (data: { name: string; target_amount: number; deadline?: string | null }) => {
+  const createGoal = async (data: {
+    name: string;
+    target_amount: number;
+    deadline?: string | null;
+    auto_reserve_enabled?: boolean;
+    auto_reserve_frequency?: string | null;
+    auto_reserve_amount?: number;
+    auto_reserve_per_expense?: number;
+    auto_reserve_per_sale?: number;
+  }) => {
     if (!user) return false;
     const { error } = await supabase.from("goals").insert({
       name: data.name,
       target_amount: data.target_amount,
       deadline: data.deadline || null,
+      auto_reserve_enabled: data.auto_reserve_enabled ?? false,
+      auto_reserve_frequency: data.auto_reserve_enabled ? (data.auto_reserve_frequency || "monthly") : null,
+      auto_reserve_amount: data.auto_reserve_amount ?? 0,
+      auto_reserve_per_expense: data.auto_reserve_per_expense ?? 0,
+      auto_reserve_per_sale: data.auto_reserve_per_sale ?? 0,
       user_id: effectiveUserId,
       company_id: selectedCompanyId || null,
     } as any);
+
     if (error) {
       toast({ title: "Erro ao criar meta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
