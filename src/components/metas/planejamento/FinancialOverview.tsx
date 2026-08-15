@@ -207,7 +207,7 @@ export function OverviewDetailPanel({
     setPctDraft(raw);
     const value = Number(raw.replace(",", "."));
     if (!Number.isFinite(value)) return;
-    onPercentChange(Math.round(value * 100) / 100);
+    onPercentChange(Math.round(toInternal(value) * 100) / 100);
   };
 
   const header = (
