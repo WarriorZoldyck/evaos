@@ -847,6 +847,8 @@ export type Database = {
       }
       goals: {
         Row: {
+          allocation_mode: string
+          allocation_percent: number
           auto_reserve_amount: number | null
           auto_reserve_enabled: boolean
           auto_reserve_frequency: string | null
@@ -856,6 +858,7 @@ export type Database = {
           created_at: string | null
           current_amount: number
           deadline: string | null
+          goal_type: string
           icon: string | null
           id: string
           name: string
@@ -863,6 +866,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          allocation_mode?: string
+          allocation_percent?: number
           auto_reserve_amount?: number | null
           auto_reserve_enabled?: boolean
           auto_reserve_frequency?: string | null
@@ -872,6 +877,7 @@ export type Database = {
           created_at?: string | null
           current_amount?: number
           deadline?: string | null
+          goal_type?: string
           icon?: string | null
           id?: string
           name: string
@@ -879,6 +885,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          allocation_mode?: string
+          allocation_percent?: number
           auto_reserve_amount?: number | null
           auto_reserve_enabled?: boolean
           auto_reserve_frequency?: string | null
@@ -888,6 +896,7 @@ export type Database = {
           created_at?: string | null
           current_amount?: number
           deadline?: string | null
+          goal_type?: string
           icon?: string | null
           id?: string
           name?: string
