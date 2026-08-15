@@ -77,54 +77,63 @@ export function sumSimulated(
   return items.reduce((sum, c) => sum + (c.total * (percents[c.name] ?? 0)) / 100, 0);
 }
 
-/** Bloco real: card de média + lista de categorias reais. */
+/** Bloco real: card de média + lista de categorias reais (recolhível). */
 export function RealAverageBlock({
   kind,
   stats,
   simulated,
   selected,
   onSelect,
+  open,
+  onToggle,
 }: {
   kind: SimulationKind;
   stats: MetasSidebarStats;
   simulated: Record<string, number>;
   selected: string | null;
   onSelect: (name: string) => void;
+  open: boolean;
+  onToggle: () => void;
 }) {
   const isIncome = kind === "income";
   return (
     <div className="space-y-2.5">
-      <FinancialMetricCard
-        icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-        label={isIncome ? "Média de entradas / mês" : "Média de saídas / mês"}
-        value={formatBRL(isIncome ? stats.avgIncomeMonth : stats.avgSpentMonth)}
-        tone={isIncome ? "success" : "default"}
-      />
-      <CategoryList
-        items={isIncome ? stats.incomeCategories : stats.expenseCategories}
-        emptyLabel={
-          isIncome
-            ? "Sem receitas categorizadas neste ano."
-            : "Sem despesas categorizadas neste ano."
-        }
-        barClass={isIncome ? "bg-emerald-500/70" : "bg-primary/70"}
-        hint={
-          isIncome
-            ? "Clique numa categoria para simular um aumento."
-            : "Clique numa categoria para simular um corte."
-        }
-        simulated={simulated}
-        simulatedLabel={(pct, value) =>
-          isIncome
-            ? `aumento de ${pct}% · + ${formatBRL(value)}/mês`
-            : `corte de ${pct}% · + ${formatBRL(value)}/mês`
-        }
-        selected={selected}
-        onSelect={onSelect}
-      />
+      <button type="button" onClick={onToggle} className="w-full text-left">
+        <FinancialMetricCard
+          icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+          label={isIncome ? "Média de entradas / mês" : "Média de saídas / mês"}
+          value={formatBRL(isIncome ? stats.avgIncomeMonth : stats.avgSpentMonth)}
+          tone={isIncome ? "success" : "default"}
+        />
+      </button>
+      {open && (
+        <CategoryList
+          items={isIncome ? stats.incomeCategories : stats.expenseCategories}
+          emptyLabel={
+            isIncome
+              ? "Sem receitas categorizadas neste ano."
+              : "Sem despesas categorizadas neste ano."
+          }
+          barClass={isIncome ? "bg-emerald-500/70" : "bg-primary/70"}
+          hint={
+            isIncome
+              ? "Clique numa categoria para ajustar a meta de entradas."
+              : "Clique numa categoria para ajustar a meta de saídas."
+          }
+          simulated={simulated}
+          simulatedLabel={(pct, value) =>
+            isIncome
+              ? `${pct > 0 ? "aumento" : "redução"} de ${Math.abs(pct)}% · ${value >= 0 ? "+" : "−"} ${formatBRL(Math.abs(value))}/mês`
+              : `${pct > 0 ? "corte" : "aumento"} de ${Math.abs(pct)}% · ${value >= 0 ? "+" : "−"} ${formatBRL(Math.abs(value))}/mês`
+          }
+          selected={selected}
+          onSelect={onSelect}
+        />
+      )}
     </div>
   );
 }
+
 
 /** Painel fixo: simulador de corte (saídas) ou de aumento (entradas). */
 export function OverviewDetailPanel({
