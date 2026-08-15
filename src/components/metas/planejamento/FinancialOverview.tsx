@@ -85,62 +85,33 @@ export function sumSimulated(
   return items.reduce((sum, c) => sum + (c.total * (percents[c.name] ?? 0)) / 100, 0);
 }
 
-/** Bloco real: card de média + lista de categorias reais (recolhível). */
+/** Bloco real: card de média (a lista pareada é renderizada fora). */
 export function RealAverageBlock({
   kind,
   stats,
-  simulated,
-  selected,
-  onSelect,
-  open,
   onToggle,
 }: {
   kind: SimulationKind;
   stats: MetasSidebarStats;
-  simulated: Record<string, number>;
-  selected: string | null;
-  onSelect: (name: string) => void;
-  open: boolean;
+  simulated?: Record<string, number>;
+  selected?: string | null;
+  onSelect?: (name: string) => void;
+  open?: boolean;
   onToggle: () => void;
 }) {
   const isIncome = kind === "income";
   return (
-    <div className="space-y-2.5">
-      <button type="button" onClick={onToggle} className="w-full text-left">
-        <FinancialMetricCard
-          icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-          label={isIncome ? "Média de entradas / mês" : "Média de saídas / mês"}
-          value={formatBRL(isIncome ? stats.avgIncomeMonth : stats.avgSpentMonth)}
-          tone={isIncome ? "success" : "default"}
-        />
-      </button>
-      {open && (
-        <CategoryList
-          items={isIncome ? stats.incomeCategories : stats.expenseCategories}
-          emptyLabel={
-            isIncome
-              ? "Sem receitas categorizadas neste ano."
-              : "Sem despesas categorizadas neste ano."
-          }
-          barClass={isIncome ? "bg-emerald-500/70" : "bg-primary/70"}
-          hint={
-            isIncome
-              ? "Clique numa categoria para ajustar a meta de entradas."
-              : "Clique numa categoria para ajustar a meta de saídas."
-          }
-          simulated={simulated}
-          simulatedLabel={(pct, value) =>
-            isIncome
-              ? `${pct > 0 ? "aumento" : "redução"} de ${Math.abs(pct)}% · ${value >= 0 ? "+" : "−"} ${formatBRL(Math.abs(value))}/mês`
-              : `${pct > 0 ? "corte" : "aumento"} de ${Math.abs(pct)}% · ${value >= 0 ? "+" : "−"} ${formatBRL(Math.abs(value))}/mês`
-          }
-          selected={selected}
-          onSelect={onSelect}
-        />
-      )}
-    </div>
+    <button type="button" onClick={onToggle} className="w-full text-left">
+      <FinancialMetricCard
+        icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+        label={isIncome ? "Média de entradas / mês" : "Média de saídas / mês"}
+        value={formatBRL(isIncome ? stats.avgIncomeMonth : stats.avgSpentMonth)}
+        tone={isIncome ? "success" : "default"}
+      />
+    </button>
   );
 }
+
 
 /** Espelho do card de média: valor já com a meta aplicada. */
 export function MetaAverageCard({
