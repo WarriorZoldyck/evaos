@@ -2094,7 +2094,7 @@ REGRAS DE GERENCIAMENTO DE CATEGORIAS:
 - NÃO invente ações além das listadas acima.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome da Empresa","friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome da Empresa","friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
 
 ⚠️ CRÍTICO: Para consultas o campo 'intent' SEMPRE deve ser exatamente "consulta" (literal). O tipo da consulta vai em 'query_type'. NUNCA coloque "agrupar_por_categoria", "saldo", "listar_lancamentos" etc. no campo 'intent' — só em 'query_type'.
 ⚠️ NUNCA use frases como "Vou buscar essa informação", "Já vou te trazer", "Aguarde um momento" no friendly_message de consultas. O backend executa a consulta no mesmo turno e entrega o resultado — promessas de "vou buscar" deixam o usuário sem resposta.
@@ -2537,7 +2537,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     const VALID_QUERY_TYPES = [
       "saldo", "resumo_mes", "gastos_mes", "receitas_mes", "pendentes",
       "gastos_categoria", "agrupar_por_categoria", "listar_lancamentos",
-      "listar_cartoes", "listar_contas",
+      "listar_cartoes", "listar_contas", "metas_mes",
     ];
     // Self-heal: AI sometimes puts query_type in the intent field (e.g. intent="agrupar_por_categoria")
     if (aiParsed.intent && VALID_QUERY_TYPES.includes(aiParsed.intent)) {
