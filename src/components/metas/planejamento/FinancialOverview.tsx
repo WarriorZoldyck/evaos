@@ -139,12 +139,11 @@ export function MetaAverageCard({
 }
 
 
-/** Painel fixo: ajuste da meta mensal da categoria (para mais ou para menos). */
+/** Painel lateral: ajuste da meta mensal da categoria (slider + campos). */
 export function OverviewDetailPanel({
   mode,
   category,
   percent,
-  totalSimulatedMonthly,
   newAverage,
   onPercentChange,
   onReset,
@@ -153,7 +152,7 @@ export function OverviewDetailPanel({
   category: CategoryBreakdown | null;
   percent: number;
   /** Soma da simulação de todas as categorias do mesmo tipo. */
-  totalSimulatedMonthly: number;
+  totalSimulatedMonthly?: number;
   /** Nova média mensal do bloco (entradas ou saídas) já simulada. */
   newAverage: number;
   onPercentChange: (percent: number) => void;
@@ -167,6 +166,9 @@ export function OverviewDetailPanel({
   );
   // Entradas: percentual positivo aumenta. Saídas: percentual positivo corta.
   const projected = Math.max(0, isIncome ? original + delta : original - delta);
+
+  const minPct = -100;
+  const maxPct = isIncome ? 300 : 100;
 
   // Campo com máscara de moeda: guardamos centavos como inteiro e formatamos.
   const [draft, setDraft] = useState<string>(() => maskFromNumber(projected));
@@ -201,15 +203,6 @@ export function OverviewDetailPanel({
     if (!Number.isFinite(value)) return;
     onPercentChange(Math.round(value * 100) / 100);
   };
-
-  /** Botões rápidos: mexe no valor alvo em passos de 5% da média. */
-  const nudge = (direction: 1 | -1) => {
-    if (original <= 0) return;
-    const step = Math.max(1, Math.round(original * 0.05 * 100) / 100);
-    commitTarget(projected + direction * step);
-  };
-
-
 
   const header = (
     <div className="flex items-center justify-between px-1">
@@ -247,21 +240,30 @@ export function OverviewDetailPanel({
     <div className="space-y-2">
       {header}
 
-      <div className="glass-card p-4 space-y-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">{category.name}</p>
-            <p className="text-[11px] text-muted-foreground">
-              Média atual · <span className="font-mono">{formatBRL(original)}/mês</span>
-            </p>
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-[11px] text-muted-foreground">
-              {isIncome ? "Nova média de entradas" : "Nova média de saídas"}
-            </p>
-            <p className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400">
-              {formatBRL(newAverage)}
-            </p>
+      <div className="glass-card p-4 space-y-3.5">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">{category.name}</p>
+          <p className="text-[11px] text-muted-foreground">
+            Média atual · <span className="font-mono">{formatBRL(original)}/mês</span>
+          </p>
+        </div>
+
+        {/* Controle principal: deslizar para mais ou para menos. */}
+        <div className="space-y-1.5">
+          <Slider
+            value={[Math.max(minPct, Math.min(maxPct, Math.round(percent)))]}
+            min={minPct}
+            max={maxPct}
+            step={1}
+            onValueChange={([v]) => onPercentChange(v)}
+            aria-label={isIncome ? "Variação da entrada" : "Corte da saída"}
+          />
+          <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+            <span>{minPct}%</span>
+            <span className="text-foreground font-semibold">
+              {percent > 0 ? "+" : ""}{Math.round(percent)}%
+            </span>
+            <span>+{maxPct}%</span>
           </div>
         </div>
 
@@ -270,37 +272,15 @@ export function OverviewDetailPanel({
             <span className="text-[11px] text-muted-foreground block">
               {isIncome ? "Entradas alvo (mês)" : "Saídas alvo (mês)"}
             </span>
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 shrink-0"
-                aria-label="Diminuir valor alvo"
-                onClick={() => nudge(-1)}
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </Button>
-              <div className="flex items-center gap-1 h-8 flex-1 min-w-0 rounded-lg bg-background/60 border border-border px-2">
-                <span className="text-[11px] text-muted-foreground font-mono">R$</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={draft}
-                  onChange={(e) => applyMasked(e.target.value)}
-                  className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
-                />
-              </div>
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 shrink-0"
-                aria-label="Aumentar valor alvo"
-                onClick={() => nudge(1)}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
+            <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
+              <span className="text-[11px] text-muted-foreground font-mono">R$</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={draft}
+                onChange={(e) => applyMasked(e.target.value)}
+                className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
+              />
             </div>
           </label>
 
@@ -321,115 +301,131 @@ export function OverviewDetailPanel({
           </label>
         </div>
 
-        <div
-          className={cn(
-            "rounded-xl border p-3 space-y-1.5",
-            totalSimulatedMonthly < 0
-              ? "border-destructive/30 bg-destructive/10"
-              : "border-emerald-500/30 bg-emerald-500/10",
-          )}
-        >
-          <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
-            {isIncome ? "Ganho total na meta" : "Economia total na meta"}
-          </p>
-          <p
-            className={cn(
-              "text-xl font-bold font-mono",
-              totalSimulatedMonthly < 0
-                ? "text-destructive"
-                : "text-emerald-600 dark:text-emerald-400",
-            )}
-          >
-            {signedBRL(totalSimulatedMonthly)}<span className="text-xs font-normal">/mês</span>
-          </p>
-          <div className="pt-1.5 mt-1 border-t border-border/40 space-y-1">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-muted-foreground truncate">
-                {isIncome ? "Ganho nesta categoria" : "Economia nesta categoria"}
-              </span>
-              <span className="font-mono text-foreground">{signedBRL(delta)}/mês</span>
-            </div>
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>Novo valor da categoria</span>
-              <span className="font-mono">{formatBRL(projected)}/mês</span>
-            </div>
+        <div className="pt-2 border-t border-border/40 space-y-1">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-muted-foreground">Novo valor da categoria</span>
+            <span className="font-mono text-foreground">{formatBRL(projected)}/mês</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-muted-foreground truncate">
+              {isIncome ? "Nova média de entradas" : "Nova média de saídas"}
+            </span>
+            <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+              {formatBRL(newAverage)}
+            </span>
           </div>
         </div>
-
       </div>
     </div>
   );
 }
 
-/** Espelho da meta: barrinhas de categoria com o valor já ajustado. */
-export function SimulatedCategoryList({
+/** Lista pareada: categoria real à esquerda e a versão simulada à direita. */
+export function PairedCategoryList({
   items,
   percents,
   kind,
   selected,
   onSelect,
-  open = true,
 }: {
   items: CategoryBreakdown[];
   percents: Record<string, number>;
   kind: SimulationKind;
   selected: string | null;
   onSelect: (name: string) => void;
-  open?: boolean;
 }) {
   const isIncome = kind === "income";
   const projectedOf = (c: CategoryBreakdown) => {
     const pct = percents[c.name] ?? 0;
-    const delta = (c.total * pct) / 100;
-    return Math.max(0, isIncome ? c.total + delta : c.total - delta);
+    const d = (c.total * pct) / 100;
+    return Math.max(0, isIncome ? c.total + d : c.total - d);
   };
-  const total = items.reduce((s, c) => s + projectedOf(c), 0);
+  const realTotal = items.reduce((s, c) => s + c.total, 0);
+  const simTotal = items.reduce((s, c) => s + projectedOf(c), 0);
 
-  if (items.length === 0 || !open) return null;
-
+  if (items.length === 0) {
+    return (
+      <div className="glass-card p-4">
+        <p className="text-xs text-muted-foreground text-center py-2">
+          {isIncome
+            ? "Sem receitas categorizadas neste ano."
+            : "Sem despesas categorizadas neste ano."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="glass-card p-4 space-y-2">
-      <p className="text-[11px] text-muted-foreground">
-        {isIncome ? "Entradas simuladas por categoria" : "Saídas simuladas por categoria"}
-      </p>
-      <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1">
+      <div className="grid grid-cols-2 gap-x-4 text-[11px] text-muted-foreground">
+        <span className="truncate">
+          {isIncome ? "Entradas reais por categoria" : "Saídas reais por categoria"}
+        </span>
+        <span className="truncate">
+          {isIncome ? "Entradas na meta" : "Saídas na meta"}
+        </span>
+      </div>
+      <div className="max-h-[320px] overflow-y-auto space-y-1 pr-1">
         {items.map((c) => {
           const projected = projectedOf(c);
-          const pct = total > 0 ? (projected / total) * 100 : 0;
           const sim = percents[c.name] ?? 0;
           const isSelected = selected === c.name;
+          const realPct = realTotal > 0 ? (c.total / realTotal) * 100 : 0;
+          const simPct = simTotal > 0 ? (projected / simTotal) * 100 : 0;
           return (
             <button
               key={c.name}
               type="button"
               onClick={() => onSelect(c.name)}
               className={cn(
-                "w-full text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
+                "w-full grid grid-cols-2 gap-x-4 items-start text-left rounded-lg px-1.5 py-1.5 transition-colors hover:bg-accent/30",
                 isSelected && "bg-accent/40 ring-1 ring-primary/40",
               )}
             >
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1">
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="truncate font-medium text-foreground">{c.name}</span>
-                  <span
-                    className={cn(
-                      "font-mono shrink-0",
-                      sim !== 0
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {formatBRL(projected)}/mês
+                  <span className="font-mono text-muted-foreground shrink-0">
+                    {formatBRL(c.total)}
                   </span>
                 </div>
                 <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                   <div
                     className={cn(
                       "h-full rounded-full",
-                      sim !== 0 ? "bg-emerald-500/70" : isIncome ? "bg-emerald-500/40" : "bg-primary/40",
+                      isIncome ? "bg-emerald-500/70" : "bg-primary/70",
                     )}
-                    style={{ width: `${pct}%` }}
+                    style={{ width: `${realPct}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span
+                    className={cn(
+                      "truncate font-mono",
+                      sim !== 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+                    )}
+                  >
+                    {sim !== 0 ? `${sim > 0 ? "+" : "−"}${Math.abs(Math.round(sim))}%` : "—"}
+                  </span>
+                  <span
+                    className={cn(
+                      "font-mono shrink-0",
+                      sim !== 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground",
+                    )}
+                  >
+                    {formatBRL(projected)}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full",
+                      sim !== 0 ? "bg-emerald-500/70" : isIncome ? "bg-emerald-500/30" : "bg-primary/30",
+                    )}
+                    style={{ width: `${simPct}%` }}
                   />
                 </div>
               </div>
@@ -440,6 +436,7 @@ export function SimulatedCategoryList({
     </div>
   );
 }
+
 
 /** Cards espelhados: capacidade e sobra recalculadas com a simulação. */
 export function SimulationSummary({
