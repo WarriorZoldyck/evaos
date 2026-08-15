@@ -327,7 +327,7 @@ export function OverviewDetailPanel({
   );
 }
 
-/** Lista pareada: categoria real à esquerda e a versão simulada à direita. */
+/** Lista pareada: real · meta · realizado no mês. */
 export function PairedCategoryList({
   items,
   percents,
@@ -364,13 +364,12 @@ export function PairedCategoryList({
 
   return (
     <div className="glass-card p-3 space-y-1.5">
-      <div className="grid grid-cols-2 gap-x-4 text-[11px] text-muted-foreground">
+      <div className="grid grid-cols-[1fr_1fr_1.1fr] gap-x-3 text-[11px] text-muted-foreground">
         <span className="truncate">
           {isIncome ? "Entradas reais por categoria" : "Saídas reais por categoria"}
         </span>
-        <span className="truncate">
-          {isIncome ? "Entradas na meta" : "Saídas na meta"}
-        </span>
+        <span className="truncate">{isIncome ? "Entradas na meta" : "Saídas na meta"}</span>
+        <span className="truncate">Realizado neste mês</span>
       </div>
       <div className="max-h-[320px] overflow-y-auto space-y-1 pr-1">
         {items.map((c) => {
@@ -379,13 +378,17 @@ export function PairedCategoryList({
           const isSelected = selected === c.name;
           const realPct = realTotal > 0 ? (c.total / realTotal) * 100 : 0;
           const simPct = simTotal > 0 ? (projected / simTotal) * 100 : 0;
+          const progress = buildCategoryProgress(
+            { name: c.name, average: c.total, actual: c.monthTotal, target: projected },
+            kind,
+          );
           return (
             <button
               key={c.name}
               type="button"
               onClick={() => onSelect(c.name)}
               className={cn(
-                "w-full grid grid-cols-2 gap-x-4 items-start text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
+                "w-full grid grid-cols-[1fr_1fr_1.1fr] gap-x-3 items-start text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
                 isSelected && "bg-accent/40 ring-1 ring-primary/40",
               )}
             >
@@ -436,10 +439,89 @@ export function PairedCategoryList({
                   />
                 </div>
               </div>
+
+              <ProgressCell progress={progress} />
             </button>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+const STATUS_BAR: Record<BudgetStatus, string> = {
+  ok: "bg-emerald-500/70",
+  near: "bg-amber-500/80",
+  over: "bg-destructive/80",
+  behind: "bg-amber-500/80",
+  reached: "bg-emerald-500/80",
+};
+
+const STATUS_TEXT: Record<BudgetStatus, string> = {
+  ok: "text-muted-foreground",
+  near: "text-amber-600 dark:text-amber-400",
+  over: "text-destructive",
+  behind: "text-amber-600 dark:text-amber-400",
+  reached: "text-emerald-600 dark:text-emerald-400",
+};
+
+/** Terceira coluna: quanto já foi efetivado no mês frente à meta. */
+function ProgressCell({ progress }: { progress: CategoryProgress }) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className={cn("font-mono shrink-0", STATUS_TEXT[progress.status])}>
+          {formatBRL(progress.actual)}
+        </span>
+        <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+          {Math.round(progress.consumedPct)}%
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full", STATUS_BAR[progress.status])}
+          style={{ width: `${Math.min(100, progress.consumedPct)}%` }}
+        />
+      </div>
+      <p className={cn("text-[10px] truncate", STATUS_TEXT[progress.status])}>{progress.message}</p>
+    </div>
+  );
+}
+
+/** Card do realizado do mês (totais de entrada/saída). */
+export function RealizedMonthCard({
+  kind,
+  actual,
+  target,
+}: { kind: SimulationKind; actual: number; target: number }) {
+  const progress = buildCategoryProgress(
+    { name: "total", average: target, actual, target },
+    kind,
+  );
+  const isIncome = kind === "income";
+  return (
+    <div className="glass-card px-3.5 py-2.5 space-y-1.5">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+        <CalendarClock className="h-4 w-4" />
+        <span className="truncate">
+          {isIncome ? "Recebido neste mês" : "Gasto neste mês"}
+        </span>
+      </div>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className={cn("text-lg font-bold font-mono truncate", STATUS_TEXT[progress.status])}>
+          {formatBRL(actual)}
+        </p>
+        <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+          {Math.round(progress.consumedPct)}% da meta
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div
+          className={cn("h-full rounded-full", STATUS_BAR[progress.status])}
+          style={{ width: `${Math.min(100, progress.consumedPct)}%` }}
+        />
+      </div>
+      <p className={cn("text-[11px] truncate", STATUS_TEXT[progress.status])}>{progress.message}</p>
     </div>
   );
 }
