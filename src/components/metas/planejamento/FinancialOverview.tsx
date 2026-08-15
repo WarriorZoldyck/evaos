@@ -210,7 +210,7 @@ export function OverviewDetailPanel({
   const header = (
     <div className="flex items-center justify-between px-1">
       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-        {isIncome ? "Simulador de ganhos" : "Simulador de economia"}
+        {isIncome ? "Meta de entradas" : "Meta de saídas"}
       </h3>
       <Button
         size="sm"
