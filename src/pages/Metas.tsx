@@ -276,15 +276,23 @@ export default function Metas() {
                 />
               }
               simulated={
-                <button type="button" onClick={openIncome} className="w-full text-left">
-                  <MetaAverageCard
+                <>
+                  <button type="button" onClick={openIncome} className="w-full text-left">
+                    <MetaAverageCard
+                      kind="income"
+                      value={simulatedIncome}
+                      base={stats.avgIncomeMonth}
+                    />
+                  </button>
+                  <RealizedMonthCard
                     kind="income"
-                    value={simulatedIncome}
-                    base={stats.avgIncomeMonth}
+                    actual={stats.incomeMonth}
+                    target={simulatedIncome}
                   />
-                </button>
+                </>
               }
             />
+
 
             {openBlock === "income" && (
               <PairedCategoryList
