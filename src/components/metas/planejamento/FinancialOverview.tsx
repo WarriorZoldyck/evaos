@@ -46,6 +46,12 @@ function numberFromMask(masked: string): number {
   return digits ? Number(digits) / 100 : 0;
 }
 
+/** Formata com sinal explícito (+/−) para deltas de simulação. */
+export function signedBRL(value: number): string {
+  if (Math.abs(value) < 0.005) return formatBRL(0);
+  return `${value > 0 ? "+" : "−"} ${formatBRL(Math.abs(value))}`;
+}
+
 export function OverviewSkeleton() {
   return (
     <div className="space-y-3">
