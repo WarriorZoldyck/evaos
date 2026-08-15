@@ -449,25 +449,17 @@ export function SimulationSummary({
   simulatedCapacity,
   baseLeftover,
   simulatedLeftover,
-  simulatedGain,
-  simulatedSaving,
-  onCreateGoal,
 }: {
   baseCapacity: number;
   simulatedCapacity: number;
   baseLeftover: number;
   simulatedLeftover: number;
-  simulatedGain: number;
-  simulatedSaving: number;
-  onCreateGoal?: (draft: GoalDraft) => void;
 }) {
   const diff = (a: number, b: number) => {
     const d = a - b;
     if (Math.abs(d) < 0.01) return null;
     return `${d > 0 ? "+" : "−"} ${formatBRL(Math.abs(d))}`;
   };
-
-  const monthly = Math.round((simulatedGain + simulatedSaving) * 100) / 100;
 
   return (
     <div className="space-y-2.5">
@@ -483,6 +475,23 @@ export function SimulationSummary({
         delta={diff(simulatedLeftover, baseLeftover)}
         danger={simulatedLeftover < 0}
       />
+    </div>
+  );
+}
+
+/** Ação lateral: cria uma meta a partir do ganho + economia simulados. */
+export function CreateGoalFromSimulation({
+  simulatedGain,
+  simulatedSaving,
+  onCreateGoal,
+}: {
+  simulatedGain: number;
+  simulatedSaving: number;
+  onCreateGoal?: (draft: GoalDraft) => void;
+}) {
+  const monthly = Math.round((simulatedGain + simulatedSaving) * 100) / 100;
+  return (
+    <div className="space-y-2">
       <Button
         className="w-full gap-1.5"
         disabled={monthly <= 0}
@@ -500,13 +509,13 @@ export function SimulationSummary({
       </Button>
       {monthly > 0 && (
         <p className="text-[11px] text-muted-foreground px-1">
-          Junta {formatBRL(simulatedGain)}/mês de ganho e {formatBRL(simulatedSaving)}/mês de
-          economia · {formatBRL(monthly * PLAN_MONTHS)} em {PLAN_MONTHS} meses.
+          {formatBRL(monthly)}/mês · {formatBRL(monthly * PLAN_MONTHS)} em {PLAN_MONTHS} meses.
         </p>
       )}
     </div>
   );
 }
+
 
 /** Card de resumo com valor por mês e projeção anual. */
 function TotalsCard({
