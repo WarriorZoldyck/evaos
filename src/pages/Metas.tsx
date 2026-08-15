@@ -460,6 +460,31 @@ export default function Metas() {
         goalName={planningGoal?.title}
         title="Como tornar essa meta possível"
       />
+
+      <CreateGoalFromSimulationDialog
+        open={simGoalOpen}
+        onOpenChange={setSimGoalOpen}
+        simulatedGain={totalIncomeSimulated}
+        simulatedSaving={totalExpenseSimulated}
+        baseCapacity={monthlyCapacityRaw}
+        simulatedCapacity={simulatedCapacity}
+        baseLeftover={stats.leftover}
+        simulatedLeftover={simulatedLeftover}
+        goals={goals}
+        onConfirm={(draft) => {
+          setPrefill(draft);
+          setFormOpen(true);
+        }}
+        onReinforceGoals={(perGoal) =>
+          toast.success(
+            `Plano definido: reforce ${perGoal.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}/mês em cada meta existente.`,
+          )
+        }
+      />
+
     </div>
   );
 }
