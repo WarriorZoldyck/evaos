@@ -167,6 +167,11 @@ export function OverviewDetailPanel({
   // Entradas: percentual positivo aumenta. Saídas: percentual positivo corta.
   const projected = Math.max(0, isIncome ? original + delta : original - delta);
 
+  // UI: direita sempre significa "aumentar o valor da categoria".
+  // Internamente, saídas usam percentual positivo = corte, então invertemos.
+  const uiPercent = isIncome ? percent : -percent;
+  const toInternal = (ui: number) => (isIncome ? ui : -ui);
+
   const minPct = -100;
   const maxPct = isIncome ? 300 : 100;
 
@@ -176,10 +181,11 @@ export function OverviewDetailPanel({
     setDraft(maskFromNumber(projected));
   }, [projected]);
 
-  const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(percent)));
+  const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(uiPercent)));
   useEffect(() => {
-    setPctDraft(String(Math.round(percent)));
-  }, [percent]);
+    setPctDraft(String(Math.round(uiPercent)));
+  }, [uiPercent]);
+
 
   /** Converte um valor alvo em percentual assinado (aceita mais e menos). */
   const commitTarget = (value: number) => {
@@ -201,7 +207,7 @@ export function OverviewDetailPanel({
     setPctDraft(raw);
     const value = Number(raw.replace(",", "."));
     if (!Number.isFinite(value)) return;
-    onPercentChange(Math.round(value * 100) / 100);
+    onPercentChange(Math.round(toInternal(value) * 100) / 100);
   };
 
   const header = (
@@ -251,20 +257,21 @@ export function OverviewDetailPanel({
         {/* Controle principal: deslizar para mais ou para menos. */}
         <div className="space-y-1.5">
           <Slider
-            value={[Math.max(minPct, Math.min(maxPct, Math.round(percent)))]}
+            value={[Math.max(minPct, Math.min(maxPct, Math.round(uiPercent)))]}
             min={minPct}
             max={maxPct}
             step={1}
-            onValueChange={([v]) => onPercentChange(v)}
-            aria-label={isIncome ? "Variação da entrada" : "Corte da saída"}
+            onValueChange={([v]) => onPercentChange(toInternal(v))}
+            aria-label={isIncome ? "Variação da entrada" : "Variação da saída"}
           />
           <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
             <span>{minPct}%</span>
             <span className="text-foreground font-semibold">
-              {percent > 0 ? "+" : ""}{Math.round(percent)}%
+              {uiPercent > 0 ? "+" : ""}{Math.round(uiPercent)}%
             </span>
             <span>+{maxPct}%</span>
           </div>
+
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -286,7 +293,7 @@ export function OverviewDetailPanel({
 
           <label className="space-y-1">
             <span className="text-[11px] text-muted-foreground block">
-              {isIncome ? "Variação (%) +/−" : "Corte (%) +/−"}
+              Variação (%) +/−
             </span>
             <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
               <input
