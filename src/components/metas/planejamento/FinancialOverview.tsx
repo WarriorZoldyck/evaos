@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
-  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw, Plus, Minus,
+  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw, ChevronDown,
 } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+
 
 import { useCompany } from "@/contexts/CompanyContext";
 import type { CategoryBreakdown, MetasSidebarStats } from "@/hooks/useMetasSidebarStats";
