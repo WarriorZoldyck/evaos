@@ -224,6 +224,8 @@ export default function Metas() {
                 simulated={incomeBoosts}
                 selected={selectedIncome}
                 onSelect={setSelectedIncome}
+                open={openBlock === "income"}
+                onToggle={openIncome}
               />
             }
             simulated={
@@ -246,6 +248,7 @@ export default function Metas() {
                   kind="income"
                   selected={selectedIncome}
                   onSelect={setSelectedIncome}
+                  open={openBlock === "income"}
                 />
               </>
             }
@@ -259,6 +262,8 @@ export default function Metas() {
                 simulated={expenseCuts}
                 selected={selectedExpense}
                 onSelect={setSelectedExpense}
+                open={openBlock === "expense"}
+                onToggle={openExpense}
               />
             }
             simulated={
@@ -281,10 +286,16 @@ export default function Metas() {
                   kind="expense"
                   selected={selectedExpense}
                   onSelect={setSelectedExpense}
+                  open={openBlock === "expense"}
                 />
               </>
             }
           />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <GainTotalCard monthly={totalIncomeSimulated} />
+            <SavingGoalCard monthly={totalExpenseSimulated} />
+          </div>
 
           <PairRow
             real={
@@ -308,6 +319,7 @@ export default function Metas() {
               />
             }
           />
+
         </div>
       )}
 
