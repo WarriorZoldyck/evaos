@@ -110,6 +110,47 @@ export default function Metas() {
     setSelectedExpense((cur) => cur ?? stats.expenseCategories[0]?.name ?? null);
   }, [stats.loading, stats.incomeCategories, stats.expenseCategories]);
 
+  // Metas orçamentárias salvas: hidratam os percentuais na abertura da página.
+  const budgetTargets = useBudgetTargets();
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (hydrated.current || stats.loading || budgetTargets.loading) return;
+    hydrated.current = true;
+
+    const toPercents = (
+      items: typeof stats.incomeCategories,
+      saved: Record<string, number>,
+      kind: "income" | "expense",
+    ) => {
+      const out: Record<string, number> = {};
+      items.forEach((c) => {
+        const target = saved[c.name];
+        if (target === undefined || c.total <= 0) return;
+        const pct =
+          kind === "income"
+            ? ((target - c.total) / c.total) * 100
+            : ((c.total - target) / c.total) * 100;
+        if (Math.abs(pct) >= 0.01) out[c.name] = Math.round(pct * 100) / 100;
+      });
+      return out;
+    };
+
+    setIncomeBoosts(toPercents(stats.incomeCategories, budgetTargets.income, "income"));
+    setExpenseCuts(toPercents(stats.expenseCategories, budgetTargets.expense, "expense"));
+  }, [stats.loading, budgetTargets.loading, stats.incomeCategories, stats.expenseCategories, budgetTargets.income, budgetTargets.expense]);
+
+  /** Salva a meta mensal da categoria a partir do percentual simulado. */
+  const persistTarget = useCallback(
+    (kind: "income" | "expense", name: string, average: number, percent: number) => {
+      const delta = (average * percent) / 100;
+      const target = Math.max(0, kind === "income" ? average + delta : average - delta);
+      budgetTargets.setTarget(kind, name, target);
+    },
+    [budgetTargets],
+  );
+
+
+
 
   const selectedIncomeCat =
     stats.incomeCategories.find((c) => c.name === selectedIncome) ?? null;
