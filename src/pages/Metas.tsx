@@ -21,13 +21,14 @@ import {
   RealCapacityCard,
   RealLeftoverCard,
   OverviewDetailPanel,
-  SimulatedCategoryList,
+  PairedCategoryList,
   SimulationSummary,
   CreateGoalFromSimulation,
   GainTotalCard,
   SavingGoalCard,
   sumSimulated,
 } from "@/components/metas/planejamento/FinancialOverview";
+
 
 import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
