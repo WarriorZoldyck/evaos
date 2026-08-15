@@ -512,37 +512,80 @@ export function CreateGoalFromSimulation({
 }
 
 
-/** Card de resumo com valor por mês e projeção anual. */
+/** Card de resumo com valor por mês, projeção anual e o plano montado. */
 function TotalsCard({
   label,
   icon,
   monthly,
   months,
+  kind,
+  items,
+  percents,
 }: {
   label: string;
   icon: React.ReactNode;
   monthly: number;
   months: number;
+  kind: SimulationKind;
+  items: CategoryBreakdown[];
+  percents: Record<string, number>;
 }) {
   const negative = monthly < -0.005;
+  const [open, setOpen] = useState(false);
+  const isIncome = kind === "income";
+
+  const plan = items
+    .map((c) => ({ name: c.name, pct: percents[c.name] ?? 0, delta: (c.total * (percents[c.name] ?? 0)) / 100 }))
+    .filter((r) => Math.abs(r.delta) >= 0.01)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+
   return (
     <div className="glass-card px-4 py-3 space-y-1">
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
-        {icon}
-        <span className="truncate">{label}</span>
-      </div>
-      <p
-        className={cn(
-          "text-lg font-bold font-mono truncate",
-          negative ? "text-destructive" : "text-emerald-600 dark:text-emerald-400",
-        )}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left space-y-1"
+        aria-expanded={open}
       >
-        {signedBRL(monthly)}
-        <span className="text-xs font-normal text-muted-foreground">/mês</span>
-      </p>
-      <p className="text-[11px] font-mono text-muted-foreground">
-        {signedBRL(monthly * months)} em {months} {months === 1 ? "mês" : "meses"}
-      </p>
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+          {icon}
+          <span className="truncate flex-1">{label}</span>
+          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+        </div>
+        <p
+          className={cn(
+            "text-lg font-bold font-mono truncate",
+            negative ? "text-destructive" : "text-emerald-600 dark:text-emerald-400",
+          )}
+        >
+          {signedBRL(monthly)}
+          <span className="text-xs font-normal text-muted-foreground">/mês</span>
+        </p>
+        <p className="text-[11px] font-mono text-muted-foreground">
+          {signedBRL(monthly * months)} em {months} {months === 1 ? "mês" : "meses"}
+        </p>
+      </button>
+
+      {open && (
+        <div className="pt-2 mt-1 border-t border-border/40 space-y-1">
+          {plan.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">
+              {isIncome
+                ? "Ainda sem aumentos simulados nas entradas."
+                : "Ainda sem cortes simulados nas saídas."}
+            </p>
+          ) : (
+            plan.map((r) => (
+              <div key={r.name} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="truncate text-muted-foreground">
+                  {r.name} <span className="font-mono">({r.pct > 0 ? "+" : "−"}{Math.abs(Math.round(r.pct))}%)</span>
+                </span>
+                <span className="font-mono text-foreground shrink-0">{signedBRL(r.delta)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -551,13 +594,23 @@ function TotalsCard({
 export function GainTotalCard({
   monthly,
   months = PLAN_MONTHS,
-}: { monthly: number; months?: number }) {
+  items = [],
+  percents = {},
+}: {
+  monthly: number;
+  months?: number;
+  items?: CategoryBreakdown[];
+  percents?: Record<string, number>;
+}) {
   return (
     <TotalsCard
       label="Ganho total"
       icon={<TrendingUp className="h-4 w-4" />}
       monthly={monthly}
       months={months}
+      kind="income"
+      items={items}
+      percents={percents}
     />
   );
 }
@@ -566,16 +619,27 @@ export function GainTotalCard({
 export function SavingGoalCard({
   monthly,
   months = PLAN_MONTHS,
-}: { monthly: number; months?: number }) {
+  items = [],
+  percents = {},
+}: {
+  monthly: number;
+  months?: number;
+  items?: CategoryBreakdown[];
+  percents?: Record<string, number>;
+}) {
   return (
     <TotalsCard
       label="Meta de economia"
       icon={<PiggyBank className="h-4 w-4" />}
       monthly={monthly}
       months={months}
+      kind="expense"
+      items={items}
+      percents={percents}
     />
   );
 }
+
 
 
 function SummaryRow({
