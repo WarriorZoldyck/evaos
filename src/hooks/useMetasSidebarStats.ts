@@ -95,13 +95,18 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     const avgIncomeMonth = totalIncomeYear / monthsElapsed;
     const avgSpentMonth = totalSpentYear / monthsElapsed;
 
+    // Realizado do mês corrente — mesma fonte da média, então os números batem.
+    const incomeMonth = Number((cashFlow.monthlyRevenueTotals || {})[CURRENT_PERIOD] || 0);
+    const spentMonth = Number((cashFlow.monthlyExpenseTotals || {})[CURRENT_PERIOD] || 0);
+
     const rowsToCategories = (rows: DRECategoryRow[]): CategoryBreakdown[] =>
       rows
         .map((r) => ({
           name: r.categoryName,
           total: sumTotals(r.monthlyTotals) / monthsElapsed,
+          monthTotal: Number(r.monthlyTotals?.[CURRENT_PERIOD] || 0),
         }))
-        .filter((c) => c.total !== 0)
+        .filter((c) => c.total !== 0 || c.monthTotal !== 0)
         .sort((a, b) => b.total - a.total);
 
     const incomeCategories = rowsToCategories(cashFlow.revenueRows || []);
@@ -112,6 +117,8 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     return {
       avgIncomeMonth,
       avgSpentMonth,
+      incomeMonth,
+      spentMonth,
       leftover,
       incomeCategories,
       expenseCategories,
