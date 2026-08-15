@@ -363,7 +363,7 @@ export function PairedCategoryList({
   }
 
   return (
-    <div className="glass-card p-4 space-y-2">
+    <div className="glass-card p-3 space-y-1.5">
       <div className="grid grid-cols-2 gap-x-4 text-[11px] text-muted-foreground">
         <span className="truncate">
           {isIncome ? "Entradas reais por categoria" : "Saídas reais por categoria"}
@@ -385,7 +385,7 @@ export function PairedCategoryList({
               type="button"
               onClick={() => onSelect(c.name)}
               className={cn(
-                "w-full grid grid-cols-2 gap-x-4 items-start text-left rounded-lg px-1.5 py-1.5 transition-colors hover:bg-accent/30",
+                "w-full grid grid-cols-2 gap-x-4 items-start text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
                 isSelected && "bg-accent/40 ring-1 ring-primary/40",
               )}
             >
@@ -547,7 +547,7 @@ function TotalsCard({
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
 
   return (
-    <div className="glass-card px-4 py-3 space-y-1">
+    <div className="glass-card px-3.5 py-2.5 space-y-1">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -656,7 +656,7 @@ function SummaryRow({
   danger,
 }: { label: string; value: number; delta: string | null; danger: boolean }) {
   return (
-    <div className="glass-card px-4 py-3 space-y-1">
+    <div className="glass-card px-3.5 py-2.5 space-y-1">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
         <PiggyBank className="h-4 w-4" />
         <span className="truncate">{label}</span>

@@ -64,9 +64,9 @@ function PairRow({
   simulated: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-3 items-start md:grid-cols-2">
-      <div className="min-w-0 space-y-2.5">{real}</div>
-      <div className="min-w-0 space-y-2.5">{simulated}</div>
+    <div className="grid gap-2.5 items-start md:grid-cols-2">
+      <div className="min-w-0 space-y-2">{real}</div>
+      <div className="min-w-0 space-y-2">{simulated}</div>
     </div>
   );
 }
@@ -182,7 +182,7 @@ export default function Metas() {
   const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
   return (
-    <div className="metas-scope animate-fade-in space-y-6">
+    <div className="metas-scope animate-fade-in space-y-6 w-full max-w-[1180px] mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold font-display text-foreground">
@@ -206,8 +206,8 @@ export default function Metas() {
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
-        <div className="grid gap-3 items-start md:grid-cols-[minmax(0,1fr)_minmax(190px,230px)]">
-          <div className="min-w-0 space-y-3">
+        <div className="grid gap-2.5 items-start md:grid-cols-[minmax(0,1fr)_minmax(180px,210px)]">
+          <div className="min-w-0 space-y-2.5">
             <PairRow
               real={
                 <>
