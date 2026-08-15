@@ -341,7 +341,13 @@ export default function Metas() {
               />
             )}
 
+            <GoalInsightCard
+              goals={goals}
+              activeGoalId={activeGoalId}
+              monthlyCapacity={Math.max(0, simulatedCapacity)}
+            />
           </aside>
+
         </div>
       )}
 
