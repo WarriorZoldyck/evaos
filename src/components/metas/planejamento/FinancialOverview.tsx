@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
-  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw,
+  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw, Plus, Minus,
 } from "lucide-react";
 
 import { useCompany } from "@/contexts/CompanyContext";
