@@ -37,6 +37,10 @@ import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorLi
 import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
+import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
+import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
+import { toast } from "sonner";
+
 
 import { needsResolution } from "@/lib/goalPlanning";
 import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
