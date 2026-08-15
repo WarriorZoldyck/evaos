@@ -18,6 +18,7 @@ import {
   RealBalanceCard,
   RealAverageBlock,
   MetaAverageCard,
+  RealizedMonthCard,
   RealCapacityCard,
   RealLeftoverCard,
   OverviewDetailPanel,
@@ -27,6 +28,8 @@ import {
   SavingGoalCard,
   sumSimulated,
 } from "@/components/metas/planejamento/FinancialOverview";
+import { MonthRiskCard } from "@/components/metas/planejamento/MonthRiskCard";
+import { useBudgetTargets } from "@/hooks/useBudgetTargets";
 
 
 import { cn } from "@/lib/utils";
