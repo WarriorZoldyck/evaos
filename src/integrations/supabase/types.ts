@@ -513,6 +513,47 @@ export type Database = {
         }
         Relationships: []
       }
+      budget_targets: {
+        Row: {
+          category_name: string
+          company_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          target_amount: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_name: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          target_amount?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_name?: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          target_amount?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_targets_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       card_terminals: {
         Row: {
           acquirer: string | null
