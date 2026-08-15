@@ -22,6 +22,8 @@ import {
   OverviewDetailPanel,
   SimulatedCategoryList,
   SimulationSummary,
+  GainTotalCard,
+  SavingGoalCard,
   sumSimulated,
 } from "@/components/metas/planejamento/FinancialOverview";
 
@@ -80,13 +82,23 @@ export default function Metas() {
   const [incomeBoosts, setIncomeBoosts] = useState<Record<string, number>>({});
   const [selectedIncome, setSelectedIncome] = useState<string | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
+  // Um bloco aberto por vez, compartilhado pelas duas colunas.
+  const [openBlock, setOpenBlock] = useState<"income" | "expense" | null>("expense");
 
-  // Cada simulador nasce aberto na maior categoria da sua lista.
+  const openIncome = () => {
+    setOpenBlock((cur) => (cur === "income" ? null : "income"));
+  };
+  const openExpense = () => {
+    setOpenBlock((cur) => (cur === "expense" ? null : "expense"));
+  };
+
+  // Cada bloco nasce apontando para a maior categoria da sua lista.
   useEffect(() => {
     if (stats.loading) return;
     setSelectedIncome((cur) => cur ?? stats.incomeCategories[0]?.name ?? null);
     setSelectedExpense((cur) => cur ?? stats.expenseCategories[0]?.name ?? null);
   }, [stats.loading, stats.incomeCategories, stats.expenseCategories]);
+
 
   const selectedIncomeCat =
     stats.incomeCategories.find((c) => c.name === selectedIncome) ?? null;
@@ -212,6 +224,8 @@ export default function Metas() {
                 simulated={incomeBoosts}
                 selected={selectedIncome}
                 onSelect={setSelectedIncome}
+                open={openBlock === "income"}
+                onToggle={openIncome}
               />
             }
             simulated={
@@ -234,6 +248,7 @@ export default function Metas() {
                   kind="income"
                   selected={selectedIncome}
                   onSelect={setSelectedIncome}
+                  open={openBlock === "income"}
                 />
               </>
             }
@@ -247,6 +262,8 @@ export default function Metas() {
                 simulated={expenseCuts}
                 selected={selectedExpense}
                 onSelect={setSelectedExpense}
+                open={openBlock === "expense"}
+                onToggle={openExpense}
               />
             }
             simulated={
@@ -269,10 +286,16 @@ export default function Metas() {
                   kind="expense"
                   selected={selectedExpense}
                   onSelect={setSelectedExpense}
+                  open={openBlock === "expense"}
                 />
               </>
             }
           />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <GainTotalCard monthly={totalIncomeSimulated} />
+            <SavingGoalCard monthly={totalExpenseSimulated} />
+          </div>
 
           <PairRow
             real={
@@ -296,6 +319,7 @@ export default function Metas() {
               />
             }
           />
+
         </div>
       )}
 

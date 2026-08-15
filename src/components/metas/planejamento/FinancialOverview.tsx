@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
-  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw,
+  Wallet, TrendingDown, TrendingUp, PiggyBank, Sparkles, RotateCcw, Plus, Minus,
 } from "lucide-react";
 
 import { useCompany } from "@/contexts/CompanyContext";
@@ -46,6 +46,12 @@ function numberFromMask(masked: string): number {
   return digits ? Number(digits) / 100 : 0;
 }
 
+/** Formata com sinal explícito (+/−) para deltas de simulação. */
+export function signedBRL(value: number): string {
+  if (Math.abs(value) < 0.005) return formatBRL(0);
+  return `${value > 0 ? "+" : "−"} ${formatBRL(Math.abs(value))}`;
+}
+
 export function OverviewSkeleton() {
   return (
     <div className="space-y-3">
@@ -77,56 +83,65 @@ export function sumSimulated(
   return items.reduce((sum, c) => sum + (c.total * (percents[c.name] ?? 0)) / 100, 0);
 }
 
-/** Bloco real: card de média + lista de categorias reais. */
+/** Bloco real: card de média + lista de categorias reais (recolhível). */
 export function RealAverageBlock({
   kind,
   stats,
   simulated,
   selected,
   onSelect,
+  open,
+  onToggle,
 }: {
   kind: SimulationKind;
   stats: MetasSidebarStats;
   simulated: Record<string, number>;
   selected: string | null;
   onSelect: (name: string) => void;
+  open: boolean;
+  onToggle: () => void;
 }) {
   const isIncome = kind === "income";
   return (
     <div className="space-y-2.5">
-      <FinancialMetricCard
-        icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-        label={isIncome ? "Média de entradas / mês" : "Média de saídas / mês"}
-        value={formatBRL(isIncome ? stats.avgIncomeMonth : stats.avgSpentMonth)}
-        tone={isIncome ? "success" : "default"}
-      />
-      <CategoryList
-        items={isIncome ? stats.incomeCategories : stats.expenseCategories}
-        emptyLabel={
-          isIncome
-            ? "Sem receitas categorizadas neste ano."
-            : "Sem despesas categorizadas neste ano."
-        }
-        barClass={isIncome ? "bg-emerald-500/70" : "bg-primary/70"}
-        hint={
-          isIncome
-            ? "Clique numa categoria para simular um aumento."
-            : "Clique numa categoria para simular um corte."
-        }
-        simulated={simulated}
-        simulatedLabel={(pct, value) =>
-          isIncome
-            ? `aumento de ${pct}% · + ${formatBRL(value)}/mês`
-            : `corte de ${pct}% · + ${formatBRL(value)}/mês`
-        }
-        selected={selected}
-        onSelect={onSelect}
-      />
+      <button type="button" onClick={onToggle} className="w-full text-left">
+        <FinancialMetricCard
+          icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+          label={isIncome ? "Média de entradas / mês" : "Média de saídas / mês"}
+          value={formatBRL(isIncome ? stats.avgIncomeMonth : stats.avgSpentMonth)}
+          tone={isIncome ? "success" : "default"}
+        />
+      </button>
+      {open && (
+        <CategoryList
+          items={isIncome ? stats.incomeCategories : stats.expenseCategories}
+          emptyLabel={
+            isIncome
+              ? "Sem receitas categorizadas neste ano."
+              : "Sem despesas categorizadas neste ano."
+          }
+          barClass={isIncome ? "bg-emerald-500/70" : "bg-primary/70"}
+          hint={
+            isIncome
+              ? "Clique numa categoria para ajustar a meta de entradas."
+              : "Clique numa categoria para ajustar a meta de saídas."
+          }
+          simulated={simulated}
+          simulatedLabel={(pct, value) =>
+            isIncome
+              ? `${pct > 0 ? "aumento" : "redução"} de ${Math.abs(pct)}% · ${value >= 0 ? "+" : "−"} ${formatBRL(Math.abs(value))}/mês`
+              : `${pct > 0 ? "corte" : "aumento"} de ${Math.abs(pct)}% · ${value >= 0 ? "+" : "−"} ${formatBRL(Math.abs(value))}/mês`
+          }
+          selected={selected}
+          onSelect={onSelect}
+        />
+      )}
     </div>
   );
 }
 
-/** Painel fixo: simulador de corte (saídas) ou de aumento (entradas). */
+
+/** Painel fixo: ajuste da meta mensal da categoria (para mais ou para menos). */
 export function OverviewDetailPanel({
   mode,
   category,
@@ -152,7 +167,8 @@ export function OverviewDetailPanel({
     () => Math.round(original * (percent / 100) * 100) / 100,
     [original, percent],
   );
-  const projected = isIncome ? original + delta : Math.max(0, original - delta);
+  // Entradas: percentual positivo aumenta. Saídas: percentual positivo corta.
+  const projected = Math.max(0, isIncome ? original + delta : original - delta);
 
   // Campo com máscara de moeda: guardamos centavos como inteiro e formatamos.
   const [draft, setDraft] = useState<string>(() => maskFromNumber(projected));
@@ -165,34 +181,42 @@ export function OverviewDetailPanel({
     setPctDraft(String(Math.round(percent)));
   }, [percent]);
 
+  /** Converte um valor alvo em percentual assinado (aceita mais e menos). */
+  const commitTarget = (value: number) => {
+    if (original <= 0) return;
+    const target = Math.max(0, value);
+    const pct = isIncome
+      ? ((target - original) / original) * 100
+      : ((original - target) / original) * 100;
+    onPercentChange(Math.round(pct * 100) / 100);
+  };
+
   const applyMasked = (raw: string) => {
     const masked = maskFromDigits(raw);
     setDraft(masked);
-    if (original <= 0) return;
-    const value = numberFromMask(masked);
-    // Nas entradas o valor digitado manda: sem teto, só não pode ficar abaixo da média.
-    const clamped = isIncome
-      ? Math.max(original, value)
-      : Math.min(original, Math.max(0, value));
-    const pct = isIncome
-      ? ((clamped - original) / original) * 100
-      : ((original - clamped) / original) * 100;
-    onPercentChange(Math.max(0, Math.round(pct * 100) / 100));
+    commitTarget(numberFromMask(masked));
   };
 
   const applyPercent = (raw: string) => {
     setPctDraft(raw);
     const value = Number(raw.replace(",", "."));
     if (!Number.isFinite(value)) return;
-    // Saídas não podem cortar mais do que 100%; entradas não têm teto.
-    const clamped = isIncome ? Math.max(0, value) : Math.min(100, Math.max(0, value));
-    onPercentChange(Math.round(clamped * 100) / 100);
+    onPercentChange(Math.round(value * 100) / 100);
   };
+
+  /** Botões rápidos: mexe no valor alvo em passos de 5% da média. */
+  const nudge = (direction: 1 | -1) => {
+    if (original <= 0) return;
+    const step = Math.max(1, Math.round(original * 0.05 * 100) / 100);
+    commitTarget(projected + direction * step);
+  };
+
+
 
   const header = (
     <div className="flex items-center justify-between px-1">
       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-        {isIncome ? "Simulador de ganhos" : "Simulador de economia"}
+        {isIncome ? "Meta de entradas" : "Meta de saídas"}
       </h3>
       <Button
         size="sm"
@@ -246,29 +270,49 @@ export function OverviewDetailPanel({
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1">
             <span className="text-[11px] text-muted-foreground block">
-              {isIncome ? "Novo faturamento alvo" : "Novo gasto alvo"}
+              {isIncome ? "Entradas alvo (mês)" : "Saídas alvo (mês)"}
             </span>
-            <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
-              <span className="text-[11px] text-muted-foreground font-mono">R$</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={draft}
-                onChange={(e) => applyMasked(e.target.value)}
-                className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
-              />
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 shrink-0"
+                aria-label="Diminuir valor alvo"
+                onClick={() => nudge(-1)}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <div className="flex items-center gap-1 h-8 flex-1 min-w-0 rounded-lg bg-background/60 border border-border px-2">
+                <span className="text-[11px] text-muted-foreground font-mono">R$</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={draft}
+                  onChange={(e) => applyMasked(e.target.value)}
+                  className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
+                />
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 shrink-0"
+                aria-label="Aumentar valor alvo"
+                onClick={() => nudge(1)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
             </div>
           </label>
 
           <label className="space-y-1">
             <span className="text-[11px] text-muted-foreground block">
-              {isIncome ? "Aumentar (%)" : "Cortar (%)"}
+              {isIncome ? "Variação (%) +/−" : "Corte (%) +/−"}
             </span>
             <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
               <input
                 type="number"
-                min={0}
-                max={isIncome ? undefined : 100}
                 step={1}
                 value={pctDraft}
                 onChange={(e) => applyPercent(e.target.value)}
@@ -279,54 +323,72 @@ export function OverviewDetailPanel({
           </label>
         </div>
 
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5">
+        <div
+          className={cn(
+            "rounded-xl border p-3 space-y-1.5",
+            totalSimulatedMonthly < 0
+              ? "border-destructive/30 bg-destructive/10"
+              : "border-emerald-500/30 bg-emerald-500/10",
+          )}
+        >
           <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
-            {isIncome ? "Ganho total simulado" : "Economia total simulada"}
+            {isIncome ? "Ganho total na meta" : "Economia total na meta"}
           </p>
-          <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-            {formatBRL(totalSimulatedMonthly)}<span className="text-xs font-normal">/mês</span>
+          <p
+            className={cn(
+              "text-xl font-bold font-mono",
+              totalSimulatedMonthly < 0
+                ? "text-destructive"
+                : "text-emerald-600 dark:text-emerald-400",
+            )}
+          >
+            {signedBRL(totalSimulatedMonthly)}<span className="text-xs font-normal">/mês</span>
           </p>
-          <div className="pt-1.5 mt-1 border-t border-emerald-500/20 space-y-1">
+          <div className="pt-1.5 mt-1 border-t border-border/40 space-y-1">
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground truncate">
                 {isIncome ? "Ganho nesta categoria" : "Economia nesta categoria"}
               </span>
-              <span className="font-mono text-foreground">{formatBRL(delta)}/mês</span>
+              <span className="font-mono text-foreground">{signedBRL(delta)}/mês</span>
             </div>
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>{isIncome ? "Nova média da categoria" : "Sobra na categoria"}</span>
+              <span>Novo valor da categoria</span>
               <span className="font-mono">{formatBRL(projected)}/mês</span>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );
 }
 
-/** Espelho simulado das barrinhas de categoria (valor já com corte/aumento). */
+/** Espelho da meta: barrinhas de categoria com o valor já ajustado. */
 export function SimulatedCategoryList({
   items,
   percents,
   kind,
   selected,
   onSelect,
+  open = true,
 }: {
   items: CategoryBreakdown[];
   percents: Record<string, number>;
   kind: SimulationKind;
   selected: string | null;
   onSelect: (name: string) => void;
+  open?: boolean;
 }) {
   const isIncome = kind === "income";
   const projectedOf = (c: CategoryBreakdown) => {
     const pct = percents[c.name] ?? 0;
     const delta = (c.total * pct) / 100;
-    return isIncome ? c.total + delta : Math.max(0, c.total - delta);
+    return Math.max(0, isIncome ? c.total + delta : c.total - delta);
   };
   const total = items.reduce((s, c) => s + projectedOf(c), 0);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 || !open) return null;
+
 
   return (
     <div className="glass-card p-4 space-y-2">
@@ -355,7 +417,7 @@ export function SimulatedCategoryList({
                   <span
                     className={cn(
                       "font-mono shrink-0",
-                      sim > 0
+                      sim !== 0
                         ? "text-emerald-600 dark:text-emerald-400"
                         : "text-muted-foreground",
                     )}
@@ -367,7 +429,7 @@ export function SimulatedCategoryList({
                   <div
                     className={cn(
                       "h-full rounded-full",
-                      sim > 0 ? "bg-emerald-500/70" : isIncome ? "bg-emerald-500/40" : "bg-primary/40",
+                      sim !== 0 ? "bg-emerald-500/70" : isIncome ? "bg-emerald-500/40" : "bg-primary/40",
                     )}
                     style={{ width: `${pct}%` }}
                   />
@@ -410,13 +472,13 @@ export function SimulationSummary({
   return (
     <div className="space-y-2.5">
       <SummaryRow
-        label="Capacidade mensal simulada"
+        label="Nova capacidade mensal"
         value={simulatedCapacity}
         delta={diff(simulatedCapacity, baseCapacity)}
         danger={simulatedCapacity <= 0}
       />
       <SummaryRow
-        label="Sobra simulada até dez"
+        label="Nova sobra até dez"
         value={simulatedLeftover}
         delta={diff(simulatedLeftover, baseLeftover)}
         danger={simulatedLeftover < 0}
@@ -445,6 +507,72 @@ export function SimulationSummary({
     </div>
   );
 }
+
+/** Card de resumo com valor por mês e projeção anual. */
+function TotalsCard({
+  label,
+  icon,
+  monthly,
+  months,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  monthly: number;
+  months: number;
+}) {
+  const negative = monthly < -0.005;
+  return (
+    <div className="glass-card px-4 py-3 space-y-1">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+      <p
+        className={cn(
+          "text-lg font-bold font-mono truncate",
+          negative ? "text-destructive" : "text-emerald-600 dark:text-emerald-400",
+        )}
+      >
+        {signedBRL(monthly)}
+        <span className="text-xs font-normal text-muted-foreground">/mês</span>
+      </p>
+      <p className="text-[11px] font-mono text-muted-foreground">
+        {signedBRL(monthly * months)} em {months} {months === 1 ? "mês" : "meses"}
+      </p>
+    </div>
+  );
+}
+
+/** Card "Ganho total" (mês e ano). */
+export function GainTotalCard({
+  monthly,
+  months = PLAN_MONTHS,
+}: { monthly: number; months?: number }) {
+  return (
+    <TotalsCard
+      label="Ganho total"
+      icon={<TrendingUp className="h-4 w-4" />}
+      monthly={monthly}
+      months={months}
+    />
+  );
+}
+
+/** Card "Meta de economia" (mês e ano). */
+export function SavingGoalCard({
+  monthly,
+  months = PLAN_MONTHS,
+}: { monthly: number; months?: number }) {
+  return (
+    <TotalsCard
+      label="Meta de economia"
+      icon={<PiggyBank className="h-4 w-4" />}
+      monthly={monthly}
+      months={months}
+    />
+  );
+}
+
 
 function SummaryRow({
   label,
@@ -557,7 +685,7 @@ function CategoryList({
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div className={cn("h-full rounded-full", barClass)} style={{ width: `${pct}%` }} />
                   </div>
-                  {sim > 0 && (
+                  {sim !== 0 && (
                     <p className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
                       {simulatedLabel(sim, (c.total * sim) / 100)}
                     </p>
