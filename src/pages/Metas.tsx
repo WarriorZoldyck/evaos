@@ -389,8 +389,12 @@ export default function Metas() {
                 onPercentChange={(p) => {
                   if (!selectedIncomeCat) return;
                   setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
+                  persistTarget("income", selectedIncomeCat.name, selectedIncomeCat.total, p);
                 }}
-                onReset={() => setIncomeBoosts({})}
+                onReset={() => {
+                  setIncomeBoosts({});
+                  budgetTargets.clearKind("income");
+                }}
               />
             )}
 
@@ -403,10 +407,23 @@ export default function Metas() {
                 onPercentChange={(p) => {
                   if (!selectedExpenseCat) return;
                   setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
+                  persistTarget("expense", selectedExpenseCat.name, selectedExpenseCat.total, p);
                 }}
-                onReset={() => setExpenseCuts({})}
+                onReset={() => {
+                  setExpenseCuts({});
+                  budgetTargets.clearKind("expense");
+                }}
               />
             )}
+
+            <MonthRiskCard
+              expenseCategories={stats.expenseCategories}
+              percents={expenseCuts}
+              onSelect={(name) => {
+                setOpenBlock("expense");
+                setSelectedExpense(name);
+              }}
+            />
 
             <GoalInsightCard
               goals={goals}
