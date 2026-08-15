@@ -264,29 +264,49 @@ export function OverviewDetailPanel({
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-1">
             <span className="text-[11px] text-muted-foreground block">
-              {isIncome ? "Novo faturamento alvo" : "Novo gasto alvo"}
+              {isIncome ? "Entradas alvo (mês)" : "Saídas alvo (mês)"}
             </span>
-            <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
-              <span className="text-[11px] text-muted-foreground font-mono">R$</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={draft}
-                onChange={(e) => applyMasked(e.target.value)}
-                className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
-              />
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 shrink-0"
+                aria-label="Diminuir valor alvo"
+                onClick={() => nudge(-1)}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <div className="flex items-center gap-1 h-8 flex-1 min-w-0 rounded-lg bg-background/60 border border-border px-2">
+                <span className="text-[11px] text-muted-foreground font-mono">R$</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={draft}
+                  onChange={(e) => applyMasked(e.target.value)}
+                  className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
+                />
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 shrink-0"
+                aria-label="Aumentar valor alvo"
+                onClick={() => nudge(1)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
             </div>
           </label>
 
           <label className="space-y-1">
             <span className="text-[11px] text-muted-foreground block">
-              {isIncome ? "Aumentar (%)" : "Cortar (%)"}
+              {isIncome ? "Variação (%) +/−" : "Corte (%) +/−"}
             </span>
             <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
               <input
                 type="number"
-                min={0}
-                max={isIncome ? undefined : 100}
                 step={1}
                 value={pctDraft}
                 onChange={(e) => applyPercent(e.target.value)}
@@ -297,26 +317,41 @@ export function OverviewDetailPanel({
           </label>
         </div>
 
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5">
+        <div
+          className={cn(
+            "rounded-xl border p-3 space-y-1.5",
+            totalSimulatedMonthly < 0
+              ? "border-destructive/30 bg-destructive/10"
+              : "border-emerald-500/30 bg-emerald-500/10",
+          )}
+        >
           <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
-            {isIncome ? "Ganho total simulado" : "Economia total simulada"}
+            {isIncome ? "Ganho total na meta" : "Economia total na meta"}
           </p>
-          <p className="text-xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-            {formatBRL(totalSimulatedMonthly)}<span className="text-xs font-normal">/mês</span>
+          <p
+            className={cn(
+              "text-xl font-bold font-mono",
+              totalSimulatedMonthly < 0
+                ? "text-destructive"
+                : "text-emerald-600 dark:text-emerald-400",
+            )}
+          >
+            {signedBRL(totalSimulatedMonthly)}<span className="text-xs font-normal">/mês</span>
           </p>
-          <div className="pt-1.5 mt-1 border-t border-emerald-500/20 space-y-1">
+          <div className="pt-1.5 mt-1 border-t border-border/40 space-y-1">
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground truncate">
                 {isIncome ? "Ganho nesta categoria" : "Economia nesta categoria"}
               </span>
-              <span className="font-mono text-foreground">{formatBRL(delta)}/mês</span>
+              <span className="font-mono text-foreground">{signedBRL(delta)}/mês</span>
             </div>
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-              <span>{isIncome ? "Nova média da categoria" : "Sobra na categoria"}</span>
+              <span>Novo valor da categoria</span>
               <span className="font-mono">{formatBRL(projected)}/mês</span>
             </div>
           </div>
         </div>
+
       </div>
     </div>
   );
