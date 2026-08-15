@@ -313,13 +313,20 @@ export default function Metas() {
                 />
               }
               simulated={
-                <button type="button" onClick={openExpense} className="w-full text-left">
-                  <MetaAverageCard
+                <>
+                  <button type="button" onClick={openExpense} className="w-full text-left">
+                    <MetaAverageCard
+                      kind="expense"
+                      value={simulatedExpense}
+                      base={stats.avgSpentMonth}
+                    />
+                  </button>
+                  <RealizedMonthCard
                     kind="expense"
-                    value={simulatedExpense}
-                    base={stats.avgSpentMonth}
+                    actual={stats.spentMonth}
+                    target={simulatedExpense}
                   />
-                </button>
+                </>
               }
             />
 
