@@ -167,6 +167,11 @@ export function OverviewDetailPanel({
   // Entradas: percentual positivo aumenta. Saídas: percentual positivo corta.
   const projected = Math.max(0, isIncome ? original + delta : original - delta);
 
+  // UI: direita sempre significa "aumentar o valor da categoria".
+  // Internamente, saídas usam percentual positivo = corte, então invertemos.
+  const uiPercent = isIncome ? percent : -percent;
+  const toInternal = (ui: number) => (isIncome ? ui : -ui);
+
   const minPct = -100;
   const maxPct = isIncome ? 300 : 100;
 
@@ -176,10 +181,11 @@ export function OverviewDetailPanel({
     setDraft(maskFromNumber(projected));
   }, [projected]);
 
-  const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(percent)));
+  const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(uiPercent)));
   useEffect(() => {
-    setPctDraft(String(Math.round(percent)));
-  }, [percent]);
+    setPctDraft(String(Math.round(uiPercent)));
+  }, [uiPercent]);
+
 
   /** Converte um valor alvo em percentual assinado (aceita mais e menos). */
   const commitTarget = (value: number) => {
