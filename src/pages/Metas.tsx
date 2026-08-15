@@ -21,13 +21,14 @@ import {
   RealCapacityCard,
   RealLeftoverCard,
   OverviewDetailPanel,
-  SimulatedCategoryList,
+  PairedCategoryList,
   SimulationSummary,
   CreateGoalFromSimulation,
   GainTotalCard,
   SavingGoalCard,
   sumSimulated,
 } from "@/components/metas/planejamento/FinancialOverview";
+
 
 import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
@@ -216,98 +217,59 @@ export default function Metas() {
                 <RealAverageBlock
                   kind="income"
                   stats={stats}
-                  simulated={incomeBoosts}
-                  selected={selectedIncome}
-                  onSelect={setSelectedIncome}
-                  open={openBlock === "income"}
                   onToggle={openIncome}
                 />
               }
               simulated={
-                <>
-                  <button type="button" onClick={openIncome} className="w-full text-left">
-                    <MetaAverageCard
-                      kind="income"
-                      value={simulatedIncome}
-                      base={stats.avgIncomeMonth}
-                    />
-                  </button>
-                  {openBlock === "income" && (
-                    <>
-                      <OverviewDetailPanel
-                        mode="income"
-                        category={selectedIncomeCat}
-                        percent={selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0}
-                        totalSimulatedMonthly={totalIncomeSimulated}
-                        newAverage={simulatedIncome}
-                        onPercentChange={(p) => {
-                          if (!selectedIncomeCat) return;
-                          setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
-                        }}
-                        onReset={() => setIncomeBoosts({})}
-                      />
-                      <SimulatedCategoryList
-                        items={stats.incomeCategories}
-                        percents={incomeBoosts}
-                        kind="income"
-                        selected={selectedIncome}
-                        onSelect={setSelectedIncome}
-                        open
-                      />
-                    </>
-                  )}
-                </>
+                <button type="button" onClick={openIncome} className="w-full text-left">
+                  <MetaAverageCard
+                    kind="income"
+                    value={simulatedIncome}
+                    base={stats.avgIncomeMonth}
+                  />
+                </button>
               }
             />
+
+            {openBlock === "income" && (
+              <PairedCategoryList
+                items={stats.incomeCategories}
+                percents={incomeBoosts}
+                kind="income"
+                selected={selectedIncome}
+                onSelect={setSelectedIncome}
+              />
+            )}
 
             <PairRow
               real={
                 <RealAverageBlock
                   kind="expense"
                   stats={stats}
-                  simulated={expenseCuts}
-                  selected={selectedExpense}
-                  onSelect={setSelectedExpense}
-                  open={openBlock === "expense"}
                   onToggle={openExpense}
                 />
               }
               simulated={
-                <>
-                  <button type="button" onClick={openExpense} className="w-full text-left">
-                    <MetaAverageCard
-                      kind="expense"
-                      value={simulatedExpense}
-                      base={stats.avgSpentMonth}
-                    />
-                  </button>
-                  {openBlock === "expense" && (
-                    <>
-                      <OverviewDetailPanel
-                        mode="expense"
-                        category={selectedExpenseCat}
-                        percent={selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0}
-                        totalSimulatedMonthly={totalExpenseSimulated}
-                        newAverage={simulatedExpense}
-                        onPercentChange={(p) => {
-                          if (!selectedExpenseCat) return;
-                          setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
-                        }}
-                        onReset={() => setExpenseCuts({})}
-                      />
-                      <SimulatedCategoryList
-                        items={stats.expenseCategories}
-                        percents={expenseCuts}
-                        kind="expense"
-                        selected={selectedExpense}
-                        onSelect={setSelectedExpense}
-                        open
-                      />
-                    </>
-                  )}
-                </>
+                <button type="button" onClick={openExpense} className="w-full text-left">
+                  <MetaAverageCard
+                    kind="expense"
+                    value={simulatedExpense}
+                    base={stats.avgSpentMonth}
+                  />
+                </button>
               }
             />
+
+            {openBlock === "expense" && (
+              <PairedCategoryList
+                items={stats.expenseCategories}
+                percents={expenseCuts}
+                kind="expense"
+                selected={selectedExpense}
+                onSelect={setSelectedExpense}
+              />
+            )}
+
 
             <PairRow
               real={
@@ -328,8 +290,16 @@ export default function Metas() {
           </div>
 
           <aside className="min-w-0 space-y-3 md:sticky md:top-4">
-            <GainTotalCard monthly={totalIncomeSimulated} />
-            <SavingGoalCard monthly={totalExpenseSimulated} />
+            <GainTotalCard
+              monthly={totalIncomeSimulated}
+              items={stats.incomeCategories}
+              percents={incomeBoosts}
+            />
+            <SavingGoalCard
+              monthly={totalExpenseSimulated}
+              items={stats.expenseCategories}
+              percents={expenseCuts}
+            />
             <CreateGoalFromSimulation
               simulatedGain={totalIncomeSimulated}
               simulatedSaving={totalExpenseSimulated}
@@ -338,6 +308,35 @@ export default function Metas() {
                 setFormOpen(true);
               }}
             />
+
+            {openBlock === "income" && (
+              <OverviewDetailPanel
+                mode="income"
+                category={selectedIncomeCat}
+                percent={selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0}
+                newAverage={simulatedIncome}
+                onPercentChange={(p) => {
+                  if (!selectedIncomeCat) return;
+                  setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
+                }}
+                onReset={() => setIncomeBoosts({})}
+              />
+            )}
+
+            {openBlock === "expense" && (
+              <OverviewDetailPanel
+                mode="expense"
+                category={selectedExpenseCat}
+                percent={selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0}
+                newAverage={simulatedExpense}
+                onPercentChange={(p) => {
+                  if (!selectedExpenseCat) return;
+                  setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
+                }}
+                onReset={() => setExpenseCuts({})}
+              />
+            )}
+
           </aside>
         </div>
       )}
