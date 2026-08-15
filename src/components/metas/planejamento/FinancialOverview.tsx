@@ -417,7 +417,7 @@ export function SimulatedCategoryList({
                   <span
                     className={cn(
                       "font-mono shrink-0",
-                      sim > 0
+                      sim !== 0
                         ? "text-emerald-600 dark:text-emerald-400"
                         : "text-muted-foreground",
                     )}
@@ -429,7 +429,7 @@ export function SimulatedCategoryList({
                   <div
                     className={cn(
                       "h-full rounded-full",
-                      sim > 0 ? "bg-emerald-500/70" : isIncome ? "bg-emerald-500/40" : "bg-primary/40",
+                      sim !== 0 ? "bg-emerald-500/70" : isIncome ? "bg-emerald-500/40" : "bg-primary/40",
                     )}
                     style={{ width: `${pct}%` }}
                   />
@@ -685,7 +685,7 @@ function CategoryList({
                   <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div className={cn("h-full rounded-full", barClass)} style={{ width: `${pct}%` }} />
                   </div>
-                  {sim > 0 && (
+                  {sim !== 0 && (
                     <p className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400">
                       {simulatedLabel(sim, (c.total * sim) / 100)}
                     </p>
