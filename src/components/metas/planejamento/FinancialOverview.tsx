@@ -135,7 +135,7 @@ export function RealAverageBlock({
 }
 
 
-/** Painel fixo: simulador de corte (saídas) ou de aumento (entradas). */
+/** Painel fixo: ajuste da meta mensal da categoria (para mais ou para menos). */
 export function OverviewDetailPanel({
   mode,
   category,
@@ -161,7 +161,8 @@ export function OverviewDetailPanel({
     () => Math.round(original * (percent / 100) * 100) / 100,
     [original, percent],
   );
-  const projected = isIncome ? original + delta : Math.max(0, original - delta);
+  // Entradas: percentual positivo aumenta. Saídas: percentual positivo corta.
+  const projected = Math.max(0, isIncome ? original + delta : original - delta);
 
   // Campo com máscara de moeda: guardamos centavos como inteiro e formatamos.
   const [draft, setDraft] = useState<string>(() => maskFromNumber(projected));
@@ -174,29 +175,37 @@ export function OverviewDetailPanel({
     setPctDraft(String(Math.round(percent)));
   }, [percent]);
 
+  /** Converte um valor alvo em percentual assinado (aceita mais e menos). */
+  const commitTarget = (value: number) => {
+    if (original <= 0) return;
+    const target = Math.max(0, value);
+    const pct = isIncome
+      ? ((target - original) / original) * 100
+      : ((original - target) / original) * 100;
+    onPercentChange(Math.round(pct * 100) / 100);
+  };
+
   const applyMasked = (raw: string) => {
     const masked = maskFromDigits(raw);
     setDraft(masked);
-    if (original <= 0) return;
-    const value = numberFromMask(masked);
-    // Nas entradas o valor digitado manda: sem teto, só não pode ficar abaixo da média.
-    const clamped = isIncome
-      ? Math.max(original, value)
-      : Math.min(original, Math.max(0, value));
-    const pct = isIncome
-      ? ((clamped - original) / original) * 100
-      : ((original - clamped) / original) * 100;
-    onPercentChange(Math.max(0, Math.round(pct * 100) / 100));
+    commitTarget(numberFromMask(masked));
   };
 
   const applyPercent = (raw: string) => {
     setPctDraft(raw);
     const value = Number(raw.replace(",", "."));
     if (!Number.isFinite(value)) return;
-    // Saídas não podem cortar mais do que 100%; entradas não têm teto.
-    const clamped = isIncome ? Math.max(0, value) : Math.min(100, Math.max(0, value));
-    onPercentChange(Math.round(clamped * 100) / 100);
+    onPercentChange(Math.round(value * 100) / 100);
   };
+
+  /** Botões rápidos: mexe no valor alvo em passos de 5% da média. */
+  const nudge = (direction: 1 | -1) => {
+    if (original <= 0) return;
+    const step = Math.max(1, Math.round(original * 0.05 * 100) / 100);
+    commitTarget(projected + direction * step);
+  };
+
+
 
   const header = (
     <div className="flex items-center justify-between px-1">
