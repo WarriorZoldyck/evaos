@@ -57,12 +57,13 @@ function PairRow({
   simulated: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-3 items-start lg:grid-cols-2">
+    <div className="grid gap-3 items-start md:grid-cols-2">
       <div className="min-w-0 space-y-2.5">{real}</div>
       <div className="min-w-0 space-y-2.5">{simulated}</div>
     </div>
   );
 }
+
 
 export default function Metas() {
   const navigate = useNavigate();
