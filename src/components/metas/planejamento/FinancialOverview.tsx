@@ -257,20 +257,21 @@ export function OverviewDetailPanel({
         {/* Controle principal: deslizar para mais ou para menos. */}
         <div className="space-y-1.5">
           <Slider
-            value={[Math.max(minPct, Math.min(maxPct, Math.round(percent)))]}
+            value={[Math.max(minPct, Math.min(maxPct, Math.round(uiPercent)))]}
             min={minPct}
             max={maxPct}
             step={1}
-            onValueChange={([v]) => onPercentChange(v)}
-            aria-label={isIncome ? "Variação da entrada" : "Corte da saída"}
+            onValueChange={([v]) => onPercentChange(toInternal(v))}
+            aria-label={isIncome ? "Variação da entrada" : "Variação da saída"}
           />
           <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
             <span>{minPct}%</span>
             <span className="text-foreground font-semibold">
-              {percent > 0 ? "+" : ""}{Math.round(percent)}%
+              {uiPercent > 0 ? "+" : ""}{Math.round(uiPercent)}%
             </span>
             <span>+{maxPct}%</span>
           </div>
+
         </div>
 
         <div className="grid grid-cols-2 gap-2">
