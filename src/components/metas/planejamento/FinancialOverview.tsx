@@ -293,7 +293,7 @@ export function OverviewDetailPanel({
 
           <label className="space-y-1">
             <span className="text-[11px] text-muted-foreground block">
-              {isIncome ? "Variação (%) +/−" : "Corte (%) +/−"}
+              Variação (%) +/−
             </span>
             <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
               <input
