@@ -37,6 +37,10 @@ import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorLi
 import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
+import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
+import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
+import { toast } from "sonner";
+
 
 import { needsResolution } from "@/lib/goalPlanning";
 import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
@@ -82,6 +86,8 @@ export default function Metas() {
     monthly?: number;
   } | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [simGoalOpen, setSimGoalOpen] = useState(false);
+
   const [expenseCuts, setExpenseCuts] = useState<Record<string, number>>({});
   const [incomeBoosts, setIncomeBoosts] = useState<Record<string, number>>({});
   const [selectedIncome, setSelectedIncome] = useState<string | null>(null);
@@ -303,11 +309,9 @@ export default function Metas() {
             <CreateGoalFromSimulation
               simulatedGain={totalIncomeSimulated}
               simulatedSaving={totalExpenseSimulated}
-              onCreateGoal={(draft) => {
-                setPrefill(draft);
-                setFormOpen(true);
-              }}
+              onCreateGoal={() => setSimGoalOpen(true)}
             />
+
 
             {openBlock === "income" && (
               <OverviewDetailPanel
@@ -337,7 +341,13 @@ export default function Metas() {
               />
             )}
 
+            <GoalInsightCard
+              goals={goals}
+              activeGoalId={activeGoalId}
+              monthlyCapacity={Math.max(0, simulatedCapacity)}
+            />
           </aside>
+
         </div>
       )}
 
@@ -450,6 +460,31 @@ export default function Metas() {
         goalName={planningGoal?.title}
         title="Como tornar essa meta possível"
       />
+
+      <CreateGoalFromSimulationDialog
+        open={simGoalOpen}
+        onOpenChange={setSimGoalOpen}
+        simulatedGain={totalIncomeSimulated}
+        simulatedSaving={totalExpenseSimulated}
+        baseCapacity={monthlyCapacityRaw}
+        simulatedCapacity={simulatedCapacity}
+        baseLeftover={stats.leftover}
+        simulatedLeftover={simulatedLeftover}
+        goals={goals}
+        onConfirm={(draft) => {
+          setPrefill(draft);
+          setFormOpen(true);
+        }}
+        onReinforceGoals={(perGoal) =>
+          toast.success(
+            `Plano definido: reforce ${perGoal.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}/mês em cada meta existente.`,
+          )
+        }
+      />
+
     </div>
   );
 }
