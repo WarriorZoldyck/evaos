@@ -472,13 +472,13 @@ export function SimulationSummary({
   return (
     <div className="space-y-2.5">
       <SummaryRow
-        label="Capacidade mensal simulada"
+        label="Nova capacidade mensal"
         value={simulatedCapacity}
         delta={diff(simulatedCapacity, baseCapacity)}
         danger={simulatedCapacity <= 0}
       />
       <SummaryRow
-        label="Sobra simulada até dez"
+        label="Nova sobra até dez"
         value={simulatedLeftover}
         delta={diff(simulatedLeftover, baseLeftover)}
         danger={simulatedLeftover < 0}
@@ -507,6 +507,72 @@ export function SimulationSummary({
     </div>
   );
 }
+
+/** Card de resumo com valor por mês e projeção anual. */
+function TotalsCard({
+  label,
+  icon,
+  monthly,
+  months,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  monthly: number;
+  months: number;
+}) {
+  const negative = monthly < -0.005;
+  return (
+    <div className="glass-card px-4 py-3 space-y-1">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+      <p
+        className={cn(
+          "text-lg font-bold font-mono truncate",
+          negative ? "text-destructive" : "text-emerald-600 dark:text-emerald-400",
+        )}
+      >
+        {signedBRL(monthly)}
+        <span className="text-xs font-normal text-muted-foreground">/mês</span>
+      </p>
+      <p className="text-[11px] font-mono text-muted-foreground">
+        {signedBRL(monthly * months)} em {months} {months === 1 ? "mês" : "meses"}
+      </p>
+    </div>
+  );
+}
+
+/** Card "Ganho total" (mês e ano). */
+export function GainTotalCard({
+  monthly,
+  months = PLAN_MONTHS,
+}: { monthly: number; months?: number }) {
+  return (
+    <TotalsCard
+      label="Ganho total"
+      icon={<TrendingUp className="h-4 w-4" />}
+      monthly={monthly}
+      months={months}
+    />
+  );
+}
+
+/** Card "Meta de economia" (mês e ano). */
+export function SavingGoalCard({
+  monthly,
+  months = PLAN_MONTHS,
+}: { monthly: number; months?: number }) {
+  return (
+    <TotalsCard
+      label="Meta de economia"
+      icon={<PiggyBank className="h-4 w-4" />}
+      monthly={monthly}
+      months={months}
+    />
+  );
+}
+
 
 function SummaryRow({
   label,
