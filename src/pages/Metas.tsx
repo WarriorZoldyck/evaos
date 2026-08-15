@@ -23,7 +23,6 @@ import {
   OverviewDetailPanel,
   PairedCategoryList,
   SimulationSummary,
-  CreateGoalFromSimulation,
   GainTotalCard,
   SavingGoalCard,
   sumSimulated,
@@ -202,7 +201,14 @@ export default function Metas() {
         </Button>
       </div>
 
-      {/* Real x meta, pareados linha a linha + resumo lateral */}
+      {/* Nível 1 — Metas Orçamentárias (fluxo de caixa) */}
+      <div className="px-1">
+        <h2 className="text-sm font-semibold text-foreground">Metas Orçamentárias</h2>
+        <p className="text-xs text-muted-foreground">
+          Quanto entra e quanto sai por categoria — define a sobra do mês.
+        </p>
+      </div>
+
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
@@ -285,12 +291,22 @@ export default function Metas() {
                 </>
               }
               simulated={
-                <SimulationSummary
-                  baseCapacity={monthlyCapacityRaw}
-                  simulatedCapacity={simulatedCapacity}
-                  baseLeftover={stats.leftover}
-                  simulatedLeftover={simulatedLeftover}
-                />
+                <>
+                  <SimulationSummary
+                    baseCapacity={monthlyCapacityRaw}
+                    simulatedCapacity={simulatedCapacity}
+                    baseLeftover={stats.leftover}
+                    simulatedLeftover={simulatedLeftover}
+                  />
+                  <Button
+                    className="w-full gap-1.5"
+                    onClick={() => setSimGoalOpen(true)}
+                    disabled={simulatedCapacity <= 0}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Usar o que vai sobrar
+                  </Button>
+                </>
               }
             />
           </div>
@@ -306,13 +322,6 @@ export default function Metas() {
               items={stats.expenseCategories}
               percents={expenseCuts}
             />
-            <CreateGoalFromSimulation
-              simulatedGain={totalIncomeSimulated}
-              simulatedSaving={totalExpenseSimulated}
-              onCreateGoal={() => setSimGoalOpen(true)}
-            />
-
-
             {openBlock === "income" && (
               <OverviewDetailPanel
                 mode="income"
@@ -471,18 +480,7 @@ export default function Metas() {
         baseLeftover={stats.leftover}
         simulatedLeftover={simulatedLeftover}
         goals={goals}
-        onConfirm={(draft) => {
-          setPrefill(draft);
-          setFormOpen(true);
-        }}
-        onReinforceGoals={(perGoal) =>
-          toast.success(
-            `Plano definido: reforce ${perGoal.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}/mês em cada meta existente.`,
-          )
-        }
+        onCreate={(draft) => createGoal(draft)}
       />
 
     </div>
