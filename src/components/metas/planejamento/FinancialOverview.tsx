@@ -140,6 +140,31 @@ export function RealAverageBlock({
   );
 }
 
+/** Espelho do card de média: valor já com a meta aplicada. */
+export function MetaAverageCard({
+  kind,
+  value,
+  base,
+}: { kind: SimulationKind; value: number; base: number }) {
+  const isIncome = kind === "income";
+  const delta = value - base;
+  return (
+    <div className="relative">
+      <FinancialMetricCard
+        icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+        label={isIncome ? "Meta de entradas / mês" : "Meta de saídas / mês"}
+        value={formatBRL(value)}
+        tone={isIncome ? "success" : "default"}
+      />
+      {Math.abs(delta) >= 0.01 && (
+        <span className="absolute right-4 bottom-2 text-[11px] font-mono text-muted-foreground">
+          {signedBRL(delta)} vs. real
+        </span>
+      )}
+    </div>
+  );
+}
+
 
 /** Painel fixo: ajuste da meta mensal da categoria (para mais ou para menos). */
 export function OverviewDetailPanel({
