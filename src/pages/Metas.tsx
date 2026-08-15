@@ -38,6 +38,7 @@ import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
 import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
 import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
+import { ObjectivesPanel } from "@/components/metas/planejamento/ObjectivesPanel";
 import { toast } from "sonner";
 
 
@@ -361,7 +362,19 @@ export default function Metas() {
       )}
 
 
-      {/* Cofrinhos e plano */}
+      {/* Nível 2 — Objetivos (destino da sobra) */}
+      {!loading && (
+        <ObjectivesPanel
+          goals={goals}
+          leftoverMonthly={Math.max(0, simulatedCapacity)}
+          activeGoalId={activeGoalId}
+          onSelect={setActiveGoalId}
+          onOpenGoal={(id) => navigate(`/metas/${id}`)}
+          onCreate={() => openCreate()}
+        />
+      )}
+
+      {/* Acompanhamento do objetivo selecionado */}
       <div className="space-y-4">
         {loading ? (
           <div className="space-y-3">
