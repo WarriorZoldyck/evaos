@@ -32,14 +32,12 @@ import {
 import { cn } from "@/lib/utils";
 import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
 import { GoalChat } from "@/components/metas/planejamento/GoalChat";
-import { GoalSelectorList } from "@/components/metas/planejamento/GoalSelectorList";
 import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
 import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
 import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
 import { ObjectivesPanel } from "@/components/metas/planejamento/ObjectivesPanel";
-import { toast } from "sonner";
 
 
 import { needsResolution } from "@/lib/goalPlanning";
@@ -399,13 +397,6 @@ export default function Metas() {
                   onReply={handleReply}
                   suggestions={CHAT_CHIPS}
                   disabled={!planningGoal}
-                />
-                <GoalSelectorList
-                  goals={goals}
-                  activeGoalId={activeGoalId}
-                  onSelect={setActiveGoalId}
-                  onOpen={(g: Goal) => navigate(`/metas/${g.id}`)}
-                  onCreate={() => openCreate()}
                 />
                 {!planningGoal && (
                   <div className="glass-card p-5">
