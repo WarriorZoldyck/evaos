@@ -79,6 +79,7 @@ export default function Metas() {
   const { isPersonal, selectedCompanyId } = useCompany();
   const { goals, loading, createGoal, updateGoal, deleteGoal } = useGoals();
   const stats = useMetasSidebarStats();
+  const isMobile = useIsMobile();
 
   /** Chave de UI por contexto: o que estava aberto/selecionado volta igual. */
   const uiKey = `metas:ui:${isPersonal ? "personal" : selectedCompanyId ?? "none"}`;
