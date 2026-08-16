@@ -6,13 +6,20 @@ import type { BudgetKind } from "@/lib/budgetProgress";
 
 export interface BudgetTargetsApi {
   loading: boolean;
+  /** true enquanto houver gravação pendente ou em curso. */
+  saving: boolean;
+  /** Mensagem da última falha de gravação (null quando tudo certo). */
+  error: string | null;
   /** Alvo mensal salvo por categoria, separado por tipo. */
   income: Record<string, number>;
   expense: Record<string, number>;
   setTarget: (kind: BudgetKind, categoryName: string, amount: number) => void;
   clearKind: (kind: BudgetKind) => Promise<void>;
+  /** Grava imediatamente tudo que está no debounce (ao sair da página). */
+  flush: () => Promise<void>;
   refetch: () => void;
 }
+
 
 const DEBOUNCE_MS = 600;
 
