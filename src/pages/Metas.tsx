@@ -495,7 +495,7 @@ export default function Metas() {
           </aside>
 
           {/* Nível 2 — Objetivos (destino da sobra), 3ª coluna */}
-          <aside className="min-w-0 xl:sticky xl:top-4">
+          <aside className="min-w-0 md:col-span-2 xl:col-span-1 xl:sticky xl:top-4">
             {loading ? (
               <div className="space-y-3">
                 {Array.from({ length: 2 }).map((_, i) => (
