@@ -33,12 +33,8 @@ import { useBudgetTargets } from "@/hooks/useBudgetTargets";
 
 
 import { cn } from "@/lib/utils";
-import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
-import { GoalChat } from "@/components/metas/planejamento/GoalChat";
-import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
-import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
-import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
 import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
+
 import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
 import { ObjectivesPanel } from "@/components/metas/planejamento/ObjectivesPanel";
 
