@@ -109,13 +109,15 @@ export default function Metas() {
   // Um bloco aberto por vez, compartilhado pelas duas colunas.
   const [openBlock, setOpenBlock] = useState<"income" | "expense" | null>("expense");
 
-  const planningRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
 
   // Clicar fora (ou Esc) fecha a lista de categorias e devolve a visão compacta.
+  // O ref envolve as duas colunas (planejamento + aside com sliders) para que
+  // interagir com os controles de meta não feche as categorias.
   useEffect(() => {
     if (!openBlock) return;
     const onPointerDown = (e: PointerEvent) => {
-      const el = planningRef.current;
+      const el = gridRef.current;
       if (el && !el.contains(e.target as Node)) setOpenBlock(null);
     };
     const onKeyDown = (e: KeyboardEvent) => {
