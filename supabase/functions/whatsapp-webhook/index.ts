@@ -4520,6 +4520,17 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             break;
           }
 
+          case "metas_mes": {
+            const ctxCompany =
+              companyId ?? (aiParsed.context === "Pessoal" ? null : undefined);
+            const report = await buildBudgetMonthReport(supabase, userId, ctxCompany);
+            responseMessage = formatBudgetMonthMessage(
+              report,
+              aiParsed.context || undefined,
+            );
+            break;
+          }
+
           case "gastos_categoria": {
             const categoryFilter = aiParsed.category_filter || "";
             const filterCat = categories.find(
