@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +18,7 @@ import {
   RealBalanceCard,
   RealAverageBlock,
   MetaAverageCard,
+  RealizedMonthCard,
   RealCapacityCard,
   RealLeftoverCard,
   OverviewDetailPanel,
@@ -27,6 +28,8 @@ import {
   SavingGoalCard,
   sumSimulated,
 } from "@/components/metas/planejamento/FinancialOverview";
+import { MonthRiskCard } from "@/components/metas/planejamento/MonthRiskCard";
+import { useBudgetTargets } from "@/hooks/useBudgetTargets";
 
 
 import { cn } from "@/lib/utils";
@@ -106,6 +109,47 @@ export default function Metas() {
     setSelectedIncome((cur) => cur ?? stats.incomeCategories[0]?.name ?? null);
     setSelectedExpense((cur) => cur ?? stats.expenseCategories[0]?.name ?? null);
   }, [stats.loading, stats.incomeCategories, stats.expenseCategories]);
+
+  // Metas orçamentárias salvas: hidratam os percentuais na abertura da página.
+  const budgetTargets = useBudgetTargets();
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (hydrated.current || stats.loading || budgetTargets.loading) return;
+    hydrated.current = true;
+
+    const toPercents = (
+      items: typeof stats.incomeCategories,
+      saved: Record<string, number>,
+      kind: "income" | "expense",
+    ) => {
+      const out: Record<string, number> = {};
+      items.forEach((c) => {
+        const target = saved[c.name];
+        if (target === undefined || c.total <= 0) return;
+        const pct =
+          kind === "income"
+            ? ((target - c.total) / c.total) * 100
+            : ((c.total - target) / c.total) * 100;
+        if (Math.abs(pct) >= 0.01) out[c.name] = Math.round(pct * 100) / 100;
+      });
+      return out;
+    };
+
+    setIncomeBoosts(toPercents(stats.incomeCategories, budgetTargets.income, "income"));
+    setExpenseCuts(toPercents(stats.expenseCategories, budgetTargets.expense, "expense"));
+  }, [stats.loading, budgetTargets.loading, stats.incomeCategories, stats.expenseCategories, budgetTargets.income, budgetTargets.expense]);
+
+  /** Salva a meta mensal da categoria a partir do percentual simulado. */
+  const persistTarget = useCallback(
+    (kind: "income" | "expense", name: string, average: number, percent: number) => {
+      const delta = (average * percent) / 100;
+      const target = Math.max(0, kind === "income" ? average + delta : average - delta);
+      budgetTargets.setTarget(kind, name, target);
+    },
+    [budgetTargets],
+  );
+
+
 
 
   const selectedIncomeCat =
@@ -232,15 +276,23 @@ export default function Metas() {
                 />
               }
               simulated={
-                <button type="button" onClick={openIncome} className="w-full text-left">
-                  <MetaAverageCard
+                <>
+                  <button type="button" onClick={openIncome} className="w-full text-left">
+                    <MetaAverageCard
+                      kind="income"
+                      value={simulatedIncome}
+                      base={stats.avgIncomeMonth}
+                    />
+                  </button>
+                  <RealizedMonthCard
                     kind="income"
-                    value={simulatedIncome}
-                    base={stats.avgIncomeMonth}
+                    actual={stats.incomeMonth}
+                    target={simulatedIncome}
                   />
-                </button>
+                </>
               }
             />
+
 
             {openBlock === "income" && (
               <PairedCategoryList
@@ -261,13 +313,20 @@ export default function Metas() {
                 />
               }
               simulated={
-                <button type="button" onClick={openExpense} className="w-full text-left">
-                  <MetaAverageCard
+                <>
+                  <button type="button" onClick={openExpense} className="w-full text-left">
+                    <MetaAverageCard
+                      kind="expense"
+                      value={simulatedExpense}
+                      base={stats.avgSpentMonth}
+                    />
+                  </button>
+                  <RealizedMonthCard
                     kind="expense"
-                    value={simulatedExpense}
-                    base={stats.avgSpentMonth}
+                    actual={stats.spentMonth}
+                    target={simulatedExpense}
                   />
-                </button>
+                </>
               }
             />
 
@@ -330,8 +389,12 @@ export default function Metas() {
                 onPercentChange={(p) => {
                   if (!selectedIncomeCat) return;
                   setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
+                  persistTarget("income", selectedIncomeCat.name, selectedIncomeCat.total, p);
                 }}
-                onReset={() => setIncomeBoosts({})}
+                onReset={() => {
+                  setIncomeBoosts({});
+                  budgetTargets.clearKind("income");
+                }}
               />
             )}
 
@@ -344,10 +407,23 @@ export default function Metas() {
                 onPercentChange={(p) => {
                   if (!selectedExpenseCat) return;
                   setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
+                  persistTarget("expense", selectedExpenseCat.name, selectedExpenseCat.total, p);
                 }}
-                onReset={() => setExpenseCuts({})}
+                onReset={() => {
+                  setExpenseCuts({});
+                  budgetTargets.clearKind("expense");
+                }}
               />
             )}
+
+            <MonthRiskCard
+              expenseCategories={stats.expenseCategories}
+              percents={expenseCuts}
+              onSelect={(name) => {
+                setOpenBlock("expense");
+                setSelectedExpense(name);
+              }}
+            />
 
             <GoalInsightCard
               goals={goals}

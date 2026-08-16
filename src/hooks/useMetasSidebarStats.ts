@@ -7,7 +7,10 @@ import type { DRECategoryRow } from "@/hooks/useDREData";
 
 export interface CategoryBreakdown {
   name: string;
+  /** Média mensal do ano corrente. */
   total: number;
+  /** Total já efetivado (pago) no mês corrente. */
+  monthTotal: number;
 }
 
 export interface MetasSidebarStats {
@@ -15,6 +18,9 @@ export interface MetasSidebarStats {
   totalBalance: number;
   avgIncomeMonth: number;
   avgSpentMonth: number;
+  /** Realizado do mês corrente. */
+  incomeMonth: number;
+  spentMonth: number;
   leftover: number;
   incomeCategories: CategoryBreakdown[];
   expenseCategories: CategoryBreakdown[];
@@ -23,6 +29,7 @@ export interface MetasSidebarStats {
 }
 
 const YEAR = new Date().getFullYear();
+const CURRENT_PERIOD = `${YEAR}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
 export function useMetasSidebarStats(): MetasSidebarStats {
   const effectiveUserId = useEffectiveUserId();
@@ -88,13 +95,18 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     const avgIncomeMonth = totalIncomeYear / monthsElapsed;
     const avgSpentMonth = totalSpentYear / monthsElapsed;
 
+    // Realizado do mês corrente — mesma fonte da média, então os números batem.
+    const incomeMonth = Number((cashFlow.monthlyRevenueTotals || {})[CURRENT_PERIOD] || 0);
+    const spentMonth = Number((cashFlow.monthlyExpenseTotals || {})[CURRENT_PERIOD] || 0);
+
     const rowsToCategories = (rows: DRECategoryRow[]): CategoryBreakdown[] =>
       rows
         .map((r) => ({
           name: r.categoryName,
           total: sumTotals(r.monthlyTotals) / monthsElapsed,
+          monthTotal: Number(r.monthlyTotals?.[CURRENT_PERIOD] || 0),
         }))
-        .filter((c) => c.total !== 0)
+        .filter((c) => c.total !== 0 || c.monthTotal !== 0)
         .sort((a, b) => b.total - a.total);
 
     const incomeCategories = rowsToCategories(cashFlow.revenueRows || []);
@@ -105,6 +117,8 @@ export function useMetasSidebarStats(): MetasSidebarStats {
     return {
       avgIncomeMonth,
       avgSpentMonth,
+      incomeMonth,
+      spentMonth,
       leftover,
       incomeCategories,
       expenseCategories,
