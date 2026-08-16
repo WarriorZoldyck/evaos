@@ -276,7 +276,7 @@ export default function Metas() {
   const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
   return (
-    <div className="metas-scope animate-fade-in space-y-6 w-full max-w-[1180px] mx-auto">
+    <div className="metas-scope animate-fade-in space-y-6 w-full max-w-[1440px] mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold font-display text-foreground">
