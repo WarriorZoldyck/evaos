@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,7 +81,7 @@ export default function MetaDetalhe() {
   const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
   const {
     planningGoal, scoreResult, actionPlan, isSimulated,
-    dispatchResolution, patchGoal, addAiActions, resetScenario,
+    dispatchResolution, resetScenario,
   } = usePlanningGoal({
     goal: goal ?? null,
     monthlyCapacity,
