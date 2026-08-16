@@ -29,7 +29,7 @@ export function FinancialMetricCard({
   rightSlot,
 }: FinancialMetricCardProps) {
   const content = (
-    <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
+    <div className="px-3.5 py-2.5 h-full flex items-center justify-between gap-3">
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground min-w-0">
         {icon}
         <span className="truncate">{label}</span>
@@ -47,7 +47,7 @@ export function FinancialMetricCard({
         type="button"
         onClick={onClick}
         className={cn(
-          "glass-card glass-card-interactive w-full text-left",
+          "glass-card glass-card-interactive w-full h-full text-left",
           active && "glass-card-active",
         )}
       >
@@ -56,5 +56,6 @@ export function FinancialMetricCard({
     );
   }
 
-  return <div className="glass-card">{content}</div>;
+  return <div className="glass-card h-full">{content}</div>;
 }
+

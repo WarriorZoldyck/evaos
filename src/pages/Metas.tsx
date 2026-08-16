@@ -56,17 +56,21 @@ const assistantService = new LocalAssistantService();
 function PairRow({
   real,
   simulated,
+  realized,
 }: {
   real: React.ReactNode;
   simulated: React.ReactNode;
+  realized?: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-x-5 gap-y-3 items-start md:grid-cols-2">
-      <div className="min-w-0 space-y-2">{real}</div>
-      <div className="min-w-0 space-y-2">{simulated}</div>
+    <div className="grid gap-x-5 gap-y-3 items-stretch md:grid-cols-[1fr_1fr_1.1fr]">
+      <div className="min-w-0 space-y-3">{real}</div>
+      <div className="min-w-0 space-y-3">{simulated}</div>
+      <div className="min-w-0 space-y-3">{realized}</div>
     </div>
   );
 }
+
 
 
 export default function Metas() {
@@ -311,15 +315,19 @@ export default function Metas() {
       ) : (
         <div className="grid gap-5 items-start md:grid-cols-[minmax(0,1fr)_minmax(200px,240px)] xl:grid-cols-[minmax(0,1fr)_minmax(200px,240px)_minmax(300px,360px)]">
 
-          <div className="min-w-0 space-y-4">
+          <div className="min-w-0 space-y-5">
+
+            <OverviewHeader />
+
+            {/* Cabeçalho das colunas */}
+            <div className="hidden md:grid gap-x-5 md:grid-cols-[1fr_1fr_1.1fr] px-1 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+              <span className="truncate">Real</span>
+              <span className="truncate">Meta / mês</span>
+              <span className="truncate">Realizado neste mês</span>
+            </div>
 
             <PairRow
-              real={
-                <>
-                  <OverviewHeader />
-                  <RealBalanceCard value={stats.totalBalance} />
-                </>
-              }
+              real={<RealBalanceCard value={stats.totalBalance} />}
               simulated={null}
             />
 
@@ -332,20 +340,20 @@ export default function Metas() {
                 />
               }
               simulated={
-                <>
-                  <button type="button" onClick={openIncome} className="w-full text-left">
-                    <MetaAverageCard
-                      kind="income"
-                      value={simulatedIncome}
-                      base={stats.avgIncomeMonth}
-                    />
-                  </button>
-                  <RealizedMonthCard
+                <button type="button" onClick={openIncome} className="w-full h-full text-left">
+                  <MetaAverageCard
                     kind="income"
-                    actual={stats.incomeMonth}
-                    target={simulatedIncome}
+                    value={simulatedIncome}
+                    base={stats.avgIncomeMonth}
                   />
-                </>
+                </button>
+              }
+              realized={
+                <RealizedMonthCard
+                  kind="income"
+                  actual={stats.incomeMonth}
+                  target={simulatedIncome}
+                />
               }
             />
 
@@ -369,20 +377,20 @@ export default function Metas() {
                 />
               }
               simulated={
-                <>
-                  <button type="button" onClick={openExpense} className="w-full text-left">
-                    <MetaAverageCard
-                      kind="expense"
-                      value={simulatedExpense}
-                      base={stats.avgSpentMonth}
-                    />
-                  </button>
-                  <RealizedMonthCard
+                <button type="button" onClick={openExpense} className="w-full h-full text-left">
+                  <MetaAverageCard
                     kind="expense"
-                    actual={stats.spentMonth}
-                    target={simulatedExpense}
+                    value={simulatedExpense}
+                    base={stats.avgSpentMonth}
                   />
-                </>
+                </button>
+              }
+              realized={
+                <RealizedMonthCard
+                  kind="expense"
+                  actual={stats.spentMonth}
+                  target={simulatedExpense}
+                />
               }
             />
 
@@ -405,25 +413,26 @@ export default function Metas() {
                 </>
               }
               simulated={
-                <>
-                  <SimulationSummary
-                    baseCapacity={monthlyCapacityRaw}
-                    simulatedCapacity={simulatedCapacity}
-                    baseLeftover={stats.leftover}
-                    simulatedLeftover={simulatedLeftover}
-                  />
-                  <Button
-                    className="w-full gap-1.5"
-                    onClick={() => setSimGoalOpen(true)}
-                    disabled={simulatedCapacity <= 0}
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    Usar o que vai sobrar
-                  </Button>
-                </>
+                <SimulationSummary
+                  baseCapacity={monthlyCapacityRaw}
+                  simulatedCapacity={simulatedCapacity}
+                  baseLeftover={stats.leftover}
+                  simulatedLeftover={simulatedLeftover}
+                />
+              }
+              realized={
+                <Button
+                  className="w-full gap-1.5"
+                  onClick={() => setSimGoalOpen(true)}
+                  disabled={simulatedCapacity <= 0}
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Usar o que vai sobrar
+                </Button>
               }
             />
           </div>
+
 
           <aside className="min-w-0 space-y-4 md:sticky md:top-4">
             <GainTotalCard
