@@ -364,8 +364,9 @@ export function PairedCategoryList({
   }
 
   return (
-    <div className="glass-card p-3 space-y-1.5">
-      <div className="grid grid-cols-[1fr_1fr_1.1fr] gap-x-3 text-[11px] text-muted-foreground">
+    <div className="glass-card p-4 space-y-2.5">
+      <div className="grid grid-cols-[1fr_1fr_1.1fr] gap-x-5 text-[11px] text-muted-foreground">
+
         <span className="truncate">
           {isIncome ? "Entradas reais por categoria" : "Saídas reais por categoria"}
         </span>
