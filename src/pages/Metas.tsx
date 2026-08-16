@@ -334,9 +334,9 @@ export default function Metas() {
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
-        <div className="grid gap-5 items-start md:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]">
+        <div ref={gridRef} className="grid gap-5 items-start md:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]">
 
-          <div ref={planningRef} className="min-w-0 space-y-5">
+          <div className="min-w-0 space-y-5">
 
             <OverviewHeader />
 
