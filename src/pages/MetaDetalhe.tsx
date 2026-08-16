@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +19,24 @@ import { GoalRadarLarge } from "@/components/metas/GoalRadarLarge";
 import { GoalFormModal } from "@/components/metas/GoalFormModal";
 import { GoalAmountModal } from "@/components/metas/GoalAmountModal";
 import { GoalHistoryModal } from "@/components/metas/GoalHistoryModal";
+import { useMetasSidebarStats } from "@/hooks/useMetasSidebarStats";
+import { usePlanningGoal } from "@/hooks/usePlanningGoal";
+import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
+import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
+import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
+import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
+import { GoalChat } from "@/components/metas/planejamento/GoalChat";
+import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
+import type {
+  AssistantReply,
+  ChatMessage,
+  GoalPlanningContext,
+} from "@/services/assistant/AssistantService";
+import { needsResolution } from "@/lib/goalPlanning";
+
+const assistantService = new LocalAssistantService();
+const CHAT_CHIPS = ["Até 6 meses", "1 ano", "2 anos", "Consigo guardar R$ 800 por mês"];
+
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
