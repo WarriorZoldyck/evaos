@@ -364,15 +364,16 @@ export function PairedCategoryList({
   }
 
   return (
-    <div className="glass-card p-3 space-y-1.5">
-      <div className="grid grid-cols-[1fr_1fr_1.1fr] gap-x-3 text-[11px] text-muted-foreground">
+    <div className="glass-card p-4 space-y-2.5">
+      <div className="grid grid-cols-[1fr_1fr_1.1fr] gap-x-5 text-[11px] text-muted-foreground">
+
         <span className="truncate">
           {isIncome ? "Entradas reais por categoria" : "Saídas reais por categoria"}
         </span>
         <span className="truncate">{isIncome ? "Entradas na meta" : "Saídas na meta"}</span>
         <span className="truncate">Realizado neste mês</span>
       </div>
-      <div className="max-h-[320px] overflow-y-auto space-y-1 pr-1">
+      <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1">
         {items.map((c) => {
           const projected = projectedOf(c);
           const sim = percents[c.name] ?? 0;
@@ -389,7 +390,7 @@ export function PairedCategoryList({
               type="button"
               onClick={() => onSelect(c.name)}
               className={cn(
-                "w-full grid grid-cols-[1fr_1fr_1.1fr] gap-x-3 items-start text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
+                "w-full grid grid-cols-[1fr_1fr_1.1fr] gap-x-5 items-start text-left rounded-xl px-2.5 py-2 transition-colors hover:bg-accent/30",
                 isSelected && "bg-accent/40 ring-1 ring-primary/40",
               )}
             >

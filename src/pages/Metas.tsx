@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 import { useGoals, type Goal } from "@/hooks/useGoals";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -61,7 +61,7 @@ function PairRow({
   simulated: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-2.5 items-start md:grid-cols-2">
+    <div className="grid gap-x-5 gap-y-3 items-start md:grid-cols-2">
       <div className="min-w-0 space-y-2">{real}</div>
       <div className="min-w-0 space-y-2">{simulated}</div>
     </div>
@@ -276,7 +276,7 @@ export default function Metas() {
   const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
   return (
-    <div className="metas-scope animate-fade-in space-y-6 w-full max-w-[1440px] mx-auto">
+    <div className="metas-scope animate-fade-in space-y-7 w-full max-w-[1600px] mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold font-display text-foreground">
@@ -286,15 +286,8 @@ export default function Metas() {
             {isPersonal ? "Pessoal" : "Empresa"} · cofrinhos e metas
           </p>
         </div>
-        <Button
-          onClick={() => openCreate()}
-          size="icon"
-          className="h-11 w-11 rounded-full shrink-0"
-          aria-label="Nova meta"
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
       </div>
+
 
       {/* Nível 1 — Metas Orçamentárias (fluxo de caixa) */}
       <div className="px-1 flex items-end justify-between gap-3">
@@ -316,9 +309,10 @@ export default function Metas() {
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
-        <div className="grid gap-2.5 items-start md:grid-cols-[minmax(0,1fr)_minmax(180px,210px)] xl:grid-cols-[minmax(0,1fr)_minmax(180px,210px)_minmax(240px,300px)]">
+        <div className="grid gap-5 items-start md:grid-cols-[minmax(0,1fr)_minmax(200px,240px)] xl:grid-cols-[minmax(0,1fr)_minmax(200px,240px)_minmax(300px,360px)]">
 
-          <div className="min-w-0 space-y-2.5">
+          <div className="min-w-0 space-y-4">
+
             <PairRow
               real={
                 <>
@@ -431,7 +425,7 @@ export default function Metas() {
             />
           </div>
 
-          <aside className="min-w-0 space-y-3 md:sticky md:top-4">
+          <aside className="min-w-0 space-y-4 md:sticky md:top-4">
             <GainTotalCard
               monthly={totalIncomeSimulated}
               items={stats.incomeCategories}
@@ -478,24 +472,10 @@ export default function Metas() {
               />
             )}
 
-            <MonthRiskCard
-              expenseCategories={stats.expenseCategories}
-              percents={expenseCuts}
-              onSelect={(name) => {
-                setOpenBlock("expense");
-                setSelectedExpense(name);
-              }}
-            />
-
-            <GoalInsightCard
-              goals={goals}
-              activeGoalId={activeGoalId}
-              monthlyCapacity={Math.max(0, simulatedCapacity)}
-            />
           </aside>
 
-          {/* Nível 2 — Objetivos (destino da sobra), 3ª coluna */}
-          <aside className="min-w-0 md:col-span-2 xl:col-span-1 xl:sticky xl:top-4">
+          {/* 4ª coluna — Objetivos (destino da sobra) + leitura da EVA */}
+          <aside className="min-w-0 space-y-4 md:col-span-2 xl:col-span-1 xl:sticky xl:top-4">
             {loading ? (
               <div className="space-y-3">
                 {Array.from({ length: 2 }).map((_, i) => (
@@ -514,7 +494,23 @@ export default function Metas() {
                 onCreate={() => openCreate()}
               />
             )}
+
+            <GoalInsightCard
+              goals={goals}
+              activeGoalId={activeGoalId}
+              monthlyCapacity={Math.max(0, simulatedCapacity)}
+            />
+
+            <MonthRiskCard
+              expenseCategories={stats.expenseCategories}
+              percents={expenseCuts}
+              onSelect={(name) => {
+                setOpenBlock("expense");
+                setSelectedExpense(name);
+              }}
+            />
           </aside>
+
 
         </div>
       )}
