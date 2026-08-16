@@ -390,7 +390,7 @@ export function PairedCategoryList({
               type="button"
               onClick={() => onSelect(c.name)}
               className={cn(
-                "w-full grid grid-cols-[1fr_1fr_1.1fr] gap-x-3 items-start text-left rounded-lg px-1.5 py-1 transition-colors hover:bg-accent/30",
+                "w-full grid grid-cols-[1fr_1fr_1.1fr] gap-x-5 items-start text-left rounded-xl px-2.5 py-2 transition-colors hover:bg-accent/30",
                 isSelected && "bg-accent/40 ring-1 ring-primary/40",
               )}
             >
