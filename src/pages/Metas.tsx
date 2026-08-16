@@ -276,7 +276,7 @@ export default function Metas() {
   const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
   return (
-    <div className="metas-scope animate-fade-in space-y-6 w-full max-w-[1440px] mx-auto">
+    <div className="metas-scope animate-fade-in space-y-7 w-full max-w-[1600px] mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold font-display text-foreground">
@@ -286,15 +286,8 @@ export default function Metas() {
             {isPersonal ? "Pessoal" : "Empresa"} · cofrinhos e metas
           </p>
         </div>
-        <Button
-          onClick={() => openCreate()}
-          size="icon"
-          className="h-11 w-11 rounded-full shrink-0"
-          aria-label="Nova meta"
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
       </div>
+
 
       {/* Nível 1 — Metas Orçamentárias (fluxo de caixa) */}
       <div className="px-1 flex items-end justify-between gap-3">
