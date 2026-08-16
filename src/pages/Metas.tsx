@@ -32,6 +32,8 @@ import { useBudgetTargets } from "@/hooks/useBudgetTargets";
 
 
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
 
 import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
