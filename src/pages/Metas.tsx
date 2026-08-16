@@ -132,7 +132,7 @@ export default function Metas() {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [openBlock]);
+  }, [openBlock, isMobile]);
 
   const openIncome = () => {
     setOpenBlock((cur) => (cur === "income" ? null : "income"));
