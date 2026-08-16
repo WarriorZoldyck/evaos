@@ -303,6 +303,45 @@ export default function Metas() {
 
   const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
+  // Painel de ajuste da meta: fica na coluna lateral no desktop e vira
+  // gaveta inferior no mobile, onde o aside empilhado ficava fora de alcance.
+  const detailPanel =
+    openBlock === "income" ? (
+      <OverviewDetailPanel
+        mode="income"
+        category={selectedIncomeCat}
+        percent={selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0}
+        newAverage={simulatedIncome}
+        onPercentChange={(p) => {
+          if (!selectedIncomeCat) return;
+          setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
+          persistTarget("income", selectedIncomeCat.name, selectedIncomeCat.total, p);
+        }}
+        onReset={() => {
+          setIncomeBoosts({});
+          budgetTargets.clearKind("income");
+        }}
+      />
+    ) : openBlock === "expense" ? (
+      <OverviewDetailPanel
+        mode="expense"
+        category={selectedExpenseCat}
+        percent={selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0}
+        newAverage={simulatedExpense}
+        onPercentChange={(p) => {
+          if (!selectedExpenseCat) return;
+          setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
+          persistTarget("expense", selectedExpenseCat.name, selectedExpenseCat.total, p);
+        }}
+        onReset={() => {
+          setExpenseCuts({});
+          budgetTargets.clearKind("expense");
+        }}
+      />
+    ) : null;
+
+  const mobileSelected = openBlock === "income" ? selectedIncomeCat : selectedExpenseCat;
+
   return (
     <div className="metas-scope animate-fade-in space-y-7 w-full max-w-[1600px] mx-auto">
       <div className="flex items-start justify-between gap-4">
