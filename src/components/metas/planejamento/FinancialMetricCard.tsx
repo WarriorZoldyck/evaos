@@ -9,6 +9,8 @@ interface FinancialMetricCardProps {
   active?: boolean;
   onClick?: () => void;
   rightSlot?: React.ReactNode;
+  /** Altura natural (sem esticar) — usado quando há dois cards empilhados na mesma linha. */
+  dense?: boolean;
 }
 
 const TONES: Record<NonNullable<FinancialMetricCardProps["tone"]>, string> = {
