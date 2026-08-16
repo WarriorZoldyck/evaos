@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Play } from "lucide-react";
-import { HolographicAvatar } from "./HolographicAvatar";
+import { ArrowRight, Play, ShieldCheck } from "lucide-react";
+import dashboardMockup from "@/assets/landing-dashboard-mockup.png";
 import avatar1 from "@/assets/avatar-1.jpg";
 import avatar2 from "@/assets/avatar-2.jpg";
 import avatar3 from "@/assets/avatar-3.jpg";
@@ -8,94 +8,111 @@ import avatar4 from "@/assets/avatar-4.jpg";
 
 const avatars = [avatar1, avatar2, avatar3, avatar4];
 
+const stats = [
+  { value: "+500", label: "profissionais ativos" },
+  { value: "R$ 40M+", label: "movimentados na plataforma" },
+  { value: "98%", label: "recomendam a EVA OS" },
+];
+
 export function LandingHero() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative pt-32 pb-0 lg:pt-40 lg:pb-0 overflow-visible">
-      {/* Enhanced background effects */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[1000px] h-[1000px] rounded-full opacity-30" style={{ background: "radial-gradient(circle, hsl(195 100% 50% / 0.2), hsl(200 100% 40% / 0.08) 50%, transparent 70%)" }} />
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[hsl(195,100%,50%/0.5)] to-transparent" />
-        <div className="absolute top-0 left-1/3 w-px h-full opacity-20" style={{ background: "linear-gradient(to bottom, transparent, hsl(195 100% 50% / 0.4), transparent)" }} />
-        <div className="absolute top-0 left-2/3 w-px h-full opacity-15" style={{ background: "linear-gradient(to bottom, transparent, hsl(195 100% 50% / 0.3), transparent)" }} />
-      </div>
-
-      {/* Bottom gradient fade to separate from next section */}
+    <section className="relative pt-28 lg:pt-36 pb-16 overflow-hidden">
       <div
-        className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none z-20"
-        style={{ background: "linear-gradient(to bottom, transparent, hsl(220 30% 4%))" }}
+        className="absolute inset-x-0 top-0 h-[520px] pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(180deg, hsl(var(--landing-surface)) 0%, hsl(var(--landing-bg)) 100%)",
+        }}
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-end">
-          {/* Left: Copy */}
-          <div className="text-center lg:text-left pb-20">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-[hsl(195,100%,50%/0.3)] bg-[hsl(195,100%,50%/0.06)] mb-6">
-              <div className="h-2 w-2 rounded-full bg-[hsl(195,100%,50%)] animate-pulse shadow-[0_0_8px_hsl(195,100%,50%)]" />
-              <span className="text-xs font-medium text-[hsl(195,100%,50%)]">Inteligência financeira ativa</span>
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          <div className="text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-[hsl(var(--landing-border))] bg-[hsl(var(--landing-card))] mb-6">
+              <ShieldCheck className="h-3.5 w-3.5 text-[hsl(var(--landing-accent))]" />
+              <span className="text-xs font-medium text-[hsl(var(--landing-accent))]">
+                Gestão financeira simples e segura
+              </span>
             </div>
 
-            <h1 className="font-display text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.1] tracking-tight mb-6">
-              Sua gestão financeira no{" "}
-              <span className="bg-clip-text text-transparent" style={{ backgroundImage: "linear-gradient(135deg, hsl(195 100% 50%), hsl(195 100% 70%))", filter: "drop-shadow(0 0 20px hsl(195 100% 50% / 0.4))" }}>
-                piloto automático
-              </span>
+            <h1 className="font-display text-4xl sm:text-5xl lg:text-[3.4rem] font-bold leading-[1.08] tracking-tight mb-6">
+              Sua empresa e sua vida financeira{" "}
+              <span className="text-[hsl(var(--landing-accent))]">no mesmo lugar</span>
             </h1>
 
-            <p className="text-lg sm:text-xl text-[hsl(215,18%,55%)] leading-relaxed mb-8 max-w-lg mx-auto lg:mx-0">
-              EVA OS é o ecossistema inteligente que unifica suas finanças pessoais e empresariais em uma única plataforma. Dashboard em tempo real, precificação inteligente e controle total.
+            <p className="text-lg text-[hsl(var(--landing-muted))] leading-relaxed mb-8 max-w-xl mx-auto lg:mx-0">
+              O EVA OS organiza contas, cartões, maquininhas e relatórios em um painel
+              único. Você acompanha entradas, saídas e resultado em tempo real — e decide
+              com dados, não com achismo.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
+            <div className="flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
               <button
                 onClick={() => navigate("/auth")}
-                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-semibold text-base bg-gradient-to-r from-[hsl(195,100%,50%)] to-[hsl(200,100%,40%)] text-[hsl(220,40%,6%)] hover:brightness-110 transition-all duration-300 shadow-[0_0_40px_hsl(195,100%,50%/0.4),0_0_80px_hsl(195,100%,50%/0.15)]"
+                className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-base bg-[hsl(var(--landing-accent))] text-white hover:brightness-110 transition-all duration-200 shadow-[0_10px_25px_-12px_hsl(var(--landing-accent)/0.7)]"
               >
                 Começar grátis
                 <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </button>
               <a
                 href="#how-it-works"
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-medium text-sm border border-[hsl(215,25%,16%)] text-[hsl(215,18%,60%)] hover:border-[hsl(195,100%,50%/0.4)] hover:text-[hsl(210,30%,92%)] hover:shadow-[0_0_20px_hsl(195,100%,50%/0.1)] transition-all duration-200"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-medium text-sm border border-[hsl(var(--landing-border))] text-[hsl(var(--landing-text))] hover:bg-[hsl(var(--landing-surface))] transition-colors"
               >
-                <Play className="h-4 w-4" />
+                <Play className="h-4 w-4 text-[hsl(var(--landing-accent))]" />
                 Ver como funciona
               </a>
             </div>
 
-            <div className="mt-10 flex items-center gap-6 justify-center lg:justify-start">
+            <div className="mt-8 flex items-center gap-4 justify-center lg:justify-start">
               <div className="flex -space-x-2">
                 {avatars.map((src, i) => (
                   <img
                     key={i}
                     src={src}
                     alt=""
-                    className="h-9 w-9 rounded-full border-2 border-[hsl(220,30%,4%)] object-cover"
+                    className="h-9 w-9 rounded-full border-2 border-[hsl(var(--landing-bg))] object-cover"
                   />
                 ))}
               </div>
-              <div className="text-sm text-[hsl(215,18%,55%)]">
-                <span className="font-semibold text-[hsl(210,30%,92%)]">+500</span> profissionais já usam
-              </div>
+              <p className="text-sm text-[hsl(var(--landing-muted))]">
+                <span className="font-semibold text-[hsl(var(--landing-text))]">+500</span>{" "}
+                profissionais já usam
+              </p>
             </div>
           </div>
 
-          {/* Right: Holographic Avatar */}
-          <div className="relative flex items-center justify-center overflow-visible">
-            <HolographicAvatar />
-
-            {/* Floating stat cards with enhanced glow */}
-            <div className="absolute -top-4 -left-4 sm:-left-8 px-4 py-3 rounded-xl border border-[hsl(195,100%,50%/0.2)] shadow-[0_0_15px_hsl(195,100%,50%/0.1)]" style={{ background: "hsla(220,30%,9%,0.9)", backdropFilter: "blur(12px)" }}>
-              <p className="text-xs text-[hsl(215,18%,55%)]">Receita mensal</p>
-              <p className="text-lg font-bold font-display text-[hsl(152,69%,40%)]">R$ 42.850</p>
-            </div>
-
-            <div className="absolute top-1/2 -right-2 sm:-right-6 px-4 py-3 rounded-xl border border-[hsl(195,100%,50%/0.2)] shadow-[0_0_15px_hsl(195,100%,50%/0.1)]" style={{ background: "hsla(220,30%,9%,0.9)", backdropFilter: "blur(12px)" }}>
-              <p className="text-xs text-[hsl(215,18%,55%)]">Lucro líquido</p>
-              <p className="text-lg font-bold font-display text-[hsl(195,100%,50%)]">68%</p>
-            </div>
+          <div className="relative">
+            <div
+              className="absolute -inset-6 rounded-[2rem] pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(circle at 60% 40%, hsl(var(--landing-accent-soft) / 0.18), transparent 70%)",
+              }}
+            />
+            <img
+              src={dashboardMockup}
+              alt="Painel do EVA OS em notebook e celular mostrando saldo, receitas, despesas e gráficos"
+              className="relative w-full h-auto"
+              width={1408}
+              height={1008}
+            />
           </div>
+        </div>
+
+        <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 rounded-2xl overflow-hidden border border-[hsl(var(--landing-border))] bg-[hsl(var(--landing-surface))]">
+          {stats.map((s) => (
+            <div
+              key={s.label}
+              className="px-6 py-6 text-center border-b sm:border-b-0 sm:border-r last:border-0 border-[hsl(var(--landing-border))]"
+            >
+              <p className="font-display text-2xl font-bold text-[hsl(var(--landing-accent))]">
+                {s.value}
+              </p>
+              <p className="text-sm text-[hsl(var(--landing-muted))] mt-1">{s.label}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
