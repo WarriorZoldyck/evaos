@@ -118,7 +118,7 @@ export default function Metas() {
   // O ref envolve as duas colunas (planejamento + aside com sliders) para que
   // interagir com os controles de meta não feche as categorias.
   useEffect(() => {
-    if (!openBlock) return;
+    if (!openBlock || isMobile) return;
     const onPointerDown = (e: PointerEvent) => {
       const el = gridRef.current;
       if (el && !el.contains(e.target as Node)) setOpenBlock(null);
