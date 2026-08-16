@@ -71,8 +71,8 @@ export function ObjectivesPanel({
   }, [goals]);
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-start justify-between gap-2 px-1">
+    <section className="space-y-4">
+      <div className="flex items-start justify-between gap-3 px-1">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-foreground">Meus Objetivos</h2>
           <p className="text-[11px] text-muted-foreground">
@@ -80,15 +80,16 @@ export function ObjectivesPanel({
           </p>
         </div>
         <Button
-          size="icon"
+          size="sm"
           variant="outline"
-          className="h-8 w-8 shrink-0"
+          className="h-8 shrink-0 gap-1.5"
           onClick={onCreate}
-          aria-label="Novo objetivo"
         >
           <Plus className="h-4 w-4" />
+          Novo objetivo
         </Button>
       </div>
+
 
       {groups.length === 0 ? (
         <div className="glass-card p-5 text-center">
