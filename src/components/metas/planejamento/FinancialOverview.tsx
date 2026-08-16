@@ -373,7 +373,7 @@ export function PairedCategoryList({
         <span className="truncate">{isIncome ? "Entradas na meta" : "Saídas na meta"}</span>
         <span className="truncate">Realizado neste mês</span>
       </div>
-      <div className="max-h-[320px] overflow-y-auto space-y-1 pr-1">
+      <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1">
         {items.map((c) => {
           const projected = projectedOf(c);
           const sim = percents[c.name] ?? 0;
