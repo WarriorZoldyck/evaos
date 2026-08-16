@@ -47,7 +47,7 @@ export function FinancialMetricCard({
         type="button"
         onClick={onClick}
         className={cn(
-          "glass-card glass-card-interactive w-full text-left",
+          "glass-card glass-card-interactive w-full h-full text-left",
           active && "glass-card-active",
         )}
       >
@@ -56,5 +56,6 @@ export function FinancialMetricCard({
     );
   }
 
-  return <div className="glass-card">{content}</div>;
+  return <div className="glass-card h-full">{content}</div>;
 }
+
