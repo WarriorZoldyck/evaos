@@ -71,9 +71,23 @@ function PairRow({
 
 export default function Metas() {
   const navigate = useNavigate();
-  const { isPersonal } = useCompany();
-  const { goals, loading, createGoal, updateGoal } = useGoals();
+  const { isPersonal, selectedCompanyId } = useCompany();
+  const { goals, loading, createGoal, updateGoal, deleteGoal } = useGoals();
   const stats = useMetasSidebarStats();
+
+  /** Chave de UI por contexto: o que estava aberto/selecionado volta igual. */
+  const uiKey = `metas:ui:${isPersonal ? "personal" : selectedCompanyId ?? "none"}`;
+  const readUi = () => {
+    try {
+      return JSON.parse(localStorage.getItem(uiKey) || "{}") as {
+        openBlock?: "income" | "expense" | null;
+        selectedIncome?: string | null;
+        selectedExpense?: string | null;
+      };
+    } catch {
+      return {};
+    }
+  };
 
   const [formOpen, setFormOpen] = useState(false);
   const [prefill, setPrefill] = useState<{
@@ -99,6 +113,26 @@ export default function Metas() {
     setOpenBlock((cur) => (cur === "expense" ? null : "expense"));
   };
 
+  // Restaura a UI salva ao trocar de contexto.
+  useEffect(() => {
+    const saved = readUi();
+    setOpenBlock(saved.openBlock ?? "expense");
+    setSelectedIncome(saved.selectedIncome ?? null);
+    setSelectedExpense(saved.selectedExpense ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        uiKey,
+        JSON.stringify({ openBlock, selectedIncome, selectedExpense }),
+      );
+    } catch {
+      /* storage indisponível: a UI só perde a última posição */
+    }
+  }, [uiKey, openBlock, selectedIncome, selectedExpense]);
+
   // Cada bloco nasce apontando para a maior categoria da sua lista.
   useEffect(() => {
     if (stats.loading) return;
@@ -108,10 +142,19 @@ export default function Metas() {
 
   // Metas orçamentárias salvas: hidratam os percentuais na abertura da página.
   const budgetTargets = useBudgetTargets();
-  const hydrated = useRef(false);
+  const hydratedKey = useRef<string | null>(null);
   useEffect(() => {
-    if (hydrated.current || stats.loading || budgetTargets.loading) return;
-    hydrated.current = true;
+    const hasCategories =
+      stats.incomeCategories.length > 0 || stats.expenseCategories.length > 0;
+    if (
+      hydratedKey.current === uiKey ||
+      stats.loading ||
+      budgetTargets.loading ||
+      !hasCategories
+    ) {
+      return;
+    }
+    hydratedKey.current = uiKey;
 
     const toPercents = (
       items: typeof stats.incomeCategories,
@@ -133,7 +176,7 @@ export default function Metas() {
 
     setIncomeBoosts(toPercents(stats.incomeCategories, budgetTargets.income, "income"));
     setExpenseCuts(toPercents(stats.expenseCategories, budgetTargets.expense, "expense"));
-  }, [stats.loading, budgetTargets.loading, stats.incomeCategories, stats.expenseCategories, budgetTargets.income, budgetTargets.expense]);
+  }, [uiKey, stats.loading, budgetTargets.loading, stats.incomeCategories, stats.expenseCategories, budgetTargets.income, budgetTargets.expense]);
 
   /** Salva a meta mensal da categoria a partir do percentual simulado. */
   const persistTarget = useCallback(
@@ -144,6 +187,19 @@ export default function Metas() {
     },
     [budgetTargets],
   );
+
+  // Ao sair da página, grava o que ainda estava no debounce.
+  const flushRef = useRef(budgetTargets.flush);
+  flushRef.current = budgetTargets.flush;
+  useEffect(() => () => { void flushRef.current(); }, []);
+
+  const handleDeleteGoal = useCallback(
+    async (id: string) => {
+      await deleteGoal(id);
+    },
+    [deleteGoal],
+  );
+
 
 
 
