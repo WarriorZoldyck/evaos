@@ -25,17 +25,7 @@ import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
 import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
 import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
 import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
-import { GoalChat } from "@/components/metas/planejamento/GoalChat";
-import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
-import type {
-  AssistantReply,
-  ChatMessage,
-  GoalPlanningContext,
-} from "@/services/assistant/AssistantService";
 import { needsResolution } from "@/lib/goalPlanning";
-
-const assistantService = new LocalAssistantService();
-const CHAT_CHIPS = ["Até 6 meses", "1 ano", "2 anos", "Consigo guardar R$ 800 por mês"];
 
 
 const formatCurrency = (v: number) =>
@@ -97,31 +87,6 @@ export default function MetaDetalhe() {
     monthlyCapacity,
     topCategories: stats.topCategories,
   });
-
-  const buildContext = useCallback(
-    (history: ChatMessage[]): GoalPlanningContext => ({
-      goal: planningGoal,
-      scoreResult,
-      financialStats: {
-        totalBalance: stats.totalBalance,
-        avgIncomeMonth: stats.avgIncomeMonth,
-        avgSpentMonth: stats.avgSpentMonth,
-        monthlyCapacity,
-      },
-      topCategories: stats.topCategories,
-      conversationHistory: history,
-    }),
-    [planningGoal, scoreResult, stats, monthlyCapacity],
-  );
-
-  const handleReply = useCallback(
-    (reply: AssistantReply) => {
-      if (reply.goalPatch) patchGoal(reply.goalPatch);
-      reply.resolutionActions?.forEach(dispatchResolution);
-      if (reply.actions) addAiActions(reply.actions);
-    },
-    [patchGoal, dispatchResolution, addAiActions],
-  );
 
   const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
@@ -415,12 +380,6 @@ export default function MetaDetalhe() {
             />
           )}
           <ActionPlanList items={actionPlan} />
-          <GoalChat
-            service={assistantService}
-            buildContext={buildContext}
-            onReply={handleReply}
-            suggestions={CHAT_CHIPS}
-          />
         </div>
       )}
 
