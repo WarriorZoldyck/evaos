@@ -786,6 +786,7 @@ export function RealCapacityCard({ value }: { value: number }) {
       icon={<PiggyBank className="h-4 w-4" />}
       label="Capacidade mensal estimada"
       value={formatBRL(value)}
+      dense
       tone={value <= 0 ? "danger" : "success"}
     />
   );
@@ -797,6 +798,7 @@ export function RealLeftoverCard({ value }: { value: number }) {
       icon={<PiggyBank className="h-4 w-4" />}
       label="Sobra estimada até dez"
       value={formatBRL(value)}
+      dense
       tone={value < 0 ? "danger" : "default"}
     />
   );
