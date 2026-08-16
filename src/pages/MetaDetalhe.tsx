@@ -392,7 +392,40 @@ export default function MetaDetalhe() {
         )}
       </div>
 
+      {/* Acompanhamento e plano de ação */}
+      {planningGoal && scoreResult && (
+        <div className="space-y-4">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+            Acompanhamento
+          </h2>
+          <ActiveGoalCard
+            goal={planningGoal}
+            scoreResult={scoreResult}
+            isSimulated={isSimulated}
+          />
+          <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
+          {showResolution && (
+            <GoalResolutionPanel
+              breakdown={scoreResult.breakdown}
+              topCategories={stats.topCategories}
+              onResolve={dispatchResolution}
+              onCombine={() => {}}
+              onReset={resetScenario}
+              isSimulated={isSimulated}
+            />
+          )}
+          <ActionPlanList items={actionPlan} />
+          <GoalChat
+            service={assistantService}
+            buildContext={buildContext}
+            onReply={handleReply}
+            suggestions={CHAT_CHIPS}
+          />
+        </div>
+      )}
+
       {/* Modais */}
+
       <GoalFormModal
         open={configOpen}
         onClose={() => setConfigOpen(false)}
