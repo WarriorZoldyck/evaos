@@ -189,7 +189,7 @@ function ObjectiveCard({
   return (
     <div
       className={cn(
-        "glass-card p-3 space-y-2 transition-colors",
+        "glass-card p-4 space-y-2.5 transition-colors",
         active && "ring-1 ring-primary/40",
       )}
     >
