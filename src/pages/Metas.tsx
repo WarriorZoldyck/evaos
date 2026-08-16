@@ -56,17 +56,21 @@ const assistantService = new LocalAssistantService();
 function PairRow({
   real,
   simulated,
+  realized,
 }: {
   real: React.ReactNode;
   simulated: React.ReactNode;
+  realized?: React.ReactNode;
 }) {
   return (
-    <div className="grid gap-x-5 gap-y-3 items-start md:grid-cols-2">
-      <div className="min-w-0 space-y-2">{real}</div>
-      <div className="min-w-0 space-y-2">{simulated}</div>
+    <div className="grid gap-x-5 gap-y-3 items-stretch md:grid-cols-[1fr_1fr_1.1fr]">
+      <div className="min-w-0 space-y-3">{real}</div>
+      <div className="min-w-0 space-y-3">{simulated}</div>
+      <div className="min-w-0 space-y-3">{realized}</div>
     </div>
   );
 }
+
 
 
 export default function Metas() {
