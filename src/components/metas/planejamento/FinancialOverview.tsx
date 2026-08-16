@@ -102,7 +102,7 @@ export function RealAverageBlock({
 }) {
   const isIncome = kind === "income";
   return (
-    <button type="button" onClick={onToggle} className="w-full text-left">
+    <button type="button" onClick={onToggle} className="w-full h-full text-left">
       <FinancialMetricCard
         icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
         label={isIncome ? "Média de entradas / mês" : "Média de saídas / mês"}
