@@ -425,7 +425,7 @@ export default function Metas() {
             />
           </div>
 
-          <aside className="min-w-0 space-y-3 md:sticky md:top-4">
+          <aside className="min-w-0 space-y-4 md:sticky md:top-4">
             <GainTotalCard
               monthly={totalIncomeSimulated}
               items={stats.incomeCategories}
