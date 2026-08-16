@@ -763,6 +763,7 @@ function SummaryRow({
         )}
       >
         {formatBRL(value)}
+      </p>
     
     </div>
   );
