@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,6 +19,24 @@ import { GoalRadarLarge } from "@/components/metas/GoalRadarLarge";
 import { GoalFormModal } from "@/components/metas/GoalFormModal";
 import { GoalAmountModal } from "@/components/metas/GoalAmountModal";
 import { GoalHistoryModal } from "@/components/metas/GoalHistoryModal";
+import { useMetasSidebarStats } from "@/hooks/useMetasSidebarStats";
+import { usePlanningGoal } from "@/hooks/usePlanningGoal";
+import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
+import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
+import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
+import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
+import { GoalChat } from "@/components/metas/planejamento/GoalChat";
+import { LocalAssistantService } from "@/services/assistant/LocalAssistantService";
+import type {
+  AssistantReply,
+  ChatMessage,
+  GoalPlanningContext,
+} from "@/services/assistant/AssistantService";
+import { needsResolution } from "@/lib/goalPlanning";
+
+const assistantService = new LocalAssistantService();
+const CHAT_CHIPS = ["Até 6 meses", "1 ano", "2 anos", "Consigo guardar R$ 800 por mês"];
+
 
 const formatCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -57,6 +75,55 @@ export default function MetaDetalhe() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [movements, setMovements] = useState<GoalMovement[]>([]);
   const [movLoading, setMovLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Abertura direta em modo edição (vinda da lista de objetivos).
+  useEffect(() => {
+    if (searchParams.get("editar") === "1") {
+      setConfigOpen(true);
+      searchParams.delete("editar");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Acompanhamento (score, plano de ação e chat) mora aqui, não na lista.
+  const stats = useMetasSidebarStats();
+  const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
+  const {
+    planningGoal, scoreResult, actionPlan, isSimulated,
+    dispatchResolution, patchGoal, addAiActions, resetScenario,
+  } = usePlanningGoal({
+    goal: goal ?? null,
+    monthlyCapacity,
+    topCategories: stats.topCategories,
+  });
+
+  const buildContext = useCallback(
+    (history: ChatMessage[]): GoalPlanningContext => ({
+      goal: planningGoal,
+      scoreResult,
+      financialStats: {
+        totalBalance: stats.totalBalance,
+        avgIncomeMonth: stats.avgIncomeMonth,
+        avgSpentMonth: stats.avgSpentMonth,
+        monthlyCapacity,
+      },
+      topCategories: stats.topCategories,
+      conversationHistory: history,
+    }),
+    [planningGoal, scoreResult, stats, monthlyCapacity],
+  );
+
+  const handleReply = useCallback(
+    (reply: AssistantReply) => {
+      if (reply.goalPatch) patchGoal(reply.goalPatch);
+      reply.resolutionActions?.forEach(dispatchResolution);
+      if (reply.actions) addAiActions(reply.actions);
+    },
+    [patchGoal, dispatchResolution, addAiActions],
+  );
+
+  const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
   useEffect(() => {
     if (!id) return;
@@ -66,6 +133,7 @@ export default function MetaDetalhe() {
       setMovLoading(false);
     });
   }, [id, fetchMovements, goal?.current_amount]);
+
 
   const progress = useMemo(() => {
     if (!goal || goal.target_amount <= 0) return 0;
@@ -324,7 +392,40 @@ export default function MetaDetalhe() {
         )}
       </div>
 
+      {/* Acompanhamento e plano de ação */}
+      {planningGoal && scoreResult && (
+        <div className="space-y-4">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">
+            Acompanhamento
+          </h2>
+          <ActiveGoalCard
+            goal={planningGoal}
+            scoreResult={scoreResult}
+            isSimulated={isSimulated}
+          />
+          <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
+          {showResolution && (
+            <GoalResolutionPanel
+              breakdown={scoreResult.breakdown}
+              topCategories={stats.topCategories}
+              onResolve={dispatchResolution}
+              onCombine={() => {}}
+              onReset={resetScenario}
+              isSimulated={isSimulated}
+            />
+          )}
+          <ActionPlanList items={actionPlan} />
+          <GoalChat
+            service={assistantService}
+            buildContext={buildContext}
+            onReply={handleReply}
+            suggestions={CHAT_CHIPS}
+          />
+        </div>
+      )}
+
       {/* Modais */}
+
       <GoalFormModal
         open={configOpen}
         onClose={() => setConfigOpen(false)}

@@ -33,12 +33,8 @@ import { useBudgetTargets } from "@/hooks/useBudgetTargets";
 
 
 import { cn } from "@/lib/utils";
-import { ActiveGoalCard } from "@/components/metas/planejamento/ActiveGoalCard";
-import { GoalChat } from "@/components/metas/planejamento/GoalChat";
-import { GoalProgressPanel } from "@/components/metas/planejamento/GoalProgressPanel";
-import { ActionPlanList } from "@/components/metas/planejamento/ActionPlanList";
-import { GoalResolutionPanel } from "@/components/metas/planejamento/GoalResolutionPanel";
 import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
+
 import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
 import { ObjectivesPanel } from "@/components/metas/planejamento/ObjectivesPanel";
 
@@ -75,9 +71,23 @@ function PairRow({
 
 export default function Metas() {
   const navigate = useNavigate();
-  const { isPersonal } = useCompany();
-  const { goals, loading, createGoal, updateGoal } = useGoals();
+  const { isPersonal, selectedCompanyId } = useCompany();
+  const { goals, loading, createGoal, updateGoal, deleteGoal } = useGoals();
   const stats = useMetasSidebarStats();
+
+  /** Chave de UI por contexto: o que estava aberto/selecionado volta igual. */
+  const uiKey = `metas:ui:${isPersonal ? "personal" : selectedCompanyId ?? "none"}`;
+  const readUi = () => {
+    try {
+      return JSON.parse(localStorage.getItem(uiKey) || "{}") as {
+        openBlock?: "income" | "expense" | null;
+        selectedIncome?: string | null;
+        selectedExpense?: string | null;
+      };
+    } catch {
+      return {};
+    }
+  };
 
   const [formOpen, setFormOpen] = useState(false);
   const [prefill, setPrefill] = useState<{
@@ -103,6 +113,26 @@ export default function Metas() {
     setOpenBlock((cur) => (cur === "expense" ? null : "expense"));
   };
 
+  // Restaura a UI salva ao trocar de contexto.
+  useEffect(() => {
+    const saved = readUi();
+    setOpenBlock(saved.openBlock ?? "expense");
+    setSelectedIncome(saved.selectedIncome ?? null);
+    setSelectedExpense(saved.selectedExpense ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uiKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        uiKey,
+        JSON.stringify({ openBlock, selectedIncome, selectedExpense }),
+      );
+    } catch {
+      /* storage indisponível: a UI só perde a última posição */
+    }
+  }, [uiKey, openBlock, selectedIncome, selectedExpense]);
+
   // Cada bloco nasce apontando para a maior categoria da sua lista.
   useEffect(() => {
     if (stats.loading) return;
@@ -112,10 +142,19 @@ export default function Metas() {
 
   // Metas orçamentárias salvas: hidratam os percentuais na abertura da página.
   const budgetTargets = useBudgetTargets();
-  const hydrated = useRef(false);
+  const hydratedKey = useRef<string | null>(null);
   useEffect(() => {
-    if (hydrated.current || stats.loading || budgetTargets.loading) return;
-    hydrated.current = true;
+    const hasCategories =
+      stats.incomeCategories.length > 0 || stats.expenseCategories.length > 0;
+    if (
+      hydratedKey.current === uiKey ||
+      stats.loading ||
+      budgetTargets.loading ||
+      !hasCategories
+    ) {
+      return;
+    }
+    hydratedKey.current = uiKey;
 
     const toPercents = (
       items: typeof stats.incomeCategories,
@@ -137,7 +176,7 @@ export default function Metas() {
 
     setIncomeBoosts(toPercents(stats.incomeCategories, budgetTargets.income, "income"));
     setExpenseCuts(toPercents(stats.expenseCategories, budgetTargets.expense, "expense"));
-  }, [stats.loading, budgetTargets.loading, stats.incomeCategories, stats.expenseCategories, budgetTargets.income, budgetTargets.expense]);
+  }, [uiKey, stats.loading, budgetTargets.loading, stats.incomeCategories, stats.expenseCategories, budgetTargets.income, budgetTargets.expense]);
 
   /** Salva a meta mensal da categoria a partir do percentual simulado. */
   const persistTarget = useCallback(
@@ -148,6 +187,19 @@ export default function Metas() {
     },
     [budgetTargets],
   );
+
+  // Ao sair da página, grava o que ainda estava no debounce.
+  const flushRef = useRef(budgetTargets.flush);
+  flushRef.current = budgetTargets.flush;
+  useEffect(() => () => { void flushRef.current(); }, []);
+
+  const handleDeleteGoal = useCallback(
+    async (id: string) => {
+      await deleteGoal(id);
+    },
+    [deleteGoal],
+  );
+
 
 
 
@@ -224,7 +276,7 @@ export default function Metas() {
   const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
   return (
-    <div className="metas-scope animate-fade-in space-y-6 w-full max-w-[1180px] mx-auto">
+    <div className="metas-scope animate-fade-in space-y-6 w-full max-w-[1440px] mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold font-display text-foreground">
@@ -245,17 +297,27 @@ export default function Metas() {
       </div>
 
       {/* Nível 1 — Metas Orçamentárias (fluxo de caixa) */}
-      <div className="px-1">
-        <h2 className="text-sm font-semibold text-foreground">Metas Orçamentárias</h2>
-        <p className="text-xs text-muted-foreground">
-          Quanto entra e quanto sai por categoria — define a sobra do mês.
-        </p>
+      <div className="px-1 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-foreground">Metas Orçamentárias</h2>
+          <p className="text-xs text-muted-foreground">
+            Quanto entra e quanto sai por categoria — define a sobra do mês.
+          </p>
+        </div>
+        <span className="text-[11px] shrink-0 text-muted-foreground">
+          {budgetTargets.error
+            ? <span className="text-destructive">Falha ao salvar: {budgetTargets.error}</span>
+            : budgetTargets.saving
+              ? "Salvando…"
+              : "Planejamento salvo"}
+        </span>
       </div>
 
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
-        <div className="grid gap-2.5 items-start md:grid-cols-[minmax(0,1fr)_minmax(180px,210px)]">
+        <div className="grid gap-2.5 items-start md:grid-cols-[minmax(0,1fr)_minmax(180px,210px)] xl:grid-cols-[minmax(0,1fr)_minmax(180px,210px)_minmax(240px,300px)]">
+
           <div className="min-w-0 space-y-2.5">
             <PairRow
               real={
@@ -432,92 +494,31 @@ export default function Metas() {
             />
           </aside>
 
+          {/* Nível 2 — Objetivos (destino da sobra), 3ª coluna */}
+          <aside className="min-w-0 md:col-span-2 xl:col-span-1 xl:sticky xl:top-4">
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <Skeleton key={i} className="h-24 w-full rounded-[1.5rem]" />
+                ))}
+              </div>
+            ) : (
+              <ObjectivesPanel
+                goals={goals}
+                leftoverMonthly={Math.max(0, simulatedCapacity)}
+                activeGoalId={activeGoalId}
+                onSelect={setActiveGoalId}
+                onOpenGoal={(id) => navigate(`/metas/${id}`)}
+                onEditGoal={(id) => navigate(`/metas/${id}?editar=1`)}
+                onDeleteGoal={handleDeleteGoal}
+                onCreate={() => openCreate()}
+              />
+            )}
+          </aside>
+
         </div>
       )}
 
-
-      {/* Nível 2 — Objetivos (destino da sobra) */}
-      {!loading && (
-        <ObjectivesPanel
-          goals={goals}
-          leftoverMonthly={Math.max(0, simulatedCapacity)}
-          activeGoalId={activeGoalId}
-          onSelect={setActiveGoalId}
-          onOpenGoal={(id) => navigate(`/metas/${id}`)}
-          onCreate={() => openCreate()}
-        />
-      )}
-
-      {/* Acompanhamento do objetivo selecionado */}
-      <div className="space-y-4">
-        {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <Skeleton key={i} className="h-40 w-full rounded-[1.5rem]" />
-            ))}
-          </div>
-        ) : goals.length === 0 ? null : (
-          <>
-            <div className="grid gap-4 lg:grid-cols-2 items-start">
-              <div className="min-w-0 space-y-4">
-                {planningGoal && scoreResult && (
-                  <ActiveGoalCard
-                    goal={planningGoal}
-                    scoreResult={scoreResult}
-                    isSimulated={isSimulated}
-                  />
-                )}
-                <GoalChat
-                  service={assistantService}
-                  buildContext={buildContext}
-                  onReply={handleReply}
-                  suggestions={CHAT_CHIPS}
-                  disabled={!planningGoal}
-                />
-                {!planningGoal && (
-                  <div className="glass-card p-5">
-                    <p className="text-sm text-muted-foreground">
-                      Selecione um cofrinho para ver progresso, score e plano de ação.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {planningGoal && scoreResult && (
-                <div className={cn("min-w-0 space-y-4")}>
-                  <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
-
-                  {showResolution && (
-                    <GoalResolutionPanel
-                      breakdown={scoreResult.breakdown}
-                      topCategories={stats.topCategories}
-                      onResolve={dispatchResolution}
-                      onCombine={() => setPlanOpen(true)}
-                      onReset={resetScenario}
-                      isSimulated={isSimulated}
-                    />
-                  )}
-
-                  <ActionPlanList
-                    items={actionPlan}
-                    footer={
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-2"
-                        onClick={() => setPlanOpen(true)}
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Ver plano completo
-                      </Button>
-                    }
-                  />
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
 
       <GoalFormModal
         open={formOpen}
