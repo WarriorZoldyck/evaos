@@ -123,21 +123,32 @@ export function MetaAverageCard({
   const isIncome = kind === "income";
   const delta = value - base;
   return (
-    <div className="relative">
-      <FinancialMetricCard
-        icon={isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-        label={isIncome ? "Meta de entradas / mês" : "Meta de saídas / mês"}
-        value={formatBRL(value)}
-        tone={isIncome ? "success" : "default"}
-      />
-      {Math.abs(delta) >= 0.01 && (
-        <span className="absolute right-4 bottom-2 text-[11px] font-mono text-muted-foreground">
-          {signedBRL(delta)} vs. real
+    <div className="glass-card px-3.5 py-2.5 h-full flex flex-col justify-center gap-1">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
+        {isIncome ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+        <span className="truncate">
+          {isIncome ? "Meta de entradas / mês" : "Meta de saídas / mês"}
         </span>
-      )}
+      </div>
+      <div className="flex items-baseline justify-between gap-2">
+        <p
+          className={cn(
+            "text-base font-bold font-mono truncate",
+            isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-foreground",
+          )}
+        >
+          {formatBRL(value)}
+        </p>
+        {Math.abs(delta) >= 0.01 && (
+          <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+            {signedBRL(delta)} vs. real
+          </span>
+        )}
+      </div>
     </div>
   );
 }
+
 
 
 /** Painel lateral: ajuste da meta mensal da categoria (slider + campos). */
