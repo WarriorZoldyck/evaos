@@ -313,7 +313,7 @@ export default function Metas() {
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
-        <div className="grid gap-5 items-start md:grid-cols-[minmax(0,1fr)_minmax(200px,240px)] xl:grid-cols-[minmax(0,1fr)_minmax(200px,240px)_minmax(300px,360px)]">
+        <div className="grid gap-5 items-start md:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]">
 
           <div className="min-w-0 space-y-5">
 
@@ -483,46 +483,48 @@ export default function Metas() {
 
           </aside>
 
-          {/* 4ª coluna — Objetivos (destino da sobra) + leitura da EVA */}
-          <aside className="min-w-0 space-y-4 md:col-span-2 xl:col-span-1 xl:sticky xl:top-4">
-            {loading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 2 }).map((_, i) => (
-                  <Skeleton key={i} className="h-24 w-full rounded-[1.5rem]" />
-                ))}
-              </div>
-            ) : (
-              <ObjectivesPanel
-                goals={goals}
-                leftoverMonthly={Math.max(0, simulatedCapacity)}
-                activeGoalId={activeGoalId}
-                onSelect={setActiveGoalId}
-                onOpenGoal={(id) => navigate(`/metas/${id}`)}
-                onEditGoal={(id) => navigate(`/metas/${id}?editar=1`)}
-                onDeleteGoal={handleDeleteGoal}
-                onCreate={() => openCreate()}
-              />
-            )}
-
-            <GoalInsightCard
-              goals={goals}
-              activeGoalId={activeGoalId}
-              monthlyCapacity={Math.max(0, simulatedCapacity)}
-            />
-
-            <MonthRiskCard
-              expenseCategories={stats.expenseCategories}
-              percents={expenseCuts}
-              onSelect={(name) => {
-                setOpenBlock("expense");
-                setSelectedExpense(name);
-              }}
-            />
-          </aside>
-
-
         </div>
       )}
+
+
+      {/* Nível 2 — Objetivos (destino da sobra) + leitura da EVA */}
+      <div className="space-y-4">
+        {loading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-28 w-full rounded-[1.5rem]" />
+            ))}
+          </div>
+        ) : (
+          <ObjectivesPanel
+            goals={goals}
+            leftoverMonthly={Math.max(0, simulatedCapacity)}
+            activeGoalId={activeGoalId}
+            onSelect={setActiveGoalId}
+            onOpenGoal={(id) => navigate(`/metas/${id}`)}
+            onEditGoal={(id) => navigate(`/metas/${id}?editar=1`)}
+            onDeleteGoal={handleDeleteGoal}
+            onCreate={() => openCreate()}
+          />
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <GoalInsightCard
+            goals={goals}
+            activeGoalId={activeGoalId}
+            monthlyCapacity={Math.max(0, simulatedCapacity)}
+          />
+
+          <MonthRiskCard
+            expenseCategories={stats.expenseCategories}
+            percents={expenseCuts}
+            onSelect={(name) => {
+              setOpenBlock("expense");
+              setSelectedExpense(name);
+            }}
+          />
+        </div>
+      </div>
 
 
       <GoalFormModal
