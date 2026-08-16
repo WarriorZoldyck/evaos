@@ -15,7 +15,6 @@ import { ActionPlanDialog } from "@/components/metas/ActionPlanDialog";
 import {
   OverviewSkeleton,
   OverviewHeader,
-  RealBalanceCard,
   RealAverageBlock,
   MetaAverageCard,
   RealizedMonthCard,
@@ -109,6 +108,26 @@ export default function Metas() {
   const [selectedExpense, setSelectedExpense] = useState<string | null>(null);
   // Um bloco aberto por vez, compartilhado pelas duas colunas.
   const [openBlock, setOpenBlock] = useState<"income" | "expense" | null>("expense");
+
+  const planningRef = useRef<HTMLDivElement>(null);
+
+  // Clicar fora (ou Esc) fecha a lista de categorias e devolve a visão compacta.
+  useEffect(() => {
+    if (!openBlock) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const el = planningRef.current;
+      if (el && !el.contains(e.target as Node)) setOpenBlock(null);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenBlock(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openBlock]);
 
   const openIncome = () => {
     setOpenBlock((cur) => (cur === "income" ? null : "income"));
@@ -315,7 +334,7 @@ export default function Metas() {
       ) : (
         <div className="grid gap-5 items-start md:grid-cols-[minmax(0,1fr)_minmax(220px,260px)]">
 
-          <div className="min-w-0 space-y-5">
+          <div ref={planningRef} className="min-w-0 space-y-5">
 
             <OverviewHeader />
 
@@ -325,11 +344,6 @@ export default function Metas() {
               <span className="truncate">Meta / mês</span>
               <span className="truncate">Realizado neste mês</span>
             </div>
-
-            <PairRow
-              real={<RealBalanceCard value={stats.totalBalance} />}
-              simulated={null}
-            />
 
             <PairRow
               real={
