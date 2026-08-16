@@ -75,6 +75,55 @@ export default function MetaDetalhe() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [movements, setMovements] = useState<GoalMovement[]>([]);
   const [movLoading, setMovLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Abertura direta em modo edição (vinda da lista de objetivos).
+  useEffect(() => {
+    if (searchParams.get("editar") === "1") {
+      setConfigOpen(true);
+      searchParams.delete("editar");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Acompanhamento (score, plano de ação e chat) mora aqui, não na lista.
+  const stats = useMetasSidebarStats();
+  const monthlyCapacity = Math.max(0, stats.avgIncomeMonth - stats.avgSpentMonth);
+  const {
+    planningGoal, scoreResult, actionPlan, isSimulated,
+    dispatchResolution, patchGoal, addAiActions, resetScenario,
+  } = usePlanningGoal({
+    goal: goal ?? null,
+    monthlyCapacity,
+    topCategories: stats.topCategories,
+  });
+
+  const buildContext = useCallback(
+    (history: ChatMessage[]): GoalPlanningContext => ({
+      goal: planningGoal,
+      scoreResult,
+      financialStats: {
+        totalBalance: stats.totalBalance,
+        avgIncomeMonth: stats.avgIncomeMonth,
+        avgSpentMonth: stats.avgSpentMonth,
+        monthlyCapacity,
+      },
+      topCategories: stats.topCategories,
+      conversationHistory: history,
+    }),
+    [planningGoal, scoreResult, stats, monthlyCapacity],
+  );
+
+  const handleReply = useCallback(
+    (reply: AssistantReply) => {
+      if (reply.goalPatch) patchGoal(reply.goalPatch);
+      reply.resolutionActions?.forEach(dispatchResolution);
+      if (reply.actions) addAiActions(reply.actions);
+    },
+    [patchGoal, dispatchResolution, addAiActions],
+  );
+
+  const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
   useEffect(() => {
     if (!id) return;
@@ -84,6 +133,7 @@ export default function MetaDetalhe() {
       setMovLoading(false);
     });
   }, [id, fetchMovements, goal?.current_amount]);
+
 
   const progress = useMemo(() => {
     if (!goal || goal.target_amount <= 0) return 0;
