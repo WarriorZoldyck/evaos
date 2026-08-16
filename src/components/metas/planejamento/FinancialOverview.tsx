@@ -764,7 +764,7 @@ function SummaryRow({
       >
         {formatBRL(value)}
       </p>
-      {delta && <p className="text-[11px] font-mono text-muted-foreground">{delta} vs. real</p>}
+    
     </div>
   );
 }
