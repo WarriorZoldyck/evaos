@@ -503,46 +503,31 @@ export default function Metas() {
               items={stats.expenseCategories}
               percents={expenseCuts}
             />
-            {openBlock === "income" && (
-              <OverviewDetailPanel
-                mode="income"
-                category={selectedIncomeCat}
-                percent={selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0}
-                newAverage={simulatedIncome}
-                onPercentChange={(p) => {
-                  if (!selectedIncomeCat) return;
-                  setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
-                  persistTarget("income", selectedIncomeCat.name, selectedIncomeCat.total, p);
-                }}
-                onReset={() => {
-                  setIncomeBoosts({});
-                  budgetTargets.clearKind("income");
-                }}
-              />
-            )}
-
-            {openBlock === "expense" && (
-              <OverviewDetailPanel
-                mode="expense"
-                category={selectedExpenseCat}
-                percent={selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0}
-                newAverage={simulatedExpense}
-                onPercentChange={(p) => {
-                  if (!selectedExpenseCat) return;
-                  setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
-                  persistTarget("expense", selectedExpenseCat.name, selectedExpenseCat.total, p);
-                }}
-                onReset={() => {
-                  setExpenseCuts({});
-                  budgetTargets.clearKind("expense");
-                }}
-              />
-            )}
+            {!isMobile && detailPanel}
 
           </aside>
 
         </div>
       )}
+
+      {/* Mobile: ajuste da meta em gaveta, acessível ao tocar na categoria */}
+      <Sheet
+        open={isMobile && Boolean(detailPanel) && Boolean(mobileSelected)}
+        onOpenChange={(o) => {
+          if (!o) {
+            if (openBlock === "income") setSelectedIncome(null);
+            else setSelectedExpense(null);
+          }
+        }}
+      >
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+          <SheetHeader className="text-left">
+            <SheetTitle>Ajustar meta</SheetTitle>
+          </SheetHeader>
+          <div className="mt-3">{detailPanel}</div>
+        </SheetContent>
+      </Sheet>
+
 
 
       {/* Nível 2 — Objetivos (destino da sobra) + leitura da EVA */}
