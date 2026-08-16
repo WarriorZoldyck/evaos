@@ -29,15 +29,29 @@ export function FinancialMetricCard({
   active,
   onClick,
   rightSlot,
+  dense,
 }: FinancialMetricCardProps) {
   const content = (
-    <div className="px-3.5 py-2.5 h-full flex flex-col justify-center gap-1">
+    <div
+      className={cn(
+        "flex flex-col justify-center gap-1",
+        dense ? "px-3.5 py-2" : "px-3.5 py-2.5 h-full",
+      )}
+    >
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide font-semibold text-muted-foreground min-w-0">
         {icon}
         <span className="truncate">{label}</span>
       </div>
       <div className="flex items-center justify-between gap-2">
-        <p className={cn("text-lg font-bold font-mono truncate", TONES[tone])}>{value}</p>
+        <p
+          className={cn(
+            "font-bold font-mono truncate",
+            dense ? "text-base" : "text-lg",
+            TONES[tone],
+          )}
+        >
+          {value}
+        </p>
         {rightSlot}
       </div>
     </div>
@@ -49,7 +63,8 @@ export function FinancialMetricCard({
         type="button"
         onClick={onClick}
         className={cn(
-          "glass-card glass-card-interactive w-full h-full text-left",
+          "glass-card glass-card-interactive w-full text-left",
+          !dense && "h-full",
           active && "glass-card-active",
         )}
       >
@@ -58,6 +73,6 @@ export function FinancialMetricCard({
     );
   }
 
-  return <div className="glass-card h-full">{content}</div>;
+  return <div className={cn("glass-card", !dense && "h-full")}>{content}</div>;
 }
 
