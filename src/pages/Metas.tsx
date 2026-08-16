@@ -428,92 +428,31 @@ export default function Metas() {
             />
           </aside>
 
+          {/* Nível 2 — Objetivos (destino da sobra), 3ª coluna */}
+          <aside className="min-w-0 xl:sticky xl:top-4">
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <Skeleton key={i} className="h-24 w-full rounded-[1.5rem]" />
+                ))}
+              </div>
+            ) : (
+              <ObjectivesPanel
+                goals={goals}
+                leftoverMonthly={Math.max(0, simulatedCapacity)}
+                activeGoalId={activeGoalId}
+                onSelect={setActiveGoalId}
+                onOpenGoal={(id) => navigate(`/metas/${id}`)}
+                onEditGoal={(id) => navigate(`/metas/${id}?editar=1`)}
+                onDeleteGoal={handleDeleteGoal}
+                onCreate={() => openCreate()}
+              />
+            )}
+          </aside>
+
         </div>
       )}
 
-
-      {/* Nível 2 — Objetivos (destino da sobra) */}
-      {!loading && (
-        <ObjectivesPanel
-          goals={goals}
-          leftoverMonthly={Math.max(0, simulatedCapacity)}
-          activeGoalId={activeGoalId}
-          onSelect={setActiveGoalId}
-          onOpenGoal={(id) => navigate(`/metas/${id}`)}
-          onCreate={() => openCreate()}
-        />
-      )}
-
-      {/* Acompanhamento do objetivo selecionado */}
-      <div className="space-y-4">
-        {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <Skeleton key={i} className="h-40 w-full rounded-[1.5rem]" />
-            ))}
-          </div>
-        ) : goals.length === 0 ? null : (
-          <>
-            <div className="grid gap-4 lg:grid-cols-2 items-start">
-              <div className="min-w-0 space-y-4">
-                {planningGoal && scoreResult && (
-                  <ActiveGoalCard
-                    goal={planningGoal}
-                    scoreResult={scoreResult}
-                    isSimulated={isSimulated}
-                  />
-                )}
-                <GoalChat
-                  service={assistantService}
-                  buildContext={buildContext}
-                  onReply={handleReply}
-                  suggestions={CHAT_CHIPS}
-                  disabled={!planningGoal}
-                />
-                {!planningGoal && (
-                  <div className="glass-card p-5">
-                    <p className="text-sm text-muted-foreground">
-                      Selecione um cofrinho para ver progresso, score e plano de ação.
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {planningGoal && scoreResult && (
-                <div className={cn("min-w-0 space-y-4")}>
-                  <GoalProgressPanel goal={planningGoal} scoreResult={scoreResult} />
-
-                  {showResolution && (
-                    <GoalResolutionPanel
-                      breakdown={scoreResult.breakdown}
-                      topCategories={stats.topCategories}
-                      onResolve={dispatchResolution}
-                      onCombine={() => setPlanOpen(true)}
-                      onReset={resetScenario}
-                      isSimulated={isSimulated}
-                    />
-                  )}
-
-                  <ActionPlanList
-                    items={actionPlan}
-                    footer={
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-2"
-                        onClick={() => setPlanOpen(true)}
-                      >
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Ver plano completo
-                      </Button>
-                    }
-                  />
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
 
       <GoalFormModal
         open={formOpen}
