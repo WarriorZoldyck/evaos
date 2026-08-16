@@ -297,17 +297,27 @@ export default function Metas() {
       </div>
 
       {/* Nível 1 — Metas Orçamentárias (fluxo de caixa) */}
-      <div className="px-1">
-        <h2 className="text-sm font-semibold text-foreground">Metas Orçamentárias</h2>
-        <p className="text-xs text-muted-foreground">
-          Quanto entra e quanto sai por categoria — define a sobra do mês.
-        </p>
+      <div className="px-1 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-foreground">Metas Orçamentárias</h2>
+          <p className="text-xs text-muted-foreground">
+            Quanto entra e quanto sai por categoria — define a sobra do mês.
+          </p>
+        </div>
+        <span className="text-[11px] shrink-0 text-muted-foreground">
+          {budgetTargets.error
+            ? <span className="text-destructive">Falha ao salvar: {budgetTargets.error}</span>
+            : budgetTargets.saving
+              ? "Salvando…"
+              : "Planejamento salvo"}
+        </span>
       </div>
 
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
-        <div className="grid gap-2.5 items-start md:grid-cols-[minmax(0,1fr)_minmax(180px,210px)]">
+        <div className="grid gap-2.5 items-start md:grid-cols-[minmax(0,1fr)_minmax(180px,210px)] xl:grid-cols-[minmax(0,1fr)_minmax(180px,210px)_minmax(240px,300px)]">
+
           <div className="min-w-0 space-y-2.5">
             <PairRow
               real={
