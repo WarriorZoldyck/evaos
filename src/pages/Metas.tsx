@@ -309,9 +309,10 @@ export default function Metas() {
       {stats.loading ? (
         <OverviewSkeleton />
       ) : (
-        <div className="grid gap-2.5 items-start md:grid-cols-[minmax(0,1fr)_minmax(180px,210px)] xl:grid-cols-[minmax(0,1fr)_minmax(180px,210px)_minmax(240px,300px)]">
+        <div className="grid gap-5 items-start md:grid-cols-[minmax(0,1fr)_minmax(200px,240px)] xl:grid-cols-[minmax(0,1fr)_minmax(200px,240px)_minmax(300px,360px)]">
 
-          <div className="min-w-0 space-y-2.5">
+          <div className="min-w-0 space-y-4">
+
             <PairRow
               real={
                 <>
