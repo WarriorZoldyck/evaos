@@ -472,24 +472,10 @@ export default function Metas() {
               />
             )}
 
-            <MonthRiskCard
-              expenseCategories={stats.expenseCategories}
-              percents={expenseCuts}
-              onSelect={(name) => {
-                setOpenBlock("expense");
-                setSelectedExpense(name);
-              }}
-            />
-
-            <GoalInsightCard
-              goals={goals}
-              activeGoalId={activeGoalId}
-              monthlyCapacity={Math.max(0, simulatedCapacity)}
-            />
           </aside>
 
-          {/* Nível 2 — Objetivos (destino da sobra), 3ª coluna */}
-          <aside className="min-w-0 md:col-span-2 xl:col-span-1 xl:sticky xl:top-4">
+          {/* 4ª coluna — Objetivos (destino da sobra) + leitura da EVA */}
+          <aside className="min-w-0 space-y-4 md:col-span-2 xl:col-span-1 xl:sticky xl:top-4">
             {loading ? (
               <div className="space-y-3">
                 {Array.from({ length: 2 }).map((_, i) => (
@@ -508,7 +494,23 @@ export default function Metas() {
                 onCreate={() => openCreate()}
               />
             )}
+
+            <GoalInsightCard
+              goals={goals}
+              activeGoalId={activeGoalId}
+              monthlyCapacity={Math.max(0, simulatedCapacity)}
+            />
+
+            <MonthRiskCard
+              expenseCategories={stats.expenseCategories}
+              percents={expenseCuts}
+              onSelect={(name) => {
+                setOpenBlock("expense");
+                setSelectedExpense(name);
+              }}
+            />
           </aside>
+
 
         </div>
       )}
