@@ -50,12 +50,12 @@ export function GoalInsightCard({
       </div>
 
       {insights.length === 0 ? (
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
+        <p className="text-xs text-muted-foreground leading-relaxed">
           Nenhum cofrinho ainda. Simule um corte ou um ganho acima e crie a primeira meta para
           acompanhar aqui quanto você já alcançou e se está no ritmo.
         </p>
       ) : (
-        <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
           {insights.map((i) => {
             const style = STATUS_STYLES[i.status];
             const isActive = i.id === activeGoalId;
@@ -63,28 +63,28 @@ export function GoalInsightCard({
               <div
                 key={i.id}
                 className={cn(
-                  "rounded-xl border border-border/50 p-2.5 space-y-1.5",
+                  "rounded-xl border border-border/50 p-3 space-y-2",
                   isActive && "ring-1 ring-primary/40 bg-accent/20",
                 )}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 min-w-0">
-                    <Target className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                    <span className="truncate text-xs font-semibold text-foreground">{i.name}</span>
+                    <Target className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="truncate text-sm font-semibold text-foreground">{i.name}</span>
                   </span>
-                  <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+                  <span className="text-[11px] font-mono text-muted-foreground shrink-0">
                     {formatBRL(i.target)}
                   </span>
                 </div>
 
-                <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div className="h-2 rounded-full bg-muted overflow-hidden">
                   <div
                     className="h-full rounded-full bg-primary/70"
                     style={{ width: `${i.progressPct}%` }}
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+                <div className="flex items-center justify-between text-[11px] font-mono text-muted-foreground">
                   <span>
                     {formatBRL(i.current)} · {Math.round(i.progressPct)}%
                   </span>
@@ -92,7 +92,7 @@ export function GoalInsightCard({
                 </div>
 
                 {i.monthsLeft !== null && i.remaining > 0 && (
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
                     Precisa de{" "}
                     <span className="font-mono text-foreground">{formatBRL(i.requiredMonthly)}</span>
                     /mês em {i.monthsLeft} {i.monthsLeft === 1 ? "mês" : "meses"} · simulação permite{" "}
@@ -100,7 +100,7 @@ export function GoalInsightCard({
                   </p>
                 )}
 
-                <p className={cn("text-[11px] font-medium leading-snug", style.className)}>
+                <p className={cn("text-xs font-medium leading-snug", style.className)}>
                   {style.label} — {i.message}
                 </p>
               </div>
@@ -108,6 +108,7 @@ export function GoalInsightCard({
           })}
         </div>
       )}
+
     </div>
   );
 }
