@@ -32,6 +32,8 @@ import { useBudgetTargets } from "@/hooks/useBudgetTargets";
 
 
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { GoalInsightCard } from "@/components/metas/planejamento/GoalInsightCard";
 
 import { CreateGoalFromSimulationDialog } from "@/components/metas/planejamento/CreateGoalFromSimulationDialog";
@@ -77,6 +79,7 @@ export default function Metas() {
   const { isPersonal, selectedCompanyId } = useCompany();
   const { goals, loading, createGoal, updateGoal, deleteGoal } = useGoals();
   const stats = useMetasSidebarStats();
+  const isMobile = useIsMobile();
 
   /** Chave de UI por contexto: o que estava aberto/selecionado volta igual. */
   const uiKey = `metas:ui:${isPersonal ? "personal" : selectedCompanyId ?? "none"}`;
@@ -115,7 +118,7 @@ export default function Metas() {
   // O ref envolve as duas colunas (planejamento + aside com sliders) para que
   // interagir com os controles de meta não feche as categorias.
   useEffect(() => {
-    if (!openBlock) return;
+    if (!openBlock || isMobile) return;
     const onPointerDown = (e: PointerEvent) => {
       const el = gridRef.current;
       if (el && !el.contains(e.target as Node)) setOpenBlock(null);
@@ -129,7 +132,7 @@ export default function Metas() {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [openBlock]);
+  }, [openBlock, isMobile]);
 
   const openIncome = () => {
     setOpenBlock((cur) => (cur === "income" ? null : "income"));
@@ -300,6 +303,45 @@ export default function Metas() {
 
   const showResolution = Boolean(scoreResult && needsResolution(scoreResult.status));
 
+  // Painel de ajuste da meta: fica na coluna lateral no desktop e vira
+  // gaveta inferior no mobile, onde o aside empilhado ficava fora de alcance.
+  const detailPanel =
+    openBlock === "income" ? (
+      <OverviewDetailPanel
+        mode="income"
+        category={selectedIncomeCat}
+        percent={selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0}
+        newAverage={simulatedIncome}
+        onPercentChange={(p) => {
+          if (!selectedIncomeCat) return;
+          setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
+          persistTarget("income", selectedIncomeCat.name, selectedIncomeCat.total, p);
+        }}
+        onReset={() => {
+          setIncomeBoosts({});
+          budgetTargets.clearKind("income");
+        }}
+      />
+    ) : openBlock === "expense" ? (
+      <OverviewDetailPanel
+        mode="expense"
+        category={selectedExpenseCat}
+        percent={selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0}
+        newAverage={simulatedExpense}
+        onPercentChange={(p) => {
+          if (!selectedExpenseCat) return;
+          setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
+          persistTarget("expense", selectedExpenseCat.name, selectedExpenseCat.total, p);
+        }}
+        onReset={() => {
+          setExpenseCuts({});
+          budgetTargets.clearKind("expense");
+        }}
+      />
+    ) : null;
+
+  const mobileSelected = openBlock === "income" ? selectedIncomeCat : selectedExpenseCat;
+
   return (
     <div className="metas-scope animate-fade-in space-y-7 w-full max-w-[1600px] mx-auto">
       <div className="flex items-start justify-between gap-4">
@@ -461,46 +503,31 @@ export default function Metas() {
               items={stats.expenseCategories}
               percents={expenseCuts}
             />
-            {openBlock === "income" && (
-              <OverviewDetailPanel
-                mode="income"
-                category={selectedIncomeCat}
-                percent={selectedIncomeCat ? incomeBoosts[selectedIncomeCat.name] ?? 0 : 0}
-                newAverage={simulatedIncome}
-                onPercentChange={(p) => {
-                  if (!selectedIncomeCat) return;
-                  setIncomeBoosts((prev) => ({ ...prev, [selectedIncomeCat.name]: p }));
-                  persistTarget("income", selectedIncomeCat.name, selectedIncomeCat.total, p);
-                }}
-                onReset={() => {
-                  setIncomeBoosts({});
-                  budgetTargets.clearKind("income");
-                }}
-              />
-            )}
-
-            {openBlock === "expense" && (
-              <OverviewDetailPanel
-                mode="expense"
-                category={selectedExpenseCat}
-                percent={selectedExpenseCat ? expenseCuts[selectedExpenseCat.name] ?? 0 : 0}
-                newAverage={simulatedExpense}
-                onPercentChange={(p) => {
-                  if (!selectedExpenseCat) return;
-                  setExpenseCuts((prev) => ({ ...prev, [selectedExpenseCat.name]: p }));
-                  persistTarget("expense", selectedExpenseCat.name, selectedExpenseCat.total, p);
-                }}
-                onReset={() => {
-                  setExpenseCuts({});
-                  budgetTargets.clearKind("expense");
-                }}
-              />
-            )}
+            {!isMobile && detailPanel}
 
           </aside>
 
         </div>
       )}
+
+      {/* Mobile: ajuste da meta em gaveta, acessível ao tocar na categoria */}
+      <Sheet
+        open={isMobile && Boolean(detailPanel) && Boolean(mobileSelected)}
+        onOpenChange={(o) => {
+          if (!o) {
+            if (openBlock === "income") setSelectedIncome(null);
+            else setSelectedExpense(null);
+          }
+        }}
+      >
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+          <SheetHeader className="text-left">
+            <SheetTitle>Ajustar meta</SheetTitle>
+          </SheetHeader>
+          <div className="mt-3">{detailPanel}</div>
+        </SheetContent>
+      </Sheet>
+
 
 
       {/* Nível 2 — Objetivos (destino da sobra) + leitura da EVA */}
