@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 import { useGoals, type Goal } from "@/hooks/useGoals";
 import { useCompany } from "@/contexts/CompanyContext";
