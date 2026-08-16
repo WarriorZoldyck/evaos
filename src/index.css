@@ -661,3 +661,16 @@ input[type="number"]::-webkit-outer-spin-button {
   }
 }
 
+
+/* ---------- Landing page (tema claro fixo) ---------- */
+:root,
+.dark {
+  --landing-bg: 0 0% 100%;
+  --landing-surface: 197 60% 96%;
+  --landing-card: 0 0% 100%;
+  --landing-border: 200 30% 88%;
+  --landing-text: 205 40% 14%;
+  --landing-muted: 205 14% 42%;
+  --landing-accent: 192 82% 26%;
+  --landing-accent-soft: 190 72% 59%;
+}

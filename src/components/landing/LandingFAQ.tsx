@@ -32,14 +32,10 @@ export function LandingFAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section id="faq" className="py-24 relative">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[hsl(215,25%,16%)] to-transparent" />
-      </div>
-
+    <section id="faq" className="py-20 sm:py-24 bg-[hsl(var(--landing-surface))]">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <p className="text-sm font-medium text-[hsl(195,100%,50%)] mb-3 tracking-wider uppercase">FAQ</p>
+        <div className="text-center mb-12">
+          <p className="text-sm font-semibold text-[hsl(var(--landing-accent))] mb-3 tracking-wider uppercase">FAQ</p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold mb-4">
             Perguntas frequentes
           </h2>
@@ -49,19 +45,18 @@ export function LandingFAQ() {
           {faqs.map((faq, i) => (
             <div
               key={i}
-              className="rounded-xl border border-[hsl(215,25%,12%)] overflow-hidden"
-              style={{ background: "hsla(220,30%,7%,0.6)" }}
+              className="rounded-xl border border-[hsl(var(--landing-border))] bg-[hsl(var(--landing-card))] overflow-hidden"
             >
               <button
                 onClick={() => setOpenIndex(openIndex === i ? null : i)}
                 className="w-full flex items-center justify-between p-5 text-left"
               >
                 <span className="font-medium text-sm pr-4">{faq.q}</span>
-                <ChevronDown className={`h-4 w-4 shrink-0 text-[hsl(215,18%,55%)] transition-transform duration-200 ${openIndex === i ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-4 w-4 shrink-0 text-[hsl(var(--landing-muted))] transition-transform duration-200 ${openIndex === i ? "rotate-180" : ""}`} />
               </button>
               {openIndex === i && (
                 <div className="px-5 pb-5 -mt-1">
-                  <p className="text-sm text-[hsl(215,18%,55%)] leading-relaxed">{faq.a}</p>
+                  <p className="text-sm text-[hsl(var(--landing-muted))] leading-relaxed">{faq.a}</p>
                 </div>
               )}
             </div>
@@ -71,3 +66,4 @@ export function LandingFAQ() {
     </section>
   );
 }
+

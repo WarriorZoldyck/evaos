@@ -20,37 +20,32 @@ const testimonials = [
 
 export function LandingTestimonials() {
   return (
-    <section id="testimonials" className="py-24 relative">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[hsl(215,25%,16%)] to-transparent" />
-      </div>
-
+    <section id="testimonials" className="py-20 sm:py-24 bg-[hsl(var(--landing-surface))]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <p className="text-sm font-medium text-[hsl(195,100%,50%)] mb-3 tracking-wider uppercase">Depoimentos</p>
-          <h2 className="font-display text-3xl sm:text-4xl font-bold mb-4">
-            Quem usa, recomenda
-          </h2>
+        <div className="text-center mb-14">
+          <p className="text-sm font-semibold text-[hsl(var(--landing-accent))] mb-3 tracking-wider uppercase">
+            Depoimentos
+          </p>
+          <h2 className="font-display text-3xl sm:text-4xl font-bold">Quem usa, recomenda</h2>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
           {testimonials.map((t, i) => (
             <div
               key={i}
-              className="p-6 rounded-2xl border border-[hsl(215,25%,12%)]"
-              style={{ background: "hsla(220,30%,7%,0.6)" }}
+              className="p-6 rounded-2xl border border-[hsl(var(--landing-border))] bg-[hsl(var(--landing-card))]"
             >
               <div className="flex gap-1 mb-4">
-                {[1,2,3,4,5].map((s) => (
+                {[1, 2, 3, 4, 5].map((s) => (
                   <Star key={s} className="h-4 w-4 fill-[hsl(38,92%,50%)] text-[hsl(38,92%,50%)]" />
                 ))}
               </div>
-              <p className="text-sm text-[hsl(215,18%,65%)] leading-relaxed mb-5 italic">
+              <p className="text-sm text-[hsl(var(--landing-muted))] leading-relaxed mb-5">
                 "{t.text}"
               </p>
               <div>
-                <p className="font-semibold text-sm">{t.name}</p>
-                <p className="text-xs text-[hsl(215,18%,50%)]">{t.role}</p>
+                <p className="font-semibold text-sm text-[hsl(var(--landing-text))]">{t.name}</p>
+                <p className="text-xs text-[hsl(var(--landing-muted))]">{t.role}</p>
               </div>
             </div>
           ))}

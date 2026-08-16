@@ -54,20 +54,18 @@ const features = [
 
 export function LandingFeatures() {
   return (
-    <section id="features" className="py-24 relative">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[hsl(215,25%,16%)] to-transparent" />
-      </div>
-
+    <section id="features" className="py-20 sm:py-24 bg-[hsl(var(--landing-surface))]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <p className="text-sm font-medium text-[hsl(195,100%,50%)] mb-3 tracking-wider uppercase">Funcionalidades</p>
+        <div className="text-center mb-14">
+          <p className="text-sm font-semibold text-[hsl(var(--landing-accent))] mb-3 tracking-wider uppercase">
+            Funcionalidades
+          </p>
           <h2 className="font-display text-3xl sm:text-4xl font-bold mb-4">
-            Tudo que você precisa.{" "}
-            <span className="text-[hsl(215,18%,55%)]">Nada que não precisa.</span>
+            Tudo que você precisa para organizar o dinheiro
           </h2>
-          <p className="text-[hsl(215,18%,55%)] max-w-2xl mx-auto text-lg">
-            Ferramentas pensadas para quem quer controle total das finanças sem complexidade desnecessária.
+          <p className="text-[hsl(var(--landing-muted))] max-w-2xl mx-auto text-lg">
+            Ferramentas pensadas para quem quer controle total das finanças sem complexidade
+            desnecessária.
           </p>
         </div>
 
@@ -75,14 +73,15 @@ export function LandingFeatures() {
           {features.map((f, i) => (
             <div
               key={i}
-              className="group p-6 rounded-2xl border border-[hsl(215,25%,12%)] hover:border-[hsl(195,100%,50%/0.4)] transition-all duration-300 hover:shadow-[0_0_30px_hsl(195,100%,50%/0.1),0_0_60px_hsl(195,100%,50%/0.05)]"
-              style={{ background: "hsla(220,30%,7%,0.6)" }}
+              className="group p-6 rounded-2xl border border-[hsl(var(--landing-border))] bg-[hsl(var(--landing-card))] transition-all duration-300 hover:shadow-[0_18px_40px_-24px_hsl(var(--landing-accent)/0.5)] hover:-translate-y-0.5"
             >
-              <div className="h-10 w-10 rounded-xl flex items-center justify-center mb-4 bg-[hsl(195,100%,50%/0.1)] group-hover:bg-[hsl(195,100%,50%/0.2)] group-hover:shadow-[0_0_15px_hsl(195,100%,50%/0.2)] transition-all duration-300">
-                <f.icon className="h-5 w-5 text-[hsl(195,100%,50%)]" />
+              <div className="h-10 w-10 rounded-xl flex items-center justify-center mb-4 bg-[hsl(var(--landing-accent-soft)/0.18)]">
+                <f.icon className="h-5 w-5 text-[hsl(var(--landing-accent))]" />
               </div>
               <h3 className="font-display font-semibold text-base mb-2">{f.title}</h3>
-              <p className="text-sm text-[hsl(215,18%,55%)] leading-relaxed">{f.description}</p>
+              <p className="text-sm text-[hsl(var(--landing-muted))] leading-relaxed">
+                {f.description}
+              </p>
             </div>
           ))}
         </div>
