@@ -176,12 +176,12 @@ export function useAIPendingTransactions() {
   };
 
   const approveMutation = useMutation({
-    mutationFn: approveSingle,
+    mutationFn: (pending: AIPendingTransaction) => approveSingle(pending),
     onSuccess: () => {
       toast.success("Lançamento aprovado e registrado!");
       invalidateAll();
     },
-    onError: (err: any) => toast.error("Erro ao aprovar: " + err.message),
+    onError: (err: any) => toast.error("Erro ao aprovar: " + mapDatabaseError(err)),
   });
 
   const rejectMutation = useMutation({
@@ -196,21 +196,24 @@ export function useAIPendingTransactions() {
       toast.success("Lançamento rejeitado.");
       invalidateAll();
     },
-    onError: (err: any) => toast.error("Erro ao rejeitar: " + err.message),
+    onError: (err: any) => toast.error("Erro ao rejeitar: " + mapDatabaseError(err)),
   });
 
   const approveAllMutation = useMutation({
     mutationFn: async (items: AIPendingTransaction[]) => {
+      if (items.length === 0) return;
+      const refs = await loadValidRefs(items[0].user_id);
       for (const item of items) {
-        await approveSingle(item);
+        await approveSingle(item, refs);
       }
     },
     onSuccess: () => {
       toast.success("Todas as parcelas aprovadas!");
       invalidateAll();
     },
-    onError: (err: any) => toast.error("Erro ao aprovar parcelas: " + err.message),
+    onError: (err: any) => toast.error("Erro ao aprovar parcelas: " + mapDatabaseError(err)),
   });
+
 
   const rejectAllMutation = useMutation({
     mutationFn: async (items: AIPendingTransaction[]) => {
