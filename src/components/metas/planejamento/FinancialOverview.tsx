@@ -206,14 +206,19 @@ export function OverviewDetailPanel({
   const minPct = -100;
   const maxPct = isIncome ? 300 : 100;
 
-  // Campo com máscara de moeda: guardamos centavos como inteiro e formatamos.
+  // O campo aceita digitação livre em reais; só vira percentual no commit
+  // (blur/Enter). Enquanto está focado, nada reescreve o que o usuário digita.
   const [draft, setDraft] = useState<string>(() => maskFromNumber(projected));
+  const valueFocused = useRef(false);
   useEffect(() => {
+    if (valueFocused.current) return;
     setDraft(maskFromNumber(projected));
   }, [projected]);
 
   const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(uiPercent)));
+  const pctFocused = useRef(false);
   useEffect(() => {
+    if (pctFocused.current) return;
     setPctDraft(String(Math.round(uiPercent)));
   }, [uiPercent]);
 
@@ -228,10 +233,16 @@ export function OverviewDetailPanel({
     onPercentChange(Math.round(pct * 100) / 100);
   };
 
-  const applyMasked = (raw: string) => {
-    const masked = maskFromDigits(raw);
-    setDraft(masked);
-    commitTarget(numberFromMask(masked));
+  /** Aplica o valor digitado (em reais) e reformata o campo. */
+  const commitDraft = () => {
+    const parsed = parseTypedAmount(draft);
+    if (parsed === null) {
+      setDraft(maskFromNumber(projected));
+      return;
+    }
+    const target = Math.max(0, parsed);
+    setDraft(maskFromNumber(target));
+    commitTarget(target);
   };
 
   const applyPercent = (raw: string) => {
@@ -240,6 +251,7 @@ export function OverviewDetailPanel({
     if (!Number.isFinite(value)) return;
     onPercentChange(Math.round(toInternal(value) * 100) / 100);
   };
+
 
   const header = (
     <div className="flex items-center justify-between px-1">
