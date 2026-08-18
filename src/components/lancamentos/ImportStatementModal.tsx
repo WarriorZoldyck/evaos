@@ -1857,7 +1857,7 @@ export function ImportStatementModal({
   // (extrato) sem match, nasce como ignorar; o usuário liga o toggle
   // para criar. Vincular só existe quando há target.
   const getRowDisposition = (i: number): "link" | "create" | "ignore-explicit" => {
-    const action = matchActions[i] || "ignorar";
+    const action = sharedEffectiveAction(matchActions[i], reviewedRows.has(i));
     if (action === "vincular" && matchTargets[i]) return "link";
     if (action === "criar") return "create";
     return "ignore-explicit";
