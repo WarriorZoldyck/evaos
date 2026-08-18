@@ -3153,6 +3153,17 @@ export function ImportStatementModal({
               )}
 
               <div className="flex items-center gap-2 flex-wrap justify-end">
+                {draftSavedAt && (
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                    Progresso salvo às {draftSavedAt}
+                  </span>
+                )}
+                {confirmedNotImported > 0 && (
+                  <span className="text-[11px] text-destructive whitespace-nowrap">
+                    {confirmedNotImported} linha{confirmedNotImported > 1 ? "s" : ""} confirmada
+                    {confirmedNotImported > 1 ? "s" : ""} sem decisão de importação — revise antes de continuar.
+                  </span>
+                )}
                 {hasDivergence && (
                   <Button
                     variant={acknowledgeDivergence ? "secondary" : "outline"}
