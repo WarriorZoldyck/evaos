@@ -351,14 +351,21 @@ export function OverviewDetailPanel({
             </span>
             <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
               <input
-                type="number"
-                step={1}
+                type="text"
+                inputMode="decimal"
                 value={pctDraft}
-                onFocus={() => { pctFocused.current = true; }}
+                onFocus={() => { pctFocused.current = true; e.currentTarget.select(); }}
                 onChange={(e) => applyPercent(e.target.value)}
                 onBlur={() => {
                   pctFocused.current = false;
-                  setPctDraft(String(Math.round(uiPercent)));
+                  setPctDraft(String(uiPercent).replace(".", ","));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") {
+                    setPctDraft(String(uiPercent).replace(".", ","));
+                    e.currentTarget.blur();
+                  }
                 }}
                 className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
               />
