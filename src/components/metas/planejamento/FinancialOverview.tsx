@@ -44,10 +44,6 @@ function maskFromNumber(value: number): string {
   return maskFromDigits(String(Math.round((value || 0) * 100)));
 }
 
-function numberFromMask(masked: string): number {
-  const digits = masked.replace(/\D/g, "");
-  return digits ? Number(digits) / 100 : 0;
-}
 
 /**
  * Lê o que o usuário digitou em reais (não em centavos): "10.000", "10000",
