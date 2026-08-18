@@ -490,11 +490,19 @@ export function ReconcileStep({
     () => new Map(groupCandidates.map((c) => [String(c.id), c])),
     [groupCandidates],
   );
+  /**
+   * Decisão efetiva da linha — MESMA regra usada pelo salvamento.
+   * Antes a tela assumia "criar" e o commit assumia "ignorar": linhas
+   * apareciam confirmadas e não eram importadas.
+   */
+  const actionOf = (i: number) =>
+    sharedEffectiveAction(matchActions[i], reviewedRows?.has(i));
+
   /** IDs já usados por outro vínculo (match confirmado, "É o mesmo" ou outro grupo). */
   const claimedSystemIds = useMemo(() => {
     const out = new Set<string>();
     Object.entries(matchTargets || {}).forEach(([k, id]) => {
-      if (id && (matchActions[Number(k)] || "criar") === "vincular") out.add(String(id));
+      if (id && actionOf(Number(k)) === "vincular") out.add(String(id));
     });
     Object.entries(matches || {}).forEach(([k, m]) => {
       const idx = Number(k);
