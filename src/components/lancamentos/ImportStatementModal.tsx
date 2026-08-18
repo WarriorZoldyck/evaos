@@ -1126,6 +1126,13 @@ export function ImportStatementModal({
     setParsing(false);
   };
 
+  // Espelho síncrono de `userDecidedRows` — o matcher resolve fora do ciclo de
+  // render e precisa do valor mais atual, não do capturado no closure.
+  const decidedRowsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    decidedRowsRef.current = userDecidedRows;
+  }, [userDecidedRows]);
+
   // Marca uma linha como "decidida pelo usuário" — a partir daí o motor de
   // correspondência não pode mais alterá-la.
   const markDecided = useCallback((idx: number) => {
