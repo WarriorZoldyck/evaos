@@ -1125,6 +1125,55 @@ export function ImportStatementModal({
     setParsing(false);
   };
 
+  // Marca uma linha como "decidida pelo usuário" — a partir daí o motor de
+  // correspondência não pode mais alterá-la.
+  const markDecided = useCallback((idx: number) => {
+    setUserDecidedRows((prev) => {
+      if (prev.has(idx)) return prev;
+      const next = new Set(prev);
+      next.add(idx);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Aplica os padrões calculados pelo matcher SEM apagar decisões do usuário.
+   * Era o `setMatchActions(nextActions)` cru que zerava tudo para "ignorar" a
+   * cada recálculo (retomar rascunho, marcar checkbox, trocar mês da fatura).
+   */
+  const applyMatchDefaults = useCallback(
+    (
+      nextActions: Record<number, "vincular" | "criar" | "ignorar">,
+      nextTargets: Record<number, string>,
+      nextIgnored: Set<number>,
+    ) => {
+      setMatchActions((prev) => {
+        const merged = { ...nextActions };
+        for (const key of Object.keys(prev)) {
+          const i = Number(key);
+          if (decidedRowsRef.current.has(i)) merged[i] = prev[i];
+        }
+        return merged;
+      });
+      setMatchTargets((prev) => {
+        const merged = { ...nextTargets };
+        for (const key of Object.keys(prev)) {
+          const i = Number(key);
+          if (decidedRowsRef.current.has(i) && prev[i]) merged[i] = prev[i];
+        }
+        return merged;
+      });
+      setExplicitlyIgnored((prev) => {
+        const merged = new Set(nextIgnored);
+        decidedRowsRef.current.forEach((i) => {
+          if (prev.has(i)) merged.add(i);
+          else merged.delete(i);
+        });
+        return merged;
+      });
+    },
+    [],
+  );
 
   // Trigger reconciliation matching for both debit accounts and credit cards
   useEffect(() => {
