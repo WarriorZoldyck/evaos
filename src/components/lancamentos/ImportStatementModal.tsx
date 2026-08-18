@@ -1251,9 +1251,7 @@ export function ImportStatementModal({
             nextIgnored.delete(rowIdx);
           }
         });
-        setMatchActions(nextActions);
-        setMatchTargets(nextTargets);
-        setExplicitlyIgnored(nextIgnored);
+        applyMatchDefaults(nextActions, nextTargets, nextIgnored);
       });
       return;
     }
