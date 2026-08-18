@@ -2739,12 +2739,14 @@ export function ImportStatementModal({
               matchLoading={matchLoading}
               matchActions={matchActions}
               matchTargets={matchTargets}
-              onActionChange={(idx, action) =>
-                setMatchActions((prev) => ({ ...prev, [idx]: action }))
-              }
-              onTargetChange={(idx, txId) =>
-                setMatchTargets((prev) => ({ ...prev, [idx]: txId }))
-              }
+              onActionChange={(idx, action) => {
+                markDecided(idx);
+                setMatchActions((prev) => ({ ...prev, [idx]: action }));
+              }}
+              onTargetChange={(idx, txId) => {
+                markDecided(idx);
+                setMatchTargets((prev) => ({ ...prev, [idx]: txId }));
+              }}
               bankAccountId={bankId}
               walletId={walletId}
               replaceDeleteIds={replaceDeleteIds}
