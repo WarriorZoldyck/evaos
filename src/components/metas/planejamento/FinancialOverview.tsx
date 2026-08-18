@@ -63,6 +63,13 @@ function parseTypedAmount(input: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/** Formata um percentual assinado em notação brasileira (vírgula decimal). */
+function formatPctBR(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return String(rounded).replace(".", ",");
+}
+
+
 
 /** Formata com sinal explícito (+/−) para deltas de simulação. */
 export function signedBRL(value: number): string {
