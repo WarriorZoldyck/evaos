@@ -373,6 +373,13 @@ export function ImportStatementModal({
   // Rows the user explicitly clicked "Ignorar de vez" — usadas para diferenciar
   // ignorar-por-default (silencioso, bloqueia o Importar) de ignorar-consciente.
   const [explicitlyIgnored, setExplicitlyIgnored] = useState<Set<number>>(new Set());
+  // Linhas em que o USUÁRIO já decidiu (ligou/desligou o toggle, vinculou
+  // manualmente, agrupou...). O motor de correspondência NUNCA sobrescreve
+  // essas decisões quando roda de novo — era isso que apagava horas de
+  // trabalho ao retomar um rascunho ou mexer em qualquer checkbox.
+  const [userDecidedRows, setUserDecidedRows] = useState<Set<number>>(new Set());
+  // Carimbo do último salvamento automático do rascunho (mostrado na tela).
+  const [draftSavedAt, setDraftSavedAt] = useState<string>("");
   // Fase 2A — linhas do extrato que JÁ existem no sistema com a mesma impressão
   // digital de importação (mesmo extrato importado novamente).
   const [duplicateRows, setDuplicateRows] = useState<Set<number>>(new Set());
