@@ -211,11 +211,11 @@ export function OverviewDetailPanel({
     setDraft(maskFromNumber(projected));
   }, [projected]);
 
-  const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(uiPercent)));
+  const [pctDraft, setPctDraft] = useState<string>(() => formatPctBR(uiPercent));
   const pctFocused = useRef(false);
   useEffect(() => {
     if (pctFocused.current) return;
-    setPctDraft(String(Math.round(uiPercent)));
+    setPctDraft(formatPctBR(uiPercent));
   }, [uiPercent]);
 
 
