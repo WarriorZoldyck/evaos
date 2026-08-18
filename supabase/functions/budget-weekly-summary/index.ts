@@ -27,16 +27,16 @@ async function sendText(phone: string, text: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // Autorização: chave de admin (cron / execução manual).
+  // Autorização: apenas com a chave de admin (cron / execução manual).
+  // A anon key é pública e NÃO pode ser aceita como credencial de cron.
   const adminKey = Deno.env.get("BROADCAST_ADMIN_KEY");
-  const apikeyHeader = req.headers.get("apikey");
-  const isCron = !!apikeyHeader && apikeyHeader === Deno.env.get("SUPABASE_ANON_KEY");
-  if (!isCron && (!adminKey || req.headers.get("x-admin-key") !== adminKey)) {
+  if (!adminKey || req.headers.get("x-admin-key") !== adminKey) {
     return new Response(JSON.stringify({ error: "unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
 
   if (!evoUrl || !evoKey || !evoInstance) {
     return new Response(JSON.stringify({ error: "evolution_not_configured" }), {
