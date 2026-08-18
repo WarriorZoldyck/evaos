@@ -3072,6 +3072,13 @@ export function ImportStatementModal({
             }
           });
           const toImport = counts.vincular + counts.criar;
+          // Coerência tela × salvamento: nenhuma linha marcada como
+          // "Confirmada" pode ficar de fora da importação.
+          const confirmedNotImported = rows.reduce(
+            (acc, _r, i) =>
+              acc + (reviewedRows.has(i) && getRowDisposition(i) === "ignore-explicit" ? 1 : 0),
+            0,
+          );
           const selectedNetTotal = netToCreate + netToLink;
           const fmt = (v: number) =>
             v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
