@@ -358,7 +358,12 @@ export function OverviewDetailPanel({
                 type="number"
                 step={1}
                 value={pctDraft}
+                onFocus={() => { pctFocused.current = true; }}
                 onChange={(e) => applyPercent(e.target.value)}
+                onBlur={() => {
+                  pctFocused.current = false;
+                  setPctDraft(String(Math.round(uiPercent)));
+                }}
                 className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
               />
               <span className="text-[11px] text-muted-foreground font-mono">%</span>
