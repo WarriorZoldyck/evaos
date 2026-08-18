@@ -2759,6 +2759,7 @@ export function ImportStatementModal({
                   return next;
                 });
                 // Move row to "criar" so it is imported from the statement.
+                markDecided(idx);
                 setMatchActions((prev) => ({ ...prev, [idx]: "criar" }));
                 // Seed category from candidate so the new line inherits classification.
                 // Always resolve to NAME (never UUID) — combobox and DB store names.
