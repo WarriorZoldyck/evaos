@@ -400,6 +400,45 @@ export type Database = {
         }
         Relationships: []
       }
+      backup_renato_ctx_20260818: {
+        Row: {
+          backed_up_at: string | null
+          company_id: string | null
+          created_at: string | null
+          dre_section: string | null
+          id: string | null
+          name: string | null
+          parent_id: string | null
+          sort_order: number | null
+          type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          dre_section?: string | null
+          id?: string | null
+          name?: string | null
+          parent_id?: string | null
+          sort_order?: number | null
+          type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          dre_section?: string | null
+          id?: string | null
+          name?: string | null
+          parent_id?: string | null
+          sort_order?: number | null
+          type?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       backup_simoespaula_categorias_20260801: {
         Row: {
           backed_up_at: string
