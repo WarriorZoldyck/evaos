@@ -49,6 +49,25 @@ function numberFromMask(masked: string): number {
   return digits ? Number(digits) / 100 : 0;
 }
 
+/**
+ * Lê o que o usuário digitou em reais (não em centavos): "10.000", "10000",
+ * "10.000,50" e "10000.50" viram 10000 / 10000,50.
+ */
+function parseTypedAmount(input: string): number | null {
+  const cleaned = input.replace(/[^\d.,-]/g, "").trim();
+  if (!cleaned) return null;
+  const hasComma = cleaned.includes(",");
+  const normalized = hasComma
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : // sem vírgula: pontos são separadores de milhar quando agrupam 3 dígitos
+      /^\d{1,3}(\.\d{3})+$/.test(cleaned)
+      ? cleaned.replace(/\./g, "")
+      : cleaned;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
+
+
 /** Formata com sinal explícito (+/−) para deltas de simulação. */
 export function signedBRL(value: number): string {
   if (Math.abs(value) < 0.005) return formatBRL(0);
