@@ -603,6 +603,10 @@ export function ImportStatementModal({
 
 
 
+  // Assinatura das decisões já persistidas — usada para gravar na hora quando
+  // o usuário decide algo, em vez de esperar o debounce.
+  const lastDecisionSigRef = useRef<string>("");
+
   // Salvamento do rascunho. Decisões (toggle/vínculo) gravam IMEDIATAMENTE;
   // campos de texto continuam com debounce curto para não escrever a cada tecla.
   useEffect(() => {
