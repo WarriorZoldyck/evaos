@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,10 +44,6 @@ function maskFromNumber(value: number): string {
   return maskFromDigits(String(Math.round((value || 0) * 100)));
 }
 
-function numberFromMask(masked: string): number {
-  const digits = masked.replace(/\D/g, "");
-  return digits ? Number(digits) / 100 : 0;
-}
 
 /**
  * Lê o que o usuário digitou em reais (não em centavos): "10.000", "10000",
@@ -206,14 +202,19 @@ export function OverviewDetailPanel({
   const minPct = -100;
   const maxPct = isIncome ? 300 : 100;
 
-  // Campo com máscara de moeda: guardamos centavos como inteiro e formatamos.
+  // O campo aceita digitação livre em reais; só vira percentual no commit
+  // (blur/Enter). Enquanto está focado, nada reescreve o que o usuário digita.
   const [draft, setDraft] = useState<string>(() => maskFromNumber(projected));
+  const valueFocused = useRef(false);
   useEffect(() => {
+    if (valueFocused.current) return;
     setDraft(maskFromNumber(projected));
   }, [projected]);
 
   const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(uiPercent)));
+  const pctFocused = useRef(false);
   useEffect(() => {
+    if (pctFocused.current) return;
     setPctDraft(String(Math.round(uiPercent)));
   }, [uiPercent]);
 
@@ -228,10 +229,16 @@ export function OverviewDetailPanel({
     onPercentChange(Math.round(pct * 100) / 100);
   };
 
-  const applyMasked = (raw: string) => {
-    const masked = maskFromDigits(raw);
-    setDraft(masked);
-    commitTarget(numberFromMask(masked));
+  /** Aplica o valor digitado (em reais) e reformata o campo. */
+  const commitDraft = () => {
+    const parsed = parseTypedAmount(draft);
+    if (parsed === null) {
+      setDraft(maskFromNumber(projected));
+      return;
+    }
+    const target = Math.max(0, parsed);
+    setDraft(maskFromNumber(target));
+    commitTarget(target);
   };
 
   const applyPercent = (raw: string) => {
@@ -240,6 +247,7 @@ export function OverviewDetailPanel({
     if (!Number.isFinite(value)) return;
     onPercentChange(Math.round(toInternal(value) * 100) / 100);
   };
+
 
   const header = (
     <div className="flex items-center justify-between px-1">
@@ -314,9 +322,24 @@ export function OverviewDetailPanel({
               <span className="text-[11px] text-muted-foreground font-mono">R$</span>
               <input
                 type="text"
-                inputMode="numeric"
+                inputMode="decimal"
                 value={draft}
-                onChange={(e) => applyMasked(e.target.value)}
+                onFocus={(e) => {
+                  valueFocused.current = true;
+                  e.currentTarget.select();
+                }}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={() => {
+                  valueFocused.current = false;
+                  commitDraft();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") {
+                    setDraft(maskFromNumber(projected));
+                    e.currentTarget.blur();
+                  }
+                }}
                 className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
               />
             </div>
@@ -331,7 +354,12 @@ export function OverviewDetailPanel({
                 type="number"
                 step={1}
                 value={pctDraft}
+                onFocus={() => { pctFocused.current = true; }}
                 onChange={(e) => applyPercent(e.target.value)}
+                onBlur={() => {
+                  pctFocused.current = false;
+                  setPctDraft(String(Math.round(uiPercent)));
+                }}
                 className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
               />
               <span className="text-[11px] text-muted-foreground font-mono">%</span>
