@@ -2187,11 +2187,11 @@ export function ImportStatementModal({
 
       // Compute date range across all imported rows for the post-import filter
       const allDates = selectedRows
-        .filter((r) => (matchActions[rows.indexOf(r)] || "criar") !== "ignorar")
+        .filter((r) => getRowDisposition(rows.indexOf(r)) !== "ignore-explicit")
         .map((r) => r.date)
         .sort();
       const ignoredCount = selectedRows.filter(
-        (r) => matchActions[rows.indexOf(r)] === "ignorar"
+        (r) => getRowDisposition(rows.indexOf(r)) === "ignore-explicit"
       ).length;
 
       // Quando o usuário informou o mês da fatura, o deep-link em Análises EVA
