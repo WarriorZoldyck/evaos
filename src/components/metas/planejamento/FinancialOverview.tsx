@@ -326,9 +326,24 @@ export function OverviewDetailPanel({
               <span className="text-[11px] text-muted-foreground font-mono">R$</span>
               <input
                 type="text"
-                inputMode="numeric"
+                inputMode="decimal"
                 value={draft}
-                onChange={(e) => applyMasked(e.target.value)}
+                onFocus={(e) => {
+                  valueFocused.current = true;
+                  e.currentTarget.select();
+                }}
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={() => {
+                  valueFocused.current = false;
+                  commitDraft();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") {
+                    setDraft(maskFromNumber(projected));
+                    e.currentTarget.blur();
+                  }
+                }}
                 className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
               />
             </div>
