@@ -354,7 +354,7 @@ export function OverviewDetailPanel({
                 type="text"
                 inputMode="decimal"
                 value={pctDraft}
-                onFocus={() => { pctFocused.current = true; e.currentTarget.select(); }}
+                onFocus={(e) => { pctFocused.current = true; e.currentTarget.select(); }}
                 onChange={(e) => applyPercent(e.target.value)}
                 onBlur={() => {
                   pctFocused.current = false;
