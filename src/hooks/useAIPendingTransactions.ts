@@ -4,6 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
+import { mapDatabaseError } from "@/lib/errorMapper";
+
 
 export interface AIPendingTransaction {
   id: string;
@@ -43,7 +45,46 @@ export interface AIPendingTransaction {
   created_at: string;
 }
 
-async function approveSingle(pending: AIPendingTransaction) {
+interface ValidRefs {
+  banks: Set<string>;
+  wallets: Set<string>;
+  cards: Set<string>;
+  terminals: Set<string>;
+}
+
+async function loadValidRefs(userId: string): Promise<ValidRefs> {
+  const [banks, wallets, cards, terminals] = await Promise.all([
+    supabase.from("bank_accounts").select("id").eq("user_id", userId),
+    supabase.from("wallets").select("id").eq("user_id", userId),
+    supabase.from("credit_cards").select("id").eq("user_id", userId),
+    supabase.from("card_terminals").select("id").eq("user_id", userId),
+  ]);
+  const toSet = (r: { data: { id: string }[] | null }) => new Set((r.data || []).map((x) => x.id));
+  return {
+    banks: toSet(banks as any),
+    wallets: toSet(wallets as any),
+    cards: toSet(cards as any),
+    terminals: toSet(terminals as any),
+  };
+}
+
+async function approveSingle(pending: AIPendingTransaction, refs?: ValidRefs) {
+  const valid = refs ?? (await loadValidRefs(pending.user_id));
+
+  const creditCardId = pending.credit_card_id && valid.cards.has(pending.credit_card_id)
+    ? pending.credit_card_id
+    : null;
+  // Compra no cartão não debita conta bancária — o débito ocorre no pagamento da fatura.
+  const bankAccountId = creditCardId
+    ? null
+    : pending.bank_account_id && valid.banks.has(pending.bank_account_id)
+      ? pending.bank_account_id
+      : null;
+  const walletId = pending.wallet_id && valid.wallets.has(pending.wallet_id) ? pending.wallet_id : null;
+  const cardTerminalId = pending.card_terminal_id && valid.terminals.has(pending.card_terminal_id)
+    ? pending.card_terminal_id
+    : null;
+
   const { error: insertError } = await supabase.from("transactions").insert({
     user_id: pending.user_id,
     description: pending.description,
@@ -55,10 +96,10 @@ async function approveSingle(pending: AIPendingTransaction) {
     competence_date: pending.competence_date || new Date().toISOString().split("T")[0],
     payment_date: pending.payment_date || new Date().toISOString().split("T")[0],
     status: (pending.transaction_status || "Pago") as "Pago" | "Pendente",
-    bank_account_id: pending.bank_account_id,
-    wallet_id: pending.wallet_id,
-    credit_card_id: pending.credit_card_id,
-    card_terminal_id: pending.card_terminal_id,
+    bank_account_id: bankAccountId,
+    wallet_id: walletId,
+    credit_card_id: creditCardId,
+    card_terminal_id: cardTerminalId,
     company_id: pending.company_id,
     payment_method: pending.payment_method,
     supplier_id: pending.supplier_id,
@@ -74,6 +115,7 @@ async function approveSingle(pending: AIPendingTransaction) {
     original_amount: pending.original_amount,
   });
   if (insertError) throw insertError;
+
 
   const { error: updateError } = await supabase
     .from("ai_pending_transactions")
@@ -136,12 +178,12 @@ export function useAIPendingTransactions() {
   };
 
   const approveMutation = useMutation({
-    mutationFn: approveSingle,
+    mutationFn: (pending: AIPendingTransaction) => approveSingle(pending),
     onSuccess: () => {
       toast.success("Lançamento aprovado e registrado!");
       invalidateAll();
     },
-    onError: (err: any) => toast.error("Erro ao aprovar: " + err.message),
+    onError: (err: any) => toast.error("Erro ao aprovar: " + mapDatabaseError(err)),
   });
 
   const rejectMutation = useMutation({
@@ -156,21 +198,24 @@ export function useAIPendingTransactions() {
       toast.success("Lançamento rejeitado.");
       invalidateAll();
     },
-    onError: (err: any) => toast.error("Erro ao rejeitar: " + err.message),
+    onError: (err: any) => toast.error("Erro ao rejeitar: " + mapDatabaseError(err)),
   });
 
   const approveAllMutation = useMutation({
     mutationFn: async (items: AIPendingTransaction[]) => {
+      if (items.length === 0) return;
+      const refs = await loadValidRefs(items[0].user_id);
       for (const item of items) {
-        await approveSingle(item);
+        await approveSingle(item, refs);
       }
     },
     onSuccess: () => {
       toast.success("Todas as parcelas aprovadas!");
       invalidateAll();
     },
-    onError: (err: any) => toast.error("Erro ao aprovar parcelas: " + err.message),
+    onError: (err: any) => toast.error("Erro ao aprovar parcelas: " + mapDatabaseError(err)),
   });
+
 
   const rejectAllMutation = useMutation({
     mutationFn: async (items: AIPendingTransaction[]) => {
