@@ -2884,6 +2884,7 @@ export function ImportStatementModal({
                 setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
                 setRowCategories((prev) => ({ ...prev, [idx]: category }));
                 setRowContacts((prev) => ({ ...prev, [idx]: contact }));
+                markDecided(idx);
                 setReviewedRows((prev) => {
                   const next = new Set(prev);
                   next.add(idx);
@@ -2892,10 +2893,12 @@ export function ImportStatementModal({
               }}
               onReviewCancel={(idx) => {
                 if (!reviewedRows.has(idx)) {
+                  markDecided(idx);
                   setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
                 }
               }}
               onSetReviewed={(idx, reviewed) => {
+                markDecided(idx);
                 setReviewedRows((prev) => {
                   const next = new Set(prev);
                   if (reviewed) next.add(idx);
