@@ -1,4 +1,5 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import { effectiveAction as sharedEffectiveAction } from "@/lib/import/disposition";
 import { useNavigate } from "react-router-dom";
 import { Upload, FileText, Loader2, Check, CreditCard, Sparkles, ArrowRight, ArrowLeft, CheckCircle2, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -373,6 +374,13 @@ export function ImportStatementModal({
   // Rows the user explicitly clicked "Ignorar de vez" — usadas para diferenciar
   // ignorar-por-default (silencioso, bloqueia o Importar) de ignorar-consciente.
   const [explicitlyIgnored, setExplicitlyIgnored] = useState<Set<number>>(new Set());
+  // Linhas em que o USUÁRIO já decidiu (ligou/desligou o toggle, vinculou
+  // manualmente, agrupou...). O motor de correspondência NUNCA sobrescreve
+  // essas decisões quando roda de novo — era isso que apagava horas de
+  // trabalho ao retomar um rascunho ou mexer em qualquer checkbox.
+  const [userDecidedRows, setUserDecidedRows] = useState<Set<number>>(new Set());
+  // Carimbo do último salvamento automático do rascunho (mostrado na tela).
+  const [draftSavedAt, setDraftSavedAt] = useState<string>("");
   // Fase 2A — linhas do extrato que JÁ existem no sistema com a mesma impressão
   // digital de importação (mesmo extrato importado novamente).
   const [duplicateRows, setDuplicateRows] = useState<Set<number>>(new Set());
@@ -461,26 +469,45 @@ export function ImportStatementModal({
     setStatementTotalInput(s.statementTotalInput || "");
     setAmountRescaled(!!s.amountRescaled);
     setAcknowledgeDivergence(!!s.acknowledgeDivergence);
-    setMatchActions(s.matchActions || {});
-    setMatchTargets(s.matchTargets || {});
     setGroups(s.groups || {});
     setReplaceDeleteIds(new Set(s.replaceDeleteIds || []));
     setRowCategories(s.rowCategories || {});
     setRowDescriptions(s.rowDescriptions || {});
     setRowContacts(s.rowContacts || {});
-    setReviewedRows(new Set(s.reviewedRows || []));
+    const restoredReviewed = new Set<number>(s.reviewedRows || []);
+    setReviewedRows(restoredReviewed);
     // Backfill: qualquer linha com ação "ignorar" (sem target vinculado) é
     // considerada decisão explícita — o toggle é a decisão, não há "pendente".
-    const restoredActions = s.matchActions || {};
+    const restoredActions = { ...(s.matchActions || {}) };
     const restoredTargets = s.matchTargets || {};
     const restoredIgnored = new Set<number>(s.explicitlyIgnored || []);
+    // Selo "Confirmada" na tela SEM ação registrada = intenção de criar.
+    // Sem esse backfill a linha voltava como "ignorar" e sumia da importação
+    // enquanto continuava aparecendo confirmada — a origem da divergência.
+    restoredReviewed.forEach((idx) => {
+      if (!restoredActions[idx] || restoredActions[idx] === "ignorar") {
+        if (!restoredTargets[idx]) restoredActions[idx] = "criar";
+      }
+    });
     Object.keys(restoredActions).forEach((k) => {
       const idx = Number(k);
       if (restoredActions[idx] === "ignorar" && !restoredTargets[idx]) {
         restoredIgnored.add(idx);
+      } else {
+        restoredIgnored.delete(idx);
       }
     });
+    setMatchActions(restoredActions);
+    setMatchTargets(restoredTargets);
     setExplicitlyIgnored(restoredIgnored);
+    // Tudo que veio do rascunho é decisão do usuário — o matcher não mexe.
+    const restoredDecided = new Set<number>([
+      ...(s.userDecidedRows || []),
+      ...Object.keys(restoredActions).map(Number),
+      ...restoredReviewed,
+    ]);
+    setUserDecidedRows(restoredDecided);
+    decidedRowsRef.current = restoredDecided;
     setExtraCategories(s.extraCategories || []);
     setPromotedOrphanIds(new Set(s.promotedOrphanIds || []));
     setPendingResume(null);
@@ -568,22 +595,31 @@ export function ImportStatementModal({
     setRowContacts(nextContacts);
     setExtraMatches(nextMatches);
     setExplicitlyIgnored(new Set());
+    const seeded = new Set<number>(items.map((_, i) => i));
+    setUserDecidedRows(seeded);
+    decidedRowsRef.current = seeded;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isReviewMode, reviewBatch, pendingResume, mergedCategories.length]);
 
 
 
-  // Debounced save whenever something meaningful changes.
+  // Assinatura das decisões já persistidas — usada para gravar na hora quando
+  // o usuário decide algo, em vez de esperar o debounce.
+  const lastDecisionSigRef = useRef<string>("");
+
+  // Salvamento do rascunho. Decisões (toggle/vínculo) gravam IMEDIATAMENTE;
+  // campos de texto continuam com debounce curto para não escrever a cada tecla.
   useEffect(() => {
     if (!open || !sessionKey) return;
     if (!sessionLoadedRef.current) return; // avoid clobbering before load runs
     if (pendingResume) return; // user hasn't decided resume/discard yet
     if (step === "summary") return;
     if (rows.length === 0) return;
-    const handle = setTimeout(() => {
+    const persist = () => {
+      const now = new Date();
       const snap = {
         version: SESSION_VERSION,
-        savedAt: new Date().toISOString(),
+        savedAt: now.toISOString(),
         fileName,
         step,
         importType,
@@ -602,6 +638,7 @@ export function ImportStatementModal({
         rowContacts,
         reviewedRows: Array.from(reviewedRows),
         explicitlyIgnored: Array.from(explicitlyIgnored),
+        userDecidedRows: Array.from(userDecidedRows),
         groups,
         replaceDeleteIds: Array.from(replaceDeleteIds),
         extraCategories,
@@ -609,14 +646,29 @@ export function ImportStatementModal({
       };
       try {
         localStorage.setItem(sessionKey, JSON.stringify(snap));
+        setDraftSavedAt(
+          now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        );
       } catch { /* quota exceeded — skip silently */ }
-    }, 400);
+    };
+    // Mudou uma DECISÃO → grava agora. Só texto → debounce.
+    const decisionsChanged =
+      lastDecisionSigRef.current !==
+      JSON.stringify([matchActions, matchTargets, Array.from(reviewedRows), Array.from(explicitlyIgnored), groups]);
+    if (decisionsChanged) {
+      lastDecisionSigRef.current = JSON.stringify([
+        matchActions, matchTargets, Array.from(reviewedRows), Array.from(explicitlyIgnored), groups,
+      ]);
+      persist();
+      return;
+    }
+    const handle = setTimeout(persist, 400);
     return () => clearTimeout(handle);
   }, [
     open, sessionKey, pendingResume, step, rows, fileName, importType, targetBankAccount, targetCard,
     billReferenceMonth, statementTotal, statementTotalInput, amountRescaled, acknowledgeDivergence,
     matchActions, matchTargets, rowCategories, rowDescriptions, rowContacts, reviewedRows,
-    explicitlyIgnored, replaceDeleteIds, extraCategories, promotedOrphanIds, groups,
+    explicitlyIgnored, userDecidedRows, replaceDeleteIds, extraCategories, promotedOrphanIds, groups,
   ]);
 
   // Load suppliers/clients once the reconcile step is reachable, so the review
@@ -1118,6 +1170,62 @@ export function ImportStatementModal({
     setParsing(false);
   };
 
+  // Espelho síncrono de `userDecidedRows` — o matcher resolve fora do ciclo de
+  // render e precisa do valor mais atual, não do capturado no closure.
+  const decidedRowsRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    decidedRowsRef.current = userDecidedRows;
+  }, [userDecidedRows]);
+
+  // Marca uma linha como "decidida pelo usuário" — a partir daí o motor de
+  // correspondência não pode mais alterá-la.
+  const markDecided = useCallback((idx: number) => {
+    setUserDecidedRows((prev) => {
+      if (prev.has(idx)) return prev;
+      const next = new Set(prev);
+      next.add(idx);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Aplica os padrões calculados pelo matcher SEM apagar decisões do usuário.
+   * Era o `setMatchActions(nextActions)` cru que zerava tudo para "ignorar" a
+   * cada recálculo (retomar rascunho, marcar checkbox, trocar mês da fatura).
+   */
+  const applyMatchDefaults = useCallback(
+    (
+      nextActions: Record<number, "vincular" | "criar" | "ignorar">,
+      nextTargets: Record<number, string>,
+      nextIgnored: Set<number>,
+    ) => {
+      setMatchActions((prev) => {
+        const merged = { ...nextActions };
+        for (const key of Object.keys(prev)) {
+          const i = Number(key);
+          if (decidedRowsRef.current.has(i)) merged[i] = prev[i];
+        }
+        return merged;
+      });
+      setMatchTargets((prev) => {
+        const merged = { ...nextTargets };
+        for (const key of Object.keys(prev)) {
+          const i = Number(key);
+          if (decidedRowsRef.current.has(i) && prev[i]) merged[i] = prev[i];
+        }
+        return merged;
+      });
+      setExplicitlyIgnored((prev) => {
+        const merged = new Set(nextIgnored);
+        decidedRowsRef.current.forEach((i) => {
+          if (prev.has(i)) merged.add(i);
+          else merged.delete(i);
+        });
+        return merged;
+      });
+    },
+    [],
+  );
 
   // Trigger reconciliation matching for both debit accounts and credit cards
   useEffect(() => {
@@ -1160,9 +1268,7 @@ export function ImportStatementModal({
             nextIgnored.add(i);
           }
         });
-        setMatchActions(nextActions);
-        setMatchTargets(nextTargets);
-        setExplicitlyIgnored(nextIgnored);
+        applyMatchDefaults(nextActions, nextTargets, nextIgnored);
       });
       return;
     }
@@ -1246,9 +1352,7 @@ export function ImportStatementModal({
             nextIgnored.delete(rowIdx);
           }
         });
-        setMatchActions(nextActions);
-        setMatchTargets(nextTargets);
-        setExplicitlyIgnored(nextIgnored);
+        applyMatchDefaults(nextActions, nextTargets, nextIgnored);
       });
       return;
     }
@@ -1495,7 +1599,7 @@ export function ImportStatementModal({
       if (!r.selected) return;
       if (matches[i]?.best) return;
       if (extraMatches[i]) return;
-      const action = matchActions[i] || "criar";
+      const action = sharedEffectiveAction(matchActions[i], reviewedRows.has(i));
       if (action !== "criar") return;
       const cents = Math.round(Math.abs(r.amount) * 100);
       const arr = unmatchedByCents.get(cents) || [];
@@ -1753,7 +1857,7 @@ export function ImportStatementModal({
   // (extrato) sem match, nasce como ignorar; o usuário liga o toggle
   // para criar. Vincular só existe quando há target.
   const getRowDisposition = (i: number): "link" | "create" | "ignore-explicit" => {
-    const action = matchActions[i] || "ignorar";
+    const action = sharedEffectiveAction(matchActions[i], reviewedRows.has(i));
     if (action === "vincular" && matchTargets[i]) return "link";
     if (action === "criar") return "create";
     return "ignore-explicit";
@@ -2083,11 +2187,11 @@ export function ImportStatementModal({
 
       // Compute date range across all imported rows for the post-import filter
       const allDates = selectedRows
-        .filter((r) => (matchActions[rows.indexOf(r)] || "criar") !== "ignorar")
+        .filter((r) => getRowDisposition(rows.indexOf(r)) !== "ignore-explicit")
         .map((r) => r.date)
         .sort();
       const ignoredCount = selectedRows.filter(
-        (r) => matchActions[rows.indexOf(r)] === "ignorar"
+        (r) => getRowDisposition(rows.indexOf(r)) === "ignore-explicit"
       ).length;
 
       // Quando o usuário informou o mês da fatura, o deep-link em Análises EVA
@@ -2635,12 +2739,14 @@ export function ImportStatementModal({
               matchLoading={matchLoading}
               matchActions={matchActions}
               matchTargets={matchTargets}
-              onActionChange={(idx, action) =>
-                setMatchActions((prev) => ({ ...prev, [idx]: action }))
-              }
-              onTargetChange={(idx, txId) =>
-                setMatchTargets((prev) => ({ ...prev, [idx]: txId }))
-              }
+              onActionChange={(idx, action) => {
+                markDecided(idx);
+                setMatchActions((prev) => ({ ...prev, [idx]: action }));
+              }}
+              onTargetChange={(idx, txId) => {
+                markDecided(idx);
+                setMatchTargets((prev) => ({ ...prev, [idx]: txId }));
+              }}
               bankAccountId={bankId}
               walletId={walletId}
               replaceDeleteIds={replaceDeleteIds}
@@ -2653,6 +2759,7 @@ export function ImportStatementModal({
                   return next;
                 });
                 // Move row to "criar" so it is imported from the statement.
+                markDecided(idx);
                 setMatchActions((prev) => ({ ...prev, [idx]: "criar" }));
                 // Seed category from candidate so the new line inherits classification.
                 // Always resolve to NAME (never UUID) — combobox and DB store names.
@@ -2777,6 +2884,7 @@ export function ImportStatementModal({
                 setRowDescriptions((prev) => ({ ...prev, [idx]: description }));
                 setRowCategories((prev) => ({ ...prev, [idx]: category }));
                 setRowContacts((prev) => ({ ...prev, [idx]: contact }));
+                markDecided(idx);
                 setReviewedRows((prev) => {
                   const next = new Set(prev);
                   next.add(idx);
@@ -2785,10 +2893,12 @@ export function ImportStatementModal({
               }}
               onReviewCancel={(idx) => {
                 if (!reviewedRows.has(idx)) {
+                  markDecided(idx);
                   setMatchActions((prev) => ({ ...prev, [idx]: "ignorar" }));
                 }
               }}
               onSetReviewed={(idx, reviewed) => {
+                markDecided(idx);
                 setReviewedRows((prev) => {
                   const next = new Set(prev);
                   if (reviewed) next.add(idx);
@@ -2962,6 +3072,13 @@ export function ImportStatementModal({
             }
           });
           const toImport = counts.vincular + counts.criar;
+          // Coerência tela × salvamento: nenhuma linha marcada como
+          // "Confirmada" pode ficar de fora da importação.
+          const confirmedNotImported = rows.reduce(
+            (acc, _r, i) =>
+              acc + (reviewedRows.has(i) && getRowDisposition(i) === "ignore-explicit" ? 1 : 0),
+            0,
+          );
           const selectedNetTotal = netToCreate + netToLink;
           const fmt = (v: number) =>
             v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -3036,6 +3153,17 @@ export function ImportStatementModal({
               )}
 
               <div className="flex items-center gap-2 flex-wrap justify-end">
+                {draftSavedAt && (
+                  <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                    Progresso salvo às {draftSavedAt}
+                  </span>
+                )}
+                {confirmedNotImported > 0 && (
+                  <span className="text-[11px] text-destructive whitespace-nowrap">
+                    {confirmedNotImported} linha{confirmedNotImported > 1 ? "s" : ""} confirmada
+                    {confirmedNotImported > 1 ? "s" : ""} sem decisão de importação — revise antes de continuar.
+                  </span>
+                )}
                 {hasDivergence && (
                   <Button
                     variant={acknowledgeDivergence ? "secondary" : "outline"}
@@ -3063,13 +3191,15 @@ export function ImportStatementModal({
                 ) : (
                   <Button
                     onClick={handleImport}
-                    disabled={importing || blockedByDivergence}
+                    disabled={importing || blockedByDivergence || confirmedNotImported > 0}
                     className="gap-2"
                     size="sm"
                     title={
-                      blockedByDivergence
-                        ? "Confirme a divergência com o total do banco antes de importar."
-                        : undefined
+                      confirmedNotImported > 0
+                        ? "Existem linhas confirmadas na tela que não entrariam na importação. Revise-as."
+                        : blockedByDivergence
+                          ? "Confirme a divergência com o total do banco antes de importar."
+                          : undefined
                     }
                   >
                     {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}

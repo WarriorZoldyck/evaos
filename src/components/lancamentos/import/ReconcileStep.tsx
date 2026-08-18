@@ -59,6 +59,7 @@ import {
   type GroupsMap,
 } from "@/lib/import/grouping";
 import type { CandidateTx } from "@/lib/import/matching";
+import { effectiveAction as sharedEffectiveAction } from "@/lib/import/disposition";
 
 
 export interface ParsedRow {
@@ -490,15 +491,23 @@ export function ReconcileStep({
     () => new Map(groupCandidates.map((c) => [String(c.id), c])),
     [groupCandidates],
   );
+  /**
+   * Decisão efetiva da linha — MESMA regra usada pelo salvamento.
+   * Antes a tela assumia "criar" e o commit assumia "ignorar": linhas
+   * apareciam confirmadas e não eram importadas.
+   */
+  const actionOf = (i: number) =>
+    sharedEffectiveAction(matchActions[i], reviewedRows?.has(i));
+
   /** IDs já usados por outro vínculo (match confirmado, "É o mesmo" ou outro grupo). */
   const claimedSystemIds = useMemo(() => {
     const out = new Set<string>();
     Object.entries(matchTargets || {}).forEach(([k, id]) => {
-      if (id && (matchActions[Number(k)] || "criar") === "vincular") out.add(String(id));
+      if (id && actionOf(Number(k)) === "vincular") out.add(String(id));
     });
     Object.entries(matches || {}).forEach(([k, m]) => {
       const idx = Number(k);
-      if ((matchActions[idx] || "criar") === "vincular" && m?.best?.candidate?.id) {
+      if ((actionOf(idx)) === "vincular" && m?.best?.candidate?.id) {
         out.add(String(m.best.candidate.id));
       }
     });
@@ -524,7 +533,7 @@ export function ReconcileStep({
         if (!r.selected || i === groupForRow) return false;
         if (ownExtras.has(i)) return true;
         if (groupedRowIdx.has(i)) return false;
-        return (matchActions[i] || "criar") !== "vincular";
+        return (actionOf(i)) !== "vincular";
       })
       .map(({ r, i }) => ({
         index: i,
@@ -545,14 +554,14 @@ export function ReconcileStep({
   // in the dedicated "Vinculadas manualmente" section for clear feedback).
   const matchedExactRows = indexedUngrouped.filter(
     ({ i }) =>
-      (matchActions[i] || "criar") === "vincular" &&
+      (actionOf(i)) === "vincular" &&
       matches[i]?.best &&
       matches[i]!.best!.tier === "exact" &&
       !dismissedSuggestions.has(i)
   );
   const matchedToleranceRows = indexedUngrouped.filter(
     ({ i }) =>
-      (matchActions[i] || "criar") === "vincular" &&
+      (actionOf(i)) === "vincular" &&
       matches[i]?.best &&
       matches[i]!.best!.tier === "tolerance" &&
       !dismissedSuggestions.has(i)
@@ -560,7 +569,7 @@ export function ReconcileStep({
   // Rows where matcher found a same-value candidate but text differs — user must confirm.
   const suggestedRows = indexedUngrouped.filter(({ i }) => {
     if (dismissedSuggestions.has(i)) return false;
-    const a = matchActions[i] || "criar";
+    const a = actionOf(i);
     return a === "criar" && matches[i]?.best?.suggested;
   });
   const suggestedIdxSet = new Set(suggestedRows.map(({ i }) => i));
@@ -568,7 +577,7 @@ export function ReconcileStep({
   // OR against an auto-suggested candidate that the user confirmed. Both
   // deserve explicit visual feedback so the click doesn't feel silent.
   const manualLinkedRows = indexedUngrouped.filter(({ i }) => {
-    const a = matchActions[i] || "criar";
+    const a = actionOf(i);
     if (a !== "vincular" || !matchTargets[i]) return false;
     if (!matches[i]?.best) return true; // orphan link
     return dismissedSuggestions.has(i); // suggested → user confirmed
@@ -578,7 +587,7 @@ export function ReconcileStep({
   const newRows = indexedUngrouped.filter(({ i }) => {
     if (suggestedIdxSet.has(i)) return false;
     if (manualLinkedIdxSet.has(i)) return false;
-    const a = matchActions[i] || "criar";
+    const a = actionOf(i);
     if (a === "ignorar") {
       return !matches[i]?.best || dismissedSuggestions.has(i);
     }
@@ -629,13 +638,13 @@ export function ReconcileStep({
   // - Restante = original − conciliado (o que ainda precisa virar novo/ignorado)
   const reconciledRowsTotal =
     indexedUngrouped
-      .filter(({ i }) => (matchActions[i] || "criar") === "vincular")
+      .filter(({ i }) => (actionOf(i)) === "vincular")
       .reduce((s, { r }) => s + signedStatementAmount(r), 0) +
     indexed
       .filter(({ i }) => groupedRowIdx.has(i))
       .reduce((s, { r }) => s + signedStatementAmount(r), 0);
   const reconciledRowsCount =
-    indexedUngrouped.filter(({ i }) => (matchActions[i] || "criar") === "vincular").length +
+    indexedUngrouped.filter(({ i }) => (actionOf(i)) === "vincular").length +
     indexed.filter(({ i }) => groupedRowIdx.has(i)).length;
   const remainingTotal = Math.max(0, statementTotal - Math.abs(reconciledRowsTotal));
   const remainingCount = Math.max(0, coverageTotal - reconciledRowsCount);
@@ -1408,7 +1417,7 @@ export function ReconcileStep({
               const matched = newRows.filter(({ i }) => suggestions[i]?.source === "history").length;
               const unmatched = total - matched;
               const pendingReview = newRows.filter(
-                ({ i }) => (matchActions[i] || "criar") === "criar" && !(reviewedRows?.has(i))
+                ({ i }) => (actionOf(i)) === "criar" && !(reviewedRows?.has(i))
               ).length;
               return (
                 <>
@@ -1513,7 +1522,7 @@ export function ReconcileStep({
                       const isReplacing = !!(
                         replacingCandId && replaceDeleteIds?.has(replacingCandId)
                       );
-                      const rowAction = matchActions[i] || "criar";
+                      const rowAction = actionOf(i);
                       const willBeCreated = rowAction !== "ignorar";
                       // Categoria é opcional na confirmação: se ficar vazia, a criação
                       // usa "Sem Categoria" como fallback (o usuário classifica depois).
