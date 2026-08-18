@@ -63,6 +63,13 @@ function parseTypedAmount(input: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+/** Formata um percentual assinado em notação brasileira (vírgula decimal). */
+function formatPctBR(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  return String(rounded).replace(".", ",");
+}
+
+
 
 /** Formata com sinal explícito (+/−) para deltas de simulação. */
 export function signedBRL(value: number): string {
@@ -211,11 +218,11 @@ export function OverviewDetailPanel({
     setDraft(maskFromNumber(projected));
   }, [projected]);
 
-  const [pctDraft, setPctDraft] = useState<string>(() => String(Math.round(uiPercent)));
+  const [pctDraft, setPctDraft] = useState<string>(() => formatPctBR(uiPercent));
   const pctFocused = useRef(false);
   useEffect(() => {
     if (pctFocused.current) return;
-    setPctDraft(String(Math.round(uiPercent)));
+    setPctDraft(formatPctBR(uiPercent));
   }, [uiPercent]);
 
 
@@ -351,14 +358,21 @@ export function OverviewDetailPanel({
             </span>
             <div className="flex items-center gap-1 h-8 rounded-lg bg-background/60 border border-border px-2">
               <input
-                type="number"
-                step={1}
+                type="text"
+                inputMode="decimal"
                 value={pctDraft}
-                onFocus={() => { pctFocused.current = true; }}
+                onFocus={(e) => { pctFocused.current = true; e.currentTarget.select(); }}
                 onChange={(e) => applyPercent(e.target.value)}
                 onBlur={() => {
                   pctFocused.current = false;
-                  setPctDraft(String(Math.round(uiPercent)));
+                  setPctDraft(String(uiPercent).replace(".", ","));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") {
+                    setPctDraft(String(uiPercent).replace(".", ","));
+                    e.currentTarget.blur();
+                  }
                 }}
                 className="w-full bg-transparent outline-none text-xs font-mono text-foreground text-right"
               />
