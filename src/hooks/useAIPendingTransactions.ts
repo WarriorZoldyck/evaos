@@ -4,6 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
+import { mapDatabaseError } from "@/lib/errorMapper";
+
 
 export interface AIPendingTransaction {
   id: string;
