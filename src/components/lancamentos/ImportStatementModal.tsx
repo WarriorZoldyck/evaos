@@ -469,26 +469,45 @@ export function ImportStatementModal({
     setStatementTotalInput(s.statementTotalInput || "");
     setAmountRescaled(!!s.amountRescaled);
     setAcknowledgeDivergence(!!s.acknowledgeDivergence);
-    setMatchActions(s.matchActions || {});
-    setMatchTargets(s.matchTargets || {});
     setGroups(s.groups || {});
     setReplaceDeleteIds(new Set(s.replaceDeleteIds || []));
     setRowCategories(s.rowCategories || {});
     setRowDescriptions(s.rowDescriptions || {});
     setRowContacts(s.rowContacts || {});
-    setReviewedRows(new Set(s.reviewedRows || []));
+    const restoredReviewed = new Set<number>(s.reviewedRows || []);
+    setReviewedRows(restoredReviewed);
     // Backfill: qualquer linha com ação "ignorar" (sem target vinculado) é
     // considerada decisão explícita — o toggle é a decisão, não há "pendente".
-    const restoredActions = s.matchActions || {};
+    const restoredActions = { ...(s.matchActions || {}) };
     const restoredTargets = s.matchTargets || {};
     const restoredIgnored = new Set<number>(s.explicitlyIgnored || []);
+    // Selo "Confirmada" na tela SEM ação registrada = intenção de criar.
+    // Sem esse backfill a linha voltava como "ignorar" e sumia da importação
+    // enquanto continuava aparecendo confirmada — a origem da divergência.
+    restoredReviewed.forEach((idx) => {
+      if (!restoredActions[idx] || restoredActions[idx] === "ignorar") {
+        if (!restoredTargets[idx]) restoredActions[idx] = "criar";
+      }
+    });
     Object.keys(restoredActions).forEach((k) => {
       const idx = Number(k);
       if (restoredActions[idx] === "ignorar" && !restoredTargets[idx]) {
         restoredIgnored.add(idx);
+      } else {
+        restoredIgnored.delete(idx);
       }
     });
+    setMatchActions(restoredActions);
+    setMatchTargets(restoredTargets);
     setExplicitlyIgnored(restoredIgnored);
+    // Tudo que veio do rascunho é decisão do usuário — o matcher não mexe.
+    const restoredDecided = new Set<number>([
+      ...(s.userDecidedRows || []),
+      ...Object.keys(restoredActions).map(Number),
+      ...restoredReviewed,
+    ]);
+    setUserDecidedRows(restoredDecided);
+    decidedRowsRef.current = restoredDecided;
     setExtraCategories(s.extraCategories || []);
     setPromotedOrphanIds(new Set(s.promotedOrphanIds || []));
     setPendingResume(null);
