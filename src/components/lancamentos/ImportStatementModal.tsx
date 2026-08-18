@@ -595,22 +595,27 @@ export function ImportStatementModal({
     setRowContacts(nextContacts);
     setExtraMatches(nextMatches);
     setExplicitlyIgnored(new Set());
+    const seeded = new Set<number>(items.map((_, i) => i));
+    setUserDecidedRows(seeded);
+    decidedRowsRef.current = seeded;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isReviewMode, reviewBatch, pendingResume, mergedCategories.length]);
 
 
 
-  // Debounced save whenever something meaningful changes.
+  // Salvamento do rascunho. Decisões (toggle/vínculo) gravam IMEDIATAMENTE;
+  // campos de texto continuam com debounce curto para não escrever a cada tecla.
   useEffect(() => {
     if (!open || !sessionKey) return;
     if (!sessionLoadedRef.current) return; // avoid clobbering before load runs
     if (pendingResume) return; // user hasn't decided resume/discard yet
     if (step === "summary") return;
     if (rows.length === 0) return;
-    const handle = setTimeout(() => {
+    const persist = () => {
+      const now = new Date();
       const snap = {
         version: SESSION_VERSION,
-        savedAt: new Date().toISOString(),
+        savedAt: now.toISOString(),
         fileName,
         step,
         importType,
@@ -629,6 +634,7 @@ export function ImportStatementModal({
         rowContacts,
         reviewedRows: Array.from(reviewedRows),
         explicitlyIgnored: Array.from(explicitlyIgnored),
+        userDecidedRows: Array.from(userDecidedRows),
         groups,
         replaceDeleteIds: Array.from(replaceDeleteIds),
         extraCategories,
@@ -636,14 +642,29 @@ export function ImportStatementModal({
       };
       try {
         localStorage.setItem(sessionKey, JSON.stringify(snap));
+        setDraftSavedAt(
+          now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        );
       } catch { /* quota exceeded — skip silently */ }
-    }, 400);
+    };
+    // Mudou uma DECISÃO → grava agora. Só texto → debounce.
+    const decisionsChanged =
+      lastDecisionSigRef.current !==
+      JSON.stringify([matchActions, matchTargets, Array.from(reviewedRows), Array.from(explicitlyIgnored), groups]);
+    if (decisionsChanged) {
+      lastDecisionSigRef.current = JSON.stringify([
+        matchActions, matchTargets, Array.from(reviewedRows), Array.from(explicitlyIgnored), groups,
+      ]);
+      persist();
+      return;
+    }
+    const handle = setTimeout(persist, 400);
     return () => clearTimeout(handle);
   }, [
     open, sessionKey, pendingResume, step, rows, fileName, importType, targetBankAccount, targetCard,
     billReferenceMonth, statementTotal, statementTotalInput, amountRescaled, acknowledgeDivergence,
     matchActions, matchTargets, rowCategories, rowDescriptions, rowContacts, reviewedRows,
-    explicitlyIgnored, replaceDeleteIds, extraCategories, promotedOrphanIds, groups,
+    explicitlyIgnored, userDecidedRows, replaceDeleteIds, extraCategories, promotedOrphanIds, groups,
   ]);
 
   // Load suppliers/clients once the reconcile step is reachable, so the review
