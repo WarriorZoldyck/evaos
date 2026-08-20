@@ -203,7 +203,7 @@ type EntityLevel = "root" | "categoria" | "fornecedor" | "cliente";
 interface UnifiedEntityFilterProps {
   filters: Filters;
   onFiltersChange: (filters: Filters) => void;
-  rootCategories: Category[];
+  rootCategories: FlatCategoryOption[];
   suppliers: { id: string; name: string }[];
   clients: { id: string; name: string }[];
 }
