@@ -160,6 +160,8 @@ export default function FluxoDeCaixa() {
             monthlyResults={monthlyResults}
             loading={loading}
             subtractOnExpand
+            onDrilldown={handleDrilldown}
+
           />
         </CardContent>
       </Card>
