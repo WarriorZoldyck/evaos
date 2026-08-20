@@ -1,5 +1,5 @@
 import { useState, useRef, Fragment } from "react";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, ListFilter } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { DRECategoryRow } from "@/hooks/useDREData";
@@ -14,6 +14,7 @@ interface DRETableProps {
   monthlyResults: Record<string, number>;
   loading: boolean;
   subtractOnExpand?: boolean;
+  onDrilldown?: (args: { categoryId: string; categoryName: string; type: "receita" | "despesa" }) => void;
 }
 
 const INDENT_PX = 20;
@@ -30,6 +31,8 @@ function CategoryRows({
   colorClass,
   rowCounter,
   subtractOnExpand,
+  type,
+  onDrilldown,
 }: {
   rows: DRECategoryRow[];
   periods: string[];
@@ -39,6 +42,8 @@ function CategoryRows({
   colorClass: string;
   rowCounter: { current: number };
   subtractOnExpand?: boolean;
+  type: "receita" | "despesa";
+  onDrilldown?: (args: { categoryId: string; categoryName: string; type: "receita" | "despesa" }) => void;
 }) {
   return (
     <>
@@ -87,6 +92,19 @@ function CategoryRows({
                       · apenas nesta categoria
                     </span>
                   )}
+                  {onDrilldown && (
+                    <button
+                      type="button"
+                      title="Ver lançamentos desta categoria"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDrilldown({ categoryId: row.categoryId, categoryName: row.categoryName, type });
+                      }}
+                      className="ml-1 p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-muted"
+                    >
+                      <ListFilter className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </span>
               </td>
               {periods.map((p) => (
@@ -108,6 +126,8 @@ function CategoryRows({
                 colorClass={colorClass}
                 rowCounter={rowCounter}
                 subtractOnExpand={subtractOnExpand}
+                type={type}
+                onDrilldown={onDrilldown}
               />
             )}
           </Fragment>
@@ -130,6 +150,8 @@ function SectionBlock({
   sectionClassName,
   colorClass,
   subtractOnExpand,
+  type,
+  onDrilldown,
 }: {
   sectionId: string;
   label: string;
@@ -143,6 +165,8 @@ function SectionBlock({
   sectionClassName: string;
   colorClass: string;
   subtractOnExpand?: boolean;
+  type: "receita" | "despesa";
+  onDrilldown?: (args: { categoryId: string; categoryName: string; type: "receita" | "despesa" }) => void;
 }) {
   const grand = Object.values(totals).reduce((s, v) => s + v, 0);
   const rowCounter = useRef(0);
@@ -177,6 +201,8 @@ function SectionBlock({
           colorClass={colorClass}
           rowCounter={rowCounter}
           subtractOnExpand={subtractOnExpand}
+          type={type}
+          onDrilldown={onDrilldown}
         />
       )}
     </>
@@ -217,6 +243,7 @@ export function DRETable({
   monthlyResults,
   loading,
   subtractOnExpand,
+  onDrilldown,
 }: DRETableProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sections, setSections] = useState<Set<string>>(new Set());
@@ -282,6 +309,8 @@ export function DRETable({
             sectionClassName="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-b"
             colorClass="text-emerald-700 dark:text-emerald-400"
             subtractOnExpand={subtractOnExpand}
+            type="receita"
+            onDrilldown={onDrilldown}
           />
 
           {/* Expense section - collapsible */}
@@ -298,6 +327,8 @@ export function DRETable({
             sectionClassName="bg-destructive/10 text-destructive border-b"
             colorClass="text-destructive"
             subtractOnExpand={subtractOnExpand}
+            type="despesa"
+            onDrilldown={onDrilldown}
           />
 
           {/* Result */}
