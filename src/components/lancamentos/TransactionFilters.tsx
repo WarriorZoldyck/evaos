@@ -29,6 +29,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { TransactionFilters as Filters, Category } from "@/hooks/useTransactions";
+import { flattenCategoryOptions, type FlatCategoryOption } from "@/lib/categoryTree";
+
 
 type PeriodKey = "today" | "week" | "month" | "year" | "custom" | "all";
 
