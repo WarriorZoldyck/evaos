@@ -252,6 +252,67 @@ export async function buildAnalysisData(
   const cards = (cardRes?.data || []).filter((c: any) => inScope(c.company_id));
   const budgets = (budgetRes?.data || []).filter((b: any) => inScope(b.company_id));
 
+  // Saldos por conta (saldo inicial + movimentos pagos vinculados à conta)
+  const movByAccount = new Map<string, number>();
+  for (const t of paidRes?.data || []) {
+    const id = t.bank_account_id as string;
+    if (!id) continue;
+    const amount = Math.abs(Number(t.amount) || 0);
+    movByAccount.set(id, (movByAccount.get(id) || 0) + (t.type === "receita" ? amount : -amount));
+  }
+  const accountBalances = accounts.map((a: any) => ({
+    name: a.name,
+    balance: Number(a.initial_balance || 0) + (movByAccount.get(a.id) || 0),
+  }));
+  const cashTotal = accountBalances.reduce((s, a) => s + a.balance, 0);
+
+  // Compromissos futuros (3 meses)
+  const pending = (pendingRes?.data || []).filter((t: any) => inScope(t.company_id));
+  const pendingByMonth = new Map<string, { receita: number; despesa: number }>();
+  for (const t of pending) {
+    const mk = String(t.payment_date || "").slice(0, 7);
+    if (!mk) continue;
+    const b = pendingByMonth.get(mk) || { receita: 0, despesa: 0 };
+    const amount = Math.abs(Number(t.amount) || 0);
+    if (t.type === "receita") b.receita += amount;
+    else b.despesa += amount;
+    pendingByMonth.set(mk, b);
+  }
+  const pendingLines = [...pendingByMonth.entries()].sort().map(
+    ([k, v]) => `  ${k}: a receber ${fmtBRL(v.receita)} | a pagar ${fmtBRL(v.despesa)}`,
+  );
+
+  // Uso de cartão (lançamentos vinculados a cartão, pagos + pendentes no período)
+  const cardUse = new Map<string, number>();
+  for (const t of pending) {
+    if (!t.credit_card_id || t.type === "receita") continue;
+    cardUse.set(t.credit_card_id, (cardUse.get(t.credit_card_id) || 0) + Math.abs(Number(t.amount) || 0));
+  }
+  const cardLines = cards.map((c: any) => {
+    const limit = Number(c.limit || 0);
+    const used = cardUse.get(c.id) || 0;
+    return `  ${c.name}: limite ${limit > 0 ? fmtBRL(limit) : "não informado"} | faturas futuras em aberto ${fmtBRL(used)}${limit > 0 ? ` (${((used / limit) * 100).toFixed(0)}% do limite)` : ""}`;
+  });
+
+  // Tendência: últimos 3 meses x período completo
+  const last3 = monthKeys.slice(-3);
+  const l3Receita = last3.reduce((s, k) => s + (monthly.get(k)?.receita || 0), 0) / Math.max(last3.length, 1);
+  const l3Despesa = last3.reduce((s, k) => s + (monthly.get(k)?.despesa || 0), 0) / Math.max(last3.length, 1);
+  const avgReceita = totalReceita / nMonths;
+  const avgDespesa = totalDespesa / nMonths;
+  const margin = totalReceita > 0 ? ((totalReceita - totalDespesa) / totalReceita) * 100 : 0;
+  const l3Margin = l3Receita > 0 ? ((l3Receita - l3Despesa) / l3Receita) * 100 : 0;
+  const runway = fixedTotal > 0 ? cashTotal / fixedTotal : 0;
+
+  // Retiradas de sócio / pró-labore
+  const proNames = ["pro-labore", "pro labore", "prolabore", "socio", "sócio", "retirada", "distribuicao de lucro", "distribuição de lucro"];
+  const proLines = [...byCategory.entries()]
+    .filter(([name]) => proNames.some((p) => normalize(name).includes(normalize(p))))
+    .map(([name, v]) => `  ${name}: ${fmtBRL(v.despesa / nMonths)}/mês`);
+  const proTotal = [...byCategory.entries()]
+    .filter(([name]) => proNames.some((p) => normalize(name).includes(normalize(p))))
+    .reduce((s, [, v]) => s + v.despesa / nMonths, 0);
+
   const budgetLines = budgets.slice(0, 40).map((b: any) => {
     return `  ${b.category_name || "—"}: meta ${fmtBRL(Number(b.target_amount ?? 0))}${b.kind ? ` (${b.kind})` : ""}`;
   });
@@ -260,11 +321,18 @@ export async function buildAnalysisData(
 === DADOS REAIS DO USUÁRIO (use SOMENTE estes números) ===
 Contextos analisados: ${contexts.labels.join(" + ")}
 Período: últimos ${nMonths} meses (${monthKeys[0] || "—"} a ${monthKeys[monthKeys.length - 1] || "—"})
+Data de hoje: ${todayStr}
 
 TOTAIS DO PERÍODO
-  Entradas: ${fmtBRL(totalReceita)} (média ${fmtBRL(totalReceita / nMonths)}/mês)
-  Saídas:   ${fmtBRL(totalDespesa)} (média ${fmtBRL(totalDespesa / nMonths)}/mês)
+  Entradas: ${fmtBRL(totalReceita)} (média ${fmtBRL(avgReceita)}/mês)
+  Saídas:   ${fmtBRL(totalDespesa)} (média ${fmtBRL(avgDespesa)}/mês)
   Resultado: ${fmtBRL(totalReceita - totalDespesa)} (média ${fmtBRL((totalReceita - totalDespesa) / nMonths)}/mês)
+  Margem do período: ${margin.toFixed(1)}%
+
+TENDÊNCIA (últimos 3 meses vs média do período)
+  Entradas: ${fmtBRL(l3Receita)}/mês (média do período ${fmtBRL(avgReceita)}/mês)
+  Saídas: ${fmtBRL(l3Despesa)}/mês (média do período ${fmtBRL(avgDespesa)}/mês)
+  Margem dos últimos 3 meses: ${l3Margin.toFixed(1)}%
 
 SÉRIE MENSAL
 ${monthlyLines.join("\n") || "  Sem movimentação"}
@@ -276,15 +344,28 @@ ${fixed.length ? "    - " + fixed.slice(0, 20).join("\n    - ") : "    (nenhum)"
 ${variable.length ? "    - " + variable.slice(0, 20).join("\n    - ") : "    (nenhum)"}
   Impostos identificados: ${fmtBRL(taxMonthly)}/mês (≈ ${taxRate.toFixed(1)}% da receita do período)
 
+RETIRADAS / PRÓ-LABORE IDENTIFICADOS
+${proLines.join("\n") || "  Nenhuma categoria de pró-labore/retirada identificada nos dados"}
+  Total de retiradas: ${fmtBRL(proTotal)}/mês
+
+CAIXA E FÔLEGO
+  Caixa total nas contas: ${fmtBRL(cashTotal)}
+${accountBalances.map((a) => `    - ${a.name}: ${fmtBRL(a.balance)}`).join("\n") || "    (nenhuma conta cadastrada)"}
+  Cobertura de custos fixos com o caixa atual: ${fixedTotal > 0 ? `${runway.toFixed(1)} meses` : "não calculável (sem custos fixos identificados)"}
+
+CARTÕES
+${cardLines.join("\n") || "  nenhum"}
+
+COMPROMISSOS FUTUROS (pendentes até ${horizonStr})
+${pendingLines.join("\n") || "  Nenhum lançamento pendente futuro"}
+
 TOP CATEGORIAS
 ${catLines.join("\n") || "  Sem dados"}
-
-CONTAS: ${accounts.map((a: any) => a.name).join(", ") || "nenhuma"}
-CARTÕES: ${cards.map((c: any) => c.name).join(", ") || "nenhum"}
 
 METAS ORÇAMENTÁRIAS CADASTRADAS
 ${budgetLines.join("\n") || "  Nenhuma meta cadastrada"}
 === FIM DOS DADOS ===`.trim();
+
 
   return { block, monthsCovered: nMonths };
 }
