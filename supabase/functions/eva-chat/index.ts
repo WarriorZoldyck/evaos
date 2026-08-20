@@ -1140,6 +1140,33 @@ ${historicalPatternsBlock}`;
     }
 
     // === CONVERSA ===
+    // Rede de segurança: se for pergunta (ou resposta evasiva), roda a análise com dados reais.
+    {
+      const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
+      const userText = String(lastUser?.content || "");
+      const fm = String(aiParsed.friendly_message || "");
+      const looksEvasive = /não consigo|nao consigo|depende de|reunir os dados|não tenho acesso|nao tenho acesso|análise complexa|analise complexa/i.test(fm);
+      const looksAnalytical = /\?|quanto|qual|como|por que|porque|vale a pena|posso|preciso|margem|lucro|custo|faturar|líquido|liquido/i.test(userText);
+      if (userText && (looksEvasive || looksAnalytical)) {
+        const contexts = resolveContexts(activeContextName, companies as any, activeContextName);
+        const analysisData = await buildAnalysisData(supabase, userId, contexts, { months: 12 });
+        const result = await runAnalysis({
+          apiKey: LOVABLE_API_KEY,
+          question: userText.slice(0, 4000),
+          dataBlock: analysisData.block,
+          channel: "app",
+          analysisType: "diagnostico",
+          history: messages.slice(-6).map((m: any) => ({ role: m.role, content: String(m.content || "") })),
+        });
+        if (result.ok) {
+          return new Response(JSON.stringify({ reply: result.text, action: "analysis" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
     return new Response(JSON.stringify({
       reply: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos, consultas e categorias. 😊",
       action: null,
