@@ -4341,7 +4341,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       });
       const result = await runAnalysis({
         apiKey: LOVABLE_API_KEY!,
-        question: String(aiParsed.question || messageText || "").slice(0, 4000),
+        question: String(aiParsed.question || userMsgText || "").slice(0, 4000),
         dataBlock: analysisData.block,
         channel: "whatsapp",
         analysisType: aiParsed.analysis_type || null,
