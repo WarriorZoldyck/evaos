@@ -414,14 +414,37 @@ function UnifiedEntityFilter({
                       onFiltersChange({ ...filters, categoryId: "__sem_categoria__" }),
                     muted: true,
                   })}
-                  {filterList(rootCategories).map((cat) =>
-                    renderOption({
-                      key: cat.id,
-                      label: cat.name,
-                      selected: filters.categoryId === cat.id,
-                      onSelect: () => onFiltersChange({ ...filters, categoryId: cat.id }),
-                    }),
-                  )}
+                  {filterList(rootCategories).map((cat) => {
+                    const depth = (cat as unknown as { depth?: number }).depth ?? 0;
+                    const leaf =
+                      (cat as unknown as { leafName?: string }).leafName ?? cat.name;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          onFiltersChange({ ...filters, categoryId: cat.id });
+                          goRoot();
+                        }}
+                        className="w-full flex items-center gap-2 px-2 py-2 rounded-md hover:bg-accent text-left text-sm"
+                        style={{ paddingLeft: 8 + depth * 14 }}
+                      >
+                        <span className="w-4 shrink-0">
+                          {filters.categoryId === cat.id ? (
+                            <Check className="h-4 w-4 text-primary" />
+                          ) : null}
+                        </span>
+                        <span
+                          className={`truncate ${depth > 0 ? "text-muted-foreground" : "font-medium"}`}
+                          title={cat.name}
+                        >
+                          {depth > 0 ? "› " : ""}
+                          {leaf}
+                        </span>
+                      </button>
+                    );
+                  })}
+
                 </>
               )}
               {level === "fornecedor" && (
