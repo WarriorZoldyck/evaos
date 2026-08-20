@@ -421,12 +421,43 @@ ${historicalPatternsBlock}`;
       });
     }
 
-    // --- Resolve context ---
-    const resolveContext = (contextName: string | undefined): string | null => {
-      if (!contextName || contextName === "Pessoal") return null;
-      const company = companies.find((c: any) => c.name.toLowerCase() === contextName.toLowerCase());
-      return company?.id || null;
+    // --- Resolve context (defensive: aceita string, array ou null) ---
+    const resolveContext = (contextName: unknown): string | null => {
+      const first = Array.isArray(contextName) ? contextName[0] : contextName;
+      if (!first || typeof first !== "string") return null;
+      return resolveContexts(first, companies as any).companyIds[0] ?? null;
     };
+
+    // === ANÁLISE (resposta detalhada com dados reais) ===
+    if (aiParsed.intent === "analise") {
+      const ctxInput = aiParsed.contexts ?? aiParsed.context ?? activeContextName;
+      const contexts = resolveContexts(ctxInput, companies as any, activeContextName);
+      const analysisData = await buildAnalysisData(supabase, userId, contexts, {
+        months: Number(aiParsed.months) || 12,
+      });
+      const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
+      const result = await runAnalysis({
+        apiKey: LOVABLE_API_KEY,
+        question: String(aiParsed.question || lastUser?.content || "").slice(0, 4000),
+        dataBlock: analysisData.block,
+        channel: "app",
+        analysisType: aiParsed.analysis_type || null,
+        targetAmount: Number(aiParsed.target_amount) || null,
+        history: messages.slice(-6).map((m: any) => ({ role: m.role, content: String(m.content || "") })),
+      });
+
+      if (!result.ok) {
+        return new Response(JSON.stringify({ error: result.error }), {
+          status: result.status || 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ reply: result.text, action: "analysis" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // === EXECUTE ACTION ===
     if (aiParsed.intent === "lancamento") {
