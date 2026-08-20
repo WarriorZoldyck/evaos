@@ -468,3 +468,80 @@ ${dataBlock}`;
   if (!text) return { ok: false, status: 500, error: "A análise voltou vazia. Tente reformular a pergunta." };
   return { ok: true, text };
 }
+
+/**
+ * Divide uma mensagem longa em partes para o WhatsApp, quebrando em linhas
+ * em branco / quebras de linha em vez de cortar o raciocínio no meio.
+ */
+export function splitForWhatsApp(text: string, maxLen = 3500): string[] {
+  const clean = (text || "").trim();
+  if (clean.length <= maxLen) return [clean];
+
+  const parts: string[] = [];
+  let rest = clean;
+  while (rest.length > maxLen) {
+    const window = rest.slice(0, maxLen);
+    let cut = window.lastIndexOf("\n\n");
+    if (cut < maxLen * 0.5) cut = window.lastIndexOf("\n");
+    if (cut < maxLen * 0.5) cut = window.lastIndexOf(" ");
+    if (cut <= 0) cut = maxLen;
+    parts.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) parts.push(rest);
+  return parts.map((p, i) => (parts.length > 1 ? `${p}${i < parts.length - 1 ? "\n\n_(continua…)_" : ""}` : p));
+}
+
+/**
+ * Leitura de CFO sobre um relatório determinístico já montado (ex.: metas do
+ * mês). Não recalcula nada: interpreta os números que recebe.
+ */
+export async function runCfoReading(args: {
+  apiKey: string;
+  reportText: string;
+  channel: "app" | "whatsapp";
+  contextLabel?: string | null;
+}): Promise<string | null> {
+  const { apiKey, reportText, channel, contextLabel } = args;
+
+  const format =
+    channel === "whatsapp"
+      ? `Responda em no máximo 10 linhas, sem títulos markdown, usando *negrito* do WhatsApp e bullets "•".`
+      : `Responda em markdown, no máximo 12 linhas, com bullets curtos.`;
+
+  const system = `Você é a EVA, CFO do usuário no EVA OS (20+ anos de experiência em finanças de empresas brasileiras).
+Recebe abaixo um relatório JÁ CALCULADO de metas x realizado do mês${contextLabel ? ` (contexto: ${contextLabel})` : ""}.
+
+Sua tarefa é a LEITURA DE CFO desse relatório:
+1. Projeção de fechamento do mês no ritmo atual (use a regra de três com o % do mês já decorrido informado no relatório).
+2. Onde está o risco real (categoria e valor).
+3. 2 a 3 ações concretas para o restante do mês, com valores.
+
+REGRAS: use SOMENTE os números do relatório e projeções derivadas deles — nunca invente valores novos. Não repita o relatório inteiro. Sem saudação. Português do Brasil.
+${format}`;
+
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: ANALYSIS_MODEL,
+        max_tokens: 1200,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: reportText },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("EVA CFO reading gateway error:", res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content?.trim() || "";
+    return text || null;
+  } catch (e) {
+    console.error("EVA CFO reading failed:", e);
+    return null;
+  }
+}
