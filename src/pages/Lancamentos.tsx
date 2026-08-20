@@ -88,6 +88,7 @@ export default function Lancamentos() {
   // Read query params from dashboard clicks
   useEffect(() => {
     const categoryParam = searchParams.get("category");
+    const categoryIdParam = searchParams.get("categoryId");
     const typeParam = searchParams.get("type");
     const statusParam = searchParams.get("status");
     const dateFromParam = searchParams.get("dateFrom");
@@ -95,16 +96,22 @@ export default function Lancamentos() {
     const dateFieldParam = searchParams.get("dateField");
     const accountIdParam = searchParams.get("accountId");
 
-    if (categoryParam || typeParam || statusParam || dateFromParam || dateToParam || dateFieldParam || accountIdParam) {
+    if (categoryParam || categoryIdParam || typeParam || statusParam || dateFromParam || dateToParam || dateFieldParam || accountIdParam) {
       const isUncategorizedSentinel = categoryParam === "__sem_categoria__";
-      const matchedCat = !isUncategorizedSentinel
-        ? categories.find((c) => c.name === categoryParam && !c.parent_id)
+      const byId = categoryIdParam
+        ? categories.find((c) => c.id === categoryIdParam)
         : null;
+      const matchedCat =
+        byId ||
+        (!isUncategorizedSentinel && categoryParam
+          ? categories.find((c) => c.name === categoryParam) || null
+          : null);
       setFilters((prev) => ({
         ...prev,
         categoryId: isUncategorizedSentinel
           ? "__sem_categoria__"
           : matchedCat?.id || prev.categoryId,
+
         type: (typeParam as "receita" | "despesa") || prev.type,
         status: (statusParam as "Pago" | "Pendente") || prev.status,
         dateFrom: dateFromParam || prev.dateFrom,
