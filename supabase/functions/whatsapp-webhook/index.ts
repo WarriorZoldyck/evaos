@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
+import { resolveContexts, buildAnalysisData, runAnalysis } from "../_shared/eva-analysis.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1980,12 +1981,26 @@ REGRA IMUTÁVEL — CADASTRO DE CONTAS/CARTÕES/CARTEIRAS NÃO É SUPORTADO PELO
 IMPORTANTE: Você tem acesso ao HISTÓRICO DA CONVERSA de hoje. Use-o para entender o contexto completo. Se o usuário está respondendo a uma pergunta anterior (ex: informando o valor, escolhendo uma conta, dando detalhes adicionais), considere todo o contexto da conversa para construir o lançamento completo.
 
 REGRAS:
-1. Classifique como: "lancamento", "editar_lancamento", "consulta", "gerenciar_categoria" ou "conversa"
+1. Classifique como: "lancamento", "editar_lancamento", "consulta", "analise", "gerenciar_categoria" ou "conversa"
 2. Para lançamentos: extraia TODOS os campos possíveis da mensagem E do contexto da conversa
 3. Para consultas: identifique o tipo e contexto
 4. Para gerenciar categorias: identifique a ação solicitada
 5. Responda SEMPRE em português brasileiro
 6. Retorne APENAS um JSON válido, sem texto adicional
+
+REGRA CRÍTICA — PERGUNTAS ANALÍTICAS VIRAM "analise", NUNCA "conversa":
+Use intent="analise" quando a pergunta exigir raciocínio/cálculo sobre os dados. Exemplos:
+- "Quanto preciso faturar pra tirar X líquido?" → analysis_type="faturamento_necessario", target_amount=X
+- "Qual minha estrutura de custos / margem / ponto de equilíbrio?" → analysis_type="estrutura_custos"
+- "Onde posso cortar X?" → analysis_type="onde_cortar", target_amount=X
+- "Compare períodos ou empresas" → analysis_type="comparativo"
+- "Como estou frente às metas?" → analysis_type="meta_vs_realizado"
+- "Vale a pena? / Posso contratar? / O que você acha?" → analysis_type="diagnostico"
+- Se o usuário pedir para juntar mais de um contexto, preencha "contexts" com TODOS os nomes.
+- NUNCA diga que "depende de vários fatores" ou que precisa de mais dados: classifique como "analise".
+
+Para análise:
+{"intent":"analise","analysis_type":"faturamento_necessario|estrutura_custos|onde_cortar|comparativo|meta_vs_realizado|diagnostico","contexts":["Pessoal"],"months":12,"target_amount":0,"question":"reescreva a pergunta do usuário de forma completa e autocontida"}
 
 CONTEXTOS DISPONÍVEIS (use EXATAMENTE um destes valores no campo "context"):
 ${contextNames.map((n) => `  - "${n}"`).join("\n")}
@@ -2520,21 +2535,20 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     }
 
     // --- Resolve context to company_id ---
-    const resolveContext = (contextName: string | undefined): string | null => {
-      if (!contextName || contextName === "Pessoal") return null;
-      const company = companies.find(
-        (c) => c.name.toLowerCase() === contextName.toLowerCase()
-      );
-      return company?.id || null;
+    const resolveContext = (contextName: unknown): string | null => {
+      const first = Array.isArray(contextName) ? contextName[0] : contextName;
+      if (!first || typeof first !== "string" || first === "Pessoal") return null;
+      return resolveContexts(first, companies as any).companyIds[0] ?? null;
     };
 
-    const validateContext = (contextName: string | undefined): boolean => {
-      if (!contextName || contextName === "Pessoal") return true;
-      return companies.some((c) => c.name.toLowerCase() === contextName.toLowerCase());
+    const validateContext = (contextName: unknown): boolean => {
+      const first = Array.isArray(contextName) ? contextName[0] : contextName;
+      if (!first || typeof first !== "string" || first === "Pessoal") return true;
+      return companies.some((c) => c.name.toLowerCase() === first.toLowerCase());
     };
 
     // Validate that intent is one of expected values to prevent AI manipulation
-    const VALID_INTENTS = ["lancamento", "editar_lancamento", "consulta", "gerenciar_categoria", "conversa"];
+    const VALID_INTENTS = ["lancamento", "editar_lancamento", "consulta", "analise", "gerenciar_categoria", "conversa"];
     const VALID_QUERY_TYPES = [
       "saldo", "resumo_mes", "gastos_mes", "receitas_mes", "pendentes",
       "gastos_categoria", "agrupar_por_categoria", "listar_lancamentos",
@@ -4319,6 +4333,28 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }, 200);
     }
 
+    if (aiParsed.intent === "analise") {
+      const ctxInput = aiParsed.contexts ?? aiParsed.context ?? "Pessoal";
+      const contexts = resolveContexts(ctxInput, companies as any, "Pessoal");
+      const analysisData = await buildAnalysisData(supabase, userId, contexts, {
+        months: Number(aiParsed.months) || 12,
+      });
+      const result = await runAnalysis({
+        apiKey: LOVABLE_API_KEY!,
+        question: String(aiParsed.question || userMsgText || "").slice(0, 4000),
+        dataBlock: analysisData.block,
+        channel: "whatsapp",
+        analysisType: aiParsed.analysis_type || null,
+        targetAmount: Number(aiParsed.target_amount) || null,
+      });
+
+      return respond({
+        success: result.ok,
+        intent: "analise",
+        message: result.ok ? result.text : (result.error || "Não consegui concluir a análise agora."),
+      }, 200);
+    }
+
     if (aiParsed.intent === "consulta") {
       const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
@@ -5041,6 +5077,27 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         message: aiParsed.friendly_message || FEEDBACK_REPLY[feedbackType],
         transaction: null,
       }, 200);
+    }
+
+    // Rede de segurança: pergunta analítica que caiu em "conversa" → responde com dados reais
+    {
+      const fm = String(aiParsed.friendly_message || "");
+      const looksEvasive = /não consigo|nao consigo|depende de|reunir os dados|não tenho acesso|nao tenho acesso|análise complexa|analise complexa/i.test(fm);
+      const looksAnalytical = /\?|quanto|qual|como|por que|porque|vale a pena|posso|preciso|margem|lucro|custo|faturar|l[ií]quido/i.test(trimmedMsg || "");
+      if (LOVABLE_API_KEY && trimmedMsg && (looksEvasive || looksAnalytical)) {
+        const contexts = resolveContexts(aiParsed.context ?? "Pessoal", companies as any, "Pessoal");
+        const analysisData = await buildAnalysisData(supabase, userId, contexts, { months: 12 });
+        const result = await runAnalysis({
+          apiKey: LOVABLE_API_KEY,
+          question: trimmedMsg.slice(0, 4000),
+          dataBlock: analysisData.block,
+          channel: "whatsapp",
+          analysisType: "diagnostico",
+        });
+        if (result.ok) {
+          return respond({ success: true, intent: "analise", message: result.text, transaction: null }, 200);
+        }
+      }
     }
 
     return respond({

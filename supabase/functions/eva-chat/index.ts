@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
+import { resolveContexts, buildAnalysisData, runAnalysis } from "../_shared/eva-analysis.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -242,7 +243,7 @@ CONTEXTO ATIVO NO MOMENTO: "${activeContextName}"
 - Só troque para outro contexto se o usuário citar o nome dele.
 
 REGRAS:
-1. Classifique como: "lancamento", "editar_lancamento", "consulta", "gerenciar_categoria" ou "conversa"
+1. Classifique como: "lancamento", "editar_lancamento", "consulta", "analise", "gerenciar_categoria" ou "conversa"
 2. Para lançamentos: extraia TODOS os campos possíveis da mensagem E do contexto da conversa
 3. Para consultas: identifique o tipo e contexto
 4. Para gerenciar categorias: identifique a ação solicitada
@@ -256,6 +257,21 @@ REGRA CRÍTICA — PERGUNTAS SEMPRE VIRAM "consulta", NUNCA "conversa":
 - "O que tenho a pagar?" / "Pendentes" → query_type="pendentes"
 - "Quanto gastei esse mês?" (sem categoria) → query_type="gastos_mes"
 - NUNCA responda "não tenho essa informação" — dispare a consulta apropriada.
+
+REGRA CRÍTICA — PERGUNTAS ANALÍTICAS VIRAM "analise", NUNCA "conversa":
+Use intent="analise" sempre que a pergunta exigir raciocínio/cálculo sobre os dados, por exemplo:
+- "Quanto preciso faturar bruto pra tirar X líquido?" → analysis_type="faturamento_necessario", target_amount=X
+- "Qual minha estrutura de custos?" / "Qual minha margem?" / "Ponto de equilíbrio" → analysis_type="estrutura_custos"
+- "Onde posso cortar X reais?" → analysis_type="onde_cortar", target_amount=X
+- "Compare este ano com o ano passado" / "Compare as empresas" → analysis_type="comparativo"
+- "Como estou frente às minhas metas?" → analysis_type="meta_vs_realizado"
+- "Posso contratar alguém?" / "Vale a pena?" / qualquer pergunta de decisão financeira → analysis_type="diagnostico"
+- Se o usuário pedir para avaliar MAIS DE UM contexto junto ("X e Y como se fossem uma empresa só"), preencha "contexts" com TODOS os nomes.
+- NUNCA responda que "depende de vários fatores" ou que precisa reunir dados: classifique como "analise" que o backend te entrega os números reais.
+
+Para análise:
+{"intent":"analise","analysis_type":"faturamento_necessario|estrutura_custos|onde_cortar|comparativo|meta_vs_realizado|diagnostico","contexts":["Pessoal"],"months":12,"target_amount":0,"question":"reescreva a pergunta do usuário de forma completa e autocontida"}
+- "months": quantos meses de histórico considerar (padrão 12, máximo 24; use 24 para comparações anuais).
 
 CONTEXTOS DISPONÍVEIS (use EXATAMENTE um destes valores no campo "context"):
 ${contextNames.map((n) => `  - "${n}"`).join("\n")}
@@ -405,12 +421,43 @@ ${historicalPatternsBlock}`;
       });
     }
 
-    // --- Resolve context ---
-    const resolveContext = (contextName: string | undefined): string | null => {
-      if (!contextName || contextName === "Pessoal") return null;
-      const company = companies.find((c: any) => c.name.toLowerCase() === contextName.toLowerCase());
-      return company?.id || null;
+    // --- Resolve context (defensive: aceita string, array ou null) ---
+    const resolveContext = (contextName: unknown): string | null => {
+      const first = Array.isArray(contextName) ? contextName[0] : contextName;
+      if (!first || typeof first !== "string") return null;
+      return resolveContexts(first, companies as any).companyIds[0] ?? null;
     };
+
+    // === ANÁLISE (resposta detalhada com dados reais) ===
+    if (aiParsed.intent === "analise") {
+      const ctxInput = aiParsed.contexts ?? aiParsed.context ?? activeContextName;
+      const contexts = resolveContexts(ctxInput, companies as any, activeContextName);
+      const analysisData = await buildAnalysisData(supabase, userId, contexts, {
+        months: Number(aiParsed.months) || 12,
+      });
+      const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
+      const result = await runAnalysis({
+        apiKey: LOVABLE_API_KEY,
+        question: String(aiParsed.question || lastUser?.content || "").slice(0, 4000),
+        dataBlock: analysisData.block,
+        channel: "app",
+        analysisType: aiParsed.analysis_type || null,
+        targetAmount: Number(aiParsed.target_amount) || null,
+        history: messages.slice(-6).map((m: any) => ({ role: m.role, content: String(m.content || "") })),
+      });
+
+      if (!result.ok) {
+        return new Response(JSON.stringify({ error: result.error }), {
+          status: result.status || 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ reply: result.text, action: "analysis" }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // === EXECUTE ACTION ===
     if (aiParsed.intent === "lancamento") {
@@ -1093,6 +1140,33 @@ ${historicalPatternsBlock}`;
     }
 
     // === CONVERSA ===
+    // Rede de segurança: se for pergunta (ou resposta evasiva), roda a análise com dados reais.
+    {
+      const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
+      const userText = String(lastUser?.content || "");
+      const fm = String(aiParsed.friendly_message || "");
+      const looksEvasive = /não consigo|nao consigo|depende de|reunir os dados|não tenho acesso|nao tenho acesso|análise complexa|analise complexa/i.test(fm);
+      const looksAnalytical = /\?|quanto|qual|como|por que|porque|vale a pena|posso|preciso|margem|lucro|custo|faturar|líquido|liquido/i.test(userText);
+      if (userText && (looksEvasive || looksAnalytical)) {
+        const contexts = resolveContexts(activeContextName, companies as any, activeContextName);
+        const analysisData = await buildAnalysisData(supabase, userId, contexts, { months: 12 });
+        const result = await runAnalysis({
+          apiKey: LOVABLE_API_KEY,
+          question: userText.slice(0, 4000),
+          dataBlock: analysisData.block,
+          channel: "app",
+          analysisType: "diagnostico",
+          history: messages.slice(-6).map((m: any) => ({ role: m.role, content: String(m.content || "") })),
+        });
+        if (result.ok) {
+          return new Response(JSON.stringify({ reply: result.text, action: "analysis" }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+    }
+
     return new Response(JSON.stringify({
       reply: aiParsed.friendly_message || "Olá! Sou a EVA, sua assistente financeira. Posso ajudar com lançamentos, consultas e categorias. 😊",
       action: null,
