@@ -126,7 +126,11 @@ export async function buildAnalysisData(
   const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
   const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01`;
 
-  const [txRes, catRes, accRes, cardRes, budgetRes] = await Promise.all([
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const horizon = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+  const horizonStr = `${horizon.getFullYear()}-${pad(horizon.getMonth() + 1)}-${pad(horizon.getDate())}`;
+
+  const [txRes, catRes, accRes, cardRes, budgetRes, paidRes, pendingRes] = await Promise.all([
     supabase
       .from("transactions")
       .select("amount, type, status, payment_date, competence_date, category, subcategory, company_id, is_internal_transfer")
@@ -134,13 +138,29 @@ export async function buildAnalysisData(
       .gte("payment_date", startStr)
       .limit(20000),
     supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
-    supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
-    supabase.from("credit_cards").select("id, name, credit_limit, company_id").eq("user_id", userId),
+    supabase.from("bank_accounts").select("id, name, initial_balance, company_id").eq("user_id", userId),
+    supabase.from("credit_cards").select("id, name, limit, company_id").eq("user_id", userId),
     supabase.from("budget_targets").select("*").eq("user_id", userId).limit(500).then(
       (r: any) => r,
       () => ({ data: [] }),
     ),
+    supabase
+      .from("transactions")
+      .select("amount, type, bank_account_id, company_id")
+      .eq("user_id", userId)
+      .eq("status", "Pago")
+      .not("bank_account_id", "is", null)
+      .limit(50000),
+    supabase
+      .from("transactions")
+      .select("amount, type, payment_date, category, company_id, credit_card_id")
+      .eq("user_id", userId)
+      .eq("status", "Pendente")
+      .gte("payment_date", todayStr)
+      .lte("payment_date", horizonStr)
+      .limit(5000),
   ]);
+
 
   const categories = catRes?.data || [];
   const catById = new Map<string, any>(categories.map((c: any) => [c.id, c]));
