@@ -7,6 +7,11 @@ import { DREPeriodFilter } from "@/components/relatorios/DREPeriodFilter";
 import { DRETable } from "@/components/relatorios/DRETable";
 import { DRETableContabil } from "@/components/relatorios/DRETableContabil";
 import { DREIndicatorCards } from "@/components/relatorios/DREIndicatorCards";
+import {
+  ExportReportButton,
+  buildContabilRows,
+  buildGerencialRows,
+} from "@/components/relatorios/ExportReportButton";
 import { useDREData, type DREFilters } from "@/hooks/useDREData";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCompany } from "@/contexts/CompanyContext";
