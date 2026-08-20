@@ -526,7 +526,7 @@ ${format}`;
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: ANALYSIS_MODEL,
-        max_tokens: 1200,
+        max_tokens: 4000,
         messages: [
           { role: "system", content: system },
           { role: "user", content: reportText },
