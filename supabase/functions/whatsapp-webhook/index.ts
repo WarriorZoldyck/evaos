@@ -312,7 +312,12 @@ async function getImageBase64(remoteJid: string, messageId: string): Promise<str
 // Helper to build response AND send Evolution reply
 function buildResponse(body: any, status: number, phone: string) {
   if (body.message && phone) {
-    const replyTask = sendEvolutionReply(phone, body.message);
+    const parts = splitForWhatsApp(String(body.message));
+    const replyTask = (async () => {
+      for (const part of parts) {
+        await sendEvolutionReply(phone, part);
+      }
+    })();
     const edgeRuntime = (globalThis as any).EdgeRuntime;
     if (edgeRuntime?.waitUntil) {
       edgeRuntime.waitUntil(replyTask);
@@ -320,6 +325,7 @@ function buildResponse(body: any, status: number, phone: string) {
       replyTask.catch((err) => console.error("Evolution reply background task failed:", err));
     }
   }
+
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
