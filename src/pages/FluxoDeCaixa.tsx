@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -32,6 +33,26 @@ export default function FluxoDeCaixa() {
     monthlyResults,
     loading,
   } = useCashFlowMonthly("caixa", filters);
+
+  const navigate = useNavigate();
+
+  const handleDrilldown = ({
+    categoryId,
+    categoryName,
+    type,
+  }: { categoryId: string; categoryName: string; type: "receita" | "despesa" }) => {
+    const params = new URLSearchParams({
+      categoryId,
+      category: categoryName,
+      type,
+      status: "Pago",
+      dateField: "payment_date",
+      dateFrom: `${filters.year}-01-01`,
+      dateTo: `${filters.year}-12-31`,
+    });
+    if (filters.accountId) params.set("accountId", `bank:${filters.accountId}`);
+    navigate(`/lancamentos?${params.toString()}`);
+  };
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 7 }, (_, i) => currentYear - 3 + i);
@@ -139,6 +160,8 @@ export default function FluxoDeCaixa() {
             monthlyResults={monthlyResults}
             loading={loading}
             subtractOnExpand
+            onDrilldown={handleDrilldown}
+
           />
         </CardContent>
       </Card>

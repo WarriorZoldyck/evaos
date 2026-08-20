@@ -25,6 +25,9 @@ interface Props {
   periods: string[];
   rows: ExportRow[];
   disabled?: boolean;
+  /** "icon" renders a compact icon-only trigger (used for per-branch export). */
+  variant?: "default" | "icon";
+  tooltip?: string;
 }
 
 const num = (v: number) =>
@@ -96,7 +99,7 @@ export function buildGerencialRows(
   ];
 }
 
-export function ExportReportButton({ title, fileBaseName, periods, rows, disabled }: Props) {
+export function ExportReportButton({ title, fileBaseName, periods, rows, disabled, variant = "default", tooltip }: Props) {
   const [exporting, setExporting] = useState<null | "csv" | "pdf" | "xlsx">(null);
   const { toast } = useToast();
 
@@ -177,10 +180,22 @@ export function ExportReportButton({ title, fileBaseName, periods, rows, disable
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={disabled || !!exporting} className="gap-1 h-8 text-xs">
-          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          Exportar
-        </Button>
+        {variant === "icon" ? (
+          <button
+            type="button"
+            title={tooltip ?? "Exportar esta categoria"}
+            disabled={disabled || !!exporting}
+            onClick={(e) => e.stopPropagation()}
+            className="p-0.5 rounded text-muted-foreground hover:text-primary hover:bg-muted"
+          >
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          </button>
+        ) : (
+          <Button variant="outline" size="sm" disabled={disabled || !!exporting} className="gap-1 h-8 text-xs">
+            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Exportar
+          </Button>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-popover z-50">
         <DropdownMenuItem onClick={() => handleExport("csv")} className="gap-2">

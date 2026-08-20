@@ -1,4 +1,6 @@
 import { mapDatabaseError } from "@/lib/errorMapper";
+import { collectCategoryBranchIds } from "@/lib/categoryTree";
+
 import { useState, useEffect, useCallback } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
@@ -246,16 +248,19 @@ export function useTransactions() {
     if (filters.categoryId === "__sem_categoria__") {
       query = query.or("category.is.null,category.eq.");
     } else if (filters.categoryId) {
-      const selectedCat = allCategories.find((c) => c.id === filters.categoryId);
-      const childCats = allCategories.filter((c) => c.parent_id === filters.categoryId);
-      const allIds = [filters.categoryId, ...childCats.map((c) => c.id)];
-      const allNames = [selectedCat?.name, ...childCats.map((c) => c.name)].filter(Boolean);
-      const conditions = [
-        ...allIds.map((id) => `category.eq.${id}`),
-        ...allNames.map((name) => `category.eq.${name}`),
-      ];
+      const branchIds = collectCategoryBranchIds(allCategories, filters.categoryId);
+      const branchNames = branchIds
+        .map((id) => allCategories.find((c) => c.id === id)?.name)
+        .filter((n): n is string => Boolean(n));
+      const tokens = Array.from(new Set([...branchIds, ...branchNames]));
+      const conditions = tokens.flatMap((token) => [
+        `category.eq.${token}`,
+        `subcategory.eq.${token}`,
+        `subcategory2.eq.${token}`,
+      ]);
       query = query.or(conditions.join(","));
     }
+
     const dateColumn = filters.dateField === "competence_date" ? "competence_date" : "payment_date";
     if (filters.dateFrom) {
       query = query.gte(dateColumn, filters.dateFrom);
