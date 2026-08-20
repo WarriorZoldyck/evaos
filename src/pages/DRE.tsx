@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Info, AlertTriangle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -29,6 +29,24 @@ export default function DRE() {
   const [showHorizontalAnalysis, setShowHorizontalAnalysis] = useState(false);
   const { bankAccounts } = useAccounts();
   const data = useDREData(filters);
+  const navigate = useNavigate();
+
+  const handleDrilldown = ({
+    categoryId,
+    categoryName,
+    type,
+  }: { categoryId: string; categoryName: string; type: "receita" | "despesa" }) => {
+    const params = new URLSearchParams({
+      categoryId,
+      category: categoryName,
+      type,
+      dateField: "competence_date",
+      dateFrom: `${filters.year}-01-01`,
+      dateTo: `${filters.year}-12-31`,
+    });
+    if (filters.accountId) params.set("accountId", `bank:${filters.accountId}`);
+    navigate(`/lancamentos?${params.toString()}`);
+  };
 
   if (onlyPersonal) return <Navigate to="/dashboard" replace />;
 
@@ -148,6 +166,7 @@ export default function DRE() {
               monthlyExpenseTotals={data.monthlyExpenseTotals}
               monthlyResults={data.monthlyResults}
               loading={data.loading}
+              onDrilldown={handleDrilldown}
             />
           )}
         </CardContent>
