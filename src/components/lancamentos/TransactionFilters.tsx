@@ -507,7 +507,7 @@ export function TransactionFilters({
   hidePeriod = false,
   hideSearch = false,
 }: TransactionFiltersProps) {
-  const rootCategories = categories.filter((c) => !c.parent_id);
+  const rootCategories = useMemo(() => flattenCategoryOptions(categories), [categories]);
 
   return (
     <div className="w-full">
