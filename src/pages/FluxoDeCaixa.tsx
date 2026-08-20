@@ -104,6 +104,21 @@ export default function FluxoDeCaixa() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+
+          <ExportReportButton
+            title={`Fluxo de Caixa — ${filters.year}`}
+            fileBaseName={`fluxo_de_caixa_${filters.year}`}
+            periods={periods}
+            rows={buildGerencialRows(
+              periods,
+              revenueRows,
+              expenseRows,
+              monthlyRevenueTotals,
+              monthlyExpenseTotals,
+              monthlyResults,
+            )}
+            disabled={loading}
+          />
         </div>
       </div>
 
