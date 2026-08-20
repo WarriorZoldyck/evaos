@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
-import { resolveContexts, buildAnalysisData, runAnalysis } from "../_shared/eva-analysis.ts";
+import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading } from "../_shared/eva-analysis.ts";
+import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -255,6 +256,7 @@ REGRA CRÍTICA — PERGUNTAS SEMPRE VIRAM "consulta", NUNCA "conversa":
 - "Qual meu saldo?" → query_type="saldo"
 - "Resumo do mês" / "Como foi meu mês?" → query_type="resumo_mes"
 - "O que tenho a pagar?" / "Pendentes" → query_type="pendentes"
+- "Como estão minhas metas do mês?" / "Estou dentro do orçamento?" / "Quanto ainda posso gastar?" → query_type="metas_mes"
 - "Quanto gastei esse mês?" (sem categoria) → query_type="gastos_mes"
 - NUNCA responda "não tenho essa informação" — dispare a consulta apropriada.
 
@@ -308,7 +310,7 @@ Para gerenciamento de categorias:
 {"intent":"gerenciar_categoria","action":"criar|criar_subcategoria|renomear|mover|excluir","category_name":"...","category_id":"UUID","new_name":"...","parent_category_id":"UUID|null","new_parent_category_id":"UUID|null","category_type":"receita|despesa|ambos","context":"Pessoal|Nome","friendly_message":"..."}
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas","category_filter":"...","contact_filter":"...|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|ano_passado|null","context":"Pessoal|Nome","friendly_message":"..."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes","category_filter":"...","contact_filter":"...|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|ano_passado|null","context":"Pessoal|Nome","friendly_message":"..."}
 
 REGRA DE PERÍODO — PRESTE MUITA ATENÇÃO:
 - Se o usuário diz "ano", "anual", "este ano", "2025", "2026" → use "ano_atual" ou "ano_passado"
@@ -854,6 +856,22 @@ ${historicalPatternsBlock}`;
 
       try {
         switch (aiParsed.query_type) {
+          case "metas_mes": {
+            const ctxCompany =
+              companyId ?? (aiParsed.context === "Pessoal" ? null : undefined);
+            const report = await buildBudgetMonthReport(supabase, userId, ctxCompany);
+            responseMessage = formatBudgetMonthMessage(report, aiParsed.context || undefined);
+            if (report.hasData) {
+              const reading = await runCfoReading({
+                apiKey: LOVABLE_API_KEY,
+                reportText: responseMessage,
+                channel: "app",
+                contextLabel: aiParsed.context || null,
+              });
+              if (reading) responseMessage += `\n\n**🧠 Leitura da EVA (CFO)**\n\n${reading}`;
+            }
+            break;
+          }
           case "saldo": {
             const balances: string[] = [];
             let totalBalance = 0;
