@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
-import { resolveContexts, buildAnalysisData, runAnalysis } from "../_shared/eva-analysis.ts";
+import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading, splitForWhatsApp } from "../_shared/eva-analysis.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -312,7 +312,12 @@ async function getImageBase64(remoteJid: string, messageId: string): Promise<str
 // Helper to build response AND send Evolution reply
 function buildResponse(body: any, status: number, phone: string) {
   if (body.message && phone) {
-    const replyTask = sendEvolutionReply(phone, body.message);
+    const parts = splitForWhatsApp(String(body.message));
+    const replyTask = (async () => {
+      for (const part of parts) {
+        await sendEvolutionReply(phone, part);
+      }
+    })();
     const edgeRuntime = (globalThis as any).EdgeRuntime;
     if (edgeRuntime?.waitUntil) {
       edgeRuntime.waitUntil(replyTask);
@@ -320,6 +325,7 @@ function buildResponse(body: any, status: number, phone: string) {
       replyTask.catch((err) => console.error("Evolution reply background task failed:", err));
     }
   }
+
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -4565,6 +4571,15 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               report,
               aiParsed.context || undefined,
             );
+            if (report.hasData && LOVABLE_API_KEY) {
+              const reading = await runCfoReading({
+                apiKey: LOVABLE_API_KEY,
+                reportText: responseMessage,
+                channel: "whatsapp",
+                contextLabel: aiParsed.context || null,
+              });
+              if (reading) responseMessage += `\n\n🧠 *Leitura da EVA (CFO)*\n${reading}`;
+            }
             break;
           }
 

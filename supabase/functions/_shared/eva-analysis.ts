@@ -126,7 +126,11 @@ export async function buildAnalysisData(
   const start = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
   const startStr = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-01`;
 
-  const [txRes, catRes, accRes, cardRes, budgetRes] = await Promise.all([
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const horizon = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+  const horizonStr = `${horizon.getFullYear()}-${pad(horizon.getMonth() + 1)}-${pad(horizon.getDate())}`;
+
+  const [txRes, catRes, accRes, cardRes, budgetRes, paidRes, pendingRes] = await Promise.all([
     supabase
       .from("transactions")
       .select("amount, type, status, payment_date, competence_date, category, subcategory, company_id, is_internal_transfer")
@@ -134,13 +138,29 @@ export async function buildAnalysisData(
       .gte("payment_date", startStr)
       .limit(20000),
     supabase.from("categories").select("id, name, type, parent_id, company_id").eq("user_id", userId),
-    supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", userId),
-    supabase.from("credit_cards").select("id, name, credit_limit, company_id").eq("user_id", userId),
+    supabase.from("bank_accounts").select("id, name, initial_balance, company_id").eq("user_id", userId),
+    supabase.from("credit_cards").select("id, name, limit, company_id").eq("user_id", userId),
     supabase.from("budget_targets").select("*").eq("user_id", userId).limit(500).then(
       (r: any) => r,
       () => ({ data: [] }),
     ),
+    supabase
+      .from("transactions")
+      .select("amount, type, bank_account_id, company_id")
+      .eq("user_id", userId)
+      .eq("status", "Pago")
+      .not("bank_account_id", "is", null)
+      .limit(50000),
+    supabase
+      .from("transactions")
+      .select("amount, type, payment_date, category, company_id, credit_card_id")
+      .eq("user_id", userId)
+      .eq("status", "Pendente")
+      .gte("payment_date", todayStr)
+      .lte("payment_date", horizonStr)
+      .limit(5000),
   ]);
+
 
   const categories = catRes?.data || [];
   const catById = new Map<string, any>(categories.map((c: any) => [c.id, c]));
@@ -232,6 +252,67 @@ export async function buildAnalysisData(
   const cards = (cardRes?.data || []).filter((c: any) => inScope(c.company_id));
   const budgets = (budgetRes?.data || []).filter((b: any) => inScope(b.company_id));
 
+  // Saldos por conta (saldo inicial + movimentos pagos vinculados à conta)
+  const movByAccount = new Map<string, number>();
+  for (const t of paidRes?.data || []) {
+    const id = t.bank_account_id as string;
+    if (!id) continue;
+    const amount = Math.abs(Number(t.amount) || 0);
+    movByAccount.set(id, (movByAccount.get(id) || 0) + (t.type === "receita" ? amount : -amount));
+  }
+  const accountBalances = accounts.map((a: any) => ({
+    name: a.name,
+    balance: Number(a.initial_balance || 0) + (movByAccount.get(a.id) || 0),
+  }));
+  const cashTotal = accountBalances.reduce((s, a) => s + a.balance, 0);
+
+  // Compromissos futuros (3 meses)
+  const pending = (pendingRes?.data || []).filter((t: any) => inScope(t.company_id));
+  const pendingByMonth = new Map<string, { receita: number; despesa: number }>();
+  for (const t of pending) {
+    const mk = String(t.payment_date || "").slice(0, 7);
+    if (!mk) continue;
+    const b = pendingByMonth.get(mk) || { receita: 0, despesa: 0 };
+    const amount = Math.abs(Number(t.amount) || 0);
+    if (t.type === "receita") b.receita += amount;
+    else b.despesa += amount;
+    pendingByMonth.set(mk, b);
+  }
+  const pendingLines = [...pendingByMonth.entries()].sort().map(
+    ([k, v]) => `  ${k}: a receber ${fmtBRL(v.receita)} | a pagar ${fmtBRL(v.despesa)}`,
+  );
+
+  // Uso de cartão (lançamentos vinculados a cartão, pagos + pendentes no período)
+  const cardUse = new Map<string, number>();
+  for (const t of pending) {
+    if (!t.credit_card_id || t.type === "receita") continue;
+    cardUse.set(t.credit_card_id, (cardUse.get(t.credit_card_id) || 0) + Math.abs(Number(t.amount) || 0));
+  }
+  const cardLines = cards.map((c: any) => {
+    const limit = Number(c.limit || 0);
+    const used = cardUse.get(c.id) || 0;
+    return `  ${c.name}: limite ${limit > 0 ? fmtBRL(limit) : "não informado"} | faturas futuras em aberto ${fmtBRL(used)}${limit > 0 ? ` (${((used / limit) * 100).toFixed(0)}% do limite)` : ""}`;
+  });
+
+  // Tendência: últimos 3 meses x período completo
+  const last3 = monthKeys.slice(-3);
+  const l3Receita = last3.reduce((s, k) => s + (monthly.get(k)?.receita || 0), 0) / Math.max(last3.length, 1);
+  const l3Despesa = last3.reduce((s, k) => s + (monthly.get(k)?.despesa || 0), 0) / Math.max(last3.length, 1);
+  const avgReceita = totalReceita / nMonths;
+  const avgDespesa = totalDespesa / nMonths;
+  const margin = totalReceita > 0 ? ((totalReceita - totalDespesa) / totalReceita) * 100 : 0;
+  const l3Margin = l3Receita > 0 ? ((l3Receita - l3Despesa) / l3Receita) * 100 : 0;
+  const runway = fixedTotal > 0 ? cashTotal / fixedTotal : 0;
+
+  // Retiradas de sócio / pró-labore
+  const proNames = ["pro-labore", "pro labore", "prolabore", "socio", "sócio", "retirada", "distribuicao de lucro", "distribuição de lucro"];
+  const proLines = [...byCategory.entries()]
+    .filter(([name]) => proNames.some((p) => normalize(name).includes(normalize(p))))
+    .map(([name, v]) => `  ${name}: ${fmtBRL(v.despesa / nMonths)}/mês`);
+  const proTotal = [...byCategory.entries()]
+    .filter(([name]) => proNames.some((p) => normalize(name).includes(normalize(p))))
+    .reduce((s, [, v]) => s + v.despesa / nMonths, 0);
+
   const budgetLines = budgets.slice(0, 40).map((b: any) => {
     return `  ${b.category_name || "—"}: meta ${fmtBRL(Number(b.target_amount ?? 0))}${b.kind ? ` (${b.kind})` : ""}`;
   });
@@ -240,11 +321,18 @@ export async function buildAnalysisData(
 === DADOS REAIS DO USUÁRIO (use SOMENTE estes números) ===
 Contextos analisados: ${contexts.labels.join(" + ")}
 Período: últimos ${nMonths} meses (${monthKeys[0] || "—"} a ${monthKeys[monthKeys.length - 1] || "—"})
+Data de hoje: ${todayStr}
 
 TOTAIS DO PERÍODO
-  Entradas: ${fmtBRL(totalReceita)} (média ${fmtBRL(totalReceita / nMonths)}/mês)
-  Saídas:   ${fmtBRL(totalDespesa)} (média ${fmtBRL(totalDespesa / nMonths)}/mês)
+  Entradas: ${fmtBRL(totalReceita)} (média ${fmtBRL(avgReceita)}/mês)
+  Saídas:   ${fmtBRL(totalDespesa)} (média ${fmtBRL(avgDespesa)}/mês)
   Resultado: ${fmtBRL(totalReceita - totalDespesa)} (média ${fmtBRL((totalReceita - totalDespesa) / nMonths)}/mês)
+  Margem do período: ${margin.toFixed(1)}%
+
+TENDÊNCIA (últimos 3 meses vs média do período)
+  Entradas: ${fmtBRL(l3Receita)}/mês (média do período ${fmtBRL(avgReceita)}/mês)
+  Saídas: ${fmtBRL(l3Despesa)}/mês (média do período ${fmtBRL(avgDespesa)}/mês)
+  Margem dos últimos 3 meses: ${l3Margin.toFixed(1)}%
 
 SÉRIE MENSAL
 ${monthlyLines.join("\n") || "  Sem movimentação"}
@@ -256,15 +344,28 @@ ${fixed.length ? "    - " + fixed.slice(0, 20).join("\n    - ") : "    (nenhum)"
 ${variable.length ? "    - " + variable.slice(0, 20).join("\n    - ") : "    (nenhum)"}
   Impostos identificados: ${fmtBRL(taxMonthly)}/mês (≈ ${taxRate.toFixed(1)}% da receita do período)
 
+RETIRADAS / PRÓ-LABORE IDENTIFICADOS
+${proLines.join("\n") || "  Nenhuma categoria de pró-labore/retirada identificada nos dados"}
+  Total de retiradas: ${fmtBRL(proTotal)}/mês
+
+CAIXA E FÔLEGO
+  Caixa total nas contas: ${fmtBRL(cashTotal)}
+${accountBalances.map((a) => `    - ${a.name}: ${fmtBRL(a.balance)}`).join("\n") || "    (nenhuma conta cadastrada)"}
+  Cobertura de custos fixos com o caixa atual: ${fixedTotal > 0 ? `${runway.toFixed(1)} meses` : "não calculável (sem custos fixos identificados)"}
+
+CARTÕES
+${cardLines.join("\n") || "  nenhum"}
+
+COMPROMISSOS FUTUROS (pendentes até ${horizonStr})
+${pendingLines.join("\n") || "  Nenhum lançamento pendente futuro"}
+
 TOP CATEGORIAS
 ${catLines.join("\n") || "  Sem dados"}
-
-CONTAS: ${accounts.map((a: any) => a.name).join(", ") || "nenhuma"}
-CARTÕES: ${cards.map((c: any) => c.name).join(", ") || "nenhum"}
 
 METAS ORÇAMENTÁRIAS CADASTRADAS
 ${budgetLines.join("\n") || "  Nenhuma meta cadastrada"}
 === FIM DOS DADOS ===`.trim();
+
 
   return { block, monthsCovered: nMonths };
 }
@@ -291,18 +392,37 @@ export async function runAnalysis(args: RunAnalysisArgs): Promise<RunAnalysisRes
 
   const formatRules =
     channel === "whatsapp"
-      ? `FORMATO (WhatsApp): texto enxuto, use *negrito* do WhatsApp, listas curtas com "•", sem markdown de títulos, máximo ~15 linhas.`
-      : `FORMATO (chat do app): markdown, use **negrito**, títulos curtos e listas. Máximo ~25 linhas.`;
+      ? `FORMATO (WhatsApp) — versão executiva, sem markdown de títulos nem tabelas:
+• Linha 1: a conclusão com o número, em *negrito* do WhatsApp.
+• "*Conta-base*" com 4 a 7 linhas curtas no formato "• item: R$ valor".
+• "*Cenários*" com 3 a 4 linhas: "• Faturar R$ X → resultado R$ Y, retirada R$ Z, retém R$ W".
+• "*Ressalvas*": 2 a 3 bullets curtos (bruto x líquido, impostos, sazonalidade).
+• "*A política que eu adotaria*": 3 a 5 bullets (meta mínima, meta confortável, margem mínima, retenção, caixa-alvo).
+Máximo ~45 linhas. Nunca corte o raciocínio no meio: seja denso, não longo.`
+      : `FORMATO (chat do app) — markdown completo:
+1. **Conclusão** — o número, em uma ou duas frases.
+2. **Conta-base** — tabela markdown item x valor (faturamento, custos fixos, variáveis, impostos, resultado, retiradas, sobra).
+3. **Cenários** — tabela markdown com 3 a 4 faixas de faturamento e, em cada uma, resultado, retirada possível e quanto fica retido na empresa.
+4. **Ressalvas** — bruto x líquido, impostos/regime, sazonalidade, o que muda a conta.
+5. **A política que eu adotaria** — meta mínima, meta confortável, margem mínima, retenção mínima e caixa-alvo (em meses de custo fixo).`;
 
-  const system = `Você é a EVA, analista financeira do EVA OS. Você TEM os dados reais do usuário abaixo.
+  const system = `Você é a EVA, CFO do usuário no EVA OS: uma diretora financeira com mais de 20 anos de experiência em empresas brasileiras (Simples, Lucro Presumido e Real), acostumada a fechar mês, defender caixa e dizer não para retirada que quebra a empresa. Você TEM os dados reais do usuário no bloco abaixo.
+
+POSTURA DE CFO (obrigatória):
+- Você não é uma calculadora. Nunca entregue a conta simplista sem criticá-la: se o usuário pede "quero 40 mil, minha margem é 40%, logo preciso faturar 100 mil", mostre a conta dele, aponte por que ela deixa a empresa sem capital de giro e proponha o número saudável.
+- Sempre explicite as premissas ("estou assumindo que os 40% são margem líquida operacional, ANTES da retirada dos sócios").
+- Diferencie pró-labore BRUTO de LÍQUIDO: cite INSS (11%/20%), IRRF e o efeito do regime tributário sempre que o pedido for de retirada pessoal.
+- Toda recomendação de retirada precisa preservar capital de giro: defina um caixa-alvo em meses de custo fixo (mínimo 3 meses) e compare com o caixa atual dos dados.
+- Trabalhe com cenários, não com um número único. Mostre a faixa: mínimo para não quebrar, confortável, ideal.
+- Fale como quem decide: "a política que eu adotaria", "eu não retiraria mais que X até o caixa chegar em Y".
 
 REGRAS INEGOCIÁVEIS:
 1. NUNCA responda "não consigo te dar um número exato", "depende de vários fatores" ou peça para o usuário reunir dados. Você já tem os dados.
-2. SEMPRE comece pela resposta direta: o número/conclusão em uma frase.
-3. Depois mostre a MEMÓRIA DE CÁLCULO passo a passo, com os valores reais usados.
-4. Termine com 2 a 4 recomendações práticas e específicas (cite categorias e valores reais).
-5. Se faltar um dado essencial (ex.: regime tributário, pró-labore), ADOTE uma premissa razoável, marque-a explicitamente como "premissa: ..." e faça o cálculo mesmo assim. No máximo UMA pergunta objetiva no final.
-6. Use apenas os números do bloco de dados. Não invente valores. Se algo não existe nos dados, diga isso e use a premissa.
+2. Comece pela conclusão numérica em uma frase.
+3. Mostre a conta-base com os valores reais usados, item a item.
+4. Traga 3 a 4 cenários quantificados.
+5. Encerre com a política financeira recomendada (números, não conselhos genéricos).
+6. Use apenas os números do bloco de dados. O que não existir nos dados vira premissa explícita ("premissa: ..."), nunca invenção. No máximo UMA pergunta objetiva no final.
 7. Português do Brasil, valores em R$ formatados.
 ${analysisType ? `8. Tipo de análise solicitada: ${analysisType}.` : ""}
 ${targetAmount ? `9. Valor-alvo informado pelo usuário: ${fmtBRL(targetAmount)}.` : ""}
@@ -325,10 +445,11 @@ ${dataBlock}`;
     },
     body: JSON.stringify({
       model: ANALYSIS_MODEL,
-      max_tokens: 2500,
+      max_tokens: 6000,
       messages,
     }),
   });
+
 
   if (!res.ok) {
     const errText = await res.text();
@@ -346,4 +467,81 @@ ${dataBlock}`;
   const text = data?.choices?.[0]?.message?.content?.trim() || "";
   if (!text) return { ok: false, status: 500, error: "A análise voltou vazia. Tente reformular a pergunta." };
   return { ok: true, text };
+}
+
+/**
+ * Divide uma mensagem longa em partes para o WhatsApp, quebrando em linhas
+ * em branco / quebras de linha em vez de cortar o raciocínio no meio.
+ */
+export function splitForWhatsApp(text: string, maxLen = 3500): string[] {
+  const clean = (text || "").trim();
+  if (clean.length <= maxLen) return [clean];
+
+  const parts: string[] = [];
+  let rest = clean;
+  while (rest.length > maxLen) {
+    const window = rest.slice(0, maxLen);
+    let cut = window.lastIndexOf("\n\n");
+    if (cut < maxLen * 0.5) cut = window.lastIndexOf("\n");
+    if (cut < maxLen * 0.5) cut = window.lastIndexOf(" ");
+    if (cut <= 0) cut = maxLen;
+    parts.push(rest.slice(0, cut).trim());
+    rest = rest.slice(cut).trim();
+  }
+  if (rest) parts.push(rest);
+  return parts.map((p, i) => (parts.length > 1 ? `${p}${i < parts.length - 1 ? "\n\n_(continua…)_" : ""}` : p));
+}
+
+/**
+ * Leitura de CFO sobre um relatório determinístico já montado (ex.: metas do
+ * mês). Não recalcula nada: interpreta os números que recebe.
+ */
+export async function runCfoReading(args: {
+  apiKey: string;
+  reportText: string;
+  channel: "app" | "whatsapp";
+  contextLabel?: string | null;
+}): Promise<string | null> {
+  const { apiKey, reportText, channel, contextLabel } = args;
+
+  const format =
+    channel === "whatsapp"
+      ? `Responda em no máximo 10 linhas, sem títulos markdown, usando *negrito* do WhatsApp e bullets "•".`
+      : `Responda em markdown, no máximo 12 linhas, com bullets curtos.`;
+
+  const system = `Você é a EVA, CFO do usuário no EVA OS (20+ anos de experiência em finanças de empresas brasileiras).
+Recebe abaixo um relatório JÁ CALCULADO de metas x realizado do mês${contextLabel ? ` (contexto: ${contextLabel})` : ""}.
+
+Sua tarefa é a LEITURA DE CFO desse relatório:
+1. Projeção de fechamento do mês no ritmo atual (use a regra de três com o % do mês já decorrido informado no relatório).
+2. Onde está o risco real (categoria e valor).
+3. 2 a 3 ações concretas para o restante do mês, com valores.
+
+REGRAS: use SOMENTE os números do relatório e projeções derivadas deles — nunca invente valores novos. Não repita o relatório inteiro. Sem saudação. Português do Brasil.
+${format}`;
+
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: ANALYSIS_MODEL,
+        max_tokens: 1200,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: reportText },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("EVA CFO reading gateway error:", res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content?.trim() || "";
+    return text || null;
+  } catch (e) {
+    console.error("EVA CFO reading failed:", e);
+    return null;
+  }
 }
