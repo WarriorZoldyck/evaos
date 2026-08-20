@@ -5079,6 +5079,27 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }, 200);
     }
 
+    // Rede de segurança: pergunta analítica que caiu em "conversa" → responde com dados reais
+    {
+      const fm = String(aiParsed.friendly_message || "");
+      const looksEvasive = /não consigo|nao consigo|depende de|reunir os dados|não tenho acesso|nao tenho acesso|análise complexa|analise complexa/i.test(fm);
+      const looksAnalytical = /\?|quanto|qual|como|por que|porque|vale a pena|posso|preciso|margem|lucro|custo|faturar|l[ií]quido/i.test(trimmedMsg || "");
+      if (LOVABLE_API_KEY && trimmedMsg && (looksEvasive || looksAnalytical)) {
+        const contexts = resolveContexts(aiParsed.context ?? "Pessoal", companies as any, "Pessoal");
+        const analysisData = await buildAnalysisData(supabase, userId, contexts, { months: 12 });
+        const result = await runAnalysis({
+          apiKey: LOVABLE_API_KEY,
+          question: trimmedMsg.slice(0, 4000),
+          dataBlock: analysisData.block,
+          channel: "whatsapp",
+          analysisType: "diagnostico",
+        });
+        if (result.ok) {
+          return respond({ success: true, intent: "analise", message: result.text, transaction: null }, 200);
+        }
+      }
+    }
+
     return respond({
       success: true,
       intent: "conversa",
