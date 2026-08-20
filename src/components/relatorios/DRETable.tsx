@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { DRECategoryRow } from "@/hooks/useDREData";
 import { getPeriodLabel } from "@/hooks/useDREData";
+import { ExportReportButton, flattenCategoryRows } from "@/components/relatorios/ExportReportButton";
 
 interface DRETableProps {
   periods: string[];
@@ -104,6 +105,23 @@ function CategoryRows({
                     >
                       <ListFilter className="h-3.5 w-3.5" />
                     </button>
+                  )}
+                  {onDrilldown && (
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <ExportReportButton
+                        variant="icon"
+                        tooltip={`Exportar "${row.categoryName}" e subcategorias`}
+                        title={row.categoryName}
+                        fileBaseName={row.categoryName
+                          .toLowerCase()
+                          .normalize("NFD")
+                          .replace(/[\u0300-\u036f]/g, "")
+                          .replace(/[^a-z0-9]+/g, "_")
+                          .replace(/^_|_$/g, "")}
+                        periods={periods}
+                        rows={flattenCategoryRows([row], periods)}
+                      />
+                    </span>
                   )}
                 </span>
               </td>
