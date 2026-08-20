@@ -4,6 +4,7 @@ import { FileText, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { DRETable } from "@/components/relatorios/DRETable";
+import { ExportReportButton, buildGerencialRows } from "@/components/relatorios/ExportReportButton";
 import { useCashFlowMonthly, type CashFlowMonthlyFilters } from "@/hooks/useCashFlowMonthly";
 import { useAccounts } from "@/hooks/useAccounts";
 import type { DREGranularity } from "@/hooks/useDREData";
@@ -86,7 +87,7 @@ export default function FluxoDeCaixa() {
           </Select>
 
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFilters((f) => ({ ...f, year: f.year - 1 }))}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFilters((f) => ({ ...f, year: f.year - 1 }))} aria-label="Ano anterior">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Select value={String(filters.year)} onValueChange={(v) => setFilters((f) => ({ ...f, year: Number(v) }))}>
@@ -103,6 +104,21 @@ export default function FluxoDeCaixa() {
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+
+          <ExportReportButton
+            title={`Fluxo de Caixa — ${filters.year}`}
+            fileBaseName={`fluxo_de_caixa_${filters.year}`}
+            periods={periods}
+            rows={buildGerencialRows(
+              periods,
+              revenueRows,
+              expenseRows,
+              monthlyRevenueTotals,
+              monthlyExpenseTotals,
+              monthlyResults,
+            )}
+            disabled={loading}
+          />
         </div>
       </div>
 
