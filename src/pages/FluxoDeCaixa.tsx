@@ -87,7 +87,7 @@ export default function FluxoDeCaixa() {
           </Select>
 
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFilters((f) => ({ ...f, year: f.year - 1 }))}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setFilters((f) => ({ ...f, year: f.year - 1 }))} aria-label="Ano anterior">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Select value={String(filters.year)} onValueChange={(v) => setFilters((f) => ({ ...f, year: Number(v) }))}>
