@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
-import { resolveContexts, buildAnalysisData, runAnalysis } from "../_shared/eva-analysis.ts";
+import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading, splitForWhatsApp } from "../_shared/eva-analysis.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -4571,6 +4571,15 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               report,
               aiParsed.context || undefined,
             );
+            if (report.hasData && LOVABLE_API_KEY) {
+              const reading = await runCfoReading({
+                apiKey: LOVABLE_API_KEY,
+                reportText: responseMessage,
+                channel: "whatsapp",
+                contextLabel: aiParsed.context || null,
+              });
+              if (reading) responseMessage += `\n\n🧠 *Leitura da EVA (CFO)*\n${reading}`;
+            }
             break;
           }
 
