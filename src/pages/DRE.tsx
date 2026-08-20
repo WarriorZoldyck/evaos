@@ -63,15 +63,35 @@ export default function DRE() {
             </CollapsibleContent>
           </Collapsible>
         </div>
-        <DREPeriodFilter
-          filters={filters}
-          onChange={(partial) => setFilters((prev) => ({ ...prev, ...partial }))}
-          bankAccounts={bankAccounts}
-          showVerticalAnalysis={showVerticalAnalysis}
-          onToggleVerticalAnalysis={setShowVerticalAnalysis}
-          showHorizontalAnalysis={showHorizontalAnalysis}
-          onToggleHorizontalAnalysis={setShowHorizontalAnalysis}
-        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <DREPeriodFilter
+            filters={filters}
+            onChange={(partial) => setFilters((prev) => ({ ...prev, ...partial }))}
+            bankAccounts={bankAccounts}
+            showVerticalAnalysis={showVerticalAnalysis}
+            onToggleVerticalAnalysis={setShowVerticalAnalysis}
+            showHorizontalAnalysis={showHorizontalAnalysis}
+            onToggleHorizontalAnalysis={setShowHorizontalAnalysis}
+          />
+          <ExportReportButton
+            title={`DRE ${isContabil ? "Contábil" : "Gerencial"} — ${filters.year}`}
+            fileBaseName={`dre_${isContabil ? "contabil" : "gerencial"}_${filters.year}`}
+            periods={data.periods}
+            rows={
+              isContabil
+                ? buildContabilRows(data.sections, data.periods)
+                : buildGerencialRows(
+                    data.periods,
+                    data.revenueRows,
+                    data.expenseRows,
+                    data.monthlyRevenueTotals,
+                    data.monthlyExpenseTotals,
+                    data.monthlyResults,
+                  )
+            }
+            disabled={data.loading}
+          />
+        </div>
       </div>
 
       {/* Unmapped categories warning (contábil) */}
