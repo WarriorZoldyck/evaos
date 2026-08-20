@@ -129,7 +129,7 @@ export async function buildAnalysisData(
   const [txRes, catRes, accRes, cardRes, budgetRes] = await Promise.all([
     supabase
       .from("transactions")
-      .select("amount, type, status, payment_date, competence_date, category, subcategory, company_id, is_transfer")
+      .select("amount, type, status, payment_date, competence_date, category, subcategory, company_id, is_internal_transfer")
       .eq("user_id", userId)
       .gte("payment_date", startStr)
       .limit(20000),
@@ -150,7 +150,7 @@ export async function buildAnalysisData(
     wanted.has(companyId ?? "__pessoal__");
 
   const txs = (txRes?.data || []).filter(
-    (t: any) => inScope(t.company_id) && !t.is_transfer,
+    (t: any) => inScope(t.company_id) && !t.is_internal_transfer,
   );
 
   // Monthly series
@@ -233,8 +233,7 @@ export async function buildAnalysisData(
   const budgets = (budgetRes?.data || []).filter((b: any) => inScope(b.company_id));
 
   const budgetLines = budgets.slice(0, 40).map((b: any) => {
-    const cat = catById.get(b.category_id);
-    return `  ${cat?.name || b.category_id || "—"}: meta ${fmtBRL(Number(b.target_amount ?? b.amount ?? 0))}${b.type ? ` (${b.type})` : ""}`;
+    return `  ${b.category_name || "—"}: meta ${fmtBRL(Number(b.target_amount ?? 0))}${b.kind ? ` (${b.kind})` : ""}`;
   });
 
   const block = `
