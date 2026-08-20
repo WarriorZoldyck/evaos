@@ -4,6 +4,7 @@ import { FileText, Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { DRETable } from "@/components/relatorios/DRETable";
+import { ExportReportButton, buildGerencialRows } from "@/components/relatorios/ExportReportButton";
 import { useCashFlowMonthly, type CashFlowMonthlyFilters } from "@/hooks/useCashFlowMonthly";
 import { useAccounts } from "@/hooks/useAccounts";
 import type { DREGranularity } from "@/hooks/useDREData";
