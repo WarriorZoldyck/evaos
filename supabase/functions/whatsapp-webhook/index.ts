@@ -2147,7 +2147,7 @@ NÍVEL DE DETALHE ("detail_level") — REGRA IMPORTANTE:
 - "listar_lancamentos" é sempre detalhado por natureza.
 
 MÚLTIPLAS PERGUNTAS NA MESMA MENSAGEM:
-- Se o usuário fizer 2 ou 3 perguntas diferentes numa só mensagem (ex: "quanto gastei em alimentação em julho? e qual minha meta de lazer?"), responda a PRIMEIRA no objeto principal e coloque as demais em "follow_up_queries": um array com até 3 objetos, cada um com os mesmos campos ({"query_type","category_filter","period_filter","date_from","date_to","period_label","context","tipo_filter","contact_filter"}). O sistema executa todas e junta as respostas. NUNCA ignore uma das perguntas.
+- Se o usuário fizer 2 ou 3 perguntas diferentes numa só mensagem (ex: "quanto gastei em alimentação em julho? e qual minha meta de lazer?"), responda a PRIMEIRA no objeto principal e coloque as demais em "follow_up_queries": um array com até 3 objetos, cada um com os mesmos campos ({"query_type","category_filter","period_filter","date_from","date_to","period_label","detail_level","context","tipo_filter","contact_filter"}). O sistema executa todas e junta as respostas. NUNCA ignore uma das perguntas.
 
 REGRAS DE PERÍODO:
 - Se o usuário não especificar período, use "mes_atual"

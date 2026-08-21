@@ -259,6 +259,7 @@ REGRA CRÍTICA — PERGUNTAS SEMPRE VIRAM "consulta", NUNCA "conversa":
 - "Como estão minhas metas do mês?" / "Estou dentro do orçamento?" / "Quanto ainda posso gastar?" → query_type="metas_mes"
 - "Quanto gastei esse mês?" (sem categoria) → query_type="gastos_mes"
 - "Qual a minha meta de lazer?" / "Quanto ainda posso gastar em alimentação?" → query_type="meta_categoria", category_filter="lazer"
+- NÍVEL DE DETALHE: use "detail_level":"resumo" por padrão (só o valor consolidado, sem listar lançamentos). Use "detalhado" APENAS quando o usuário pedir os itens ("quais lançamentos", "quais foram", "do que é isso", "o que compõe", "me mostra a lista", "detalha"). Se o usuário perguntar "quais foram?" depois de um resumo, repita a MESMA consulta com detail_level="detalhado". "listar_lancamentos" é sempre detalhado.
 - Período específico: se o usuário citar mês/ano ("em julho de 2026", "março", "de 01/07 a 15/07"), preencha date_from e date_to (YYYY-MM-DD) e period_label ("julho/2026") em vez de period_filter. Sem ano citado, use o ano de hoje.
 - Duas ou três perguntas na mesma mensagem: responda a primeira no objeto principal e coloque as outras (até 3) em "follow_up_queries", cada uma com os mesmos campos. NUNCA deixe uma pergunta sem resposta.
 - NUNCA responda "não tenho essa informação" — dispare a consulta apropriada.
@@ -313,7 +314,7 @@ Para gerenciamento de categorias:
 {"intent":"gerenciar_categoria","action":"criar|criar_subcategoria|renomear|mover|excluir","category_name":"...","category_id":"UUID","new_name":"...","parent_category_id":"UUID|null","new_parent_category_id":"UUID|null","category_type":"receita|despesa|ambos","context":"Pessoal|Nome","friendly_message":"..."}
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...","contact_filter":"...|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|ano_passado|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"julho/2026 (ou null)","context":"Pessoal|Nome","follow_up_queries":[],"friendly_message":"..."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...","contact_filter":"...|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|ano_passado|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"julho/2026 (ou null)","detail_level":"resumo|detalhado","context":"Pessoal|Nome","follow_up_queries":[],"friendly_message":"..."}
 
 REGRA DE PERÍODO — PRESTE MUITA ATENÇÃO:
 - Se o usuário diz "ano", "anual", "este ano", "2025", "2026" → use "ano_atual" ou "ano_passado"
@@ -1032,9 +1033,16 @@ ${historicalPatternsBlock}`;
             if (!catExpenses || catExpenses.length === 0) {
               responseMessage = `📊 Nenhum gasto encontrado com "${label}" ${periodLabel}.\n\nDica: tente um termo diferente (categoria ou nome do estabelecimento).`;
             } else {
-              const items = catExpenses.slice(0, 20).map((t: any) => `  • ${t.description}${t.contact_name ? ` — ${t.contact_name}` : ""}: ${fmt(Number(t.amount))} (${formatDate(t.payment_date)})`).join("\n");
-              const extra = catExpenses.length > 20 ? `\n  ...e mais ${catExpenses.length - 20} lançamento(s)` : "";
-              responseMessage = `📊 Gastos com "${label}" ${periodLabel}:\n\n${items}${extra}\n\n💰 Total: ${fmt(total)} (${catExpenses.length} lançamento(s))`;
+              const detailed = String(aiParsed.detail_level || "resumo").toLowerCase() === "detalhado";
+              const pendingTotal = catExpenses.filter((t: any) => t.status === "Pendente").reduce((acc: number, t: any) => acc + Number(t.amount || 0), 0);
+              const pendingLine = pendingTotal > 0 ? `\n\n⏳ Sendo ${fmt(pendingTotal)} ainda pendente(s)` : "";
+              if (!detailed) {
+                responseMessage = `📊 Gastos com "${label}" ${periodLabel}\n\n💰 **Total: ${fmt(total)}** (${catExpenses.length} lançamento(s))${pendingLine}\n\n_Quer ver os lançamentos? É só pedir._`;
+              } else {
+                const items = catExpenses.slice(0, 20).map((t: any) => `  • ${t.description}${t.contact_name ? ` — ${t.contact_name}` : ""}: ${fmt(Number(t.amount))} (${formatDate(t.payment_date)})`).join("\n");
+                const extra = catExpenses.length > 20 ? `\n  ...e mais ${catExpenses.length - 20} lançamento(s)` : "";
+                responseMessage = `📊 Gastos com "${label}" ${periodLabel}:\n\n${items}${extra}\n\n💰 Total: ${fmt(total)} (${catExpenses.length} lançamento(s))${pendingLine}`;
+              }
             }
             break;
           }
