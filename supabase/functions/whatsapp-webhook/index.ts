@@ -2562,7 +2562,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     const VALID_QUERY_TYPES = [
       "saldo", "resumo_mes", "gastos_mes", "receitas_mes", "pendentes",
       "gastos_categoria", "agrupar_por_categoria", "listar_lancamentos",
-      "listar_cartoes", "listar_contas", "metas_mes",
+      "listar_cartoes", "listar_contas", "metas_mes", "meta_categoria",
     ];
     // Self-heal: AI sometimes puts query_type in the intent field (e.g. intent="agrupar_por_categoria")
     if (aiParsed.intent && VALID_QUERY_TYPES.includes(aiParsed.intent)) {
