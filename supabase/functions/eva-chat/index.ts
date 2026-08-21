@@ -907,16 +907,52 @@ ${historicalPatternsBlock}`;
               all.find((r: any) => normalizeText(r.name) === nf) ||
               all.find((r: any) => normalizeText(r.name).includes(nf) || nf.includes(normalizeText(r.name)));
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+
+            let pendingMonth = 0;
+            if (row) {
+              const rootNameOf = (catId: string): string => {
+                let node: any = categories.find((c: any) => c.id === catId);
+                let guard = 0;
+                while (node?.parent_id && guard < 5) {
+                  const parent = categories.find((c: any) => c.id === node.parent_id);
+                  if (!parent) break;
+                  node = parent;
+                  guard++;
+                }
+                return node?.name || "";
+              };
+              const branchIds = categories
+                .filter((c: any) => normalizeText(rootNameOf(c.id)) === normalizeText(row.name))
+                .map((c: any) => c.id);
+              if (branchIds.length > 0) {
+                const mStart = new Date().toISOString().substring(0, 7) + "-01";
+                const mEnd = new Date();
+                mEnd.setMonth(mEnd.getMonth() + 1, 0);
+                let pq = supabase
+                  .from("transactions")
+                  .select("amount")
+                  .eq("user_id", userId)
+                  .eq("status", "Pendente")
+                  .in("category", branchIds)
+                  .gte("payment_date", mStart)
+                  .lte("payment_date", mEnd.toISOString().substring(0, 10));
+                pq = addContextFilter(pq);
+                const { data: pendRows } = await pq;
+                pendingMonth = (pendRows || []).reduce((acc: number, t: any) => acc + Number(t.amount || 0), 0);
+              }
+            }
+            const pendingLine = pendingMonth > 0 ? `\n- Pendente neste mês: ${fmt(pendingMonth)} ⏳` : "";
+
             if (!wanted) {
               responseMessage = "De qual categoria você quer saber a meta?";
             } else if (!row) {
               responseMessage = `📊 Não encontrei a categoria "${wanted}" no seu planejamento${ctxLabel}.`;
             } else if (!row.target || row.target <= 0) {
-              responseMessage = `📊 **${row.name}**${ctxLabel}\n\n- Meta do mês: não definida\n- Já realizado neste mês: ${fmt(row.actual || 0)}\n- Média mensal do ano: ${fmt(row.average || 0)}`;
+              responseMessage = `📊 **${row.name}**${ctxLabel}\n\n- Meta do mês: não definida\n- Já realizado neste mês: ${fmt(row.actual || 0)}${pendingLine}\n- Média mensal do ano: ${fmt(row.average || 0)}`;
             } else {
               const remaining = (row.target || 0) - (row.actual || 0);
               const pct = Math.round(((row.actual || 0) / row.target) * 100);
-              responseMessage = `📊 **Meta de ${row.name}**${ctxLabel} — ${row.kind}\n\n- Meta do mês: ${fmt(row.target)}\n- Já realizado: ${fmt(row.actual || 0)} (${pct}%)\n- ${remaining >= 0 ? `Ainda cabe: ${fmt(remaining)}` : `Estourou: ${fmt(Math.abs(remaining))} ⚠️`}\n- Média mensal do ano: ${fmt(row.average || 0)}`;
+              responseMessage = `📊 **Meta de ${row.name}**${ctxLabel} — ${row.kind}\n\n- Meta do mês: ${fmt(row.target)}\n- Já realizado: ${fmt(row.actual || 0)} (${pct}%)${pendingLine}\n- ${remaining >= 0 ? `Ainda cabe: ${fmt(remaining)}` : `Estourou: ${fmt(Math.abs(remaining))} ⚠️`}`;
             }
             break;
           }
