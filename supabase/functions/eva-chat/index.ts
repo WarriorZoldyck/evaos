@@ -258,6 +258,9 @@ REGRA CRÍTICA — PERGUNTAS SEMPRE VIRAM "consulta", NUNCA "conversa":
 - "O que tenho a pagar?" / "Pendentes" → query_type="pendentes"
 - "Como estão minhas metas do mês?" / "Estou dentro do orçamento?" / "Quanto ainda posso gastar?" → query_type="metas_mes"
 - "Quanto gastei esse mês?" (sem categoria) → query_type="gastos_mes"
+- "Qual a minha meta de lazer?" / "Quanto ainda posso gastar em alimentação?" → query_type="meta_categoria", category_filter="lazer"
+- Período específico: se o usuário citar mês/ano ("em julho de 2026", "março", "de 01/07 a 15/07"), preencha date_from e date_to (YYYY-MM-DD) e period_label ("julho/2026") em vez de period_filter. Sem ano citado, use o ano de hoje.
+- Duas ou três perguntas na mesma mensagem: responda a primeira no objeto principal e coloque as outras (até 3) em "follow_up_queries", cada uma com os mesmos campos. NUNCA deixe uma pergunta sem resposta.
 - NUNCA responda "não tenho essa informação" — dispare a consulta apropriada.
 
 REGRA CRÍTICA — PERGUNTAS ANALÍTICAS VIRAM "analise", NUNCA "conversa":
