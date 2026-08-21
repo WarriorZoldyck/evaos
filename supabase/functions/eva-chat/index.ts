@@ -1084,10 +1084,14 @@ ${historicalPatternsBlock}`;
         responseMessage = "Erro ao buscar dados. Tente novamente.";
       }
 
-      return new Response(JSON.stringify({ reply: responseMessage, action: "query" }), {
+      answerBlocks.push(responseMessage);
+      }
+
+      return new Response(JSON.stringify({ reply: answerBlocks.filter(Boolean).join("\n\n---\n\n"), action: "query" }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     // === EDITAR LANÇAMENTO ===
     if (aiParsed.intent === "editar_lancamento") {
