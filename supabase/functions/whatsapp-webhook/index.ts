@@ -4624,17 +4624,59 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             break;
           }
 
+          case "meta_categoria": {
+            const wanted = String(aiParsed.category_filter || "").trim();
+            const ctxCompanyMeta =
+              companyId ?? (aiParsed.context === "Pessoal" ? null : undefined);
+            const report = await buildBudgetMonthReport(supabase, userId, ctxCompanyMeta);
+            const norm = (s: string) =>
+              s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+            const all = [
+              ...report.expense.map((r: any) => ({ ...r, kind: "saída" })),
+              ...report.income.map((r: any) => ({ ...r, kind: "entrada" })),
+            ];
+            const row =
+              all.find((r: any) => norm(r.name) === norm(wanted)) ||
+              all.find((r: any) => norm(r.name).includes(norm(wanted)) || norm(wanted).includes(norm(r.name)));
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+
+            if (!wanted) {
+              responseMessage = "De qual categoria você quer saber a meta?";
+            } else if (!row) {
+              responseMessage = `📊 Não encontrei a categoria "${wanted}" no seu planejamento${ctxLabel}. Cadastre a meta em Planejamento Inteligente ou me diga o nome exato da categoria.`;
+            } else if (!row.target || row.target <= 0) {
+              responseMessage = `📊 *${row.name}*${ctxLabel}\n\n• Meta do mês: não definida\n• Já realizado neste mês: ${fmt(row.actual || 0)}\n• Média mensal do ano: ${fmt(row.average || 0)}\n\nQuer que eu use a média (${fmt(row.average || 0)}) como meta dessa categoria?`;
+            } else {
+              const remaining = (row.target || 0) - (row.actual || 0);
+              const pct = row.target > 0 ? Math.round(((row.actual || 0) / row.target) * 100) : 0;
+              const line =
+                remaining >= 0
+                  ? `• Ainda cabe: ${fmt(remaining)}`
+                  : `• Estourou: ${fmt(Math.abs(remaining))} ⚠️`;
+              responseMessage = `📊 *Meta de ${row.name}*${ctxLabel} — ${row.kind}\n\n• Meta do mês: ${fmt(row.target)}\n• Já realizado: ${fmt(row.actual || 0)} (${pct}% da meta)\n${line}\n• Média mensal do ano: ${fmt(row.average || 0)}`;
+            }
+            break;
+          }
+
           case "gastos_categoria": {
             const categoryFilter = aiParsed.category_filter || "";
-            const filterCat = categories.find(
-              (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
-            );
-            // Include subcategories of the matched category
+            const normCat = (s: string) =>
+              String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+            const filterCat =
+              categories.find((c) => normCat(c.name) === normCat(categoryFilter)) ||
+              categories.find((c) => categoryFilter && normCat(c.name).includes(normCat(categoryFilter)));
+            // Include ALL descendants (subcategorias e sub-subcategorias)
             const catIds: string[] = [];
             if (filterCat) {
-              catIds.push(filterCat.id);
-              const subs = categories.filter((c: any) => c.parent_id === filterCat.id);
-              subs.forEach((s: any) => catIds.push(s.id));
+              const queue = [filterCat.id];
+              while (queue.length > 0) {
+                const current = queue.shift()!;
+                if (catIds.includes(current)) continue;
+                catIds.push(current);
+                categories
+                  .filter((c: any) => c.parent_id === current)
+                  .forEach((c: any) => queue.push(c.id));
+              }
             }
 
             let q = supabase
@@ -4645,7 +4687,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               .gte("payment_date", periodStart)
               .lte("payment_date", periodEnd)
               .order("payment_date", { ascending: false })
-              .limit(20);
+              .limit(1000);
             
             if (catIds.length > 0) {
               q = q.in("category", catIds);
@@ -4653,23 +4695,28 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               q = q.ilike("category", `%${categoryFilter}%`);
             }
             q = addContextFilter(q);
-            const { data: catExpenses } = await q;
+            const { data: catExpensesAll } = await q;
 
-            const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
+            const rows = catExpensesAll || [];
+            // Total sobre TODOS os lançamentos do período (não só os exibidos)
+            const total = rows.reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            
-            if (!catExpenses || catExpenses.length === 0) {
+            const shown = rows.slice(0, 25);
+
+            if (rows.length === 0) {
               responseMessage = `📊 Nenhum gasto com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}.`;
             } else {
-              const items = catExpenses.map((t: any) => {
+              const items = shown.map((t: any) => {
                 const contact = t.contact_name ? ` — ${t.contact_name}` : "";
                 const statusIcon = t.status === "Pendente" ? " ⏳" : "";
                 return `  • ${t.description}${contact}: ${fmt(t.amount)} (${formatDate(t.payment_date)})${statusIcon}`;
               }).join("\n");
-              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}:\n\n${items}\n\n💰 Total: ${fmt(total)} (${catExpenses.length} lançamento${catExpenses.length > 1 ? "s" : ""})`;
+              const more = rows.length > shown.length ? `\n  … e mais ${rows.length - shown.length} lançamento(s)` : "";
+              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}:\n\n${items}${more}\n\n💰 Total: ${fmt(total)} (${rows.length} lançamento${rows.length > 1 ? "s" : ""})`;
             }
             break;
           }
+
 
           case "listar_lancamentos": {
             const contactFilter = aiParsed.contact_filter || "";
