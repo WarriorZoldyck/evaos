@@ -890,6 +890,33 @@ ${historicalPatternsBlock}`;
 
       try {
         switch (aiParsed.query_type) {
+          case "meta_categoria": {
+            const wanted = String(aiParsed.category_filter || "").trim();
+            const ctxCompanyMeta = companyId ?? (aiParsed.context === "Pessoal" ? null : undefined);
+            const report = await buildBudgetMonthReport(supabase, userId, ctxCompanyMeta);
+            const all = [
+              ...report.expense.map((r: any) => ({ ...r, kind: "saída" })),
+              ...report.income.map((r: any) => ({ ...r, kind: "entrada" })),
+            ];
+            const nf = normalizeText(wanted);
+            const row =
+              all.find((r: any) => normalizeText(r.name) === nf) ||
+              all.find((r: any) => normalizeText(r.name).includes(nf) || nf.includes(normalizeText(r.name)));
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+            if (!wanted) {
+              responseMessage = "De qual categoria você quer saber a meta?";
+            } else if (!row) {
+              responseMessage = `📊 Não encontrei a categoria "${wanted}" no seu planejamento${ctxLabel}.`;
+            } else if (!row.target || row.target <= 0) {
+              responseMessage = `📊 **${row.name}**${ctxLabel}\n\n- Meta do mês: não definida\n- Já realizado neste mês: ${fmt(row.actual || 0)}\n- Média mensal do ano: ${fmt(row.average || 0)}`;
+            } else {
+              const remaining = (row.target || 0) - (row.actual || 0);
+              const pct = Math.round(((row.actual || 0) / row.target) * 100);
+              responseMessage = `📊 **Meta de ${row.name}**${ctxLabel} — ${row.kind}\n\n- Meta do mês: ${fmt(row.target)}\n- Já realizado: ${fmt(row.actual || 0)} (${pct}%)\n- ${remaining >= 0 ? `Ainda cabe: ${fmt(remaining)}` : `Estourou: ${fmt(Math.abs(remaining))} ⚠️`}\n- Média mensal do ano: ${fmt(row.average || 0)}`;
+            }
+            break;
+          }
+
           case "metas_mes": {
             const ctxCompany =
               companyId ?? (aiParsed.context === "Pessoal" ? null : undefined);
