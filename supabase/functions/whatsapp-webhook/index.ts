@@ -4874,13 +4874,17 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
       }
 
+      answerBlocks.push(responseMessage);
+      }
+
       return respond({
         success: true,
         intent: "consulta",
-        message: responseMessage,
+        message: answerBlocks.filter(Boolean).join("\n\n————————\n\n"),
         transaction: null,
       }, 200);
     }
+
 
     // === GERENCIAR CATEGORIA ===
     if (aiParsed.intent === "gerenciar_categoria") {
