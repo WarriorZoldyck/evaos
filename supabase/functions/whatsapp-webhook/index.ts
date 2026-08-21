@@ -2116,7 +2116,7 @@ REGRAS DE GERENCIAMENTO DE CATEGORIAS:
 - NÃO invente ações além das listadas acima.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"rótulo legível do período, ex: julho/2026 (ou null)","context":"Pessoal|Nome da Empresa","follow_up_queries":[],"friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"rótulo legível do período, ex: julho/2026 (ou null)","detail_level":"resumo|detalhado","context":"Pessoal|Nome da Empresa","follow_up_queries":[],"friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
 
 ⚠️ CRÍTICO: Para consultas o campo 'intent' SEMPRE deve ser exatamente "consulta" (literal). O tipo da consulta vai em 'query_type'. NUNCA coloque "agrupar_por_categoria", "saldo", "listar_lancamentos" etc. no campo 'intent' — só em 'query_type'.
 ⚠️ NUNCA use frases como "Vou buscar essa informação", "Já vou te trazer", "Aguarde um momento" no friendly_message de consultas. O backend executa a consulta no mesmo turno e entrega o resultado — promessas de "vou buscar" deixam o usuário sem resposta.
@@ -2127,7 +2127,7 @@ TIPOS DE CONSULTA:
 - "gastos_mes" = total de despesas do mês
 - "receitas_mes" = total de receitas do mês
 - "pendentes" = contas a pagar/receber
-- "gastos_categoria" = gastos de UMA categoria específica (LISTA os lançamentos individuais + total). EXIGE category_filter preenchido com o nome da categoria.
+- "gastos_categoria" = gastos de UMA categoria específica. EXIGE category_filter preenchido com o nome da categoria.
 - "agrupar_por_categoria" = TODOS os lançamentos agrupados por categoria, com total e % por categoria. Use quando o usuário pedir para "separar/agrupar/dividir por categoria", "gastos por categoria" (sem nomear uma), "quanto gastei em cada categoria", etc. Defina tipo_filter="despesa" (padrão) ou "receita". NÃO use category_filter aqui.
 - "listar_lancamentos" = listar lançamentos filtrados por fornecedor, cliente, descrição, ou qualquer critério específico
 - "listar_cartoes" = listar cartões de crédito cadastrados
@@ -2140,8 +2140,14 @@ TIPOS DE CONSULTA:
 - Se o usuário pedir para AGRUPAR/SEPARAR/DIVIDIR por categoria sem nomear uma específica (ex: "separe meus gastos por categoria", "quanto gastei em cada categoria"), use "agrupar_por_categoria". NUNCA use "gastos_categoria" com category_filter vazio nem "listar_lancamentos" nesse caso.
 - SEMPRE que o usuário pedir dados específicos, filtre e retorne SOMENTE o que ele pediu. NÃO retorne dados genéricos.
 
+NÍVEL DE DETALHE ("detail_level") — REGRA IMPORTANTE:
+- Padrão SEMPRE "resumo": responda só o VALOR consolidado (total, meta, saldo), sem listar lançamentos.
+- Use "detalhado" APENAS quando o usuário pedir explicitamente os itens: "quais lançamentos", "quais foram", "do que é isso", "o que compõe", "me mostra a lista", "detalha", "discrimina", "extrato de...".
+- Se logo depois de um resumo o usuário perguntar "quais foram?" / "do que é?", repita a MESMA consulta anterior (mesma categoria e mesmo período do histórico) com detail_level="detalhado".
+- "listar_lancamentos" é sempre detalhado por natureza.
+
 MÚLTIPLAS PERGUNTAS NA MESMA MENSAGEM:
-- Se o usuário fizer 2 ou 3 perguntas diferentes numa só mensagem (ex: "quanto gastei em alimentação em julho? e qual minha meta de lazer?"), responda a PRIMEIRA no objeto principal e coloque as demais em "follow_up_queries": um array com até 3 objetos, cada um com os mesmos campos ({"query_type","category_filter","period_filter","date_from","date_to","period_label","context","tipo_filter","contact_filter"}). O sistema executa todas e junta as respostas. NUNCA ignore uma das perguntas.
+- Se o usuário fizer 2 ou 3 perguntas diferentes numa só mensagem (ex: "quanto gastei em alimentação em julho? e qual minha meta de lazer?"), responda a PRIMEIRA no objeto principal e coloque as demais em "follow_up_queries": um array com até 3 objetos, cada um com os mesmos campos ({"query_type","category_filter","period_filter","date_from","date_to","period_label","detail_level","context","tipo_filter","contact_filter"}). O sistema executa todas e junta as respostas. NUNCA ignore uma das perguntas.
 
 REGRAS DE PERÍODO:
 - Se o usuário não especificar período, use "mes_atual"
@@ -4640,12 +4646,48 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               all.find((r: any) => norm(r.name).includes(norm(wanted)) || norm(wanted).includes(norm(r.name)));
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
 
+            // Pendentes do mês nessa categoria (o relatório de metas conta só o que está Pago)
+            let pendingMonth = 0;
+            if (row) {
+              const rootNameOf = (catId: string): string => {
+                let node: any = categories.find((c: any) => c.id === catId);
+                let guard = 0;
+                while (node?.parent_id && guard < 5) {
+                  const parent = categories.find((c: any) => c.id === node.parent_id);
+                  if (!parent) break;
+                  node = parent;
+                  guard++;
+                }
+                return node?.name || "";
+              };
+              const branchIds = categories
+                .filter((c: any) => norm(rootNameOf(c.id)) === norm(row.name))
+                .map((c: any) => c.id);
+              if (branchIds.length > 0) {
+                const monthStart = new Date().toISOString().substring(0, 7) + "-01";
+                const monthEndDate = new Date();
+                monthEndDate.setMonth(monthEndDate.getMonth() + 1, 0);
+                let pq = supabase
+                  .from("transactions")
+                  .select("amount")
+                  .eq("user_id", userId)
+                  .eq("status", "Pendente")
+                  .in("category", branchIds)
+                  .gte("payment_date", monthStart)
+                  .lte("payment_date", monthEndDate.toISOString().substring(0, 10));
+                pq = addContextFilter(pq);
+                const { data: pendRows } = await pq;
+                pendingMonth = (pendRows || []).reduce((acc: number, t: any) => acc + (Number(t.amount) || 0), 0);
+              }
+            }
+            const pendingLine = pendingMonth > 0 ? `\n• Pendente neste mês: ${fmt(pendingMonth)} ⏳` : "";
+
             if (!wanted) {
               responseMessage = "De qual categoria você quer saber a meta?";
             } else if (!row) {
               responseMessage = `📊 Não encontrei a categoria "${wanted}" no seu planejamento${ctxLabel}. Cadastre a meta em Planejamento Inteligente ou me diga o nome exato da categoria.`;
             } else if (!row.target || row.target <= 0) {
-              responseMessage = `📊 *${row.name}*${ctxLabel}\n\n• Meta do mês: não definida\n• Já realizado neste mês: ${fmt(row.actual || 0)}\n• Média mensal do ano: ${fmt(row.average || 0)}\n\nQuer que eu use a média (${fmt(row.average || 0)}) como meta dessa categoria?`;
+              responseMessage = `📊 *${row.name}*${ctxLabel}\n\n• Meta do mês: não definida\n• Já realizado neste mês: ${fmt(row.actual || 0)}${pendingLine}\n• Média mensal do ano: ${fmt(row.average || 0)}\n\nQuer que eu use a média (${fmt(row.average || 0)}) como meta dessa categoria?`;
             } else {
               const remaining = (row.target || 0) - (row.actual || 0);
               const pct = row.target > 0 ? Math.round(((row.actual || 0) / row.target) * 100) : 0;
@@ -4653,7 +4695,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 remaining >= 0
                   ? `• Ainda cabe: ${fmt(remaining)}`
                   : `• Estourou: ${fmt(Math.abs(remaining))} ⚠️`;
-              responseMessage = `📊 *Meta de ${row.name}*${ctxLabel} — ${row.kind}\n\n• Meta do mês: ${fmt(row.target)}\n• Já realizado: ${fmt(row.actual || 0)} (${pct}% da meta)\n${line}\n• Média mensal do ano: ${fmt(row.average || 0)}`;
+              responseMessage = `📊 *Meta de ${row.name}*${ctxLabel} — ${row.kind}\n\n• Meta do mês: ${fmt(row.target)}\n• Já realizado: ${fmt(row.actual || 0)} (${pct}% da meta)${pendingLine}\n${line}`;
             }
             break;
           }
@@ -4703,8 +4745,16 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
             const shown = rows.slice(0, 25);
 
+            const pendingTotal = rows
+              .filter((t: any) => t.status === "Pendente")
+              .reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+            const detailed = String(aiParsed.detail_level || "resumo").toLowerCase() === "detalhado";
+
             if (rows.length === 0) {
               responseMessage = `📊 Nenhum gasto com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}.`;
+            } else if (!detailed) {
+              const pendingLine = pendingTotal > 0 ? `\n⏳ Sendo ${fmt(pendingTotal)} ainda pendente(s)` : "";
+              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}\n\n💰 Total: ${fmt(total)} (${rows.length} lançamento${rows.length > 1 ? "s" : ""})${pendingLine}\n\n_Quer ver os lançamentos? É só pedir._`;
             } else {
               const items = shown.map((t: any) => {
                 const contact = t.contact_name ? ` — ${t.contact_name}` : "";
