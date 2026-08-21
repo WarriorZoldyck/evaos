@@ -4384,8 +4384,24 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         const todayDate = new Date(today + "T12:00:00");
         const pad2 = (n: number) => String(n).padStart(2, "0");
         const fmtDate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-        
+
+        // Período explícito informado pela IA (mês/ano específico, intervalo livre)
+        const isDate = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+        if (isDate(aiParsed.date_from) || isDate(aiParsed.date_to)) {
+          const start = isDate(aiParsed.date_from) ? aiParsed.date_from : `${String(aiParsed.date_to).slice(0, 7)}-01`;
+          let end = isDate(aiParsed.date_to) ? aiParsed.date_to : null;
+          if (!end) {
+            const [y, m] = start.split("-").map(Number);
+            end = `${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`;
+          }
+          const label = aiParsed.period_label
+            ? `em ${aiParsed.period_label}`
+            : `de ${start.split("-").reverse().join("/")} a ${end.split("-").reverse().join("/")}`;
+          return { start, end, label };
+        }
+
         switch (period) {
+
           case "mes_passado": {
             const d = new Date(todayDate);
             d.setMonth(d.getMonth() - 1);
