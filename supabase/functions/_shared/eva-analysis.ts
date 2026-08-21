@@ -260,11 +260,11 @@ export async function buildAnalysisData(
     const amount = Math.abs(Number(t.amount) || 0);
     movByAccount.set(id, (movByAccount.get(id) || 0) + (t.type === "receita" ? amount : -amount));
   }
-  const accountBalances = accounts.map((a: any) => ({
+  const accountBalances: { name: string; balance: number }[] = accounts.map((a: any) => ({
     name: a.name,
     balance: Number(a.initial_balance || 0) + (movByAccount.get(a.id) || 0),
   }));
-  const cashTotal = accountBalances.reduce((s, a) => s + a.balance, 0);
+  const cashTotal = accountBalances.reduce((s: number, a) => s + a.balance, 0);
 
   // Compromissos futuros (3 meses)
   const pending = (pendingRes?.data || []).filter((t: any) => inScope(t.company_id));
