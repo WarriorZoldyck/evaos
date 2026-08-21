@@ -2133,12 +2133,15 @@ TIPOS DE CONSULTA:
 - "listar_cartoes" = listar cartões de crédito cadastrados
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
 - "metas_mes" = acompanhamento das METAS ORÇAMENTÁRIAS do mês (quanto já foi gasto/recebido vs a meta, quanto falta e em que categorias não dá para gastar mais). Use quando o usuário falar em "meta", "metas do mês", "orçamento", "quanto ainda posso gastar", "estou dentro da meta?", "quanto falta para bater a meta".
+- "meta_categoria" = meta orçamentária de UMA categoria específica (ex: "qual a minha meta de lazer?", "quanto posso gastar ainda em alimentação?"). EXIGE category_filter com o nome da categoria.
 - Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
 - Se o usuário pedir lançamentos de um fornecedor específico (ex: "lançamentos do Moscato", "quanto paguei no Dentais"), use "listar_lancamentos" com contact_filter.
 - Se o usuário pedir lançamentos de UMA categoria nomeada (ex: "gastos com Alimentação"), use "gastos_categoria" com category_filter.
 - Se o usuário pedir para AGRUPAR/SEPARAR/DIVIDIR por categoria sem nomear uma específica (ex: "separe meus gastos por categoria", "quanto gastei em cada categoria"), use "agrupar_por_categoria". NUNCA use "gastos_categoria" com category_filter vazio nem "listar_lancamentos" nesse caso.
 - SEMPRE que o usuário pedir dados específicos, filtre e retorne SOMENTE o que ele pediu. NÃO retorne dados genéricos.
 
+MÚLTIPLAS PERGUNTAS NA MESMA MENSAGEM:
+- Se o usuário fizer 2 ou 3 perguntas diferentes numa só mensagem (ex: "quanto gastei em alimentação em julho? e qual minha meta de lazer?"), responda a PRIMEIRA no objeto principal e coloque as demais em "follow_up_queries": um array com até 3 objetos, cada um com os mesmos campos ({"query_type","category_filter","period_filter","date_from","date_to","period_label","context","tipo_filter","contact_filter"}). O sistema executa todas e junta as respostas. NUNCA ignore uma das perguntas.
 
 REGRAS DE PERÍODO:
 - Se o usuário não especificar período, use "mes_atual"
@@ -2146,6 +2149,7 @@ REGRAS DE PERÍODO:
 - Se disser "últimos 7 dias", "essa semana", use "ultimos_7_dias"
 - Se disser "últimos 30 dias", use "ultimos_30_dias"
 - Se disser "últimos 3 meses", use "ultimos_90_dias"
+- Se o usuário citar um MÊS/ANO específico ("julho de 2026", "em março", "2025", "de 01/07 a 15/07"), NÃO use period_filter: preencha date_from e date_to com as datas exatas (YYYY-MM-DD, primeiro e último dia do intervalo) e period_label com o rótulo legível (ex: "julho/2026"). Se o ano não for citado, assuma o ano da data de hoje.
 
 Para editar lançamento existente:
 {"intent":"editar_lancamento","transaction_id":"UUID-do-lancamento-da-lista-ou-null","field":"amount|description|category|payment_date|competence_date|status|notes","new_value":"novo valor","friendly_message":"..."}
