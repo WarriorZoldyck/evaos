@@ -1014,7 +1014,7 @@ ${historicalPatternsBlock}`;
               catIds.push(filterCat.id);
               categories.filter((c: any) => c.parent_id === filterCat!.id).forEach((s: any) => catIds.push(s.id));
             }
-            let q = supabase.from("transactions").select("amount, description, payment_date, contact_name, status, category").eq("user_id", userId).eq("type", "despesa").gte("payment_date", periodStart).lte("payment_date", periodEnd).order("payment_date", { ascending: false }).limit(50);
+            let q = supabase.from("transactions").select("amount, description, payment_date, contact_name, status, category").eq("user_id", userId).eq("type", "despesa").gte("payment_date", periodStart).lte("payment_date", periodEnd).order("payment_date", { ascending: false }).limit(1000);
             if (catIds.length > 0) {
               q = q.in("category", catIds);
             } else if (categoryFilter) {
