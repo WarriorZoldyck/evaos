@@ -20,6 +20,7 @@ interface Props {
   contextLabel?: string;
   saldoAtual: number;
   initialMonth?: Date;
+  balanceThroughDate?: Date;
 }
 
 function fmt(v: number) {
@@ -44,11 +45,12 @@ export function SaldoAtualDetailModal({
   contextLabel,
   saldoAtual,
   initialMonth,
+  balanceThroughDate,
 }: Props) {
   const { balances: bankBalances, loading: loadingBanks } =
-    useAccountCurrentBalances(bankAccounts, "bank");
+    useAccountCurrentBalances(bankAccounts, "bank", balanceThroughDate);
   const { balances: walletBalances, loading: loadingWallets } =
-    useAccountCurrentBalances(wallets, "wallet");
+    useAccountCurrentBalances(wallets, "wallet", balanceThroughDate);
 
   const [statementTarget, setStatementTarget] = useState<StatementTarget | null>(null);
 
@@ -86,7 +88,7 @@ export function SaldoAtualDetailModal({
             </DialogTitle>
             <DialogDescription>
               {contextLabel ? `Contexto: ${contextLabel}. ` : ""}
-              Soma de saldo inicial + lançamentos pagos. Clique em uma conta para ver o extrato.
+              Soma de saldo inicial + lançamentos pagos até {balanceThroughDate?.toLocaleDateString("pt-BR") ?? "hoje"}. Clique em uma conta para ver o extrato.
             </DialogDescription>
           </DialogHeader>
 

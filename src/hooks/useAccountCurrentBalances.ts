@@ -19,6 +19,7 @@ interface AccountLike {
 export function useAccountCurrentBalances(
   accounts: AccountLike[],
   type: "bank" | "wallet",
+  throughDate?: Date,
 ) {
   const effectiveUserId = useEffectiveUserId();
   const [balances, setBalances] = useState<Map<string, number>>(new Map());
@@ -32,8 +33,10 @@ export function useAccountCurrentBalances(
       return;
     }
     setLoading(true);
-    // pass "tomorrow" so payments up to today are included
-    const dateFrom = format(addDays(new Date(), 1), "yyyy-MM-dd");
+    // The RPC uses payment_date < date_from. Historical dashboard periods pass
+    // their end date here; otherwise payments up to today are included.
+    const referenceDate = throughDate && throughDate < new Date() ? throughDate : new Date();
+    const dateFrom = format(addDays(referenceDate, 1), "yyyy-MM-dd");
     const results = await Promise.all(
       accounts.map(async (a) => {
         const { data, error } = await supabase.rpc("get_account_prior_balance", {
@@ -48,7 +51,7 @@ export function useAccountCurrentBalances(
     );
     setBalances(new Map(results));
     setLoading(false);
-  }, [effectiveUserId, idsKey, type]);
+  }, [effectiveUserId, idsKey, type, throughDate?.getTime()]);
 
   useEffect(() => {
     fetchBalances();

@@ -17,6 +17,7 @@ interface SummaryCardsProps {
   saidas: number;
   saldo: number;
   saldoAtual: number;
+  saldoAtualLabel?: string;
   entradaPrevista: number;
   saidaPrevista: number;
   mdrBruto: number;
@@ -240,7 +241,7 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
 
 export function SummaryCards({
   faturamento, receitaOperacional, unmappedRevenueCount = 0, faturamentoNaoMapeado = 0,
-  entradas, saidas, saldo, saldoAtual,
+  entradas, saidas, saldo, saldoAtual, saldoAtualLabel = "Saldo Atual",
   entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent,
   loading, dateFrom, dateTo,
   prevFaturamento, prevEntradas, prevSaidas, prevSaldo,
@@ -274,7 +275,7 @@ export function SummaryCards({
       {/* Main cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
         <SummaryCard
-          title="Saldo Atual"
+          title={saldoAtualLabel}
           value={saldoAtual}
           icon={Landmark}
           trend={saldoAtual >= 0 ? "up" : "down"}

@@ -222,16 +222,28 @@ export function useDashboardData(filters: DashboardFilters) {
       const bankIds = bankData?.map(b => b.id) || [];
       const walletIds = accountId ? [] : (walletData?.map(w => w.id) || []);
 
-      let totalPaidDelta = 0;
-      if (bankIds.length > 0 || walletIds.length > 0) {
-        const { data: deltaData, error: deltaErr } = await supabase.rpc(
-          "get_accounts_paid_delta",
-          { bank_ids: bankIds, wallet_ids: walletIds },
-        );
-        if (!deltaErr && deltaData !== null && deltaData !== undefined) {
-          totalPaidDelta = Number(deltaData) || 0;
-        }
-      }
+      const referenceDate = end < new Date() ? end : new Date();
+      const dateFrom = format(addDays(referenceDate, 1), "yyyy-MM-dd");
+      const accountDeltas = await Promise.all([
+        ...bankIds.map((id) =>
+          supabase.rpc("get_account_prior_balance", {
+            account_id_param: id,
+            account_type_param: "bank",
+            date_from: dateFrom,
+          }),
+        ),
+        ...walletIds.map((id) =>
+          supabase.rpc("get_account_prior_balance", {
+            account_id_param: id,
+            account_type_param: "wallet",
+            date_from: dateFrom,
+          }),
+        ),
+      ]);
+      const totalPaidDelta = accountDeltas.reduce((sum, result) => {
+        if (result.error || result.data === null || result.data === undefined) return sum;
+        return sum + (Number(result.data) || 0);
+      }, 0);
 
       setSaldoAtual(bankSum + walletSum + totalPaidDelta);
     };
@@ -240,7 +252,7 @@ export function useDashboardData(filters: DashboardFilters) {
     fetchCards();
     fetchCategories();
     fetchBalances();
-  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, accountId, fetchTrigger]);
+  }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, accountId, endStr, fetchTrigger]);
 
   // Fetch filtered transactions for the period
   useEffect(() => {

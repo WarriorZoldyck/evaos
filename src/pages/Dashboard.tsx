@@ -52,6 +52,10 @@ export default function Dashboard() {
 
   const mdr = useMdrSummary();
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
+  const balanceReferenceDate = useMemo(
+    () => (dateRange.end < new Date() ? dateRange.end : new Date()),
+    [dateRange.end],
+  );
   const {
     transactions,
     competenceTransactions,
@@ -204,6 +208,11 @@ export default function Dashboard() {
         saidas={summary.saidas}
         saldo={summary.saldo}
         saldoAtual={saldoAtual}
+        saldoAtualLabel={
+          dateRange.end < new Date()
+            ? `Saldo em ${format(dateRange.end, "dd/MM/yyyy")}`
+            : "Saldo Atual"
+        }
         entradaPrevista={summary.entradaPrevista}
         saidaPrevista={summary.saidaPrevista}
         mdrBruto={summary.mdrBruto}
@@ -241,6 +250,7 @@ export default function Dashboard() {
         contextLabel={contextLabel}
         saldoAtual={saldoAtual}
         initialMonth={dateRange.start}
+        balanceThroughDate={balanceReferenceDate}
       />
 
       <FaturamentoDetailModal
