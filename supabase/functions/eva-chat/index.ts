@@ -258,6 +258,9 @@ REGRA CRÍTICA — PERGUNTAS SEMPRE VIRAM "consulta", NUNCA "conversa":
 - "O que tenho a pagar?" / "Pendentes" → query_type="pendentes"
 - "Como estão minhas metas do mês?" / "Estou dentro do orçamento?" / "Quanto ainda posso gastar?" → query_type="metas_mes"
 - "Quanto gastei esse mês?" (sem categoria) → query_type="gastos_mes"
+- "Qual a minha meta de lazer?" / "Quanto ainda posso gastar em alimentação?" → query_type="meta_categoria", category_filter="lazer"
+- Período específico: se o usuário citar mês/ano ("em julho de 2026", "março", "de 01/07 a 15/07"), preencha date_from e date_to (YYYY-MM-DD) e period_label ("julho/2026") em vez de period_filter. Sem ano citado, use o ano de hoje.
+- Duas ou três perguntas na mesma mensagem: responda a primeira no objeto principal e coloque as outras (até 3) em "follow_up_queries", cada uma com os mesmos campos. NUNCA deixe uma pergunta sem resposta.
 - NUNCA responda "não tenho essa informação" — dispare a consulta apropriada.
 
 REGRA CRÍTICA — PERGUNTAS ANALÍTICAS VIRAM "analise", NUNCA "conversa":
@@ -310,7 +313,7 @@ Para gerenciamento de categorias:
 {"intent":"gerenciar_categoria","action":"criar|criar_subcategoria|renomear|mover|excluir","category_name":"...","category_id":"UUID","new_name":"...","parent_category_id":"UUID|null","new_parent_category_id":"UUID|null","category_type":"receita|despesa|ambos","context":"Pessoal|Nome","friendly_message":"..."}
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes","category_filter":"...","contact_filter":"...|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|ano_passado|null","context":"Pessoal|Nome","friendly_message":"..."}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...","contact_filter":"...|null","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|ano_passado|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"julho/2026 (ou null)","context":"Pessoal|Nome","follow_up_queries":[],"friendly_message":"..."}
 
 REGRA DE PERÍODO — PRESTE MUITA ATENÇÃO:
 - Se o usuário diz "ano", "anual", "este ano", "2025", "2026" → use "ano_atual" ou "ano_passado"
@@ -820,6 +823,26 @@ ${historicalPatternsBlock}`;
     // === CONSULTA ===
     if (aiParsed.intent === "consulta") {
       if (!aiParsed.context) aiParsed.context = activeContextName;
+      const baseParsed: any = aiParsed;
+      const rawFollowUps = Array.isArray(baseParsed.follow_up_queries) ? baseParsed.follow_up_queries : [];
+      const specs: any[] = [baseParsed];
+      const seenSpecs = new Set<string>();
+      const keyOf = (s: any) =>
+        [s.query_type, s.category_filter, s.contact_filter, s.period_filter, s.date_from, s.date_to, s.context]
+          .map((v) => String(v ?? "")).join("|").toLowerCase();
+      seenSpecs.add(keyOf(baseParsed));
+      for (const f of rawFollowUps) {
+        if (!f || typeof f !== "object" || specs.length >= 4) continue;
+        const merged = { ...baseParsed, ...f, follow_up_queries: undefined };
+        const k = keyOf(merged);
+        if (seenSpecs.has(k)) continue;
+        seenSpecs.add(k);
+        specs.push(merged);
+      }
+      const answerBlocks: string[] = [];
+
+      for (const spec of specs) {
+      const aiParsed: any = spec;
       const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
 
@@ -833,7 +856,21 @@ ${historicalPatternsBlock}`;
         const period = aiParsed.period_filter || "mes_atual";
         const todayDate = new Date(today + "T12:00:00");
         const fmtD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const isDate = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+        if (isDate(aiParsed.date_from) || isDate(aiParsed.date_to)) {
+          const start = isDate(aiParsed.date_from) ? aiParsed.date_from : `${String(aiParsed.date_to).slice(0, 7)}-01`;
+          let end = isDate(aiParsed.date_to) ? aiParsed.date_to : null;
+          if (!end) {
+            const [y, m] = start.split("-").map(Number);
+            end = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
+          }
+          const label = aiParsed.period_label
+            ? `em ${aiParsed.period_label}`
+            : `de ${start.split("-").reverse().join("/")} a ${end.split("-").reverse().join("/")}`;
+          return { start, end, label };
+        }
         switch (period) {
+
           case "mes_passado": {
             const d = new Date(todayDate); d.setMonth(d.getMonth() - 1);
             const start = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
@@ -856,6 +893,33 @@ ${historicalPatternsBlock}`;
 
       try {
         switch (aiParsed.query_type) {
+          case "meta_categoria": {
+            const wanted = String(aiParsed.category_filter || "").trim();
+            const ctxCompanyMeta = companyId ?? (aiParsed.context === "Pessoal" ? null : undefined);
+            const report = await buildBudgetMonthReport(supabase, userId, ctxCompanyMeta);
+            const all = [
+              ...report.expense.map((r: any) => ({ ...r, kind: "saída" })),
+              ...report.income.map((r: any) => ({ ...r, kind: "entrada" })),
+            ];
+            const nf = normalizeText(wanted);
+            const row =
+              all.find((r: any) => normalizeText(r.name) === nf) ||
+              all.find((r: any) => normalizeText(r.name).includes(nf) || nf.includes(normalizeText(r.name)));
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+            if (!wanted) {
+              responseMessage = "De qual categoria você quer saber a meta?";
+            } else if (!row) {
+              responseMessage = `📊 Não encontrei a categoria "${wanted}" no seu planejamento${ctxLabel}.`;
+            } else if (!row.target || row.target <= 0) {
+              responseMessage = `📊 **${row.name}**${ctxLabel}\n\n- Meta do mês: não definida\n- Já realizado neste mês: ${fmt(row.actual || 0)}\n- Média mensal do ano: ${fmt(row.average || 0)}`;
+            } else {
+              const remaining = (row.target || 0) - (row.actual || 0);
+              const pct = Math.round(((row.actual || 0) / row.target) * 100);
+              responseMessage = `📊 **Meta de ${row.name}**${ctxLabel} — ${row.kind}\n\n- Meta do mês: ${fmt(row.target)}\n- Já realizado: ${fmt(row.actual || 0)} (${pct}%)\n- ${remaining >= 0 ? `Ainda cabe: ${fmt(remaining)}` : `Estourou: ${fmt(Math.abs(remaining))} ⚠️`}\n- Média mensal do ano: ${fmt(row.average || 0)}`;
+            }
+            break;
+          }
+
           case "metas_mes": {
             const ctxCompany =
               companyId ?? (aiParsed.context === "Pessoal" ? null : undefined);
@@ -953,7 +1017,7 @@ ${historicalPatternsBlock}`;
               catIds.push(filterCat.id);
               categories.filter((c: any) => c.parent_id === filterCat!.id).forEach((s: any) => catIds.push(s.id));
             }
-            let q = supabase.from("transactions").select("amount, description, payment_date, contact_name, status, category").eq("user_id", userId).eq("type", "despesa").gte("payment_date", periodStart).lte("payment_date", periodEnd).order("payment_date", { ascending: false }).limit(50);
+            let q = supabase.from("transactions").select("amount, description, payment_date, contact_name, status, category").eq("user_id", userId).eq("type", "despesa").gte("payment_date", periodStart).lte("payment_date", periodEnd).order("payment_date", { ascending: false }).limit(1000);
             if (catIds.length > 0) {
               q = q.in("category", catIds);
             } else if (categoryFilter) {
@@ -1023,10 +1087,14 @@ ${historicalPatternsBlock}`;
         responseMessage = "Erro ao buscar dados. Tente novamente.";
       }
 
-      return new Response(JSON.stringify({ reply: responseMessage, action: "query" }), {
+      answerBlocks.push(responseMessage);
+      }
+
+      return new Response(JSON.stringify({ reply: answerBlocks.filter(Boolean).join("\n\n---\n\n"), action: "query" }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     // === EDITAR LANÇAMENTO ===
     if (aiParsed.intent === "editar_lancamento") {

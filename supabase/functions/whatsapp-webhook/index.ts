@@ -2116,7 +2116,7 @@ REGRAS DE GERENCIAMENTO DE CATEGORIAS:
 - NÃO invente ações além das listadas acima.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","context":"Pessoal|Nome da Empresa","friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"rótulo legível do período, ex: julho/2026 (ou null)","context":"Pessoal|Nome da Empresa","follow_up_queries":[],"friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
 
 ⚠️ CRÍTICO: Para consultas o campo 'intent' SEMPRE deve ser exatamente "consulta" (literal). O tipo da consulta vai em 'query_type'. NUNCA coloque "agrupar_por_categoria", "saldo", "listar_lancamentos" etc. no campo 'intent' — só em 'query_type'.
 ⚠️ NUNCA use frases como "Vou buscar essa informação", "Já vou te trazer", "Aguarde um momento" no friendly_message de consultas. O backend executa a consulta no mesmo turno e entrega o resultado — promessas de "vou buscar" deixam o usuário sem resposta.
@@ -2133,12 +2133,15 @@ TIPOS DE CONSULTA:
 - "listar_cartoes" = listar cartões de crédito cadastrados
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
 - "metas_mes" = acompanhamento das METAS ORÇAMENTÁRIAS do mês (quanto já foi gasto/recebido vs a meta, quanto falta e em que categorias não dá para gastar mais). Use quando o usuário falar em "meta", "metas do mês", "orçamento", "quanto ainda posso gastar", "estou dentro da meta?", "quanto falta para bater a meta".
+- "meta_categoria" = meta orçamentária de UMA categoria específica (ex: "qual a minha meta de lazer?", "quanto posso gastar ainda em alimentação?"). EXIGE category_filter com o nome da categoria.
 - Se o usuário perguntar sobre cartões cadastrados, maquininhas, contas, use o query_type correspondente. NÃO classifique como "conversa".
 - Se o usuário pedir lançamentos de um fornecedor específico (ex: "lançamentos do Moscato", "quanto paguei no Dentais"), use "listar_lancamentos" com contact_filter.
 - Se o usuário pedir lançamentos de UMA categoria nomeada (ex: "gastos com Alimentação"), use "gastos_categoria" com category_filter.
 - Se o usuário pedir para AGRUPAR/SEPARAR/DIVIDIR por categoria sem nomear uma específica (ex: "separe meus gastos por categoria", "quanto gastei em cada categoria"), use "agrupar_por_categoria". NUNCA use "gastos_categoria" com category_filter vazio nem "listar_lancamentos" nesse caso.
 - SEMPRE que o usuário pedir dados específicos, filtre e retorne SOMENTE o que ele pediu. NÃO retorne dados genéricos.
 
+MÚLTIPLAS PERGUNTAS NA MESMA MENSAGEM:
+- Se o usuário fizer 2 ou 3 perguntas diferentes numa só mensagem (ex: "quanto gastei em alimentação em julho? e qual minha meta de lazer?"), responda a PRIMEIRA no objeto principal e coloque as demais em "follow_up_queries": um array com até 3 objetos, cada um com os mesmos campos ({"query_type","category_filter","period_filter","date_from","date_to","period_label","context","tipo_filter","contact_filter"}). O sistema executa todas e junta as respostas. NUNCA ignore uma das perguntas.
 
 REGRAS DE PERÍODO:
 - Se o usuário não especificar período, use "mes_atual"
@@ -2146,6 +2149,7 @@ REGRAS DE PERÍODO:
 - Se disser "últimos 7 dias", "essa semana", use "ultimos_7_dias"
 - Se disser "últimos 30 dias", use "ultimos_30_dias"
 - Se disser "últimos 3 meses", use "ultimos_90_dias"
+- Se o usuário citar um MÊS/ANO específico ("julho de 2026", "em março", "2025", "de 01/07 a 15/07"), NÃO use period_filter: preencha date_from e date_to com as datas exatas (YYYY-MM-DD, primeiro e último dia do intervalo) e period_label com o rótulo legível (ex: "julho/2026"). Se o ano não for citado, assuma o ano da data de hoje.
 
 Para editar lançamento existente:
 {"intent":"editar_lancamento","transaction_id":"UUID-do-lancamento-da-lista-ou-null","field":"amount|description|category|payment_date|competence_date|status|notes","new_value":"novo valor","friendly_message":"..."}
@@ -2558,7 +2562,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     const VALID_QUERY_TYPES = [
       "saldo", "resumo_mes", "gastos_mes", "receitas_mes", "pendentes",
       "gastos_categoria", "agrupar_por_categoria", "listar_lancamentos",
-      "listar_cartoes", "listar_contas", "metas_mes",
+      "listar_cartoes", "listar_contas", "metas_mes", "meta_categoria",
     ];
     // Self-heal: AI sometimes puts query_type in the intent field (e.g. intent="agrupar_por_categoria")
     if (aiParsed.intent && VALID_QUERY_TYPES.includes(aiParsed.intent)) {
@@ -4362,8 +4366,29 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     }
 
     if (aiParsed.intent === "consulta") {
+      const baseParsed: any = aiParsed;
+      const rawFollowUps = Array.isArray(baseParsed.follow_up_queries) ? baseParsed.follow_up_queries : [];
+      const specs: any[] = [baseParsed];
+      const seen = new Set<string>();
+      const keyOf = (s: any) =>
+        [s.query_type, s.category_filter, s.contact_filter, s.period_filter, s.date_from, s.date_to, s.context]
+          .map((v) => String(v ?? "")).join("|").toLowerCase();
+      seen.add(keyOf(baseParsed));
+      for (const f of rawFollowUps) {
+        if (!f || typeof f !== "object" || specs.length >= 4) continue;
+        const merged = { ...baseParsed, ...f, follow_up_queries: undefined };
+        const k = keyOf(merged);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        specs.push(merged);
+      }
+      const answerBlocks: string[] = [];
+
+      for (const spec of specs) {
+      const aiParsed: any = spec;
       const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
+
 
       const addContextFilter = (query: any) => {
         if (companyId) {
@@ -4380,8 +4405,24 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         const todayDate = new Date(today + "T12:00:00");
         const pad2 = (n: number) => String(n).padStart(2, "0");
         const fmtDate = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-        
+
+        // Período explícito informado pela IA (mês/ano específico, intervalo livre)
+        const isDate = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+        if (isDate(aiParsed.date_from) || isDate(aiParsed.date_to)) {
+          const start = isDate(aiParsed.date_from) ? aiParsed.date_from : `${String(aiParsed.date_to).slice(0, 7)}-01`;
+          let end = isDate(aiParsed.date_to) ? aiParsed.date_to : null;
+          if (!end) {
+            const [y, m] = start.split("-").map(Number);
+            end = `${y}-${pad2(m)}-${pad2(new Date(y, m, 0).getDate())}`;
+          }
+          const label = aiParsed.period_label
+            ? `em ${aiParsed.period_label}`
+            : `de ${start.split("-").reverse().join("/")} a ${end.split("-").reverse().join("/")}`;
+          return { start, end, label };
+        }
+
         switch (period) {
+
           case "mes_passado": {
             const d = new Date(todayDate);
             d.setMonth(d.getMonth() - 1);
@@ -4583,17 +4624,59 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             break;
           }
 
+          case "meta_categoria": {
+            const wanted = String(aiParsed.category_filter || "").trim();
+            const ctxCompanyMeta =
+              companyId ?? (aiParsed.context === "Pessoal" ? null : undefined);
+            const report = await buildBudgetMonthReport(supabase, userId, ctxCompanyMeta);
+            const norm = (s: string) =>
+              s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+            const all = [
+              ...report.expense.map((r: any) => ({ ...r, kind: "saída" })),
+              ...report.income.map((r: any) => ({ ...r, kind: "entrada" })),
+            ];
+            const row =
+              all.find((r: any) => norm(r.name) === norm(wanted)) ||
+              all.find((r: any) => norm(r.name).includes(norm(wanted)) || norm(wanted).includes(norm(r.name)));
+            const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
+
+            if (!wanted) {
+              responseMessage = "De qual categoria você quer saber a meta?";
+            } else if (!row) {
+              responseMessage = `📊 Não encontrei a categoria "${wanted}" no seu planejamento${ctxLabel}. Cadastre a meta em Planejamento Inteligente ou me diga o nome exato da categoria.`;
+            } else if (!row.target || row.target <= 0) {
+              responseMessage = `📊 *${row.name}*${ctxLabel}\n\n• Meta do mês: não definida\n• Já realizado neste mês: ${fmt(row.actual || 0)}\n• Média mensal do ano: ${fmt(row.average || 0)}\n\nQuer que eu use a média (${fmt(row.average || 0)}) como meta dessa categoria?`;
+            } else {
+              const remaining = (row.target || 0) - (row.actual || 0);
+              const pct = row.target > 0 ? Math.round(((row.actual || 0) / row.target) * 100) : 0;
+              const line =
+                remaining >= 0
+                  ? `• Ainda cabe: ${fmt(remaining)}`
+                  : `• Estourou: ${fmt(Math.abs(remaining))} ⚠️`;
+              responseMessage = `📊 *Meta de ${row.name}*${ctxLabel} — ${row.kind}\n\n• Meta do mês: ${fmt(row.target)}\n• Já realizado: ${fmt(row.actual || 0)} (${pct}% da meta)\n${line}\n• Média mensal do ano: ${fmt(row.average || 0)}`;
+            }
+            break;
+          }
+
           case "gastos_categoria": {
             const categoryFilter = aiParsed.category_filter || "";
-            const filterCat = categories.find(
-              (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
-            );
-            // Include subcategories of the matched category
+            const normCat = (s: string) =>
+              String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+            const filterCat =
+              categories.find((c) => normCat(c.name) === normCat(categoryFilter)) ||
+              categories.find((c) => categoryFilter && normCat(c.name).includes(normCat(categoryFilter)));
+            // Include ALL descendants (subcategorias e sub-subcategorias)
             const catIds: string[] = [];
             if (filterCat) {
-              catIds.push(filterCat.id);
-              const subs = categories.filter((c: any) => c.parent_id === filterCat.id);
-              subs.forEach((s: any) => catIds.push(s.id));
+              const queue = [filterCat.id];
+              while (queue.length > 0) {
+                const current = queue.shift()!;
+                if (catIds.includes(current)) continue;
+                catIds.push(current);
+                categories
+                  .filter((c: any) => c.parent_id === current)
+                  .forEach((c: any) => queue.push(c.id));
+              }
             }
 
             let q = supabase
@@ -4604,7 +4687,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               .gte("payment_date", periodStart)
               .lte("payment_date", periodEnd)
               .order("payment_date", { ascending: false })
-              .limit(20);
+              .limit(1000);
             
             if (catIds.length > 0) {
               q = q.in("category", catIds);
@@ -4612,23 +4695,28 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               q = q.ilike("category", `%${categoryFilter}%`);
             }
             q = addContextFilter(q);
-            const { data: catExpenses } = await q;
+            const { data: catExpensesAll } = await q;
 
-            const total = (catExpenses || []).reduce((s: number, t: any) => s + t.amount, 0);
+            const rows = catExpensesAll || [];
+            // Total sobre TODOS os lançamentos do período (não só os exibidos)
+            const total = rows.reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            
-            if (!catExpenses || catExpenses.length === 0) {
+            const shown = rows.slice(0, 25);
+
+            if (rows.length === 0) {
               responseMessage = `📊 Nenhum gasto com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}.`;
             } else {
-              const items = catExpenses.map((t: any) => {
+              const items = shown.map((t: any) => {
                 const contact = t.contact_name ? ` — ${t.contact_name}` : "";
                 const statusIcon = t.status === "Pendente" ? " ⏳" : "";
                 return `  • ${t.description}${contact}: ${fmt(t.amount)} (${formatDate(t.payment_date)})${statusIcon}`;
               }).join("\n");
-              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}:\n\n${items}\n\n💰 Total: ${fmt(total)} (${catExpenses.length} lançamento${catExpenses.length > 1 ? "s" : ""})`;
+              const more = rows.length > shown.length ? `\n  … e mais ${rows.length - shown.length} lançamento(s)` : "";
+              responseMessage = `📊 Gastos com "${filterCat?.name || categoryFilter}" ${periodLabel}${ctxLabel}:\n\n${items}${more}\n\n💰 Total: ${fmt(total)} (${rows.length} lançamento${rows.length > 1 ? "s" : ""})`;
             }
             break;
           }
+
 
           case "listar_lancamentos": {
             const contactFilter = aiParsed.contact_filter || "";
@@ -4833,13 +4921,17 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         responseMessage = "Desculpe, ocorreu um erro ao buscar seus dados. Tente novamente.";
       }
 
+      answerBlocks.push(responseMessage);
+      }
+
       return respond({
         success: true,
         intent: "consulta",
-        message: responseMessage,
+        message: answerBlocks.filter(Boolean).join("\n\n————————\n\n"),
         transaction: null,
       }, 200);
     }
+
 
     // === GERENCIAR CATEGORIA ===
     if (aiParsed.intent === "gerenciar_categoria") {
