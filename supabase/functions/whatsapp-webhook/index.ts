@@ -4366,8 +4366,29 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     }
 
     if (aiParsed.intent === "consulta") {
+      const baseParsed: any = aiParsed;
+      const rawFollowUps = Array.isArray(baseParsed.follow_up_queries) ? baseParsed.follow_up_queries : [];
+      const specs: any[] = [baseParsed];
+      const seen = new Set<string>();
+      const keyOf = (s: any) =>
+        [s.query_type, s.category_filter, s.contact_filter, s.period_filter, s.date_from, s.date_to, s.context]
+          .map((v) => String(v ?? "")).join("|").toLowerCase();
+      seen.add(keyOf(baseParsed));
+      for (const f of rawFollowUps) {
+        if (!f || typeof f !== "object" || specs.length >= 4) continue;
+        const merged = { ...baseParsed, ...f, follow_up_queries: undefined };
+        const k = keyOf(merged);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        specs.push(merged);
+      }
+      const answerBlocks: string[] = [];
+
+      for (const spec of specs) {
+      const aiParsed: any = spec;
       const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
+
 
       const addContextFilter = (query: any) => {
         if (companyId) {
