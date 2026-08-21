@@ -820,6 +820,26 @@ ${historicalPatternsBlock}`;
     // === CONSULTA ===
     if (aiParsed.intent === "consulta") {
       if (!aiParsed.context) aiParsed.context = activeContextName;
+      const baseParsed: any = aiParsed;
+      const rawFollowUps = Array.isArray(baseParsed.follow_up_queries) ? baseParsed.follow_up_queries : [];
+      const specs: any[] = [baseParsed];
+      const seenSpecs = new Set<string>();
+      const keyOf = (s: any) =>
+        [s.query_type, s.category_filter, s.contact_filter, s.period_filter, s.date_from, s.date_to, s.context]
+          .map((v) => String(v ?? "")).join("|").toLowerCase();
+      seenSpecs.add(keyOf(baseParsed));
+      for (const f of rawFollowUps) {
+        if (!f || typeof f !== "object" || specs.length >= 4) continue;
+        const merged = { ...baseParsed, ...f, follow_up_queries: undefined };
+        const k = keyOf(merged);
+        if (seenSpecs.has(k)) continue;
+        seenSpecs.add(k);
+        specs.push(merged);
+      }
+      const answerBlocks: string[] = [];
+
+      for (const spec of specs) {
+      const aiParsed: any = spec;
       const companyId = resolveContext(aiParsed.context);
       let responseMessage = "";
 
@@ -833,7 +853,21 @@ ${historicalPatternsBlock}`;
         const period = aiParsed.period_filter || "mes_atual";
         const todayDate = new Date(today + "T12:00:00");
         const fmtD = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        const isDate = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+        if (isDate(aiParsed.date_from) || isDate(aiParsed.date_to)) {
+          const start = isDate(aiParsed.date_from) ? aiParsed.date_from : `${String(aiParsed.date_to).slice(0, 7)}-01`;
+          let end = isDate(aiParsed.date_to) ? aiParsed.date_to : null;
+          if (!end) {
+            const [y, m] = start.split("-").map(Number);
+            end = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
+          }
+          const label = aiParsed.period_label
+            ? `em ${aiParsed.period_label}`
+            : `de ${start.split("-").reverse().join("/")} a ${end.split("-").reverse().join("/")}`;
+          return { start, end, label };
+        }
         switch (period) {
+
           case "mes_passado": {
             const d = new Date(todayDate); d.setMonth(d.getMonth() - 1);
             const start = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
