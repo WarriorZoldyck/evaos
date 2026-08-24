@@ -42,6 +42,9 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
   const [goalType, setGoalType] = useState<string>("sonho");
   const [allocationMode, setAllocationMode] = useState<string>("fixed");
   const [allocationPercent, setAllocationPercent] = useState("");
+  const [yearMode, setYearMode] = useState(false);
+  const [months, setMonths] = useState("12");
+
   const [saving, setSaving] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [pendingPayload, setPendingPayload] = useState<any>(null);
