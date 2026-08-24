@@ -299,7 +299,9 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                </div>
               </TableCell>
+
             </TableRow>
           );
         })}
