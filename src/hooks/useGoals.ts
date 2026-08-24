@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { ensureGoalCategory, renameGoalCategory, fetchGoalLinkedAmounts } from "@/lib/goalCategory";
+
 
 export interface Goal {
   id: string;
