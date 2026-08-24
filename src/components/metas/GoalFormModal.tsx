@@ -194,7 +194,14 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
                   Informe o total e o prazo em meses; calculamos quanto guardar por mês.
                 </p>
               </div>
-              <Switch checked={yearMode} onCheckedChange={setYearMode} />
+              <Switch
+                checked={yearMode}
+                onCheckedChange={(v) => {
+                  setYearMode(v);
+                  if (v) applyYearPlan(targetAmount, months);
+                }}
+              />
+
             </div>
 
             {yearMode && (
