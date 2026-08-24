@@ -190,6 +190,13 @@ export default function MetaDetalhe() {
           <p className="text-sm text-muted-foreground">
             de {formatCurrency(goal.target_amount)} · {progress.toFixed(0)}%
           </p>
+          {Number(goal.linked_amount || 0) > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {formatCurrency(Number(goal.linked_amount || 0))} vindos de lançamentos em
+              {" "}“Metas &gt; {goal.name}” · {formatCurrency(Number(goal.manual_amount || 0))} em aportes manuais
+            </p>
+          )}
+
           {goal.deadline && !isCompleted && (
             <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5 pt-1">
               <CalendarDays className="h-3.5 w-3.5" />

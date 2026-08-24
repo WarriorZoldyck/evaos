@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { ensureGoalCategory, renameGoalCategory, fetchGoalLinkedAmounts } from "@/lib/goalCategory";
+
 
 export interface Goal {
   id: string;
@@ -24,7 +26,12 @@ export interface Goal {
   allocation_mode: string;
   allocation_percent: number;
   created_at: string;
+  /** Aportes manuais registrados em goal_movements. */
+  manual_amount?: number;
+  /** Somatório das transferências categorizadas em "Metas > [objetivo]". */
+  linked_amount?: number;
 }
+
 
 export interface GoalMovement {
   id: string;
@@ -56,7 +63,19 @@ export function useGoals() {
     if (error) {
       toast({ title: "Erro ao carregar metas", description: mapDatabaseError(error), variant: "destructive" });
     } else {
-      setGoals((data as Goal[]) || []);
+      const rows = (data as Goal[]) || [];
+      const linked = await fetchGoalLinkedAmounts(
+        effectiveUserId,
+        isPersonal ? null : selectedCompanyId || null,
+        rows.map((g) => g.name),
+      );
+      setGoals(
+        rows.map((g) => {
+          const manual = Number(g.current_amount) || 0;
+          const fromTx = Number(linked[g.name] || 0);
+          return { ...g, manual_amount: manual, linked_amount: fromTx, current_amount: manual + fromTx };
+        }),
+      );
     }
     setLoading(false);
   }, [user, effectiveUserId, isPersonal, selectedCompanyId, toast]);
@@ -97,21 +116,42 @@ export function useGoals() {
       toast({ title: "Erro ao criar meta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
-    toast({ title: "Meta criada!" });
+    // Cria "Metas > [objetivo]" para o usuário categorizar as transferências.
+    const catId = await ensureGoalCategory(
+      effectiveUserId,
+      isPersonal ? null : selectedCompanyId || null,
+      data.name,
+    );
+    toast({
+      title: "Meta criada!",
+      description: catId ? `Categoria "Metas > ${data.name}" disponível nos lançamentos.` : undefined,
+    });
     fetchGoals();
     return true;
   };
 
+
   const updateGoal = async (id: string, data: Partial<Goal>) => {
-    const { error } = await supabase.from("goals").update(data as any).eq("id", id);
+    const previous = goals.find((g) => g.id === id);
+    const payload = { ...data };
+    delete (payload as any).manual_amount;
+    delete (payload as any).linked_amount;
+    const { error } = await supabase.from("goals").update(payload as any).eq("id", id);
     if (error) {
       toast({ title: "Erro ao atualizar meta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
+    }
+    const ctxCompany = isPersonal ? null : selectedCompanyId || null;
+    if (data.name && previous && previous.name !== data.name) {
+      await renameGoalCategory(effectiveUserId, ctxCompany, previous.name, data.name);
+    } else if (data.name || previous?.name) {
+      await ensureGoalCategory(effectiveUserId, ctxCompany, (data.name || previous!.name) as string);
     }
     toast({ title: "Meta atualizada!" });
     fetchGoals();
     return true;
   };
+
 
   const deleteGoal = async (id: string) => {
     const { error } = await supabase.from("goals").delete().eq("id", id);
@@ -139,7 +179,9 @@ export function useGoals() {
     }
     const goal = goals.find(g => g.id === goalId);
     if (goal) {
-      await supabase.from("goals").update({ current_amount: goal.current_amount + amount } as any).eq("id", goalId);
+      const manual = Number(goal.manual_amount ?? goal.current_amount) || 0;
+      await supabase.from("goals").update({ current_amount: manual + amount } as any).eq("id", goalId);
+
     }
     toast({ title: "Valor reservado!" });
     fetchGoals();
@@ -161,7 +203,9 @@ export function useGoals() {
     }
     const goal = goals.find(g => g.id === goalId);
     if (goal) {
-      await supabase.from("goals").update({ current_amount: Math.max(0, goal.current_amount - amount) } as any).eq("id", goalId);
+      const manual = Number(goal.manual_amount ?? goal.current_amount) || 0;
+      await supabase.from("goals").update({ current_amount: Math.max(0, manual - amount) } as any).eq("id", goalId);
+
     }
     toast({ title: "Valor retirado!" });
     fetchGoals();

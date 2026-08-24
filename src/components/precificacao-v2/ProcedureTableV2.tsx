@@ -158,7 +158,24 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                     value={proc.quantity ?? 1}
                     step={1}
                     min={1}
-                    onCommit={(v) => onInlineUpdate(proc.id, { quantity: Math.max(1, Math.round(v)) })}
+                    onCommit={(v) => {
+                      const qty = Math.max(1, Math.round(v));
+                      // Quantidade não altera a lucratividade: reajusta o preço para manter a margem.
+                      if (calcParts) {
+                        const pct = calc.lucratividadePct;
+                        const divisor = 1 - pct / 100 - taxRate / 100;
+                        if (divisor > 0) {
+                          const parts = calcParts({ ...proc, quantity: qty } as any);
+                          onInlineUpdate(proc.id, {
+                            quantity: qty,
+                            desired_price: Math.round(((parts.cf + parts.cv) / divisor) * 100) / 100,
+                          });
+                          return;
+                        }
+                      }
+                      onInlineUpdate(proc.id, { quantity: qty });
+                    }}
+
                   />
                 ) : <span>{proc.quantity ?? 1}</span>}
               </TableCell>
@@ -250,7 +267,17 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                 {fmt(calc.liquido)}
               </TableCell>
               <TableCell className={`text-right ${isNegative ? "text-destructive" : ""}`}>{fmt(calc.lucratividadeHora)}</TableCell>
-              <TableCell>
+              <TableCell onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  title="Editar procedimento"
+                  onClick={(e) => { e.stopPropagation(); onEdit(proc); }}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -272,7 +299,9 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                </div>
               </TableCell>
+
             </TableRow>
           );
         })}
