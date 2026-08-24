@@ -203,7 +203,9 @@ export function useGoals() {
     }
     const goal = goals.find(g => g.id === goalId);
     if (goal) {
-      await supabase.from("goals").update({ current_amount: Math.max(0, goal.current_amount - amount) } as any).eq("id", goalId);
+      const manual = Number(goal.manual_amount ?? goal.current_amount) || 0;
+      await supabase.from("goals").update({ current_amount: Math.max(0, manual - amount) } as any).eq("id", goalId);
+
     }
     toast({ title: "Valor retirado!" });
     fetchGoals();
