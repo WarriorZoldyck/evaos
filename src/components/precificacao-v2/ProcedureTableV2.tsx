@@ -267,7 +267,17 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
                 {fmt(calc.liquido)}
               </TableCell>
               <TableCell className={`text-right ${isNegative ? "text-destructive" : ""}`}>{fmt(calc.lucratividadeHora)}</TableCell>
-              <TableCell>
+              <TableCell onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  title="Editar procedimento"
+                  onClick={(e) => { e.stopPropagation(); onEdit(proc); }}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-7 w-7">
