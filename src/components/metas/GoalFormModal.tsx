@@ -81,6 +81,21 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
     }
   }, [editGoal, prefill, open]);
 
+  /** Modo anual: total + meses => valor mensal (e prazo estimado). */
+  const applyYearPlan = (total: string, monthsRaw: string) => {
+    setTargetAmount(total);
+    setMonths(monthsRaw);
+    const m = Number(monthsRaw) || 0;
+    const t = Number(total) || 0;
+    if (m > 0 && t > 0) {
+      setReserveAmount(String(Math.round((t / m) * 100) / 100));
+      setAutoReserve(true);
+      const d = new Date();
+      d.setMonth(d.getMonth() + m);
+      setDeadline(d.toISOString().slice(0, 10));
+    }
+  };
+
 
   const handleSubmit = async () => {
     if (!name.trim() || !targetAmount) return;
