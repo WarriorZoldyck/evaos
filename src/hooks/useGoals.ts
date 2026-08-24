@@ -56,7 +56,19 @@ export function useGoals() {
     if (error) {
       toast({ title: "Erro ao carregar metas", description: mapDatabaseError(error), variant: "destructive" });
     } else {
-      setGoals((data as Goal[]) || []);
+      const rows = (data as Goal[]) || [];
+      const linked = await fetchGoalLinkedAmounts(
+        effectiveUserId,
+        isPersonal ? null : selectedCompanyId || null,
+        rows.map((g) => g.name),
+      );
+      setGoals(
+        rows.map((g) => {
+          const manual = Number(g.current_amount) || 0;
+          const fromTx = Number(linked[g.name] || 0);
+          return { ...g, manual_amount: manual, linked_amount: fromTx, current_amount: manual + fromTx };
+        }),
+      );
     }
     setLoading(false);
   }, [user, effectiveUserId, isPersonal, selectedCompanyId, toast]);
@@ -97,10 +109,20 @@ export function useGoals() {
       toast({ title: "Erro ao criar meta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
     }
-    toast({ title: "Meta criada!" });
+    // Cria "Metas > [objetivo]" para o usuário categorizar as transferências.
+    const catId = await ensureGoalCategory(
+      effectiveUserId,
+      isPersonal ? null : selectedCompanyId || null,
+      data.name,
+    );
+    toast({
+      title: "Meta criada!",
+      description: catId ? `Categoria "Metas > ${data.name}" disponível nos lançamentos.` : undefined,
+    });
     fetchGoals();
     return true;
   };
+
 
   const updateGoal = async (id: string, data: Partial<Goal>) => {
     const { error } = await supabase.from("goals").update(data as any).eq("id", id);
