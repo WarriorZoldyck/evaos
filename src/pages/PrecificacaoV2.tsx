@@ -88,7 +88,7 @@ export default function PrecificacaoV2() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[288px] overflow-auto">
+          <div className="max-h-[440px] overflow-auto">
             <ProcedureTableV2
               procedures={procedures}
               calcProcedure={calcProcedure}
