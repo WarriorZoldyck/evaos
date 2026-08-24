@@ -172,7 +172,13 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Valor da meta (R$)</Label>
-              <Input type="number" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} placeholder="10000" />
+              <Input
+                type="number"
+                value={targetAmount}
+                onChange={(e) => (yearMode ? applyYearPlan(e.target.value, months) : setTargetAmount(e.target.value))}
+                placeholder="10000"
+              />
+
             </div>
             <div className="space-y-2">
               <Label>Prazo</Label>
