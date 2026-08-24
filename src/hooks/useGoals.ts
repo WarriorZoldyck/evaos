@@ -26,7 +26,12 @@ export interface Goal {
   allocation_mode: string;
   allocation_percent: number;
   created_at: string;
+  /** Aportes manuais registrados em goal_movements. */
+  manual_amount?: number;
+  /** Somatório das transferências categorizadas em "Metas > [objetivo]". */
+  linked_amount?: number;
 }
+
 
 export interface GoalMovement {
   id: string;
