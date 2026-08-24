@@ -162,6 +162,49 @@ export function GoalFormModal({ open, onClose, editGoal, prefill, onSave, onUpda
             </div>
           </div>
 
+          <div className="rounded-lg border p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Pensar no ano</Label>
+                <p className="text-xs text-muted-foreground">
+                  Informe o total e o prazo em meses; calculamos quanto guardar por mês.
+                </p>
+              </div>
+              <Switch checked={yearMode} onCheckedChange={setYearMode} />
+            </div>
+
+            {yearMode && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-xs">Prazo (meses)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={months}
+                    onChange={(e) => applyYearPlan(targetAmount, e.target.value)}
+                    placeholder="12"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Guardar por mês (R$)</Label>
+                  <Input
+                    type="number"
+                    value={reserveAmount}
+                    onChange={(e) => {
+                      setReserveAmount(e.target.value);
+                      const m = Number(months) || 0;
+                      const perMonth = Number(e.target.value) || 0;
+                      if (m > 0 && perMonth > 0) setTargetAmount(String(Math.round(perMonth * m * 100) / 100));
+                    }}
+                    placeholder="1000"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+
+
           <div className="flex items-center justify-between pt-2 border-t">
             <Label>Reserva automática</Label>
             <Switch checked={autoReserve} onCheckedChange={setAutoReserve} />
