@@ -132,15 +132,26 @@ export function useGoals() {
 
 
   const updateGoal = async (id: string, data: Partial<Goal>) => {
-    const { error } = await supabase.from("goals").update(data as any).eq("id", id);
+    const previous = goals.find((g) => g.id === id);
+    const payload = { ...data };
+    delete (payload as any).manual_amount;
+    delete (payload as any).linked_amount;
+    const { error } = await supabase.from("goals").update(payload as any).eq("id", id);
     if (error) {
       toast({ title: "Erro ao atualizar meta", description: mapDatabaseError(error), variant: "destructive" });
       return false;
+    }
+    const ctxCompany = isPersonal ? null : selectedCompanyId || null;
+    if (data.name && previous && previous.name !== data.name) {
+      await renameGoalCategory(effectiveUserId, ctxCompany, previous.name, data.name);
+    } else if (data.name || previous?.name) {
+      await ensureGoalCategory(effectiveUserId, ctxCompany, (data.name || previous!.name) as string);
     }
     toast({ title: "Meta atualizada!" });
     fetchGoals();
     return true;
   };
+
 
   const deleteGoal = async (id: string) => {
     const { error } = await supabase.from("goals").delete().eq("id", id);
