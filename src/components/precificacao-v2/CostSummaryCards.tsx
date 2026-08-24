@@ -39,24 +39,6 @@ export function CostSummaryCards({ groupTotals, custoHora, fmm, fmmPorSala, cust
 
   return (
     <div className="space-y-4">
-      {/* Group totals */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {summaryItems.map((item) => (
-          <Card key={item.label}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={`h-10 w-10 rounded-lg flex items-center justify-center bg-muted ${item.color}`}>
-                <item.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{item.label}</p>
-                <p className="text-lg font-bold font-display">{fmt(item.value)}</p>
-                <p className="text-[10px] text-muted-foreground">{fmt(item.value * 12)}/ano</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       {/* Annual minimum billing highlight */}
       <Card className="border-primary/30 bg-primary/5">
         <CardContent className="p-4 flex items-center justify-between">
@@ -75,6 +57,25 @@ export function CostSummaryCards({ groupTotals, custoHora, fmm, fmmPorSala, cust
           </div>
         </CardContent>
       </Card>
+
+      {/* Group totals */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {summaryItems.map((item) => (
+          <Card key={item.label}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={`h-10 w-10 rounded-lg flex items-center justify-center bg-muted ${item.color}`}>
+                <item.icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">{item.label}</p>
+                <p className="text-lg font-bold font-display">{fmt(item.value)}</p>
+                <p className="text-[10px] text-muted-foreground">{fmt(item.value * 12)}/ano</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
 
       {/* Metrics + chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
