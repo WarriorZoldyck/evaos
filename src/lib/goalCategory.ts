@@ -107,10 +107,9 @@ export async function fetchGoalLinkedAmounts(
 
   let q = supabase
     .from("transactions")
-    .select("amount,subcategory,type,category")
+    .select("amount,subcategory,type")
     .eq("user_id", userId)
     .eq("type", "receita")
-    .eq("category", GOALS_ROOT_CATEGORY)
     .in("subcategory", goalNames);
   if (companyId) q = q.eq("company_id", companyId);
   else q = q.is("company_id", null);
