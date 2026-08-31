@@ -2,6 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Building2, Home, TrendingDown, Clock, DollarSign, LayoutGrid, CalendarDays } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { CostGroupTotals } from "@/hooks/usePricingV2";
+import { formatHours } from "@/lib/workHours";
 
 const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -11,11 +12,23 @@ interface CostSummaryCardsProps {
   fmm: number;
   fmmPorSala: number;
   custoHoraPorSala: number;
+  availableHours?: number;
+  productiveHours?: number;
+  productiveLossPct?: number;
 }
 
 const COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))"];
 
-export function CostSummaryCards({ groupTotals, custoHora, fmm, fmmPorSala, custoHoraPorSala }: CostSummaryCardsProps) {
+export function CostSummaryCards({
+  groupTotals,
+  custoHora,
+  fmm,
+  fmmPorSala,
+  custoHoraPorSala,
+  availableHours,
+  productiveHours,
+  productiveLossPct = 0,
+}: CostSummaryCardsProps) {
   const pieData = [
     { name: "Fixos Clínica", value: groupTotals.fixos_clinica },
     { name: "Variáveis Clínica", value: groupTotals.variaveis_clinica },
@@ -37,6 +50,7 @@ export function CostSummaryCards({ groupTotals, custoHora, fmm, fmmPorSala, cust
     { label: "CF/H / Sala", value: custoHoraPorSala, icon: Clock },
   ];
 
+
   return (
     <div className="space-y-4">
       {/* Annual minimum billing highlight */}
@@ -51,9 +65,22 @@ export function CostSummaryCards({ groupTotals, custoHora, fmm, fmmPorSala, cust
               <p className="text-xl font-bold font-display text-primary">{fmt(fmmAnual)}</p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Mês</p>
-            <p className="text-lg font-bold font-display">{fmt(fmm)}</p>
+          <div className="flex items-center gap-6 text-right">
+            {productiveHours !== undefined && (
+              <div>
+                <p className="text-xs text-muted-foreground">Horas produtivas / mês</p>
+                <p className="text-lg font-bold font-display">{formatHours(productiveHours)}</p>
+                {availableHours !== undefined && productiveLossPct > 0 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    {formatHours(availableHours)} disponíveis · −{productiveLossPct}% de perda
+                  </p>
+                )}
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground">Mês</p>
+              <p className="text-lg font-bold font-display">{fmt(fmm)}</p>
+            </div>
           </div>
         </CardContent>
       </Card>

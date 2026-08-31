@@ -5,6 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import {
+  availableHours,
+  productiveHours,
+  countWorkingDays,
+  DEFAULT_WEEKDAYS,
+  type Weekday,
+} from "@/lib/workHours";
 
 export interface PricingV2Config {
   id: string;
@@ -14,8 +21,23 @@ export interface PricingV2Config {
   tax_rate: number;
   days_per_week: number | null;
   hours_per_day: number | null;
+  productive_loss_pct: number;
+  work_weekdays: Weekday[];
+  excluded_days: string[];
   updated_at: string | null;
 }
+
+export interface SaveConfigInput {
+  hours: number;
+  rooms: number;
+  tax: number;
+  daysPerWeek?: number | null;
+  hoursPerDay?: number | null;
+  productiveLossPct?: number;
+  workWeekdays?: Weekday[];
+  excludedDays?: string[];
+}
+
 
 export interface CostItem {
   id: string;
@@ -67,6 +89,20 @@ const COST_GROUP_LABELS: Record<CostGroup, string> = {
 
 export { COST_GROUP_LABELS };
 
+const VALID_WEEKDAYS = new Set([0, 1, 2, 3, 4, 5, 6]);
+
+function parseWeekdays(raw: unknown): Weekday[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v) => Number(v))
+    .filter((v) => VALID_WEEKDAYS.has(v)) as Weekday[];
+}
+
+function parseDays(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v): v is string => typeof v === "string");
+}
+
 function monthlyValue(item: CostItem): number {
   return item.frequency === "A" ? item.value / 12 : item.value;
 }
@@ -92,14 +128,39 @@ export function usePricingV2() {
     return { fixos_clinica: fixos, variaveis_clinica: variaveis, pessoais, total: fixos + variaveis + pessoais };
   })();
 
-  const hoursPerMonth = config?.hours_per_month ?? 160;
   const numRooms = config?.num_rooms ?? 1;
   const taxRate = config?.tax_rate ?? 8.44;
+
+  // Horas: quando há calendário configurado (dias da semana + horas/dia),
+  // as horas disponíveis vêm da contagem real de dias do mês corrente.
+  const workWeekdays = config?.work_weekdays ?? [];
+  const excludedDays = config?.excluded_days ?? [];
+  const hoursPerDay = config?.hours_per_day ?? null;
+  const productiveLossPct = config?.productive_loss_pct ?? 0;
+
+  const today = new Date();
+  const calendarYear = today.getFullYear();
+  const calendarMonth = today.getMonth() + 1;
+  const workingDays =
+    workWeekdays.length > 0
+      ? countWorkingDays(calendarYear, calendarMonth, workWeekdays, excludedDays)
+      : 0;
+
+  const availableHoursMonth =
+    workWeekdays.length > 0 && hoursPerDay && hoursPerDay > 0
+      ? availableHours(workingDays, hoursPerDay)
+      : config?.hours_per_month ?? 160;
+
+  const productiveHoursMonth = productiveHours(availableHoursMonth, productiveLossPct);
+
+  /** Horas efetivamente faturáveis — base de todo o custo/hora. */
+  const hoursPerMonth = productiveHoursMonth;
 
   const custoHora = hoursPerMonth > 0 ? groupTotals.total / hoursPerMonth : 0;
   const fmm = groupTotals.total;
   const fmmPorSala = numRooms > 0 ? fmm / numRooms : fmm;
   const custoHoraPorSala = numRooms > 0 ? custoHora / numRooms : custoHora;
+
 
   // ─── Fetch config ───
   const fetchConfig = useCallback(async () => {
@@ -130,6 +191,9 @@ export function usePricingV2() {
         tax_rate: Number(data.tax_rate) ?? 8.44,
         days_per_week: data.days_per_week != null ? Number(data.days_per_week) : null,
         hours_per_day: data.hours_per_day != null ? Number(data.hours_per_day) : null,
+        productive_loss_pct: Number((data as { productive_loss_pct?: number }).productive_loss_pct) || 0,
+        work_weekdays: parseWeekdays((data as { work_weekdays?: unknown }).work_weekdays),
+        excluded_days: parseDays((data as { excluded_days?: unknown }).excluded_days),
         updated_at: data.updated_at,
       };
       setConfig(parsed);
@@ -139,19 +203,23 @@ export function usePricingV2() {
   }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
 
   // ─── Save config ───
-  const saveConfig = async (hours: number, rooms: number, tax: number, daysPerWeek?: number | null, hoursPerDay?: number | null) => {
+  const saveConfig = async (input: SaveConfigInput) => {
     if (!user) return false;
+    const payload = {
+      hours_per_month: Math.max(1, Math.round(input.hours || 0)) || 160,
+      num_rooms: Math.round(input.rooms * 1000) / 1000,
+      tax_rate: input.tax,
+      days_per_week: input.daysPerWeek ?? null,
+      hours_per_day: input.hoursPerDay ?? null,
+      productive_loss_pct: Math.min(99.99, Math.max(0, input.productiveLossPct ?? 0)),
+      work_weekdays: input.workWeekdays ?? [],
+      excluded_days: input.excludedDays ?? [],
+    };
+
     if (config) {
       const { error } = await supabase
         .from("pricing_v2_configurations")
-        .update({
-          hours_per_month: hours,
-          num_rooms: Math.round(rooms * 1000) / 1000,
-          tax_rate: tax,
-          days_per_week: daysPerWeek ?? null,
-          hours_per_day: hoursPerDay ?? null,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...payload, updated_at: new Date().toISOString() })
         .eq("id", config.id);
       if (error) {
         toast({ title: "Erro ao salvar", description: mapDatabaseError(error), variant: "destructive" });
@@ -161,17 +229,14 @@ export function usePricingV2() {
       const { error } = await supabase.from("pricing_v2_configurations").insert({
         user_id: effectiveUserId,
         company_id: selectedCompanyId || null,
-        hours_per_month: hours,
-        num_rooms: Math.round(rooms * 1000) / 1000,
-        tax_rate: tax,
-        days_per_week: daysPerWeek ?? null,
-        hours_per_day: hoursPerDay ?? null,
+        ...payload,
       });
       if (error) {
         toast({ title: "Erro ao criar configuração", description: mapDatabaseError(error), variant: "destructive" });
         return false;
       }
     }
+
     toast({ title: "Configuração salva!" });
     await fetchConfig();
     return true;
@@ -234,6 +299,9 @@ export function usePricingV2() {
         tax_rate: Number(newConfig.tax_rate) ?? 8.44,
         days_per_week: newConfig.days_per_week != null ? Number(newConfig.days_per_week) : null,
         hours_per_day: newConfig.hours_per_day != null ? Number(newConfig.hours_per_day) : null,
+        productive_loss_pct: Number((newConfig as { productive_loss_pct?: number }).productive_loss_pct) || 0,
+        work_weekdays: parseWeekdays((newConfig as { work_weekdays?: unknown }).work_weekdays),
+        excluded_days: parseDays((newConfig as { excluded_days?: unknown }).excluded_days),
         updated_at: newConfig.updated_at,
       });
       const { error } = await supabase.from("pricing_v2_cost_items").insert({
@@ -519,6 +587,10 @@ export function usePricingV2() {
     fmmPorSala,
     custoHoraPorSala,
     hoursPerMonth,
+    availableHoursMonth,
+    productiveHoursMonth,
+    productiveLossPct,
+    workingDays,
     numRooms,
     taxRate,
     selectedProcedure,
