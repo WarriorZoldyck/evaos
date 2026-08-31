@@ -1,33 +1,35 @@
-# Resumo da reunião — pendências a implementar
+# Precificação — perda produtiva e calendário de horas
 
-Da transcrição, os itens de Metas (categoria automática, modo anual) e Precificação (lucratividade fixa na quantidade, 5 linhas, botão editar, scroll, calendário no topo) já foram implementados, assim como as taxas da maquininha na calculadora de parcelamento. O que sobrou como novo escopo:
+Foco desta rodada: como as **horas do mês** são calculadas. Hoje o card de Configuração Geral usa `dias/semana × horas/dia × 4,33`, uma média que não reflete o mês real e não considera tempo improdutivo (intervalos, faltas, buracos na agenda).
 
-## 1. Precificação de produtos (novo módulo/tipo)
+## 1. Calendário do mês
 
-Demanda do cliente: calcular preço de **produtos** (ex.: café), hoje a Precificação V2 é focada em serviços/procedimentos.
+Substituir a média fixa de 4,33 por um calendário real:
 
-- Novo tipo "Produto" na Precificação V2:
-  - **CMV (Custo da Mercadoria Vendida)**: ingredientes/insumos com quantidade e custo unitário por porção/unidade.
-  - Margem, impostos/taxas e comissões sobre o preço.
-  - **Ponto de equilíbrio**: quantas unidades precisa vender no mês para cobrir os custos fixos (usando os custos fixos já cadastrados na precificação).
-- Sem controle de estoque nesta etapa (fica para depois, conforme conversa).
+- O usuário escolhe **quais dias da semana trabalha** (S T Q Q S S D) e as **horas por dia**.
+- O sistema conta os dias úteis reais do mês selecionado (ex.: setembro/2026 tem 22 segundas-a-sextas) e mostra o mês de referência.
+- Um mini-calendário mostra os dias contados; o usuário pode **desmarcar dias específicos** (feriados, folgas) clicando neles.
+- Resultado: **Horas disponíveis no mês** = (dias marcados) × horas/dia.
+- Continua sendo possível digitar as horas manualmente, sobrescrevendo o cálculo.
 
-## 2. Relatórios/Análise — gráficos visuais
+## 2. Perda produtiva (%)
 
-Na área contábil (DRE/Fluxo), adicionar gráficos "bonitos" opcionais que o usuário possa ativar (visão menos seca), sem mudar os cálculos.
+Novo campo **% de perda produtiva** no mesmo card:
 
-## 3. Planos — conferir desconto do anual
+- Representa o tempo que existe na agenda mas não vira serviço faturado (encaixes vazios, limpeza entre atendimentos, deslocamento, atraso).
+- **Horas produtivas = horas disponíveis × (1 − perda%)**.
+- O card passa a mostrar as duas linhas: horas disponíveis e horas produtivas, com a diferença em horas.
+- **Todo o cálculo de custo/hora, FMM e lucratividade passa a usar as horas produtivas**, não as disponíveis. Ou seja: aumentar a perda encarece a hora e sobe o preço sugerido — que é o comportamento correto.
+- Valor padrão 0% para não alterar os números de quem já usa; quem preencher vê o impacto imediato nos cards de resumo e na tabela de procedimentos.
 
-Verificar se o plano anual está aplicando o desconto prometido (12× R$139,90 → R$1.399) automaticamente no checkout Asaas, sem necessidade de cupom; corrigir se não estiver.
+## 3. Onde aparece
 
-## 4. Cadastro — confirmação de e-mail
+O card de calendário/horas já está no topo da página. Ele passa a concentrar: dias trabalhados, horas/dia, calendário do mês, perda produtiva, horas disponíveis e horas produtivas — em um bloco único e legível.
 
-Investigar: usuário logou sem confirmar e-mail e confirmação pode cair em página em branco. Garantir fluxo `/auth/callback` funcionando e login só após confirmação (se essa for a política desejada).
+## Detalhes técnicas
 
-## Detalhes técnicos
-
-- Produtos: nova tabela (ou flag `kind: 'service' | 'product'` em `pricing_procedures`) com itens de insumo (nome, unidade, qtd por produto, custo unitário) e cálculo de CMV em `src/lib/installmentPricing.ts`-adjacent (nova lib pura com testes).
-- Ponto de equilíbrio: `custosFixosMensais / (preço - custo variável unitário)` — lib pura + card na tela.
-- Gráficos: Recharts com tokens semânticos do tema, opt-in por toggle na página.
-- Anual: revisar `asaas-create-subscription` para billingType YEARLY com valor com desconto.
-- Auth: revisar `src/pages/AuthCallback.tsx` e configuração "Confirm email" no Supabase.
+- Migração em `pricing_v2_configurations`: colunas `productive_loss_pct numeric default 0` e `excluded_days jsonb default '[]'` (datas ISO desmarcadas no calendário). Sem novas tabelas; GRANTs e RLS seguem o padrão já existente da tabela.
+- Nova lib pura `src/lib/workHours.ts` com testes: `countWorkingDays(year, month, weekdays, excludedDates)`, `availableHours(...)`, `productiveHours(available, lossPct)`.
+- `src/components/precificacao-v2/ConfigCard.tsx`: troca de dias/semana numérico por toggles de dias da semana, mini-calendário (`Calendar` do shadcn, `mode="multiple"`, `pointer-events-auto`), campo de perda %, e exibição das duas linhas de horas.
+- `src/hooks/usePricingV2.ts`: `hoursPerMonth` efetivo passa a ser o valor produtivo; `custoHora`, `fmm`, `custoHoraPorSala` e `calcParts` consomem esse número sem mudança de fórmula.
+- `src/components/precificacao-v2/CostSummaryCards.tsx`: mostrar horas produtivas (e as disponíveis como referência secundária).
