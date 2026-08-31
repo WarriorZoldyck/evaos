@@ -11,11 +11,23 @@ interface CostSummaryCardsProps {
   fmm: number;
   fmmPorSala: number;
   custoHoraPorSala: number;
+  availableHours?: number;
+  productiveHours?: number;
+  productiveLossPct?: number;
 }
 
 const COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))"];
 
-export function CostSummaryCards({ groupTotals, custoHora, fmm, fmmPorSala, custoHoraPorSala }: CostSummaryCardsProps) {
+export function CostSummaryCards({
+  groupTotals,
+  custoHora,
+  fmm,
+  fmmPorSala,
+  custoHoraPorSala,
+  availableHours,
+  productiveHours,
+  productiveLossPct = 0,
+}: CostSummaryCardsProps) {
   const pieData = [
     { name: "Fixos Clínica", value: groupTotals.fixos_clinica },
     { name: "Variáveis Clínica", value: groupTotals.variaveis_clinica },
@@ -36,6 +48,7 @@ export function CostSummaryCards({ groupTotals, custoHora, fmm, fmmPorSala, cust
     { label: "FMM / Sala", value: fmmPorSala, icon: LayoutGrid },
     { label: "CF/H / Sala", value: custoHoraPorSala, icon: Clock },
   ];
+
 
   return (
     <div className="space-y-4">
