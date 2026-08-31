@@ -22,7 +22,7 @@ export default function PrecificacaoV2() {
   const {
     config, costItems, procedures, loading,
     groupTotals, custoHora, fmm, fmmPorSala, custoHoraPorSala,
-    hoursPerMonth, numRooms, taxRate,
+    hoursPerMonth, availableHoursMonth, productiveHoursMonth, productiveLossPct, numRooms, taxRate,
     selectedProcedureId, setSelectedProcedureId,
     saveConfig, addCostItem, updateCostItem, deleteCostItem,
     createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
@@ -82,6 +82,9 @@ export default function PrecificacaoV2() {
         fmm={fmm}
         fmmPorSala={fmmPorSala}
         custoHoraPorSala={custoHoraPorSala}
+        availableHours={availableHoursMonth}
+        productiveHours={productiveHoursMonth}
+        productiveLossPct={productiveLossPct}
       />
 
       {/* Seção 3: Procedimentos */}
