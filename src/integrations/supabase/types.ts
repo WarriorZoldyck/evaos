@@ -1140,35 +1140,44 @@ export type Database = {
         Row: {
           company_id: string | null
           days_per_week: number | null
+          excluded_days: Json
           hours_per_day: number | null
           hours_per_month: number
           id: string
           num_rooms: number
+          productive_loss_pct: number
           tax_rate: number
           updated_at: string | null
           user_id: string
+          work_weekdays: Json
         }
         Insert: {
           company_id?: string | null
           days_per_week?: number | null
+          excluded_days?: Json
           hours_per_day?: number | null
           hours_per_month?: number
           id?: string
           num_rooms?: number
+          productive_loss_pct?: number
           tax_rate?: number
           updated_at?: string | null
           user_id: string
+          work_weekdays?: Json
         }
         Update: {
           company_id?: string | null
           days_per_week?: number | null
+          excluded_days?: Json
           hours_per_day?: number | null
           hours_per_month?: number
           id?: string
           num_rooms?: number
+          productive_loss_pct?: number
           tax_rate?: number
           updated_at?: string | null
           user_id?: string
+          work_weekdays?: Json
         }
         Relationships: [
           {
