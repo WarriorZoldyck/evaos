@@ -5,6 +5,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import {
+  availableHours,
+  productiveHours,
+  countWorkingDays,
+  DEFAULT_WEEKDAYS,
+  type Weekday,
+} from "@/lib/workHours";
 
 export interface PricingV2Config {
   id: string;
@@ -82,6 +89,20 @@ const COST_GROUP_LABELS: Record<CostGroup, string> = {
 
 export { COST_GROUP_LABELS };
 
+const VALID_WEEKDAYS = new Set([0, 1, 2, 3, 4, 5, 6]);
+
+function parseWeekdays(raw: unknown): Weekday[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v) => Number(v))
+    .filter((v) => VALID_WEEKDAYS.has(v)) as Weekday[];
+}
+
+function parseDays(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((v): v is string => typeof v === "string");
+}
+
 function monthlyValue(item: CostItem): number {
   return item.frequency === "A" ? item.value / 12 : item.value;
 }
@@ -145,6 +166,9 @@ export function usePricingV2() {
         tax_rate: Number(data.tax_rate) ?? 8.44,
         days_per_week: data.days_per_week != null ? Number(data.days_per_week) : null,
         hours_per_day: data.hours_per_day != null ? Number(data.hours_per_day) : null,
+        productive_loss_pct: Number((data as { productive_loss_pct?: number }).productive_loss_pct) || 0,
+        work_weekdays: parseWeekdays((data as { work_weekdays?: unknown }).work_weekdays),
+        excluded_days: parseDays((data as { excluded_days?: unknown }).excluded_days),
         updated_at: data.updated_at,
       };
       setConfig(parsed);
@@ -249,6 +273,9 @@ export function usePricingV2() {
         tax_rate: Number(newConfig.tax_rate) ?? 8.44,
         days_per_week: newConfig.days_per_week != null ? Number(newConfig.days_per_week) : null,
         hours_per_day: newConfig.hours_per_day != null ? Number(newConfig.hours_per_day) : null,
+        productive_loss_pct: Number((newConfig as { productive_loss_pct?: number }).productive_loss_pct) || 0,
+        work_weekdays: parseWeekdays((newConfig as { work_weekdays?: unknown }).work_weekdays),
+        excluded_days: parseDays((newConfig as { excluded_days?: unknown }).excluded_days),
         updated_at: newConfig.updated_at,
       });
       const { error } = await supabase.from("pricing_v2_cost_items").insert({
