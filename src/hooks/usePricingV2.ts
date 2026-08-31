@@ -203,19 +203,23 @@ export function usePricingV2() {
   }, [user, effectiveUserId, toast, isPersonal, selectedCompanyId]);
 
   // ─── Save config ───
-  const saveConfig = async (hours: number, rooms: number, tax: number, daysPerWeek?: number | null, hoursPerDay?: number | null) => {
+  const saveConfig = async (input: SaveConfigInput) => {
     if (!user) return false;
+    const payload = {
+      hours_per_month: Math.max(1, Math.round(input.hours || 0)) || 160,
+      num_rooms: Math.round(input.rooms * 1000) / 1000,
+      tax_rate: input.tax,
+      days_per_week: input.daysPerWeek ?? null,
+      hours_per_day: input.hoursPerDay ?? null,
+      productive_loss_pct: Math.min(99.99, Math.max(0, input.productiveLossPct ?? 0)),
+      work_weekdays: input.workWeekdays ?? [],
+      excluded_days: input.excludedDays ?? [],
+    };
+
     if (config) {
       const { error } = await supabase
         .from("pricing_v2_configurations")
-        .update({
-          hours_per_month: hours,
-          num_rooms: Math.round(rooms * 1000) / 1000,
-          tax_rate: tax,
-          days_per_week: daysPerWeek ?? null,
-          hours_per_day: hoursPerDay ?? null,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...payload, updated_at: new Date().toISOString() })
         .eq("id", config.id);
       if (error) {
         toast({ title: "Erro ao salvar", description: mapDatabaseError(error), variant: "destructive" });
@@ -225,17 +229,14 @@ export function usePricingV2() {
       const { error } = await supabase.from("pricing_v2_configurations").insert({
         user_id: effectiveUserId,
         company_id: selectedCompanyId || null,
-        hours_per_month: hours,
-        num_rooms: Math.round(rooms * 1000) / 1000,
-        tax_rate: tax,
-        days_per_week: daysPerWeek ?? null,
-        hours_per_day: hoursPerDay ?? null,
+        ...payload,
       });
       if (error) {
         toast({ title: "Erro ao criar configuração", description: mapDatabaseError(error), variant: "destructive" });
         return false;
       }
     }
+
     toast({ title: "Configuração salva!" });
     await fetchConfig();
     return true;
