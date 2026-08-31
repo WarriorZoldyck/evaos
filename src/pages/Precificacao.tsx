@@ -71,7 +71,17 @@ export default function Precificacao() {
       </div>
 
       {/* Seção 1: Config */}
-      <ConfigCard hoursPerMonth={hoursPerMonth} numRooms={numRooms} taxRate={taxRate} daysPerWeek={config?.days_per_week ?? null} hoursPerDay={config?.hours_per_day ?? null} onSave={saveConfig} />
+      <ConfigCard
+        hoursPerMonth={config?.hours_per_month ?? 160}
+        numRooms={numRooms}
+        taxRate={taxRate}
+        daysPerWeek={config?.days_per_week ?? null}
+        hoursPerDay={config?.hours_per_day ?? null}
+        productiveLossPct={config?.productive_loss_pct ?? 0}
+        workWeekdays={config?.work_weekdays ?? []}
+        excludedDays={config?.excluded_days ?? []}
+        onSave={saveConfig}
+      />
 
       {/* Seção 2: Resumo */}
       <CostSummaryCards
