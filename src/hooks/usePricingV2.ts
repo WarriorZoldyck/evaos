@@ -128,14 +128,39 @@ export function usePricingV2() {
     return { fixos_clinica: fixos, variaveis_clinica: variaveis, pessoais, total: fixos + variaveis + pessoais };
   })();
 
-  const hoursPerMonth = config?.hours_per_month ?? 160;
   const numRooms = config?.num_rooms ?? 1;
   const taxRate = config?.tax_rate ?? 8.44;
+
+  // Horas: quando há calendário configurado (dias da semana + horas/dia),
+  // as horas disponíveis vêm da contagem real de dias do mês corrente.
+  const workWeekdays = config?.work_weekdays ?? [];
+  const excludedDays = config?.excluded_days ?? [];
+  const hoursPerDay = config?.hours_per_day ?? null;
+  const productiveLossPct = config?.productive_loss_pct ?? 0;
+
+  const today = new Date();
+  const calendarYear = today.getFullYear();
+  const calendarMonth = today.getMonth() + 1;
+  const workingDays =
+    workWeekdays.length > 0
+      ? countWorkingDays(calendarYear, calendarMonth, workWeekdays, excludedDays)
+      : 0;
+
+  const availableHoursMonth =
+    workWeekdays.length > 0 && hoursPerDay && hoursPerDay > 0
+      ? availableHours(workingDays, hoursPerDay)
+      : config?.hours_per_month ?? 160;
+
+  const productiveHoursMonth = productiveHours(availableHoursMonth, productiveLossPct);
+
+  /** Horas efetivamente faturáveis — base de todo o custo/hora. */
+  const hoursPerMonth = productiveHoursMonth;
 
   const custoHora = hoursPerMonth > 0 ? groupTotals.total / hoursPerMonth : 0;
   const fmm = groupTotals.total;
   const fmmPorSala = numRooms > 0 ? fmm / numRooms : fmm;
   const custoHoraPorSala = numRooms > 0 ? custoHora / numRooms : custoHora;
+
 
   // ─── Fetch config ───
   const fetchConfig = useCallback(async () => {
