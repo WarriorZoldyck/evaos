@@ -14,8 +14,23 @@ export interface PricingV2Config {
   tax_rate: number;
   days_per_week: number | null;
   hours_per_day: number | null;
+  productive_loss_pct: number;
+  work_weekdays: Weekday[];
+  excluded_days: string[];
   updated_at: string | null;
 }
+
+export interface SaveConfigInput {
+  hours: number;
+  rooms: number;
+  tax: number;
+  daysPerWeek?: number | null;
+  hoursPerDay?: number | null;
+  productiveLossPct?: number;
+  workWeekdays?: Weekday[];
+  excludedDays?: string[];
+}
+
 
 export interface CostItem {
   id: string;
