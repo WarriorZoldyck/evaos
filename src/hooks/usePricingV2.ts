@@ -1,6 +1,7 @@
 import { mapDatabaseError } from "@/lib/errorMapper";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -9,8 +10,15 @@ import {
   availableHours,
   productiveHours,
   countWorkingDays,
+  monthSchedule,
+  availableHoursFromSchedule,
+  legacyToWeekdaySchedule,
+  parseMonthKey,
+  toMonthKey,
   DEFAULT_WEEKDAYS,
   type Weekday,
+  type WeekdaySchedule,
+  type DayOverrides,
 } from "@/lib/workHours";
 
 export interface PricingV2Config {
@@ -24,6 +32,10 @@ export interface PricingV2Config {
   productive_loss_pct: number;
   work_weekdays: Weekday[];
   excluded_days: string[];
+  weekday_schedule: WeekdaySchedule;
+  day_overrides: DayOverrides;
+  observe_holidays: boolean;
+  reference_month: string | null;
   updated_at: string | null;
 }
 
@@ -36,7 +48,12 @@ export interface SaveConfigInput {
   productiveLossPct?: number;
   workWeekdays?: Weekday[];
   excludedDays?: string[];
+  weekdaySchedule?: WeekdaySchedule;
+  dayOverrides?: DayOverrides;
+  observeHolidays?: boolean;
+  referenceMonth?: string | null;
 }
+
 
 
 export interface CostItem {
@@ -103,6 +120,47 @@ function parseDays(raw: unknown): string[] {
   return raw.filter((v): v is string => typeof v === "string");
 }
 
+function parseWeekdaySchedule(raw: unknown): WeekdaySchedule {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: WeekdaySchedule = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const w = Number(k);
+    if (!VALID_WEEKDAYS.has(w) || !v || typeof v !== "object") continue;
+    const r = v as { start?: string; end?: string; break?: number };
+    if (!r.start || !r.end) continue;
+    out[w as Weekday] = { start: r.start, end: r.end, break: Number(r.break) || 0 };
+  }
+  return out;
+}
+
+function parseDayOverrides(raw: unknown): DayOverrides {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: DayOverrides = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v === null) {
+      out[k] = null;
+      continue;
+    }
+    if (typeof v !== "object") continue;
+    const r = v as { start?: string; end?: string; break?: number };
+    if (!r.start || !r.end) continue;
+    out[k] = { start: r.start, end: r.end, break: Number(r.break) || 0 };
+  }
+  return out;
+}
+
+/** Campos novos da configuração, tolerante ao formato antigo. */
+function parseScheduleFields(row: Record<string, unknown>) {
+  return {
+    weekday_schedule: parseWeekdaySchedule(row.weekday_schedule),
+    day_overrides: parseDayOverrides(row.day_overrides),
+    observe_holidays: row.observe_holidays !== false,
+    reference_month: typeof row.reference_month === "string" ? row.reference_month : null,
+  };
+}
+
+
+
 function monthlyValue(item: CostItem): number {
   return item.frequency === "A" ? item.value / 12 : item.value;
 }
@@ -131,27 +189,55 @@ export function usePricingV2() {
   const numRooms = config?.num_rooms ?? 1;
   const taxRate = config?.tax_rate ?? 8.44;
 
-  // Horas: quando há calendário configurado (dias da semana + horas/dia),
-  // as horas disponíveis vêm da contagem real de dias do mês corrente.
+  // Horas: quando há jornada configurada (weekday_schedule), as horas
+  // disponíveis vêm da agenda real do mês de referência.
   const workWeekdays = config?.work_weekdays ?? [];
   const excludedDays = config?.excluded_days ?? [];
   const hoursPerDay = config?.hours_per_day ?? null;
   const productiveLossPct = config?.productive_loss_pct ?? 0;
+  const observeHolidays = config?.observe_holidays ?? true;
 
   const today = new Date();
-  const calendarYear = today.getFullYear();
-  const calendarMonth = today.getMonth() + 1;
-  const workingDays =
-    workWeekdays.length > 0
-      ? countWorkingDays(calendarYear, calendarMonth, workWeekdays, excludedDays)
-      : 0;
+  const refMonth =
+    parseMonthKey(config?.reference_month) ?? {
+      year: today.getFullYear(),
+      month: today.getMonth() + 1,
+    };
+  const calendarYear = refMonth.year;
+  const calendarMonth = refMonth.month;
 
-  const availableHoursMonth =
-    workWeekdays.length > 0 && hoursPerDay && hoursPerDay > 0
-      ? availableHours(workingDays, hoursPerDay)
-      : config?.hours_per_month ?? 160;
+  /** Jornada: usa o novo formato; se vazio, converte o formato antigo. */
+  const weekdaySchedule: WeekdaySchedule =
+    config && Object.keys(config.weekday_schedule ?? {}).length > 0
+      ? config.weekday_schedule
+      : legacyToWeekdaySchedule(workWeekdays, hoursPerDay);
+
+  const dayOverrides: DayOverrides = useMemo(() => {
+    const base: DayOverrides = { ...(config?.day_overrides ?? {}) };
+    // Compatibilidade: dias excluídos do formato antigo viram folga.
+    for (const d of excludedDays) if (!(d in base)) base[d] = null;
+    return base;
+  }, [config?.day_overrides, excludedDays.join(",")]);
+
+  const scheduleDays = useMemo(
+    () =>
+      monthSchedule(calendarYear, calendarMonth, {
+        weekdaySchedule,
+        overrides: dayOverrides,
+        observeHolidays,
+      }),
+    [calendarYear, calendarMonth, JSON.stringify(weekdaySchedule), dayOverrides, observeHolidays],
+  );
+
+  const hasSchedule = Object.keys(weekdaySchedule).length > 0;
+  const workingDays = hasSchedule ? scheduleDays.filter((d) => d.hours > 0).length : 0;
+
+  const availableHoursMonth = hasSchedule
+    ? availableHoursFromSchedule(scheduleDays)
+    : config?.hours_per_month ?? 160;
 
   const productiveHoursMonth = productiveHours(availableHoursMonth, productiveLossPct);
+
 
   /** Horas efetivamente faturáveis — base de todo o custo/hora. */
   const hoursPerMonth = productiveHoursMonth;
@@ -194,6 +280,7 @@ export function usePricingV2() {
         productive_loss_pct: Number((data as { productive_loss_pct?: number }).productive_loss_pct) || 0,
         work_weekdays: parseWeekdays((data as { work_weekdays?: unknown }).work_weekdays),
         excluded_days: parseDays((data as { excluded_days?: unknown }).excluded_days),
+        ...parseScheduleFields(data as unknown as Record<string, unknown>),
         updated_at: data.updated_at,
       };
       setConfig(parsed);
@@ -214,6 +301,11 @@ export function usePricingV2() {
       productive_loss_pct: Math.min(99.99, Math.max(0, input.productiveLossPct ?? 0)),
       work_weekdays: input.workWeekdays ?? [],
       excluded_days: input.excludedDays ?? [],
+      weekday_schedule: (input.weekdaySchedule ?? config?.weekday_schedule ?? {}) as unknown as Json,
+      day_overrides: (input.dayOverrides ?? config?.day_overrides ?? {}) as unknown as Json,
+      observe_holidays: input.observeHolidays ?? config?.observe_holidays ?? true,
+      reference_month:
+        input.referenceMonth ?? config?.reference_month ?? toMonthKey(today.getFullYear(), today.getMonth() + 1),
     };
 
     if (config) {
@@ -302,6 +394,7 @@ export function usePricingV2() {
         productive_loss_pct: Number((newConfig as { productive_loss_pct?: number }).productive_loss_pct) || 0,
         work_weekdays: parseWeekdays((newConfig as { work_weekdays?: unknown }).work_weekdays),
         excluded_days: parseDays((newConfig as { excluded_days?: unknown }).excluded_days),
+        ...parseScheduleFields(newConfig as unknown as Record<string, unknown>),
         updated_at: newConfig.updated_at,
       });
       const { error } = await supabase.from("pricing_v2_cost_items").insert({
@@ -591,6 +684,11 @@ export function usePricingV2() {
     productiveHoursMonth,
     productiveLossPct,
     workingDays,
+    weekdaySchedule,
+    dayOverrides,
+    observeHolidays,
+    referenceMonth: toMonthKey(calendarYear, calendarMonth),
+    scheduleDays,
     numRooms,
     taxRate,
     selectedProcedure,

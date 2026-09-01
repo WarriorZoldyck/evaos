@@ -27,7 +27,8 @@ export default function Precificacao() {
   const {
     config, costItems, procedures, loading,
     groupTotals, custoHora, fmm, fmmPorSala, custoHoraPorSala,
-    hoursPerMonth, numRooms, taxRate,
+    hoursPerMonth, availableHoursMonth, productiveHoursMonth, productiveLossPct, numRooms, taxRate,
+    weekdaySchedule, dayOverrides, observeHolidays, referenceMonth, workingDays,
     selectedProcedureId, setSelectedProcedureId,
     saveConfig, addCostItem, updateCostItem, deleteCostItem,
     createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
@@ -80,6 +81,12 @@ export default function Precificacao() {
         productiveLossPct={config?.productive_loss_pct ?? 0}
         workWeekdays={config?.work_weekdays ?? []}
         excludedDays={config?.excluded_days ?? []}
+        weekdaySchedule={weekdaySchedule}
+        dayOverrides={dayOverrides}
+        observeHolidays={observeHolidays}
+        referenceMonth={referenceMonth}
+        availableHoursMonth={availableHoursMonth}
+        workingDays={workingDays}
         onSave={saveConfig}
       />
 
@@ -90,6 +97,9 @@ export default function Precificacao() {
         fmm={fmm}
         fmmPorSala={fmmPorSala}
         custoHoraPorSala={custoHoraPorSala}
+        availableHours={availableHoursMonth}
+        productiveHours={productiveHoursMonth}
+        productiveLossPct={productiveLossPct}
       />
 
       {/* Seção 3: Procedimentos */}

@@ -1139,44 +1139,56 @@ export type Database = {
       pricing_v2_configurations: {
         Row: {
           company_id: string | null
+          day_overrides: Json
           days_per_week: number | null
           excluded_days: Json
           hours_per_day: number | null
           hours_per_month: number
           id: string
           num_rooms: number
+          observe_holidays: boolean
           productive_loss_pct: number
+          reference_month: string | null
           tax_rate: number
           updated_at: string | null
           user_id: string
+          weekday_schedule: Json
           work_weekdays: Json
         }
         Insert: {
           company_id?: string | null
+          day_overrides?: Json
           days_per_week?: number | null
           excluded_days?: Json
           hours_per_day?: number | null
           hours_per_month?: number
           id?: string
           num_rooms?: number
+          observe_holidays?: boolean
           productive_loss_pct?: number
+          reference_month?: string | null
           tax_rate?: number
           updated_at?: string | null
           user_id: string
+          weekday_schedule?: Json
           work_weekdays?: Json
         }
         Update: {
           company_id?: string | null
+          day_overrides?: Json
           days_per_week?: number | null
           excluded_days?: Json
           hours_per_day?: number | null
           hours_per_month?: number
           id?: string
           num_rooms?: number
+          observe_holidays?: boolean
           productive_loss_pct?: number
+          reference_month?: string | null
           tax_rate?: number
           updated_at?: string | null
           user_id?: string
+          weekday_schedule?: Json
           work_weekdays?: Json
         }
         Relationships: [
