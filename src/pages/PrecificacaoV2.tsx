@@ -122,7 +122,6 @@ export default function PrecificacaoV2() {
               calcParts={calcParts}
               taxRate={taxRate}
             />
-          </div>
         </CardContent>
       </Card>
 
