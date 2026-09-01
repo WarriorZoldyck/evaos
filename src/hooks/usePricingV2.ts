@@ -1,6 +1,7 @@
 import { mapDatabaseError } from "@/lib/errorMapper";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -300,8 +301,8 @@ export function usePricingV2() {
       productive_loss_pct: Math.min(99.99, Math.max(0, input.productiveLossPct ?? 0)),
       work_weekdays: input.workWeekdays ?? [],
       excluded_days: input.excludedDays ?? [],
-      weekday_schedule: (input.weekdaySchedule ?? config?.weekday_schedule ?? {}) as unknown as Record<string, unknown>,
-      day_overrides: (input.dayOverrides ?? config?.day_overrides ?? {}) as unknown as Record<string, unknown>,
+      weekday_schedule: (input.weekdaySchedule ?? config?.weekday_schedule ?? {}) as unknown as Json,
+      day_overrides: (input.dayOverrides ?? config?.day_overrides ?? {}) as unknown as Json,
       observe_holidays: input.observeHolidays ?? config?.observe_holidays ?? true,
       reference_month:
         input.referenceMonth ?? config?.reference_month ?? toMonthKey(today.getFullYear(), today.getMonth() + 1),
