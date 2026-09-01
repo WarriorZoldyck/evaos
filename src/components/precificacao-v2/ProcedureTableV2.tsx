@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -120,9 +120,10 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
+    <div className="relative w-full max-h-[600px] overflow-x-scroll overflow-y-auto">
+      <table className="w-full caption-bottom text-sm">
+        <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_var(--border)]">
+          <TableRow>
           <TableHead>Procedimento</TableHead>
           <TableHead className="text-right">Qtd</TableHead>
           <TableHead className="text-right">Tempo (h)</TableHead>
@@ -306,6 +307,7 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
           );
         })}
       </TableBody>
-    </Table>
+      </table>
+    </div>
   );
 }
