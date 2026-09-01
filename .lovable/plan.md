@@ -42,6 +42,16 @@ Comportamento:
 - Cada célula mostra a faixa horária e o total de horas do dia; folgas ficam esmaecidas.
 - Rodapé sempre com o total do mês: dias, horas disponíveis e horas produtivas (já com a perda).
 
+## 2b. Feriados nacionais
+
+- O calendário já vem com os **feriados nacionais brasileiros** do ano (fixos + móveis derivados da Páscoa: Carnaval, Sexta-Feira Santa, Corpus Christi).
+- Por padrão eles entram como **folga (não somam horas)** e aparecem marcados com o nome do feriado (ex.: "Independência") em destaque na célula.
+- O usuário pode **clicar no feriado e marcar "Vou trabalhar neste dia"** — aí o dia volta a somar, com a faixa padrão ou uma faixa específica.
+- Chave no modal: "Considerar feriados nacionais" (ligado por padrão). Desligando, todos os feriados voltam a contar como dia normal.
+- Feriados municipais/estaduais não entram na lista automática; o usuário marca esses dias manualmente como folga.
+
+
+
 ## 3. Cálculo
 
 - Horas do dia = (fim − início) − intervalo.
