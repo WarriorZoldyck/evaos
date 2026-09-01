@@ -279,6 +279,7 @@ export function usePricingV2() {
         productive_loss_pct: Number((data as { productive_loss_pct?: number }).productive_loss_pct) || 0,
         work_weekdays: parseWeekdays((data as { work_weekdays?: unknown }).work_weekdays),
         excluded_days: parseDays((data as { excluded_days?: unknown }).excluded_days),
+        ...parseScheduleFields(data as unknown as Record<string, unknown>),
         updated_at: data.updated_at,
       };
       setConfig(parsed);
@@ -299,6 +300,11 @@ export function usePricingV2() {
       productive_loss_pct: Math.min(99.99, Math.max(0, input.productiveLossPct ?? 0)),
       work_weekdays: input.workWeekdays ?? [],
       excluded_days: input.excludedDays ?? [],
+      weekday_schedule: (input.weekdaySchedule ?? config?.weekday_schedule ?? {}) as unknown as Record<string, unknown>,
+      day_overrides: (input.dayOverrides ?? config?.day_overrides ?? {}) as unknown as Record<string, unknown>,
+      observe_holidays: input.observeHolidays ?? config?.observe_holidays ?? true,
+      reference_month:
+        input.referenceMonth ?? config?.reference_month ?? toMonthKey(today.getFullYear(), today.getMonth() + 1),
     };
 
     if (config) {
@@ -387,6 +393,7 @@ export function usePricingV2() {
         productive_loss_pct: Number((newConfig as { productive_loss_pct?: number }).productive_loss_pct) || 0,
         work_weekdays: parseWeekdays((newConfig as { work_weekdays?: unknown }).work_weekdays),
         excluded_days: parseDays((newConfig as { excluded_days?: unknown }).excluded_days),
+        ...parseScheduleFields(newConfig as unknown as Record<string, unknown>),
         updated_at: newConfig.updated_at,
       });
       const { error } = await supabase.from("pricing_v2_cost_items").insert({
