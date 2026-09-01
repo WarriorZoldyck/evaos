@@ -42,6 +42,16 @@ Comportamento:
 - Cada célula mostra a faixa horária e o total de horas do dia; folgas ficam esmaecidas.
 - Rodapé sempre com o total do mês: dias, horas disponíveis e horas produtivas (já com a perda).
 
+## 2b. Feriados nacionais
+
+- O calendário já vem com os **feriados nacionais brasileiros** do ano (fixos + móveis derivados da Páscoa: Carnaval, Sexta-Feira Santa, Corpus Christi).
+- Por padrão eles entram como **folga (não somam horas)** e aparecem marcados com o nome do feriado (ex.: "Independência") em destaque na célula.
+- O usuário pode **clicar no feriado e marcar "Vou trabalhar neste dia"** — aí o dia volta a somar, com a faixa padrão ou uma faixa específica.
+- Chave no modal: "Considerar feriados nacionais" (ligado por padrão). Desligando, todos os feriados voltam a contar como dia normal.
+- Feriados municipais/estaduais não entram na lista automática; o usuário marca esses dias manualmente como folga.
+
+
+
 ## 3. Cálculo
 
 - Horas do dia = (fim − início) − intervalo.
@@ -59,6 +69,7 @@ Comportamento:
   - `excluded_days` e `hours_per_day` continuam existindo para compatibilidade; a migração de leitura converte o formato antigo (weekdays + horas/dia + excluídos) no novo na primeira abertura.
   - GRANTs e RLS já existentes da tabela permanecem.
 - `src/lib/workHours.ts` ganha funções puras + testes: `dayHours(range)`, `monthSchedule(year, month, weekdaySchedule, overrides)`, `availableHoursFromSchedule(...)`, mantendo `productiveHours` como está.
+- Novo `src/lib/brazilHolidays.ts` (puro + testes): cálculo da Páscoa (algoritmo de Meeus/Gauss) e lista de feriados nacionais do ano, com nome e data. Sem dependência externa nem chamada de rede. Nova coluna `observe_holidays boolean default true` em `pricing_v2_configurations`; trabalhar num feriado é apenas um override em `day_overrides`.
 - Novo `src/components/precificacao-v2/WorkScheduleModal.tsx` (Dialog do shadcn) com grade do mês própria (não o `Calendar`, para caber a faixa horária em cada célula), painel lateral de edição e navegação de mês.
 - `ConfigCard.tsx` simplifica: resumo + botão que abre o modal; mantém perda produtiva, salas e alíquota.
 - `usePricingV2.ts`: `availableHoursMonth` passa a vir de `availableHoursFromSchedule` do mês de referência; `saveConfig` grava os novos campos.
