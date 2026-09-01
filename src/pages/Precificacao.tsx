@@ -80,6 +80,12 @@ export default function Precificacao() {
         productiveLossPct={config?.productive_loss_pct ?? 0}
         workWeekdays={config?.work_weekdays ?? []}
         excludedDays={config?.excluded_days ?? []}
+        weekdaySchedule={weekdaySchedule}
+        dayOverrides={dayOverrides}
+        observeHolidays={observeHolidays}
+        referenceMonth={referenceMonth}
+        availableHoursMonth={availableHoursMonth}
+        workingDays={workingDays}
         onSave={saveConfig}
       />
 
