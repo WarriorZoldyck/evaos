@@ -119,6 +119,47 @@ function parseDays(raw: unknown): string[] {
   return raw.filter((v): v is string => typeof v === "string");
 }
 
+function parseWeekdaySchedule(raw: unknown): WeekdaySchedule {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: WeekdaySchedule = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const w = Number(k);
+    if (!VALID_WEEKDAYS.has(w) || !v || typeof v !== "object") continue;
+    const r = v as { start?: string; end?: string; break?: number };
+    if (!r.start || !r.end) continue;
+    out[w as Weekday] = { start: r.start, end: r.end, break: Number(r.break) || 0 };
+  }
+  return out;
+}
+
+function parseDayOverrides(raw: unknown): DayOverrides {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: DayOverrides = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v === null) {
+      out[k] = null;
+      continue;
+    }
+    if (typeof v !== "object") continue;
+    const r = v as { start?: string; end?: string; break?: number };
+    if (!r.start || !r.end) continue;
+    out[k] = { start: r.start, end: r.end, break: Number(r.break) || 0 };
+  }
+  return out;
+}
+
+/** Campos novos da configuração, tolerante ao formato antigo. */
+function parseScheduleFields(row: Record<string, unknown>) {
+  return {
+    weekday_schedule: parseWeekdaySchedule(row.weekday_schedule),
+    day_overrides: parseDayOverrides(row.day_overrides),
+    observe_holidays: row.observe_holidays !== false,
+    reference_month: typeof row.reference_month === "string" ? row.reference_month : null,
+  };
+}
+
+
+
 function monthlyValue(item: CostItem): number {
   return item.frequency === "A" ? item.value / 12 : item.value;
 }
