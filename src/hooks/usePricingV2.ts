@@ -131,27 +131,55 @@ export function usePricingV2() {
   const numRooms = config?.num_rooms ?? 1;
   const taxRate = config?.tax_rate ?? 8.44;
 
-  // Horas: quando há calendário configurado (dias da semana + horas/dia),
-  // as horas disponíveis vêm da contagem real de dias do mês corrente.
+  // Horas: quando há jornada configurada (weekday_schedule), as horas
+  // disponíveis vêm da agenda real do mês de referência.
   const workWeekdays = config?.work_weekdays ?? [];
   const excludedDays = config?.excluded_days ?? [];
   const hoursPerDay = config?.hours_per_day ?? null;
   const productiveLossPct = config?.productive_loss_pct ?? 0;
+  const observeHolidays = config?.observe_holidays ?? true;
 
   const today = new Date();
-  const calendarYear = today.getFullYear();
-  const calendarMonth = today.getMonth() + 1;
-  const workingDays =
-    workWeekdays.length > 0
-      ? countWorkingDays(calendarYear, calendarMonth, workWeekdays, excludedDays)
-      : 0;
+  const refMonth =
+    parseMonthKey(config?.reference_month) ?? {
+      year: today.getFullYear(),
+      month: today.getMonth() + 1,
+    };
+  const calendarYear = refMonth.year;
+  const calendarMonth = refMonth.month;
 
-  const availableHoursMonth =
-    workWeekdays.length > 0 && hoursPerDay && hoursPerDay > 0
-      ? availableHours(workingDays, hoursPerDay)
-      : config?.hours_per_month ?? 160;
+  /** Jornada: usa o novo formato; se vazio, converte o formato antigo. */
+  const weekdaySchedule: WeekdaySchedule =
+    config && Object.keys(config.weekday_schedule ?? {}).length > 0
+      ? config.weekday_schedule
+      : legacyToWeekdaySchedule(workWeekdays, hoursPerDay);
+
+  const dayOverrides: DayOverrides = useMemo(() => {
+    const base: DayOverrides = { ...(config?.day_overrides ?? {}) };
+    // Compatibilidade: dias excluídos do formato antigo viram folga.
+    for (const d of excludedDays) if (!(d in base)) base[d] = null;
+    return base;
+  }, [config?.day_overrides, excludedDays.join(",")]);
+
+  const scheduleDays = useMemo(
+    () =>
+      monthSchedule(calendarYear, calendarMonth, {
+        weekdaySchedule,
+        overrides: dayOverrides,
+        observeHolidays,
+      }),
+    [calendarYear, calendarMonth, JSON.stringify(weekdaySchedule), dayOverrides, observeHolidays],
+  );
+
+  const hasSchedule = Object.keys(weekdaySchedule).length > 0;
+  const workingDays = hasSchedule ? scheduleDays.filter((d) => d.hours > 0).length : 0;
+
+  const availableHoursMonth = hasSchedule
+    ? availableHoursFromSchedule(scheduleDays)
+    : config?.hours_per_month ?? 160;
 
   const productiveHoursMonth = productiveHours(availableHoursMonth, productiveLossPct);
+
 
   /** Horas efetivamente faturáveis — base de todo o custo/hora. */
   const hoursPerMonth = productiveHoursMonth;
