@@ -120,7 +120,7 @@ export function ProcedureTableV2({ procedures, calcProcedure, selectedId, onSele
   }
 
   return (
-    <div className="relative w-full max-h-[700px] overflow-x-scroll overflow-y-auto">
+    <div className="relative w-full max-h-[360px] overflow-x-scroll overflow-y-auto">
       <table className="w-full caption-bottom text-sm">
         <TableHeader className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_var(--border)]">
           <TableRow>
