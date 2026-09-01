@@ -108,8 +108,7 @@ export default function PrecificacaoV2() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="max-h-[440px] overflow-auto">
-            <ProcedureTableV2
+          <ProcedureTableV2
               procedures={procedures}
               calcProcedure={calcProcedure}
               selectedId={selectedProcedureId}
@@ -123,7 +122,6 @@ export default function PrecificacaoV2() {
               calcParts={calcParts}
               taxRate={taxRate}
             />
-          </div>
         </CardContent>
       </Card>
 
