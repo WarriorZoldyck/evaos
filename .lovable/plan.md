@@ -69,6 +69,7 @@ Comportamento:
   - `excluded_days` e `hours_per_day` continuam existindo para compatibilidade; a migração de leitura converte o formato antigo (weekdays + horas/dia + excluídos) no novo na primeira abertura.
   - GRANTs e RLS já existentes da tabela permanecem.
 - `src/lib/workHours.ts` ganha funções puras + testes: `dayHours(range)`, `monthSchedule(year, month, weekdaySchedule, overrides)`, `availableHoursFromSchedule(...)`, mantendo `productiveHours` como está.
+- Novo `src/lib/brazilHolidays.ts` (puro + testes): cálculo da Páscoa (algoritmo de Meeus/Gauss) e lista de feriados nacionais do ano, com nome e data. Sem dependência externa nem chamada de rede. Nova coluna `observe_holidays boolean default true` em `pricing_v2_configurations`; trabalhar num feriado é apenas um override em `day_overrides`.
 - Novo `src/components/precificacao-v2/WorkScheduleModal.tsx` (Dialog do shadcn) com grade do mês própria (não o `Calendar`, para caber a faixa horária em cada célula), painel lateral de edição e navegação de mês.
 - `ConfigCard.tsx` simplifica: resumo + botão que abre o modal; mantém perda produtiva, salas e alíquota.
 - `usePricingV2.ts`: `availableHoursMonth` passa a vir de `availableHoursFromSchedule` do mês de referência; `saveConfig` grava os novos campos.
