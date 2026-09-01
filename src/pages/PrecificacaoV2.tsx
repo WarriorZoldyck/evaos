@@ -23,6 +23,7 @@ export default function PrecificacaoV2() {
     config, costItems, procedures, loading,
     groupTotals, custoHora, fmm, fmmPorSala, custoHoraPorSala,
     hoursPerMonth, availableHoursMonth, productiveHoursMonth, productiveLossPct, numRooms, taxRate,
+    weekdaySchedule, dayOverrides, observeHolidays, referenceMonth, workingDays,
     selectedProcedureId, setSelectedProcedureId,
     saveConfig, addCostItem, updateCostItem, deleteCostItem,
     createProcedure, updateProcedure, duplicateProcedure, deleteProcedure, calcProcedure,
