@@ -1,5 +1,5 @@
 import { mapDatabaseError } from "@/lib/errorMapper";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
@@ -9,8 +9,15 @@ import {
   availableHours,
   productiveHours,
   countWorkingDays,
+  monthSchedule,
+  availableHoursFromSchedule,
+  legacyToWeekdaySchedule,
+  parseMonthKey,
+  toMonthKey,
   DEFAULT_WEEKDAYS,
   type Weekday,
+  type WeekdaySchedule,
+  type DayOverrides,
 } from "@/lib/workHours";
 
 export interface PricingV2Config {
@@ -24,6 +31,10 @@ export interface PricingV2Config {
   productive_loss_pct: number;
   work_weekdays: Weekday[];
   excluded_days: string[];
+  weekday_schedule: WeekdaySchedule;
+  day_overrides: DayOverrides;
+  observe_holidays: boolean;
+  reference_month: string | null;
   updated_at: string | null;
 }
 
@@ -36,7 +47,12 @@ export interface SaveConfigInput {
   productiveLossPct?: number;
   workWeekdays?: Weekday[];
   excludedDays?: string[];
+  weekdaySchedule?: WeekdaySchedule;
+  dayOverrides?: DayOverrides;
+  observeHolidays?: boolean;
+  referenceMonth?: string | null;
 }
+
 
 
 export interface CostItem {
