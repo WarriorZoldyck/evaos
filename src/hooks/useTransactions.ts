@@ -612,6 +612,29 @@ export function useTransactions() {
     return true;
   };
 
+  const moveTransactionsToContext = async (ids: string[], companyId: string | null) => {
+    if (ids.length === 0) return false;
+    const { error } = await supabase
+      .from("transactions")
+      .update({ company_id: companyId })
+      .in("id", ids);
+    if (error) {
+      toast({
+        title: "Erro ao mover lançamentos",
+        description: mapDatabaseError(error),
+        variant: "destructive",
+      });
+      return false;
+    }
+    toast({
+      title: `${ids.length} lançamento${ids.length > 1 ? "s movidos" : " movido"} de contexto!`,
+    });
+    fetchTransactions();
+    return true;
+  };
+
+
+
   const groupedParentCardFilterActive = (() => {
     if (!filters.accountId.startsWith("card:")) return false;
     const selectedCardId = filters.accountId.split(":").slice(1).join(":");
