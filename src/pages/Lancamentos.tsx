@@ -22,6 +22,8 @@ import { useHeaderSlot, useHeaderLeftSlot } from "@/contexts/HeaderSlotContext";
 import { TransactionTable } from "@/components/lancamentos/TransactionTable";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
+import { MoveContextDialog } from "@/components/lancamentos/MoveContextDialog";
+
 import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
