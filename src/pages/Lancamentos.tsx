@@ -22,6 +22,8 @@ import { useHeaderSlot, useHeaderLeftSlot } from "@/contexts/HeaderSlotContext";
 import { TransactionTable } from "@/components/lancamentos/TransactionTable";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
+import { MoveContextDialog } from "@/components/lancamentos/MoveContextDialog";
+
 import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
 import { CreditCardBillPaymentModal } from "@/components/contas/CreditCardBillPaymentModal";
@@ -40,7 +42,7 @@ export default function Lancamentos() {
     transactions, loading, totalCount, page, setPage, totalPages, exhaustiveActive,
     filters, setFilters,
     createTransaction, createMultipleTransactions, updateTransaction,
-    deleteTransaction, deleteMultipleTransactions, reconcileMultipleTransactions, deleteSeriesTransactions, duplicateTransaction,
+    deleteTransaction, deleteMultipleTransactions, reconcileMultipleTransactions, moveTransactionsToContext, deleteSeriesTransactions, duplicateTransaction,
     fetchTransactions, updateMultipleTransactions,
     bankAccounts, creditCards, wallets, suppliers, clients, categories,
     cardTerminals, allCardTerminals, allAccounts, allCategories, refetchAccounts,
@@ -57,6 +59,8 @@ export default function Lancamentos() {
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
   const [billPaymentCard, setBillPaymentCard] = useState<{ card: any; referenceDate?: Date } | null>(null);
   const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
+  const [moveContextIds, setMoveContextIds] = useState<string[] | null>(null);
+
 
   // Open modal from query param (?new=true) or custom event
   useEffect(() => {
@@ -358,6 +362,8 @@ export default function Lancamentos() {
             onDelete={handleDelete}
             onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
             onReconcileMultiple={(ids, reconciled) => reconcileMultipleTransactions(ids, reconciled)}
+            onMoveContext={(ids) => setMoveContextIds(ids)}
+
             onLiquidate={(t) => {
               // If it's a credit card transaction, open bill payment flow positioned
               // on the cycle that contains this transaction. We use payment_date
@@ -486,6 +492,18 @@ export default function Lancamentos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Move context dialog */}
+      {moveContextIds && (
+        <MoveContextDialog
+          open
+          onClose={() => setMoveContextIds(null)}
+          transactions={transactions.filter((t) => moveContextIds.includes(t.id))}
+          allAccounts={allAccounts}
+          companies={companies}
+          onConfirm={moveTransactionsToContext}
+        />
+      )}
 
       {/* Series dialog */}
       <SeriesEditDialog

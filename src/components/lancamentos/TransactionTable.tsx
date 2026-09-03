@@ -5,6 +5,7 @@ import {
   Edit, Copy, Trash2, CheckCircle2, MoreHorizontal, Loader2,
   Landmark, Wallet, CreditCard, HelpCircle, Eye, Repeat,
   ChevronDown, ChevronRight, Lock, ShieldCheck, Link2, Unlock,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,8 @@ interface TransactionTableProps {
   onDelete: (transaction: Transaction) => void;
   onDeleteMultiple?: (ids: string[]) => void;
   onReconcileMultiple?: (ids: string[], reconciled: boolean) => void;
+  onMoveContext?: (ids: string[]) => void;
+
   onLiquidate: (transaction: Transaction) => void;
   onViewDetails: (transaction: Transaction) => void;
 }
@@ -593,6 +596,8 @@ export function TransactionTable({
   onDelete,
   onDeleteMultiple,
   onReconcileMultiple,
+  onMoveContext,
+
   onLiquidate,
   onViewDetails,
 }: TransactionTableProps) {
@@ -894,7 +899,22 @@ export function TransactionTable({
               </Button>
             );
           })()}
+          {onMoveContext && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => {
+                onMoveContext(Array.from(selectedIds));
+                clearSelection();
+              }}
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5" />
+              Mover contexto
+            </Button>
+          )}
           {onDeleteMultiple && (
+
             <Button
               variant="destructive"
               size="sm"
