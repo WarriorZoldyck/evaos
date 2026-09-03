@@ -491,6 +491,18 @@ export default function Lancamentos() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Move context dialog */}
+      {moveContextIds && (
+        <MoveContextDialog
+          open
+          onClose={() => setMoveContextIds(null)}
+          transactions={transactions.filter((t) => moveContextIds.includes(t.id))}
+          allAccounts={allAccounts}
+          companies={companies}
+          onConfirm={moveTransactionsToContext}
+        />
+      )}
+
       {/* Series dialog */}
       <SeriesEditDialog
         open={seriesDialogOpen}
