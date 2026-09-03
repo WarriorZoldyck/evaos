@@ -360,6 +360,8 @@ export default function Lancamentos() {
             onDelete={handleDelete}
             onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
             onReconcileMultiple={(ids, reconciled) => reconcileMultipleTransactions(ids, reconciled)}
+            onMoveContext={(ids) => setMoveContextIds(ids)}
+
             onLiquidate={(t) => {
               // If it's a credit card transaction, open bill payment flow positioned
               // on the cycle that contains this transaction. We use payment_date
