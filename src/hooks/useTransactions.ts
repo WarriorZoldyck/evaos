@@ -673,6 +673,8 @@ export function useTransactions() {
     deleteTransaction,
     deleteMultipleTransactions,
     reconcileMultipleTransactions,
+    moveTransactionsToContext,
+
     deleteSeriesTransactions,
     duplicateTransaction,
     redistributeSeriesAmounts,
