@@ -65,6 +65,8 @@ interface TransactionTableProps {
   onDelete: (transaction: Transaction) => void;
   onDeleteMultiple?: (ids: string[]) => void;
   onReconcileMultiple?: (ids: string[], reconciled: boolean) => void;
+  onMoveContext?: (ids: string[]) => void;
+
   onLiquidate: (transaction: Transaction) => void;
   onViewDetails: (transaction: Transaction) => void;
 }
