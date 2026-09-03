@@ -595,6 +595,8 @@ export function TransactionTable({
   onDelete,
   onDeleteMultiple,
   onReconcileMultiple,
+  onMoveContext,
+
   onLiquidate,
   onViewDetails,
 }: TransactionTableProps) {
