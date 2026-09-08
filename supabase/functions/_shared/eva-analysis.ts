@@ -2,7 +2,9 @@
 // Collects real aggregates from the user's data and asks the AI to write a
 // specific, number-driven answer instead of a generic one.
 
-export const ANALYSIS_MODEL = "google/gemini-2.5-pro";
+import { AI_CHAT_URL } from "./ai-provider.ts";
+
+export const ANALYSIS_MODEL = "gemini-2.5-pro";
 
 export function fmtBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -437,7 +439,7 @@ ${dataBlock}`;
     { role: "user", content: question },
   ];
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const res = await fetch(AI_CHAT_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -521,7 +523,7 @@ REGRAS: use SOMENTE os números do relatório e projeções derivadas deles — 
 ${format}`;
 
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch(AI_CHAT_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({

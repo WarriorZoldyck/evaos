@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
 import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading, splitForWhatsApp } from "../_shared/eva-analysis.ts";
+import { AI_CHAT_URL, getAiApiKey } from "../_shared/ai-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,7 +12,7 @@ const corsHeaders = {
 };
 
 const EVA_MAINTENANCE_FALLBACK = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
-const WHATSAPP_AI_MODEL = "google/gemini-3-flash-preview";
+const WHATSAPP_AI_MODEL = "gemini-2.5-flash";
 
 function createTimer(scope: string) {
   const startedAt = performance.now();
@@ -416,7 +417,7 @@ function hasStrongCompanyNameMatch(companyName: string, extractedName: string) {
 
 async function extractDocumentParties(apiKey: string, userContent: any) {
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(AI_CHAT_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -569,7 +570,7 @@ serve(async (req) => {
         secrets: {
           SUPABASE_URL: !!Deno.env.get("SUPABASE_URL"),
           SUPABASE_SERVICE_ROLE_KEY: !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-          LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
+          GOOGLE_API_KEY: !!Deno.env.get("GOOGLE_API_KEY"),
           EVOLUTION_API_URL: !!Deno.env.get("EVOLUTION_API_URL"),
           EVOLUTION_API_KEY: !!Deno.env.get("EVOLUTION_API_KEY"),
           EVOLUTION_INSTANCE: !!Deno.env.get("EVOLUTION_INSTANCE"),
@@ -1960,7 +1961,7 @@ ${lines.join("\n")}`;
     const historicalPatternsBlock = buildHistoricalPatterns();
 
     // 6. Call Lovable AI Gateway
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const LOVABLE_API_KEY = getAiApiKey();
     if (!LOVABLE_API_KEY) {
       return respond(
         { success: false, error: "AI not configured", message: "⚠️ IA não configurada. Contate o suporte." },
@@ -2308,7 +2309,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 - Escolha categoria, conta, carteira e cartão SOMENTE desse contexto.`
       : systemPrompt;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch(AI_CHAT_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,
