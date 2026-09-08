@@ -9,7 +9,6 @@ import { AppSidebar } from "./AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GlobalTransactionModal } from "./GlobalTransactionModal";
 import { SubscriptionBanner } from "@/components/subscription/SubscriptionGuard";
-import { WhatsappRestoredBanner } from "@/components/layout/WhatsappRestoredBanner";
 import { OnboardingGuide } from "@/components/onboarding/OnboardingGuide";
 import { EvaChatButton } from "@/components/chat/EvaChatButton";
 import { Loader2, Plus } from "lucide-react";
@@ -55,7 +54,6 @@ function AppLayoutInner() {
                 onOpenGlobalForm={() => setGlobalFormOpen(true)}
               />
               <SubscriptionBanner />
-              <WhatsappRestoredBanner />
               <div className={isOnLancamentos ? "flex-1 overflow-auto px-4 pb-4 md:px-6 md:pb-6" : "flex-1 overflow-auto p-4 md:p-6"}>
                 <Outlet />
               </div>
