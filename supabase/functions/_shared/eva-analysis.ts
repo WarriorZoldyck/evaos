@@ -2,7 +2,9 @@
 // Collects real aggregates from the user's data and asks the AI to write a
 // specific, number-driven answer instead of a generic one.
 
-export const ANALYSIS_MODEL = "google/gemini-2.5-pro";
+import { AI_CHAT_URL } from "./ai-provider.ts";
+
+export const ANALYSIS_MODEL = "gemini-2.5-pro";
 
 export function fmtBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
