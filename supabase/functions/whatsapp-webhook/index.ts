@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
 import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading, splitForWhatsApp } from "../_shared/eva-analysis.ts";
+import { AI_CHAT_URL, getAiApiKey } from "../_shared/ai-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
