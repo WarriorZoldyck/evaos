@@ -416,7 +416,7 @@ function hasStrongCompanyNameMatch(companyName: string, extractedName: string) {
 
 async function extractDocumentParties(apiKey: string, userContent: any) {
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(AI_CHAT_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -2308,7 +2308,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 - Escolha categoria, conta, carteira e cartão SOMENTE desse contexto.`
       : systemPrompt;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch(AI_CHAT_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${LOVABLE_API_KEY}`,

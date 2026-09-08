@@ -437,7 +437,7 @@ ${dataBlock}`;
     { role: "user", content: question },
   ];
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const res = await fetch(AI_CHAT_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -521,7 +521,7 @@ REGRAS: use SOMENTE os números do relatório e projeções derivadas deles — 
 ${format}`;
 
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch(AI_CHAT_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
