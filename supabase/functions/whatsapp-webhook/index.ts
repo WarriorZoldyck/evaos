@@ -570,7 +570,7 @@ serve(async (req) => {
         secrets: {
           SUPABASE_URL: !!Deno.env.get("SUPABASE_URL"),
           SUPABASE_SERVICE_ROLE_KEY: !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-          LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
+          GOOGLE_API_KEY: !!Deno.env.get("GOOGLE_API_KEY"),
           EVOLUTION_API_URL: !!Deno.env.get("EVOLUTION_API_URL"),
           EVOLUTION_API_KEY: !!Deno.env.get("EVOLUTION_API_KEY"),
           EVOLUTION_INSTANCE: !!Deno.env.get("EVOLUTION_INSTANCE"),
@@ -1961,7 +1961,7 @@ ${lines.join("\n")}`;
     const historicalPatternsBlock = buildHistoricalPatterns();
 
     // 6. Call Lovable AI Gateway
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const LOVABLE_API_KEY = getAiApiKey();
     if (!LOVABLE_API_KEY) {
       return respond(
         { success: false, error: "AI not configured", message: "⚠️ IA não configurada. Contate o suporte." },
