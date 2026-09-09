@@ -2246,18 +2246,24 @@ ${historicalPatternsBlock}`;
     let userContent: any;
     if (imageBase64) {
       if (mediaIsAudio) {
-        // Send audio using file format for Gemini multimodal
-        userContent = [
-          {
-            type: "file",
-            file: {
-              filename: "audio.ogg",
-              file_data: `data:${mediaMimetype};base64,${imageBase64}`,
-            },
-          },
-          { type: "text", text: userText },
-        ];
-        console.log("Sending multimodal request to AI (audio + text), mimetype:", mediaMimetype);
+        // O endpoint compatível com OpenAI do Gemini não aceita partes "file".
+        // Transcrevemos o áudio na API nativa e enviamos o texto resultante.
+        console.log("Transcribing audio before AI request, mimetype:", mediaMimetype);
+        let transcript: string | null = null;
+        try {
+          transcript = await transcribeAudioBase64(
+            LOVABLE_API_KEY,
+            imageBase64,
+            mediaMimetype || "audio/ogg",
+            WHATSAPP_AI_MODEL,
+          );
+        } catch (err) {
+          console.error("Audio transcription failed:", err);
+        }
+        console.log("Audio transcript length:", transcript?.length ?? 0);
+        userContent = transcript
+          ? `${message ? `${message}\n\n` : ""}[Transcrição do áudio do usuário]: ${transcript}`
+          : "O usuário enviou um áudio, mas não foi possível entender o conteúdo. Peça gentilmente para repetir por texto ou em outro áudio.";
       } else if (mediaIsDocument) {
         // Send document (PDF) using file format (same as parse-bank-statement)
         userContent = [
