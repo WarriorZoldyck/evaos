@@ -2521,11 +2521,29 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }, 200);
       }
 
-      if (cleanText && cleanText.length > 5) {
+      // Última trava: jamais enviar ao usuário algo que ainda pareça JSON/estrutura.
+      const stillLooksStructured =
+        /[{[]/.test(cleanText.slice(0, 2)) ||
+        /"intent"\s*:/.test(cleanText) ||
+        /'intent'\s*:/.test(cleanText) ||
+        /```/.test(cleanText);
+      if (cleanText && cleanText.length > 5 && !stillLooksStructured) {
         return respond({
           success: true,
           intent: "conversa",
           message: cleanText,
+          transaction: null,
+        }, 200);
+      }
+      if (stillLooksStructured) {
+        const fm = cleanText.match(/['"]friendly_message['"]\s*:\s*['"]([\s\S]*?)['"]\s*[,}]/);
+        const extracted = fm?.[1]?.replace(/\\n/g, "\n").replace(/\\'/g, "'").trim();
+        return respond({
+          success: true,
+          intent: "conversa",
+          message: extracted && extracted.length > 0
+            ? extracted
+            : "Desculpe, não consegui processar sua mensagem agora. Pode tentar novamente?",
           transaction: null,
         }, 200);
       }
