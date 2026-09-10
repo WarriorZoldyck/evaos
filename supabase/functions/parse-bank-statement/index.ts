@@ -1,6 +1,7 @@
 // Public endpoint: verify_jwt = false in supabase/config.toml
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { aiGenerateWithFile, getAiApiKey } from "../_shared/ai-provider.ts";
 
 
 const corsHeaders = {
@@ -285,9 +286,9 @@ async function callAIGateway(
 }
 
 async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cartao"): Promise<ParsedTransaction[]> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  const apiKey = getAiApiKey();
   if (!apiKey) {
-    throw new Error("LOVABLE_API_KEY not configured");
+    throw new Error("GOOGLE_API_KEY not configured");
   }
 
   // Convert PDF bytes to base64 (chunked to avoid stack overflow)
