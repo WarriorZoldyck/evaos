@@ -2486,12 +2486,18 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     aiParsed = parseJsonRobust(rawContent);
     if (!aiParsed) {
       console.warn("Failed to parse AI response as JSON, using raw text as friendly_message:", rawContent.substring(0, 300));
-      const cleanText = rawContent.replace(/```[\s\S]*?```/g, "").trim();
+      // Strip markdown code fences — including an OPENING fence without a closing
+      // one (truncated AI output), which otherwise leaks the raw JSON to the user.
+      const cleanText = rawContent
+        .replace(/^[\s\S]*?```(?:json)?\s*/i, (m) => (m.includes("{") ? m.slice(m.indexOf("{")) : ""))
+        .replace(/```[\s\S]*?```/g, "")
+        .replace(/```+\s*$/g, "")
+        .trim();
 
       // Defense-in-depth: if it still looks like a dict literal, NEVER dump the raw
       // structure to the user. Try to extract just the friendly_message field.
       const looksLikeDict =
-        cleanText.startsWith("{") &&
+        (cleanText.startsWith("{") || cleanText.startsWith("```")) &&
         (/'intent'\s*:/.test(cleanText) || /"intent"\s*:/.test(cleanText));
       if (looksLikeDict) {
         const fm = cleanText.match(/['"]friendly_message['"]\s*:\s*['"]([\s\S]*?)['"]\s*[,}]/);
