@@ -1,6 +1,7 @@
 // Public endpoint: verify_jwt = false in supabase/config.toml
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { aiGenerateWithFile, getAiApiKey } from "../_shared/ai-provider.ts";
 
 
 const corsHeaders = {
@@ -267,39 +268,17 @@ async function callAIGateway(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
+    return await aiGenerateWithFile(apiKey, {
+      model,
+      base64,
+      mimeType: "application/pdf",
+      systemPrompt: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT,
+      userText: kind === "conta"
+        ? "This is a BANK CHECKING ACCOUNT statement (extrato de conta corrente). Extract every debit AND credit line into the compact { meta, txs } JSON shape. Ignore the running balance column. Emit meta once, then all txs. Return ONLY the JSON object."
+        : "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
+      maxTokens,
+      temperature: 0,
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [
-              {
-                type: "file",
-                file: {
-                  filename: "statement.pdf",
-                  file_data: `data:application/pdf;base64,${base64}`,
-                },
-              },
-              {
-                type: "text",
-                text: kind === "conta"
-                  ? "This is a BANK CHECKING ACCOUNT statement (extrato de conta corrente). Extract every debit AND credit line into the compact { meta, txs } JSON shape. Ignore the running balance column. Emit meta once, then all txs. Return ONLY the JSON object."
-                  : "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
-              },
-            ],
-          },
-        ],
-        temperature: 0,
-        max_tokens: maxTokens,
-      }),
     });
   } finally {
     clearTimeout(timer);
@@ -307,9 +286,9 @@ async function callAIGateway(
 }
 
 async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cartao"): Promise<ParsedTransaction[]> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
+  const apiKey = getAiApiKey();
   if (!apiKey) {
-    throw new Error("LOVABLE_API_KEY not configured");
+    throw new Error("GOOGLE_API_KEY not configured");
   }
 
   // Convert PDF bytes to base64 (chunked to avoid stack overflow)

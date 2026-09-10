@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
 import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading, splitForWhatsApp } from "../_shared/eva-analysis.ts";
-import { AI_CHAT_URL, getAiApiKey, transcribeAudioBase64 } from "../_shared/ai-provider.ts";
+import { AI_CHAT_URL, getAiApiKey, transcribeAudioBase64, extractDocumentText } from "../_shared/ai-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -2265,18 +2265,24 @@ ${historicalPatternsBlock}`;
           ? `${message ? `${message}\n\n` : ""}[Transcrição do áudio do usuário]: ${transcript}`
           : "O usuário enviou um áudio, mas não foi possível entender o conteúdo. Peça gentilmente para repetir por texto ou em outro áudio.";
       } else if (mediaIsDocument) {
-        // Send document (PDF) using file format (same as parse-bank-statement)
-        userContent = [
-          {
-            type: "file",
-            file: {
-              filename: "document.pdf",
-              file_data: `data:${mediaMimetype};base64,${imageBase64}`,
-            },
-          },
-          { type: "text", text: userText },
-        ];
-        console.log("Sending multimodal request to AI (document + text), mimetype:", mediaMimetype);
+        // O endpoint compatível com OpenAI do Gemini não aceita partes "file".
+        // Extraímos o conteúdo do documento na API nativa e enviamos como texto.
+        console.log("Extracting document text before AI request, mimetype:", mediaMimetype);
+        let docText: string | null = null;
+        try {
+          docText = await extractDocumentText(
+            LOVABLE_API_KEY,
+            imageBase64,
+            mediaMimetype || "application/pdf",
+            WHATSAPP_AI_MODEL,
+          );
+        } catch (err) {
+          console.error("Document extraction failed:", err);
+        }
+        console.log("Document text length:", docText?.length ?? 0);
+        userContent = docText
+          ? `${userText}\n\n[Conteúdo do documento enviado pelo usuário]:\n${docText}`
+          : "O usuário enviou um documento, mas não foi possível ler o conteúdo. Peça gentilmente para reenviar o arquivo ou informar os dados por texto.";
       } else {
         // Send image using image_url format
         const mimeType = imageBase64.startsWith("/9j/") ? "image/jpeg" : 
