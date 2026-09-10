@@ -74,3 +74,96 @@ export async function aiChat(
     body: JSON.stringify({ ...body, model: toGeminiModel(body.model) }),
   });
 }
+
+/**
+ * Envia um arquivo (PDF, imagem, etc.) para o Gemini usando a API nativa
+ * `generateContent`, que aceita `inline_data`. O endpoint compatível com OpenAI
+ * não aceita partes do tipo "file", por isso documentos passam por aqui.
+ * Retorna um objeto no mesmo formato de resposta do chat/completions da OpenAI,
+ * para reaproveitar os parsers existentes.
+ */
+export async function aiGenerateWithFile(
+  apiKey: string,
+  opts: {
+    model: string;
+    base64: string;
+    mimeType: string;
+    userText: string;
+    systemPrompt?: string;
+    maxTokens?: number;
+    temperature?: number;
+    signal?: AbortSignal;
+  },
+): Promise<Response> {
+  const mimeType = (opts.mimeType || "application/pdf").split(";")[0].trim();
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${toGeminiModel(opts.model)}:generateContent`;
+
+  const res = await fetch(url, {
+    method: "POST",
+    signal: opts.signal,
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    body: JSON.stringify({
+      ...(opts.systemPrompt
+        ? { systemInstruction: { parts: [{ text: opts.systemPrompt }] } }
+        : {}),
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inline_data: { mime_type: mimeType, data: opts.base64 } },
+            { text: opts.userText },
+          ],
+        },
+      ],
+      generationConfig: {
+        temperature: opts.temperature ?? 0,
+        maxOutputTokens: opts.maxTokens ?? 8192,
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    return new Response(await res.text(), { status: res.status });
+  }
+
+  const data = await res.json();
+  const cand = data?.candidates?.[0];
+  const text = (cand?.content?.parts ?? [])
+    .map((p: { text?: string }) => p?.text ?? "")
+    .join("");
+  const finish = cand?.finishReason === "MAX_TOKENS" ? "length" : "stop";
+
+  return new Response(
+    JSON.stringify({
+      choices: [{ message: { role: "assistant", content: text }, finish_reason: finish }],
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
+
+/** Extrai o conteúdo textual de um documento (PDF/imagem) em base64. */
+export async function extractDocumentText(
+  apiKey: string,
+  base64: string,
+  mimeType: string,
+  model = "gemini-2.5-flash",
+): Promise<string | null> {
+  const res = await aiGenerateWithFile(apiKey, {
+    model,
+    base64,
+    mimeType,
+    maxTokens: 8192,
+    userText:
+      "Transcreva integralmente o conteúdo deste documento em texto puro, em português do Brasil. " +
+      "Preserve TODOS os valores monetários, datas, nomes de estabelecimentos, parcelas, códigos de barras e linhas digitáveis. " +
+      "Não resuma, não comente, não use markdown. Responda apenas com o conteúdo transcrito.",
+  });
+  if (!res.ok) {
+    console.error("Gemini document extraction error:", res.status, await res.text());
+    return null;
+  }
+  const data = await res.json();
+  const text = data?.choices?.[0]?.message?.content?.trim();
+  return text || null;
+}
