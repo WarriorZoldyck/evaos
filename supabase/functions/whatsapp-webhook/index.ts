@@ -2486,12 +2486,18 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     aiParsed = parseJsonRobust(rawContent);
     if (!aiParsed) {
       console.warn("Failed to parse AI response as JSON, using raw text as friendly_message:", rawContent.substring(0, 300));
-      const cleanText = rawContent.replace(/```[\s\S]*?```/g, "").trim();
+      // Strip markdown code fences — including an OPENING fence without a closing
+      // one (truncated AI output), which otherwise leaks the raw JSON to the user.
+      const cleanText = rawContent
+        .replace(/^[\s\S]*?```(?:json)?\s*/i, (m) => (m.includes("{") ? m.slice(m.indexOf("{")) : ""))
+        .replace(/```[\s\S]*?```/g, "")
+        .replace(/```+\s*$/g, "")
+        .trim();
 
       // Defense-in-depth: if it still looks like a dict literal, NEVER dump the raw
       // structure to the user. Try to extract just the friendly_message field.
       const looksLikeDict =
-        cleanText.startsWith("{") &&
+        (cleanText.startsWith("{") || cleanText.startsWith("```")) &&
         (/'intent'\s*:/.test(cleanText) || /"intent"\s*:/.test(cleanText));
       if (looksLikeDict) {
         const fm = cleanText.match(/['"]friendly_message['"]\s*:\s*['"]([\s\S]*?)['"]\s*[,}]/);
@@ -2515,11 +2521,29 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         }, 200);
       }
 
-      if (cleanText && cleanText.length > 5) {
+      // Última trava: jamais enviar ao usuário algo que ainda pareça JSON/estrutura.
+      const stillLooksStructured =
+        /[{[]/.test(cleanText.slice(0, 2)) ||
+        /"intent"\s*:/.test(cleanText) ||
+        /'intent'\s*:/.test(cleanText) ||
+        /```/.test(cleanText);
+      if (cleanText && cleanText.length > 5 && !stillLooksStructured) {
         return respond({
           success: true,
           intent: "conversa",
           message: cleanText,
+          transaction: null,
+        }, 200);
+      }
+      if (stillLooksStructured) {
+        const fm = cleanText.match(/['"]friendly_message['"]\s*:\s*['"]([\s\S]*?)['"]\s*[,}]/);
+        const extracted = fm?.[1]?.replace(/\\n/g, "\n").replace(/\\'/g, "'").trim();
+        return respond({
+          success: true,
+          intent: "conversa",
+          message: extracted && extracted.length > 0
+            ? extracted
+            : "Desculpe, não consegui processar sua mensagem agora. Pode tentar novamente?",
           transaction: null,
         }, 200);
       }
