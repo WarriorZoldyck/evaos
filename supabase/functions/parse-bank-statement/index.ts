@@ -267,39 +267,17 @@ async function callAIGateway(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
+    return await aiGenerateWithFile(apiKey, {
+      model,
+      base64,
+      mimeType: "application/pdf",
+      systemPrompt: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT,
+      userText: kind === "conta"
+        ? "This is a BANK CHECKING ACCOUNT statement (extrato de conta corrente). Extract every debit AND credit line into the compact { meta, txs } JSON shape. Ignore the running balance column. Emit meta once, then all txs. Return ONLY the JSON object."
+        : "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
+      maxTokens,
+      temperature: 0,
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [
-              {
-                type: "file",
-                file: {
-                  filename: "statement.pdf",
-                  file_data: `data:application/pdf;base64,${base64}`,
-                },
-              },
-              {
-                type: "text",
-                text: kind === "conta"
-                  ? "This is a BANK CHECKING ACCOUNT statement (extrato de conta corrente). Extract every debit AND credit line into the compact { meta, txs } JSON shape. Ignore the running balance column. Emit meta once, then all txs. Return ONLY the JSON object."
-                  : "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
-              },
-            ],
-          },
-        ],
-        temperature: 0,
-        max_tokens: maxTokens,
-      }),
     });
   } finally {
     clearTimeout(timer);
