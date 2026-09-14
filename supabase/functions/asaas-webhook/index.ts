@@ -75,9 +75,11 @@ Deno.serve(async (req) => {
       }
       case "PAYMENT_OVERDUE": {
         const grace = new Date();
-        grace.setDate(grace.getDate() + 3);
+        grace.setDate(grace.getDate() + 5);
         updates.status = "past_due";
         updates.grace_until = grace.toISOString();
+        if (payment?.invoiceUrl) updates.invoice_url = payment.invoiceUrl;
+        if (payment?.dueDate) updates.next_due_date = payment.dueDate;
         break;
       }
       case "PAYMENT_DELETED":
