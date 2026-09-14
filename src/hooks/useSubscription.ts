@@ -31,27 +31,9 @@ export interface SubscriptionRow {
   };
 }
 
-export function useSubscription() {
-  const { user } = useAuth();
-
-  const query = useQuery({
-    queryKey: ["subscription", user?.id],
-    enabled: !!user?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*, plan:subscription_plans(*)")
-        .eq("user_id", user!.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data as SubscriptionRow | null;
-    },
-  });
-
 export const GRACE_DAYS = 5;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
 
 export function useSubscription() {
   const { user } = useAuth();
