@@ -50,24 +50,76 @@ export function useSubscription() {
     },
   });
 
+export const GRACE_DAYS = 5;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export function useSubscription() {
+  const { user } = useAuth();
+
+  const query = useQuery({
+    queryKey: ["subscription", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select("*, plan:subscription_plans(*)")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as SubscriptionRow | null;
+    },
+  });
+
   const sub = query.data;
   const now = Date.now();
 
-  const isInTrial =
-    sub?.status === "trialing" && sub.trial_ends_at && new Date(sub.trial_ends_at).getTime() > now;
-  const isActive = sub?.status === "active";
-  const isInGrace =
-    sub?.status === "past_due" && sub.grace_until && new Date(sub.grace_until).getTime() > now;
+  const trialValid =
+    sub?.status === "trialing" && !!sub.trial_ends_at && new Date(sub.trial_ends_at).getTime() > now;
+
+  // Vencimento em aberto mesmo com status "active" (webhook pode não ter chegado)
+  const dueTime = sub?.next_due_date ? new Date(`${sub.next_due_date}T23:59:59`).getTime() : null;
+  const periodEndTime = sub?.current_period_end ? new Date(sub.current_period_end).getTime() : null;
+  const isOverdueActive =
+    sub?.status === "active" &&
+    !!dueTime &&
+    dueTime < now &&
+    (periodEndTime === null || periodEndTime < now);
+
+  const graceTime = sub?.grace_until ? new Date(sub.grace_until).getTime() : null;
+
+  // Momento em que o acesso será bloqueado, quando houver pendência
+  let blockAt: Date | null = null;
+  if (sub?.status === "past_due") {
+    blockAt = graceTime ? new Date(graceTime) : new Date(now);
+  } else if (isOverdueActive && dueTime) {
+    blockAt = new Date(dueTime + GRACE_DAYS * DAY_MS);
+  }
+
+  const isPastDue = sub?.status === "past_due" || isOverdueActive;
+  const isInGrace = isPastDue && !!blockAt && blockAt.getTime() > now;
+  const isActive = sub?.status === "active" && !isOverdueActive;
+  const isInTrial = trialValid;
+
   const hasAccess = Boolean(isInTrial || isActive || isInGrace);
   const isBlocked = !!sub && !hasAccess;
   const noSubscription = !sub;
 
+  const daysToBlock =
+    blockAt && blockAt.getTime() > now
+      ? Math.max(0, Math.ceil((blockAt.getTime() - now) / DAY_MS))
+      : 0;
+
   return {
     ...query,
     subscription: sub,
-    isInTrial: !!isInTrial,
+    isInTrial,
     isActive,
-    isInGrace: !!isInGrace,
+    isPastDue,
+    isInGrace,
+    blockAt,
+    daysToBlock,
     hasAccess,
     isBlocked,
     noSubscription,
