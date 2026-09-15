@@ -1,3 +1,4 @@
+import { fetchAiCompletions } from "./ai-gateway.ts";
 // Shared analytical engine for EVA (in-app chat + WhatsApp).
 // Collects real aggregates from the user's data and asks the AI to write a
 // specific, number-driven answer instead of a generic one.
@@ -437,18 +438,11 @@ ${dataBlock}`;
     { role: "user", content: question },
   ];
 
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: ANALYSIS_MODEL,
-      max_tokens: 6000,
-      messages,
-    }),
-  });
+  const res = await fetchAiCompletions({
+    model: ANALYSIS_MODEL,
+    max_tokens: 6000,
+    messages,
+  }, apiKey);
 
 
   if (!res.ok) {
@@ -521,18 +515,14 @@ REGRAS: use SOMENTE os números do relatório e projeções derivadas deles — 
 ${format}`;
 
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: ANALYSIS_MODEL,
-        max_tokens: 4000,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: reportText },
-        ],
-      }),
-    });
+    const res = await fetchAiCompletions({
+      model: ANALYSIS_MODEL,
+      max_tokens: 4000,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: reportText },
+      ],
+    }, apiKey);
     if (!res.ok) {
       console.error("EVA CFO reading gateway error:", res.status, await res.text());
       return null;
