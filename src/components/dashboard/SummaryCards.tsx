@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowLeftRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, DollarSign, ArrowUpCircle, ArrowDownCircle, Landmark, ArrowLeftRight, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResponsiveContainer, AreaChart, Area } from "recharts";
@@ -20,6 +20,10 @@ interface SummaryCardsProps {
   saldoAtualLabel?: string;
   entradaPrevista: number;
   saidaPrevista: number;
+  entradaPrevistaPeriodo?: number;
+  entradasEmAtraso?: number;
+  saidaPrevistaPeriodo?: number;
+  saidasEmAtraso?: number;
   mdrBruto: number;
   mdrLiquido: number;
   mdrTaxas: number;
@@ -202,9 +206,26 @@ interface ForecastCardProps {
   subtitle?: string;
   delta?: number | null;
   invertDeltaColor?: boolean;
+  overdueValue?: number;
+  periodValue?: number;
+  tooltip?: string;
 }
 
-function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName, loading, onClick, subtitle, delta, invertDeltaColor }: ForecastCardProps) {
+function ForecastCard({
+  title,
+  value,
+  icon: Icon,
+  iconClassName,
+  valueClassName,
+  loading,
+  onClick,
+  subtitle,
+  delta,
+  invertDeltaColor,
+  overdueValue,
+  periodValue,
+  tooltip,
+}: ForecastCardProps) {
   const isUp = (delta ?? 0) >= 0;
   const deltaGood = invertDeltaColor ? !isUp : isUp;
   const deltaColor =
@@ -214,12 +235,34 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
         ? "text-success"
         : "text-destructive";
 
+  const hasOverdue = overdueValue !== undefined && overdueValue > 0;
+
   return (
     <Card className="cursor-pointer hover:border-primary/20 transition-colors" onClick={onClick}>
       <CardContent className="p-4 flex items-center gap-3">
         <Icon className={`h-8 w-8 shrink-0 ${iconClassName}`} />
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted-foreground">{title}</p>
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1">
+              <p className="text-xs text-muted-foreground">{title}</p>
+              {tooltip && (
+                <TooltipProvider delayDuration={150}>
+                  <UITooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-[10px] text-muted-foreground cursor-help border border-border rounded-full w-3.5 h-3.5 inline-flex items-center justify-center leading-none">?</span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-xs whitespace-pre-line">{tooltip}</TooltipContent>
+                  </UITooltip>
+                </TooltipProvider>
+              )}
+            </div>
+            {hasOverdue && !loading && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                {formatCurrency(overdueValue)} em atraso
+              </span>
+            )}
+          </div>
           {loading ? (
             <Skeleton className="h-6 w-24 mt-0.5" />
           ) : (
@@ -227,7 +270,13 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
               {formatCurrency(value)}
             </p>
           )}
-          {subtitle && <p className="text-[10px] text-muted-foreground">{subtitle}</p>}
+          {hasOverdue && periodValue !== undefined && !loading ? (
+            <p className="text-[10px] text-muted-foreground">
+              {formatCurrency(periodValue)} no período · {formatCurrency(overdueValue)} em atraso
+            </p>
+          ) : subtitle ? (
+            <p className="text-[10px] text-muted-foreground">{subtitle}</p>
+          ) : null}
           {delta !== undefined && delta !== null && (
             <p className={`text-[10px] ${deltaColor} mt-0.5`}>
               {isUp ? "↗" : "↘"} {Math.abs(delta).toFixed(1)}% vs período anterior
@@ -242,7 +291,10 @@ function ForecastCard({ title, value, icon: Icon, iconClassName, valueClassName,
 export function SummaryCards({
   faturamento, receitaOperacional, unmappedRevenueCount = 0, faturamentoNaoMapeado = 0,
   entradas, saidas, saldo, saldoAtual, saldoAtualLabel = "Saldo Atual",
-  entradaPrevista, saidaPrevista, mdrBruto, mdrLiquido, mdrTaxas, mdrPercent,
+  entradaPrevista, saidaPrevista,
+  entradaPrevistaPeriodo, entradasEmAtraso,
+  saidaPrevistaPeriodo, saidasEmAtraso,
+  mdrBruto, mdrLiquido, mdrTaxas, mdrPercent,
   loading, dateFrom, dateTo,
   prevFaturamento, prevEntradas, prevSaidas, prevSaldo,
   prevEntradaPrevista, prevSaidaPrevista, prevSaldoPrevisto,
@@ -392,6 +444,9 @@ export function SummaryCards({
           loading={loading}
           onClick={onEntradasPrevistasClick ?? (() => go({ type: "receita", status: "Pendente" }))}
           delta={prevEntradaPrevista !== undefined ? pctChange(entradaPrevista, prevEntradaPrevista) : undefined}
+          overdueValue={entradasEmAtraso}
+          periodValue={entradaPrevistaPeriodo}
+          tooltip="Total previsto: soma o agendado para o período com os valores pendentes em atraso de vencimentos anteriores."
         />
         <ForecastCard
           title="Saídas previstas"
@@ -402,6 +457,9 @@ export function SummaryCards({
           onClick={onSaidasPrevistasClick ?? (() => go({ type: "despesa", status: "Pendente" }))}
           delta={prevSaidaPrevista !== undefined ? pctChange(saidaPrevista, prevSaidaPrevista) : undefined}
           invertDeltaColor
+          overdueValue={saidasEmAtraso}
+          periodValue={saidaPrevistaPeriodo}
+          tooltip="Total previsto: soma as despesas do período com contas pendentes em atraso de vencimentos anteriores."
         />
         <ForecastCard
           title="Saldo previsto"
@@ -416,6 +474,7 @@ export function SummaryCards({
           loading={loading}
           onClick={() => go({ status: "Pendente" })}
           delta={prevSaldoPrevisto !== undefined ? pctChange(saldoPrevisto, prevSaldoPrevisto) : undefined}
+          subtitle="Diferença entre entradas e saídas previstas"
         />
       </div>
     </div>

@@ -114,6 +114,8 @@ interface Props {
   includeAllStatus?: boolean;
   /** Sobrescreve o título padrão do modal. */
   titleOverride?: string;
+  overdueTotal?: number;
+  periodTotal?: number;
 }
 
 export function EntradasSaidasDetailModal({
@@ -133,10 +135,13 @@ export function EntradasSaidasDetailModal({
   categoryFilter = null,
   includeAllStatus = false,
   titleOverride,
+  overdueTotal,
+  periodTotal,
 }: Props) {
 
   const navigate = useNavigate();
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
+  const [timeframeFilter, setTimeframeFilter] = useState<"all" | "period" | "overdue">("all");
   const [page, setPage] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const PAGE_SIZE = 50;
@@ -204,6 +209,9 @@ export function EntradasSaidasDetailModal({
         const totalParcels = first.installments_total ?? items.length;
         const amount = items.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
         const kind = classifyItem(first);
+        const todayStr = format(new Date(), "yyyy-MM-dd");
+        const isOverdue = first.status === "Pendente" && !!first.payment_date && first.payment_date < todayStr;
+        const isPreviousPeriod = !!first.payment_date && first.payment_date < dateFrom;
         return {
           key: first.series_id ? `s:${first.series_id}` : `t:${first.id}`,
           first,
@@ -212,10 +220,12 @@ export function EntradasSaidasDetailModal({
           parcels: totalParcels,
           amount,
           kind,
+          isOverdue,
+          isPreviousPeriod,
         };
       })
       .sort((a, b) => (b.first.payment_date ?? "").localeCompare(a.first.payment_date ?? ""));
-  }, [transactions, targetType, statusFilter, includeAllStatus, categoryFilter]);
+  }, [transactions, targetType, statusFilter, includeAllStatus, categoryFilter, dateFrom]);
 
 
   const availableKinds = useMemo(() => {
@@ -224,10 +234,26 @@ export function EntradasSaidasDetailModal({
     return s;
   }, [lines]);
 
-  const filtered = useMemo(
-    () => (paymentFilter === "all" ? lines : lines.filter((l) => l.items.some((t) => classifyItem(t) === paymentFilter))),
-    [lines, paymentFilter],
-  );
+  const timeframeCounts = useMemo(() => {
+    const overdueCount = lines.filter((l) => l.isOverdue).length;
+    const periodCount = lines.filter((l) => !l.isPreviousPeriod).length;
+    return { all: lines.length, period: periodCount, overdue: overdueCount };
+  }, [lines]);
+
+  const filtered = useMemo(() => {
+    return lines.filter((l) => {
+      if (paymentFilter !== "all" && !l.items.some((t) => classifyItem(t) === paymentFilter)) {
+        return false;
+      }
+      if (isPrevisto && timeframeFilter === "period" && l.isPreviousPeriod) {
+        return false;
+      }
+      if (isPrevisto && timeframeFilter === "overdue" && !l.isOverdue) {
+        return false;
+      }
+      return true;
+    });
+  }, [lines, paymentFilter, isPrevisto, timeframeFilter]);
 
   const totals = useMemo(() => {
     const sum = filtered.reduce((acc, l) => acc + l.amount, 0);
@@ -304,7 +330,8 @@ export function EntradasSaidasDetailModal({
           <DialogDescription>
             {isEntradas ? "Receitas" : "Despesas"} {isPrevisto ? "com previsão de pagamento" : "com pagamento"} entre{" "}
             <span className="font-medium text-foreground">{formatDate(dateFrom)}</span> e{" "}
-            <span className="font-medium text-foreground">{formatDate(dateTo)}</span>.{" "}
+            <span className="font-medium text-foreground">{formatDate(dateTo)}</span>
+            {isPrevisto && (overdueTotal ?? 0) > 0 ? " (inclui valores em atraso de meses anteriores)" : ""}.{" "}
             <span className="text-muted-foreground">
               {lines.length} lançamento(s) após agrupar parcelas.
             </span>
@@ -312,40 +339,111 @@ export function EntradasSaidasDetailModal({
         </DialogHeader>
 
         {/* Resumo */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          <div className="rounded-lg border p-3">
-            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Total</p>
-            <p className={`text-lg font-bold font-display ${accentClass}`}>{formatCurrency(totals.sum)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {filtered.length} {filtered.length === 1 ? "lançamento" : "lançamentos"} · média {formatCurrency(avg)}
-            </p>
+        {isPrevisto && ((overdueTotal ?? 0) > 0 || (periodTotal ?? 0) > 0) ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Total Previsto</p>
+              <p className={`text-lg font-bold font-display ${accentClass}`}>{formatCurrency(totals.sum)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {filtered.length} lançamento(s)
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Do Período</p>
+              <p className="text-lg font-bold font-display text-foreground">
+                {formatCurrency(periodTotal ?? 0)}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {timeframeCounts.period} lançamento(s)
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase text-amber-600 dark:text-amber-400 tracking-wide font-medium">Em Atraso</p>
+              <p className="text-lg font-bold font-display text-amber-600 dark:text-amber-400">
+                {formatCurrency(overdueTotal ?? 0)}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {timeframeCounts.overdue} vencido(s)
+              </p>
+            </div>
+            <div className="rounded-lg border p-3 flex flex-col justify-between">
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Ações</p>
+              <div className="flex gap-1 flex-wrap">
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={exportCsv}>
+                  Exportar CSV
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="rounded-lg border p-3">
-            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">vs período anterior</p>
-            <p
-              className={`text-lg font-bold font-display ${
-                delta === null
-                  ? "text-muted-foreground"
-                  : (isEntradas ? delta >= 0 : delta <= 0)
-                    ? "text-success"
-                    : "text-destructive"
-              }`}
-            >
-              {delta === null ? "—" : `${delta >= 0 ? "↗" : "↘"} ${Math.abs(delta).toFixed(1)}%`}
-            </p>
-            {prevTotal !== undefined && prevTotal > 0 && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">Ant. {formatCurrency(prevTotal)}</p>
-            )}
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Total</p>
+              <p className={`text-lg font-bold font-display ${accentClass}`}>{formatCurrency(totals.sum)}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {filtered.length} {filtered.length === 1 ? "lançamento" : "lançamentos"} · média {formatCurrency(avg)}
+              </p>
+            </div>
+            <div className="rounded-lg border p-3">
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">vs período anterior</p>
+              <p
+                className={`text-lg font-bold font-display ${
+                  delta === null
+                    ? "text-muted-foreground"
+                    : (isEntradas ? delta >= 0 : delta <= 0)
+                      ? "text-success"
+                      : "text-destructive"
+                }`}
+              >
+                {delta === null ? "—" : `${delta >= 0 ? "↗" : "↘"} ${Math.abs(delta).toFixed(1)}%`}
+              </p>
+              {prevTotal !== undefined && prevTotal > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">Ant. {formatCurrency(prevTotal)}</p>
+              )}
+            </div>
+            <div className="rounded-lg border p-3 flex flex-col justify-between">
+              <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Ações</p>
+              <div className="flex gap-1 flex-wrap">
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={exportCsv}>
+                  Exportar CSV
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="rounded-lg border p-3 flex flex-col justify-between">
-            <p className="text-[11px] uppercase text-muted-foreground tracking-wide">Ações</p>
-            <div className="flex gap-1 flex-wrap">
-              <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={exportCsv}>
-                Exportar CSV
+        )}
+
+        {/* Filtros de Vencimento / Período */}
+        {isPrevisto && timeframeCounts.overdue > 0 && (
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            <span className="text-[11px] uppercase text-muted-foreground tracking-wide">Vencimento:</span>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                size="sm"
+                variant={timeframeFilter === "all" ? "default" : "outline"}
+                className="h-7 px-2 text-xs"
+                onClick={() => { setTimeframeFilter("all"); setPage(1); }}
+              >
+                Todas ({timeframeCounts.all})
+              </Button>
+              <Button
+                size="sm"
+                variant={timeframeFilter === "period" ? "default" : "outline"}
+                className="h-7 px-2 text-xs"
+                onClick={() => { setTimeframeFilter("period"); setPage(1); }}
+              >
+                Do período ({timeframeCounts.period})
+              </Button>
+              <Button
+                size="sm"
+                variant={timeframeFilter === "overdue" ? "default" : "outline"}
+                className="h-7 px-2 text-xs border-amber-500/40 text-amber-600 dark:text-amber-400"
+                onClick={() => { setTimeframeFilter("overdue"); setPage(1); }}
+              >
+                Em atraso ({timeframeCounts.overdue})
               </Button>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Filtros forma */}
         <div className="flex items-center gap-2 flex-wrap">
@@ -405,7 +503,14 @@ export function EntradasSaidasDetailModal({
                           </div>
                         </td>
                         <td className="py-2 pr-3 font-mono text-xs hidden md:table-cell text-muted-foreground">
-                          {formatDate(t.payment_date)}
+                          <div className="flex flex-col gap-0.5">
+                            <span>{formatDate(t.payment_date)}</span>
+                            {isPrevisto && l.isOverdue && (
+                              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 w-fit">
+                                {l.isPreviousPeriod ? "Atraso (mês ant.)" : "Em atraso"}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2 pr-3 hidden lg:table-cell text-muted-foreground truncate max-w-[200px]">
                           {resolveCategory(t.category)}

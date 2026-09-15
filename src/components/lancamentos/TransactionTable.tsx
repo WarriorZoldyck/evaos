@@ -92,15 +92,16 @@ function useCategoryHelpers(categories: Category[], allCategories?: Category[]) 
 
   const getCategoryHierarchy = (t: Transaction) => {
     const parts: string[] = [];
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const cat = findCategory(t.category);
     if (cat) parts.push(cat.name);
-    else if (t.category) parts.push(t.category);
+    else if (t.category && !uuidRe.test(t.category)) parts.push(t.category);
     const sub = findCategory(t.subcategory);
     if (sub) parts.push(sub.name);
-    else if (t.subcategory) parts.push(t.subcategory);
+    else if (t.subcategory && !uuidRe.test(t.subcategory)) parts.push(t.subcategory);
     const sub2 = findCategory(t.subcategory2);
     if (sub2) parts.push(sub2.name);
-    else if (t.subcategory2) parts.push(t.subcategory2);
+    else if (t.subcategory2 && !uuidRe.test(t.subcategory2)) parts.push(t.subcategory2);
     return parts;
   };
 
