@@ -138,13 +138,46 @@ export function SubscriptionBlockedScreen() {
   );
 }
 
+function OwnerBlockedScreen({ ownerName }: { ownerName: string | null }) {
+  return (
+    <div className="min-h-[60vh] flex items-center justify-center p-6">
+      <div className="max-w-md w-full text-center space-y-4 p-8 rounded-2xl border border-destructive/40 bg-card">
+        <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
+        <h2 className="text-2xl font-bold">Workspace bloqueado</h2>
+        <p className="text-muted-foreground">
+          A assinatura {ownerName ? `de ${ownerName}` : "do responsável por este workspace"} está com pagamento
+          pendente. O acesso volta assim que a assinatura for regularizada.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function SubscriptionGate({ children }: { children: React.ReactNode }) {
   const { isBlocked, isLoading } = useSubscription();
+  const { impersonatingOwnerId, impersonatingOwnerName } = useHub();
   const location = useLocation();
+
+  const ownerAccess = useQuery({
+    queryKey: ["owner-subscription-access", impersonatingOwnerId],
+    enabled: !!impersonatingOwnerId,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("subscription_access_ok", {
+        _uid: impersonatingOwnerId!,
+      });
+      if (error) throw error;
+      return data as boolean;
+    },
+  });
 
   if (isLoading) return <>{children}</>;
 
   const allowed = ALLOWED_WHEN_BLOCKED.some((p) => location.pathname.startsWith(p));
+
+  if (impersonatingOwnerId && ownerAccess.data === false && !allowed) {
+    return <OwnerBlockedScreen ownerName={impersonatingOwnerName} />;
+  }
+
   if (isBlocked && !allowed) {
     return <SubscriptionBlockedScreen />;
   }
