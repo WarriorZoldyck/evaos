@@ -45,8 +45,12 @@ function isExcludedCardStatementLine(description: string): boolean {
     || /\bdeb(?:ito)?\s+autom(?:atico)?\s+de\s+fatura\b/.test(d)
     || /\btotal\s+(da\s+)?fatura\b/.test(d)
     || /\bsaldo\s+financiado\b/.test(d)
-    || /\blancamentos\s+atuais\b/.test(d);
+    || /\blancamentos\s+atuais\b/.test(d)
+    || /\bvalor\s+total\b/.test(d)
+    || /^total\b/.test(d)
+    || /\bcotacao\s+(dolar|euro|moeda)\b/.test(d);
 }
+
 
 // Linhas de saldo/resumo de extrato de conta corrente — não são movimentos.
 function isAccountSummaryLine(description: string): boolean {
@@ -206,7 +210,8 @@ EXCLUDE (NOT real transactions):
 - Bill payments: "DEB AUTOM DE FATURA", "PAGAMENTO DE FATURA", "PAG FATURA"
 - Payment/credit lines that only register paying the card bill: "PAGAMENTO RECEBIDO", "CREDITO DE PAGAMENTO", "PGTO FATURA" — do NOT emit these as txs.
 - Summary/header lines: "Total da fatura anterior", "Pagamento efetuado em ...", "Saldo financiado", "Lançamentos atuais"
-- Section totals, "Total transações inter. em R$", "Total lançamentos inter. em R$"
+- Section totals, "Total transações inter. em R$", "Total lançamentos inter. em R$", "VALOR TOTAL"
+- Exchange rate lines: "COTAÇÃO DOLAR", "COTAÇÃO EURO" (informational only, not purchases)
 - Opening/closing balances, "ANUIDADE" R$ 0,00
 - "Compras parceladas - próximas faturas" (future bills) — SKIP entirely.
 
@@ -271,15 +276,15 @@ async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cart
   }
   const base64 = btoa(binary);
 
-  const attempts: Array<{ model: string; maxTokens: number; timeoutMs: number }> = [
-    { model: "gemini-2.5-flash", maxTokens: 24000, timeoutMs: 70_000 },
-    { model: "gemini-2.5-pro", maxTokens: 32000, timeoutMs: 90_000 },
+  const attempts: Array<{ model: string; maxTokens: number; timeoutMs: number; thinkingBudget?: number }> = [
+    { model: "gemini-2.5-flash", maxTokens: 32000, timeoutMs: 110_000, thinkingBudget: 0 },
+    { model: "gemini-2.5-flash-lite", maxTokens: 24000, timeoutMs: 80_000, thinkingBudget: 0 },
   ];
 
   let lastError: unknown = null;
   for (let i = 0; i < attempts.length; i++) {
-    const { model, maxTokens, timeoutMs } = attempts[i];
-    console.log(`Calling AI Gateway model=${model} max_tokens=${maxTokens} timeout=${timeoutMs}ms provider=${aiConfig.provider}`);
+    const { model, maxTokens, timeoutMs, thinkingBudget } = attempts[i];
+    console.log(`Calling AI Gateway model=${model} max_tokens=${maxTokens} timeout=${timeoutMs}ms provider=${aiConfig.provider} thinkingBudget=${thinkingBudget}`);
     let response: Response;
     const startedAt = Date.now();
     const controller = new AbortController();
@@ -290,6 +295,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cart
         model,
         max_tokens: maxTokens,
         temperature: 0,
+        thinking_budget: thinkingBudget ?? 0,
         signal: controller.signal,
         messages: [
           { role: "system", content: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT },
@@ -313,6 +319,7 @@ async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cart
           },
         ],
       });
+
     } catch (err) {
       const aborted = err instanceof DOMException && err.name === "AbortError";
       console.error(`AI Gateway ${model} ${aborted ? "timed out" : "failed"} after ${Date.now() - startedAt}ms:`, err);
