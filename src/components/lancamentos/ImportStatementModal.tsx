@@ -103,13 +103,25 @@ function normalizeText(s: string): string {
 function resolveCategoryPath(
   name: string,
   categories: { id: string; name: string; parent_id: string | null }[],
+  fallbackCategories?: { id: string; name: string; parent_id: string | null }[],
 ): RowCategoryValue {
   if (!name) return { category: "" };
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const norm = normalizeText(name);
-  const found = categories.find((c) => c.id === name || normalizeText(c.name) === norm);
-  if (!found) return { category: name };
+  let found = categories.find((c) => c.id === name || normalizeText(c.name) === norm);
+  if (!found && fallbackCategories) {
+    found = fallbackCategories.find((c) => c.id === name || normalizeText(c.name) === norm);
+  }
+  if (!found) {
+    return { category: uuidRe.test(name) ? "" : name };
+  }
   // Walk up
   const byId = new Map(categories.map((c) => [c.id, c]));
+  if (fallbackCategories) {
+    fallbackCategories.forEach((c) => {
+      if (!byId.has(c.id)) byId.set(c.id, c);
+    });
+  }
   const chain: { id: string; name: string; parent_id: string | null }[] = [found];
   let cur = found;
   while (cur.parent_id) {
@@ -128,10 +140,16 @@ function resolveCategoryPath(
 function resolveCategoryPathByIds(
   ids: { categoryId?: string; subcategoryId?: string; subcategory2Id?: string },
   categories: { id: string; name: string; parent_id: string | null }[],
+  fallbackCategories?: { id: string; name: string; parent_id: string | null }[],
 ): RowCategoryValue | null {
   const deepestId = ids.subcategory2Id || ids.subcategoryId || ids.categoryId;
   if (!deepestId) return null;
   const byId = new Map(categories.map((c) => [c.id, c]));
+  if (fallbackCategories) {
+    fallbackCategories.forEach((c) => {
+      if (!byId.has(c.id)) byId.set(c.id, c);
+    });
+  }
   const found = byId.get(deepestId);
   if (!found) return null;
   const chain: { id: string; name: string; parent_id: string | null }[] = [found];
@@ -152,9 +170,18 @@ function resolveCategoryPathByIds(
 function resolveCategoryName(
   value: string | undefined | null,
   categories: { id: string; name: string }[],
+  fallbackCategories?: { id: string; name: string }[],
 ): string | undefined {
   if (!value) return undefined;
-  return categories.find((c) => c.id === value)?.name || value;
+  const found = categories.find((c) => c.id === value)?.name;
+  if (found) return found;
+  if (fallbackCategories) {
+    const fallbackFound = fallbackCategories.find((c) => c.id === value)?.name;
+    if (fallbackFound) return fallbackFound;
+  }
+  const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRe.test(value)) return undefined;
+  return value;
 }
 
 
@@ -1091,9 +1118,25 @@ export function ImportStatementModal({
 
 
       // Capture statement total reported by the bank (used to validate the import).
-      const parsedStatementTotal = typeof result.statement_total === "number" && result.statement_total > 0
+      let parsedStatementTotal = typeof result.statement_total === "number" && result.statement_total > 0
         ? Number(result.statement_total)
         : null;
+
+      // Client-side safety check: if parsedStatementTotal is ~10x or ~100x the sum of parsed lines
+      if (parsedStatementTotal && parsed.length > 0) {
+        const sumAmounts = parsed.reduce((acc, r) => acc + (r.amount || 0), 0);
+        if (sumAmounts > 0) {
+          const ratio = parsedStatementTotal / sumAmounts;
+          if (ratio >= 8 && ratio <= 12) {
+            console.warn(`[ImportStatement] Rescaling statement total /10 (was ${parsedStatementTotal})`);
+            parsedStatementTotal = Math.round((parsedStatementTotal / 10) * 100) / 100;
+          } else if (ratio >= 50 && ratio <= 250) {
+            console.warn(`[ImportStatement] Rescaling statement total /100 (was ${parsedStatementTotal})`);
+            parsedStatementTotal = Math.round(parsedStatementTotal) / 100;
+          }
+        }
+      }
+
       setStatementTotal(parsedStatementTotal);
       setStatementTotalInput(
         parsedStatementTotal
@@ -1879,11 +1922,11 @@ export function ImportStatementModal({
         const payload: Record<string, unknown> = {};
 
         const rowCat = rowCategories[i];
-        const categoryName = resolveCategoryName(rowCat?.category, mergedCategories);
+        const categoryName = resolveCategoryName(rowCat?.category, mergedCategories, allCategories);
         if (categoryName) {
           payload.category = categoryName;
-          payload.subcategory = resolveCategoryName(rowCat?.subcategory, mergedCategories) || null;
-          payload.subcategory2 = resolveCategoryName(rowCat?.subcategory2, mergedCategories) || null;
+          payload.subcategory = resolveCategoryName(rowCat?.subcategory, mergedCategories, allCategories) || null;
+          payload.subcategory2 = resolveCategoryName(rowCat?.subcategory2, mergedCategories, allCategories) || null;
         }
 
         const desc = (rowDescriptions[i] || "").trim();
@@ -2097,9 +2140,9 @@ export function ImportStatementModal({
 
       const realIdx = rows.indexOf(r);
       const rowCat = rowCategories[realIdx];
-      const categoryName = resolveCategoryName(rowCat?.category, mergedCategories) || catName;
-      const subcategoryName = resolveCategoryName(rowCat?.subcategory, mergedCategories) || null;
-      const subcategory2Name = resolveCategoryName(rowCat?.subcategory2, mergedCategories) || null;
+      const categoryName = resolveCategoryName(rowCat?.category, mergedCategories, allCategories) || catName;
+      const subcategoryName = resolveCategoryName(rowCat?.subcategory, mergedCategories, allCategories) || null;
+      const subcategory2Name = resolveCategoryName(rowCat?.subcategory2, mergedCategories, allCategories) || null;
       const editedDesc = (rowDescriptions[realIdx] || "").trim();
       const finalDesc = editedDesc || r.description;
       const contact = rowContacts[realIdx] || {};
@@ -2765,14 +2808,14 @@ export function ImportStatementModal({
                 // Always resolve to NAME (never UUID) — combobox and DB store names.
                 setRowCategories((prev) => {
                   if (prev[idx]?.touched) return prev;
-                  const catName = resolveCategoryName((cand as any).category, mergedCategories);
+                  const catName = resolveCategoryName((cand as any).category, mergedCategories, allCategories);
                   if (!catName) return prev;
                   return {
                     ...prev,
                     [idx]: {
                       category: catName,
-                      subcategory: resolveCategoryName((cand as any).subcategory, mergedCategories),
-                      subcategory2: resolveCategoryName((cand as any).subcategory2, mergedCategories),
+                      subcategory: resolveCategoryName((cand as any).subcategory, mergedCategories, allCategories),
+                      subcategory2: resolveCategoryName((cand as any).subcategory2, mergedCategories, allCategories),
                       touched: false,
                     },
                   };
@@ -2802,6 +2845,7 @@ export function ImportStatementModal({
               }}
 
               categories={mergedCategories}
+              allCategories={allCategories}
               onCreateCategory={async ({ name, parentName, type }) => {
                 try {
                   const trimmed = name.trim();

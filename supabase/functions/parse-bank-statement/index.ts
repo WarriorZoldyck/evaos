@@ -1,7 +1,7 @@
 // Public endpoint: verify_jwt = false in supabase/config.toml
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { aiGenerateWithFile, getAiApiKey } from "../_shared/ai-provider.ts";
+import { fetchAiCompletions, getAiConfig } from "../_shared/ai-gateway.ts";
 
 
 const corsHeaders = {
@@ -257,38 +257,10 @@ Return ONLY the JSON object, no markdown fences, no prose.`;
 
 type StatementKind = "conta" | "cartao";
 
-async function callAIGateway(
-  apiKey: string,
-  base64: string,
-  model: string,
-  maxTokens: number,
-  timeoutMs: number,
-  kind: StatementKind,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await aiGenerateWithFile(apiKey, {
-      model,
-      base64,
-      mimeType: "application/pdf",
-      systemPrompt: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT,
-      userText: kind === "conta"
-        ? "This is a BANK CHECKING ACCOUNT statement (extrato de conta corrente). Extract every debit AND credit line into the compact { meta, txs } JSON shape. Ignore the running balance column. Emit meta once, then all txs. Return ONLY the JSON object."
-        : "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
-      maxTokens,
-      temperature: 0,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cartao"): Promise<ParsedTransaction[]> {
-  const apiKey = getAiApiKey();
-  if (!apiKey) {
-    throw new Error("GOOGLE_API_KEY not configured");
+  const aiConfig = getAiConfig();
+  if (!aiConfig.apiKey) {
+    throw new Error("Chave de IA não configurada nos Segredos do Supabase (configure GEMINI_API_KEY ou OPENAI_API_KEY).");
   }
 
   // Convert PDF bytes to base64 (chunked to avoid stack overflow)
@@ -300,18 +272,47 @@ async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cart
   const base64 = btoa(binary);
 
   const attempts: Array<{ model: string; maxTokens: number; timeoutMs: number }> = [
-    { model: "google/gemini-3-flash-preview", maxTokens: 24000, timeoutMs: 70_000 },
-    { model: "google/gemini-2.5-pro", maxTokens: 32000, timeoutMs: 90_000 },
+    { model: "gemini-2.5-flash", maxTokens: 24000, timeoutMs: 70_000 },
+    { model: "gemini-2.5-pro", maxTokens: 32000, timeoutMs: 90_000 },
   ];
 
   let lastError: unknown = null;
   for (let i = 0; i < attempts.length; i++) {
     const { model, maxTokens, timeoutMs } = attempts[i];
-    console.log(`Calling AI Gateway model=${model} max_tokens=${maxTokens} timeout=${timeoutMs}ms`);
+    console.log(`Calling AI Gateway model=${model} max_tokens=${maxTokens} timeout=${timeoutMs}ms provider=${aiConfig.provider}`);
     let response: Response;
     const startedAt = Date.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
-      response = await callAIGateway(apiKey, base64, model, maxTokens, timeoutMs, kind);
+      response = await fetchAiCompletions({
+        model,
+        max_tokens: maxTokens,
+        temperature: 0,
+        signal: controller.signal,
+        messages: [
+          { role: "system", content: kind === "conta" ? ACCOUNT_SYSTEM_PROMPT : CARD_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              {
+                type: "file",
+                file: {
+                  filename: "statement.pdf",
+                  file_data: `data:application/pdf;base64,${base64}`,
+                },
+              },
+              {
+                type: "text",
+                text: kind === "conta"
+                  ? "This is a BANK CHECKING ACCOUNT statement (extrato de conta corrente). Extract every debit AND credit line into the compact { meta, txs } JSON shape. Ignore the running balance column. Emit meta once, then all txs. Return ONLY the JSON object."
+                  : "Extract this statement into the compact { meta, txs } JSON shape. Emit meta once, then all txs. Return ONLY the JSON object.",
+              },
+            ],
+          },
+        ],
+      });
     } catch (err) {
       const aborted = err instanceof DOMException && err.name === "AbortError";
       console.error(`AI Gateway ${model} ${aborted ? "timed out" : "failed"} after ${Date.now() - startedAt}ms:`, err);
@@ -319,19 +320,17 @@ async function parsePDFWithAI(fileBytes: Uint8Array, kind: StatementKind = "cart
         ? new Error(`O modelo demorou demais para processar o extrato (${model}).`)
         : err;
       continue;
+    } finally {
+      clearTimeout(timer);
     }
 
     if (!response.ok) {
       const errText = await response.text();
       console.error(`AI Gateway ${model} error ${response.status}:`, errText.slice(0, 500));
-      if (response.status === 429 || response.status === 402) {
-        throw new Error(
-          response.status === 402
-            ? "Créditos de IA esgotados. Adicione créditos ou tente novamente mais tarde."
-            : "Muitas requisições. Aguarde alguns segundos e tente novamente.",
-        );
+      if (response.status === 429) {
+        throw new Error("Muitas requisições para a API de IA. Aguarde alguns segundos e tente novamente.");
       }
-      lastError = new Error(`AI processing failed: ${response.status}`);
+      lastError = new Error(`Falha no processamento de IA (${response.status}): ${errText.slice(0, 200)}`);
       continue;
     }
 
@@ -441,13 +440,44 @@ function parseTxJson(jsonStr: string, finishReason: string, kind: StatementKind 
       return iso;
     };
 
+    const parseStatementAmount = (val: unknown): number | undefined => {
+      if (val === undefined || val === null || val === "") return undefined;
+      if (typeof val === "number") {
+        return Number.isFinite(val) && val > 0 ? val : undefined;
+      }
+      const s = String(val).trim().replace(/[^\d.,-]/g, "");
+      if (!s) return undefined;
+      if (s.includes(".") && s.includes(",")) {
+        const lastDot = s.lastIndexOf(".");
+        const lastComma = s.lastIndexOf(",");
+        if (lastComma > lastDot) {
+          const n = Number(s.replace(/\./g, "").replace(",", "."));
+          return Number.isFinite(n) && n > 0 ? n : undefined;
+        } else {
+          const n = Number(s.replace(/,/g, ""));
+          return Number.isFinite(n) && n > 0 ? n : undefined;
+        }
+      }
+      if (s.includes(",")) {
+        const n = Number(s.replace(",", "."));
+        return Number.isFinite(n) && n > 0 ? n : undefined;
+      }
+      if (s.includes(".")) {
+        const dotsCount = (s.match(/\./g) || []).length;
+        if (dotsCount > 1) {
+          const n = Number(s.replace(/\./g, ""));
+          return Number.isFinite(n) && n > 0 ? n : undefined;
+        }
+        const n = Number(s);
+        return Number.isFinite(n) && n > 0 ? n : undefined;
+      }
+      const n = Number(s);
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
+
     const metaDue: string | undefined = meta?.due && /^\d{4}-\d{2}-\d{2}$/.test(meta.due) ? meta.due : undefined;
     const metaClose: string | undefined = meta?.close && /^\d{4}-\d{2}-\d{2}$/.test(meta.close) ? meta.close : undefined;
-    let metaTotal: number | undefined;
-    if (meta?.total !== undefined && meta?.total !== null && meta?.total !== "") {
-      const n = Number(String(meta.total).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
-      if (Number.isFinite(n) && n > 0) metaTotal = n;
-    }
+    const metaTotal: number | undefined = parseStatementAmount(meta?.total);
     const metaCards: Record<string, string> = {};
     if (meta?.cards && typeof meta.cards === "object") {
       for (const [k, v] of Object.entries(meta.cards)) {
@@ -494,9 +524,8 @@ function parseTxJson(jsonStr: string, finishReason: string, kind: StatementKind 
       const statementDueDate = isAccount ? undefined : (metaDue ?? (t.statement_due_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_due_date)) ? String(t.statement_due_date) : undefined));
       const statementCloseDate = isAccount ? undefined : (metaClose ?? (t.statement_close_date && /^\d{4}-\d{2}-\d{2}$/.test(String(t.statement_close_date)) ? String(t.statement_close_date) : undefined));
       let statementTotal = isAccount ? undefined : metaTotal;
-      if (!isAccount && statementTotal === undefined && t.statement_total !== undefined && t.statement_total !== null && t.statement_total !== "") {
-        const n = Number(String(t.statement_total).replace(/[^\d.,-]/g, "").replace(/\./g, "").replace(",", "."));
-        if (Number.isFinite(n) && n > 0) statementTotal = n;
+      if (!isAccount && statementTotal === undefined) {
+        statementTotal = parseStatementAmount(t.statement_total);
       }
       const cardholderName = isAccount
         ? undefined
@@ -652,6 +681,10 @@ serve(async (req) => {
           amount: Math.round((t.amount / 100) * 100) / 100,
           ...(t.statement_total ? { statement_total: t.statement_total } : {}),
         }));
+        // Signal 1 fired because amounts were ~100x the declared statement_total.
+        // The statement_total is the bank's authoritative value (already correct),
+        // so we must NOT rescale it. Only Signal 2 (no statement_total) needs no
+        // adjustment here. Nothing to do — statement_total stays as-is.
         amountRescaled = true;
       }
     }
@@ -676,9 +709,16 @@ serve(async (req) => {
       console.log(
         `Statement total check: statement_total=${statementTotal} gross=${grossTotal.toFixed(2)} net=${netTotal.toFixed(2)} ratio=${ratio.toFixed(2)}`
       );
-      if (comparisonTotal > 0 && statementTotal > comparisonTotal * 20) {
-        // Mirror of Signal 1: statement_total ~100× the sum of lines => dropped decimals
-        if (statementTotal >= comparisonTotal * 30 && statementTotal <= comparisonTotal * 300) {
+      if (comparisonTotal > 0 && statementTotal > comparisonTotal * 5) {
+        if (statementTotal >= comparisonTotal * 8 && statementTotal <= comparisonTotal * 12) {
+          // ~10x off: AI added a trailing zero or dropped a single decimal place
+          const rescaled = Math.round((statementTotal / 10) * 100) / 100;
+          console.warn(
+            `Rescaled statement_total /10: was=${statementTotal} now=${rescaled.toFixed(2)} (gross=${grossTotal.toFixed(2)} net=${netTotal.toFixed(2)})`
+          );
+          statementTotal = rescaled;
+        } else if (statementTotal >= comparisonTotal * 30 && statementTotal <= comparisonTotal * 300) {
+          // ~100x off: dropped decimal separator completely
           const rescaled = Math.round(statementTotal) / 100;
           console.warn(
             `Rescaled statement_total /100: was=${statementTotal} now=${rescaled.toFixed(2)} (gross=${grossTotal.toFixed(2)} net=${netTotal.toFixed(2)})`

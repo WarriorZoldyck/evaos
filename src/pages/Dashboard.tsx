@@ -58,6 +58,7 @@ export default function Dashboard() {
   );
   const {
     transactions,
+    expectedTransactions,
     competenceTransactions,
     allTransactions,
     summary,
@@ -215,6 +216,10 @@ export default function Dashboard() {
         }
         entradaPrevista={summary.entradaPrevista}
         saidaPrevista={summary.saidaPrevista}
+        entradaPrevistaPeriodo={summary.entradaPrevistaPeriodo}
+        entradasEmAtraso={summary.entradasEmAtraso}
+        saidaPrevistaPeriodo={summary.saidaPrevistaPeriodo}
+        saidasEmAtraso={summary.saidasEmAtraso}
         mdrBruto={summary.mdrBruto}
         mdrLiquido={summary.mdrLiquido}
         mdrTaxas={summary.mdrTaxas}
@@ -299,8 +304,10 @@ export default function Dashboard() {
         onOpenChange={setEntradasPrevModalOpen}
         mode="entradas"
         statusFilter="Pendente"
-        transactions={transactions as any}
+        transactions={expectedTransactions as any}
         total={summary.entradaPrevista}
+        periodTotal={summary.entradaPrevistaPeriodo}
+        overdueTotal={summary.entradasEmAtraso}
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
         categoryNameResolver={categoryNameResolver}
@@ -314,8 +321,10 @@ export default function Dashboard() {
         onOpenChange={setSaidasPrevModalOpen}
         mode="saidas"
         statusFilter="Pendente"
-        transactions={transactions as any}
+        transactions={expectedTransactions as any}
         total={summary.saidaPrevista}
+        periodTotal={summary.saidaPrevistaPeriodo}
+        overdueTotal={summary.saidasEmAtraso}
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
         categoryNameResolver={categoryNameResolver}

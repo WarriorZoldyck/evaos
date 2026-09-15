@@ -37,6 +37,7 @@ interface Transaction {
   series_id: string | null;
   credit_card_id: string | null;
   isRecurring?: boolean;
+  isOverdue?: boolean;
   // Fields from recurring occurrences
   competence_date?: string;
   subcategory?: string | null;
@@ -295,8 +296,13 @@ export function UpcomingTransactions({ transactions, creditCards, loading, onLiq
                           <Repeat className="h-3.5 w-3.5 text-primary shrink-0" />
                         )}
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                         <span>{format(parseISO(t.payment_date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                        {(t.isOverdue || t.payment_date < format(new Date(), "yyyy-MM-dd")) && (
+                          <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                            Em atraso
+                          </span>
+                        )}
                         <span>·</span>
                         <span className="truncate">{t.category}</span>
                       </div>

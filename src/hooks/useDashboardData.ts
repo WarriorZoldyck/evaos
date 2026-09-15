@@ -149,6 +149,7 @@ export function useDashboardData(filters: DashboardFilters) {
   const { selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected } = useCompany();
   const { occurrences: recurringOccurrences, loading: recurringLoading, refetch: refetchRecurring } = useRecurringTransactions(90);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [overdueTransactions, setOverdueTransactions] = useState<Transaction[]>([]);
   const [competenceTransactions, setCompetenceTransactions] = useState<Transaction[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [creditCards, setCreditCards] = useState<CreditCardInfo[]>([]);
@@ -260,8 +261,6 @@ export function useDashboardData(filters: DashboardFilters) {
     const companyCtx = { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
 
     const fetchTransactions = async () => {
-      setLoading(true);
-
       let query = supabase
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method, transfer_id, is_internal_transfer")
@@ -289,7 +288,33 @@ export function useDashboardData(filters: DashboardFilters) {
           .filter((t) => t.status === "Pago" && t.type === "receita")
           .reduce((acc, t) => acc + Number(t.amount || 0), 0),
       );
-      setLoading(false);
+    };
+
+    const fetchOverdueTransactions = async () => {
+      const twoYearsAgo = format(subYears(new Date(), 2), "yyyy-MM-dd");
+      let overdueQuery = supabase
+        .from("transactions")
+        .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method, transfer_id, is_internal_transfer")
+        .eq("status", "Pendente")
+        .lt("payment_date", startStr)
+        .gte("payment_date", twoYearsAgo);
+
+      overdueQuery = applyCompanyFilter(overdueQuery, companyCtx);
+      overdueQuery = applyAccountFilter(overdueQuery, accountId, linkedCardIds);
+
+      const allOverdue: Transaction[] = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await overdueQuery.order("payment_date", { ascending: true }).range(from, from + PAGE - 1);
+        if (error || !data || data.length === 0) break;
+        allOverdue.push(...(data as Transaction[]));
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+
+      const transferVisibility = splitContextNeutralTransfers(allOverdue);
+      setOverdueTransactions(transferVisibility.included);
     };
 
     const fetchCompetenceTransactions = async () => {
@@ -316,8 +341,17 @@ export function useDashboardData(filters: DashboardFilters) {
       setCompetenceTransactions(splitContextNeutralTransfers(allData).included);
     };
 
-    fetchTransactions();
-    fetchCompetenceTransactions();
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchTransactions(),
+        fetchOverdueTransactions(),
+        fetchCompetenceTransactions(),
+      ]);
+      setLoading(false);
+    };
+
+    loadData();
   }, [user, effectiveUserId, selectedCompanyId, isPersonal, viewAll, selectedCompanyIds, personalSelected, startStr, endStr, accountId, linkedCardIds, fetchTrigger]);
 
 
@@ -416,15 +450,45 @@ export function useDashboardData(filters: DashboardFilters) {
 
     const saldo = entradas - saidas;
 
-    // Entrada Prevista = receitas pendentes no período (por payment_date)
-    const entradaPrevista = transactions
-      .filter((t) => t.type === "receita" && t.status === "Pendente")
-      .reduce((acc, t) => acc + Number(t.amount), 0);
+    const todayStr = format(new Date(), "yyyy-MM-dd");
 
-    // Saída Prevista = despesas pendentes no período (por payment_date)
-    const saidaPrevista = transactions
-      .filter((t) => t.type === "despesa" && t.status === "Pendente")
-      .reduce((acc, t) => acc + Number(t.amount), 0);
+    // Receitas pendentes no período
+    const receitasPendentesPeriodo = transactions.filter((t) => t.type === "receita" && t.status === "Pendente");
+    const entradaPrevistaPeriodo = receitasPendentesPeriodo.reduce((acc, t) => acc + Number(t.amount), 0);
+
+    // Receitas pendentes em atraso de períodos anteriores (payment_date < startStr)
+    const receitasEmAtrasoAnterior = overdueTransactions.filter((t) => t.type === "receita" && t.status === "Pendente");
+    const entradasEmAtrasoAnterior = receitasEmAtrasoAnterior.reduce((acc, t) => acc + Number(t.amount), 0);
+
+    // Receitas do período que já venceram (payment_date < todayStr)
+    const receitasEmAtrasoPeriodo = receitasPendentesPeriodo.filter((t) => t.payment_date < todayStr);
+    const entradasEmAtrasoPeriodo = receitasEmAtrasoPeriodo.reduce((acc, t) => acc + Number(t.amount), 0);
+
+    // Total em atraso (anterior + vencidas no período)
+    const entradasEmAtraso = entradasEmAtrasoAnterior + entradasEmAtrasoPeriodo;
+
+    // Entrada prevista total: previsto do período + o que ficou pendente em atraso de meses anteriores
+    const entradaPrevista = entradaPrevistaPeriodo + entradasEmAtrasoAnterior;
+
+    // Despesas pendentes no período
+    const despesasPendentesPeriodo = transactions.filter((t) => t.type === "despesa" && t.status === "Pendente");
+    const saidaPrevistaPeriodo = despesasPendentesPeriodo.reduce((acc, t) => acc + Number(t.amount), 0);
+
+    // Despesas pendentes em atraso de períodos anteriores (payment_date < startStr)
+    const despesasEmAtrasoAnterior = overdueTransactions.filter((t) => t.type === "despesa" && t.status === "Pendente");
+    const saidasEmAtrasoAnterior = despesasEmAtrasoAnterior.reduce((acc, t) => acc + Number(t.amount), 0);
+
+    // Despesas do período que já venceram (payment_date < todayStr)
+    const despesasEmAtrasoPeriodo = despesasPendentesPeriodo.filter((t) => t.payment_date < todayStr);
+    const saidasEmAtrasoPeriodo = despesasEmAtrasoPeriodo.reduce((acc, t) => acc + Number(t.amount), 0);
+
+    // Total em atraso (anterior + vencidas no período)
+    const saidasEmAtraso = saidasEmAtrasoAnterior + saidasEmAtrasoPeriodo;
+
+    // Saída prevista total: previsto do período + o que ficou pendente em atraso de meses anteriores
+    const saidaPrevista = saidaPrevistaPeriodo + saidasEmAtrasoAnterior;
+
+    const saldoPrevisto = entradaPrevista - saidaPrevista;
 
     // MDR: taxas de maquininha — mesma base do Faturamento (competência, Pago+Pendente),
     // só vendas em cartão com original_amount > amount. Bate com modal de Faturamento e DRE.
@@ -445,33 +509,50 @@ export function useDashboardData(filters: DashboardFilters) {
 
     return {
       faturamento, receitaOperacional, faturamentoNaoMapeado, unmappedRevenueCount,
-      entradas, saidas, saldo, entradaPrevista, saidaPrevista,
+      entradas, saidas, saldo,
+      entradaPrevista, entradaPrevistaPeriodo, entradasEmAtraso, entradasEmAtrasoAnterior,
+      saidaPrevista, saidaPrevistaPeriodo, saidasEmAtraso, saidasEmAtrasoAnterior,
+      saldoPrevisto,
       mdrBruto, mdrLiquido, mdrTaxas, mdrPercent, mdrCount,
     };
 
 
-  }, [transactions, competenceTransactions, categoryRecords]);
+  }, [transactions, overdueTransactions, competenceTransactions, categoryRecords]);
 
-  // Upcoming (Pendente) transactions
+  const expectedTransactions = useMemo(() => {
+    return [...overdueTransactions, ...transactions];
+  }, [overdueTransactions, transactions]);
+
+  // Upcoming (Pendente) transactions including overdue items
   const upcomingTransactions = useMemo(() => {
+    const todayStr = format(new Date(), "yyyy-MM-dd");
+
+    const overduePending = overdueTransactions
+      .filter((t) => t.status === "Pendente")
+      .map((t) => ({ ...t, isRecurring: false as const, isOverdue: true }));
+
     const pending = transactions
       .filter((t) => t.status === "Pendente")
-      .map((t) => ({ ...t, isRecurring: false as const }));
+      .map((t) => ({
+        ...t,
+        isRecurring: false as const,
+        isOverdue: t.payment_date < todayStr,
+      }));
 
     // Filter recurring occurrences within period
     const recurringInPeriod = recurringOccurrences
       .filter((r) => r.payment_date >= startStr && r.payment_date <= endStr)
-      .map((r) => ({ ...r }));
+      .map((r) => ({ ...r, isOverdue: r.payment_date < todayStr }));
 
-    const combined = [...pending, ...recurringInPeriod];
+    const combined = [...overduePending, ...pending, ...recurringInPeriod];
     return combined
       .sort((a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime())
-      .slice(0, 20)
+      .slice(0, 25)
       .map((t) => ({
         ...t,
         category: resolveCategoryName(t.category).name,
       }));
-  }, [transactions, recurringOccurrences, startStr, endStr, resolveCategoryName]);
+  }, [overdueTransactions, transactions, recurringOccurrences, startStr, endStr, resolveCategoryName]);
 
   // Category summary for doughnut charts - resolves UUID to name
   const categoryBreakdown = useMemo(() => {
@@ -602,6 +683,8 @@ export function useDashboardData(filters: DashboardFilters) {
 
   return {
     transactions,
+    overdueTransactions,
+    expectedTransactions,
     competenceTransactions,
     allTransactions,
     summary,

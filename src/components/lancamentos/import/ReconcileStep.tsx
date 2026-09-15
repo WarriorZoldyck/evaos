@@ -88,6 +88,7 @@ interface ReconcileStepProps {
   bankAccountId: string | null;
   walletId: string | null;
   categories: { id: string; name: string; parent_id: string | null; type: string | null }[];
+  allCategories?: { id: string; name: string; parent_id: string | null; type: string | null }[];
   rowCategories: Record<number, RowCategoryValue>;
   suggestions: Record<number, SuggestionSource>;
   suggestLoading: boolean;
@@ -367,6 +368,7 @@ export function ReconcileStep({
   bankAccountId,
   walletId,
   categories,
+  allCategories,
   rowCategories,
   suggestions,
   suggestLoading,
@@ -447,10 +449,14 @@ export function ReconcileStep({
   >(null);
   const [newCatName, setNewCatName] = useState("");
   const [creatingCat, setCreatingCat] = useState(false);
-  const categoriesById = useMemo(
-    () => new Map(categories.map((c) => [c.id, c.name])),
-    [categories],
-  );
+  const categoriesById = useMemo(() => {
+    const map = new Map<string, string>();
+    if (allCategories) {
+      allCategories.forEach((c) => map.set(c.id, c.name));
+    }
+    categories.forEach((c) => map.set(c.id, c.name));
+    return map;
+  }, [categories, allCategories]);
   const orphansById = useMemo(
     () => new Map(orphans.map((o) => [o.id, o])),
     [orphans],
@@ -458,7 +464,12 @@ export function ReconcileStep({
 
   const resolveCategoryLabel = (value?: string | null) => {
     if (!value) return value;
-    return categoriesById.get(value) || value;
+    const found = categoriesById.get(value);
+    if (found) return found;
+    // If value is a UUID but not in the map, avoid showing raw UUID
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRe.test(value)) return null; // Hide unknown IDs gracefully
+    return value; // It's a plain name string — pass through
   };
 
   // Build indexed list of selected rows
@@ -1411,6 +1422,155 @@ export function ReconcileStep({
           )}
 
 
+          {/* Q4 — SÓ NO SISTEMA (orphans) — aparece ANTES de "Só no extrato"
+              para que o usuário veja primeiro os lançamentos sem par no extrato. */}
+          {isCardMode && !orphansLoading && (remainingOrphans.length > 0 || linkedOrphans.size > 0) && (
+            <section>
+              <header className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  Só no sistema
+                  <Badge variant="secondary" className="text-[10px]">{remainingOrphans.length}</Badge>
+                  {linkedOrphans.size > 0 && (
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700">
+                      {linkedOrphans.size} resolvido{linkedOrphans.size === 1 ? "" : "s"} acima
+                    </Badge>
+                  )}
+                  <span className="text-[10px] text-muted-foreground font-normal">
+                    — {remainingOrphans.reduce((s, o) => s + Math.abs(o.amount), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                  </span>
+                </h3>
+                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setShowOrphans((v) => !v)}>
+                  {showOrphans ? "Ocultar" : "Mostrar"}
+                </Button>
+              </header>
+              {remainingOrphans.length > 0 ? (
+                <Alert className="mb-2 py-2 px-3 bg-destructive/5 border-destructive/30">
+                  <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                  <AlertDescription className="text-[11px] leading-snug ml-1">
+                    Estes valores <strong>não existem no extrato</strong> deste ciclo. Como o extrato vem direto do banco/cartão e é a fonte da verdade, provavelmente são duplicatas, ghosts, lançamentos manuais errados ou pertencem a outra fatura. Revise e exclua os incorretos para a fatura bater.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <Alert className="mb-2 py-2 px-3 bg-emerald-500/5 border-emerald-500/30">
+                  <Check className="h-3.5 w-3.5 text-emerald-700" />
+                  <AlertDescription className="text-[11px] leading-snug ml-1 text-emerald-800">
+                    Todos os itens desta seção foram resolvidos — veja em <strong>"Vinculadas manualmente"</strong> acima.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {showOrphans && (
+                remainingOrphans.length > 0 ? (
+                  <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
+                    {remainingOrphans
+                    .slice()
+                    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+                    .map((o) => {
+                      // Cruzar por valor: linhas "só no extrato" com o mesmo valor absoluto.
+                      const valueMatches = onlyStatementRows.filter(
+                        ({ r }) => Math.abs(Math.abs(r.amount) - Math.abs(o.amount)) <= 0.05
+                      );
+                      return (
+                        <div key={o.id} className="px-2 py-2 text-xs space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium break-words leading-snug">{o.description || "(sem descrição)"}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                <span title="Data da compra (competência)">Compra {fmtDate(o.competence_date)}</span>
+                                {o.payment_date && o.payment_date !== o.competence_date && (
+                                  <span className="opacity-60"> · Pgto {fmtDate(o.payment_date)}</span>
+                                )}
+                                {" · "}<Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
+                              </p>
+                              <CategoryChain
+                                category={resolveCategoryLabel(o.category)}
+                                subcategory={resolveCategoryLabel(o.subcategory)}
+                                subcategory2={resolveCategoryLabel(o.subcategory2)}
+                              />
+                            </div>
+                            <span className="font-mono text-xs whitespace-nowrap self-center">{fmt(Math.abs(o.amount))}</span>
+                            {onDeleteOrphan && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => onDeleteOrphan(o.id)}
+                                  >
+                                    <X className="h-3 w-3" /> Excluir
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="text-xs max-w-[240px]">
+                                  Remove o lançamento do sistema. Use quando for um ghost/duplicata. Esta ação não pode ser desfeita aqui.
+                                </TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+
+                          {valueMatches.length > 0 && (
+                            <div className="ml-2 pl-2 border-l-2 border-amber-500/40 space-y-1 bg-amber-500/5 rounded-r py-1.5 pr-1.5">
+                              <p className="text-[10px] font-medium text-amber-700 flex items-center gap-1">
+                                <AlertTriangle className="h-3 w-3" />
+                                Mesmo valor no extrato — pode ser o mesmo lançamento com data errada
+                              </p>
+                              {valueMatches.map(({ r, i }) => {
+                                const daysOff = Math.round(
+                                  (new Date(r.date + "T00:00:00").getTime() -
+                                    new Date(o.competence_date + "T00:00:00").getTime()) /
+                                    86400000
+                                );
+                                return (
+                                  <div
+                                    key={i}
+                                    className="flex items-start justify-between gap-2 bg-background rounded px-2 py-1.5 border border-amber-500/20"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium break-words leading-snug" title={r.description}>
+                                        {r.description}
+                                      </p>
+                                      <p className="text-[10px] text-muted-foreground">
+                                        {fmtDate(r.date)} · <span className="font-mono">{fmt(r.amount)}</span>
+                                        {daysOff !== 0 && (
+                                          <span className="ml-1 text-amber-700">
+                                            ({daysOff > 0 ? "+" : ""}{daysOff}d vs sistema)
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-6 text-[11px] gap-1 border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10"
+                                            onClick={() => handleMarkSame(i, o.id)}
+                                          >
+                                            <Link2 className="h-3 w-3" /> É o mesmo
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="max-w-[260px] text-xs">
+                                          Vincula esta linha do extrato ao lançamento existente. Útil quando o lançamento foi feito na data errada.
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null
+              )}
+            </section>
+          )}
+
+
           <section>
             {(() => {
               const total = newRows.length;
@@ -1426,31 +1586,7 @@ export function ReconcileStep({
                       <Sparkles className="h-4 w-4" />
                       Só no extrato — o que fazer?
                       <Badge variant="secondary" className="text-[10px]">{total}</Badge>
-                      <GroupMatchDialog
-          open={groupForRow !== null}
-          onOpenChange={(o) => { if (!o) setGroupForRow(null); }}
-          leader={
-            groupForRow !== null && rows[groupForRow]
-              ? {
-                  index: groupForRow,
-                  date: rows[groupForRow].date,
-                  description: rows[groupForRow].description,
-                  amount: rows[groupForRow].amount,
-                  type: rows[groupForRow].type,
-                }
-              : null
-          }
-          otherRows={availableGroupRows}
-          candidates={availableGroupCandidates}
-          initial={groupForRow !== null ? groups[groupForRow] : undefined}
-          onConfirm={(state) => {
-            if (groupForRow === null) return;
-            onGroupConfirm?.(groupForRow, state);
-            setGroupForRow(null);
-          }}
-        />
-
-        {suggestLoading && (
+                      {suggestLoading && (
                         <span className="text-[10px] text-muted-foreground flex items-center gap-1 font-normal">
                           <Loader2 className="h-3 w-3 animate-spin" /> sugerindo categorias...
                         </span>
@@ -1774,162 +1910,12 @@ export function ReconcileStep({
                           </td>
                         </tr>
                       );
-
                     })}
-
                   </tbody>
                 </table>
               </div>
             )}
           </section>
-
-
-          {/* Q4 — SÓ NO SISTEMA (orphans) */}
-          {isCardMode && !orphansLoading && (remainingOrphans.length > 0 || linkedOrphans.size > 0) && (
-            <section>
-              <header className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  Só no sistema
-                  <Badge variant="secondary" className="text-[10px]">{remainingOrphans.length}</Badge>
-                  {linkedOrphans.size > 0 && (
-                    <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-700">
-                      {linkedOrphans.size} resolvido{linkedOrphans.size === 1 ? "" : "s"} acima
-                    </Badge>
-                  )}
-                  <span className="text-[10px] text-muted-foreground font-normal">
-                    — {remainingOrphans.reduce((s, o) => s + Math.abs(o.amount), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                  </span>
-                </h3>
-                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setShowOrphans((v) => !v)}>
-                  {showOrphans ? "Ocultar" : "Mostrar"}
-                </Button>
-              </header>
-              {remainingOrphans.length > 0 ? (
-                <Alert className="mb-2 py-2 px-3 bg-destructive/5 border-destructive/30">
-                  <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
-                  <AlertDescription className="text-[11px] leading-snug ml-1">
-                    Estes valores <strong>não existem no extrato</strong> deste ciclo. Como o extrato vem direto do banco/cartão e é a fonte da verdade, provavelmente são duplicatas, ghosts, lançamentos manuais errados ou pertencem a outra fatura. Revise e exclua os incorretos para a fatura bater.
-                  </AlertDescription>
-                </Alert>
-              ) : (
-                <Alert className="mb-2 py-2 px-3 bg-emerald-500/5 border-emerald-500/30">
-                  <Check className="h-3.5 w-3.5 text-emerald-700" />
-                  <AlertDescription className="text-[11px] leading-snug ml-1 text-emerald-800">
-                    Todos os itens desta seção foram resolvidos — veja em <strong>“Vinculadas manualmente”</strong> acima.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {showOrphans && (
-                remainingOrphans.length > 0 ? (
-                  <div className="border border-destructive/30 rounded-lg bg-background max-h-96 overflow-auto divide-y">
-                    {remainingOrphans
-                    .slice()
-                    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-                    .map((o) => {
-                      // Cruzar por valor: linhas "só no extrato" com o mesmo valor absoluto.
-                      const valueMatches = onlyStatementRows.filter(
-                        ({ r }) => Math.abs(Math.abs(r.amount) - Math.abs(o.amount)) <= 0.05
-                      );
-                      return (
-                        <div key={o.id} className="px-2 py-2 text-xs space-y-1.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium break-words leading-snug">{o.description || "(sem descrição)"}</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                <span title="Data da compra (competência)">Compra {fmtDate(o.competence_date)}</span>
-                                {o.payment_date && o.payment_date !== o.competence_date && (
-                                  <span className="opacity-60"> · Pgto {fmtDate(o.payment_date)}</span>
-                                )}
-                                {" · "}<Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5">{o.status}</Badge>
-                              </p>
-                              <CategoryChain
-                                category={resolveCategoryLabel(o.category)}
-                                subcategory={resolveCategoryLabel(o.subcategory)}
-                                subcategory2={resolveCategoryLabel(o.subcategory2)}
-                              />
-                            </div>
-                            <span className="font-mono text-xs whitespace-nowrap self-center">{fmt(Math.abs(o.amount))}</span>
-                            {onDeleteOrphan && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-6 px-2 text-xs gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={() => onDeleteOrphan(o.id)}
-                                  >
-                                    <X className="h-3 w-3" /> Excluir
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left" className="text-xs max-w-[240px]">
-                                  Remove o lançamento do sistema. Use quando for um ghost/duplicata. Esta ação não pode ser desfeita aqui.
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
-
-                          {valueMatches.length > 0 && (
-                            <div className="ml-2 pl-2 border-l-2 border-amber-500/40 space-y-1 bg-amber-500/5 rounded-r py-1.5 pr-1.5">
-                              <p className="text-[10px] font-medium text-amber-700 flex items-center gap-1">
-                                <AlertTriangle className="h-3 w-3" />
-                                Mesmo valor no extrato — pode ser o mesmo lançamento com data errada
-                              </p>
-                              {valueMatches.map(({ r, i }) => {
-                                const daysOff = Math.round(
-                                  (new Date(r.date + "T00:00:00").getTime() -
-                                    new Date(o.competence_date + "T00:00:00").getTime()) /
-                                    86400000
-                                );
-                                return (
-                                  <div
-                                    key={i}
-                                    className="flex items-start justify-between gap-2 bg-background rounded px-2 py-1.5 border border-amber-500/20"
-                                  >
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-xs font-medium break-words leading-snug" title={r.description}>
-                                        {r.description}
-                                      </p>
-                                      <p className="text-[10px] text-muted-foreground">
-                                        {fmtDate(r.date)} · <span className="font-mono">{fmt(r.amount)}</span>
-                                        {daysOff !== 0 && (
-                                          <span className="ml-1 text-amber-700">
-                                            ({daysOff > 0 ? "+" : ""}{daysOff}d vs sistema)
-                                          </span>
-                                        )}
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-6 text-[11px] gap-1 border-emerald-500/50 text-emerald-700 hover:bg-emerald-500/10"
-                                            onClick={() => handleMarkSame(i, o.id)}
-                                          >
-                                            <Link2 className="h-3 w-3" /> É o mesmo
-                                          </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" className="max-w-[260px] text-xs">
-                                          Vincula esta linha do extrato ao lançamento existente. Útil quando o lançamento foi feito na data errada.
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : null
-              )}
-            </section>
-          )}
 
 
           {ignoredRows.length > 0 && (
@@ -2107,6 +2093,30 @@ export function ReconcileStep({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GroupMatchDialog
+        open={groupForRow !== null}
+        onOpenChange={(o) => { if (!o) setGroupForRow(null); }}
+        leader={
+          groupForRow !== null && rows[groupForRow]
+            ? {
+                index: groupForRow,
+                date: rows[groupForRow].date,
+                description: rows[groupForRow].description,
+                amount: rows[groupForRow].amount,
+                type: rows[groupForRow].type,
+              }
+            : null
+        }
+        otherRows={availableGroupRows}
+        candidates={availableGroupCandidates}
+        initial={groupForRow !== null ? groups[groupForRow] : undefined}
+        onConfirm={(state) => {
+          if (groupForRow === null) return;
+          onGroupConfirm?.(groupForRow, state);
+          setGroupForRow(null);
+        }}
+      />
     </TooltipProvider>
   );
 }
