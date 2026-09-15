@@ -1071,6 +1071,24 @@ serve(async (req) => {
     }
     markTiming("hub context resolved");
 
+    // === Subscription enforcement: bloqueia inadimplentes ===
+    try {
+      const { data: accessOk } = await supabase.rpc("subscription_access_ok", { _uid: userId });
+      if (accessOk === false) {
+        return buildResponse(
+          {
+            success: true,
+            blocked: "subscription",
+            message:
+              "🔒 Seu acesso à EVA está bloqueado por uma pendência no pagamento da assinatura.\n\nRegularize em https://eva.tec.br/configuracoes/assinatura e eu volto a funcionar automaticamente. 💙",
+          },
+          200, phone
+        );
+      }
+    } catch (subErr) {
+      console.error("WA subscription check failed (allowing):", subErr);
+    }
+
     // Helper used later to enforce viewer role on write intents
     const denyIfViewer = () => {
       if (effectiveRole === "viewer") {
