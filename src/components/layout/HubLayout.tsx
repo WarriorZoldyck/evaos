@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
 import { UpgradeGateScreen } from "@/components/subscription/UpgradeGate";
+import { SubscriptionGate } from "@/components/subscription/SubscriptionGuard";
 
 export default function HubLayout() {
   const { user, loading } = useAuth();
@@ -80,7 +81,9 @@ function HubLayoutInner() {
             <ThemeToggle />
           </header>
           <div className="flex-1 overflow-auto p-4 md:p-6 lg:p-8">
-            <Outlet />
+            <SubscriptionGate>
+              <Outlet />
+            </SubscriptionGate>
           </div>
         </main>
       </div>
