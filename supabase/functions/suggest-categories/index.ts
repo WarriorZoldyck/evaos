@@ -1,5 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { fetchAiCompletions } from "../_shared/ai-gateway.ts";
 
 
 interface SuggestItem {
@@ -140,20 +141,13 @@ ${batch
 
 Retorne JSON com {index, path, confidence} para CADA índice.`;
 
-      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      const aiResponse = await fetchAiCompletions({
           model: "google/gemini-3.6-flash",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
           response_format: { type: "json_object" },
-        }),
       });
 
       if (!aiResponse.ok) {

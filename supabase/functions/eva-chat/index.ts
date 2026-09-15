@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading } from "../_shared/eva-analysis.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
+import { fetchAiCompletions } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -344,20 +345,13 @@ REGRA — ESTABELECIMENTO NÃO É CATEGORIA.
 ${historicalPatternsBlock}`;
 
     // First, call AI non-streaming to get the JSON response
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const aiResponse = await fetchAiCompletions({
         model: "google/gemini-2.5-pro",
         max_tokens: 4096,
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
         ],
-      }),
     });
 
     if (!aiResponse.ok) {

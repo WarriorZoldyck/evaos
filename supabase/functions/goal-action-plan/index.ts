@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { fetchAiCompletions } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,20 +79,13 @@ serve(async (req) => {
       `Monte um plano de ação curto: 3-5 bullets com sugestões concretas e realistas (economias específicas por categoria, aumento de receita, revisões de assinaturas etc.). ` +
       `Priorize cortar nas categorias listadas quando fizer sentido. Termine com uma frase motivacional curta.`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
+    const aiResponse = await fetchAiCompletions({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    }, LOVABLE_API_KEY);
 
     if (!aiResponse.ok) {
       const text = await aiResponse.text();
