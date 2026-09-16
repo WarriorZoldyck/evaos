@@ -12,7 +12,7 @@ const corsHeaders = {
 };
 
 const EVA_MAINTENANCE_FALLBACK = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
-const WHATSAPP_AI_MODEL = "gemini-2.0-flash";
+const WHATSAPP_AI_MODEL = "gemini-2.5-flash";
 
 function createTimer(scope: string) {
   const startedAt = performance.now();

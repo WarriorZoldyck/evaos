@@ -45,10 +45,10 @@ export function getAiConfig(overrideApiKey?: string): AiConfig {
   // If generic key is provided, infer provider by prefix
   if (genericKey) {
     if (genericKey.startsWith("AIza")) {
-      return { apiKey: genericKey, provider: "gemini", defaultModel: "gemini-2.0-flash" };
+      return { apiKey: genericKey, provider: "gemini", defaultModel: "gemini-2.5-flash" };
     }
     if (genericKey.startsWith("sk-or-")) {
-      return { apiKey: genericKey, provider: "openrouter", defaultModel: "google/gemini-2.0-flash" };
+      return { apiKey: genericKey, provider: "openrouter", defaultModel: "google/gemini-2.5-flash" };
     }
     if (genericKey.startsWith("gsk_")) {
       return { apiKey: genericKey, provider: "groq", defaultModel: "llama-3.3-70b-versatile" };
@@ -60,28 +60,27 @@ export function getAiConfig(overrideApiKey?: string): AiConfig {
 
   // Check specific keys in priority order: Gemini > OpenAI > OpenRouter > Groq
   if (geminiKey) {
-    return { apiKey: geminiKey, provider: "gemini", defaultModel: "gemini-2.0-flash" };
+    return { apiKey: geminiKey, provider: "gemini", defaultModel: "gemini-2.5-flash" };
   }
   if (openAiKey) {
     return { apiKey: openAiKey, provider: "openai", defaultModel: "gpt-4o-mini" };
   }
   if (openRouterKey) {
-    return { apiKey: openRouterKey, provider: "openrouter", defaultModel: "google/gemini-2.0-flash" };
+    return { apiKey: openRouterKey, provider: "openrouter", defaultModel: "google/gemini-2.5-flash" };
   }
   if (groqKey) {
     return { apiKey: groqKey, provider: "groq", defaultModel: "llama-3.3-70b-versatile" };
   }
 
-  return { apiKey: "", provider: "gemini", defaultModel: "gemini-2.0-flash" };
+  return { apiKey: "", provider: "gemini", defaultModel: "gemini-2.5-flash" };
 }
 
 function normalizeGeminiModel(model?: string): string {
-  if (!model) return "gemini-2.0-flash";
+  if (!model) return "gemini-2.5-flash";
   let m = model.trim().replace(/^google\//i, "");
-  if (m.includes("2.5-pro") || m.includes("1.5-pro") || (m.startsWith("gpt-4") && !m.includes("mini"))) return "gemini-1.5-pro";
-  if (m.includes("1.5-flash")) return "gemini-1.5-flash";
-  if (m.includes("2.0-flash") || m.includes("2.5-flash") || m.includes("3-flash") || m.includes("flash-preview")) return "gemini-2.0-flash";
-  if (!m.startsWith("gemini-")) return "gemini-2.0-flash";
+  if (m.includes("2.5-pro") || m.includes("1.5-pro") || (m.startsWith("gpt-4") && !m.includes("mini"))) return "gemini-2.5-pro";
+  if (m.includes("2.5-flash") || m.includes("3-flash") || m.includes("flash-preview") || m.includes("2.0-flash") || m.includes("1.5-flash")) return "gemini-2.5-flash";
+  if (!m.startsWith("gemini-")) return "gemini-2.5-flash";
   return m;
 }
 
@@ -188,12 +187,11 @@ async function callGeminiNative(options: AiRequestOptions, config: AiConfig): Pr
   if (options.response_format?.type === "json_object") {
     generationConfig.responseMimeType = "application/json";
   }
-  if (model.includes("thinking")) {
-    if (options.thinking_budget !== undefined) {
-      generationConfig.thinkingConfig = { thinkingBudget: options.thinking_budget };
-    } else {
-      generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    }
+  if (options.thinking_budget !== undefined) {
+    generationConfig.thinkingConfig = { thinkingBudget: options.thinking_budget };
+  } else {
+    // Default to 0 thinking tokens for extraction & classification to prevent 70s+ timeouts
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
   }
 
   const payload: any = { contents };
