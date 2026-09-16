@@ -347,7 +347,7 @@ ${historicalPatternsBlock}`;
 
     // First, call AI non-streaming to get the JSON response
     const aiResponse = await fetchAiCompletions({
-      model: "gemini-2.5-pro",
+      model: "gemini-pro-latest",
       max_tokens: 4096,
       messages: [
         { role: "system", content: systemPrompt },

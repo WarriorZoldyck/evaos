@@ -2312,6 +2312,19 @@ ${historicalPatternsBlock}`;
       : null;
     markTiming("document context extraction");
 
+    const documentContextMatch: { company: any; reason: string } | null = (() => {
+      if (!documentPartyExtraction || !companies || companies.length === 0) return null;
+      for (const comp of companies) {
+        if (comp.cnpj && documentPartyExtraction.recipient_cnpj && comp.cnpj.replace(/\D/g, "") === documentPartyExtraction.recipient_cnpj.replace(/\D/g, "")) {
+          return { company: comp, reason: "CNPJ do destinatário bate com a empresa" };
+        }
+        if (comp.name && documentPartyExtraction.recipient_name && hasStrongCompanyNameMatch(comp.name, documentPartyExtraction.recipient_name)) {
+          return { company: comp, reason: "Nome do destinatário bate com a empresa" };
+        }
+      }
+      return null;
+    })();
+
     if (documentContextMatch) {
       console.log("DOCUMENT CONTEXT DETECTED:", {
         company: documentContextMatch.company.name,

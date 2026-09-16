@@ -4,7 +4,7 @@
 
 import { fetchAiCompletions } from "./ai-gateway.ts";
 
-export const ANALYSIS_MODEL = "gemini-2.5-pro";
+export const ANALYSIS_MODEL = "gemini-pro-latest";
 
 export function fmtBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
