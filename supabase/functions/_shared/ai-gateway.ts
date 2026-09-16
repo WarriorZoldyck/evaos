@@ -45,7 +45,7 @@ export function getAiConfig(overrideApiKey?: string): AiConfig {
   // If generic key is provided, infer provider by prefix
   if (genericKey) {
     if (genericKey.startsWith("AIza")) {
-      return { apiKey: genericKey, provider: "gemini", defaultModel: "gemini-2.5-flash" };
+      return { apiKey: genericKey, provider: "gemini", defaultModel: "gemini-flash-latest" };
     }
     if (genericKey.startsWith("sk-or-")) {
       return { apiKey: genericKey, provider: "openrouter", defaultModel: "google/gemini-2.5-flash" };
@@ -60,7 +60,7 @@ export function getAiConfig(overrideApiKey?: string): AiConfig {
 
   // Check specific keys in priority order: Gemini > OpenAI > OpenRouter > Groq
   if (geminiKey) {
-    return { apiKey: geminiKey, provider: "gemini", defaultModel: "gemini-2.5-flash" };
+    return { apiKey: geminiKey, provider: "gemini", defaultModel: "gemini-flash-latest" };
   }
   if (openAiKey) {
     return { apiKey: openAiKey, provider: "openai", defaultModel: "gpt-4o-mini" };
@@ -72,16 +72,16 @@ export function getAiConfig(overrideApiKey?: string): AiConfig {
     return { apiKey: groqKey, provider: "groq", defaultModel: "llama-3.3-70b-versatile" };
   }
 
-  return { apiKey: "", provider: "gemini", defaultModel: "gemini-2.5-flash" };
+  return { apiKey: "", provider: "gemini", defaultModel: "gemini-flash-latest" };
 }
 
 function normalizeGeminiModel(model?: string): string {
-  if (!model) return "gemini-2.5-flash";
+  if (!model) return "gemini-flash-latest";
   let m = model.trim().replace(/^google\//i, "");
-  if (m.includes("2.5-pro") || m.includes("1.5-pro") || (m.startsWith("gpt-4") && !m.includes("mini"))) return "gemini-2.5-pro";
-  if (m.includes("2.5-flash") || m.includes("3-flash") || m.includes("flash-preview") || m.includes("2.0-flash") || m.includes("1.5-flash")) return "gemini-2.5-flash";
-  if (!m.startsWith("gemini-")) return "gemini-2.5-flash";
-  return m;
+  if (m.includes("pro") || (m.startsWith("gpt-4") && !m.includes("mini"))) return "gemini-pro-latest";
+  if (m.includes("3.6-flash")) return "gemini-3.6-flash";
+  if (m.includes("flash") || m.startsWith("gpt-4o-mini")) return "gemini-flash-latest";
+  return "gemini-flash-latest";
 }
 
 function normalizeOpenAiModel(model?: string): string {

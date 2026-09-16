@@ -12,7 +12,7 @@ const corsHeaders = {
 };
 
 const EVA_MAINTENANCE_FALLBACK = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
-const WHATSAPP_AI_MODEL = "gemini-2.5-flash";
+const WHATSAPP_AI_MODEL = "gemini-flash-latest";
 
 function createTimer(scope: string) {
   const startedAt = performance.now();
@@ -1223,9 +1223,11 @@ serve(async (req) => {
         const userMsg = summaryPool[i];
         const assistantMsg = summaryPool[i + 1];
         if (userMsg?.role === "user") {
-          const userSnippet = userMsg.content.length > 80 ? userMsg.content.slice(0, 80) + "..." : userMsg.content;
+          const uText = String(userMsg?.content || "");
+          const userSnippet = uText.length > 80 ? uText.slice(0, 80) + "..." : uText;
           if (assistantMsg?.role === "assistant") {
-            const assistantSnippet = assistantMsg.content.length > 100 ? assistantMsg.content.slice(0, 100) + "..." : assistantMsg.content;
+            const aText = String(assistantMsg?.content || "");
+            const assistantSnippet = aText.length > 100 ? aText.slice(0, 100) + "..." : aText;
             summaryParts.push(`Usuário: ${userSnippet} → EVA: ${assistantSnippet}`);
           } else {
             summaryParts.push(`Usuário: ${userSnippet}`);
@@ -2328,15 +2330,25 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 - Escolha categoria, conta, carteira e cartão SOMENTE desse contexto.`
       : systemPrompt;
 
-    const aiResponse = await fetchAiCompletions({
-      model: WHATSAPP_AI_MODEL,
-      max_tokens: 2048,
-      messages: [
-        { role: "system", content: effectiveSystemPrompt },
-        ...conversationHistory,
-        { role: "user", content: userContent },
-      ],
-    }, activeAiKey);
+    let aiResponse: Response;
+    try {
+      aiResponse = await fetchAiCompletions({
+        model: WHATSAPP_AI_MODEL,
+        max_tokens: 2048,
+        messages: [
+          { role: "system", content: effectiveSystemPrompt },
+          ...conversationHistory,
+          { role: "user", content: userContent },
+        ],
+      }, activeAiKey);
+    } catch (fetchErr: any) {
+      console.error("fetchAiCompletions exception:", fetchErr);
+      return respond({
+        success: false,
+        error: fetchErr?.message || "ai_fetch_failed",
+        message: `⚠️ Não consegui me conectar com a IA no momento (${fetchErr?.message || "falha de conexão"}). Tente novamente em instantes.`,
+      }, 200);
+    }
     markTiming("main AI response received");
 
     if (!aiResponse.ok) {
@@ -5285,12 +5297,13 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       transaction: null,
     }, 200);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Webhook error:", error);
+    const errDetail = error instanceof Error ? error.message : String(error || "Erro desconhecido");
     return buildResponse({
       success: false,
-      error: error instanceof Error ? error.message : "Erro interno",
-      message: "Ocorreu um erro inesperado. Tente novamente.",
+      error: errDetail,
+      message: `Desculpe, ocorreu um erro inesperado (${errDetail}). Tente novamente em instantes.`,
     }, shouldAcknowledgeOnError ? 200 : 500, phone);
   }
 });
