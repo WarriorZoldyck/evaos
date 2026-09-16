@@ -1,6 +1,6 @@
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { fetchAiCompletions } from "../_shared/ai-gateway.ts";
+import { fetchAiCompletions, getAiConfig } from "../_shared/ai-gateway.ts";
 
 
 interface SuggestItem {
@@ -57,9 +57,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "Missing LOVABLE_API_KEY" }), {
+    const aiConfig = getAiConfig();
+    const activeAiKey = aiConfig.apiKey;
+    if (!activeAiKey) {
+      return new Response(JSON.stringify({ error: "Missing AI_API_KEY" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -142,12 +143,12 @@ ${batch
 Retorne JSON com {index, path, confidence} para CADA índice.`;
 
       const aiResponse = await fetchAiCompletions({
-          model: "google/gemini-3.6-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          response_format: { type: "json_object" },
+        model: "gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
       });
 
       if (!aiResponse.ok) {

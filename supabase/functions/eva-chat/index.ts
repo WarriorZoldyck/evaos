@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading } from "../_shared/eva-analysis.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
-import { fetchAiCompletions } from "../_shared/ai-gateway.ts";
+import { fetchAiCompletions, getAiConfig } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,9 +221,10 @@ serve(async (req) => {
 
     const historicalPatternsBlock = buildHistoricalPatterns();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "AI not configured" }), {
+    const aiConfig = getAiConfig();
+    const activeAiKey = aiConfig.apiKey;
+    if (!activeAiKey) {
+      return new Response(JSON.stringify({ error: "AI not configured. Configure GEMINI_API_KEY or OPENAI_API_KEY in Supabase secrets." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -346,12 +347,12 @@ ${historicalPatternsBlock}`;
 
     // First, call AI non-streaming to get the JSON response
     const aiResponse = await fetchAiCompletions({
-        model: "google/gemini-2.5-pro",
-        max_tokens: 4096,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
+      model: "gemini-2.5-pro",
+      max_tokens: 4096,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages,
+      ],
     });
 
     if (!aiResponse.ok) {
@@ -363,9 +364,9 @@ ${historicalPatternsBlock}`;
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (aiResponse.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos esgotados. Adicione créditos em Settings > Workspace > Usage." }), {
-          status: 402,
+      if (aiResponse.status === 402 || aiResponse.status === 403) {
+        return new Response(JSON.stringify({ error: "Verifique suas credenciais de IA no painel do Supabase." }), {
+          status: aiResponse.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -437,7 +438,7 @@ ${historicalPatternsBlock}`;
       });
       const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
       const result = await runAnalysis({
-        apiKey: LOVABLE_API_KEY,
+        apiKey: activeAiKey,
         question: String(aiParsed.question || lastUser?.content || "").slice(0, 4000),
         dataBlock: analysisData.block,
         channel: "app",
@@ -667,16 +668,19 @@ ${historicalPatternsBlock}`;
       const installmentCount = aiParsed.installments || 1;
       const installmentDetails = aiParsed.installment_details || null;
 
-      // Helper: generate fingerprint for duplicate detection
-      const generateFingerprint = (desc: string, amount: number, date: string) => {
-        const raw = `${normalizeText(desc)}|${Math.abs(amount)}|${date}|${userId}`;
-        let hash = 0;
-        for (let i = 0; i < raw.length; i++) {
-          const chr = raw.charCodeAt(i);
-          hash = ((hash << 5) - hash) + chr;
-          hash |= 0;
-        }
-        return `eva_${Math.abs(hash).toString(36)}`;
+      // Helper: generate fingerprint for duplicate detection.
+      // Uses the same algorithm as the whatsapp-webhook for consistency:
+      // amount (toFixed 2) | normalized_desc | date | supplier_key
+      const generateFingerprint = async (desc: string, amount: number, date: string, supplierKey: string | null = null): Promise<string> => {
+        const normalized = (desc || "").toLowerCase().replace(/\s+/g, " ").trim();
+        const supplier = (supplierKey || "").toLowerCase().replace(/\s+/g, " ").trim();
+        const amountStr = Math.abs(amount).toFixed(2);
+        const raw = `${amountStr}|${normalized}|${date}|${supplier}`;
+        const encoder = new TextEncoder();
+        const buf = encoder.encode(raw);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", buf);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
       };
 
       // Get the original user message for reference
@@ -688,7 +692,8 @@ ${historicalPatternsBlock}`;
         const installmentCard = creditCardId
           ? contextCards.find((c: any) => c.id === creditCardId)
           : null;
-        const pendingInstallments = installmentDetails.map((detail: any, idx: number) => {
+        const supplierKey = supplierId || contactName || null;
+        const pendingInstallments = await Promise.all(installmentDetails.map(async (detail: any, idx: number) => {
           // If paying with credit card, ALWAYS recalculate per-installment
           // payment_date from competence + (idx) months — ignore AI's due_date,
           // which often collapses all parcelas into the same cycle.
@@ -727,11 +732,11 @@ ${historicalPatternsBlock}`;
             installments_total: installmentCount,
             source: "in_app",
             status: "pending",
-            fingerprint: generateFingerprint(aiParsed.description || "", detail.amount || 0, installmentPaymentDate),
+            fingerprint: await generateFingerprint(aiParsed.description || "", detail.amount || 0, installmentPaymentDate, supplierKey),
             original_message: originalMessage,
             ai_response_message: aiParsed.friendly_message || null,
           };
-        });
+        }));
 
         const { error: insertErr } = await supabase.from("ai_pending_transactions").insert(pendingInstallments);
         if (insertErr) {
@@ -753,7 +758,8 @@ ${historicalPatternsBlock}`;
       }
 
       // Single transaction → staging area
-      const fingerprint = generateFingerprint(aiParsed.description || "", aiParsed.amount || 0, paymentDate);
+      const chatSupplierKey = supplierId || contactName || null;
+      const fingerprint = await generateFingerprint(aiParsed.description || "", aiParsed.amount || 0, paymentDate, chatSupplierKey);
 
       // Check for duplicates
       const { data: existingDup } = await supabase
@@ -958,7 +964,7 @@ ${historicalPatternsBlock}`;
             responseMessage = formatBudgetMonthMessage(report, aiParsed.context || undefined);
             if (report.hasData) {
               const reading = await runCfoReading({
-                apiKey: LOVABLE_API_KEY,
+                apiKey: activeAiKey,
                 reportText: responseMessage,
                 channel: "app",
                 contextLabel: aiParsed.context || null,
@@ -1275,7 +1281,7 @@ ${historicalPatternsBlock}`;
         const contexts = resolveContexts(activeContextName, companies as any, activeContextName);
         const analysisData = await buildAnalysisData(supabase, userId, contexts, { months: 12 });
         const result = await runAnalysis({
-          apiKey: LOVABLE_API_KEY,
+          apiKey: activeAiKey,
           question: userText.slice(0, 4000),
           dataBlock: analysisData.block,
           channel: "app",

@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
 import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading, splitForWhatsApp } from "../_shared/eva-analysis.ts";
+import { fetchAiCompletions, getAiConfig } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,7 +12,7 @@ const corsHeaders = {
 };
 
 const EVA_MAINTENANCE_FALLBACK = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
-const WHATSAPP_AI_MODEL = "google/gemini-3-flash-preview";
+const WHATSAPP_AI_MODEL = "gemini-2.0-flash";
 
 function createTimer(scope: string) {
   const startedAt = performance.now();
@@ -38,9 +39,20 @@ const CONFIRM_PATTERNS = /^(sim|s|pode|pode criar|cria|ok|pode sim|sim pode|conf
 const CANCEL_PATTERNS = /^(não|nao|n|cancela|cancelar|cancel|no|deixa|esquece|nope|negativo|não precisa|nao precisa)$/i;
 
 // --- Fingerprint helper for duplicate detection ---
-async function generateFingerprint(amount: number, description: string, competenceDate: string | null): Promise<string> {
+// supplierKey: use supplier_id when available, otherwise normalized contact_name.
+// Including the supplier ensures two different vendors with same amount/description
+// on the same date are NOT collapsed into a false duplicate.
+async function generateFingerprint(
+  amount: number,
+  description: string,
+  competenceDate: string | null,
+  supplierKey: string | null = null,
+): Promise<string> {
   const normalized = (description || "").toLowerCase().replace(/\s+/g, " ").trim();
-  const raw = `${Math.abs(amount)}|${normalized}|${competenceDate || ""}`;
+  const supplier = (supplierKey || "").toLowerCase().replace(/\s+/g, " ").trim();
+  // Round to 2 decimal places to avoid float precision differences
+  const amountStr = Math.abs(amount).toFixed(2);
+  const raw = `${amountStr}|${normalized}|${competenceDate || ""}|${supplier}`;
   const encoder = new TextEncoder();
   const data = encoder.encode(raw);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -51,7 +63,6 @@ async function generateFingerprint(amount: number, description: string, competen
 async function checkAndSetDuplicateStatus(
   supabase: any, userId: string, fingerprint: string, isSeries: boolean
 ): Promise<string> {
-  // For series, generate a series-level fingerprint and check for existing pending series
   const { data } = await supabase
     .from("ai_pending_transactions")
     .select("id")
@@ -62,10 +73,17 @@ async function checkAndSetDuplicateStatus(
   return (data && data.length > 0) ? "duplicate_suspect" : "pending";
 }
 
-// Generate a series-level fingerprint based on description + total amount + first competence date
-async function generateSeriesFingerprint(description: string, totalAmount: number, firstCompetenceDate: string | null): Promise<string> {
+// Generate a series-level fingerprint based on description + total amount + first competence date + supplier
+async function generateSeriesFingerprint(
+  description: string,
+  totalAmount: number,
+  firstCompetenceDate: string | null,
+  supplierKey: string | null = null,
+): Promise<string> {
   const normalized = (description || "").toLowerCase().replace(/\s+/g, " ").trim();
-  const raw = `series|${Math.abs(totalAmount)}|${normalized}|${firstCompetenceDate || ""}`;
+  const supplier = (supplierKey || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const amountStr = Math.abs(totalAmount).toFixed(2);
+  const raw = `series|${amountStr}|${normalized}|${firstCompetenceDate || ""}|${supplier}`;
   const encoder = new TextEncoder();
   const data = encoder.encode(raw);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -416,13 +434,8 @@ function hasStrongCompanyNameMatch(companyName: string, extractedName: string) {
 
 async function extractDocumentParties(apiKey: string, userContent: any) {
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const response = await fetchAiCompletions(
+      {
         model: WHATSAPP_AI_MODEL,
         messages: [
           {
@@ -448,8 +461,10 @@ REGRAS:
           },
           { role: "user", content: userContent },
         ],
-      }),
-    });
+        response_format: { type: "json_object" },
+      },
+      apiKey
+    );
 
     if (!response.ok) {
       console.warn("Document party extraction request failed:", response.status);
@@ -467,6 +482,7 @@ REGRAS:
     return null;
   }
 }
+
 
 // Helper: determine the correct merchant name from document parties based on transaction context
 function resolveDocMerchant(
@@ -569,7 +585,8 @@ serve(async (req) => {
         secrets: {
           SUPABASE_URL: !!Deno.env.get("SUPABASE_URL"),
           SUPABASE_SERVICE_ROLE_KEY: !!Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
-          LOVABLE_API_KEY: !!Deno.env.get("LOVABLE_API_KEY"),
+          GEMINI_API_KEY: !!(Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_API_KEY")),
+          OPENAI_API_KEY: !!Deno.env.get("OPENAI_API_KEY"),
           EVOLUTION_API_URL: !!Deno.env.get("EVOLUTION_API_URL"),
           EVOLUTION_API_KEY: !!Deno.env.get("EVOLUTION_API_KEY"),
           EVOLUTION_INSTANCE: !!Deno.env.get("EVOLUTION_INSTANCE"),
@@ -1509,7 +1526,8 @@ serve(async (req) => {
           }, 200);
         }
 
-        const singleFp = await generateFingerprint(Math.abs(txPayload.amount || 0), txPayload.description || "", competenceDate);
+        const singleSupplierKey = txPayload.supplier_id || txPayload.contact_name || null;
+        const singleFp = await generateFingerprint(Math.abs(txPayload.amount || 0), txPayload.description || "", competenceDate, singleSupplierKey);
         const singleStatus = await checkAndSetDuplicateStatus(supabase, userId, singleFp, false);
         const { error: insertErr } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
@@ -1664,7 +1682,8 @@ serve(async (req) => {
           status = "Pendente";
         }
 
-        const catFp = await generateFingerprint(Math.abs(payload.amount || 0), payload.description || "", competenceDate);
+        const catSupplierKey = payload.supplier_id || payload.contact_name || null;
+        const catFp = await generateFingerprint(Math.abs(payload.amount || 0), payload.description || "", competenceDate, catSupplierKey);
         const catStatus = await checkAndSetDuplicateStatus(supabase, userId, catFp, false);
         const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
           user_id: userId,
@@ -1959,11 +1978,12 @@ ${lines.join("\n")}`;
 
     const historicalPatternsBlock = buildHistoricalPatterns();
 
-    // 6. Call Lovable AI Gateway
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
+    // 6. Call AI Gateway (Google Gemini, OpenAI, OpenRouter or Groq)
+    const aiConfig = getAiConfig();
+    const activeAiKey = aiConfig.apiKey;
+    if (!activeAiKey) {
       return respond(
-        { success: false, error: "AI not configured", message: "⚠️ IA não configurada. Contate o suporte." },
+        { success: false, error: "AI not configured", message: "⚠️ IA não configurada. Configure a chave de IA no Supabase Secrets (GEMINI_API_KEY ou OPENAI_API_KEY)." },
         500
       );
     }
@@ -2244,6 +2264,7 @@ ${historicalPatternsBlock}`;
     const userText = message || defaultMediaPrompt;
     let userContent: any;
     if (imageBase64) {
+      const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, "");
       if (mediaIsAudio) {
         // Send audio using file format for Gemini multimodal
         userContent = [
@@ -2251,20 +2272,20 @@ ${historicalPatternsBlock}`;
             type: "file",
             file: {
               filename: "audio.ogg",
-              file_data: `data:${mediaMimetype};base64,${imageBase64}`,
+              file_data: `data:${mediaMimetype};base64,${cleanBase64}`,
             },
           },
           { type: "text", text: userText },
         ];
         console.log("Sending multimodal request to AI (audio + text), mimetype:", mediaMimetype);
       } else if (mediaIsDocument) {
-        // Send document (PDF) using file format (same as parse-bank-statement)
+        // Send document (PDF) using file format
         userContent = [
           {
             type: "file",
             file: {
               filename: "document.pdf",
-              file_data: `data:${mediaMimetype};base64,${imageBase64}`,
+              file_data: `data:${mediaMimetype};base64,${cleanBase64}`,
             },
           },
           { type: "text", text: userText },
@@ -2272,10 +2293,10 @@ ${historicalPatternsBlock}`;
         console.log("Sending multimodal request to AI (document + text), mimetype:", mediaMimetype);
       } else {
         // Send image using image_url format
-        const mimeType = imageBase64.startsWith("/9j/") ? "image/jpeg" : 
-                         imageBase64.startsWith("iVBOR") ? "image/png" : "image/jpeg";
+        const mimeType = cleanBase64.startsWith("/9j/") ? "image/jpeg" : 
+                         cleanBase64.startsWith("iVBOR") ? "image/png" : "image/jpeg";
         userContent = [
-          { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          { type: "image_url", image_url: { url: `data:${mimeType};base64,${cleanBase64}` } },
           { type: "text", text: userText },
         ];
         console.log("Sending multimodal request to AI (image + text)");
@@ -2285,9 +2306,8 @@ ${historicalPatternsBlock}`;
     }
 
     const documentPartyExtraction = !mediaIsAudio && imageBase64 && companies.length > 0
-      ? await extractDocumentParties(LOVABLE_API_KEY, userContent)
+      ? await extractDocumentParties(activeAiKey, userContent)
       : null;
-    const documentContextMatch = matchCompanyFromDocument(companies, documentPartyExtraction);
     markTiming("document context extraction");
 
     if (documentContextMatch) {
@@ -2308,42 +2328,39 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 - Escolha categoria, conta, carteira e cartão SOMENTE desse contexto.`
       : systemPrompt;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: WHATSAPP_AI_MODEL,
-        max_tokens: 2048,
-        messages: [
-          { role: "system", content: effectiveSystemPrompt },
-          ...conversationHistory,
-          { role: "user", content: userContent },
-        ],
-      }),
-    });
+    const aiResponse = await fetchAiCompletions({
+      model: WHATSAPP_AI_MODEL,
+      max_tokens: 2048,
+      messages: [
+        { role: "system", content: effectiveSystemPrompt },
+        ...conversationHistory,
+        { role: "user", content: userContent },
+      ],
+    }, activeAiKey);
     markTiming("main AI response received");
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
       console.error("AI Gateway error:", aiResponse.status, errText);
 
-      // Detect unreadable/encrypted/empty PDFs and other 4xx content issues.
-      // Return 200 so Evolution does NOT retry the webhook (which caused spam).
-      const isContentError =
-        aiResponse.status >= 400 && aiResponse.status < 500;
-      const isPdfBroken =
-        /document has no pages|INVALID_ARGUMENT|encrypted|password|unsupported/i.test(errText);
+      // Detect ONLY genuinely password-protected or empty PDFs.
+      // Do NOT classify generic 400/404 errors as "PDF encrypted"!
+      const isPdfPasswordProtected =
+        hasDocument && /password protected|protected by password|encrypted pdf|decrypt|senha/i.test(errText);
+      const isPdfEmpty =
+        hasDocument && /document has no pages|pdf is empty|0 pages/i.test(errText);
 
       let friendly = "Desculpe, tive um problema ao processar sua mensagem. Tente novamente em instantes.";
-      if (hasDocument && (isPdfBroken || isContentError)) {
-        friendly = "📄 Não consegui ler este PDF — ele pode estar criptografado, protegido por senha ou vazio. Por favor, envie uma versão desbloqueada ou tire um print das informações.";
+      if (isPdfPasswordProtected) {
+        friendly = "📄 Não consegui ler este PDF porque ele está protegido por senha. Por favor, envie uma versão desbloqueada ou tire um print das informações.";
+      } else if (isPdfEmpty) {
+        friendly = "📄 Este documento PDF parece estar vazio ou sem páginas legíveis. Por favor, confira o arquivo ou tire um print.";
+      } else if (hasDocument && aiResponse.status >= 400 && aiResponse.status < 500) {
+        friendly = "📄 Não foi possível processar este PDF no momento. Por favor, tente enviar novamente ou envie um print/foto da tela.";
       } else if (aiResponse.status === 429) {
         friendly = "⏳ Estou recebendo muitas mensagens agora. Tente novamente em alguns segundos.";
-      } else if (aiResponse.status === 402 || aiResponse.status === 403) {
-        friendly = EVA_MAINTENANCE_FALLBACK;
+      } else if (aiResponse.status === 401 || aiResponse.status === 403) {
+        friendly = "⚠️ Houve um problema com a autenticação da IA. Por favor, verifique as chaves configuradas nos Segredos do Supabase.";
       }
 
       return respond({
@@ -2352,6 +2369,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         message: friendly,
       }, 200);
     }
+
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
@@ -3709,7 +3727,8 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
         // Calculate series-level duplicate ONCE before the loop
         const totalSeriesAmt = installmentDetails.reduce((s: number, d: any) => s + Math.abs(d.amount || 0), 0);
-        const seriesFp = await generateSeriesFingerprint(aiParsed.description || "", totalSeriesAmt, competenceDate);
+        const seriesSupplierKey = supplierId || contactName || null;
+        const seriesFp = await generateSeriesFingerprint(aiParsed.description || "", totalSeriesAmt, competenceDate, seriesSupplierKey);
         const seriesDupStatus = await checkAndSetDuplicateStatus(supabase, userId, seriesFp, true);
 
         const computedPaymentDates: string[] = [];
@@ -3849,7 +3868,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
 
 
-      const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate);
+      // Use supplier_id as canonical key; fall back to contact_name for exact match
+      const mainSupplierKey = supplierId || contactName || null;
+      const mainFp = await generateFingerprint(Math.abs(aiParsed.amount || 0), aiParsed.description || "", competenceDate, mainSupplierKey);
       const mainStatus = await checkAndSetDuplicateStatus(supabase, userId, mainFp, false);
       const { error: insertError } = await supabase.from("ai_pending_transactions").insert({
         user_id: userId,
@@ -4356,7 +4377,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         months: Number(aiParsed.months) || 12,
       });
       const result = await runAnalysis({
-        apiKey: LOVABLE_API_KEY!,
+        apiKey: activeAiKey!,
         question: String(aiParsed.question || userMsgText || "").slice(0, 4000),
         dataBlock: analysisData.block,
         channel: "whatsapp",
@@ -4618,9 +4639,9 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               report,
               aiParsed.context || undefined,
             );
-            if (report.hasData && LOVABLE_API_KEY) {
+            if (report.hasData && activeAiKey) {
               const reading = await runCfoReading({
-                apiKey: LOVABLE_API_KEY,
+                apiKey: activeAiKey,
                 reportText: responseMessage,
                 channel: "whatsapp",
                 contextLabel: aiParsed.context || null,
@@ -5241,11 +5262,11 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const fm = String(aiParsed.friendly_message || "");
       const looksEvasive = /não consigo|nao consigo|depende de|reunir os dados|não tenho acesso|nao tenho acesso|análise complexa|analise complexa/i.test(fm);
       const looksAnalytical = /\?|quanto|qual|como|por que|porque|vale a pena|posso|preciso|margem|lucro|custo|faturar|l[ií]quido/i.test(trimmedMsg || "");
-      if (LOVABLE_API_KEY && trimmedMsg && (looksEvasive || looksAnalytical)) {
+      if (activeAiKey && trimmedMsg && (looksEvasive || looksAnalytical)) {
         const contexts = resolveContexts(aiParsed.context ?? "Pessoal", companies as any, "Pessoal");
         const analysisData = await buildAnalysisData(supabase, userId, contexts, { months: 12 });
         const result = await runAnalysis({
-          apiKey: LOVABLE_API_KEY,
+          apiKey: activeAiKey,
           question: trimmedMsg.slice(0, 4000),
           dataBlock: analysisData.block,
           channel: "whatsapp",

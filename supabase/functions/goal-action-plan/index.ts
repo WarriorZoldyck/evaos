@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { fetchAiCompletions } from "../_shared/ai-gateway.ts";
+import { fetchAiCompletions, getAiConfig } from "../_shared/ai-gateway.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,9 +38,10 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "LOVABLE_API_KEY not configured" }), {
+    const aiConfig = getAiConfig();
+    const activeAiKey = aiConfig.apiKey;
+    if (!activeAiKey) {
+      return new Response(JSON.stringify({ error: "AI API Key not configured in Supabase Secrets" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -80,12 +81,12 @@ serve(async (req) => {
       `Priorize cortar nas categorias listadas quando fizer sentido. Termine com uma frase motivacional curta.`;
 
     const aiResponse = await fetchAiCompletions({
-      model: "google/gemini-2.5-flash",
+      model: "gemini-2.5-flash",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-    }, LOVABLE_API_KEY);
+    });
 
     if (!aiResponse.ok) {
       const text = await aiResponse.text();

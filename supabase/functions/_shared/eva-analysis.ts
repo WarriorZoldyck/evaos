@@ -1,9 +1,10 @@
-import { fetchAiCompletions } from "./ai-gateway.ts";
 // Shared analytical engine for EVA (in-app chat + WhatsApp).
 // Collects real aggregates from the user's data and asks the AI to write a
 // specific, number-driven answer instead of a generic one.
 
-export const ANALYSIS_MODEL = "google/gemini-2.5-pro";
+import { fetchAiCompletions } from "./ai-gateway.ts";
+
+export const ANALYSIS_MODEL = "gemini-2.5-pro";
 
 export function fmtBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value || 0);
@@ -438,11 +439,14 @@ ${dataBlock}`;
     { role: "user", content: question },
   ];
 
-  const res = await fetchAiCompletions({
-    model: ANALYSIS_MODEL,
-    max_tokens: 6000,
-    messages,
-  }, apiKey);
+  const res = await fetchAiCompletions(
+    {
+      model: ANALYSIS_MODEL,
+      max_tokens: 6000,
+      messages,
+    },
+    apiKey
+  );
 
 
   if (!res.ok) {
@@ -515,14 +519,17 @@ REGRAS: use SOMENTE os números do relatório e projeções derivadas deles — 
 ${format}`;
 
   try {
-    const res = await fetchAiCompletions({
-      model: ANALYSIS_MODEL,
-      max_tokens: 4000,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: reportText },
-      ],
-    }, apiKey);
+    const res = await fetchAiCompletions(
+      {
+        model: ANALYSIS_MODEL,
+        max_tokens: 4000,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: reportText },
+        ],
+      },
+      apiKey
+    );
     if (!res.ok) {
       console.error("EVA CFO reading gateway error:", res.status, await res.text());
       return null;
