@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowRight, CheckCircle2 } from "lucide-react";
+import { LiquidateModal } from "./LiquidateModal";
 
 type Tx = {
   id: string;
@@ -116,6 +117,7 @@ interface Props {
   titleOverride?: string;
   overdueTotal?: number;
   periodTotal?: number;
+  onLiquidated?: () => void;
 }
 
 export function EntradasSaidasDetailModal({
@@ -137,9 +139,11 @@ export function EntradasSaidasDetailModal({
   titleOverride,
   overdueTotal,
   periodTotal,
+  onLiquidated,
 }: Props) {
 
   const navigate = useNavigate();
+  const [liquidateTarget, setLiquidateTarget] = useState<any | null>(null);
   const [paymentFilter, setPaymentFilter] = useState<PaymentKind | "all">("all");
   const [timeframeFilter, setTimeframeFilter] = useState<"all" | "period" | "overdue">("all");
   const [page, setPage] = useState(1);
@@ -268,6 +272,7 @@ export function EntradasSaidasDetailModal({
 
   const paginated = showAll ? filtered : filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const hasPendingAction = isPrevisto || statusFilter === "Pendente" || filtered.some((l) => l.first.status === "Pendente");
 
   const goToLancamentos = () => {
     const sp = new URLSearchParams();
@@ -483,6 +488,9 @@ export function EntradasSaidasDetailModal({
                     <th className="text-left py-2 pr-3 hidden lg:table-cell">Categoria</th>
                     <th className="text-left py-2 pr-3 hidden md:table-cell">Forma</th>
                     <th className="text-right py-2">Valor</th>
+                    {hasPendingAction && (
+                      <th className="text-center py-2 pl-3 w-28">Ação</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -523,6 +531,40 @@ export function EntradasSaidasDetailModal({
                         <td className={`py-2 text-right font-mono font-medium ${accentClass}`}>
                           {formatCurrency(l.amount)}
                         </td>
+                        {hasPendingAction && (
+                          <td className="py-2 pl-3 text-center">
+                            {t.status === "Pendente" ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2.5 text-xs gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-500/20 whitespace-nowrap"
+                                onClick={() => {
+                                  setLiquidateTarget({
+                                    id: t.id,
+                                    description: t.description,
+                                    amount: Number(l.amount || t.amount),
+                                    type: t.type,
+                                    payment_date: t.payment_date || new Date().toISOString().slice(0, 10),
+                                    bank_account_id: t.bank_account_id || null,
+                                    series_id: t.series_id || null,
+                                    credit_card_id: t.credit_card_id || null,
+                                    category: t.category,
+                                    installment_number: t.installment_number,
+                                    installments_total: t.installments_total,
+                                    original_amount: (t as any).original_amount || null,
+                                  });
+                                }}
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Dar baixa
+                              </Button>
+                            ) : (
+                              <Badge variant="secondary" className="text-[10px] font-normal bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                Pago
+                              </Badge>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -561,6 +603,15 @@ export function EntradasSaidasDetailModal({
             <ArrowRight className="h-3 w-3" />
           </Button>
         </div>
+
+        <LiquidateModal
+          transaction={liquidateTarget}
+          onClose={() => setLiquidateTarget(null)}
+          onSuccess={() => {
+            setLiquidateTarget(null);
+            onLiquidated?.();
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

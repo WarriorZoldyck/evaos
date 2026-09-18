@@ -26,11 +26,12 @@ import {
   Sparkles, Check, X, ExternalLink, MessageSquare, Mail, Upload,
   ArrowUpRight, ArrowDownLeft, Calendar, Tag, CreditCard, User,
   FileText, Clock, ChevronDown, ChevronUp, Layers, Pencil, AlertTriangle, Copy,
-  Link2,
+  Link2, Percent,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { AdjustInterestModal, parseInterestFromItem } from "@/components/analises-eva/AdjustInterestModal";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -71,11 +72,12 @@ function parseBoletoSuggestion(notes: string | null | undefined): BoletoSuggesti
 
 // Helper: convert AIPendingTransaction to Transaction-like object for TransactionFormModal
 function pendingToTransaction(item: AIPendingTransaction): Transaction {
+  const interestInfo = parseInterestFromItem(item);
   return {
     id: item.id,
     user_id: item.user_id,
     description: item.description,
-    amount: item.original_amount ?? item.amount,
+    amount: interestInfo ? item.amount : (item.original_amount ?? item.amount),
     type: item.type as "receita" | "despesa",
     category: item.category || "",
     subcategory: item.subcategory || null,
@@ -115,7 +117,7 @@ function pendingToTransaction(item: AIPendingTransaction): Transaction {
 }
 // ── Single item card ──
 function PendingCard({
-  item, onApprove, onReject, onEdit, onReconcile,
+  item, onApprove, onReject, onEdit, onAdjustInterest, onReconcile,
   isApproving, isRejecting, isReconciling = false,
   categoryName, accountName, compact = false, highlighted = false,
 }: {
@@ -123,6 +125,7 @@ function PendingCard({
   onApprove: () => void;
   onReject: () => void;
   onEdit?: () => void;
+  onAdjustInterest?: () => void;
   onReconcile?: (suggestion: BoletoSuggestion) => void;
   isApproving: boolean;
   isRejecting: boolean;
@@ -135,6 +138,7 @@ function PendingCard({
   const isReceita = item.type === "receita";
   const signedAttachmentUrl = useSignedAttachmentUrl(item.attachment_url);
   const suggestion = useMemo(() => parseBoletoSuggestion(item.notes), [item.notes]);
+  const interestInfo = useMemo(() => parseInterestFromItem(item), [item]);
 
   if (compact) {
     return (
@@ -144,6 +148,11 @@ function PendingCard({
             {item.installment_number}/{item.installments_total}
           </span>
           <span className="truncate">{item.description}</span>
+          {interestInfo && (
+            <Badge variant="outline" className="text-[10px] h-4 px-1 border-amber-500/40 text-amber-700 bg-amber-500/10 dark:text-amber-300 shrink-0">
+              +{fmt(interestInfo.interest)} juros
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {item.payment_date && (
@@ -152,9 +161,27 @@ function PendingCard({
               {fmtDate(item.payment_date)}
             </span>
           )}
-          <span className={`font-semibold ${isReceita ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-            {fmt(item.amount)}
-          </span>
+          <div className="text-right">
+            <span className={`font-semibold ${isReceita ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              {fmt(item.amount)}
+            </span>
+            {interestInfo && (
+              <p className="text-[10px] text-muted-foreground">
+                Princ: {fmt(interestInfo.principal)}
+              </p>
+            )}
+          </div>
+          {onAdjustInterest && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+              title="Ajustar Juros / Valor"
+              onClick={onAdjustInterest}
+            >
+              <Percent className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -183,6 +210,12 @@ function PendingCard({
                   Pendente
                 </Badge>
               )}
+              {interestInfo && (
+                <Badge variant="outline" className="gap-1 text-xs border-amber-500/40 text-amber-700 bg-amber-500/10 dark:text-amber-300">
+                  <Percent className="h-3 w-3" />
+                  Com juros (+{fmt(interestInfo.interest)})
+                </Badge>
+              )}
               {suggestion && (
                 <Badge variant="default" className="gap-1 text-xs bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/20">
                   <Link2 className="h-3 w-3" />
@@ -201,9 +234,16 @@ function PendingCard({
                   </p>
                 )}
               </div>
-              <span className={`text-lg font-bold whitespace-nowrap ${isReceita ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                {isReceita ? "+" : "-"}{fmt(item.amount)}
-              </span>
+              <div className="text-right shrink-0">
+                <span className={`text-lg font-bold whitespace-nowrap ${isReceita ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                  {isReceita ? "+" : "-"}{fmt(item.amount)}
+                </span>
+                {interestInfo && (
+                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                    Principal: {fmt(interestInfo.principal)} · Juros: +{fmt(interestInfo.interest)}
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -281,6 +321,17 @@ function PendingCard({
             <X className="h-3.5 w-3.5" />
             Rejeitar
           </Button>
+          {onAdjustInterest && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onAdjustInterest}
+              className="gap-1.5 text-xs text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/10"
+            >
+              <Percent className="h-3.5 w-3.5" />
+              Juros / Valor
+            </Button>
+          )}
           {onEdit && (
             <Button size="sm" variant="ghost" onClick={onEdit} className="gap-1.5">
               <Pencil className="h-3.5 w-3.5" />
@@ -303,13 +354,14 @@ function PendingCard({
 
 // ── Series card ──
 function SeriesCard({
-  items, onApproveAll, onRejectAll, onEditItem,
+  items, onApproveAll, onRejectAll, onEditItem, onAdjustInterestItem,
   isApproving, isRejecting, getCategoryName, getAccountName,
 }: {
   items: AIPendingTransaction[];
   onApproveAll: () => void;
   onRejectAll: () => void;
   onEditItem: (item: AIPendingTransaction) => void;
+  onAdjustInterestItem?: (item: AIPendingTransaction) => void;
   isApproving: boolean;
   isRejecting: boolean;
   getCategoryName: (id: string | null) => string;
@@ -395,6 +447,7 @@ function SeriesCard({
                   item={p}
                   onApprove={() => {}}
                   onReject={() => {}}
+                  onAdjustInterest={() => onAdjustInterestItem?.(p)}
                   isApproving={false}
                   isRejecting={false}
                   categoryName=""
@@ -415,6 +468,17 @@ function SeriesCard({
             <X className="h-3.5 w-3.5" />
             Rejeitar Todas
           </Button>
+          {onAdjustInterestItem && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onAdjustInterestItem(first)}
+              className="gap-1.5 text-xs text-amber-700 dark:text-amber-300 border-amber-500/30 hover:bg-amber-500/10"
+            >
+              <Percent className="h-3.5 w-3.5" />
+              Juros / Valor
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={() => onEditItem(first)} className="gap-1.5">
             <Pencil className="h-3.5 w-3.5" />
             Editar
@@ -520,12 +584,26 @@ export default function AnalisesEva() {
 
   const [editingItem, setEditingItem] = useState<AIPendingTransaction | null>(null);
   const [editingSeries, setEditingSeries] = useState<AIPendingTransaction[] | null>(null);
+  const [adjustingInterestItem, setAdjustingInterestItem] = useState<AIPendingTransaction | null>(null);
   const [seriesChoice, setSeriesChoice] = useState<{ item: AIPendingTransaction; series: AIPendingTransaction[] } | null>(null);
   const [reconcilingId, setReconcilingId] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkAppliedRef = useRef<string | null>(null);
+
+  const handleSaveInterest = async (
+    id: string,
+    updates: { amount: number; original_amount: number; notes: string | null }
+  ): Promise<boolean> => {
+    try {
+      await updatePendingAsync({ id, updates });
+      return true;
+    } catch (err: any) {
+      toast.error("Erro ao salvar valores: " + (err?.message || String(err)));
+      return false;
+    }
+  };
 
   // Deep-link support (WhatsApp → app): ?pending=<uuid>&edit=1&ctx=<company_id|personal>
   useEffect(() => {
@@ -689,10 +767,13 @@ export default function AnalisesEva() {
       || reviewedTransactions.find((p) => p.id === id);
     const prevBruto = current?.original_amount ?? current?.amount ?? null;
     const newBruto = data.amount ?? null;
+    const interestInfo = current ? parseInterestFromItem(current) : null;
     // If user kept the same bruto, keep original_amount as-is; if changed, reset it
-    const nextOriginalAmount = prevBruto != null && newBruto != null && Math.abs(prevBruto - newBruto) < 0.005
-      ? current?.original_amount ?? null
-      : null;
+    const nextOriginalAmount = interestInfo
+      ? (data.amount && Math.abs(data.amount - current.amount) < 0.005 ? current.original_amount : null)
+      : (prevBruto != null && newBruto != null && Math.abs(prevBruto - newBruto) < 0.005
+          ? current?.original_amount ?? null
+          : null);
 
     // ── EDITING WHOLE SERIES (regenerate all parcelas) ──
     if (editingSeries && editingSeries.length > 0 && current) {
@@ -972,6 +1053,7 @@ export default function AnalisesEva() {
             onApproveAll={() => approveAll(g.items)}
             onRejectAll={() => rejectAll(g.items)}
             onEditItem={(item) => handleEditClick(item)}
+            onAdjustInterestItem={(item) => setAdjustingInterestItem(item)}
             isApproving={isApproving}
             isRejecting={isRejecting}
             getCategoryName={getCategoryName}
@@ -986,6 +1068,7 @@ export default function AnalisesEva() {
           onApprove={() => approve(g.item)}
           onReject={() => reject(g.item.id)}
           onEdit={() => handleEditClick(g.item)}
+          onAdjustInterest={() => setAdjustingInterestItem(g.item)}
           onReconcile={(suggestion) => handleReconcile(g.item, suggestion)}
           isApproving={isApproving}
           isRejecting={isRejecting}
@@ -1280,6 +1363,13 @@ export default function AnalisesEva() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AdjustInterestModal
+        open={!!adjustingInterestItem}
+        item={adjustingInterestItem}
+        onClose={() => setAdjustingInterestItem(null)}
+        onSave={handleSaveInterest}
+      />
 
     </div>
   );

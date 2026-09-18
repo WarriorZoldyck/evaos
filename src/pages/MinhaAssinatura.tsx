@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Loader2, ExternalLink, AlertTriangle } from "lucide-react";
+import { Loader2, ExternalLink, AlertTriangle, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 export default function MinhaAssinatura() {
   const navigate = useNavigate();
-  const { subscription, isInTrial, isActive, isInGrace, isBlocked, noSubscription, isLoading, refetch } = useSubscription();
+  const { subscription, isInTrial, isActive, isInGrace, isBlocked, noSubscription, isLoading, refetch, isSyncing, syncSubscription } = useSubscription();
   const [canceling, setCanceling] = useState(false);
 
   if (isLoading) return <div className="flex items-center justify-center min-h-[40vh]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -37,6 +37,19 @@ export default function MinhaAssinatura() {
       toast.error((e as Error).message);
     } finally {
       setCanceling(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    toast.loading("Consultando status do pagamento no Asaas...", { id: "manual-sync" });
+    const res = await syncSubscription();
+    await refetch();
+    if (res?.subscription?.status === "active") {
+      toast.success("Pagamento confirmado! Assinatura ativa.", { id: "manual-sync" });
+    } else if (res?.synced) {
+      toast.info("Status atualizado com sucesso.", { id: "manual-sync" });
+    } else {
+      toast.error("Não foi possível sincronizar com o Asaas no momento.", { id: "manual-sync" });
     }
   };
 
@@ -80,6 +93,17 @@ export default function MinhaAssinatura() {
         </div>
 
         <div className="flex flex-wrap gap-2 pt-4 border-t border-border">
+          {subscription?.asaas_subscription_id && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled={isSyncing}
+              onClick={handleManualSync}
+            >
+              <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? "Verificando..." : "Verificar pagamento"}
+            </Button>
+          )}
           {subscription?.invoice_url && (
             <a href={subscription.invoice_url} target="_blank" rel="noreferrer">
               <Button variant="outline" className="gap-2"><ExternalLink className="h-4 w-4" /> Pagar / ver fatura</Button>

@@ -282,6 +282,7 @@ export default function Dashboard() {
         bankAccounts={bankAccounts}
         wallets={wallets}
         creditCards={creditCards}
+        onLiquidated={handleLiquidated}
       />
 
       <EntradasSaidasDetailModal
@@ -297,6 +298,7 @@ export default function Dashboard() {
         bankAccounts={bankAccounts}
         wallets={wallets}
         creditCards={creditCards}
+        onLiquidated={handleLiquidated}
       />
 
       <EntradasSaidasDetailModal
@@ -314,6 +316,7 @@ export default function Dashboard() {
         bankAccounts={bankAccounts}
         wallets={wallets}
         creditCards={creditCards}
+        onLiquidated={handleLiquidated}
       />
 
       <EntradasSaidasDetailModal
@@ -331,6 +334,7 @@ export default function Dashboard() {
         bankAccounts={bankAccounts}
         wallets={wallets}
         creditCards={creditCards}
+        onLiquidated={handleLiquidated}
       />
 
 
@@ -407,6 +411,7 @@ export default function Dashboard() {
         creditCards={creditCards}
         categoryFilter={categoryModal.category}
         includeAllStatus
+        onLiquidated={handleLiquidated}
         titleOverride={
           categoryModal.category
             ? `${categoryModal.category.name} · ${categoryModal.mode === "receita" ? "Receitas" : "Despesas"} do período`
