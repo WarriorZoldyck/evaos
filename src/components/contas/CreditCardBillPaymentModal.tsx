@@ -191,10 +191,18 @@ export function CreditCardBillPaymentModal({
       const startDate = format(billingCycle.cycleStart, "yyyy-MM-dd");
       const endDate = format(billingCycle.cycleEnd, "yyyy-MM-dd");
 
+      // Find all child cards for this parent card (if any)
+      const { data: childrenData } = await supabase
+        .from("credit_cards")
+        .select("id")
+        .eq("parent_card_id", creditCard.id);
+
+      const cardIds = [creditCard.id, ...(childrenData?.map((c) => c.id) || [])];
+
       const { data, error } = await supabase
         .from("transactions")
         .select("*")
-        .eq("credit_card_id", creditCard.id)
+        .in("credit_card_id", cardIds)
         // Blindagem: a fatura só contém compras feitas no crédito.
         // Lançamentos com método "Cartão de Débito" (legado/erro de cadastro)
         // não devem entrar no total da fatura.
@@ -322,7 +330,7 @@ export function CreditCardBillPaymentModal({
           });
         } else if (partialAction === "roll_interest") {
           // Roll with interest
-          const rate = Number(interestRate) / 100;
+          const rate = Math.max(0, Number(interestRate)) / 100;
           const amountWithInterest = Math.round(remainder * (1 + rate) * 100) / 100;
           const nextDueDate = addMonths(dueDate!, 1);
 
@@ -666,6 +674,7 @@ export function CreditCardBillPaymentModal({
                           <Label className="text-xs shrink-0">Taxa de juros (%)</Label>
                           <Input
                             type="number"
+                            min="0"
                             step="0.01"
                             value={interestRate}
                             onChange={(e) => setInterestRate(e.target.value)}
