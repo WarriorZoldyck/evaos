@@ -142,9 +142,9 @@ export function ExportTransactionsButton({
       conta: accountName(t),
       tipo: t.type === "receita" ? "Receita" : "Despesa",
       status: t.status,
-      valor: Number(t.amount),
-      valorFmt: fmtBRL(Number(t.amount)),
       sign: t.type === "receita" ? 1 : -1,
+      valor: t.type === "receita" ? Number(t.amount) : -Number(t.amount),
+      valorFmt: t.type === "receita" ? fmtBRL(Number(t.amount)) : "-" + fmtBRL(Number(t.amount)),
     }));
 
   const exportCSV = async () => {
