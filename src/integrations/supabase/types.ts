@@ -2199,7 +2199,6 @@ export type Database = {
     }
     Functions: {
       compute_cycle_key: { Args: { payment_date: string }; Returns: string }
-      enforce_subscription_delinquency: { Args: never; Returns: number }
       get_account_balance: {
         Args: { account_id_param: string }
         Returns: number
@@ -2268,7 +2267,6 @@ export type Database = {
         }[]
       }
       purge_old_hub_audit_log: { Args: never; Returns: number }
-      subscription_access_ok: { Args: { _uid: string }; Returns: boolean }
     }
     Enums: {
       account_type: "Conta Corrente" | "Poupança"

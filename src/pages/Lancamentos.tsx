@@ -371,9 +371,12 @@ export default function Lancamentos() {
               if (t.credit_card_id) {
                 const card = creditCards.find((c) => c.id === t.credit_card_id);
                 if (card) {
+                  // Resolve to parent card if it's a child card
+                  const targetCard = (card as any).parent_card_id ? creditCards.find((c) => c.id === (card as any).parent_card_id) || card : card;
+
                   const d = new Date(t.payment_date + "T12:00:00");
                   const ref = new Date(d.getFullYear(), d.getMonth(), 1);
-                  setBillPaymentCard({ card, referenceDate: ref });
+                  setBillPaymentCard({ card: targetCard, referenceDate: ref });
                   return;
                 }
               }
@@ -428,9 +431,10 @@ export default function Lancamentos() {
           if (t.credit_card_id) {
             const card = creditCards.find((c) => c.id === t.credit_card_id);
             if (card) {
+              const targetCard = (card as any).parent_card_id ? creditCards.find((c) => c.id === (card as any).parent_card_id) || card : card;
               const d = new Date(t.payment_date + "T12:00:00");
               const ref = new Date(d.getFullYear(), d.getMonth(), 1);
-              setBillPaymentCard({ card, referenceDate: ref });
+              setBillPaymentCard({ card: targetCard, referenceDate: ref });
               return;
             }
           }

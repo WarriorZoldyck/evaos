@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Check, ChevronsUpDown, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -75,7 +75,15 @@ export function CategorySelectWithCreate({
     return [...categories, ...localExtras.filter((e) => !ids.has(e.id))];
   }, [categories, localExtras]);
 
-  const selected = mergedCategories.find((c) => c.id === value);
+  // Support legacy or imported values where `value` might be the category name instead of ID
+  const selected = mergedCategories.find((c) => c.id === value || c.name === value);
+
+  // Auto-normalize name to ID if it matches by name but we are storing the name
+  useEffect(() => {
+    if (value && selected && selected.id !== value) {
+      onChange(selected.id);
+    }
+  }, [value, selected, onChange]);
 
   const openCreate = () => {
     setNewName(search.trim());

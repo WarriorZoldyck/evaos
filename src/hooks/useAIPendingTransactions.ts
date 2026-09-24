@@ -269,8 +269,11 @@ export function useAIPendingTransactions() {
     enabled: !!effectiveUserId,
   });
 
-  // Group duplicate suspects into clusters by normalized fingerprint key
+  // Group duplicate suspects into clusters by normalized fingerprint key.
+  // Requires exact amount (2 decimal places), description, date AND supplier to avoid
+  // false positives between different vendors with coincidentally same amount/description.
   const normalizeDesc = (d: string) => (d || "").toLowerCase().replace(/\s+/g, " ").trim();
+  const normalizeSupplier = (s: string | null | undefined) => (s || "").toLowerCase().replace(/\s+/g, " ").trim();
 
   const duplicateClusters: AIPendingTransaction[][] = [];
   const clusterMap = new Map<string, AIPendingTransaction[]>();
@@ -278,7 +281,10 @@ export function useAIPendingTransactions() {
   // Also check pending items that share fingerprint with suspects
   const allForClustering = [...allSuspects, ...pending];
   for (const item of allForClustering) {
-    const key = `${Math.abs(item.amount)}|${normalizeDesc(item.description)}|${item.competence_date || ""}`;
+    // Use supplier_id as canonical supplier key; fall back to contact_name
+    const supplierKey = normalizeSupplier(item.supplier_id || item.contact_name);
+    const amountKey = Math.abs(item.amount).toFixed(2);
+    const key = `${amountKey}|${normalizeDesc(item.description)}|${item.competence_date || ""}|${supplierKey}`;
     const list = clusterMap.get(key) || [];
     list.push(item);
     clusterMap.set(key, list);

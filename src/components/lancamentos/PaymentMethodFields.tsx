@@ -69,19 +69,13 @@ export function PaymentMethodFields({
   // computed due date from today.
   const selectedCreditCardId = form.watch("credit_card_id");
   const selectedCreditCard = creditCards.find((c) => c.id === selectedCreditCardId);
-  const hydratedCardIdRef = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
-    // First render: capture the initial value coming from form.reset and skip.
-    if (hydratedCardIdRef.current === undefined) {
-      hydratedCardIdRef.current = selectedCreditCardId || null;
-      return;
-    }
     if (!showCreditCardSelect || !selectedCreditCard) return;
-    // Same card that was already there — don't overwrite date.
-    if (selectedCreditCardId === hydratedCardIdRef.current) return;
 
-    hydratedCardIdRef.current = selectedCreditCardId || null;
+    // Only recalculate if the user manually changed the credit card field
+    // during this session. This prevents overwriting the date on form hydration.
+    if (!form.formState.dirtyFields.credit_card_id) return;
 
     // Base the due date on competence_date when available (coherent with the
     // purchase being edited), fall back to today for brand new entries.
@@ -96,7 +90,7 @@ export function PaymentMethodFields({
       selectedCreditCard.closing_day,
       selectedCreditCard.due_day,
     );
-    form.setValue("payment_date", new Date(dueISO + "T12:00:00"));
+    form.setValue("payment_date", new Date(dueISO + "T12:00:00"), { shouldDirty: true });
   }, [selectedCreditCardId, showCreditCardSelect, selectedCreditCard, form]);
 
 

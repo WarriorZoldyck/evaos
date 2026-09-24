@@ -12,6 +12,7 @@ import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import type { Transaction, TransactionFilters, Category, CreditCard } from "@/hooks/useTransactions";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 
 interface Props {
   filters: TransactionFilters;
@@ -48,6 +49,18 @@ export function ExportTransactionsButton({
   const categoryName = (t: Transaction) => {
     const cat = allCategories.find((c) => c.id === t.category || c.name === t.category);
     return cat?.name || t.category || "—";
+  };
+
+  const subcategoryName = (t: Transaction) => {
+    if (!t.subcategory) return "—";
+    const cat = allCategories.find((c) => c.id === t.subcategory || c.name === t.subcategory);
+    return cat?.name || t.subcategory || "—";
+  };
+
+  const subcategory2Name = (t: Transaction) => {
+    if (!t.subcategory2) return "—";
+    const cat = allCategories.find((c) => c.id === t.subcategory2 || c.name === t.subcategory2);
+    return cat?.name || t.subcategory2 || "—";
   };
 
   const contactName = (t: Transaction) => {
@@ -124,6 +137,8 @@ export function ExportTransactionsButton({
       descricao: t.description,
       contato: contactName(t),
       categoria: categoryName(t),
+      subcategoria: subcategoryName(t),
+      subcategoria2: subcategory2Name(t),
       conta: accountName(t),
       tipo: t.type === "receita" ? "Receita" : "Despesa",
       status: t.status,
@@ -141,7 +156,7 @@ export function ExportTransactionsButton({
         return;
       }
       const rows = buildRows(txs);
-      const header = ["Data", "Competência", "Descrição", "Contato", "Categoria", "Conta", "Tipo", "Status", "Valor"];
+      const header = ["Data", "Competência", "Descrição", "Contato", "Categoria", "Subcategoria", "Subcategoria 2", "Conta", "Tipo", "Status", "Valor"];
       const escape = (v: any) => {
         const s = String(v ?? "");
         return /[";,\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -149,7 +164,7 @@ export function ExportTransactionsButton({
       const csv = [
         header.join(";"),
         ...rows.map((r) =>
-          [r.data, r.competencia, r.descricao, r.contato, r.categoria, r.conta, r.tipo, r.status, r.valor.toFixed(2).replace(".", ",")]
+          [r.data, r.competencia, r.descricao, r.contato, r.categoria, r.subcategoria, r.subcategoria2, r.conta, r.tipo, r.status, r.valor.toFixed(2).replace(".", ",")]
             .map(escape)
             .join(";")
         ),
@@ -203,9 +218,14 @@ export function ExportTransactionsButton({
       autoTable(doc, {
         startY: 100,
         head: [["Data", "Descrição", "Contato", "Categoria", "Conta", "Tipo", "Status", "Valor"]],
-        body: rows.map((r) => [
-          r.data, r.descricao, r.contato, r.categoria, r.conta, r.tipo, r.status, r.valorFmt,
-        ]),
+        body: rows.map((r) => {
+          let catFull = r.categoria;
+          if (r.subcategoria !== "—") catFull += ` > ${r.subcategoria}`;
+          if (r.subcategoria2 !== "—") catFull += ` > ${r.subcategoria2}`;
+          return [
+            r.data, r.descricao, r.contato, catFull, r.conta, r.tipo, r.status, r.valorFmt,
+          ];
+        }),
         styles: { fontSize: 8, cellPadding: 4 },
         headStyles: { fillColor: [11, 17, 32], textColor: 255 },
         columnStyles: {
@@ -246,6 +266,39 @@ export function ExportTransactionsButton({
     }
   };
 
+  const exportXLSX = async () => {
+    setLoading(true);
+    try {
+      const txs = await fetchAll();
+      if (txs.length === 0) {
+        toast({ title: "Nenhum lançamento para exportar" });
+        return;
+      }
+      const rows = buildRows(txs).map(r => ({
+        Data: r.data,
+        "Competência": r.competencia,
+        "Descrição": r.descricao,
+        Contato: r.contato,
+        Categoria: r.categoria,
+        Subcategoria: r.subcategoria,
+        "Subcategoria 2": r.subcategoria2,
+        Conta: r.conta,
+        Tipo: r.tipo,
+        Status: r.status,
+        Valor: r.valor
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Lançamentos");
+      XLSX.writeFile(wb, `lancamentos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast({ title: `${txs.length} lançamentos exportados` });
+    } catch (e: any) {
+      toast({ title: "Erro ao exportar", description: e?.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -257,6 +310,9 @@ export function ExportTransactionsButton({
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={exportCSV} disabled={loading}>
           <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar CSV
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={exportXLSX} disabled={loading}>
+          <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar XLSX
         </DropdownMenuItem>
         <DropdownMenuItem onClick={exportPDF} disabled={loading}>
           <FileText className="h-4 w-4 mr-2" /> Exportar PDF

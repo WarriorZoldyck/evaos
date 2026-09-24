@@ -24,5 +24,3 @@ project_id = "rrrnnrjefyffllnrwhkz"
     verify_jwt = false
   [functions.whatsapp-webhook]
     verify_jwt = false
-  [functions.subscription-reconcile]
-    verify_jwt = false

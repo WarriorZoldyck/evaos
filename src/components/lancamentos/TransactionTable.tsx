@@ -285,22 +285,24 @@ function TransactionRow({
       </div>
 
       {/* Conciliar button (manual) */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          handleToggleReconciled(!reconciled);
-        }}
-        title={reconciled ? "Conciliado (clique para desfazer)" : "Marcar como conciliado"}
-        className={`shrink-0 hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
-          reconciled
-            ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25"
-            : "bg-transparent text-muted-foreground border-border hover:bg-accent"
-        }`}
-      >
-        <CheckCircle2 className="h-3 w-3" />
-        {reconciled ? "Conciliado" : "Conciliar"}
-      </button>
+      {!t.credit_card_id && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleReconciled(!reconciled);
+          }}
+          title={reconciled ? "Conciliado (clique para desfazer)" : "Marcar como conciliado"}
+          className={`shrink-0 hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+            reconciled
+              ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25"
+              : "bg-transparent text-muted-foreground border-border hover:bg-accent"
+          }`}
+        >
+          <CheckCircle2 className="h-3 w-3" />
+          {reconciled ? "Conciliado" : "Conciliar"}
+        </button>
+      )}
 
       {/* Status */}
       <Badge
@@ -337,7 +339,7 @@ function TransactionRow({
             <Copy className="mr-2 h-4 w-4" />
             Duplicar
           </DropdownMenuItem>
-          {t.status === "Pendente" && !reconciled && (
+          {t.status === "Pendente" && !reconciled && !t.credit_card_id && (
             <DropdownMenuItem onClick={() => onLiquidate(t)}>
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Liquidar

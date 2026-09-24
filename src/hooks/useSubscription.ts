@@ -32,8 +32,6 @@ export interface SubscriptionRow {
   };
 }
 
-const ts = (v: string | null | undefined) => (v ? new Date(v).getTime() : 0);
-
 export function useSubscription() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -54,21 +52,19 @@ export function useSubscription() {
       const rows = (data || []) as SubscriptionRow[];
       if (!rows.length) return null;
 
-      const now = Date.now();
-
-      // 1) Ativa com período pago vigente (ou vitalícia/cortesia sem vencimento)
-      const active = rows.find(
-        (r) => r.status === "active" && (!r.current_period_end || ts(r.current_period_end) > now),
-      );
+      // Prioriza assinatura ativa
+      const active = rows.find((r) => r.status === "active");
       if (active) return active;
 
-      // 2) Teste vigente
-      const trialing = rows.find((r) => r.status === "trialing" && ts(r.trial_ends_at) > now);
+      // Em teste vigente
+      const trialing = rows.find(
+        (r) => r.status === "trialing" && r.trial_ends_at && new Date(r.trial_ends_at).getTime() > Date.now(),
+      );
       if (trialing) return trialing;
 
-      // 3) Em tolerância
-      const inGrace = rows.find((r) => r.status === "past_due" && ts(r.grace_until) > now);
-      if (inGrace) return inGrace;
+      // Em atraso / carência
+      const pastDue = rows.find((r) => r.status === "past_due");
+      if (pastDue) return pastDue;
 
       return rows[0];
     },
@@ -77,23 +73,32 @@ export function useSubscription() {
   const sub = query.data;
   const now = Date.now();
 
-  // Regra única e estrita: o acesso vem do status + janelas de tempo.
-  const isInTrial = !!sub && sub.status === "trialing" && ts(sub.trial_ends_at) > now;
-  const isActive =
-    !!sub && sub.status === "active" && (!sub.current_period_end || ts(sub.current_period_end) > now);
-  const isPastDue = !!sub && sub.status === "past_due";
-  const isInGrace = isPastDue && ts(sub!.grace_until) > now;
+  // Verificação de consistência de pagamentos
+  const hasRecentPayment = Boolean(
+    sub?.last_payment_at && now - new Date(sub.last_payment_at).getTime() < 35 * 24 * 60 * 60 * 1000,
+  );
+  const hasFutureDueDate = Boolean(
+    sub?.next_due_date && new Date(sub.next_due_date).getTime() >= new Date().setHours(0, 0, 0, 0),
+  );
+  const hasValidPeriod = Boolean(
+    sub?.current_period_end && new Date(sub.current_period_end).getTime() > now,
+  );
 
+  // Se o usuário tem pagamento recente ou data futura, a assinatura é considerada ativa
+  const isActuallyActive =
+    sub?.status === "active" ||
+    (sub?.status === "past_due" && (hasRecentPayment || hasFutureDueDate || hasValidPeriod));
+
+  const isInTrial =
+    sub?.status === "trialing" && sub.trial_ends_at && new Date(sub.trial_ends_at).getTime() > now;
+  const isActive = isActuallyActive;
+  const isInGrace =
+    !isActuallyActive && sub?.status === "past_due" && sub.grace_until && new Date(sub.grace_until).getTime() > now;
   const hasAccess = Boolean(isInTrial || isActive || isInGrace);
   const isBlocked = !!sub && !hasAccess;
   const noSubscription = !sub;
 
-  const daysToBlock =
-    isInGrace && sub?.grace_until
-      ? Math.max(0, Math.ceil((ts(sub.grace_until) - now) / 86400000))
-      : 0;
-
-  // Consulta o Asaas e reativa automaticamente quem já pagou
+  // Função manual para consultar e sincronizar com o Asaas
   const syncSubscription = async () => {
     if (!user?.id || !sub?.asaas_subscription_id || isSyncing) return null;
     setIsSyncing(true);
@@ -110,22 +115,20 @@ export function useSubscription() {
     }
   };
 
-  // Sem acesso mas com assinatura no Asaas: confere uma vez em background
+  // Se a assinatura está como past_due no banco, dispara sync automático em background uma vez
   useEffect(() => {
-    if (!hasAutoSynced.current && sub?.asaas_subscription_id && !hasAccess && !query.isLoading) {
+    if (sub?.status === "past_due" && sub.asaas_subscription_id && !hasAutoSynced.current) {
       hasAutoSynced.current = true;
       syncSubscription();
     }
-  }, [sub?.asaas_subscription_id, hasAccess, query.isLoading]);
+  }, [sub?.status, sub?.asaas_subscription_id]);
 
   return {
     ...query,
     subscription: sub,
-    isInTrial,
+    isInTrial: !!isInTrial,
     isActive,
-    isPastDue,
-    isInGrace,
-    daysToBlock,
+    isInGrace: !!isInGrace,
     hasAccess,
     isBlocked,
     noSubscription,
