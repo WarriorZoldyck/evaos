@@ -425,6 +425,13 @@ export function TransactionFormModal({
       if (editTransaction) {
         setFormCompanyId(editTransaction.company_id ?? null);
         setActiveTab(editTransaction.type);
+
+        const normalizePaymentMethod = (pm: string | null | undefined) => {
+          if (!pm) return "";
+          const found = PAYMENT_METHODS.find((m) => m.toLowerCase() === pm.toLowerCase());
+          return found || pm;
+        };
+
         form.reset({
           description: editTransaction.description,
           amount: editTransaction.original_amount ?? editTransaction.amount,
@@ -434,7 +441,7 @@ export function TransactionFormModal({
           category: editTransaction.category,
           subcategory: editTransaction.subcategory || "",
           subcategory2: editTransaction.subcategory2 || "",
-          payment_method: editTransaction.payment_method || "",
+          payment_method: normalizePaymentMethod(editTransaction.payment_method),
           bank_account_id: editTransaction.bank_account_id || "",
           credit_card_id: editTransaction.credit_card_id || "",
           wallet_id: editTransaction.wallet_id || "",
@@ -805,12 +812,12 @@ export function TransactionFormModal({
         let amount = installmentAmount;
         if (hasCustomAmounts && interestRate === 0) {
           if (customInstallmentAmounts[instNum] !== undefined) {
-            amount = customInstallmentAmounts[instNum];
+            amount = Math.max(0, customInstallmentAmounts[instNum]);
           } else {
             // Redistribute: calculate remaining for non-edited
             const editedIndices = Object.keys(customInstallmentAmounts).map(Number);
-            const customSum = editedIndices.reduce((s, k) => s + (customInstallmentAmounts[k] || 0), 0);
-            const remaining = total - customSum;
+            const customSum = editedIndices.reduce((s, k) => s + Math.max(0, customInstallmentAmounts[k] || 0), 0);
+            const remaining = Math.max(0, total - customSum);
             const nonEditedCount = count - editedIndices.length;
             amount = nonEditedCount > 0 ? Math.round((remaining / nonEditedCount) * 100) / 100 : 0;
           }
