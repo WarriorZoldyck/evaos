@@ -2139,10 +2139,11 @@ REGRAS DE GERENCIAMENTO DE CATEGORIAS:
 - NÃO invente ações além das listadas acima.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"rótulo legível do período, ex: julho/2026 (ou null)","detail_level":"resumo|detalhado","context":"Pessoal|Nome da Empresa","follow_up_queries":[],"friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|sempre|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"rótulo legível do período, ex: julho/2026 (ou null)","detail_level":"resumo|detalhado","context":"Pessoal|Nome da Empresa","follow_up_queries":[],"friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
 
 ⚠️ CRÍTICO: Para consultas o campo 'intent' SEMPRE deve ser exatamente "consulta" (literal). O tipo da consulta vai em 'query_type'. NUNCA coloque "agrupar_por_categoria", "saldo", "listar_lancamentos" etc. no campo 'intent' — só em 'query_type'.
 ⚠️ NUNCA use frases como "Vou buscar essa informação", "Já vou te trazer", "Aguarde um momento" no friendly_message de consultas. O backend executa a consulta no mesmo turno e entrega o resultado — promessas de "vou buscar" deixam o usuário sem resposta.
+⚠️ REGRA DE PERÍODO: Se o usuário perguntar "quanto gastei com X" ou pedir para listar lançamentos de X, SEM ESPECIFICAR o tempo (mês, ano, etc.), use period_filter="sempre" para trazer o histórico completo, a menos que o contexto seja claramente o mês atual.
 
 TIPOS DE CONSULTA:
 - "saldo" = saldo das contas
@@ -4498,6 +4499,13 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             const d = new Date(todayDate);
             d.setDate(d.getDate() - 90);
             return { start: fmtDate(d), end: today, label: "últimos 3 meses" };
+          }
+          case "ano_atual": {
+            const start = `${todayDate.getFullYear()}-01-01`;
+            return { start, end: today, label: "neste ano" };
+          }
+          case "sempre": {
+            return { start: "2000-01-01", end: today, label: "em todo o período" };
           }
           default: { // mes_atual
             const start = today.substring(0, 7) + "-01";
