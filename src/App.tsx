@@ -20,6 +20,7 @@ import Contas from "@/pages/Contas";
 import Categorias from "@/pages/Categorias";
 import Contatos from "@/pages/Contatos";
 import Configuracoes from "@/pages/Configuracoes";
+import Auditoria from "@/pages/Auditoria";
 
 import NotFound from "@/pages/NotFound";
 import ComingSoon from "@/pages/ComingSoon";
@@ -91,6 +92,7 @@ const App = () => {
                 <Route path="/centros-de-custos" element={<CentrosDeCustos />} />
                 <Route path="/contatos" element={<Contatos />} />
                 <Route path="/configuracoes" element={<Configuracoes />} />
+                <Route path="/auditoria" element={<Auditoria />} />
                 
                 <Route path="/docs" element={<Docs />} />
                 <Route path="/integracoes" element={<Integracoes />} />

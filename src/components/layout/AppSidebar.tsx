@@ -24,6 +24,7 @@ import {
   UsersRound,
   Layers,
   Check,
+  ScrollText,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -357,6 +358,18 @@ export function AppSidebar() {
               >
                 <Settings className="h-4 w-4" />
                 <span>Configurações</span>
+              </NavLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Auditoria">
+              <NavLink
+                to="/auditoria"
+                className="sidebar-item hover:bg-sidebar-accent rounded-lg transition-all duration-200"
+                activeClassName="sidebar-item-active bg-gradient-primary-soft border border-primary/20 text-primary font-medium glow-primary-sm"
+              >
+                <ScrollText className="h-4 w-4" />
+                <span>Auditoria</span>
               </NavLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
