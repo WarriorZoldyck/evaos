@@ -296,7 +296,8 @@ export default function Lancamentos() {
         {filters.accountId.startsWith("card:") && (() => {
           const cardId = filters.accountId.split(":").slice(1).join(":");
           const card = creditCards.find((c) => c.id === cardId);
-          return card ? (
+          const isChildCard = card && (card as any).parent_card_id;
+          return card && !isChildCard ? (
             <Button
               variant="outline"
               onClick={() => setBillPaymentCard({ card })}

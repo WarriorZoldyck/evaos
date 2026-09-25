@@ -1078,7 +1078,7 @@ export function TransactionTable({
                         )}
                         <div className="flex-1">
                           <CardGroupHeader
-                            group={{ cardName: childGroup.cardName, totalAmount: childGroup.totalAmount, pendingCount: childGroup.pendingCount }}
+                            group={{ cardName: childGroup.cardName, totalAmount: childGroup.totalAmount, pendingCount: 0 }}
                             isOpen={isChildOpen}
                             txCount={childGroup.transactions.length}
                             reconciledCount={childGroup.reconciledCount || 0}
@@ -1090,10 +1090,7 @@ export function TransactionTable({
                             }}
                             onToggle={() => toggleCard(`child-${childGroup.cardId}`)}
                             indented
-                            onLiquidate={() => {
-                              const firstPending = childGroup.transactions.find((tx) => tx.status === "Pendente");
-                              if (firstPending) onLiquidate(firstPending);
-                            }}
+                            onLiquidate={() => {}}
                           />
                         </div>
                       </div>

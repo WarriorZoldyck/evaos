@@ -313,7 +313,7 @@ export default function Contas() {
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
                               <Button variant="ghost" size="icon" onClick={() => setStatementTarget({ id: c.id, type: "card", name: c.name })} className="h-8 w-8" title="Extrato"><FileText className="h-4 w-4" /></Button>
-                              <Button variant="ghost" size="sm" onClick={() => setBillPaymentCard(c)} className="h-8 gap-1 text-xs"><Receipt className="h-3.5 w-3.5" />Pagar Fatura</Button>
+                              {!isChild && <Button variant="ghost" size="sm" onClick={() => setBillPaymentCard(c)} className="h-8 gap-1 text-xs"><Receipt className="h-3.5 w-3.5" />Pagar Fatura</Button>}
                               <Button variant="ghost" size="icon" onClick={() => openEdit(c)} className="h-8 w-8"><Pencil className="h-4 w-4" /></Button>
                               <Button variant="ghost" size="icon" onClick={() => setDeleteTarget({ id: c.id, name: c.name, tab: "card" })} className="h-8 w-8 text-destructive hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
                             </div>
