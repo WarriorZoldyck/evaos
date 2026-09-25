@@ -1984,9 +1984,10 @@ ${lines.join("\n")}`;
     const aiConfig = getAiConfig();
     const activeAiKey = aiConfig.apiKey;
     if (!activeAiKey) {
+      console.error("AI not configured: no GEMINI_API_KEY or OPENAI_API_KEY found in Supabase Secrets.");
       return respond(
-        { success: false, error: "AI not configured", message: "⚠️ IA não configurada. Configure a chave de IA no Supabase Secrets (GEMINI_API_KEY ou OPENAI_API_KEY)." },
-        500
+        { success: false, error: "AI not configured", message: "😔 Desculpe, estou com um problema técnico temporário. Nossa equipe já foi notificada. Tente novamente em alguns minutos." },
+        200
       );
     }
 
@@ -2385,7 +2386,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       } else if (aiResponse.status === 429) {
         friendly = "⏳ Estou recebendo muitas mensagens agora. Tente novamente em alguns segundos.";
       } else if (aiResponse.status === 401 || aiResponse.status === 403) {
-        friendly = "⚠️ Houve um problema com a autenticação da IA. Por favor, verifique as chaves configuradas nos Segredos do Supabase.";
+        friendly = "😔 Desculpe, estou com um problema técnico temporário. Nossa equipe já foi notificada. Tente novamente em alguns minutos.";
       }
 
       return respond({
@@ -5313,10 +5314,11 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
   } catch (error: any) {
     console.error("Webhook error:", error);
     const errDetail = error instanceof Error ? error.message : String(error || "Erro desconhecido");
+    console.error("Webhook error detail:", errDetail);
     return buildResponse({
       success: false,
       error: errDetail,
-      message: `Desculpe, ocorreu um erro inesperado (${errDetail}). Tente novamente em instantes.`,
+      message: "😔 Desculpe, ocorreu um erro inesperado. Tente novamente em instantes.",
     }, shouldAcknowledgeOnError ? 200 : 500, phone);
   }
 });

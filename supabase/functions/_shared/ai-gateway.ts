@@ -333,9 +333,9 @@ export async function fetchAiCompletions(options: AiRequestOptions, overrideApiK
   const config = getAiConfig(overrideApiKey);
 
   if (!config.apiKey) {
-    console.error("[ai-gateway] No AI API Key found in environment or parameters.");
+    console.error("[ai-gateway] No AI API Key found in environment or parameters. Configure GEMINI_API_KEY or OPENAI_API_KEY in Supabase Secrets.");
     throw new Error(
-      "Nenhuma chave de IA configurada nos Segredos do Supabase. Configure GEMINI_API_KEY ou OPENAI_API_KEY no painel de configurações do Supabase."
+      "Serviço de IA temporariamente indisponível. Tente novamente em instantes."
     );
   }
 
