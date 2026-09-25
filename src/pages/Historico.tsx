@@ -22,7 +22,7 @@ type AuditLog = {
   user_name?: string;
 };
 
-export default function Auditoria() {
+export default function Historico() {
   const { user } = useAuth();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +122,7 @@ export default function Auditoria() {
         <div>
           <h1 className="text-2xl font-bold font-display flex items-center gap-2">
             <ScrollText className="h-6 w-6 text-primary" />
-            Auditoria de Lançamentos
+            Histórico de Lançamentos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             Acompanhe quem criou, editou ou excluiu lançamentos no sistema.
