@@ -4711,15 +4711,20 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
                 .filter((c: any) => norm(rootNameOf(c.id)) === norm(row.name))
                 .map((c: any) => c.id);
               if (branchIds.length > 0) {
+                const branchNames = branchIds.map(id => categories.find((c: any) => c.id === id)?.name).filter(Boolean);
                 const monthStart = new Date().toISOString().substring(0, 7) + "-01";
                 const monthEndDate = new Date();
                 monthEndDate.setMonth(monthEndDate.getMonth() + 1, 0);
+                
+                // Formata array de nomes para a sintaxe do .in() no PostgREST
+                const namesQuery = `(${branchNames.map(n => `"${n}"`).join(",")})`;
+                
                 let pq = supabase
                   .from("transactions")
                   .select("amount")
                   .eq("user_id", userId)
                   .eq("status", "Pendente")
-                  .in("category", branchIds)
+                  .or(`category.in.${namesQuery},subcategory.in.${namesQuery},subcategory2.in.${namesQuery}`)
                   .gte("payment_date", monthStart)
                   .lte("payment_date", monthEndDate.toISOString().substring(0, 10));
                 pq = addContextFilter(pq);
@@ -4779,9 +4784,15 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               .limit(1000);
             
             if (catIds.length > 0) {
-              q = q.in("category", catIds);
+              const catNames = catIds.map(id => categories.find((c: any) => c.id === id)?.name).filter(Boolean);
+              if (catNames.length > 0) {
+                const namesQuery = `(${catNames.map(n => `"${n}"`).join(",")})`;
+                q = q.or(`category.in.${namesQuery},subcategory.in.${namesQuery},subcategory2.in.${namesQuery}`);
+              } else if (categoryFilter) {
+                q = q.or(`category.ilike.%${categoryFilter}%,subcategory.ilike.%${categoryFilter}%,subcategory2.ilike.%${categoryFilter}%,description.ilike.%${categoryFilter}%`);
+              }
             } else if (categoryFilter) {
-              q = q.ilike("category", `%${categoryFilter}%`);
+              q = q.or(`category.ilike.%${categoryFilter}%,subcategory.ilike.%${categoryFilter}%,subcategory2.ilike.%${categoryFilter}%,description.ilike.%${categoryFilter}%`);
             }
             q = addContextFilter(q);
             const { data: catExpensesAll } = await q;
