@@ -2192,6 +2192,7 @@ export function ImportStatementModal({
         purchase_date_original: purchaseDateOriginal || null,
         import_fingerprint: importFingerprint,
         is_internal_transfer: isInternalTransfer || null,
+        is_reconciled: true,
       };
 
     });
