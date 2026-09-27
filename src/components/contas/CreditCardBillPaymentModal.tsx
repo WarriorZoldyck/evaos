@@ -98,6 +98,7 @@ export function CreditCardBillPaymentModal({
   onClose,
   onSuccess,
   initialReferenceDate,
+  listedIds,
 }: CreditCardBillPaymentModalProps) {
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
