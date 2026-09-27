@@ -173,12 +173,26 @@ const transactionSchema = z
     recurring_end_date: z.date().optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.payment_method === "Dinheiro" && !data.wallet_id) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["wallet_id"],
-        message: "Selecione uma carteira",
-      });
+    const add = (path: string, message: string) =>
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    const pm = data.payment_method || "";
+    if (pm === "Dinheiro" && !data.wallet_id) add("wallet_id", "Selecione uma carteira");
+    // Despesa no crédito exige o cartão; receita no cartão exige a maquininha
+    if (pm === "Cartão de Crédito" && !data.credit_card_id && !data.card_terminal_id) {
+      add("credit_card_id", "Selecione o cartão");
+      add("card_terminal_id", "Selecione a maquininha");
+    }
+    if (["PIX", "Boleto", "Transferência", "Cheque", "Depósito", "Débito Automático"].includes(pm) && !data.bank_account_id) {
+      add("bank_account_id", "Selecione a conta bancária");
+    }
+    if (pm === "Cartão de Débito" && !data.bank_account_id && !data.card_terminal_id) {
+      add("bank_account_id", "Selecione a conta bancária ou a maquininha");
+    }
+    if (!pm && !data.bank_account_id && !data.credit_card_id && !data.wallet_id && !data.card_terminal_id) {
+      add("payment_method", "Informe a forma de pagamento e a conta");
+    }
+    if (data.is_installment && (!data.installments_count || data.installments_count < 2)) {
+      add("installments_count", "Informe 2 parcelas ou mais");
     }
   });
 
