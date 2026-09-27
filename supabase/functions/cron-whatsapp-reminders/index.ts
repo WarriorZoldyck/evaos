@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
       .select("id, description, amount, payment_date")
       .eq("user_id", profile.id)
       .eq("type", "despesa")
-      .eq("status", "pending")
+      .eq("status", "Pendente")
       .in("payment_date", targetDates);
 
     if (txError || !transactions || transactions.length === 0) {
