@@ -366,6 +366,7 @@ export default function Lancamentos() {
             onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
             onReconcileMultiple={(ids, reconciled) => reconcileMultipleTransactions(ids, reconciled)}
             onMoveContext={(ids) => setMoveContextIds(ids)}
+            typeFilterActive={filters.type !== "todos"}
             onUndoPayment={async (ids) => {
               const { error } = await supabase
                 .from("transactions")
