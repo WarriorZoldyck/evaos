@@ -176,16 +176,11 @@ const transactionSchema = z
     const add = (path: string, message: string) =>
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
     const pm = data.payment_method || "";
-    const isCard = pm === "Cartão de Crédito" || pm === "Cartão de Débito";
     if (pm === "Dinheiro" && !data.wallet_id) add("wallet_id", "Selecione uma carteira");
-    if (pm && isCard) {
-      // Receita no cartão = maquininha; despesa no crédito = cartão; despesa no débito = conta
-      if (data.card_terminal_id || data.credit_card_id || data.bank_account_id) {
-        // ok — algum vínculo presente; checagens específicas abaixo
-      }
-    }
+    // Despesa no crédito exige o cartão; receita no cartão exige a maquininha
     if (pm === "Cartão de Crédito" && !data.credit_card_id && !data.card_terminal_id) {
-      add(data.card_terminal_id !== undefined && !data.credit_card_id ? "credit_card_id" : "credit_card_id", "Selecione o cartão ou a maquininha");
+      add("credit_card_id", "Selecione o cartão");
+      add("card_terminal_id", "Selecione a maquininha");
     }
     if (["PIX", "Boleto", "Transferência", "Cheque", "Depósito", "Débito Automático"].includes(pm) && !data.bank_account_id) {
       add("bank_account_id", "Selecione a conta bancária");
