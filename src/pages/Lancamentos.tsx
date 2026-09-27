@@ -23,6 +23,8 @@ import { TransactionTable } from "@/components/lancamentos/TransactionTable";
 import { TransactionFormModal } from "@/components/lancamentos/TransactionFormModal";
 import { TransactionDetailModal } from "@/components/lancamentos/TransactionDetailModal";
 import { MoveContextDialog } from "@/components/lancamentos/MoveContextDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { toast as sonnerToast } from "sonner";
 
 import { SeriesEditDialog } from "@/components/lancamentos/SeriesEditDialog";
 import { LiquidateModal } from "@/components/dashboard/LiquidateModal";
@@ -364,6 +366,18 @@ export default function Lancamentos() {
             onDeleteMultiple={(ids) => setBulkDeleteIds(ids)}
             onReconcileMultiple={(ids, reconciled) => reconcileMultipleTransactions(ids, reconciled)}
             onMoveContext={(ids) => setMoveContextIds(ids)}
+            onUndoPayment={async (ids) => {
+              const { error } = await supabase
+                .from("transactions")
+                .update({ status: "Pendente" as const })
+                .in("id", ids);
+              if (error) {
+                sonnerToast.error(error.message.includes("fechada") ? error.message : "Erro ao desfazer pagamento");
+              } else {
+                sonnerToast.success(`Pagamento desfeito em ${ids.length} lançamento(s)`);
+                fetchTransactions();
+              }
+            }}
 
             onLiquidate={(t) => {
               // If it's a credit card transaction, open bill payment flow positioned

@@ -5,7 +5,7 @@ import {
   Edit, Copy, Trash2, CheckCircle2, MoreHorizontal, Loader2,
   Landmark, Wallet, CreditCard, HelpCircle, Eye, Repeat,
   ChevronDown, ChevronRight, Lock, ShieldCheck, Link2, Unlock,
-  ArrowRightLeft,
+  ArrowRightLeft, Undo2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,6 +67,7 @@ interface TransactionTableProps {
   onDeleteMultiple?: (ids: string[]) => void;
   onReconcileMultiple?: (ids: string[], reconciled: boolean) => void;
   onMoveContext?: (ids: string[]) => void;
+  onUndoPayment?: (ids: string[]) => void;
 
   onLiquidate: (transaction: Transaction) => void;
   onViewDetails: (transaction: Transaction) => void;
@@ -600,6 +601,7 @@ export function TransactionTable({
   onDeleteMultiple,
   onReconcileMultiple,
   onMoveContext,
+  onUndoPayment,
 
   onLiquidate,
   onViewDetails,
@@ -899,6 +901,27 @@ export function TransactionTable({
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 {allReconciled ? `Desconciliar ${selectedIds.size}` : `Conciliar ${selectedIds.size}`}
+              </Button>
+            );
+          })()}
+          {onUndoPayment && (() => {
+            const paidCardIds = transactions
+              .filter((t) => selectedIds.has(t.id) && t.status === "Pago" && t.credit_card_id)
+              .map((t) => t.id);
+            if (paidCardIds.length === 0) return null;
+            return (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => {
+                  if (!confirm(`Desfazer o pagamento de ${paidCardIds.length} lançamento(s) da fatura? Eles voltarão para Pendente.`)) return;
+                  onUndoPayment(paidCardIds);
+                  clearSelection();
+                }}
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+                Desfazer pagamento
               </Button>
             );
           })()}
