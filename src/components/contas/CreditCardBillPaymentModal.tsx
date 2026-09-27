@@ -151,11 +151,22 @@ export function CreditCardBillPaymentModal({
   // When opening: if caller provided an explicit reference date (e.g. user clicked
   // Pagar Fatura on a specific cycle in Lançamentos), honor it. Otherwise jump to
   // the month of the earliest pending payment for this card.
+  const [monthReady, setMonthReady] = useState(false);
+
   useEffect(() => {
-    if (!open || !creditCard || !user) return;
+    if (!open || !creditCard || !user) {
+      setMonthReady(false);
+      setBillTransactions([]);
+      return;
+    }
+    let cancelled = false;
+    setMonthReady(false);
+    setBillTransactions([]);
+    setLoadingBill(true);
 
     if (initialReferenceDate) {
       setReferenceDate(initialReferenceDate);
+      setMonthReady(true);
       return;
     }
 
@@ -167,23 +178,25 @@ export function CreditCardBillPaymentModal({
         .eq("status", "Pendente")
         .order("payment_date", { ascending: true })
         .limit(1);
-
+      if (cancelled) return;
       if (data && data.length > 0) {
         const earliest = new Date(data[0].payment_date + "T12:00:00");
         setReferenceDate(new Date(earliest.getFullYear(), earliest.getMonth(), 1));
       } else {
         setReferenceDate(new Date());
       }
+      setMonthReady(true);
     };
 
     pickInitialMonth();
+    return () => { cancelled = true; };
   }, [open, creditCard, user, initialReferenceDate]);
 
-  // Fetch bill transactions for the selected month. We filter by payment_date so
-  // each fatura contains only the installments due in that month — matching the
-  // grouping shown on the Lançamentos page.
+  // Fetch bill transactions for the selected month. Only runs after the
+  // correct month is known; stale responses are discarded.
   useEffect(() => {
-    if (!open || !creditCard || !user || !billingCycle) return;
+    if (!open || !creditCard || !user || !billingCycle || !monthReady) return;
+    let cancelled = false;
 
     const fetchBill = async () => {
       setLoadingBill(true);
@@ -191,11 +204,11 @@ export function CreditCardBillPaymentModal({
       const startDate = format(billingCycle.cycleStart, "yyyy-MM-dd");
       const endDate = format(billingCycle.cycleEnd, "yyyy-MM-dd");
 
-      // Find all child cards for this parent card (if any)
       const { data: childrenData } = await supabase
         .from("credit_cards")
         .select("id")
         .eq("parent_card_id", creditCard.id);
+      if (cancelled) return;
 
       const cardIds = [creditCard.id, ...(childrenData?.map((c) => c.id) || [])];
 
@@ -203,17 +216,12 @@ export function CreditCardBillPaymentModal({
         .from("transactions")
         .select("*")
         .in("credit_card_id", cardIds)
-        // Blindagem: a fatura só contém compras feitas no crédito.
-        // Lançamentos com método "Cartão de Débito" (legado/erro de cadastro)
-        // não devem entrar no total da fatura.
         .or("payment_method.is.null,payment_method.neq.Cartão de Débito")
-        // Blindagem: transferências entre contas (transfer_id preenchido) nunca
-        // devem aparecer em fatura de cartão, mesmo que por engano tenham
-        // ficado vinculadas a um credit_card_id.
         .is("transfer_id", null)
         .gte("payment_date", startDate)
         .lte("payment_date", endDate)
         .order("payment_date", { ascending: true });
+      if (cancelled) return;
 
       if (error) {
         toast({
@@ -228,7 +236,8 @@ export function CreditCardBillPaymentModal({
     };
 
     fetchBill();
-  }, [open, creditCard, user, billingCycle, toast]);
+    return () => { cancelled = true; };
+  }, [open, creditCard, user, billingCycle, monthReady, toast]);
 
   // Fetch accounts
   useEffect(() => {
@@ -249,7 +258,6 @@ export function CreditCardBillPaymentModal({
   useEffect(() => {
     if (open && creditCard) {
       setStep("review");
-      setPaymentAmount("");
       setPaymentDate(format(new Date(), "yyyy-MM-dd"));
       setAccountId(creditCard.bank_account_id || "");
       setNotes("");
@@ -259,14 +267,18 @@ export function CreditCardBillPaymentModal({
     }
   }, [open, creditCard]);
 
-  // Sync default payment amount to the pending total whenever the bill changes
+  // Sync default payment amount to the pending total once the bill is loaded
   useEffect(() => {
+    if (!open || loadingBill) {
+      setPaymentAmount("");
+      return;
+    }
     if (pendingTotal > 0) {
       setPaymentAmount(String(Math.round(pendingTotal * 100) / 100));
     } else {
       setPaymentAmount("");
     }
-  }, [pendingTotal]);
+  }, [pendingTotal, open, loadingBill]);
 
 
   const navigateMonth = (delta: number) => {
