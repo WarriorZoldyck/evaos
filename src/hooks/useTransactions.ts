@@ -272,7 +272,14 @@ export function useTransactions() {
       const [accType, ...idParts] = filters.accountId.split(":");
       const accId = idParts.join(":");
       if (accType === "bank") {
-        query = query.eq("bank_account_id", accId);
+        // Include card transactions paid by this account even if the
+        // transaction itself lacks bank_account_id (keeps list = Pagar Fatura).
+        const linkedCardIds = creditCards
+          .filter((c: any) => c.bank_account_id === accId)
+          .map((c) => c.id);
+        query = linkedCardIds.length > 0
+          ? query.or(`bank_account_id.eq.${accId},credit_card_id.in.(${linkedCardIds.join(",")})`)
+          : query.eq("bank_account_id", accId);
       } else if (accType === "wallet") {
         query = query.eq("wallet_id", accId);
       } else if (accType === "card") {
