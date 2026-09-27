@@ -38,7 +38,7 @@ export default function Historico() {
       const from = page * pageSize;
       const to = from + pageSize - 1;
       
-      const { data, error, count } = await supabase
+      const { data, error, count } = await (supabase as any)
         .from("transaction_audit_logs")
         .select("*", { count: "exact" })
         .order("created_at", { ascending: false })
@@ -57,7 +57,7 @@ export default function Historico() {
       setTotalCount(count ?? 0);
 
       // Fetch user details for the logs
-      const userIds = Array.from(new Set((data || []).map((r: any) => r.user_id)));
+      const userIds: string[] = Array.from(new Set<string>(((data || []) as any[]).map((r) => String(r.user_id))));
       let userDetails: Record<string, { name: string; email: string }> = {};
       
       if (userIds.length > 0) {
