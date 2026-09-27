@@ -187,8 +187,13 @@ async function callGeminiNative(options: AiRequestOptions, config: AiConfig): Pr
   if (options.response_format?.type === "json_object") {
     generationConfig.responseMimeType = "application/json";
   }
-  if (options.thinking_budget !== undefined) {
+  // Pro models only work in thinking mode: budget 0 is rejected (400).
+  const thinkingRequired = model.includes("pro");
+  if (options.thinking_budget !== undefined && !(thinkingRequired && options.thinking_budget === 0)) {
     generationConfig.thinkingConfig = { thinkingBudget: options.thinking_budget };
+  } else if (thinkingRequired) {
+    // Dynamic thinking for Pro models
+    generationConfig.thinkingConfig = { thinkingBudget: -1 };
   } else {
     // Default to 0 thinking tokens for extraction & classification to prevent 70s+ timeouts
     generationConfig.thinkingConfig = { thinkingBudget: 0 };
