@@ -2215,13 +2215,13 @@ ${recentTransactions.length > 0 ? recentTransactions.map((t: any) => `  - [${t.i
 - Lançamentos marcados com (PENDENTE-APROVAÇÃO) estão na fila de aprovação e podem ser editados.
 
 Para conversa:
-{"intent":"conversa","feedback_type":"sugestao|elogio|critica|bug|null","friendly_message":"..."}
+{"intent":"conversa","feedback_type":"sugestao|elogio|critica|bug|reclamacao|null","friendly_message":"..."}
 
 REGRA — SUGESTÕES E FEEDBACK SOBRE O PRODUTO (NUNCA VIRAM LANÇAMENTO):
 - Se a mensagem for uma opinião, sugestão, elogio, crítica ou relato de problema sobre o EVA OS / sobre você (EVA), retorne intent="conversa" com o campo "feedback_type" preenchido.
 - Exemplos que SÃO feedback: "seria legal se você me lembrasse dos boletos", "sugestão: colocar gráfico no app", "vocês deveriam permitir editar categoria por aqui", "não gostei da nova tela de metas", "adorei o relatório novo", "o app travou quando abri o extrato", "você errou a categoria de novo".
 - Exemplos que NÃO são feedback: "gastei 50 no mercado", "quanto gastei esse mês", "cria a categoria Farmácia", "muda o valor daquele lançamento pra 80" — são lançamento/consulta/gerenciar_categoria normalmente.
-- Classificação: "sugestao" (ideia/pedido de melhoria), "elogio" (agradecimento/positivo), "critica" (insatisfação sem bug claro), "bug" (algo que não funcionou ou está errado no sistema).
+- Classificação: "sugestao" (ideia/pedido de melhoria), "elogio" (agradecimento/positivo), "critica" (insatisfação sem bug claro), "bug" (algo que não funcionou ou está errado no sistema), "reclamacao" (insatisfação do usuário com a IA ou o serviço, onde ele precise de atendimento humano).
 - Nunca crie lançamento a partir de uma mensagem de feedback, mesmo que ela cite valores (ex: "seria bom avisar quando eu gastar mais de R$ 500").
 - Se a mensagem MISTURAR uma operação real com feedback (ex: "registra 50 no mercado, e acho que a EVA devia avisar antes"), execute a operação normalmente (intent="lancamento"/"consulta"/etc.) e agradeça o feedback dentro da friendly_message. Nesse caso NÃO use intent="conversa".
 - Ao responder um feedback: agradeça de forma curta, mostre que entendeu o ponto e diga que vai encaminhar para a equipe do EVA OS. Nunca prometa prazo nem diga que já foi implementado.
@@ -5278,7 +5278,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
     }
 
     // conversa (inclui sugestões/feedback sobre o produto)
-    const VALID_FEEDBACK_TYPES = ["sugestao", "elogio", "critica", "bug"];
+    const VALID_FEEDBACK_TYPES = ["sugestao", "elogio", "critica", "bug", "reclamacao"];
     const feedbackType = VALID_FEEDBACK_TYPES.includes(aiParsed.feedback_type)
       ? aiParsed.feedback_type
       : null;
@@ -5293,7 +5293,21 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         elogio: "Que bom ler isso! 😄 Vou compartilhar com a equipe do EVA OS. Obrigada!",
         critica: "Obrigada por contar — anotei seu ponto e vou encaminhar para a equipe do EVA OS. 💙",
         bug: "Obrigada por avisar! Registrei o problema e já vou repassar para a equipe do EVA OS dar uma olhada. 🔧",
+        reclamacao: "Sinto muito que você esteja tendo problemas. Já acionei nossa equipe de suporte e eles entrarão em contato em breve! 🛠️",
       };
+
+      // Fallback: Notify ADMIN on critical feedbacks
+      if (feedbackType === "critica" || feedbackType === "bug" || feedbackType === "sugestao" || feedbackType === "reclamacao") {
+        const adminPhone = Deno.env.get("ADMIN_WHATSAPP") || "5511999999999"; // Fallback to a default or check env
+        if (adminPhone) {
+          const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", userId).single();
+          const userName = userProfile?.full_name || "Usuário Desconhecido";
+          const alertMsg = `⚠️ *Novo Feedback da EVA*\n\n*Tipo:* ${feedbackType.toUpperCase()}\n*Usuário:* ${userName} (${phone})\n*Mensagem:* "${trimmedMsg}"`;
+          
+          sendEvolutionReply(adminPhone, alertMsg).catch(e => console.error("Admin alert error:", e));
+        }
+      }
+
       return respond({
         success: true,
         intent: "conversa",

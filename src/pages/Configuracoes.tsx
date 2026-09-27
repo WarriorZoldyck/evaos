@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Settings, Trash2, Building2, Plus, X, Pencil, KeyRound } from "lucide-react";
 import { TransactionFieldsCard } from "@/components/configuracoes/TransactionFieldsCard";
 import { WhatsAppCard } from "@/components/configuracoes/WhatsAppCard";
+import { EvaTrainingCard } from "@/components/configuracoes/EvaTrainingCard";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -414,6 +415,9 @@ export default function Configuracoes() {
 
       {/* Transaction Form Fields Settings */}
       <TransactionFieldsCard />
+
+      <EvaTrainingCard />
+
 
       <Card className="border-destructive/30">
         <CardHeader>
