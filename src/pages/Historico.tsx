@@ -57,7 +57,7 @@ export default function Historico() {
       setTotalCount(count ?? 0);
 
       // Fetch user details for the logs
-      const userIds = Array.from(new Set<string>((data || []).map((r: any) => r.user_id as string)));
+      const userIds: string[] = Array.from(new Set<string>(((data || []) as any[]).map((r) => String(r.user_id))));
       let userDetails: Record<string, { name: string; email: string }> = {};
       
       if (userIds.length > 0) {
