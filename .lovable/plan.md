@@ -23,7 +23,7 @@ Na tela de novo lançamento/edição, o botão Salvar só funciona quando estes 
   - Dinheiro: carteira obrigatória
 - Parcelado: número de parcelas de 2 para cima
 
-Cadastro de cartão de crédito: a "conta que paga a fatura" passa a ser obrigatória. Um cartão sem essa conta não pode ser escolhido num lançamento até ser completado, e o sistema mostra um aviso com o atalho para editar o cartão.
+Causa do erro anterior: os cartões já têm conta obrigatória. O que acontecia é que os lançamentos de cartão ficavam salvos sem a conta. A partir de agora, todo lançamento de cartão recebe automaticamente a conta do cartão, e não é possível salvar sem ela.
 
 A mesma regra também vale para o banco de dados, para que lançamentos vindos do WhatsApp, da importação ou de integrações não entrem sem conta, cartão ou carteira. Se a EVA no WhatsApp não descobrir qual é a conta, ela pergunta antes de lançar, em vez de salvar incompleto. Na importação, as linhas incompletas ficam destacadas e bloqueiam a finalização até serem corrigidas.
 
