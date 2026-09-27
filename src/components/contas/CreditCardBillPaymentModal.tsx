@@ -62,6 +62,8 @@ interface CreditCardBillPaymentModalProps {
   onSuccess: () => void;
   /** When set, opens the modal already positioned on that bill cycle instead of auto-picking the earliest pending. */
   initialReferenceDate?: Date | null;
+  /** IDs shown in the caller's list for this bill; items missing are flagged as "fora da lista". */
+  listedIds?: string[] | null;
 }
 
 type PaymentType = "full" | "partial" | "extra";
@@ -123,6 +125,17 @@ export function CreditCardBillPaymentModal({
   const billTotal = useMemo(
     () => billTransactions.reduce((sum, t) => sum + (t.type === "receita" ? -t.amount : t.amount), 0),
     [billTransactions]
+  );
+
+  const outsideList = useMemo(() => {
+    if (!listedIds) return [] as Transaction[];
+    const set = new Set(listedIds);
+    return billTransactions.filter((t) => !set.has(t.id));
+  }, [billTransactions, listedIds]);
+  const outsideIds = useMemo(() => new Set(outsideList.map((t) => t.id)), [outsideList]);
+  const outsideTotal = useMemo(
+    () => outsideList.reduce((s, t) => s + (t.type === "receita" ? -t.amount : t.amount), 0),
+    [outsideList]
   );
 
   const pendingTotal = useMemo(
@@ -489,14 +502,26 @@ export function CreditCardBillPaymentModal({
               </div>
             ) : (
               <>
+                {outsideList.length > 0 && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-foreground">
+                    <p className="font-semibold">Diferença entre a lista e a fatura</p>
+                    <p className="mt-1 text-muted-foreground">
+                      A lista mostra {formatCurrency(billTotal - outsideTotal)} ({billTransactions.length - outsideList.length} itens), mas a fatura completa tem {formatCurrency(billTotal)} ({billTransactions.length} itens).
+                      {" "}{outsideList.length} lançamento{outsideList.length !== 1 ? "s" : ""} ({formatCurrency(outsideTotal)}) não aparece{outsideList.length !== 1 ? "m" : ""} na lista pelo filtro atual. Eles estão marcados abaixo como "Fora da lista".
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-1 max-h-48 overflow-y-auto">
-                  {billTransactions.map((t) => (
+                  {[...billTransactions].sort((a, b) => Number(outsideIds.has(b.id)) - Number(outsideIds.has(a.id))).map((t) => (
                     <div
                       key={t.id}
-                      className="flex items-center justify-between py-1.5 px-2 rounded text-sm hover:bg-muted/50"
+                      className={`flex items-center justify-between py-1.5 px-2 rounded text-sm hover:bg-muted/50 ${outsideIds.has(t.id) ? "bg-destructive/10" : ""}`}
                     >
                       <div className="flex-1 min-w-0">
                         <p className="truncate font-medium text-foreground">
+                          {outsideIds.has(t.id) && (
+                            <Badge variant="destructive" className="mr-1.5 text-[10px]">Fora da lista</Badge>
+                          )}
                           {t.description}
                         </p>
                         <p className="text-xs text-muted-foreground">
