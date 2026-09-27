@@ -86,9 +86,9 @@ export function WhatsAppCard() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Erro ao enviar teste");
       
-      toast.success("Mensagem de teste enviada!");
+      toast.success("Mensagens enviadas com sucesso!");
     } catch (err: any) {
-      toast.error(err.message || "Erro ao enviar mensagem de teste");
+      toast.error(err.message || "Erro ao enviar mensagens");
     } finally {
       setTesting(false);
     }
@@ -184,7 +184,7 @@ export function WhatsAppCard() {
             <div className="flex items-center justify-between pt-2">
               <Button onClick={handleTestReminder} disabled={testing || !whatsappNumber} variant="outline" size="sm" className="gap-2">
                 {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Envio de Teste
+                Enviar agora
               </Button>
 
               <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1">

@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
       .from("transactions")
       .select("id, description, amount, payment_date")
       .eq("user_id", profile.id)
-      .eq("type", "expense")
+      .eq("type", "despesa")
       .eq("status", "pending")
       .in("payment_date", targetDates);
 
