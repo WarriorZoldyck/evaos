@@ -59,7 +59,7 @@ export default function Lancamentos() {
   const [liquidateTarget, setLiquidateTarget] = useState<Transaction | null>(null);
   const [detailTarget, setDetailTarget] = useState<Transaction | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>("todos");
-  const [billPaymentCard, setBillPaymentCard] = useState<{ card: any; referenceDate?: Date } | null>(null);
+  const [billPaymentCard, setBillPaymentCard] = useState<{ card: any; referenceDate?: Date; listedIds?: string[] } | null>(null);
   const [bulkDeleteIds, setBulkDeleteIds] = useState<string[] | null>(null);
   const [moveContextIds, setMoveContextIds] = useState<string[] | null>(null);
 
@@ -392,7 +392,12 @@ export default function Lancamentos() {
 
                   const d = new Date(t.payment_date + "T12:00:00");
                   const ref = new Date(d.getFullYear(), d.getMonth(), 1);
-                  setBillPaymentCard({ card: targetCard, referenceDate: ref });
+                  const family = new Set([targetCard.id, ...creditCards.filter((c: any) => c.parent_card_id === targetCard.id).map((c) => c.id)]);
+                  const monthKey = t.payment_date.slice(0, 7);
+                  const listedIds = transactions
+                    .filter((x) => x.credit_card_id && family.has(x.credit_card_id) && x.payment_date?.slice(0, 7) === monthKey)
+                    .map((x) => x.id);
+                  setBillPaymentCard({ card: targetCard, referenceDate: ref, listedIds });
                   return;
                 }
               }
@@ -570,6 +575,7 @@ export default function Lancamentos() {
         open={!!billPaymentCard}
         creditCard={billPaymentCard?.card ?? null}
         initialReferenceDate={billPaymentCard?.referenceDate}
+        listedIds={billPaymentCard?.listedIds ?? null}
         onClose={() => setBillPaymentCard(null)}
         onSuccess={() => {
           setBillPaymentCard(null);
