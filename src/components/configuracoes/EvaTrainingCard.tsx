@@ -22,7 +22,7 @@ export function EvaTrainingCard() {
   }, [effectiveUserId, selectedCompanyId, isPersonal]);
 
   const fetchFiles = async () => {
-    let q = supabase.from("eva_knowledge").select("*").eq("user_id", effectiveUserId);
+    let q = (supabase as any).from("eva_knowledge").select("*").eq("user_id", effectiveUserId);
     
     if (isPersonal) {
       q = q.is("company_id", null);
@@ -54,7 +54,7 @@ export function EvaTrainingCard() {
       if (uploadError) throw uploadError;
 
       // 2. Add to table
-      const { error: dbError } = await supabase.from("eva_knowledge").insert({
+      const { error: dbError } = await (supabase as any).from("eva_knowledge").insert({
         user_id: effectiveUserId,
         company_id: selectedCompanyId || null,
         file_name: file.name,
@@ -78,7 +78,7 @@ export function EvaTrainingCard() {
 
   const handleDelete = async (id: string, path: string) => {
     try {
-      await supabase.from("eva_knowledge").delete().eq("id", id);
+      await (supabase as any).from("eva_knowledge").delete().eq("id", id);
       await supabase.storage.from("eva-knowledge").remove([path]);
       setFiles(files.filter(f => f.id !== id));
       toast.success("Arquivo removido.");
