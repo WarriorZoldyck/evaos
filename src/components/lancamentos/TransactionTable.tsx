@@ -68,6 +68,7 @@ interface TransactionTableProps {
   onReconcileMultiple?: (ids: string[], reconciled: boolean) => void;
   onMoveContext?: (ids: string[]) => void;
   onUndoPayment?: (ids: string[]) => void;
+  typeFilterActive?: boolean;
 
   onLiquidate: (transaction: Transaction) => void;
   onViewDetails: (transaction: Transaction) => void;
@@ -409,6 +410,7 @@ function CardGroupHeader({
   closed = null,
   onClose,
   onReopen,
+  typeFilterActive = false,
 }: {
   group: { cardName: string; totalAmount: number; pendingCount: number };
   isOpen: boolean;
@@ -420,6 +422,7 @@ function CardGroupHeader({
   closed?: ClosedCycle | null;
   onClose?: () => void;
   onReopen?: () => void;
+  typeFilterActive?: boolean;
 }) {
   const isPaid = group.pendingCount === 0 && txCount > 0;
   const isFullyReconciled = reconciledCount > 0 && reconciledCount === txCount;
@@ -465,6 +468,11 @@ function CardGroupHeader({
         }`}>
           {group.totalAmount > 0 ? "- " : group.totalAmount < 0 ? "+ " : ""}{formatCurrency(Math.abs(group.totalAmount))}
         </span>
+        {typeFilterActive && (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-tight" title="Com Entradas/Saídas ativo, parte dos lançamentos da fatura fica oculta. Use 'Tudo' ou 'Pagar Fatura' para ver o total real.">
+            Filtro ativo — total parcial
+          </p>
+        )}
       </div>
 
       {/* Pill de conciliação — mesmo estilo dos lançamentos normais */}
@@ -602,6 +610,7 @@ export function TransactionTable({
   onReconcileMultiple,
   onMoveContext,
   onUndoPayment,
+  typeFilterActive = false,
 
   onLiquidate,
   onViewDetails,
@@ -1011,6 +1020,7 @@ export function TransactionTable({
                   <CardGroupHeader
                     group={{ cardName: group.cardName, totalAmount: group.totalAmount, pendingCount: group.pendingCount }}
                     isOpen={isOpen}
+                    typeFilterActive={typeFilterActive}
                     txCount={group.transactions.length}
                     reconciledCount={group.reconciledCount || 0}
                     closed={group.underlyingCardId && group.cycleKey ? isCardCycleClosed(group.underlyingCardId, group.cycleKey) : null}
@@ -1065,6 +1075,7 @@ export function TransactionTable({
                 <CardGroupHeader
                   group={{ cardName: hierarchy.parentCardName, totalAmount: hierarchy.totalAmount, pendingCount: hierarchy.pendingCount }}
                   isOpen={isParentOpen}
+                  typeFilterActive={typeFilterActive}
                   txCount={hierarchy.allTransactions.length}
                   reconciledCount={hierarchy.allTransactions.filter((t) => t.is_reconciled).length}
                   onToggle={() => toggleCard(`parent-${hierarchy.parentCardId}`)}
@@ -1101,7 +1112,7 @@ export function TransactionTable({
                         )}
                         <div className="flex-1">
                           <CardGroupHeader
-                            group={{ cardName: childGroup.cardName, totalAmount: childGroup.totalAmount, pendingCount: 0 }}
+                            group={{ cardName: childGroup.cardName, totalAmount: childGroup.totalAmount, pendingCount: childGroup.transactions.filter((tx) => tx.status === "Pendente").length }}
                             isOpen={isChildOpen}
                             txCount={childGroup.transactions.length}
                             reconciledCount={childGroup.reconciledCount || 0}
@@ -1113,7 +1124,11 @@ export function TransactionTable({
                             }}
                             onToggle={() => toggleCard(`child-${childGroup.cardId}`)}
                             indented
-                            onLiquidate={() => {}}
+                            typeFilterActive={typeFilterActive}
+                            onLiquidate={() => {
+                              const firstPending = childGroup.transactions.find((tx) => tx.status === "Pendente");
+                              if (firstPending) onLiquidate(firstPending);
+                            }}
                           />
                         </div>
                       </div>
