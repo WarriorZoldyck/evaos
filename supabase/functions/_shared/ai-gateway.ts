@@ -23,22 +23,22 @@ export function getAiConfig(overrideApiKey?: string): AiConfig {
   // Check override or specific environment variables
   const geminiKey =
     (overrideApiKey && overrideApiKey.startsWith("AIza")) ? overrideApiKey :
-    (Deno.env.get("GEMINI_API_KEY") ||
-     Deno.env.get("GOOGLE_API_KEY") ||
-     Deno.env.get("GOOGLE_GENAI_API_KEY") ||
-     "").trim();
+      (Deno.env.get("GEMINI_API_KEY") ||
+        Deno.env.get("GOOGLE_API_KEY") ||
+        Deno.env.get("GOOGLE_GENAI_API_KEY") ||
+        "").trim();
 
   const openAiKey =
     (overrideApiKey && overrideApiKey.startsWith("sk-") && !overrideApiKey.startsWith("sk-or-")) ? overrideApiKey :
-    (Deno.env.get("OPENAI_API_KEY") || "").trim();
+      (Deno.env.get("OPENAI_API_KEY") || "").trim();
 
   const openRouterKey =
     (overrideApiKey && overrideApiKey.startsWith("sk-or-")) ? overrideApiKey :
-    (Deno.env.get("OPENROUTER_API_KEY") || "").trim();
+      (Deno.env.get("OPENROUTER_API_KEY") || "").trim();
 
   const groqKey =
     (overrideApiKey && overrideApiKey.startsWith("gsk_")) ? overrideApiKey :
-    (Deno.env.get("GROQ_API_KEY") || "").trim();
+      (Deno.env.get("GROQ_API_KEY") || "").trim();
 
   const genericKey = (Deno.env.get("AI_API_KEY") || overrideApiKey || "").trim();
 
@@ -158,8 +158,8 @@ async function callGeminiNative(options: AiRequestOptions, config: AiConfig): Pr
           } else if (fileData) {
             const mimeType = item.file.filename?.endsWith(".pdf") ? "application/pdf"
               : item.file.filename?.endsWith(".ogg") ? "audio/ogg"
-              : item.file.filename?.endsWith(".mp3") ? "audio/mp3"
-              : "application/pdf";
+                : item.file.filename?.endsWith(".mp3") ? "audio/mp3"
+                  : "application/pdf";
             parts.push({
               inlineData: {
                 mimeType,

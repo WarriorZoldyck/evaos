@@ -1337,6 +1337,8 @@ export type Database = {
           transaction_form_fields: Json | null
           updated_at: string | null
           whatsapp_number: string | null
+          whatsapp_reminders_enabled: boolean | null
+          whatsapp_reminders_days: number[] | null
         }
         Insert: {
           avatar_url?: string | null
@@ -1346,6 +1348,8 @@ export type Database = {
           transaction_form_fields?: Json | null
           updated_at?: string | null
           whatsapp_number?: string | null
+          whatsapp_reminders_enabled?: boolean | null
+          whatsapp_reminders_days?: number[] | null
         }
         Update: {
           avatar_url?: string | null
@@ -1355,6 +1359,8 @@ export type Database = {
           transaction_form_fields?: Json | null
           updated_at?: string | null
           whatsapp_number?: string | null
+          whatsapp_reminders_enabled?: boolean | null
+          whatsapp_reminders_days?: number[] | null
         }
         Relationships: []
       }
