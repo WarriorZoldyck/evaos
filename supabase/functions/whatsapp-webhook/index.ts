@@ -3623,12 +3623,20 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
 
       // --- Resolve subcategory_id ---
       if (!subcategoryValue && aiParsed.subcategory_id && matchedCategory) {
-        const subMatch = contextCategories.find(
-          (c) => c.id === aiParsed.subcategory_id && c.parent_id === matchedCategory!.id
-        );
+        const subMatch = contextCategories.find((c) => c.id === aiParsed.subcategory_id);
         if (subMatch) {
-          subcategoryValue = subMatch.id;
-          subcategoryLabel = subMatch.name;
+          if (subMatch.parent_id === matchedCategory!.id) {
+            subcategoryValue = subMatch.id;
+            subcategoryLabel = subMatch.name;
+          } else {
+            const intermediateParent = contextCategories.find((c) => c.id === subMatch.parent_id);
+            if (intermediateParent && intermediateParent.parent_id === matchedCategory!.id) {
+              subcategoryValue = intermediateParent.id;
+              subcategoryLabel = intermediateParent.name;
+              subcategory2Value = subMatch.id;
+              subcategory2Label = subMatch.name;
+            }
+          }
         }
       }
       if (!subcategoryValue && aiParsed.subcategory && matchedCategory) {
@@ -3641,6 +3649,22 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         if (subMatch) {
           subcategoryValue = subMatch.id;
           subcategoryLabel = subMatch.name;
+        } else {
+          const level2Children = contextCategories.filter((c) => c.parent_id === matchedCategory!.id);
+          for (const l2 of level2Children) {
+            const l3Match = contextCategories.find(
+              (c) => c.parent_id === l2.id && c.name.toLowerCase() === parsedSubName
+            ) || contextCategories.find(
+              (c) => c.parent_id === l2.id && c.name.toLowerCase().includes(parsedSubName)
+            );
+            if (l3Match) {
+              subcategoryValue = l2.id;
+              subcategoryLabel = l2.name;
+              subcategory2Value = l3Match.id;
+              subcategory2Label = l3Match.name;
+              break;
+            }
+          }
         }
       }
 
