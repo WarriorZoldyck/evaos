@@ -323,7 +323,11 @@ export function pickBestMatch(
   // Não linka automaticamente — o UI mostra como "provável, confirmar".
   const exactValueMatches = scored.filter((s) => s.tier === "exact");
   if (exactValueMatches.length === 1 && top.tier === "exact") {
-    return { ...top, suggested: true };
+    // Apenas sugerimos se houver pelo menos ALGUMA similaridade ou contato,
+    // para evitar "provável" em lançamentos não relacionados (ex: 50 reais de um restaurante e 50 de um Uber).
+    if (top.similarity > 0 || top.contactMatched) {
+      return { ...top, suggested: true };
+    }
   }
   return null;
 }

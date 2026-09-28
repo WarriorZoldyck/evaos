@@ -373,7 +373,11 @@ function SeriesCard({
   const isReceita = first.type === "receita";
   const total = items.reduce((s, i) => s + i.amount, 0);
   const baseDesc = first.description.replace(/\s*\(\d+\/\d+\)\s*$/, "");
-  const categoryName = getCategoryName(first.category);
+  const categoryName = [
+    getCategoryName(first.category),
+    getCategoryName(first.subcategory),
+    getCategoryName(first.subcategory2),
+  ].filter(Boolean).join(" > ");
   const accountName = getAccountName(first);
 
   const sourceIcon = first.source === "whatsapp" ? MessageSquare : first.source === "email" ? Mail : Upload;
@@ -1073,7 +1077,11 @@ export default function AnalisesEva() {
           isApproving={isApproving}
           isRejecting={isRejecting}
           isReconciling={reconcilingId === g.item.id}
-          categoryName={getCategoryName(g.item.category)}
+          categoryName={[
+            getCategoryName(g.item.category),
+            getCategoryName(g.item.subcategory),
+            getCategoryName(g.item.subcategory2),
+          ].filter(Boolean).join(" > ")}
           accountName={getAccountName(g.item)}
           highlighted={highlightedId === g.item.id}
         />

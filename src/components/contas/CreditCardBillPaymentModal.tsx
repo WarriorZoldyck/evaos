@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCategories } from "@/hooks/useCategories";
+import { CategorySelectWithCreate } from "@/components/lancamentos/CategorySelectWithCreate";
 import {
   Dialog,
   DialogContent,
@@ -67,7 +69,7 @@ interface CreditCardBillPaymentModalProps {
 }
 
 type PaymentType = "full" | "partial" | "extra";
-type PartialAction = "roll_next" | "roll_interest" | "create_standalone";
+type PartialAction = "roll_next" | "roll_interest" | "create_standalone" | "discount";
 type ExtraAction = "credit_next" | "just_register";
 type Step = "review" | "payment" | "difference";
 
@@ -122,6 +124,9 @@ export function CreditCardBillPaymentModal({
   const [partialAction, setPartialAction] = useState<PartialAction>("roll_next");
   const [extraAction, setExtraAction] = useState<ExtraAction>("credit_next");
   const [interestRate, setInterestRate] = useState("14");
+  const [discountCategory, setDiscountCategory] = useState("");
+
+  const { categories } = useCategories();
 
   const billTotal = useMemo(
     () => billTransactions.reduce((sum, t) => sum + (t.type === "receita" ? -t.amount : t.amount), 0),
@@ -278,6 +283,7 @@ export function CreditCardBillPaymentModal({
       setPartialAction("roll_next");
       setExtraAction("credit_next");
       setInterestRate("14");
+      setDiscountCategory("");
     }
   }, [open, creditCard]);
 
@@ -389,6 +395,20 @@ export function CreditCardBillPaymentModal({
             credit_card_id: creditCard.id,
             notes: `Valor não pago da fatura de ${format(referenceDate, "MMMM/yyyy", { locale: ptBR })}`,
           });
+        } else if (partialAction === "discount") {
+          await supabase.from("transactions").insert({
+            user_id: effectiveUserId,
+            company_id: isPersonal ? null : selectedCompanyId,
+            type: "receita" as const,
+            description: `Desconto na fatura ${creditCard.name}`,
+            amount: remainder,
+            payment_date: paymentDate,
+            competence_date: paymentDate,
+            status: "Pago" as const,
+            category: discountCategory || "Desconto",
+            bank_account_id: accountId || null,
+            notes: `Desconto concedido no pagamento da fatura de ${format(referenceDate, "MMMM/yyyy", { locale: ptBR })}`,
+          });
         }
       } else if (paymentType === "extra") {
         const credit = difference;
@@ -419,17 +439,17 @@ export function CreditCardBillPaymentModal({
           paymentType === "full"
             ? `Fatura de ${format(referenceDate, "MMMM/yyyy", { locale: ptBR })} liquidada integralmente.`
             : paymentType === "partial"
-            ? `Pago ${formatCurrency(paymentValue)} de ${formatCurrency(billTotal)}. ${
-                partialAction === "roll_next"
-                  ? "Saldo rolado para próxima fatura."
-                  : partialAction === "roll_interest"
+              ? `Pago ${formatCurrency(paymentValue)} de ${formatCurrency(billTotal)}. ${partialAction === "roll_next"
+                ? "Saldo rolado para próxima fatura."
+                : partialAction === "roll_interest"
                   ? "Saldo com juros rolado para próxima fatura."
-                  : "Lançamento avulso criado com o saldo."
+                  : partialAction === "create_standalone"
+                    ? "Lançamento avulso criado com o saldo."
+                    : "Desconto registrado com sucesso."
               }`
-            : `Pago ${formatCurrency(paymentValue)}. ${
-                extraAction === "credit_next"
-                  ? "Crédito excedente adicionado à próxima fatura."
-                  : "Pagamento registrado."
+              : `Pago ${formatCurrency(paymentValue)}. ${extraAction === "credit_next"
+                ? "Crédito excedente adicionado à próxima fatura."
+                : "Pagamento registrado."
               }`,
       });
 
@@ -489,6 +509,7 @@ export function CreditCardBillPaymentModal({
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
 
 
+
         {/* Step: Review */}
         {step === "review" && (
           <div className="space-y-4">
@@ -545,259 +566,285 @@ export function CreditCardBillPaymentModal({
                         <span
                           className={`font-mono text-sm ${
                             t.type === "receita"
+
                               ? "text-emerald-600 dark:text-emerald-400"
                               : "text-foreground"
-                          }`}
-                        >
-                          {t.type === "receita" ? "+" : "-"}
-                          {formatCurrency(t.amount)}
-                        </span>
+                              }`}
+                          >
+                            {t.type === "receita" ? "+" : "-"}
+                            {formatCurrency(t.amount)}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-
-                <Separator />
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Total da Fatura</p>
-                    <p className="text-xs text-muted-foreground">
-                      {pendingCount} pendente{pendingCount !== 1 ? "s" : ""}
-                      {paidCount > 0 && `, ${paidCount} pago${paidCount !== 1 ? "s" : ""}`}
-                    </p>
+                    ))}
                   </div>
-                  <span className="text-lg font-bold font-mono text-foreground">
-                    {formatCurrency(billTotal)}
+
+                  <Separator />
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Total da Fatura</p>
+                      <p className="text-xs text-muted-foreground">
+                        {pendingCount} pendente{pendingCount !== 1 ? "s" : ""}
+                        {paidCount > 0 && `, ${paidCount} pago${paidCount !== 1 ? "s" : ""}`}
+                      </p>
+                    </div>
+                    <span className="text-lg font-bold font-mono text-foreground">
+                      {formatCurrency(billTotal)}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Step: Payment */}
+          {step === "payment" && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Saldo Pendente</span>
+                <span className="font-mono font-semibold">{formatCurrency(pendingTotal)}</span>
+              </div>
+
+
+              <div className="space-y-2">
+                <Label>Valor do Pagamento (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                />
+                {paymentType !== "full" && paymentValue > 0 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    {paymentType === "partial" ? (
+                      <Badge variant="outline" className="text-amber-600 border-amber-300">
+                        <AlertTriangle className="h-3 w-3 mr-1" />
+                        Pagamento parcial: faltam {formatCurrency(Math.abs(difference))}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+                        Pagamento excedente: +{formatCurrency(difference)}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Data de Pagamento</Label>
+                <Input
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Conta de Saída</Label>
+                <Select value={accountId} onValueChange={setAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Observações (opcional)</Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Anotações sobre o pagamento..."
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Step: Difference */}
+          {step === "difference" && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total da Fatura</span>
+                  <span className="font-mono">{formatCurrency(billTotal)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Valor Pago</span>
+                  <span className="font-mono">{formatCurrency(paymentValue)}</span>
+                </div>
+                <Separator />
+                <div className="flex justify-between text-sm font-semibold">
+                  <span>{paymentType === "partial" ? "Saldo Restante" : "Crédito Excedente"}</span>
+                  <span
+                    className={`font-mono ${paymentType === "partial"
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-emerald-600 dark:text-emerald-400"
+                      }`}
+                  >
+                    {formatCurrency(Math.abs(difference))}
                   </span>
                 </div>
-              </>
-            )}
-          </div>
-        )}
+              </div>
 
-        {/* Step: Payment */}
-        {step === "payment" && (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-border bg-muted/30 p-3 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Saldo Pendente</span>
-              <span className="font-mono font-semibold">{formatCurrency(pendingTotal)}</span>
-            </div>
+              {paymentType === "partial" && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold">
+                    O que fazer com os {formatCurrency(Math.abs(difference))} restantes?
+                  </Label>
+                  <RadioGroup
+                    value={partialAction}
+                    onValueChange={(v) => setPartialAction(v as PartialAction)}
+                    className="space-y-2"
+                  >
+                    <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
+                      <RadioGroupItem value="roll_next" id="roll_next" className="mt-0.5" />
+                      <div>
+                        <Label htmlFor="roll_next" className="text-sm font-medium cursor-pointer">
+                          Rolar para a próxima fatura
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          O saldo será adicionado à fatura do próximo mês, sem juros.
+                        </p>
+                      </div>
+                    </div>
 
+                    <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
+                      <RadioGroupItem value="roll_interest" id="roll_interest" className="mt-0.5" />
+                      <div className="flex-1">
+                        <Label
+                          htmlFor="roll_interest"
+                          className="text-sm font-medium cursor-pointer"
+                        >
+                          Rolar com juros (rotativo)
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          O saldo será adicionado à próxima fatura com juros.
+                        </p>
+                        {partialAction === "roll_interest" && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <Label className="text-xs shrink-0">Taxa de juros (%)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={interestRate}
+                              onChange={(e) => setInterestRate(e.target.value)}
+                              className="w-24 h-8 text-sm"
+                            />
+                            <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            <span className="text-xs font-mono font-semibold text-destructive">
+                              {formatCurrency(
+                                Math.round(
+                                  Math.abs(difference) * (1 + Number(interestRate) / 100) * 100
+                                ) / 100
+                              )}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
-            <div className="space-y-2">
-              <Label>Valor do Pagamento (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(e.target.value)}
-              />
-              {paymentType !== "full" && paymentValue > 0 && (
-                <div className="flex items-center gap-2 text-xs">
-                  {paymentType === "partial" ? (
-                    <Badge variant="outline" className="text-amber-600 border-amber-300">
-                      <AlertTriangle className="h-3 w-3 mr-1" />
-                      Pagamento parcial: faltam {formatCurrency(Math.abs(difference))}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-emerald-600 border-emerald-300">
-                      Pagamento excedente: +{formatCurrency(difference)}
-                    </Badge>
-                  )}
+                    <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
+                      <RadioGroupItem
+                        value="create_standalone"
+                        id="create_standalone"
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <Label
+                          htmlFor="create_standalone"
+                          className="text-sm font-medium cursor-pointer"
+                        >
+                          Criar lançamento avulso
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Um novo lançamento pendente será criado com o valor restante.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
+                      <RadioGroupItem value="discount" id="discount" className="mt-0.5" />
+                      <div className="flex-1">
+                        <Label htmlFor="discount" className="text-sm font-medium cursor-pointer">
+                          Registrar como desconto
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          O saldo será registrado como uma receita (desconto) para compensar a fatura.
+                        </p>
+                        {partialAction === "discount" && (
+                          <div className="mt-3">
+                            <Label className="text-xs mb-1.5 block">Categoria do Desconto</Label>
+                            <CategorySelectWithCreate
+                              categories={categories.map(c => ({ id: c.name, name: c.name }))}
+                              value={discountCategory}
+                              onChange={setDiscountCategory}
+                              placeholder="Selecione ou crie..."
+                              activeTab="receita"
+                              formCompanyId={isPersonal ? null : selectedCompanyId}
+                              onCategoryCreated={(id) => setDiscountCategory(id)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </RadioGroup>
+                </div>
+              )}
+
+              {paymentType === "extra" && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold">
+                    O que fazer com o crédito de {formatCurrency(difference)}?
+                  </Label>
+                  <RadioGroup
+                    value={extraAction}
+                    onValueChange={(v) => setExtraAction(v as ExtraAction)}
+                    className="space-y-2"
+                  >
+                    <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
+                      <RadioGroupItem value="credit_next" id="credit_next" className="mt-0.5" />
+                      <div>
+                        <Label htmlFor="credit_next" className="text-sm font-medium cursor-pointer">
+                          Crédito na próxima fatura
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          O valor excedente aparecerá como crédito na fatura seguinte.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
+                      <RadioGroupItem
+                        value="just_register"
+                        id="just_register"
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <Label
+                          htmlFor="just_register"
+                          className="text-sm font-medium cursor-pointer"
+                        >
+                          Apenas registrar o pagamento
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          O valor total pago será registrado, sem criar crédito automático.
+                        </p>
+                      </div>
+                    </div>
+                  </RadioGroup>
                 </div>
               )}
             </div>
-
-            <div className="space-y-2">
-              <Label>Data de Pagamento</Label>
-              <Input
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Conta de Saída</Label>
-              <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma conta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id}>
-                      {acc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Observações (opcional)</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Anotações sobre o pagamento..."
-                rows={2}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Step: Difference */}
-        {step === "difference" && (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total da Fatura</span>
-                <span className="font-mono">{formatCurrency(billTotal)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Valor Pago</span>
-                <span className="font-mono">{formatCurrency(paymentValue)}</span>
-              </div>
-              <Separator />
-              <div className="flex justify-between text-sm font-semibold">
-                <span>{paymentType === "partial" ? "Saldo Restante" : "Crédito Excedente"}</span>
-                <span
-                  className={`font-mono ${
-                    paymentType === "partial"
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-emerald-600 dark:text-emerald-400"
-                  }`}
-                >
-                  {formatCurrency(Math.abs(difference))}
-                </span>
-              </div>
-            </div>
-
-            {paymentType === "partial" && (
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">
-                  O que fazer com os {formatCurrency(Math.abs(difference))} restantes?
-                </Label>
-                <RadioGroup
-                  value={partialAction}
-                  onValueChange={(v) => setPartialAction(v as PartialAction)}
-                  className="space-y-2"
-                >
-                  <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
-                    <RadioGroupItem value="roll_next" id="roll_next" className="mt-0.5" />
-                    <div>
-                      <Label htmlFor="roll_next" className="text-sm font-medium cursor-pointer">
-                        Rolar para a próxima fatura
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        O saldo será adicionado à fatura do próximo mês, sem juros.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
-                    <RadioGroupItem value="roll_interest" id="roll_interest" className="mt-0.5" />
-                    <div className="flex-1">
-                      <Label
-                        htmlFor="roll_interest"
-                        className="text-sm font-medium cursor-pointer"
-                      >
-                        Rolar com juros (rotativo)
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        O saldo será adicionado à próxima fatura com juros.
-                      </p>
-                      {partialAction === "roll_interest" && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <Label className="text-xs shrink-0">Taxa de juros (%)</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={interestRate}
-                            onChange={(e) => setInterestRate(e.target.value)}
-                            className="w-24 h-8 text-sm"
-                          />
-                          <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground" />
-                          <span className="text-xs font-mono font-semibold text-destructive">
-                            {formatCurrency(
-                              Math.round(
-                                Math.abs(difference) * (1 + Number(interestRate) / 100) * 100
-                              ) / 100
-                            )}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
-                    <RadioGroupItem
-                      value="create_standalone"
-                      id="create_standalone"
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <Label
-                        htmlFor="create_standalone"
-                        className="text-sm font-medium cursor-pointer"
-                      >
-                        Criar lançamento avulso
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Um novo lançamento pendente será criado com o valor restante.
-                      </p>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-            )}
-
-            {paymentType === "extra" && (
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold">
-                  O que fazer com o crédito de {formatCurrency(difference)}?
-                </Label>
-                <RadioGroup
-                  value={extraAction}
-                  onValueChange={(v) => setExtraAction(v as ExtraAction)}
-                  className="space-y-2"
-                >
-                  <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
-                    <RadioGroupItem value="credit_next" id="credit_next" className="mt-0.5" />
-                    <div>
-                      <Label htmlFor="credit_next" className="text-sm font-medium cursor-pointer">
-                        Crédito na próxima fatura
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        O valor excedente aparecerá como crédito na fatura seguinte.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start space-x-3 rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
-                    <RadioGroupItem
-                      value="just_register"
-                      id="just_register"
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <Label
-                        htmlFor="just_register"
-                        className="text-sm font-medium cursor-pointer"
-                      >
-                        Apenas registrar o pagamento
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        O valor total pago será registrado, sem criar crédito automático.
-                      </p>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-            )}
-          </div>
-        )}
+          )}
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-2 border-t border-border p-4">

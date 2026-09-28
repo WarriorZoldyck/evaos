@@ -39,12 +39,23 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         day_disabled: "text-muted-foreground opacity-50",
         day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
         day_hidden: "invisible",
+        caption_dropdowns: "flex justify-center gap-1",
+        dropdown: "bg-transparent text-sm font-medium p-1 cursor-pointer hover:bg-accent rounded-md focus:outline-none appearance-none",
+        dropdown_month: "flex items-center",
+        dropdown_year: "flex items-center",
+        dropdown_icon: "hidden",
+        v8_dropdown: "bg-transparent text-sm font-medium p-1 cursor-pointer hover:bg-accent rounded-md focus:outline-none",
+        v8_dropdown_month: "flex items-center",
+        v8_dropdown_year: "flex items-center",
         ...classNames,
       }}
       components={{
         IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4" />,
         IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4" />,
       }}
+      captionLayout="dropdown-buttons"
+      fromYear={1990}
+      toYear={2100}
       {...props}
     />
   );

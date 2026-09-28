@@ -234,11 +234,16 @@ async function findMatchingPendingBoleto(
     const bigDiff = Math.abs(Number(c.amount) - params.amount) > Math.max(20, params.amount * 0.15);
     if (bigDiff) continue;
 
-    if (score >= 2) {
+    // Para considerar um candidato válido, a pontuação deve ser >= 2,
+    // E DEVE haver alguma correspondência de texto (fornecedor ou descrição).
+    // Caso contrário, lançamentos com mesmo valor na mesma semana dão match errado.
+    const isValidMatch = score >= 2 && (supplierMatch || descMatch);
+
+    if (isValidMatch) {
       if (!best || score > best.score) {
         best = { tx: c, supplierName: candSupplierName, score };
       }
-    } else if (score === 1) {
+    } else if (score >= 1) {
       near.push({ id: c.id, supplierMatch, amountMatch, descMatch, dateMatch, amount: c.amount });
     }
   }
