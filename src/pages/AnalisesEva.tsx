@@ -539,11 +539,27 @@ function groupPending(items: AIPendingTransaction[]): GroupedItem[] {
 
 export default function AnalisesEva() {
   const {
+    allTransactions = [],
     pendingTransactions, reviewedTransactions, duplicateClusters, pendingCount,
     isLoading, approve, reject, approveAll, rejectAll, updatePendingAsync,
     keepOne, keepAll, rejectCluster,
     isApproving, isRejecting,
   } = useAIPendingTransactions();
+
+  const historyEvents = useMemo(() => {
+    const events: { id: string; item: AIPendingTransaction; type: "created" | "approved" | "rejected"; date: string }[] = [];
+    for (const t of allTransactions) {
+      if (t.created_at) {
+        events.push({ id: `${t.id}_created`, item: t, type: "created", date: t.created_at });
+      }
+      if (t.status === "approved" || t.status === "rejected") {
+        if (t.reviewed_at) {
+          events.push({ id: `${t.id}_reviewed`, item: t, type: t.status, date: t.reviewed_at });
+        }
+      }
+    }
+    return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [allTransactions]);
 
   const { categories } = useCategories();
   const { bankAccounts: accounts, creditCards, wallets, cardTerminals } = useAccounts();
@@ -1169,28 +1185,35 @@ export default function AnalisesEva() {
         </TabsContent>
 
         <TabsContent value="historico" className="mt-4 space-y-3">
-          {reviewedTransactions.length === 0 ? (
+          {historyEvents.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Clock className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-                <p className="text-muted-foreground">Nenhum lançamento revisado ainda.</p>
+                <p className="text-muted-foreground">Nenhuma atividade no histórico ainda.</p>
               </CardContent>
             </Card>
           ) : (
-            reviewedTransactions.map((item) => (
-              <Card key={item.id} className="opacity-60">
+            historyEvents.map((event) => (
+              <Card key={event.id} className="opacity-80">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-sm">{item.description}</p>
+                      <p className="font-medium text-sm">
+                        {event.type === "created" && "Recebido: "}
+                        {event.type === "approved" && "Validado: "}
+                        {event.type === "rejected" && "Rejeitado: "}
+                        {event.item.description}
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        {fmt(item.amount)}
+                        {fmt(event.item.amount)}
                         {" · "}
-                        {item.reviewed_at ? format(parseISO(item.reviewed_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : ""}
+                        {format(parseISO(event.date), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                       </p>
                     </div>
-                    <Badge variant={item.status === "approved" ? "default" : "destructive"}>
-                      {item.status === "approved" ? "Aprovado" : "Rejeitado"}
+                    <Badge variant={event.type === "created" ? "outline" : event.type === "approved" ? "default" : "destructive"}>
+                      {event.type === "created" && "Criado"}
+                      {event.type === "approved" && "Aprovado"}
+                      {event.type === "rejected" && "Rejeitado"}
                     </Badge>
                   </div>
                 </CardContent>

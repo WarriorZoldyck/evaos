@@ -370,6 +370,7 @@ export function useAIPendingTransactions() {
   });
 
   return {
+    allTransactions: pendingTransactions,
     pendingTransactions: pending,
     reviewedTransactions: reviewed,
     duplicateClusters,
