@@ -414,7 +414,12 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <div className="space-y-1.5">
+                      {msg.audioUrl && (
+                        <audio controls src={msg.audioUrl} className="w-full max-w-[220px] h-8" />
+                      )}
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
                   )}
                 </div>
               </div>
