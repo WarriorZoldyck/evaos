@@ -1,0 +1,1 @@
+REVOKE ALL ON public.eva_knowledge FROM anon;
