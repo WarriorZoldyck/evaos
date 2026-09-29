@@ -29,12 +29,24 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<any>("auto");
   const [isSaved, setIsSaved] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { selectedCompanyId } = useCompany();
   const { canUseAI, refetch: refetchLimits } = usePlanLimits();
+
+  useEffect(() => {
+    return () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
 
   useEffect(() => {
     const cfg = getStoredAiConfig();
