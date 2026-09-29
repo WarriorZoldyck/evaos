@@ -47,6 +47,21 @@ serve(async (req) => {
   try {
     const { messages, companyId: requestedCompanyId } = await req.json();
 
+    // Extrai texto de mensagens multimodais (texto/imagem/áudio) sem quebrar áudio
+    const contentToText = (content: any): string => {
+      if (typeof content === "string") return content;
+      if (Array.isArray(content)) {
+        const texts = content
+          .filter((p: any) => p && (typeof p === "string" || p.type === "text"))
+          .map((p: any) => (typeof p === "string" ? p : p.text));
+        const hasAudio = content.some((p: any) => p?.type === "file" && p?.file);
+        const hasImage = content.some((p: any) => p?.type === "image_url");
+        const label = hasAudio ? "[áudio]" : hasImage ? "[imagem]" : "";
+        return [...texts, label].filter(Boolean).join(" ").trim();
+      }
+      return "";
+    };
+
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: "messages array is required" }), {
         status: 400,
@@ -440,12 +455,12 @@ ${historicalPatternsBlock}`;
       const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
       const result = await runAnalysis({
         apiKey: activeAiKey,
-        question: String(aiParsed.question || lastUser?.content || "").slice(0, 4000),
+        question: String(aiParsed.question || contentToText(lastUser?.content) || "").slice(0, 4000),
         dataBlock: analysisData.block,
         channel: "app",
         analysisType: aiParsed.analysis_type || null,
         targetAmount: Number(aiParsed.target_amount) || null,
-        history: messages.slice(-6).map((m: any) => ({ role: m.role, content: String(m.content || "") })),
+        history: messages.slice(-6).map((m: any) => ({ role: m.role, content: contentToText(m.content) })),
       });
 
       if (!result.ok) {
@@ -686,7 +701,7 @@ ${historicalPatternsBlock}`;
 
       // Get the original user message for reference
       const lastUserMsg = messages.filter((m: any) => m.role === "user").pop();
-      const originalMessage = typeof lastUserMsg?.content === "string" ? lastUserMsg.content : "[imagem]";
+      const originalMessage = contentToText(lastUserMsg?.content) || "[mídia]";
 
       if (installmentCount > 1 && installmentDetails && Array.isArray(installmentDetails)) {
         const seriesId = crypto.randomUUID();
@@ -1274,7 +1289,7 @@ ${historicalPatternsBlock}`;
     // Rede de segurança: se for pergunta (ou resposta evasiva), roda a análise com dados reais.
     {
       const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
-      const userText = String(lastUser?.content || "");
+      const userText = contentToText(lastUser?.content);
       const fm = String(aiParsed.friendly_message || "");
       const looksEvasive = /não consigo|nao consigo|depende de|reunir os dados|não tenho acesso|nao tenho acesso|análise complexa|analise complexa/i.test(fm);
       const looksAnalytical = /\?|quanto|qual|como|por que|porque|vale a pena|posso|preciso|margem|lucro|custo|faturar|líquido|liquido/i.test(userText);
@@ -1287,7 +1302,7 @@ ${historicalPatternsBlock}`;
           dataBlock: analysisData.block,
           channel: "app",
           analysisType: "diagnostico",
-          history: messages.slice(-6).map((m: any) => ({ role: m.role, content: String(m.content || "") })),
+          history: messages.slice(-6).map((m: any) => ({ role: m.role, content: contentToText(m.content) })),
         });
         if (result.ok) {
           return new Response(JSON.stringify({ reply: result.text, action: "analysis" }), {

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, ImagePlus, Loader2, Bot, Settings, Key, Check } from "lucide-react";
+import { X, Send, ImagePlus, Loader2, Bot, Settings, Key, Check, Mic, Square, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,10 @@ import { getStoredAiConfig, saveAiConfig, callDirectAi, detectProvider } from "@
 interface Message {
   role: "user" | "assistant";
   content: string;
+  audioUrl?: string;
 }
+
+const MAX_RECORD_SECONDS = 120;
 
 interface EvaChatPanelProps {
   open: boolean;
@@ -26,12 +29,24 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<any>("auto");
   const [isSaved, setIsSaved] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { selectedCompanyId } = useCompany();
   const { canUseAI, refetch: refetchLimits } = usePlanLimits();
+
+  useEffect(() => {
+    return () => {
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+      mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
 
   useEffect(() => {
     const cfg = getStoredAiConfig();
@@ -65,17 +80,24 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
     }, 1200);
   };
 
-  const sendMessage = async (text: string, imageBase64?: string) => {
-    if (!text.trim() && !imageBase64) return;
+  const sendMessage = async (text: string, imageBase64?: string, audioDataUrl?: string) => {
+    if (!text.trim() && !imageBase64 && !audioDataUrl) return;
 
-    const userContent: any = imageBase64
-      ? [
-          { type: "image_url", image_url: { url: imageBase64 } },
-          { type: "text", text: text || "Analise esta imagem e extraia informações financeiras." },
-        ]
-      : text;
+    const parts: any[] = [];
+    if (imageBase64) parts.push({ type: "image_url", image_url: { url: imageBase64 } });
+    if (audioDataUrl) parts.push({ type: "file", file: { filename: "audio.webm", file_data: audioDataUrl } });
+    if (text.trim()) parts.push({ type: "text", text });
+    if (audioDataUrl && !text.trim()) {
+      parts.push({ type: "text", text: "Transcreva este áudio e interprete como meu pedido (lançamento, consulta ou dúvida)." });
+    }
 
-    const userMsg: Message = { role: "user", content: text || "[Imagem enviada]" };
+    const userContent: any = parts.length > 0 ? parts : text;
+
+    const userMsg: Message = {
+      role: "user",
+      content: text || (audioDataUrl ? "🎤 Áudio enviado" : "[Imagem enviada]"),
+      audioUrl: audioDataUrl,
+    };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
@@ -122,6 +144,9 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
 
       // 2. If backend failed (credits exhausted / maintenance / no key), use Direct AI Provider
       if (!backendSuccess) {
+        if (audioDataUrl) {
+          throw new Error("O envio de áudio precisa do backend da EVA ativo. No momento ele está indisponível — tente novamente em instantes ou envie por texto/imagem.");
+        }
         if (!aiConfig.apiKey) {
           throw new Error(
             "Nenhuma chave de IA foi detectada no backend. Para conversar com a EVA, **clique no ícone de engrenagem ⚙️ acima** e insira sua chave da **Google Gemini**, **OpenAI**, **OpenRouter** ou **Groq**!"
@@ -152,6 +177,78 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
       setIsLoading(false);
       refetchLimits();
     }
+  };
+
+  const stopRecordingTracks = () => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+    setRecordSeconds(0);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : undefined;
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        audioChunksRef.current = [];
+        if (blob.size === 0) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const typedText = input;
+          setInput("");
+          sendMessage(typedText, undefined, dataUrl);
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = setInterval(() => {
+        setRecordSeconds((s) => {
+          if (s + 1 >= MAX_RECORD_SECONDS) {
+            stopRecordingAndSend();
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch (e) {
+      console.error("Mic error:", e);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "❌ Não consegui acessar o microfone. Verifique a permissão do navegador e tente novamente." },
+      ]);
+    }
+  };
+
+  const stopRecordingAndSend = () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop(); // onstop envia o áudio
+    }
+    stopRecordingTracks();
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.onstop = null;
+    }
+    stopRecordingTracks();
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -317,7 +414,12 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <div className="space-y-1.5">
+                      {msg.audioUrl && (
+                        <audio controls src={msg.audioUrl} className="w-full max-w-[220px] h-8" />
+                      )}
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -334,41 +436,81 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
 
           {/* Input */}
           <div className="border-t border-border/60 p-2 shrink-0">
-            <div className="flex items-end gap-1.5">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
-              >
-                <ImagePlus className="h-4 w-4" />
-              </Button>
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Digite sua mensagem..."
-                rows={1}
-                className="flex-1 resize-none bg-muted/50 border border-border/40 rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 max-h-24 overflow-y-auto"
-              />
-              <Button
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                onClick={() => sendMessage(input)}
-                disabled={isLoading || !input.trim()}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
+            {isRecording ? (
+              <div className="flex items-center gap-2 px-2 py-1.5">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+                </span>
+                <span className="text-sm font-medium text-red-600 tabular-nums">
+                  {String(Math.floor(recordSeconds / 60)).padStart(1, "0")}:{String(recordSeconds % 60).padStart(2, "0")}
+                </span>
+                <span className="text-xs text-muted-foreground flex-1">Gravando áudio...</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground"
+                  onClick={cancelRecording}
+                  title="Cancelar gravação"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  className="h-8 w-8 bg-red-500 hover:bg-red-600 text-white"
+                  onClick={stopRecordingAndSend}
+                  title="Parar e enviar"
+                >
+                  <Square className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-end gap-1.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading}
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={startRecording}
+                  disabled={isLoading}
+                  title="Gravar áudio"
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Digite sua mensagem..."
+                  rows={1}
+                  className="flex-1 resize-none bg-muted/50 border border-border/40 rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 max-h-24 overflow-y-auto"
+                />
+                <Button
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  onClick={() => sendMessage(input)}
+                  disabled={isLoading || !input.trim()}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </>
       )}
