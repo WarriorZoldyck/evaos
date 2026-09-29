@@ -1807,6 +1807,45 @@ export type Database = {
         }
         Relationships: []
       }
+      transaction_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          source: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          source?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          source?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           amount: number
@@ -2299,6 +2338,10 @@ export type Database = {
         Returns: {
           table_name: string
         }[]
+      }
+      log_import_batch: {
+        Args: { _count: number; _label: string; _owner: string; _total: number }
+        Returns: undefined
       }
       purge_old_hub_audit_log: { Args: never; Returns: number }
       subscription_access_ok: { Args: { _uid: string }; Returns: boolean }

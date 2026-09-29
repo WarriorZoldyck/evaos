@@ -44,9 +44,6 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         dropdown_month: "flex items-center",
         dropdown_year: "flex items-center",
         dropdown_icon: "hidden",
-        v8_dropdown: "bg-transparent text-sm font-medium p-1 cursor-pointer hover:bg-accent rounded-md focus:outline-none",
-        v8_dropdown_month: "flex items-center",
-        v8_dropdown_year: "flex items-center",
         ...classNames,
       }}
       components={{
