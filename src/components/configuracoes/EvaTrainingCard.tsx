@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { mapDatabaseError } from "@/lib/errorMapper";
 
 export function EvaTrainingCard() {
   const { user } = useAuth();
@@ -41,6 +42,17 @@ export function EvaTrainingCard() {
     if (!effectiveUserId) return;
 
     const file = e.target.files[0];
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("O arquivo é maior que 10 MB. Envie um arquivo menor.");
+      e.target.value = '';
+      return;
+    }
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (!["pdf", "txt", "csv", "docx"].includes(ext)) {
+      toast.error("Formato não suportado. Use PDF, TXT, CSV ou DOCX.");
+      e.target.value = '';
+      return;
+    }
     const fileExt = file.name.split('.').pop();
     const filePath = `${effectiveUserId}/${crypto.randomUUID()}.${fileExt}`;
 
@@ -54,22 +66,26 @@ export function EvaTrainingCard() {
       if (uploadError) throw uploadError;
 
       // 2. Add to table
-      const { error: dbError } = await (supabase as any).from("eva_knowledge").insert({
+      const { data: inserted, error: dbError } = await (supabase as any).from("eva_knowledge").insert({
         user_id: effectiveUserId,
         company_id: selectedCompanyId || null,
         file_name: file.name,
         file_type: file.type || "application/octet-stream",
         file_path: filePath,
-        status: "active"
-      });
+        status: "pending"
+      }).select("id").single();
 
       if (dbError) throw dbError;
 
-      toast.success("Arquivo enviado com sucesso. A EVA já pode usá-lo como base de conhecimento!");
+      toast.success("Arquivo enviado! A EVA está lendo o conteúdo...");
+      fetchFiles();
+      const { data: res } = await supabase.functions.invoke("process-knowledge-file", { body: { id: inserted.id } });
+      if (res?.ok) toast.success("Pronto! A EVA já usa este arquivo nas respostas.");
+      else toast.error(res?.error || "Não foi possível ler o arquivo.");
       fetchFiles();
     } catch (err: any) {
       console.error(err);
-      toast.error("Erro ao enviar arquivo: " + err.message);
+      toast.error("Não foi possível enviar o arquivo: " + (err?.code ? mapDatabaseError(err) : "tente novamente."));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -110,13 +126,13 @@ export function EvaTrainingCard() {
           <Input 
             id="knowledge-upload" 
             type="file" 
-            accept=".pdf,.txt,.csv,.doc,.docx" 
+            accept=".pdf,.txt,.csv,.docx" 
             className="hidden" 
             onChange={handleUpload}
             disabled={uploading}
           />
           <p className="text-xs text-muted-foreground mt-3">
-            Formatos suportados: PDF, TXT, CSV, DOC, DOCX.
+            Formatos suportados: PDF, TXT, CSV, DOCX (até 10 MB).
           </p>
         </div>
 
@@ -136,9 +152,15 @@ export function EvaTrainingCard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 dark:text-green-400 dark:bg-green-900/20 px-2 py-1 rounded-full">
-                      <CheckCircle2 className="h-3 w-3" /> Ativo
-                    </span>
+                    {file.status === "active" ? (
+                      <span className="flex items-center gap-1 text-xs text-primary bg-primary/10 px-2 py-1 rounded-full">
+                        <CheckCircle2 className="h-3 w-3" /> Ativo
+                      </span>
+                    ) : file.status === "error" ? (
+                      <span title={file.error || ""} className="text-xs text-destructive bg-destructive/10 px-2 py-1 rounded-full">Erro</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">Processando</span>
+                    )}
                     <Button variant="ghost" size="icon" onClick={() => handleDelete(file.id, file.file_path)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>

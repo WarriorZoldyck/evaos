@@ -4,6 +4,7 @@ import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCa
 import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading } from "../_shared/eva-analysis.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
 import { fetchAiCompletions, getAiConfig } from "../_shared/ai-gateway.ts";
+import { loadKnowledgeBlock } from "../_shared/eva-knowledge.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -350,7 +351,7 @@ ${historicalPatternsBlock}`;
       model: "gemini-pro-latest",
       max_tokens: 4096,
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: systemPrompt + (await loadKnowledgeBlock(supabase, userId)) },
         ...messages,
       ],
     });

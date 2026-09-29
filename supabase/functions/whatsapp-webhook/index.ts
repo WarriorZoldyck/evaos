@@ -1,3 +1,4 @@
+import { loadKnowledgeBlock } from "../_shared/eva-knowledge.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
@@ -2356,7 +2357,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         model: WHATSAPP_AI_MODEL,
         max_tokens: 2048,
         messages: [
-          { role: "system", content: effectiveSystemPrompt },
+          { role: "system", content: effectiveSystemPrompt + (await loadKnowledgeBlock(supabase, userId)) },
           ...conversationHistory,
           { role: "user", content: userContent },
         ],
