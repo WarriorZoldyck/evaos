@@ -80,17 +80,24 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
     }, 1200);
   };
 
-  const sendMessage = async (text: string, imageBase64?: string) => {
-    if (!text.trim() && !imageBase64) return;
+  const sendMessage = async (text: string, imageBase64?: string, audioDataUrl?: string) => {
+    if (!text.trim() && !imageBase64 && !audioDataUrl) return;
 
-    const userContent: any = imageBase64
-      ? [
-          { type: "image_url", image_url: { url: imageBase64 } },
-          { type: "text", text: text || "Analise esta imagem e extraia informações financeiras." },
-        ]
-      : text;
+    const parts: any[] = [];
+    if (imageBase64) parts.push({ type: "image_url", image_url: { url: imageBase64 } });
+    if (audioDataUrl) parts.push({ type: "file", file: { filename: "audio.webm", file_data: audioDataUrl } });
+    if (text.trim()) parts.push({ type: "text", text });
+    if (audioDataUrl && !text.trim()) {
+      parts.push({ type: "text", text: "Transcreva este áudio e interprete como meu pedido (lançamento, consulta ou dúvida)." });
+    }
 
-    const userMsg: Message = { role: "user", content: text || "[Imagem enviada]" };
+    const userContent: any = parts.length > 0 ? parts : text;
+
+    const userMsg: Message = {
+      role: "user",
+      content: text || (audioDataUrl ? "🎤 Áudio enviado" : "[Imagem enviada]"),
+      audioUrl: audioDataUrl,
+    };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
@@ -137,6 +144,9 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
 
       // 2. If backend failed (credits exhausted / maintenance / no key), use Direct AI Provider
       if (!backendSuccess) {
+        if (audioDataUrl) {
+          throw new Error("O envio de áudio precisa do backend da EVA ativo. No momento ele está indisponível — tente novamente em instantes ou envie por texto/imagem.");
+        }
         if (!aiConfig.apiKey) {
           throw new Error(
             "Nenhuma chave de IA foi detectada no backend. Para conversar com a EVA, **clique no ícone de engrenagem ⚙️ acima** e insira sua chave da **Google Gemini**, **OpenAI**, **OpenRouter** ou **Groq**!"
@@ -167,6 +177,78 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
       setIsLoading(false);
       refetchLimits();
     }
+  };
+
+  const stopRecordingTracks = () => {
+    if (recordTimerRef.current) {
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+    mediaRecorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+    mediaRecorderRef.current = null;
+    setIsRecording(false);
+    setRecordSeconds(0);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : undefined;
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        audioChunksRef.current = [];
+        if (blob.size === 0) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const typedText = input;
+          setInput("");
+          sendMessage(typedText, undefined, dataUrl);
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      recorder.start();
+      setIsRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = setInterval(() => {
+        setRecordSeconds((s) => {
+          if (s + 1 >= MAX_RECORD_SECONDS) {
+            stopRecordingAndSend();
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch (e) {
+      console.error("Mic error:", e);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "❌ Não consegui acessar o microfone. Verifique a permissão do navegador e tente novamente." },
+      ]);
+    }
+  };
+
+  const stopRecordingAndSend = () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop(); // onstop envia o áudio
+    }
+    stopRecordingTracks();
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.onstop = null;
+    }
+    stopRecordingTracks();
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
