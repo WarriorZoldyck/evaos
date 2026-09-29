@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { X, Send, ImagePlus, Loader2, Bot, Settings, Key, Check } from "lucide-react";
+import { X, Send, ImagePlus, Loader2, Bot, Settings, Key, Check, Mic, Square, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,10 @@ import { getStoredAiConfig, saveAiConfig, callDirectAi, detectProvider } from "@
 interface Message {
   role: "user" | "assistant";
   content: string;
+  audioUrl?: string;
 }
+
+const MAX_RECORD_SECONDS = 120;
 
 interface EvaChatPanelProps {
   open: boolean;
