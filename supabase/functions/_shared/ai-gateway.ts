@@ -133,7 +133,7 @@ async function callGeminiNative(options: AiRequestOptions, config: AiConfig): Pr
           parts.push({ text: item.text });
         } else if (item.type === "image_url" && item.image_url?.url) {
           const urlStr = item.image_url.url;
-          const match = urlStr.match(/^data:([^;]+);base64,(.+)$/s);
+          const match = urlStr.match(/^data:([^;,]+)(?:;[^,]*?)?;base64,(.+)$/s);
           if (match) {
             parts.push({
               inlineData: {
@@ -147,7 +147,7 @@ async function callGeminiNative(options: AiRequestOptions, config: AiConfig): Pr
           }
         } else if (item.type === "file" && item.file) {
           const fileData = item.file.file_data || "";
-          const match = fileData.match(/^data:([^;]+);base64,(.+)$/s);
+          const match = fileData.match(/^data:([^;,]+)(?:;[^,]*?)?;base64,(.+)$/s);
           if (match) {
             parts.push({
               inlineData: {
