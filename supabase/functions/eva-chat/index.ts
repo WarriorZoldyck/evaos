@@ -47,6 +47,21 @@ serve(async (req) => {
   try {
     const { messages, companyId: requestedCompanyId } = await req.json();
 
+    // Extrai texto de mensagens multimodais (texto/imagem/áudio) sem quebrar áudio
+    const contentToText = (content: any): string => {
+      if (typeof content === "string") return content;
+      if (Array.isArray(content)) {
+        const texts = content
+          .filter((p: any) => p && (typeof p === "string" || p.type === "text"))
+          .map((p: any) => (typeof p === "string" ? p : p.text));
+        const hasAudio = content.some((p: any) => p?.type === "file" && p?.file);
+        const hasImage = content.some((p: any) => p?.type === "image_url");
+        const label = hasAudio ? "[áudio]" : hasImage ? "[imagem]" : "";
+        return [...texts, label].filter(Boolean).join(" ").trim();
+      }
+      return "";
+    };
+
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: "messages array is required" }), {
         status: 400,
