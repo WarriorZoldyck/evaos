@@ -752,6 +752,45 @@ export type Database = {
           },
         ]
       }
+      eva_knowledge: {
+        Row: {
+          company_id: string | null
+          content: string | null
+          created_at: string
+          error: string | null
+          file_name: string
+          file_path: string
+          file_type: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          content?: string | null
+          created_at?: string
+          error?: string | null
+          file_name: string
+          file_path: string
+          file_type: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          content?: string | null
+          created_at?: string
+          error?: string | null
+          file_name?: string
+          file_path?: string
+          file_type?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       goal_movements: {
         Row: {
           amount: number
