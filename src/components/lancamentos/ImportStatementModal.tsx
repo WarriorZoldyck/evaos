@@ -2257,6 +2257,15 @@ export function ImportStatementModal({
         dateTo: dto,
         status: importType === "cartao" ? "Pendente" : "Pago",
       });
+      if (effectiveUserId) {
+        const total = transactions.reduce((s: number, t: any) => s + (Number(t.amount) || 0), 0);
+        (supabase as any).rpc("log_import_batch", {
+          _owner: effectiveUserId,
+          _count: transactions.length + linkOk,
+          _total: total,
+          _label: `${importType === "cartao" ? "Fatura" : "Extrato"} importado — ${transactions.length} criado(s), ${linkOk} conciliado(s)`,
+        }).then(() => {}, () => {});
+      }
       // Import concluído com sucesso — apagar snapshot persistido.
       clearSession();
       setStep("summary");
