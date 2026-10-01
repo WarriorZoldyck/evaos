@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { GraduationCap, Wallet, ArrowUpCircle, ArrowDownCircle, PlusCircle, Settings, History, CalendarIcon, ChevronLeft, Baby } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { GraduationCap, Wallet, ArrowUpCircle, ArrowDownCircle, PlusCircle, Settings, History, CalendarIcon, ChevronLeft, Baby, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,56 +8,117 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTransactions } from "@/hooks/useTransactions";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
+import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
-// Prefix to identify Kids wallets
+// Prefix used to identify Kids wallets
 const KIDS_WALLET_PREFIX = "Kids - ";
 
+interface KidsWallet {
+  id: string;
+  name: string;
+}
+
+// ─── Parent: only fetches wallets directly, never transactions ───
 export default function EvaKids() {
   const { user } = useAuth();
   const effectiveUserId = useEffectiveUserId();
-  
-  // We use this only to fetch the wallets initially
-  const { wallets, refetchAccounts } = useTransactions();
-  
+  const { selectedCompanyId, isPersonal } = useCompany();
+
+  const [kidsWallets, setKidsWallets] = useState<KidsWallet[]>([]);
+  const [walletsLoading, setWalletsLoading] = useState(true);
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
   const [isAddKidModalOpen, setIsAddKidModalOpen] = useState(false);
   const [newKidName, setNewKidName] = useState("");
-  
-  // Find all Kids wallets
-  const kidsWallets = wallets.filter(w => 
-    w.name.startsWith(KIDS_WALLET_PREFIX) || 
-    w.name.toLowerCase() === "conta kids" || 
-    w.name.toLowerCase() === "eva kids"
-  );
+
+  // Fetch only Kids wallets — no useTransactions, no transaction errors
+  const fetchKidsWallets = useCallback(async () => {
+    if (!effectiveUserId) return;
+    setWalletsLoading(true);
+
+    let query = supabase
+      .from("wallets")
+      .select("id, name")
+      .eq("user_id", effectiveUserId)
+      .like("name", `${KIDS_WALLET_PREFIX}%`)
+      .order("name");
+
+    if (isPersonal) {
+      query = query.is("company_id", null);
+    } else if (selectedCompanyId) {
+      query = query.eq("company_id", selectedCompanyId);
+    }
+
+    const { data, error } = await query;
+    if (!error && data) {
+      setKidsWallets(data);
+    }
+    setWalletsLoading(false);
+  }, [effectiveUserId, isPersonal, selectedCompanyId]);
+
+  useEffect(() => {
+    fetchKidsWallets();
+  }, [fetchKidsWallets]);
 
   const handleAddKid = async () => {
-    if (!newKidName.trim()) {
+    const name = newKidName.trim();
+    if (!name) {
       toast.error("Digite o nome da criança.");
       return;
     }
-    
     if (!effectiveUserId) return;
 
-    const walletName = `${KIDS_WALLET_PREFIX}${newKidName.trim()}`;
-    
-    const { data, error } = await supabase
-      .from("wallets")
-      .insert({ name: walletName, user_id: effectiveUserId })
-      .select()
-      .single();
-      
-    if (error) {
-      toast.error("Erro ao criar conta para a criança.");
+    const walletName = `${KIDS_WALLET_PREFIX}${name}`;
+
+    // Check if already exists
+    if (kidsWallets.some(w => w.name.toLowerCase() === walletName.toLowerCase())) {
+      toast.error("Já existe uma conta com esse nome.");
       return;
     }
-    
-    toast.success("Criança cadastrada com sucesso!");
+
+    const insertData: any = { name: walletName, user_id: effectiveUserId };
+    if (!isPersonal && selectedCompanyId) {
+      insertData.company_id = selectedCompanyId;
+    }
+
+    const { error } = await supabase.from("wallets").insert(insertData);
+    if (error) {
+      toast.error("Erro ao criar conta para a criança.");
+      console.error(error);
+      return;
+    }
+
+    toast.success(`Conta de ${name} criada com sucesso!`);
     setIsAddKidModalOpen(false);
     setNewKidName("");
-    refetchAccounts();
+    fetchKidsWallets();
+  };
+
+  const handleDeleteKid = async (wallet: KidsWallet) => {
+    // First check if there are transactions linked to this wallet
+    const { count } = await supabase
+      .from("transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("wallet_id", wallet.id);
+
+    if (count && count > 0) {
+      toast.error(`Não é possível excluir: existem ${count} lançamento(s) vinculado(s).`);
+      return;
+    }
+
+    const { error } = await supabase.from("wallets").delete().eq("id", wallet.id);
+    if (error) {
+      toast.error("Erro ao excluir conta.");
+      return;
+    }
+    toast.success("Conta excluída!");
+    fetchKidsWallets();
+  };
+
+  const getKidDisplayName = (wallet: KidsWallet) => {
+    return wallet.name.replace(KIDS_WALLET_PREFIX, "");
   };
 
   const selectedWallet = kidsWallets.find(w => w.id === selectedWalletId);
@@ -73,46 +134,73 @@ export default function EvaKids() {
       </div>
 
       {!selectedWalletId ? (
+        /* ── Kid Selection Screen ── */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-          {kidsWallets.map(wallet => (
-            <Card 
-              key={wallet.id} 
-              className="cursor-pointer hover:border-primary/50 transition-colors"
-              onClick={() => setSelectedWalletId(wallet.id)}
-            >
-              <CardContent className="p-6 flex flex-col items-center justify-center gap-4 text-center">
-                <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
-                  <Baby className="h-8 w-8 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">{wallet.name.replace(KIDS_WALLET_PREFIX, '').replace(/^(Conta |Eva )?Kids( - )?/i, 'Conta Kids')}</h3>
-                  <p className="text-sm text-muted-foreground">Conta Corrente</p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          
-          <Card 
-            className="cursor-pointer border-dashed hover:border-primary/50 transition-colors bg-muted/20 shadow-none"
-            onClick={() => setIsAddKidModalOpen(true)}
-          >
-            <CardContent className="p-6 flex flex-col items-center justify-center gap-4 text-center h-full min-h-[200px]">
-              <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center">
-                <PlusCircle className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <div>
-                <h3 className="font-medium">Cadastrar Criança</h3>
-                <p className="text-sm text-muted-foreground">Criar nova conta</p>
-              </div>
-            </CardContent>
-          </Card>
+          {walletsLoading ? (
+            <p className="text-sm text-muted-foreground col-span-full text-center py-12">Carregando...</p>
+          ) : (
+            <>
+              {kidsWallets.map(wallet => (
+                <Card
+                  key={wallet.id}
+                  className="cursor-pointer hover:border-primary/50 transition-colors group relative"
+                  onClick={() => setSelectedWalletId(wallet.id)}
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive z-10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteKid(wallet);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  <CardContent className="p-6 flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
+                      <Baby className="h-8 w-8 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg">{getKidDisplayName(wallet)}</h3>
+                      <p className="text-sm text-muted-foreground">Conta Corrente</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {/* Add Kid Card */}
+              <Card
+                className="cursor-pointer border-dashed hover:border-primary/50 transition-colors bg-muted/20 shadow-none"
+                onClick={() => setIsAddKidModalOpen(true)}
+              >
+                <CardContent className="p-6 flex flex-col items-center justify-center gap-4 text-center h-full min-h-[200px]">
+                  <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center">
+                    <PlusCircle className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium">Cadastrar Criança</h3>
+                    <p className="text-sm text-muted-foreground">Criar nova conta</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       ) : (
+        /* ── Kid Dashboard ── */
         <div className="space-y-6 mt-4">
           <Button variant="ghost" onClick={() => setSelectedWalletId(null)} className="gap-2 -ml-4">
             <ChevronLeft className="h-4 w-4" /> Voltar
           </Button>
-          {selectedWallet && <KidDashboard wallet={selectedWallet} effectiveUserId={effectiveUserId!} />}
+          {selectedWallet && (
+            <KidDashboard
+              key={selectedWallet.id}
+              wallet={selectedWallet}
+              effectiveUserId={effectiveUserId!}
+              displayName={getKidDisplayName(selectedWallet)}
+            />
+          )}
         </div>
       )}
 
@@ -128,11 +216,12 @@ export default function EvaKids() {
           <div className="py-4">
             <div className="space-y-2">
               <Label htmlFor="kidName">Nome da Criança</Label>
-              <Input 
-                id="kidName" 
-                placeholder="Ex: Joãozinho" 
+              <Input
+                id="kidName"
+                placeholder="Ex: Anna"
                 value={newKidName}
                 onChange={(e) => setNewKidName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddKid()}
               />
             </div>
           </div>
@@ -146,57 +235,56 @@ export default function EvaKids() {
   );
 }
 
-function KidDashboard({ wallet, effectiveUserId }: { wallet: any, effectiveUserId: string }) {
-  const { 
-    transactions, 
-    createTransaction, 
-    filters, 
-    setFilters, 
-    fetchTransactions 
-  } = useTransactions();
+// ─── Kid Dashboard: self-contained, fetches its own transactions ───
+function KidDashboard({
+  wallet,
+  effectiveUserId,
+  displayName,
+}: {
+  wallet: KidsWallet;
+  effectiveUserId: string;
+  displayName: string;
+}) {
+  type Tx = Tables<"transactions">;
 
-  const [allowance, setAllowance] = useState(50.00);
+  const [transactions, setTransactions] = useState<Tx[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [allowance, setAllowance] = useState(50.0);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'receita' | 'despesa'>('despesa');
+  const [modalType, setModalType] = useState<"receita" | "despesa">("despesa");
   const [formData, setFormData] = useState({
-    title: '',
-    amount: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
-    category: '',
-    paymentMethod: 'dinheiro'
+    title: "",
+    amount: "",
+    date: format(new Date(), "yyyy-MM-dd"),
+    category: "",
   });
 
-  // Set filter ONLY ONCE when component mounts
-  useEffect(() => {
-    setFilters(prev => {
-      if (prev.accountId === `wallet:${wallet.id}` && prev.dateFrom === "" && prev.dateTo === "") {
-        return prev;
-      }
-      return {
-        ...prev,
-        accountId: `wallet:${wallet.id}`,
-        dateFrom: "",
-        dateTo: "",
-        status: "todos"
-      };
-    });
-  }, [wallet.id, setFilters]);
+  const fetchKidsTransactions = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("wallet_id", wallet.id)
+      .order("payment_date", { ascending: false })
+      .order("created_at", { ascending: false });
 
-  const isFilterReady = filters.accountId === `wallet:${wallet.id}`;
+    if (!error && data) {
+      setTransactions(data);
+    }
+    setLoading(false);
+  }, [wallet.id]);
+
+  useEffect(() => {
+    fetchKidsTransactions();
+  }, [fetchKidsTransactions]);
 
   const balance = transactions.reduce((acc, curr) => {
-    return curr.type === 'receita' ? acc + curr.amount : acc - curr.amount;
+    return curr.type === "receita" ? acc + curr.amount : acc - curr.amount;
   }, 0);
 
-  const openModal = (type: 'receita' | 'despesa') => {
+  const openModal = (type: "receita" | "despesa") => {
     setModalType(type);
-    setFormData({
-      title: '',
-      amount: '',
-      date: format(new Date(), 'yyyy-MM-dd'),
-      category: '',
-      paymentMethod: 'dinheiro'
-    });
+    setFormData({ title: "", amount: "", date: format(new Date(), "yyyy-MM-dd"), category: "" });
     setIsModalOpen(true);
   };
 
@@ -205,37 +293,40 @@ function KidDashboard({ wallet, effectiveUserId }: { wallet: any, effectiveUserI
       toast.error("Preencha os campos obrigatórios.");
       return;
     }
-    
-    const amountVal = parseFloat(formData.amount.replace(',', '.'));
+
+    const amountVal = parseFloat(formData.amount.replace(",", "."));
     if (isNaN(amountVal) || amountVal <= 0) {
       toast.error("Insira um valor válido.");
       return;
     }
 
-    const success = await createTransaction({
+    const payload: TablesInsert<"transactions"> = {
       user_id: effectiveUserId,
       type: modalType,
       description: formData.title,
       amount: amountVal,
       payment_date: formData.date,
       competence_date: formData.date,
-      category: formData.category || 'Geral',
-      status: 'Pago',
+      category: formData.category || "Geral",
+      status: "Pago",
       wallet_id: wallet.id,
-    });
+    };
 
-    if (success) {
-      setIsModalOpen(false);
-      fetchTransactions();
+    const { error } = await supabase.from("transactions").insert(payload);
+    if (error) {
+      toast.error("Erro ao salvar lançamento.");
+      console.error(error);
+      return;
     }
-  };
 
-  const displayName = wallet.name.replace(KIDS_WALLET_PREFIX, '').replace(/^(Conta |Eva )?Kids( - )?/i, 'Conta Kids');
+    toast.success("Lançamento salvo!");
+    setIsModalOpen(false);
+    fetchKidsTransactions();
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
-      
-      {/* Main Balance Card */}
+      {/* Balance */}
       <Card className="md:col-span-2 border-primary/20 shadow-premium glow-primary-sm bg-gradient-primary-soft relative overflow-hidden">
         <div className="absolute top-0 right-0 p-4 opacity-10">
           <Wallet className="w-32 h-32" />
@@ -243,21 +334,29 @@ function KidDashboard({ wallet, effectiveUserId }: { wallet: any, effectiveUserI
         <CardHeader>
           <CardTitle className="text-primary flex items-center gap-2">
             <Wallet className="h-5 w-5" />
-            {displayName}
+            Conta de {displayName}
           </CardTitle>
           <CardDescription>Saldo disponível para gastos</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-4xl font-bold font-display text-primary transition-all duration-300">
-            {isFilterReady ? `R$ ${balance.toFixed(2).replace('.', ',')}` : 'Carregando...'}
+            {loading ? "Carregando..." : `R$ ${balance.toFixed(2).replace(".", ",")}`}
           </div>
-          
           <div className="mt-8 flex gap-4 relative z-10">
-            <Button onClick={() => openModal('receita')} className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2" disabled={!isFilterReady}>
+            <Button
+              onClick={() => openModal("receita")}
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2"
+              disabled={loading}
+            >
               <ArrowUpCircle className="h-4 w-4" />
               Adicionar Fundo
             </Button>
-            <Button onClick={() => openModal('despesa')} variant="outline" className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2 border-destructive/20" disabled={!isFilterReady}>
+            <Button
+              onClick={() => openModal("despesa")}
+              variant="outline"
+              className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2 border-destructive/20"
+              disabled={loading}
+            >
               <ArrowDownCircle className="h-4 w-4" />
               Registrar Gasto
             </Button>
@@ -265,7 +364,7 @@ function KidDashboard({ wallet, effectiveUserId }: { wallet: any, effectiveUserI
         </CardContent>
       </Card>
 
-      {/* Settings Card */}
+      {/* Allowance Settings */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -277,16 +376,11 @@ function KidDashboard({ wallet, effectiveUserId }: { wallet: any, effectiveUserI
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Valor da Mesada (R$)</Label>
-            <Input 
-              type="number" 
-              value={allowance} 
-              onChange={(e) => setAllowance(Number(e.target.value))}
-              className="font-medium"
-            />
+            <Input type="number" value={allowance} onChange={(e) => setAllowance(Number(e.target.value))} className="font-medium" />
           </div>
           <div className="space-y-2">
             <Label>Frequência</Label>
-            <select className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50">
+            <select className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring">
               <option value="monthly">Mensal</option>
               <option value="weekly">Semanal</option>
             </select>
@@ -298,7 +392,7 @@ function KidDashboard({ wallet, effectiveUserId }: { wallet: any, effectiveUserI
         </CardContent>
       </Card>
 
-      {/* Transactions History */}
+      {/* Transaction History */}
       <Card className="md:col-span-3">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -308,36 +402,38 @@ function KidDashboard({ wallet, effectiveUserId }: { wallet: any, effectiveUserI
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {!isFilterReady ? (
+            {loading ? (
               <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>
             ) : transactions.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>
-            ) : transactions.map(tx => (
-              <div key={tx.id} className="flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
-                <div className="flex items-center gap-3">
-                  {tx.type === 'receita' ? (
-                    <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full">
-                      <ArrowUpCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+            ) : (
+              transactions.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center gap-3">
+                    {tx.type === "receita" ? (
+                      <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full">
+                        <ArrowUpCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      </div>
+                    ) : (
+                      <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full">
+                        <ArrowDownCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-medium text-sm">{tx.description}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <CalendarIcon className="h-3 w-3" />
+                        {tx.payment_date ? new Date(tx.payment_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                        {tx.category && <span className="ml-1 px-2 py-0.5 bg-muted rounded-full text-[10px]">{tx.category}</span>}
+                      </p>
                     </div>
-                  ) : (
-                    <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full">
-                      <ArrowDownCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                    </div>
-                  )}
-                  <div>
-                    <p className="font-medium text-sm">{tx.description}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CalendarIcon className="h-3 w-3" />
-                      {new Date(tx.payment_date + 'T12:00:00').toLocaleDateString('pt-BR')} 
-                      {tx.category && <span className="ml-1 px-2 py-0.5 bg-muted rounded-full text-[10px]">{tx.category}</span>}
-                    </p>
+                  </div>
+                  <div className={`font-semibold ${tx.type === "receita" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                    {tx.type === "receita" ? "+" : "-"} R$ {tx.amount.toFixed(2).replace(".", ",")}
                   </div>
                 </div>
-                <div className={`font-semibold ${tx.type === 'receita' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {tx.type === 'receita' ? '+' : '-'} R$ {tx.amount.toFixed(2).replace('.', ',')}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </CardContent>
       </Card>
@@ -346,53 +442,34 @@ function KidDashboard({ wallet, effectiveUserId }: { wallet: any, effectiveUserI
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{modalType === 'receita' ? 'Adicionar Fundo' : 'Registrar Gasto'}</DialogTitle>
+            <DialogTitle>{modalType === "receita" ? "Adicionar Fundo" : "Registrar Gasto"}</DialogTitle>
             <DialogDescription>
-              Preencha os detalhes abaixo para {modalType === 'receita' ? 'adicionar saldo' : 'registrar uma despesa'} para {displayName}.
+              {modalType === "receita" ? "Adicionar saldo" : "Registrar despesa"} para {displayName}.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="title">Descrição</Label>
-              <Input 
-                id="title" 
-                placeholder={modalType === 'receita' ? "Ex: Presente da Vó, Mesada" : "Ex: Lanche, Brinquedo"} 
+              <Input
+                id="title"
+                placeholder={modalType === "receita" ? "Ex: Presente da Vó, Mesada" : "Ex: Lanche, Brinquedo"}
                 value={formData.title}
-                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               />
             </div>
-            
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="amount">Valor (R$)</Label>
-                <Input 
-                  id="amount" 
-                  type="number"
-                  step="0.01"
-                  placeholder="0,00" 
-                  value={formData.amount}
-                  onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                />
+                <Input id="amount" type="number" step="0.01" placeholder="0,00" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date">Data</Label>
-                <Input 
-                  id="date" 
-                  type="date" 
-                  value={formData.date}
-                  onChange={(e) => setFormData({...formData, date: e.target.value})}
-                />
+                <Input id="date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
               </div>
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="category">Categoria / Pasta</Label>
-              <Input 
-                id="category" 
-                placeholder="Ex: Mesada, Alimentação, Lazer" 
-                value={formData.category}
-                onChange={(e) => setFormData({...formData, category: e.target.value})}
-              />
+              <Label htmlFor="category">Categoria</Label>
+              <Input id="category" placeholder="Ex: Mesada, Alimentação, Lazer" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} />
             </div>
           </div>
           <DialogFooter>
