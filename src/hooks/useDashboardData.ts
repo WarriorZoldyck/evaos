@@ -452,9 +452,15 @@ export function useDashboardData(filters: DashboardFilters) {
 
     const todayStr = format(new Date(), "yyyy-MM-dd");
 
-    // Receitas pendentes no período
+    // Recurring occurrences in the current period
+    const recurringInPeriod = recurringOccurrences.filter(
+      (r) => r.payment_date >= startStr && r.payment_date <= endStr
+    );
+
+    // Receitas pendentes no período (incluindo recorrentes)
     const receitasPendentesPeriodo = transactions.filter((t) => t.type === "receita" && t.status === "Pendente");
-    const entradaPrevistaPeriodo = receitasPendentesPeriodo.reduce((acc, t) => acc + Number(t.amount), 0);
+    const receitasRecorrentesPeriodo = recurringInPeriod.filter((r) => r.type === "receita");
+    const entradaPrevistaPeriodo = receitasPendentesPeriodo.reduce((acc, t) => acc + Number(t.amount), 0) + receitasRecorrentesPeriodo.reduce((acc, r) => acc + Number(r.amount), 0);
 
     // Receitas pendentes em atraso de períodos anteriores (payment_date < startStr)
     const receitasEmAtrasoAnterior = overdueTransactions.filter((t) => t.type === "receita" && t.status === "Pendente");
@@ -462,7 +468,8 @@ export function useDashboardData(filters: DashboardFilters) {
 
     // Receitas do período que já venceram (payment_date < todayStr)
     const receitasEmAtrasoPeriodo = receitasPendentesPeriodo.filter((t) => t.payment_date < todayStr);
-    const entradasEmAtrasoPeriodo = receitasEmAtrasoPeriodo.reduce((acc, t) => acc + Number(t.amount), 0);
+    const receitasRecorrentesEmAtraso = receitasRecorrentesPeriodo.filter((r) => r.payment_date < todayStr);
+    const entradasEmAtrasoPeriodo = receitasEmAtrasoPeriodo.reduce((acc, t) => acc + Number(t.amount), 0) + receitasRecorrentesEmAtraso.reduce((acc, r) => acc + Number(r.amount), 0);
 
     // Total em atraso (anterior + vencidas no período)
     const entradasEmAtraso = entradasEmAtrasoAnterior + entradasEmAtrasoPeriodo;
@@ -470,9 +477,10 @@ export function useDashboardData(filters: DashboardFilters) {
     // Entrada prevista total: previsto do período + o que ficou pendente em atraso de meses anteriores
     const entradaPrevista = entradaPrevistaPeriodo + entradasEmAtrasoAnterior;
 
-    // Despesas pendentes no período
+    // Despesas pendentes no período (incluindo recorrentes)
     const despesasPendentesPeriodo = transactions.filter((t) => t.type === "despesa" && t.status === "Pendente");
-    const saidaPrevistaPeriodo = despesasPendentesPeriodo.reduce((acc, t) => acc + Number(t.amount), 0);
+    const despesasRecorrentesPeriodo = recurringInPeriod.filter((r) => r.type === "despesa");
+    const saidaPrevistaPeriodo = despesasPendentesPeriodo.reduce((acc, t) => acc + Number(t.amount), 0) + despesasRecorrentesPeriodo.reduce((acc, r) => acc + Number(r.amount), 0);
 
     // Despesas pendentes em atraso de períodos anteriores (payment_date < startStr)
     const despesasEmAtrasoAnterior = overdueTransactions.filter((t) => t.type === "despesa" && t.status === "Pendente");
@@ -480,7 +488,8 @@ export function useDashboardData(filters: DashboardFilters) {
 
     // Despesas do período que já venceram (payment_date < todayStr)
     const despesasEmAtrasoPeriodo = despesasPendentesPeriodo.filter((t) => t.payment_date < todayStr);
-    const saidasEmAtrasoPeriodo = despesasEmAtrasoPeriodo.reduce((acc, t) => acc + Number(t.amount), 0);
+    const despesasRecorrentesEmAtraso = despesasRecorrentesPeriodo.filter((r) => r.payment_date < todayStr);
+    const saidasEmAtrasoPeriodo = despesasEmAtrasoPeriodo.reduce((acc, t) => acc + Number(t.amount), 0) + despesasRecorrentesEmAtraso.reduce((acc, r) => acc + Number(r.amount), 0);
 
     // Total em atraso (anterior + vencidas no período)
     const saidasEmAtraso = saidasEmAtrasoAnterior + saidasEmAtrasoPeriodo;
@@ -517,11 +526,14 @@ export function useDashboardData(filters: DashboardFilters) {
     };
 
 
-  }, [transactions, overdueTransactions, competenceTransactions, categoryRecords]);
+  }, [transactions, overdueTransactions, competenceTransactions, categoryRecords, recurringOccurrences, startStr, endStr]);
 
   const expectedTransactions = useMemo(() => {
-    return [...overdueTransactions, ...transactions];
-  }, [overdueTransactions, transactions]);
+    const recurringInPeriod = recurringOccurrences
+      .filter((r) => r.payment_date >= startStr && r.payment_date <= endStr)
+      .map((r) => ({ ...r, status: "Pendente" as const, isRecurring: true }));
+    return [...overdueTransactions, ...transactions, ...recurringInPeriod];
+  }, [overdueTransactions, transactions, recurringOccurrences, startStr, endStr]);
 
   // Upcoming (Pendente) transactions including overdue items
   const upcomingTransactions = useMemo(() => {

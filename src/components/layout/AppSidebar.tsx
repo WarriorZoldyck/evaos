@@ -59,6 +59,7 @@ import evaLogo from "@/assets/eva-os-logo.jpeg";
 const mainMenuItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Lançamentos", url: "/lancamentos", icon: ArrowLeftRight },
+  { title: "Metas", url: "/metas", icon: LifeBuoy },
   { title: "Análises EVA", url: "/analises-eva", icon: Sparkles, hasBadge: true },
 ];
 
@@ -79,7 +80,6 @@ const registrationMenuItems = [
 
 const comingSoonItems = [
   { title: "EVA Kids", url: "/eva-kids", icon: GraduationCap },
-  { title: "Metas", url: "/metas", icon: LifeBuoy },
   { title: "Precificação V2", url: "/precificacao-v2", icon: TrendingUp },
 ];
 

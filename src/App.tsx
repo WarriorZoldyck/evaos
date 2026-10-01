@@ -44,7 +44,7 @@ import ConciliacaoBancaria from "@/pages/ConciliacaoBancaria";
 import OAuthConsent from "@/pages/OAuthConsent";
 import AuthCallback from "@/pages/AuthCallback";
 import ResetPassword from "@/pages/ResetPassword";
-import { GraduationCap } from "lucide-react";
+import EvaKids from "@/pages/EvaKids";
 
 import { toast } from "sonner";
 
@@ -96,7 +96,7 @@ const App = () => {
                 
                 <Route path="/docs" element={<Docs />} />
                 <Route path="/integracoes" element={<Integracoes />} />
-                <Route path="/eva-kids" element={<ComingSoon title="EVA Kids" description="Educação financeira para crianças. Em breve!" icon={GraduationCap} />} />
+                <Route path="/eva-kids" element={<EvaKids />} />
                 <Route path="/metas" element={<Metas />} />
                 <Route path="/metas/:id" element={<MetaDetalhe />} />
                 <Route path="/precificacao-v2" element={<PrecificacaoV2 />} />

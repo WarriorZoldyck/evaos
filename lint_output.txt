@@ -1,0 +1,1054 @@
+
+> vite_react_shadcn_ts@0.0.0 lint
+> eslint .
+
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\analises-eva\AdjustInterestModal.tsx
+  27:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\centros-custos\CategoryDiagnosticsPanel.tsx
+  100:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  123:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\chat\EvaChatPanel.tsx
+   27:60  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   71:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  145:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\conciliacao\ManualMatchModal.tsx
+  26:42  error    Unexpected any. Specify a different type                                                                            @typescript-eslint/no-explicit-any
+  53:6   warning  React Hook useEffect has a missing dependency: 'effectiveUserId'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\configuracoes\EvaTrainingCard.tsx
+  17:38  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  22:6   warning  React Hook useEffect has a missing dependency: 'fetchFiles'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  25:26  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  57:53  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  70:19  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  81:26  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\configuracoes\WhatsAppCard.tsx
+  57:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  90:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\contas\AccountFormModal.tsx
+  49:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\contas\AccountStatementModal.tsx
+   95:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  104:72  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:74  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  112:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  117:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  121:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:66  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\contas\CreditCardBillPaymentModal.tsx
+  457:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  550:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  550:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  551:64  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\contas\CreditCardFormModal.tsx
+  35:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\contas\TerminalFormModal.tsx
+   27:14  error    Unexpected any. Specify a different type                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+   29:18  error    Unexpected any. Specify a different type                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+   69:9   warning  The 'fieldSetters' object makes the dependencies of useCallback Hook (at line 125) change on every render. Move it inside the useCallback callback. Alternatively, wrap the initialization of 'fieldSetters' in its own useMemo() Hook  react-hooks/exhaustive-deps
+  135:17  error    Unexpected any. Specify a different type                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\dashboard\CategoryBreakdownCard.tsx
+  57:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\dashboard\CategorySummaryCharts.tsx
+  35:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\dashboard\DashboardCreditCardsRow.tsx
+  112:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  113:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\dashboard\EntradasSaidasDetailModal.tsx
+  146:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  465:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  554:60  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\dashboard\FaturamentoDetailModal.tsx
+   60:7  error    Redundant double negation                                                                                                         no-extra-boolean-cast
+  376:5  warning  React Hook useMemo has a missing dependency: 'groupBy'. Either include it or remove the dependency array                          react-hooks/exhaustive-deps
+  381:5  warning  React Hook useMemo has missing dependencies: 'groupBy' and 'resolveCategory'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  386:5  warning  React Hook useMemo has a missing dependency: 'groupBy'. Either include it or remove the dependency array                          react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\dashboard\HeroSummaryCards.tsx
+  44:9  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\dashboard\LiquidateModal.tsx
+  279:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\dashboard\MdrDetailModal.tsx
+  147:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\integracoes\AsaasConnectModal.tsx
+  86:73  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\integracoes\ItauConnectModal.tsx
+   82:87  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  128:73  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\lancamentos\ExportTransactionsButton.tsx
+  160:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  181:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  244:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  252:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  262:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  295:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\lancamentos\ImportStatementModal.tsx
+   487:41   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   712:40   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   713:38   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   798:54   error    Empty block statement                                                                                                                 no-empty
+   816:105  error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   828:17   error    Empty block statement                                                                                                                 no-empty
+   839:56   error    Empty block statement                                                                                                                 no-empty
+   856:55   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   863:46   error    Unnecessary escape character: \/                                                                                                      no-useless-escape
+   868:23   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   869:13   error    'match' is never reassigned. Use 'const' instead                                                                                      prefer-const
+   908:55   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   974:75   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   975:75   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+   984:30   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  1023:40   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  1037:40   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  1047:24   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  1062:30   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  1205:19   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  1407:6    warning  React Hook useEffect has a missing dependency: 'applyMatchDefaults'. Either include it or remove the dependency array                 react-hooks/exhaustive-deps
+  1625:6    warning  React Hook useEffect has a missing dependency: 'isReviewMode'. Either include it or remove the dependency array                       react-hooks/exhaustive-deps
+  1754:6    warning  React Hook useEffect has missing dependencies: 'isReviewMode' and 'reviewedRows'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  1841:44   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  2812:64   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  2818:65   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  2819:66   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  2879:29   error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+  3324:119  error    Unexpected any. Specify a different type                                                                                              @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\lancamentos\PaymentMethodFields.tsx
+   22:23  error    Unexpected any. Specify a different type                                                                                                                                                @typescript-eslint/no-explicit-any
+  115:6   warning  React Hook useEffect has missing dependencies: 'form', 'showBankAccount', 'showCreditCardSelect', 'showTerminal', and 'showWallet'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\lancamentos\SeriesInstallmentTable.tsx
+  133:6  warning  React Hook useEffect has a missing dependency: 'onAmountsChanged'. Either include it or remove the dependency array. If 'onAmountsChanged' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\lancamentos\TransactionDetailModal.tsx
+  263:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  263:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  264:83  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\lancamentos\TransactionFormModal.tsx
+   522:6   warning  React Hook useEffect has missing dependencies: 'form', 'isPersonal', 'selectedCompanyId', and 'transferForm'. Either include them or remove the dependency array                                                              react-hooks/exhaustive-deps
+   573:47  error    Unexpected any. Specify a different type                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   688:24  error    Unexpected any. Specify a different type                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   689:24  error    Unexpected any. Specify a different type                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   690:24  error    Unexpected any. Specify a different type                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   691:24  error    Unexpected any. Specify a different type                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   788:40  error    Unexpected any. Specify a different type                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+   932:6   warning  React Hook useEffect has a missing dependency: 'transferForm'. Either include it or remove the dependency array                                                                                                               react-hooks/exhaustive-deps
+  1004:12  error    Unexpected any. Specify a different type                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+  1018:12  error    Unexpected any. Specify a different type                                                                                                                                                                                      @typescript-eslint/no-explicit-any
+  1392:6   warning  React Hook useEffect has an unnecessary dependency: 'open'. Either exclude it or remove the dependency array. Outer scope values like 'open' aren't valid dependencies because mutating them doesn't re-render the component  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\lancamentos\TransactionTable.tsx
+  234:18  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  240:50  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  748:89  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  758:30  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  825:6   warning  React Hook useMemo has a missing dependency: 'splitByCycle'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\lancamentos\import\ReconcileStep.tsx
+   530:6   warning  React Hook useMemo has a missing dependency: 'actionOf'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   556:6   warning  React Hook useMemo has a missing dependency: 'actionOf'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+   746:23  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+   763:56  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+   764:57  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+   907:32  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+   908:35  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+   909:36  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+   915:33  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+  1376:70  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+  1377:71  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+  1394:55  error    Unexpected any. Specify a different type                                                                   @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\layout\SystemNoticeDialog.tsx
+  29:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\metas\ActionPlanDialog.tsx
+  47:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\metas\GoalFormModal.tsx
+   29:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   30:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   50:56  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  130:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\metas\planejamento\FinancialOverview.tsx
+   75:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  104:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\onboarding\OnboardingGuide.tsx
+  191:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\precificacao-v2\ImportCategoriesModal.tsx
+  48:6  warning  React Hook useEffect has a missing dependency: 'loadCategoryAverages'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\precificacao-v2\ProcedureTableV2.tsx
+  169:81  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\precificacao-v2\SuggestedPriceCalculator.tsx
+  66:6  warning  React Hook useEffect has a missing dependency: 'cfOverride'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\precificacao-v2\WorkScheduleModal.tsx
+  373:10  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\relatorios\DRETableContabil.tsx
+  198:7  error  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+  206:7  error  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\relatorios\ExportReportButton.tsx
+  48:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  66:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  81:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\badge.tsx
+  29:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\button.tsx
+  47:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\command.tsx
+  24:11  error  An interface declaring no members is equivalent to its supertype  @typescript-eslint/no-empty-object-type
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\form.tsx
+  129:10  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\navigation-menu.tsx
+  111:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\sidebar.tsx
+  636:3  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\sonner.tsx
+  27:19  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\textarea.tsx
+  5:18  error  An interface declaring no members is equivalent to its supertype  @typescript-eslint/no-empty-object-type
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\components\ui\toggle.tsx
+  37:18  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\contexts\AuthContext.tsx
+  75:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\contexts\CompanyContext.tsx
+   48:107  error    Unexpected any. Specify a different type                                                                                        @typescript-eslint/no-explicit-any
+  230:17   warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\contexts\HeaderSlotContext.tsx
+  22:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  27:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  36:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  49:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\contexts\HubContext.tsx
+  125:17  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useAIPendingTransactions.ts
+   64:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   66:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  186:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  201:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  216:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  233:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  240:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  248:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  338:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  354:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  369:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useAccountCurrentBalances.ts
+  54:6   warning  React Hook useCallback has missing dependencies: 'accounts' and 'throughDate'. Either include them or remove the dependency array           react-hooks/exhaustive-deps
+  54:38  warning  React Hook useCallback has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useAccounts.ts
+  28:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useAsaasIntegration.ts
+  47:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  47:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useBudgetTargets.ts
+  53:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useCategorySuggestions.ts
+  269:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  302:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  303:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  304:36  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useDREData.ts
+   86:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  214:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  225:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  338:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  342:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useDashboardData.ts
+  131:10  error    Unexpected any. Specify a different type                                                                @typescript-eslint/no-explicit-any
+  256:6   warning  React Hook useEffect has a missing dependency: 'end'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  413:85  error    Unexpected any. Specify a different type                                                                @typescript-eslint/no-explicit-any
+  440:36  error    Unexpected any. Specify a different type                                                                @typescript-eslint/no-explicit-any
+  441:36  error    Unexpected any. Specify a different type                                                                @typescript-eslint/no-explicit-any
+  497:28  error    Unexpected any. Specify a different type                                                                @typescript-eslint/no-explicit-any
+  507:48  error    Unexpected any. Specify a different type                                                                @typescript-eslint/no-explicit-any
+  507:76  error    Unexpected any. Specify a different type                                                                @typescript-eslint/no-explicit-any
+  608:11  error    'currentBalance' is never reassigned. Use 'const' instead                                               prefer-const
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useFormFieldSettings.ts
+  60:55  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useGoals.ts
+  113:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  139:70  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  183:82  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  199:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  207:95  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  220:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useHubAuditLog.ts
+   41:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  125:65  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  133:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  137:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  143:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  182:29  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  185:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useHubRole.ts
+  15:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useImportMatching.test.ts
+  46:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  47:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  71:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useItauIntegration.ts
+  34:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  60:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  60:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  76:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  91:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  91:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useMemberPermissions.ts
+  54:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  58:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  60:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useMetasSidebarStats.ts
+  44:9   error    Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  63:35  error    Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  64:39  error    Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  67:35  error    Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  68:37  error    Unexpected any. Specify a different type                                                                              @typescript-eslint/no-explicit-any
+  79:6   warning  React Hook useCallback has an unnecessary dependency: 'contextKey'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\usePluggyIntegration.ts
+  34:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  47:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  47:56  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  48:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  62:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  62:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  78:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  93:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  93:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\usePricingV2.ts
+  220:6   warning  React Hook useMemo has a missing dependency: 'excludedDays'. Either include it or remove the dependency array                           react-hooks/exhaustive-deps
+  220:30  warning  React Hook useMemo has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked  react-hooks/exhaustive-deps
+  229:5   warning  React Hook useMemo has a missing dependency: 'weekdaySchedule'. Either include it or remove the dependency array                        react-hooks/exhaustive-deps
+  229:35  warning  React Hook useMemo has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked  react-hooks/exhaustive-deps
+  277:19  error    Unexpected constant nullishness on the left-hand side of a `??` expression                                                              no-constant-binary-expression
+  391:19  error    Unexpected constant nullishness on the left-hand side of a `??` expression                                                              no-constant-binary-expression
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useSubscription.ts
+  124:6  warning  React Hook useEffect has a missing dependency: 'syncSubscription'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useTransactions.ts
+  133:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  278:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\hooks\useWorkspaceMembers.ts
+   68:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  141:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  148:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  181:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  181:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  197:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  210:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  222:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  244:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  286:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\integrations\supabase\previewAuthStorage.ts
+  38:11  error  'timer' is never reassigned. Use 'const' instead  prefer-const
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\lib\aiGateway.test.ts
+   6:7   error  'm' is never reassigned. Use 'const' instead  prefer-const
+  34:49  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  34:55  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  35:16  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\lib\companyFilter.ts
+  13:43  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  14:7   error  'scopedQuery' is never reassigned. Use 'const' instead  prefer-const
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\lib\goalCategory.ts
+   25:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   56:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   72:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   92:72  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  118:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\AnalisesEva.tsx
+  578:60  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  593:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  596:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  597:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  598:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  600:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  622:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  745:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  818:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  887:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  893:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  914:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  984:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  990:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\CentrosDeCustos.tsx
+   75:35  error    Unexpected any. Specify a different type                                                                                                                                                  @typescript-eslint/no-explicit-any
+  120:74  error    Unexpected any. Specify a different type                                                                                                                                                  @typescript-eslint/no-explicit-any
+  129:46  error    Unexpected any. Specify a different type                                                                                                                                                  @typescript-eslint/no-explicit-any
+  225:66  error    Unexpected any. Specify a different type                                                                                                                                                  @typescript-eslint/no-explicit-any
+  453:9   warning  The 'kids' logical expression could make the dependencies of useMemo Hook (at line 462) change on every render. To fix this, wrap the initialization of 'kids' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\ConciliacaoBancaria.tsx
+   45:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  193:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  299:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\Configuracoes.tsx
+   68:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  153:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  166:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  202:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\Contas.tsx
+   65:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   69:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   93:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  117:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  124:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  131:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  138:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  278:74  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  279:74  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  283:58  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  286:88  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  289:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  290:91  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  452:97  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\Dashboard.tsx
+   99:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  102:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  109:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  112:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  120:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  134:83  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  139:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  139:83  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  143:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  143:83  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  198:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  264:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  276:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  292:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  309:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  327:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  390:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  404:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  433:41  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  434:47  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\EvaHub.tsx
+  417:68  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  431:13  error  Empty block statement                     no-empty
+  482:13  error  Empty block statement                     no-empty
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\Historico.tsx
+  18:28  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  19:28  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  41:57  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  60:77  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  61:11  error  'userDetails' is never reassigned. Use 'const' instead  prefer-const
+  75:36  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\ImportarExtrato.tsx
+  74:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\Lancamentos.tsx
+   62:66   error    Unexpected any. Specify a different type                                                                                               @typescript-eslint/no-explicit-any
+   76:6    warning  React Hook useEffect has a missing dependency: 'setSearchParams'. Either include it or remove the dependency array                     react-hooks/exhaustive-deps
+  134:6    warning  React Hook useEffect has missing dependencies: 'setFilters' and 'setSearchParams'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  198:59   error    Empty block statement                                                                                                                  no-empty
+  241:5    warning  React Hook useMemo has a missing dependency: 'navigate'. Either include it or remove the dependency array                              react-hooks/exhaustive-deps
+  301:48   error    Unexpected any. Specify a different type                                                                                               @typescript-eslint/no-explicit-any
+  391:47   error    Unexpected any. Specify a different type                                                                                               @typescript-eslint/no-explicit-any
+  391:111  error    Unexpected any. Specify a different type                                                                                               @typescript-eslint/no-explicit-any
+  395:84   error    Unexpected any. Specify a different type                                                                                               @typescript-eslint/no-explicit-any
+  455:43   error    Unexpected any. Specify a different type                                                                                               @typescript-eslint/no-explicit-any
+  455:107  error    Unexpected any. Specify a different type                                                                                               @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\Metas.tsx
+  207:6  warning  React Hook useEffect has a missing dependency: 'stats'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\OAuthConsent.tsx
+  10:60  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  10:72  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  11:57  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  11:69  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  12:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  12:66  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  19:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\hub\HubAuditoria.tsx
+  127:31  error  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  128:43  error  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  129:37  error  React Hook "useState" is called conditionally. React Hooks must be called in the exact same order in every component render  react-hooks/rules-of-hooks
+  133:19  error  React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render   react-hooks/rules-of-hooks
+  138:20  error  React Hook "useMemo" is called conditionally. React Hooks must be called in the exact same order in every component render   react-hooks/rules-of-hooks
+  165:17  error  Unexpected any. Specify a different type                                                                                     @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\hub\HubIntegridade.tsx
+  133:76  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  176:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  195:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  221:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  245:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  288:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\hub\HubMembros.tsx
+  277:68  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  302:56  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  306:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  307:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  308:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  309:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\hub\HubMeuWhatsApp.tsx
+   51:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   52:26  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   62:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  122:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\pages\hub\HubWorkspaces.tsx
+  151:13  error  Empty block statement  no-empty
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\src\services\aiService.ts
+  78:44  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\_shared\ai-gateway.ts
+    8:13  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   80:7   error  'm' is never reassigned. Use 'const' instead  prefer-const
+   96:7   error  'm' is never reassigned. Use 'const' instead  prefer-const
+  111:19  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  121:18  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  184:27  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  202:18  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  243:56  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  296:51  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  310:18  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\_shared\budgetMonthReport.ts
+  27:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  40:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  65:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  85:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  98:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\_shared\eva-analysis.ts
+   45:92   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   45:112  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:13   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  146:11   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  168:35   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  168:59   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:9    error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  253:52   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  254:50   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  255:54   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  265:81   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  272:55   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  293:35   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  318:52   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\_shared\whatsapp-boleto-card.ts
+  76:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\asaas-create-subscription\index.ts
+  111:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  184:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\asaas-sync-subscription\index.ts
+  69:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  85:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  88:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  94:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\asaas-sync\index.ts
+   21:82  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   22:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   27:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   38:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   38:57  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   70:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  160:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  171:15  error  Empty block statement                     no-empty
+  204:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  248:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\asaas-webhook\index.ts
+  26:9   error  'subscriptionId' is never reassigned. Use 'const' instead  prefer-const
+  57:14  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\auth-email-hook\index.ts
+   29:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  146:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\budget-weekly-summary\index.ts
+  71:62  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\create-hub-member\index.ts
+   83:67  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  113:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\cron-whatsapp-reminders\index.ts
+  46:15  error  Empty block statement  no-empty
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\eva-chat\index.ts
+    95:76   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   105:35   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   148:59   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   151:46   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   152:43   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   154:37   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   156:23   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   157:20   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   158:49   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   158:89   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   168:47   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   169:45   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   170:47   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   172:79   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   173:80   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   174:85   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   181:89   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   182:81   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   188:28   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   193:28   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   206:44   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   216:63   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   235:28   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   287:21   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   331:62   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   388:45   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   389:53   error  Empty block statement                                         no-empty
+   391:88   error  Empty block statement                                         no-empty
+   395:85   error  Empty block statement                                         no-empty
+   408:51   error  Empty block statement                                         no-empty
+   429:50   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   435:63   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   439:57   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   447:45   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   467:33   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   469:11   error  'contextCategories' is never reassigned. Use 'const' instead  prefer-const
+   469:53   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   472:28   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   476:54   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   478:52   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   480:58   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   487:56   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   507:56   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   510:59   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   536:51   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   537:49   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   538:51   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   548:49   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   558:53   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   561:54   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   571:61   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   571:111  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   585:42   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   589:40   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   599:50   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   619:48   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   650:44   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   663:48   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   687:47   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   693:35   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   696:93   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   749:70   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   750:59   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   816:61   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   827:25   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   829:20   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   831:25   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   846:23   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   850:40   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   902:41   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   903:40   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   907:28   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   908:28   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   914:27   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   914:53   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   917:54   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   925:29   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   926:26   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   941:73   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   979:65   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   979:156  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   985:64   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   985:154  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+   990:40   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1001:66   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1009:66   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1019:38   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1024:49   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1036:44   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1045:49   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1047:47   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1055:37   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1055:88   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1067:69   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1073:59   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1073:116  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1078:64   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1092:53   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1093:82   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1093:132  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1099:46   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1101:53   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1109:65   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1109:159  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1112:45   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1118:60   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1118:151  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1119:59   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1119:149  error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1121:79   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1122:82   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1171:40   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1212:55   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1219:46   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1241:41   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1260:41   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1275:57   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1281:74   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+  1289:47   error  Unexpected any. Specify a different type                      @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\goal-action-plan\index.ts
+  63:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\itau-connect-account\index.ts
+  39:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\itau-sync\index.ts
+  29:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\mcp\index.ts
+   18:1  error  Unexpected var, use let or const instead  no-var
+   61:1  error  Unexpected var, use let or const instead  no-var
+  116:1  error  Unexpected var, use let or const instead  no-var
+  153:1  error  Unexpected var, use let or const instead  no-var
+  183:1  error  Unexpected var, use let or const instead  no-var
+  236:1  error  Unexpected var, use let or const instead  no-var
+  237:1  error  Unexpected var, use let or const instead  no-var
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\parse-bank-statement\index.ts
+  160:44  error  Unnecessary escape character: \/                      no-useless-escape
+  160:46  error  Unnecessary escape character: \-                      no-useless-escape
+  160:57  error  Unnecessary escape character: \/                      no-useless-escape
+  160:59  error  Unnecessary escape character: \-                      no-useless-escape
+  361:40  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+  374:15  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+  402:18  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+  403:15  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+  427:40  error  Unnecessary escape character: \/                      no-useless-escape
+  427:55  error  Unnecessary escape character: \/                      no-useless-escape
+  433:38  error  Unnecessary escape character: \/                      no-useless-escape
+  500:25  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+  510:28  error  Unexpected any. Specify a different type              @typescript-eslint/no-explicit-any
+  522:11  error  'isReceita' is never reassigned. Use 'const' instead  prefer-const
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\pluggy-connect-account\index.ts
+  57:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\pluggy-connect-token\index.ts
+  43:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\pluggy-sync\index.ts
+   15:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   22:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   32:39  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   32:57  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  102:69  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  146:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  190:20  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\pluggy-webhook\index.ts
+  21:80  error  Empty block statement  no-empty
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\suggest-categories\index.ts
+  83:62  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\test-whatsapp-reminder\index.ts
+   84:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  105:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:49  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\supabase\functions\whatsapp-webhook\index.ts
+    64:13  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   166:13  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   176:18  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   205:61  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   209:30  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   212:19  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   213:15  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   336:30  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   344:40  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   440:68  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   494:28  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   548:22  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   618:82  error  Empty block statement                                    no-empty
+   646:17  error  Empty block statement                                    no-empty
+   648:17  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   742:35  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   968:46  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   975:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+   980:34  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1071:55  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1072:52  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1082:38  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1106:32  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1110:38  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1123:76  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1132:35  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1174:19  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1175:16  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1290:28  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1333:50  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1342:57  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1343:57  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1344:55  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1368:47  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1381:32  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1382:32  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1391:47  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1397:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1427:40  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1444:64  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1447:44  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1489:78  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1493:60  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1502:45  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1521:74  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1522:62  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1523:48  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1524:32  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1525:61  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1580:60  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1581:46  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1582:30  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1623:50  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1646:13  error  'creditCardId' is never reassigned. Use 'const' instead  prefer-const
+  1649:51  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1652:47  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1682:51  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1685:42  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1771:52  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1859:32  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1860:43  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1944:44  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1952:34  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  1977:32  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2219:62  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2274:22  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2322:44  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2364:24  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2411:75  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2416:19  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2482:45  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2484:53  error  Empty block statement                                    no-empty
+  2488:68  error  Empty block statement                                    no-empty
+  2495:49  error  Empty block statement                                    no-empty
+  2498:69  error  Empty block statement                                    no-empty
+  2516:51  error  Empty block statement                                    no-empty
+  2518:69  error  Empty block statement                                    no-empty
+  2523:5   error  'aiParsed' is never reassigned. Use 'const' instead      prefer-const
+  2584:84  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2607:50  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2670:33  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2674:28  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2760:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2763:47  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2766:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2796:58  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2806:55  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2820:44  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2826:59  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2834:48  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2849:51  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2852:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2855:51  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2858:55  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2871:57  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2882:55  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2885:53  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2888:55  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2891:59  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2905:57  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2915:55  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2918:53  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2921:55  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2924:59  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  2989:15  error  'accMatch' is never reassigned. Use 'const' instead      prefer-const
+  2993:17  error  'walMatch' is never reassigned. Use 'const' instead      prefer-const
+  3298:50  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3321:48  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3363:76  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3364:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3442:54  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3446:52  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3455:62  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3505:58  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3508:60  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3520:60  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3538:44  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3551:53  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3570:33  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3673:31  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3785:73  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3791:60  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3857:72  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3858:59  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3862:60  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3865:71  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3866:67  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3896:39  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3981:65  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  3982:61  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4051:65  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4069:21  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4108:40  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4139:38  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4141:36  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4145:56  error  Unnecessary escape character: \/                         no-useless-escape
+  4148:50  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4153:51  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4163:36  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4174:43  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4261:36  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4363:35  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4431:63  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4452:25  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4454:20  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4456:25  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4471:23  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4476:40  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4588:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4612:66  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4630:66  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4650:38  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4689:26  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4725:41  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4726:40  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4729:28  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4730:28  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4737:27  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4737:53  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4740:54  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4748:29  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4749:26  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4751:77  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4769:73  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4808:31  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4809:32  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4824:69  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4839:54  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4844:27  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4845:38  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4854:43  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4889:21  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4893:39  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4893:89  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4907:51  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4913:50  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4942:26  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4967:74  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4970:66  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  4998:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  5001:68  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  5007:49  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  5010:47  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  5019:41  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  5101:24  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  5354:86  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+  5376:19  error  Unexpected any. Specify a different type                 @typescript-eslint/no-explicit-any
+
+C:\Users\gurim\.gemini\antigravity-ide\scratch\evaos\tailwind.config.ts
+  136:13  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+✖ 802 problems (747 errors, 55 warnings)
+  21 errors and 0 warnings potentially fixable with the `--fix` option.
+
