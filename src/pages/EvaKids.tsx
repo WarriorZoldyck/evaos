@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { GraduationCap, Wallet, ArrowUpCircle, ArrowDownCircle, PlusCircle, Settings, History, CalendarIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,27 +8,25 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-
-type Transaction = {
-  id: string;
-  type: 'receita' | 'despesa';
-  title: string;
-  amount: number;
-  date: string;
-  category: string;
-};
+import { useTransactions } from "@/hooks/useTransactions";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function EvaKids() {
   const { user } = useAuth();
+  const effectiveUserId = useEffectiveUserId();
+  const { 
+    transactions, 
+    createTransaction, 
+    wallets, 
+    filters, 
+    setFilters, 
+    refetchAccounts,
+    fetchTransactions 
+  } = useTransactions();
   
-  // Dummy data / State for Eva Kids Checking Account
+  const [kidsWalletId, setKidsWalletId] = useState<string | null>(null);
   const [allowance, setAllowance] = useState(50.00);
-  const [transactions, setTransactions] = useState<Transaction[]>([
-    { id: '1', type: 'receita', title: 'Mesada - Outubro', amount: 50.00, date: '2026-10-01', category: 'Mesada' },
-    { id: '2', type: 'despesa', title: 'Compra na Cantina', amount: 15.50, date: '2026-10-02', category: 'Alimentação' },
-    { id: '3', type: 'despesa', title: 'Brinquedo', amount: 30.00, date: '2026-10-05', category: 'Lazer' },
-    { id: '4', type: 'receita', title: 'Presente Vó', amount: 100.00, date: '2026-10-12', category: 'Presentes' },
-  ]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'receita' | 'despesa'>('despesa');
@@ -39,6 +37,50 @@ export default function EvaKids() {
     category: '',
     paymentMethod: 'dinheiro'
   });
+
+  // Ensure "Conta Kids" wallet exists
+  useEffect(() => {
+    const initKidsWallet = async () => {
+      if (!effectiveUserId || wallets.length === 0) {
+        // Wait for wallets to load
+        return;
+      }
+      
+      let wallet = wallets.find(w => w.name.toLowerCase() === "conta kids" || w.name.toLowerCase() === "eva kids");
+      
+      if (!wallet) {
+        const { data, error } = await supabase
+          .from("wallets")
+          .insert({ name: "Conta Kids", user_id: effectiveUserId })
+          .select()
+          .single();
+          
+        if (error) {
+          console.error("Failed to create Conta Kids wallet:", error);
+          return;
+        }
+        wallet = data;
+        refetchAccounts();
+      }
+      
+      setKidsWalletId(wallet.id);
+    };
+    
+    initKidsWallet();
+  }, [effectiveUserId, wallets, refetchAccounts]);
+
+  // Set filter to only show Kids Wallet transactions
+  useEffect(() => {
+    if (kidsWalletId) {
+      setFilters(prev => ({
+        ...prev,
+        accountId: `wallet:${kidsWalletId}`,
+        dateFrom: "", // Show all time for balance
+        dateTo: "",
+        status: "todos"
+      }));
+    }
+  }, [kidsWalletId, setFilters]);
 
   const balance = transactions.reduce((acc, curr) => {
     return curr.type === 'receita' ? acc + curr.amount : acc - curr.amount;
@@ -56,24 +98,39 @@ export default function EvaKids() {
     setIsModalOpen(true);
   };
 
-  const handleSaveTransaction = () => {
+  const handleSaveTransaction = async () => {
     if (!formData.title || !formData.amount || !formData.date) {
       toast.error("Preencha os campos obrigatórios (Descrição, Valor e Data).");
       return;
     }
+    
+    if (!kidsWalletId) {
+      toast.error("Carteira Kids não encontrada. Tente novamente.");
+      return;
+    }
+    
+    const amountVal = parseFloat(formData.amount.replace(',', '.'));
+    if (isNaN(amountVal) || amountVal <= 0) {
+      toast.error("Insira um valor válido.");
+      return;
+    }
 
-    const newTx: Transaction = {
-      id: crypto.randomUUID(),
+    const success = await createTransaction({
+      user_id: effectiveUserId,
       type: modalType,
-      title: formData.title,
-      amount: parseFloat(formData.amount.replace(',', '.')),
-      date: formData.date,
-      category: formData.category || 'Geral'
-    };
+      description: formData.title,
+      amount: amountVal,
+      payment_date: formData.date,
+      competence_date: formData.date,
+      category: formData.category || 'Geral',
+      status: 'Pago',
+      wallet_id: kidsWalletId,
+    });
 
-    setTransactions([newTx, ...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-    setIsModalOpen(false);
-    toast.success(modalType === 'receita' ? "Fundo adicionado com sucesso!" : "Gasto registrado com sucesso!");
+    if (success) {
+      setIsModalOpen(false);
+      fetchTransactions(); // Refresh the list
+    }
   };
 
   return (
@@ -106,11 +163,11 @@ export default function EvaKids() {
             </div>
             
             <div className="mt-8 flex gap-4">
-              <Button onClick={() => openModal('receita')} className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2">
+              <Button onClick={() => openModal('receita')} className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2" disabled={!kidsWalletId}>
                 <ArrowUpCircle className="h-4 w-4" />
                 Adicionar Fundo
               </Button>
-              <Button onClick={() => openModal('despesa')} variant="outline" className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2 border-destructive/20">
+              <Button onClick={() => openModal('despesa')} variant="outline" className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2 border-destructive/20" disabled={!kidsWalletId}>
                 <ArrowDownCircle className="h-4 w-4" />
                 Registrar Gasto
               </Button>
@@ -176,11 +233,11 @@ export default function EvaKids() {
                       </div>
                     )}
                     <div>
-                      <p className="font-medium text-sm">{tx.title}</p>
+                      <p className="font-medium text-sm">{tx.description}</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <CalendarIcon className="h-3 w-3" />
-                        {new Date(tx.date + 'T12:00:00').toLocaleDateString('pt-BR')} 
-                        <span className="ml-1 px-2 py-0.5 bg-muted rounded-full text-[10px]">{tx.category}</span>
+                        {new Date(tx.payment_date + 'T12:00:00').toLocaleDateString('pt-BR')} 
+                        {tx.category && <span className="ml-1 px-2 py-0.5 bg-muted rounded-full text-[10px]">{tx.category}</span>}
                       </p>
                     </div>
                   </div>
@@ -256,7 +313,7 @@ export default function EvaKids() {
               >
                 <option value="dinheiro">Dinheiro</option>
               </select>
-              <p className="text-[10px] text-muted-foreground">Forma de pagamento fixa para Conta Kids no momento.</p>
+              <p className="text-[10px] text-muted-foreground">O lançamento será salvo na carteira especial "Conta Kids".</p>
             </div>
           </div>
           <DialogFooter>
