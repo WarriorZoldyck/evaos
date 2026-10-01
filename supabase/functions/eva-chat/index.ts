@@ -45,7 +45,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, companyId: requestedCompanyId } = await req.json();
+    const { messages, companyId: requestedCompanyId, customPrompt } = await req.json();
 
     // Extrai texto de mensagens multimodais (texto/imagem/áudio) sem quebrar áudio
     const contentToText = (content: any): string => {
@@ -361,12 +361,17 @@ REGRA — contact_name: SEMPRE preencha com o nome do estabelecimento quando ide
 REGRA — ESTABELECIMENTO NÃO É CATEGORIA.
 ${historicalPatternsBlock}`;
 
+    let finalSystemPrompt = systemPrompt;
+    if (customPrompt && typeof customPrompt === "string") {
+      finalSystemPrompt += `\n\nINSTRUÇÕES PERSONALIZADAS DO USUÁRIO (Siga rigorosamente):\n${customPrompt}`;
+    }
+
     // First, call AI non-streaming to get the JSON response
     const aiResponse = await fetchAiCompletions({
       model: "gemini-pro-latest",
       max_tokens: 4096,
       messages: [
-        { role: "system", content: systemPrompt + (await loadKnowledgeBlock(supabase, userId)) },
+        { role: "system", content: finalSystemPrompt + (await loadKnowledgeBlock(supabase, userId)) },
         ...messages,
       ],
     });

@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { usePlanLimits } from "@/hooks/usePlanLimits";
+import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import ReactMarkdown from "react-markdown";
 import { getStoredAiConfig, saveAiConfig, callDirectAi, detectProvider } from "@/services/aiService";
 
@@ -38,7 +39,8 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { selectedCompanyId } = useCompany();
+  const { selectedCompanyId, isPersonal } = useCompany();
+  const effectiveUserId = useEffectiveUserId();
   const { canUseAI, refetch: refetchLimits } = usePlanLimits();
 
   useEffect(() => {
@@ -128,6 +130,7 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
                   { role: "user", content: userContent },
                 ],
                 companyId: selectedCompanyId,
+                customPrompt: localStorage.getItem(`eva_custom_prompt_${effectiveUserId}_${isPersonal ? "personal" : (selectedCompanyId || "all")}`) || undefined,
               }),
             }
           );
@@ -153,7 +156,12 @@ export function EvaChatPanel({ open, onClose }: EvaChatPanelProps) {
           );
         }
 
-        const systemPrompt = `Você é a EVA, assistente financeira inteligente do sistema EVA OS. Responda em português brasileiro de forma direta, amigável e profissional. Ajude o usuário com dúvidas sobre gestão financeira, relatórios, caixa e orçamentos.`;
+        let systemPrompt = `Você é a EVA, assistente financeira inteligente do sistema EVA OS. Responda em português brasileiro de forma direta, amigável e profissional. Ajude o usuário com dúvidas sobre gestão financeira, relatórios, caixa e orçamentos.`;
+        
+        const customPrompt = localStorage.getItem(`eva_custom_prompt_${effectiveUserId}_${isPersonal ? "personal" : (selectedCompanyId || "all")}`);
+        if (customPrompt) {
+          systemPrompt += `\n\nINSTRUÇÕES PERSONALIZADAS DO USUÁRIO:\n${customPrompt}`;
+        }
 
         const formattedMessages = [
           { role: "system", content: systemPrompt },
