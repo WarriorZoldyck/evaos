@@ -198,7 +198,7 @@ export function EntradasSaidasDetailModal({
     type Group = { items: Tx[] };
     const groups = new Map<string, Group>();
     paid.forEach((t) => {
-      const key = t.series_id ? `s:${t.series_id}` : `t:${t.id}`;
+      const key = `t:${t.id}`;
       const g = groups.get(key) ?? { items: [] };
       g.items.push(t);
       groups.set(key, g);
@@ -217,7 +217,7 @@ export function EntradasSaidasDetailModal({
         const isOverdue = first.status === "Pendente" && !!first.payment_date && first.payment_date < todayStr;
         const isPreviousPeriod = !!first.payment_date && first.payment_date < dateFrom;
         return {
-          key: first.series_id ? `s:${first.series_id}` : `t:${first.id}`,
+          key: `t:${first.id}`,
           first,
           items: sorted,
           isSeries,
@@ -338,7 +338,7 @@ export function EntradasSaidasDetailModal({
             <span className="font-medium text-foreground">{formatDate(dateTo)}</span>
             {isPrevisto && (overdueTotal ?? 0) > 0 ? " (inclui valores em atraso de meses anteriores)" : ""}.{" "}
             <span className="text-muted-foreground">
-              {lines.length} lançamento(s) após agrupar parcelas.
+              {lines.length} lançamento(s).
             </span>
           </DialogDescription>
         </DialogHeader>
