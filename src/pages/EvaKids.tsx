@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { GraduationCap, Wallet, ArrowUpCircle, ArrowDownCircle, PlusCircle, Settings, History, CalendarIcon, ChevronLeft, Baby, Trash2 } from "lucide-react";
+import { GraduationCap, Wallet, ArrowUpCircle, ArrowDownCircle, PlusCircle, Settings, History, CalendarIcon, ChevronLeft, Baby, Trash2, Pencil } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -258,6 +258,7 @@ function KidDashboard({
     date: format(new Date(), "yyyy-MM-dd"),
     category: "",
   });
+  const [editingTxId, setEditingTxId] = useState<string | null>(null);
 
   const fetchKidsTransactions = useCallback(async () => {
     setLoading(true);
@@ -282,9 +283,20 @@ function KidDashboard({
     return curr.type === "receita" ? acc + curr.amount : acc - curr.amount;
   }, 0);
 
-  const openModal = (type: "receita" | "despesa") => {
+  const openModal = (type: "receita" | "despesa", txToEdit?: Tx) => {
     setModalType(type);
-    setFormData({ title: "", amount: "", date: format(new Date(), "yyyy-MM-dd"), category: "" });
+    if (txToEdit) {
+      setEditingTxId(txToEdit.id);
+      setFormData({
+        title: txToEdit.description || "",
+        amount: txToEdit.amount.toString(),
+        date: txToEdit.payment_date || format(new Date(), "yyyy-MM-dd"),
+        category: txToEdit.category || "",
+      });
+    } else {
+      setEditingTxId(null);
+      setFormData({ title: "", amount: "", date: format(new Date(), "yyyy-MM-dd"), category: "" });
+    }
     setIsModalOpen(true);
   };
 
@@ -300,27 +312,58 @@ function KidDashboard({
       return;
     }
 
-    const payload: TablesInsert<"transactions"> = {
-      user_id: effectiveUserId,
-      type: modalType,
-      description: formData.title,
-      amount: amountVal,
-      payment_date: formData.date,
-      competence_date: formData.date,
-      category: formData.category || "Geral",
-      status: "Pago",
-      wallet_id: wallet.id,
-    };
+    if (editingTxId) {
+      const { error } = await supabase.from("transactions").update({
+        type: modalType,
+        description: formData.title,
+        amount: amountVal,
+        payment_date: formData.date,
+        competence_date: formData.date,
+        category: formData.category || "Geral",
+      }).eq("id", editingTxId);
 
-    const { error } = await supabase.from("transactions").insert(payload);
+      if (error) {
+        toast.error("Erro ao atualizar lançamento.");
+        console.error(error);
+        return;
+      }
+      toast.success("Lançamento atualizado!");
+    } else {
+      const payload: TablesInsert<"transactions"> = {
+        user_id: effectiveUserId,
+        type: modalType,
+        description: formData.title,
+        amount: amountVal,
+        payment_date: formData.date,
+        competence_date: formData.date,
+        category: formData.category || "Geral",
+        status: "Pago",
+        wallet_id: wallet.id,
+      };
+
+      const { error } = await supabase.from("transactions").insert(payload);
+      if (error) {
+        toast.error("Erro ao salvar lançamento.");
+        console.error(error);
+        return;
+      }
+      toast.success("Lançamento registrado!");
+    }
+
+    setIsModalOpen(false);
+    fetchKidsTransactions();
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
+    
+    const { error } = await supabase.from("transactions").delete().eq("id", id);
     if (error) {
-      toast.error("Erro ao salvar lançamento.");
+      toast.error("Erro ao excluir lançamento.");
       console.error(error);
       return;
     }
-
-    toast.success("Lançamento salvo!");
-    setIsModalOpen(false);
+    toast.success("Lançamento excluído!");
     fetchKidsTransactions();
   };
 
@@ -408,7 +451,7 @@ function KidDashboard({
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>
             ) : (
               transactions.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
+                <div key={tx.id} className="group flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
                   <div className="flex items-center gap-3">
                     {tx.type === "receita" ? (
                       <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full">
@@ -428,8 +471,18 @@ function KidDashboard({
                       </p>
                     </div>
                   </div>
-                  <div className={`font-semibold ${tx.type === "receita" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                    {tx.type === "receita" ? "+" : "-"} R$ {tx.amount.toFixed(2).replace(".", ",")}
+                  <div className="flex items-center gap-4">
+                    <div className={`font-semibold ${tx.type === "receita" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                      {tx.type === "receita" ? "+" : "-"} R$ {tx.amount.toFixed(2).replace(".", ",")}
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => openModal(tx.type as "receita" | "despesa", tx)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteTransaction(tx.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -444,7 +497,7 @@ function KidDashboard({
           <DialogHeader>
             <DialogTitle>{modalType === "receita" ? "Adicionar Fundo" : "Registrar Gasto"}</DialogTitle>
             <DialogDescription>
-              {modalType === "receita" ? "Adicionar saldo" : "Registrar despesa"} para {displayName}.
+              {editingTxId ? "Edite as informações abaixo." : (modalType === "receita" ? `Adicionar saldo para ${displayName}.` : `Registrar despesa para ${displayName}.`)}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

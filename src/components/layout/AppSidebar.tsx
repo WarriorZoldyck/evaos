@@ -315,7 +315,7 @@ export function AppSidebar() {
           <SidebarGroupLabel className="sidebar-group-label text-[11px] uppercase tracking-wider font-semibold text-muted-foreground/70">Novidades</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {comingSoonItems.map((item) => (
+              {comingSoonItems.filter(item => item.title !== "EVA Kids" || onlyPersonal).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
