@@ -252,8 +252,13 @@ serve(async (req) => {
       : null;
     const activeContextName = activeCompany ? activeCompany.name : "Pessoal";
 
+    // Build custom prompt block EARLY so it appears at the top of the system prompt
+    const customPromptBlock = (customPrompt && typeof customPrompt === "string" && customPrompt.trim())
+      ? `\n\nINSTRUÇÕES PERSONALIZADAS DO USUÁRIO (PRIORIDADE MÁXIMA — siga rigorosamente em TODAS as respostas, inclusive friendly_message, tom de voz, e análises):\n${customPrompt.trim()}\n`
+      : "";
+
     // Build system prompt (same as whatsapp-webhook but adapted for in-app chat)
-    const systemPrompt = `Você é a EVA, assistente financeira inteligente do EVA OS. O usuário está conversando com você dentro do sistema web. Analise a mensagem e classifique a intenção.
+    const systemPrompt = `Você é a EVA, assistente financeira inteligente do EVA OS. O usuário está conversando com você dentro do sistema web. Analise a mensagem e classifique a intenção.${customPromptBlock}
 
 IMPORTANTE: Você está dentro do sistema, então pode executar ações diretamente. NÃO precisa de confirmações via pending_actions. Execute as ações e retorne o resultado.
 
@@ -361,10 +366,7 @@ REGRA — contact_name: SEMPRE preencha com o nome do estabelecimento quando ide
 REGRA — ESTABELECIMENTO NÃO É CATEGORIA.
 ${historicalPatternsBlock}`;
 
-    let finalSystemPrompt = systemPrompt;
-    if (customPrompt && typeof customPrompt === "string") {
-      finalSystemPrompt += `\n\nINSTRUÇÕES PERSONALIZADAS DO USUÁRIO (Siga rigorosamente):\n${customPrompt}`;
-    }
+    const finalSystemPrompt = systemPrompt;
 
     // First, call AI non-streaming to get the JSON response
     const aiResponse = await fetchAiCompletions({
@@ -466,6 +468,7 @@ ${historicalPatternsBlock}`;
         analysisType: aiParsed.analysis_type || null,
         targetAmount: Number(aiParsed.target_amount) || null,
         history: messages.slice(-6).map((m: any) => ({ role: m.role, content: contentToText(m.content) })),
+        customPrompt: customPromptBlock || undefined,
       });
 
       if (!result.ok) {
@@ -989,6 +992,7 @@ ${historicalPatternsBlock}`;
                 reportText: responseMessage,
                 channel: "app",
                 contextLabel: aiParsed.context || null,
+                customPrompt: customPromptBlock || undefined,
               });
               if (reading) responseMessage += `\n\n**🧠 Leitura da EVA (CFO)**\n\n${reading}`;
             }
@@ -1308,6 +1312,7 @@ ${historicalPatternsBlock}`;
           channel: "app",
           analysisType: "diagnostico",
           history: messages.slice(-6).map((m: any) => ({ role: m.role, content: contentToText(m.content) })),
+          customPrompt: customPromptBlock || undefined,
         });
         if (result.ok) {
           return new Response(JSON.stringify({ reply: result.text, action: "analysis" }), {

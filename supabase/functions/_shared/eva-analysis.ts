@@ -380,6 +380,7 @@ export interface RunAnalysisArgs {
   analysisType?: string | null;
   targetAmount?: number | null;
   history?: { role: string; content: string }[];
+  customPrompt?: string;
 }
 
 export interface RunAnalysisResult {
@@ -390,7 +391,7 @@ export interface RunAnalysisResult {
 }
 
 export async function runAnalysis(args: RunAnalysisArgs): Promise<RunAnalysisResult> {
-  const { apiKey, question, dataBlock, channel, analysisType, targetAmount, history = [] } = args;
+  const { apiKey, question, dataBlock, channel, analysisType, targetAmount, history = [], customPrompt } = args;
 
   const formatRules =
     channel === "whatsapp"
@@ -430,7 +431,7 @@ ${analysisType ? `8. Tipo de análise solicitada: ${analysisType}.` : ""}
 ${targetAmount ? `9. Valor-alvo informado pelo usuário: ${fmtBRL(targetAmount)}.` : ""}
 
 ${formatRules}
-
+${customPrompt ? `\n${customPrompt}` : ""}
 ${dataBlock}`;
 
   const messages = [
@@ -499,8 +500,9 @@ export async function runCfoReading(args: {
   reportText: string;
   channel: "app" | "whatsapp";
   contextLabel?: string | null;
+  customPrompt?: string;
 }): Promise<string | null> {
-  const { apiKey, reportText, channel, contextLabel } = args;
+  const { apiKey, reportText, channel, contextLabel, customPrompt } = args;
 
   const format =
     channel === "whatsapp"
@@ -516,7 +518,8 @@ Sua tarefa é a LEITURA DE CFO desse relatório:
 3. 2 a 3 ações concretas para o restante do mês, com valores.
 
 REGRAS: use SOMENTE os números do relatório e projeções derivadas deles — nunca invente valores novos. Não repita o relatório inteiro. Sem saudação. Português do Brasil.
-${format}`;
+${format}
+${customPrompt || ""}`;
 
   try {
     const res = await fetchAiCompletions(
