@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { GraduationCap, Wallet, ArrowUpCircle, ArrowDownCircle, PlusCircle, Settings, History, CalendarIcon, ChevronLeft, Baby, Trash2, Pencil } from "lucide-react";
+import { GraduationCap, Wallet, ArrowUpCircle, ArrowDownCircle, PlusCircle, Settings, History, CalendarIcon, ChevronLeft, Baby, Trash2, Pencil, Star, Sparkles, Moon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { format, endOfMonth } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -194,16 +196,17 @@ export default function EvaKids() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                   <CardContent className="p-6 flex flex-col items-center justify-center gap-4 text-center">
-                    <div className="h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Baby className="h-8 w-8 text-primary" />
+                    <div className="h-16 w-16 bg-blue-100/50 dark:bg-blue-900/20 rounded-full flex items-center justify-center relative overflow-hidden">
+                      <Sparkles className="h-8 w-8 text-blue-500 absolute opacity-50" />
+                      <Star className="h-8 w-8 text-amber-400 z-10 drop-shadow-md" />
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg">{getKidDisplayName(wallet)}</h3>
-                      <p className="text-sm text-muted-foreground">Conta Corrente</p>
+                      <p className="text-sm text-muted-foreground">Constelação</p>
                       {wallet.balance !== undefined && (
                         <div className="mt-3">
                           <p className="text-xl font-bold text-primary">R$ {wallet.balance.toFixed(2).replace(".", ",")}</p>
-                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Saldo Disponível</p>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Brilho Atual</p>
                         </div>
                       )}
                     </div>
@@ -329,7 +332,7 @@ function KidDashboard({
   const endOfThisMonthStr = format(endOfMonth(new Date()), "yyyy-MM-dd");
   const pastAndCurrentTransactions = transactions.filter(tx => tx.payment_date && tx.payment_date <= endOfThisMonthStr);
   const futureTransactions = transactions.filter(tx => tx.payment_date && tx.payment_date > endOfThisMonthStr);
-  
+
   const balance = pastAndCurrentTransactions.reduce((acc, curr) => {
     return curr.type === "receita" ? acc + curr.amount : acc - curr.amount;
   }, 0);
@@ -338,52 +341,129 @@ function KidDashboard({
     return curr.type === "receita" ? acc + curr.amount : acc - curr.amount;
   }, 0);
 
+  const parseInstallment = (desc: string) => {
+    const match = desc.match(/(.+?)\s+\((\d+)\/(\d+)\)$/);
+    if (match) {
+      return { baseName: match[1].trim(), current: parseInt(match[2]), total: parseInt(match[3]) };
+    }
+    return null;
+  };
+
+  const renderSingleTx = (tx: Tx, txIsFuture: boolean, hideBorder: boolean = false) => (
+    <div key={tx.id} className={`group flex items-center justify-between p-3 ${hideBorder ? '' : 'border rounded-lg'} transition-colors ${txIsFuture && !hideBorder ? 'bg-muted/30 border-dashed border-muted-foreground/30 opacity-80' : 'bg-card hover:bg-muted/50'}`}>
+      <div className="flex items-center gap-3">
+        {tx.type === "receita" ? (
+          <div className={`p-2 rounded-full ${txIsFuture ? 'bg-green-100/50 dark:bg-green-900/10' : 'bg-green-100 dark:bg-green-900/30'}`}>
+            <ArrowUpCircle className={`h-5 w-5 ${txIsFuture ? 'text-green-600/60 dark:text-green-400/60' : 'text-green-600 dark:text-green-400'}`} />
+          </div>
+        ) : (
+          <div className={`p-2 rounded-full ${txIsFuture ? 'bg-red-100/50 dark:bg-red-900/10' : 'bg-red-100 dark:bg-red-900/30'}`}>
+            <ArrowDownCircle className={`h-5 w-5 ${txIsFuture ? 'text-red-600/60 dark:text-red-400/60' : 'text-red-600 dark:text-red-400'}`} />
+          </div>
+        )}
+        <div>
+          <p className={`font-medium text-sm flex items-center gap-2 ${txIsFuture ? 'text-muted-foreground' : ''}`}>
+            {tx.description}
+            {txIsFuture && !hideBorder && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-muted-foreground/30">Previsto</Badge>}
+          </p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+            <CalendarIcon className="h-3 w-3" />
+            {tx.payment_date ? new Date(tx.payment_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+            {tx.category && <span className="ml-1 px-2 py-0.5 bg-muted rounded-full text-[10px]">{tx.category}</span>}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        <div className={`font-semibold ${tx.type === "receita" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"} ${txIsFuture ? 'opacity-80' : ''}`}>
+          {tx.type === "receita" ? "+" : "-"} R$ {tx.amount.toFixed(2).replace(".", ",")}
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => openModal(tx.type as "receita" | "despesa", tx)}>
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteTransaction(tx.id)}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderTransactionList = (txList: Tx[], isProjected: boolean = false) => {
     if (loading) return <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>;
     if (txList.length === 0) return <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>;
     
-    return txList.map((tx) => {
-      const txIsFuture = isProjected || (tx.payment_date && tx.payment_date > endOfThisMonthStr);
-      return (
-        <div key={tx.id} className={`group flex items-center justify-between p-3 border rounded-lg transition-colors ${txIsFuture ? 'bg-muted/30 border-dashed border-muted-foreground/30 opacity-80' : 'bg-card hover:bg-muted/50'}`}>
-          <div className="flex items-center gap-3">
-            {tx.type === "receita" ? (
-              <div className={`p-2 rounded-full ${txIsFuture ? 'bg-green-100/50 dark:bg-green-900/10' : 'bg-green-100 dark:bg-green-900/30'}`}>
-                <ArrowUpCircle className={`h-5 w-5 ${txIsFuture ? 'text-green-600/60 dark:text-green-400/60' : 'text-green-600 dark:text-green-400'}`} />
-              </div>
-            ) : (
-              <div className={`p-2 rounded-full ${txIsFuture ? 'bg-red-100/50 dark:bg-red-900/10' : 'bg-red-100 dark:bg-red-900/30'}`}>
-                <ArrowDownCircle className={`h-5 w-5 ${txIsFuture ? 'text-red-600/60 dark:text-red-400/60' : 'text-red-600 dark:text-red-400'}`} />
-              </div>
-            )}
-            <div>
-              <p className={`font-medium text-sm flex items-center gap-2 ${txIsFuture ? 'text-muted-foreground' : ''}`}>
-                {tx.description}
-                {txIsFuture && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-muted-foreground/30">Previsto</Badge>}
-              </p>
-              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                <CalendarIcon className="h-3 w-3" />
-                {tx.payment_date ? new Date(tx.payment_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
-                {tx.category && <span className="ml-1 px-2 py-0.5 bg-muted rounded-full text-[10px]">{tx.category}</span>}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className={`font-semibold ${tx.type === "receita" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"} ${txIsFuture ? 'opacity-80' : ''}`}>
-              {tx.type === "receita" ? "+" : "-"} R$ {tx.amount.toFixed(2).replace(".", ",")}
-            </div>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => openModal(tx.type as "receita" | "despesa", tx)}>
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteTransaction(tx.id)}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      );
+    if (!isProjected) {
+      return txList.map((tx) => {
+        const txIsFuture = tx.payment_date ? tx.payment_date > endOfThisMonthStr : false;
+        return renderSingleTx(tx, txIsFuture);
+      });
+    }
+
+    const grouped: Record<string, Tx[]> = {};
+    const singles: Tx[] = [];
+
+    txList.forEach(tx => {
+      const parsed = parseInstallment(tx.description || "");
+      if (parsed) {
+        if (!grouped[parsed.baseName]) grouped[parsed.baseName] = [];
+        grouped[parsed.baseName].push(tx);
+      } else {
+        singles.push(tx);
+      }
     });
+
+    return (
+      <div className="space-y-4">
+        {singles.map(tx => renderSingleTx(tx, true))}
+        
+        {Object.keys(grouped).length > 0 && (
+          <Accordion type="multiple" className="w-full space-y-4">
+            {Object.entries(grouped).map(([baseName, groupTxs]) => {
+              const parsedFirst = parseInstallment(groupTxs[0].description || "");
+              const totalInstallments = parsedFirst?.total || 1;
+              const remainingInstallments = groupTxs.length;
+              const completedInstallments = totalInstallments - remainingInstallments;
+              const progressPercentage = (completedInstallments / totalInstallments) * 100;
+              const totalGroupAmount = groupTxs.reduce((acc, tx) => acc + Number(tx.amount), 0);
+              const isReceita = groupTxs[0].type === "receita";
+
+              return (
+                <AccordionItem key={baseName} value={baseName} className="border rounded-lg bg-muted/10 px-1 overflow-hidden">
+                  <AccordionTrigger className="hover:no-underline px-3 py-3 data-[state=open]:border-b">
+                    <div className="flex items-center justify-between w-full pr-4">
+                      <div className="flex flex-col items-start gap-1">
+                        <div className="flex items-center gap-2">
+                          <Star className="h-4 w-4 text-amber-400/80" />
+                          <span className="font-semibold text-sm">{baseName}</span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-muted-foreground/30">
+                            Constelação Incompleta
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 w-full mt-1">
+                          <Progress value={progressPercentage} className="h-1.5 w-24" />
+                          <span className="text-[10px] text-muted-foreground">
+                            {completedInstallments}/{totalInstallments} concluído
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`font-semibold ${isReceita ? "text-green-600/80" : "text-red-600/80"}`}>
+                        {isReceita ? "+" : "-"} R$ {totalGroupAmount.toFixed(2).replace(".", ",")}
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-2 pb-0 px-2">
+                    <div className="space-y-1">
+                      {groupTxs.map(tx => renderSingleTx(tx, true, true))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
+        )}
+      </div>
+    );
   };
 
   const openModal = (type: "receita" | "despesa", txToEdit?: Tx) => {
@@ -400,10 +480,10 @@ function KidDashboard({
       });
     } else {
       setEditingTxId(null);
-      setFormData({ 
-        title: "", 
-        amount: "", 
-        date: format(new Date(), "yyyy-MM-dd"), 
+      setFormData({
+        title: "",
+        amount: "",
+        date: format(new Date(), "yyyy-MM-dd"),
         category: "",
         isInstallment: false,
         installmentsCount: 2,
@@ -445,12 +525,12 @@ function KidDashboard({
         const numInstallments = formData.installmentsCount;
         const installmentAmount = amountVal / numInstallments;
         const startDate = new Date(formData.date + "T12:00:00");
-        
+
         const payloads: TablesInsert<"transactions">[] = [];
         for (let i = 0; i < numInstallments; i++) {
           const installmentDate = new Date(startDate);
           installmentDate.setMonth(installmentDate.getMonth() + i);
-          
+
           payloads.push({
             user_id: effectiveUserId,
             type: modalType,
@@ -500,7 +580,7 @@ function KidDashboard({
 
   const handleDeleteTransaction = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir este lançamento?")) return;
-    
+
     const { error } = await supabase.from("transactions").delete().eq("id", id);
     if (error) {
       toast.error("Erro ao excluir lançamento.");
@@ -514,41 +594,42 @@ function KidDashboard({
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
       {/* Balance */}
-      <Card className="md:col-span-2 border-primary/20 shadow-premium glow-primary-sm bg-gradient-primary-soft relative overflow-hidden">
+      <Card className="md:col-span-2 border-primary/20 shadow-premium glow-primary-sm bg-gradient-to-br from-indigo-950 via-slate-900 to-indigo-900 relative overflow-hidden text-white">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 pointer-events-none mix-blend-screen" />
         <div className="absolute top-0 right-0 p-4 opacity-10">
-          <Wallet className="w-32 h-32" />
+          <Moon className="w-32 h-32 text-indigo-300" />
         </div>
         <CardHeader>
-          <CardTitle className="text-primary flex items-center gap-2">
-            <Wallet className="h-5 w-5" />
-            Conta de {displayName}
+          <CardTitle className="text-indigo-100 flex items-center gap-2">
+            <Star className="h-5 w-5 text-amber-300" />
+            Constelação de {displayName}
           </CardTitle>
-          <CardDescription>Saldo disponível para gastos</CardDescription>
+          <CardDescription className="text-indigo-200/70">Brilho cultivado para aventuras</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="text-4xl font-bold font-display text-primary transition-all duration-300">
-            {loading ? "Carregando..." : `R$ ${balance.toFixed(2).replace(".", ",")}`}
+          <div className="text-4xl font-bold font-display text-white transition-all duration-300 drop-shadow-lg">
+            {loading ? "Calculando brilho..." : `R$ ${balance.toFixed(2).replace(".", ",")}`}
           </div>
-          <div className="text-sm text-muted-foreground mt-1 font-medium">
-            {loading ? "..." : `Saldo após parcelas futuras: R$ ${projectedBalance.toFixed(2).replace(".", ",")}`}
+          <div className="text-sm text-indigo-200/80 mt-1 font-medium">
+            {loading ? "..." : `Brilho após previsões: R$ ${projectedBalance.toFixed(2).replace(".", ",")}`}
           </div>
           <div className="mt-8 flex gap-4 relative z-10">
             <Button
               onClick={() => openModal("receita")}
-              className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-2"
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-indigo-950 font-semibold gap-2 border-none"
               disabled={loading}
             >
-              <ArrowUpCircle className="h-4 w-4" />
-              Adicionar Fundo
+              <Sparkles className="h-4 w-4" />
+              Cultivar Brilho
             </Button>
             <Button
               onClick={() => openModal("despesa")}
               variant="outline"
-              className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive gap-2 border-destructive/20"
+              className="flex-1 text-indigo-100 hover:bg-indigo-800/50 hover:text-white gap-2 border-indigo-400/30 bg-indigo-950/40 backdrop-blur-sm"
               disabled={loading}
             >
-              <ArrowDownCircle className="h-4 w-4" />
-              Registrar Gasto
+              <Star className="h-4 w-4 opacity-70" />
+              Compartilhar Luz
             </Button>
           </div>
         </CardContent>
@@ -570,7 +651,7 @@ function KidDashboard({
           </div>
           <div className="space-y-2">
             <Label>Frequência</Label>
-            <select 
+            <select
               className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
               value={frequency}
               onChange={(e) => setFrequency(e.target.value as "monthly" | "weekly")}
@@ -579,11 +660,11 @@ function KidDashboard({
               <option value="weekly">Semanal</option>
             </select>
           </div>
-          
+
           {frequency === "weekly" ? (
             <div className="space-y-2 animate-in fade-in zoom-in duration-300">
               <Label>Dia da Semana</Label>
-              <select 
+              <select
                 className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
                 value={dayOfWeek}
                 onChange={(e) => setDayOfWeek(e.target.value)}
@@ -600,13 +681,13 @@ function KidDashboard({
           ) : (
             <div className="space-y-2 animate-in fade-in zoom-in duration-300">
               <Label>Dia do Mês</Label>
-              <Input 
-                type="number" 
-                min="1" 
-                max="31" 
-                value={dayOfMonth} 
-                onChange={(e) => setDayOfMonth(e.target.value)} 
-                className="font-medium" 
+              <Input
+                type="number"
+                min="1"
+                max="31"
+                value={dayOfMonth}
+                onChange={(e) => setDayOfMonth(e.target.value)}
+                className="font-medium"
                 placeholder="Ex: 5"
               />
             </div>
@@ -627,9 +708,9 @@ function KidDashboard({
               Histórico
             </CardTitle>
             <TabsList className="h-9">
-              <TabsTrigger value="realizado" className="text-xs">Realizado</TabsTrigger>
-              <TabsTrigger value="projetado" className="text-xs">Projetado</TabsTrigger>
-              <TabsTrigger value="todos" className="text-xs">Todos</TabsTrigger>
+              <TabsTrigger value="realizado" className="text-xs">Atravessado</TabsTrigger>
+              <TabsTrigger value="projetado" className="text-xs">Previsão</TabsTrigger>
+              <TabsTrigger value="todos" className="text-xs">Tudo</TabsTrigger>
             </TabsList>
           </CardHeader>
           <CardContent className="pt-6">
@@ -650,9 +731,9 @@ function KidDashboard({
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{modalType === "receita" ? "Adicionar Fundo" : "Registrar Gasto"}</DialogTitle>
+            <DialogTitle>{modalType === "receita" ? "Cultivar Brilho" : "Compartilhar Luz"}</DialogTitle>
             <DialogDescription>
-              {editingTxId ? "Edite as informações abaixo." : (modalType === "receita" ? `Adicionar saldo para ${displayName}.` : `Registrar despesa para ${displayName}.`)}
+              {editingTxId ? "Molde as informações desta luz." : (modalType === "receita" ? `Adicione brilho à constelação de ${displayName}.` : `Registre uma nova jornada para ${displayName}.`)}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -675,28 +756,28 @@ function KidDashboard({
                 <Input id="date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
               </div>
             </div>
-            
+
             {modalType === "despesa" && !editingTxId && (
               <div className="space-y-4 border p-3 rounded-md bg-muted/10 mt-2">
                 <div className="flex items-center space-x-2">
-                  <Switch 
-                    id="is-installment" 
+                  <Switch
+                    id="is-installment"
                     checked={formData.isInstallment}
                     onCheckedChange={(checked) => setFormData({ ...formData, isInstallment: checked })}
                   />
                   <Label htmlFor="is-installment" className="cursor-pointer font-medium">Compra Parcelada?</Label>
                 </div>
-                
+
                 {formData.isInstallment && (
                   <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
                     <Label htmlFor="installmentsCount">Número de Parcelas</Label>
-                    <Input 
-                      id="installmentsCount" 
-                      type="number" 
+                    <Input
+                      id="installmentsCount"
+                      type="number"
                       min="2"
                       max="48"
-                      value={formData.installmentsCount} 
-                      onChange={(e) => setFormData({ ...formData, installmentsCount: parseInt(e.target.value) || 2 })} 
+                      value={formData.installmentsCount}
+                      onChange={(e) => setFormData({ ...formData, installmentsCount: parseInt(e.target.value) || 2 })}
                     />
                     {formData.amount && formData.installmentsCount > 1 && (
                       <p className="text-sm text-muted-foreground mt-2 bg-muted/30 p-2 rounded border border-muted">
