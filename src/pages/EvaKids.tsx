@@ -298,6 +298,7 @@ function KidDashboard({
   const [frequency, setFrequency] = useState<"monthly" | "weekly">("weekly");
   const [dayOfWeek, setDayOfWeek] = useState<string>("1");
   const [dayOfMonth, setDayOfMonth] = useState<string>("5");
+  const [isAllowanceSaved, setIsAllowanceSaved] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"receita" | "despesa">("despesa");
   const [formData, setFormData] = useState({
@@ -642,60 +643,117 @@ function KidDashboard({
             <Settings className="h-5 w-5 text-muted-foreground" />
             Regras de Mesada
           </CardTitle>
-          <CardDescription>Defina o valor e frequência</CardDescription>
+          <CardDescription>
+            {isAllowanceSaved ? "Configuração ativa" : "Defina o valor e frequência"}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Valor da Mesada (R$)</Label>
-            <Input type="number" value={allowance} onChange={(e) => setAllowance(Number(e.target.value))} className="font-medium" />
-          </div>
-          <div className="space-y-2">
-            <Label>Frequência</Label>
-            <select
-              className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
-              value={frequency}
-              onChange={(e) => setFrequency(e.target.value as "monthly" | "weekly")}
-            >
-              <option value="monthly">Mensal</option>
-              <option value="weekly">Semanal</option>
-            </select>
-          </div>
-
-          {frequency === "weekly" ? (
-            <div className="space-y-2 animate-in fade-in zoom-in duration-300">
-              <Label>Dia da Semana</Label>
-              <select
-                className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
-                value={dayOfWeek}
-                onChange={(e) => setDayOfWeek(e.target.value)}
-              >
-                <option value="0">Domingo</option>
-                <option value="1">Segunda-feira</option>
-                <option value="2">Terça-feira</option>
-                <option value="3">Quarta-feira</option>
-                <option value="4">Quinta-feira</option>
-                <option value="5">Sexta-feira</option>
-                <option value="6">Sábado</option>
-              </select>
+        <CardContent>
+          {isAllowanceSaved ? (
+            <div className="space-y-4 animate-in fade-in zoom-in duration-300">
+              <div className="p-4 bg-muted/20 border rounded-lg space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Valor</span>
+                  <span className="font-semibold text-primary">R$ {allowance.toFixed(2).replace(".", ",")}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Frequência</span>
+                  <span className="font-medium text-sm text-right">
+                    {frequency === "weekly" 
+                      ? `Semanal (${["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][parseInt(dayOfWeek)]})` 
+                      : `Mensal (Dia ${dayOfMonth})`}
+                  </span>
+                </div>
+                <div className="pt-2 border-t flex justify-between items-center mt-2">
+                  <span className="text-sm text-muted-foreground flex items-center gap-1">
+                    <CalendarIcon className="h-3 w-3" /> Próxima jornada
+                  </span>
+                  <span className="text-sm font-semibold text-amber-500">
+                    {(() => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      let nextDate = new Date(today);
+                      
+                      if (frequency === "weekly") {
+                        const targetDay = parseInt(dayOfWeek);
+                        const currentDay = today.getDay();
+                        let daysToAdd = targetDay - currentDay;
+                        if (daysToAdd <= 0) daysToAdd += 7;
+                        nextDate.setDate(today.getDate() + daysToAdd);
+                      } else {
+                        const targetDate = parseInt(dayOfMonth) || 5;
+                        nextDate = new Date(today.getFullYear(), today.getMonth(), targetDate);
+                        if (nextDate <= today) {
+                          nextDate = new Date(today.getFullYear(), today.getMonth() + 1, targetDate);
+                        }
+                      }
+                      return format(nextDate, "dd/MM/yyyy");
+                    })()}
+                  </span>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full gap-2" onClick={() => setIsAllowanceSaved(false)}>
+                <Pencil className="h-4 w-4" />
+                Editar Regras
+              </Button>
             </div>
           ) : (
-            <div className="space-y-2 animate-in fade-in zoom-in duration-300">
-              <Label>Dia do Mês</Label>
-              <Input
-                type="number"
-                min="1"
-                max="31"
-                value={dayOfMonth}
-                onChange={(e) => setDayOfMonth(e.target.value)}
-                className="font-medium"
-                placeholder="Ex: 5"
-              />
+            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="space-y-2">
+                <Label>Valor da Mesada (R$)</Label>
+                <Input type="number" value={allowance} onChange={(e) => setAllowance(Number(e.target.value))} className="font-medium" />
+              </div>
+              <div className="space-y-2">
+                <Label>Frequência</Label>
+                <select 
+                  className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
+                  value={frequency}
+                  onChange={(e) => setFrequency(e.target.value as "monthly" | "weekly")}
+                >
+                  <option value="monthly">Mensal</option>
+                  <option value="weekly">Semanal</option>
+                </select>
+              </div>
+              
+              {frequency === "weekly" ? (
+                <div className="space-y-2 animate-in fade-in zoom-in duration-300">
+                  <Label>Dia da Semana</Label>
+                  <select 
+                    className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
+                    value={dayOfWeek}
+                    onChange={(e) => setDayOfWeek(e.target.value)}
+                  >
+                    <option value="0">Domingo</option>
+                    <option value="1">Segunda-feira</option>
+                    <option value="2">Terça-feira</option>
+                    <option value="3">Quarta-feira</option>
+                    <option value="4">Quinta-feira</option>
+                    <option value="5">Sexta-feira</option>
+                    <option value="6">Sábado</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="space-y-2 animate-in fade-in zoom-in duration-300">
+                  <Label>Dia do Mês</Label>
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    max="31" 
+                    value={dayOfMonth} 
+                    onChange={(e) => setDayOfMonth(e.target.value)} 
+                    className="font-medium" 
+                    placeholder="Ex: 5"
+                  />
+                </div>
+              )}
+              <Button variant="secondary" className="w-full gap-2 mt-2" onClick={() => {
+                setIsAllowanceSaved(true);
+                toast.success("Regras salvas e ativadas!");
+              }}>
+                <PlusCircle className="h-4 w-4" />
+                Salvar Regras
+              </Button>
             </div>
           )}
-          <Button variant="secondary" className="w-full gap-2 mt-2" onClick={() => toast.success("Regras atualizadas!")}>
-            <PlusCircle className="h-4 w-4" />
-            Salvar Regras
-          </Button>
         </CardContent>
       </Card>
 
