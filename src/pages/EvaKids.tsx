@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { format, endOfMonth } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +22,7 @@ const KIDS_WALLET_PREFIX = "Kids - ";
 interface KidsWallet {
   id: string;
   name: string;
+  balance?: number;
 }
 
 // ─── Parent: only fetches wallets directly, never transactions ───
@@ -52,10 +55,42 @@ export default function EvaKids() {
       query = query.eq("company_id", selectedCompanyId);
     }
 
-    const { data, error } = await query;
-    if (!error && data) {
-      setKidsWallets(data);
+    const { data: walletsData, error } = await query;
+    if (error || !walletsData) {
+      setWalletsLoading(false);
+      return;
     }
+
+    const walletIds = walletsData.map((w) => w.id);
+    if (walletIds.length === 0) {
+      setKidsWallets([]);
+      setWalletsLoading(false);
+      return;
+    }
+
+    // Calcula saldo
+    const endOfThisMonthStr = format(endOfMonth(new Date()), "yyyy-MM-dd");
+    const { data: txData } = await supabase
+      .from("transactions")
+      .select("wallet_id, amount, type")
+      .in("wallet_id", walletIds)
+      .lte("payment_date", endOfThisMonthStr);
+
+    const balanceMap: Record<string, number> = {};
+    if (txData) {
+      txData.forEach((tx) => {
+        if (!balanceMap[tx.wallet_id]) balanceMap[tx.wallet_id] = 0;
+        balanceMap[tx.wallet_id] +=
+          tx.type === "receita" ? Number(tx.amount) : -Number(tx.amount);
+      });
+    }
+
+    const enrichedWallets = walletsData.map((w) => ({
+      ...w,
+      balance: balanceMap[w.id] || 0,
+    }));
+
+    setKidsWallets(enrichedWallets);
     setWalletsLoading(false);
   }, [effectiveUserId, isPersonal, selectedCompanyId]);
 
@@ -165,6 +200,12 @@ export default function EvaKids() {
                     <div>
                       <h3 className="font-semibold text-lg">{getKidDisplayName(wallet)}</h3>
                       <p className="text-sm text-muted-foreground">Conta Corrente</p>
+                      {wallet.balance !== undefined && (
+                        <div className="mt-3">
+                          <p className="text-xl font-bold text-primary">R$ {wallet.balance.toFixed(2).replace(".", ",")}</p>
+                          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Saldo Disponível</p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -250,7 +291,6 @@ function KidDashboard({
 
   const [transactions, setTransactions] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showFutureTransactions, setShowFutureTransactions] = useState(false);
   const [allowance, setAllowance] = useState(50.0);
   const [frequency, setFrequency] = useState<"monthly" | "weekly">("weekly");
   const [dayOfWeek, setDayOfWeek] = useState<string>("1");
@@ -288,12 +328,63 @@ function KidDashboard({
 
   const endOfThisMonthStr = format(endOfMonth(new Date()), "yyyy-MM-dd");
   const pastAndCurrentTransactions = transactions.filter(tx => tx.payment_date && tx.payment_date <= endOfThisMonthStr);
+  const futureTransactions = transactions.filter(tx => tx.payment_date && tx.payment_date > endOfThisMonthStr);
   
   const balance = pastAndCurrentTransactions.reduce((acc, curr) => {
     return curr.type === "receita" ? acc + curr.amount : acc - curr.amount;
   }, 0);
 
-  const displayedTransactions = showFutureTransactions ? transactions : pastAndCurrentTransactions;
+  const projectedBalance = transactions.reduce((acc, curr) => {
+    return curr.type === "receita" ? acc + curr.amount : acc - curr.amount;
+  }, 0);
+
+  const renderTransactionList = (txList: Tx[], isProjected: boolean = false) => {
+    if (loading) return <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>;
+    if (txList.length === 0) return <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>;
+    
+    return txList.map((tx) => {
+      const txIsFuture = isProjected || (tx.payment_date && tx.payment_date > endOfThisMonthStr);
+      return (
+        <div key={tx.id} className={`group flex items-center justify-between p-3 border rounded-lg transition-colors ${txIsFuture ? 'bg-muted/30 border-dashed border-muted-foreground/30 opacity-80' : 'bg-card hover:bg-muted/50'}`}>
+          <div className="flex items-center gap-3">
+            {tx.type === "receita" ? (
+              <div className={`p-2 rounded-full ${txIsFuture ? 'bg-green-100/50 dark:bg-green-900/10' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                <ArrowUpCircle className={`h-5 w-5 ${txIsFuture ? 'text-green-600/60 dark:text-green-400/60' : 'text-green-600 dark:text-green-400'}`} />
+              </div>
+            ) : (
+              <div className={`p-2 rounded-full ${txIsFuture ? 'bg-red-100/50 dark:bg-red-900/10' : 'bg-red-100 dark:bg-red-900/30'}`}>
+                <ArrowDownCircle className={`h-5 w-5 ${txIsFuture ? 'text-red-600/60 dark:text-red-400/60' : 'text-red-600 dark:text-red-400'}`} />
+              </div>
+            )}
+            <div>
+              <p className={`font-medium text-sm flex items-center gap-2 ${txIsFuture ? 'text-muted-foreground' : ''}`}>
+                {tx.description}
+                {txIsFuture && <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-muted-foreground/30">Previsto</Badge>}
+              </p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                <CalendarIcon className="h-3 w-3" />
+                {tx.payment_date ? new Date(tx.payment_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
+                {tx.category && <span className="ml-1 px-2 py-0.5 bg-muted rounded-full text-[10px]">{tx.category}</span>}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className={`font-semibold ${tx.type === "receita" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"} ${txIsFuture ? 'opacity-80' : ''}`}>
+              {tx.type === "receita" ? "+" : "-"} R$ {tx.amount.toFixed(2).replace(".", ",")}
+            </div>
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => openModal(tx.type as "receita" | "despesa", tx)}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteTransaction(tx.id)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    });
+  };
 
   const openModal = (type: "receita" | "despesa", txToEdit?: Tx) => {
     setModalType(type);
@@ -438,6 +529,9 @@ function KidDashboard({
           <div className="text-4xl font-bold font-display text-primary transition-all duration-300">
             {loading ? "Carregando..." : `R$ ${balance.toFixed(2).replace(".", ",")}`}
           </div>
+          <div className="text-sm text-muted-foreground mt-1 font-medium">
+            {loading ? "..." : `Saldo após parcelas futuras: R$ ${projectedBalance.toFixed(2).replace(".", ",")}`}
+          </div>
           <div className="mt-8 flex gap-4 relative z-10">
             <Button
               onClick={() => openModal("receita")}
@@ -526,66 +620,30 @@ function KidDashboard({
 
       {/* Transaction History */}
       <Card className="md:col-span-3">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <History className="h-5 w-5 text-muted-foreground" />
-            Histórico Recente
-          </CardTitle>
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="show-future"
-              checked={showFutureTransactions}
-              onCheckedChange={setShowFutureTransactions}
-            />
-            <Label htmlFor="show-future" className="text-xs cursor-pointer text-muted-foreground">Parcelas Futuras</Label>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {loading ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>
-            ) : displayedTransactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>
-            ) : (
-              displayedTransactions.map((tx) => (
-                <div key={tx.id} className="group flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    {tx.type === "receita" ? (
-                      <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-full">
-                        <ArrowUpCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                      </div>
-                    ) : (
-                      <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full">
-                        <ArrowDownCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
-                      </div>
-                    )}
-                    <div>
-                      <p className="font-medium text-sm">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <CalendarIcon className="h-3 w-3" />
-                        {tx.payment_date ? new Date(tx.payment_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}
-                        {tx.category && <span className="ml-1 px-2 py-0.5 bg-muted rounded-full text-[10px]">{tx.category}</span>}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className={`font-semibold ${tx.type === "receita" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                      {tx.type === "receita" ? "+" : "-"} R$ {tx.amount.toFixed(2).replace(".", ",")}
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => openModal(tx.type as "receita" | "despesa", tx)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteTransaction(tx.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
+        <Tabs defaultValue="realizado" className="w-full">
+          <CardHeader className="flex flex-row items-center justify-between pb-2 border-b">
+            <CardTitle className="text-base flex items-center gap-2">
+              <History className="h-5 w-5 text-muted-foreground" />
+              Histórico
+            </CardTitle>
+            <TabsList className="h-9">
+              <TabsTrigger value="realizado" className="text-xs">Realizado</TabsTrigger>
+              <TabsTrigger value="projetado" className="text-xs">Projetado</TabsTrigger>
+              <TabsTrigger value="todos" className="text-xs">Todos</TabsTrigger>
+            </TabsList>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <TabsContent value="realizado" className="space-y-4 mt-0">
+              {renderTransactionList(pastAndCurrentTransactions, false)}
+            </TabsContent>
+            <TabsContent value="projetado" className="space-y-4 mt-0">
+              {renderTransactionList(futureTransactions, true)}
+            </TabsContent>
+            <TabsContent value="todos" className="space-y-4 mt-0">
+              {renderTransactionList(transactions, false)}
+            </TabsContent>
+          </CardContent>
+        </Tabs>
       </Card>
 
       {/* Transaction Modal */}
