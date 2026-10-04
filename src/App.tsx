@@ -45,6 +45,7 @@ import OAuthConsent from "@/pages/OAuthConsent";
 import AuthCallback from "@/pages/AuthCallback";
 import ResetPassword from "@/pages/ResetPassword";
 import EvaKids from "@/pages/EvaKids";
+import KidSpace from "@/pages/KidSpace";
 
 import { toast } from "sonner";
 
@@ -101,6 +102,7 @@ const App = () => {
                 <Route path="/metas/:id" element={<MetaDetalhe />} />
                 <Route path="/precificacao-v2" element={<PrecificacaoV2 />} />
               </Route>
+              <Route path="/kids/space/:walletId" element={<KidSpace />} />
               <Route element={<HubLayout />}>
                 <Route path="/eva-hub" element={<Navigate to="/eva-hub/contas" replace />} />
                 <Route path="/eva-hub/contas" element={<HubContas />} />

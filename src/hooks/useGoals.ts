@@ -63,7 +63,8 @@ export function useGoals() {
     if (error) {
       toast({ title: "Erro ao carregar metas", description: mapDatabaseError(error), variant: "destructive" });
     } else {
-      const rows = (data as Goal[]) || [];
+      // EVA Kids constellations are stored in goals but must not appear on the adult Metas page
+      const rows = ((data as Goal[]) || []).filter((g: any) => !(typeof g.icon === "string" && g.icon.startsWith("kids:")));
       const linked = await fetchGoalLinkedAmounts(
         effectiveUserId,
         isPersonal ? null : selectedCompanyId || null,

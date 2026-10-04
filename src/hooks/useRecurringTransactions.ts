@@ -141,7 +141,7 @@ export function useRecurringTransactions(horizonDays: number = 90) {
 
     let query = supabase
       .from("recurring_transactions")
-      .select("id, description, amount, type, category, subcategory, frequency, start_date, end_date, day_of_month, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, payment_method, payment_date")
+      .select("id, description, amount, type, category, subcategory, frequency, start_date, end_date, day_of_month, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, payment_method, payment_date, notes")
       .eq("user_id", effectiveUserId);
 
     if (isPersonal) {
@@ -154,9 +154,12 @@ export function useRecurringTransactions(horizonDays: number = 90) {
 
     if (!error && data) {
       const all: RecurringOccurrence[] = [];
-      (data as RecurringTransaction[]).forEach((rec) => {
-        all.push(...generateOccurrences(rec, horizonDays));
-      });
+      (data as (RecurringTransaction & { notes?: string | null })[])
+        // EVA Kids allowance rules belong to the kids' separate accounts
+        .filter((rec) => rec.notes !== "eva_kids_allowance")
+        .forEach((rec) => {
+          all.push(...generateOccurrences(rec, horizonDays));
+        });
       setOccurrences(all);
     }
     setLoading(false);
