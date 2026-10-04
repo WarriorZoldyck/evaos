@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -250,6 +251,9 @@ function KidDashboard({
   const [transactions, setTransactions] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(true);
   const [allowance, setAllowance] = useState(50.0);
+  const [frequency, setFrequency] = useState<"monthly" | "weekly">("weekly");
+  const [dayOfWeek, setDayOfWeek] = useState<string>("1");
+  const [dayOfMonth, setDayOfMonth] = useState<string>("5");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"receita" | "despesa">("despesa");
   const [formData, setFormData] = useState({
@@ -257,6 +261,8 @@ function KidDashboard({
     amount: "",
     date: format(new Date(), "yyyy-MM-dd"),
     category: "",
+    isInstallment: false,
+    installmentsCount: 2,
   });
   const [editingTxId, setEditingTxId] = useState<string | null>(null);
 
@@ -292,10 +298,19 @@ function KidDashboard({
         amount: txToEdit.amount.toString(),
         date: txToEdit.payment_date || format(new Date(), "yyyy-MM-dd"),
         category: txToEdit.category || "",
+        isInstallment: false,
+        installmentsCount: 2,
       });
     } else {
       setEditingTxId(null);
-      setFormData({ title: "", amount: "", date: format(new Date(), "yyyy-MM-dd"), category: "" });
+      setFormData({ 
+        title: "", 
+        amount: "", 
+        date: format(new Date(), "yyyy-MM-dd"), 
+        category: "",
+        isInstallment: false,
+        installmentsCount: 2,
+      });
     }
     setIsModalOpen(true);
   };
@@ -329,25 +344,57 @@ function KidDashboard({
       }
       toast.success("Lançamento atualizado!");
     } else {
-      const payload: TablesInsert<"transactions"> = {
-        user_id: effectiveUserId,
-        type: modalType,
-        description: formData.title,
-        amount: amountVal,
-        payment_date: formData.date,
-        competence_date: formData.date,
-        category: formData.category || "Geral",
-        status: "Pago",
-        wallet_id: wallet.id,
-      };
+      if (modalType === "despesa" && formData.isInstallment && formData.installmentsCount > 1) {
+        const numInstallments = formData.installmentsCount;
+        const installmentAmount = amountVal / numInstallments;
+        const startDate = new Date(formData.date + "T12:00:00");
+        
+        const payloads: TablesInsert<"transactions">[] = [];
+        for (let i = 0; i < numInstallments; i++) {
+          const installmentDate = new Date(startDate);
+          installmentDate.setMonth(installmentDate.getMonth() + i);
+          
+          payloads.push({
+            user_id: effectiveUserId,
+            type: modalType,
+            description: `${formData.title} (${i + 1}/${numInstallments})`,
+            amount: installmentAmount,
+            payment_date: format(installmentDate, "yyyy-MM-dd"),
+            competence_date: formData.date,
+            category: formData.category || "Geral",
+            status: i === 0 && startDate <= new Date() ? "Pago" : "Pendente",
+            wallet_id: wallet.id,
+          });
+        }
 
-      const { error } = await supabase.from("transactions").insert(payload);
-      if (error) {
-        toast.error("Erro ao salvar lançamento.");
-        console.error(error);
-        return;
+        const { error } = await supabase.from("transactions").insert(payloads);
+        if (error) {
+          toast.error("Erro ao salvar lançamentos parcelados.");
+          console.error(error);
+          return;
+        }
+        toast.success("Lançamentos parcelados registrados!");
+      } else {
+        const payload: TablesInsert<"transactions"> = {
+          user_id: effectiveUserId,
+          type: modalType,
+          description: formData.title,
+          amount: amountVal,
+          payment_date: formData.date,
+          competence_date: formData.date,
+          category: formData.category || "Geral",
+          status: "Pago",
+          wallet_id: wallet.id,
+        };
+
+        const { error } = await supabase.from("transactions").insert(payload);
+        if (error) {
+          toast.error("Erro ao salvar lançamento.");
+          console.error(error);
+          return;
+        }
+        toast.success("Lançamento registrado!");
       }
-      toast.success("Lançamento registrado!");
     }
 
     setIsModalOpen(false);
@@ -423,11 +470,47 @@ function KidDashboard({
           </div>
           <div className="space-y-2">
             <Label>Frequência</Label>
-            <select className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring">
+            <select 
+              className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value as "monthly" | "weekly")}
+            >
               <option value="monthly">Mensal</option>
               <option value="weekly">Semanal</option>
             </select>
           </div>
+          
+          {frequency === "weekly" ? (
+            <div className="space-y-2 animate-in fade-in zoom-in duration-300">
+              <Label>Dia da Semana</Label>
+              <select 
+                className="flex h-9 w-full items-center justify-between whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm ring-offset-background focus:outline-none focus:ring-1 focus:ring-ring"
+                value={dayOfWeek}
+                onChange={(e) => setDayOfWeek(e.target.value)}
+              >
+                <option value="0">Domingo</option>
+                <option value="1">Segunda-feira</option>
+                <option value="2">Terça-feira</option>
+                <option value="3">Quarta-feira</option>
+                <option value="4">Quinta-feira</option>
+                <option value="5">Sexta-feira</option>
+                <option value="6">Sábado</option>
+              </select>
+            </div>
+          ) : (
+            <div className="space-y-2 animate-in fade-in zoom-in duration-300">
+              <Label>Dia do Mês</Label>
+              <Input 
+                type="number" 
+                min="1" 
+                max="31" 
+                value={dayOfMonth} 
+                onChange={(e) => setDayOfMonth(e.target.value)} 
+                className="font-medium" 
+                placeholder="Ex: 5"
+              />
+            </div>
+          )}
           <Button variant="secondary" className="w-full gap-2 mt-2" onClick={() => toast.success("Regras atualizadas!")}>
             <PlusCircle className="h-4 w-4" />
             Salvar Regras
@@ -512,14 +595,46 @@ function KidDashboard({
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="amount">Valor (R$)</Label>
+                <Label htmlFor="amount">{modalType === "despesa" && formData.isInstallment ? "Valor Total (R$)" : "Valor (R$)"}</Label>
                 <Input id="amount" type="number" step="0.01" placeholder="0,00" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date">Data</Label>
+                <Label htmlFor="date">{modalType === "despesa" && formData.isInstallment ? "Data 1ª Parcela" : "Data"}</Label>
                 <Input id="date" type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
               </div>
             </div>
+            
+            {modalType === "despesa" && !editingTxId && (
+              <div className="space-y-4 border p-3 rounded-md bg-muted/10 mt-2">
+                <div className="flex items-center space-x-2">
+                  <Switch 
+                    id="is-installment" 
+                    checked={formData.isInstallment}
+                    onCheckedChange={(checked) => setFormData({ ...formData, isInstallment: checked })}
+                  />
+                  <Label htmlFor="is-installment" className="cursor-pointer font-medium">Compra Parcelada?</Label>
+                </div>
+                
+                {formData.isInstallment && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <Label htmlFor="installmentsCount">Número de Parcelas</Label>
+                    <Input 
+                      id="installmentsCount" 
+                      type="number" 
+                      min="2"
+                      max="48"
+                      value={formData.installmentsCount} 
+                      onChange={(e) => setFormData({ ...formData, installmentsCount: parseInt(e.target.value) || 2 })} 
+                    />
+                    {formData.amount && formData.installmentsCount > 1 && (
+                      <p className="text-sm text-muted-foreground mt-2 bg-muted/30 p-2 rounded border border-muted">
+                        Serão geradas <strong className="text-foreground">{formData.installmentsCount}</strong> parcelas de <strong className="text-foreground">R$ {(parseFloat(formData.amount.replace(",", ".")) / formData.installmentsCount).toFixed(2).replace(".", ",")}</strong>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="category">Categoria</Label>
               <Input id="category" placeholder="Ex: Mesada, Alimentação, Lazer" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} />
