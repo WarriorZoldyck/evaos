@@ -79,6 +79,7 @@ export function PeriodFilter({ filters, onChange }: PeriodFilterProps) {
               mode="range"
               locale={ptBR}
               className="pointer-events-auto"
+              captionLayout="buttons"
               selected={{
                 from: filters.customStart,
                 to: filters.customEnd,
