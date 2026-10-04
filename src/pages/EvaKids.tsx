@@ -250,6 +250,7 @@ function KidDashboard({
 
   const [transactions, setTransactions] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showFutureTransactions, setShowFutureTransactions] = useState(false);
   const [allowance, setAllowance] = useState(50.0);
   const [frequency, setFrequency] = useState<"monthly" | "weekly">("weekly");
   const [dayOfWeek, setDayOfWeek] = useState<string>("1");
@@ -268,15 +269,10 @@ function KidDashboard({
 
   const fetchKidsTransactions = useCallback(async () => {
     setLoading(true);
-    
-    // Filtra para exibir e abater do saldo apenas lançamentos (como parcelas) até o final do mês atual
-    const endOfThisMonth = format(endOfMonth(new Date()), "yyyy-MM-dd");
-
     const { data, error } = await supabase
       .from("transactions")
       .select("*")
       .eq("wallet_id", wallet.id)
-      .lte("payment_date", endOfThisMonth)
       .order("payment_date", { ascending: false })
       .order("created_at", { ascending: false });
 
@@ -290,9 +286,14 @@ function KidDashboard({
     fetchKidsTransactions();
   }, [fetchKidsTransactions]);
 
-  const balance = transactions.reduce((acc, curr) => {
+  const endOfThisMonthStr = format(endOfMonth(new Date()), "yyyy-MM-dd");
+  const pastAndCurrentTransactions = transactions.filter(tx => tx.payment_date && tx.payment_date <= endOfThisMonthStr);
+  
+  const balance = pastAndCurrentTransactions.reduce((acc, curr) => {
     return curr.type === "receita" ? acc + curr.amount : acc - curr.amount;
   }, 0);
+
+  const displayedTransactions = showFutureTransactions ? transactions : pastAndCurrentTransactions;
 
   const openModal = (type: "receita" | "despesa", txToEdit?: Tx) => {
     setModalType(type);
@@ -525,20 +526,28 @@ function KidDashboard({
 
       {/* Transaction History */}
       <Card className="md:col-span-3">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <History className="h-5 w-5 text-muted-foreground" />
             Histórico Recente
           </CardTitle>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-future"
+              checked={showFutureTransactions}
+              onCheckedChange={setShowFutureTransactions}
+            />
+            <Label htmlFor="show-future" className="text-xs cursor-pointer text-muted-foreground">Parcelas Futuras</Label>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {loading ? (
               <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>
-            ) : transactions.length === 0 ? (
+            ) : displayedTransactions.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nenhuma movimentação registrada.</p>
             ) : (
-              transactions.map((tx) => (
+              displayedTransactions.map((tx) => (
                 <div key={tx.id} className="group flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
                   <div className="flex items-center gap-3">
                     {tx.type === "receita" ? (

@@ -268,6 +268,25 @@ export function useTransactions() {
     if (filters.dateTo) {
       query = query.lte(dateColumn, filters.dateTo);
     }
+    
+    // Se não houver filtro de conta específico, esconde as contas Kids do contexto global (Dashboard/Lançamentos)
+    if (!filters.accountId) {
+      const { data: allUserWallets } = await supabase
+        .from("wallets")
+        .select("id, name")
+        .eq("user_id", effectiveUserId);
+
+      const allNonKidsWalletsIds = (allUserWallets || [])
+        .filter((w) => !w.name.startsWith("Kids - "))
+        .map((w) => w.id);
+      
+      if (allNonKidsWalletsIds.length > 0) {
+        query = query.or(`wallet_id.is.null,wallet_id.in.(${allNonKidsWalletsIds.join(",")})`);
+      } else {
+        query = query.is("wallet_id", null);
+      }
+    }
+
     if (filters.accountId) {
       const [accType, ...idParts] = filters.accountId.split(":");
       const accId = idParts.join(":");

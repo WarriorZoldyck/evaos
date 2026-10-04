@@ -130,9 +130,19 @@ function getDateRange(filters: DashboardFilters): { start: Date; end: Date } {
 function applyAccountFilter(
   query: any,
   accountId: string | null | undefined,
-  linkedCardIds: string[]
+  linkedCardIds: string[],
+  nonKidsIds: string[] | null = null
 ) {
-  if (!accountId) return query;
+  if (!accountId) {
+    if (nonKidsIds) {
+      if (nonKidsIds.length > 0) {
+        return query.or(`wallet_id.is.null,wallet_id.in.(${nonKidsIds.join(",")})`);
+      } else {
+        return query.is("wallet_id", null);
+      }
+    }
+    return query;
+  }
   if (linkedCardIds.length > 0) {
     return query.or(
       `bank_account_id.eq.${accountId},credit_card_id.in.(${linkedCardIds.join(",")})`
@@ -260,7 +270,7 @@ export function useDashboardData(filters: DashboardFilters) {
     if (!user || !effectiveUserId) return;
     const companyCtx = { effectiveUserId, viewAll, selectedCompanyId, isPersonal, selectedCompanyIds, personalSelected };
 
-    const fetchTransactions = async () => {
+    const fetchTransactions = async (nonKidsIds: string[] | null) => {
       let query = supabase
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method, transfer_id, is_internal_transfer")
@@ -268,7 +278,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .lte("payment_date", endStr);
 
       query = applyCompanyFilter(query, companyCtx);
-      query = applyAccountFilter(query, accountId, linkedCardIds);
+      query = applyAccountFilter(query, accountId, linkedCardIds, nonKidsIds);
 
       const allData: Transaction[] = [];
       let from = 0;
@@ -290,7 +300,7 @@ export function useDashboardData(filters: DashboardFilters) {
       );
     };
 
-    const fetchOverdueTransactions = async () => {
+    const fetchOverdueTransactions = async (nonKidsIds: string[] | null) => {
       const twoYearsAgo = format(subYears(new Date(), 2), "yyyy-MM-dd");
       let overdueQuery = supabase
         .from("transactions")
@@ -300,7 +310,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .gte("payment_date", twoYearsAgo);
 
       overdueQuery = applyCompanyFilter(overdueQuery, companyCtx);
-      overdueQuery = applyAccountFilter(overdueQuery, accountId, linkedCardIds);
+      overdueQuery = applyAccountFilter(overdueQuery, accountId, linkedCardIds, nonKidsIds);
 
       const allOverdue: Transaction[] = [];
       let from = 0;
@@ -317,7 +327,7 @@ export function useDashboardData(filters: DashboardFilters) {
       setOverdueTransactions(transferVisibility.included);
     };
 
-    const fetchCompetenceTransactions = async () => {
+    const fetchCompetenceTransactions = async (nonKidsIds: string[] | null) => {
       let query = supabase
         .from("transactions")
         .select("id, description, amount, type, status, payment_date, competence_date, category, subcategory, bank_account_id, credit_card_id, wallet_id, company_id, contact_name, series_id, installment_number, installments_total, original_amount, card_terminal_id, payment_method, transfer_id, is_internal_transfer")
@@ -325,7 +335,7 @@ export function useDashboardData(filters: DashboardFilters) {
         .lte("competence_date", endStr);
 
       query = applyCompanyFilter(query, companyCtx);
-      query = applyAccountFilter(query, accountId, linkedCardIds);
+      query = applyAccountFilter(query, accountId, linkedCardIds, nonKidsIds);
 
       const allData: Transaction[] = [];
       let from = 0;
@@ -343,10 +353,22 @@ export function useDashboardData(filters: DashboardFilters) {
 
     const loadData = async () => {
       setLoading(true);
+
+      let nonKidsIds: string[] | null = null;
+      if (!accountId) {
+        const { data: allUserWallets } = await supabase
+          .from("wallets")
+          .select("id, name")
+          .eq("user_id", effectiveUserId);
+        nonKidsIds = (allUserWallets || [])
+          .filter((w) => !w.name.startsWith("Kids - "))
+          .map((w) => w.id);
+      }
+
       await Promise.all([
-        fetchTransactions(),
-        fetchOverdueTransactions(),
-        fetchCompetenceTransactions(),
+        fetchTransactions(nonKidsIds),
+        fetchOverdueTransactions(nonKidsIds),
+        fetchCompetenceTransactions(nonKidsIds),
       ]);
       setLoading(false);
     };
@@ -370,7 +392,19 @@ export function useDashboardData(filters: DashboardFilters) {
       query = query.order("payment_date", { ascending: true }).limit(5000);
 
       query = applyCompanyFilter(query, companyCtx);
-      query = applyAccountFilter(query, accountId, linkedCardIds);
+      
+      let nonKidsIds: string[] | null = null;
+      if (!accountId) {
+        const { data: allUserWallets } = await supabase
+          .from("wallets")
+          .select("id, name")
+          .eq("user_id", effectiveUserId);
+        nonKidsIds = (allUserWallets || [])
+          .filter((w) => !w.name.startsWith("Kids - "))
+          .map((w) => w.id);
+      }
+      
+      query = applyAccountFilter(query, accountId, linkedCardIds, nonKidsIds);
 
       const { data, error } = await query;
 
