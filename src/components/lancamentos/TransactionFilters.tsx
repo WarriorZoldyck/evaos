@@ -134,6 +134,7 @@ export function TransactionPeriodFilter({ filters, onFiltersChange }: Transactio
               mode="range"
               locale={ptBR}
               className="pointer-events-auto"
+              captionLayout="buttons"
               selected={{
                 from: filters.dateFrom ? new Date(filters.dateFrom + "T00:00:00") : undefined,
                 to: filters.dateTo ? new Date(filters.dateTo + "T00:00:00") : undefined,
