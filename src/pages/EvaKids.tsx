@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { format } from "date-fns";
+import { format, endOfMonth } from "date-fns";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
@@ -268,10 +268,15 @@ function KidDashboard({
 
   const fetchKidsTransactions = useCallback(async () => {
     setLoading(true);
+    
+    // Filtra para exibir e abater do saldo apenas lançamentos (como parcelas) até o final do mês atual
+    const endOfThisMonth = format(endOfMonth(new Date()), "yyyy-MM-dd");
+
     const { data, error } = await supabase
       .from("transactions")
       .select("*")
       .eq("wallet_id", wallet.id)
+      .lte("payment_date", endOfThisMonth)
       .order("payment_date", { ascending: false })
       .order("created_at", { ascending: false });
 
