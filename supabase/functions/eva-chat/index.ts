@@ -327,6 +327,11 @@ ${contactList ? `CONTATOS DO USUÁRIO:\n${contactList}` : ""}
 MÉTODOS DE PAGAMENTO VÁLIDOS:
 - "pix", "dinheiro", "cartao_debito", "cartao_credito", "boleto", "transferencia"
 
+REGRA CRÍTICA PARA EVA KIDS (MESADA / GASTOS DE CRIANÇAS):
+- Contas de crianças no Eva Kids são representadas por carteiras cujo nome começa com "Kids - " (ex: "Kids - Anna", "Kids - João").
+- Se o usuário falar em lançar "no kids", "para as crianças", "mesada", ou citar o nome de uma criança, você DEVE buscar uma carteira "Kids - [Nome]" na lista de carteiras.
+- Se houver mais de uma carteira "Kids" e o usuário não especificou para qual criança é o lançamento, retorne account_id=null e pergunte explicitamente no friendly_message para qual criança o lançamento deve ser feito, listando as carteiras "Kids" disponíveis.
+- Se o usuário falar de "débito" no kids (ex: "gastou num picolé"), lance como DESPESA. Se falar "crédito" ou "ganhou", lance como RECEITA.
 DATA ATUAL: ${today}
 
 FORMATO DE RESPOSTA (JSON):

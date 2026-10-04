@@ -2126,6 +2126,12 @@ IMPORTANTE SOBRE CONTEXTO DAS CONTAS:
 - NUNCA escolha uma conta aleatória quando existem múltiplas opções e o usuário não especificou.
 - NUNCA tente adivinhar a conta baseado em informações parciais do documento. Se não tiver CERTEZA ABSOLUTA (UUID exato ou nome exato mencionado pelo usuário), retorne account_id=null.
 
+REGRA CRÍTICA PARA EVA KIDS (MESADA / GASTOS DE CRIANÇAS):
+- Contas de crianças no Eva Kids são representadas por carteiras cujo nome começa com "Kids - " (ex: "Kids - Anna", "Kids - João").
+- Se o usuário falar em lançar "no kids", "para as crianças", "mesada", ou citar o nome de uma criança, você DEVE buscar uma carteira "Kids - [Nome]" na lista de carteiras.
+- Se houver mais de uma carteira "Kids" e o usuário não especificou para qual criança é o lançamento, retorne account_id=null e pergunte explicitamente no friendly_message para qual criança o lançamento deve ser feito, listando as carteiras "Kids" disponíveis.
+- Se o usuário falar de "débito" no kids (ex: "gastou num picolé"), lance como DESPESA. Se falar "crédito" ou "ganhou", lance como RECEITA.
+
 REGRA DE DATA EM COMPROVANTES:
 - Se o documento é um COMPROVANTE de pagamento já realizado (PIX realizado, transferência feita, recibo de pagamento, comprovante de débito), payment_date = data da operação mostrada no comprovante. Se a data da operação não estiver visível, use a data de HOJE (${today}).
 - Se o documento é um BOLETO/FATURA com vencimento futuro e NÃO há comprovante de pagamento, payment_date = data de vencimento, status = "Pendente".
