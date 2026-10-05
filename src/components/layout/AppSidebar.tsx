@@ -25,6 +25,7 @@ import {
   Layers,
   Check,
   ScrollText,
+  ShieldCheck,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -76,6 +77,7 @@ const registrationMenuItems = [
   { title: "Centros de Custos", url: "/centros-de-custos", icon: Layers },
   { title: "Fornecedores e Clientes", url: "/contatos", icon: Users },
   { title: "Integrações", url: "/integracoes", icon: Plug },
+  { title: "Saúde de Dados", url: "/saude-de-dados", icon: ShieldCheck },
 ];
 
 const comingSoonItems = [

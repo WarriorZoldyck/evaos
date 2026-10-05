@@ -101,6 +101,7 @@ const App = () => {
                 <Route path="/metas" element={<Metas />} />
                 <Route path="/metas/:id" element={<MetaDetalhe />} />
                 <Route path="/precificacao-v2" element={<PrecificacaoV2 />} />
+                <Route path="/saude-de-dados" element={<HubIntegridade />} />
               </Route>
               <Route path="/kids/space/:walletId" element={<KidSpace />} />
               <Route element={<HubLayout />}>
@@ -109,7 +110,6 @@ const App = () => {
                 <Route path="/eva-hub/workspaces" element={<HubWorkspaces />} />
                 <Route path="/eva-hub/membros" element={<HubMembros />} />
                 <Route path="/eva-hub/auditoria" element={<HubAuditoria />} />
-                <Route path="/eva-hub/integridade" element={<HubIntegridade />} />
                 <Route path="/eva-hub/meu-whatsapp" element={<HubMeuWhatsApp />} />
               </Route>
               <Route path="*" element={<NotFound />} />

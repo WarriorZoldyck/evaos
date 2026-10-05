@@ -25,7 +25,6 @@ const baseMenuItems = [
 ];
 
 const auditoriaItem = { title: "Auditoria", url: "/eva-hub/auditoria", icon: ScrollText };
-const integridadeItem = { title: "Saúde de Dados", url: "/eva-hub/integridade", icon: ShieldCheck };
 const meuWhatsAppItem = { title: "Meu WhatsApp", url: "/eva-hub/meu-whatsapp", icon: MessageCircle };
 
 export function HubSidebar() {
@@ -36,7 +35,7 @@ export function HubSidebar() {
   const collapsed = state === "collapsed";
   const hubMenuItems = isHubMember
     ? [...baseMenuItems, meuWhatsAppItem]
-    : [...baseMenuItems, integridadeItem, auditoriaItem];
+    : [...baseMenuItems, auditoriaItem];
 
 
   return (

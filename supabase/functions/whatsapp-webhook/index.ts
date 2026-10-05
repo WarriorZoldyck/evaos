@@ -5352,12 +5352,11 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       }, 200);
     }
 
-    // Rede de segurança: pergunta analítica que caiu em "conversa" → responde com dados reais
+    // Rede de segurança: se a resposta for evasiva (IA reclamando falta de dados), roda a análise com dados reais
     {
       const fm = String(aiParsed.friendly_message || "");
       const looksEvasive = /não consigo|nao consigo|depende de|reunir os dados|não tenho acesso|nao tenho acesso|análise complexa|analise complexa/i.test(fm);
-      const looksAnalytical = /\?|quanto|qual|como|por que|porque|vale a pena|posso|preciso|margem|lucro|custo|faturar|l[ií]quido/i.test(trimmedMsg || "");
-      if (activeAiKey && trimmedMsg && (looksEvasive || looksAnalytical)) {
+      if (activeAiKey && trimmedMsg && looksEvasive) {
         const contexts = resolveContexts(aiParsed.context ?? "Pessoal", companies as any, "Pessoal");
         const analysisData = await buildAnalysisData(supabase, userId, contexts, { months: 12 });
         const result = await runAnalysis({

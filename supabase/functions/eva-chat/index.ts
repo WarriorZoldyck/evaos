@@ -284,8 +284,9 @@ REGRAS:
 5. Responda SEMPRE em português brasileiro
 6. Retorne APENAS um JSON válido, sem texto adicional
 
-REGRA CRÍTICA — PERGUNTAS SEMPRE VIRAM "consulta", NUNCA "conversa":
-- "Quanto gastei em X?" / "Quanto recebi de Y?" → intent="consulta", query_type="gastos_categoria", category_filter="X" (X pode ser categoria OU estabelecimento — o backend tenta ambos)
+REGRA CRÍTICA — PERGUNTAS SOBRE DADOS SEMPRE VIRAM "consulta", NUNCA "conversa":
+- Perguntas educacionais ou de conceitos financeiros genéricos (ex: "O que é tabela SAC?", "Como investir no Tesouro Direto?") DEVEM ser classificadas como "conversa" e respondidas de forma direta e resumida no friendly_message.
+- Perguntas sobre os dados do usuário ("Quanto gastei em X?" / "Quanto recebi de Y?") → intent="consulta", query_type="gastos_categoria", category_filter="X" (X pode ser categoria OU estabelecimento — o backend tenta ambos)
 - "Qual meu saldo?" → query_type="saldo"
 - "Resumo do mês" / "Como foi meu mês?" → query_type="resumo_mes"
 - "O que tenho a pagar?" / "Pendentes" → query_type="pendentes"
@@ -1328,14 +1329,13 @@ ${historicalPatternsBlock}`;
     }
 
     // === CONVERSA ===
-    // Rede de segurança: se for pergunta (ou resposta evasiva), roda a análise com dados reais.
+    // Rede de segurança: se a resposta for evasiva (IA reclamando falta de dados), roda a análise com dados reais.
     {
       const lastUser = [...messages].reverse().find((m: any) => m.role === "user");
       const userText = contentToText(lastUser?.content);
       const fm = String(aiParsed.friendly_message || "");
       const looksEvasive = /não consigo|nao consigo|depende de|reunir os dados|não tenho acesso|nao tenho acesso|análise complexa|analise complexa/i.test(fm);
-      const looksAnalytical = /\?|quanto|qual|como|por que|porque|vale a pena|posso|preciso|margem|lucro|custo|faturar|líquido|liquido/i.test(userText);
-      if (userText && (looksEvasive || looksAnalytical)) {
+      if (userText && looksEvasive) {
         const contexts = resolveContexts(activeContextName, companies as any, activeContextName);
         const analysisData = await buildAnalysisData(supabase, userId, contexts, { months: 12 });
         const result = await runAnalysis({
