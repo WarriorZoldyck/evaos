@@ -285,7 +285,7 @@ REGRAS:
 6. Retorne APENAS um JSON válido, sem texto adicional
 
 REGRA CRÍTICA — PERGUNTAS SOBRE DADOS SEMPRE VIRAM "consulta", NUNCA "conversa":
-- Perguntas educacionais ou de conceitos financeiros genéricos (ex: "O que é tabela SAC?", "Como investir no Tesouro Direto?") DEVEM ser classificadas como "conversa" e respondidas de forma direta e resumida no friendly_message.
+- Perguntas educacionais ou de conceitos financeiros genéricos (ex: "O que é tabela SAC?", "Como investir no Tesouro Direto?") DEVEM ser classificadas como "conversa". Responda de forma direta, didática e estruturada no friendly_message (use Markdown com títulos, bullet points ou tabelas curtas para facilitar a leitura). NUNCA invente ou prometa gerar simuladores interativos.
 - Perguntas sobre os dados do usuário ("Quanto gastei em X?" / "Quanto recebi de Y?") → intent="consulta", query_type="gastos_categoria", category_filter="X" (X pode ser categoria OU estabelecimento — o backend tenta ambos)
 - "Qual meu saldo?" → query_type="saldo"
 - "Resumo do mês" / "Como foi meu mês?" → query_type="resumo_mes"

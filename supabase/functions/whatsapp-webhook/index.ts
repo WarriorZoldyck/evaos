@@ -2023,6 +2023,9 @@ REGRAS:
 5. Responda SEMPRE em português brasileiro
 6. Retorne APENAS um JSON válido, sem texto adicional
 
+REGRA CRÍTICA — PERGUNTAS EDUCACIONAIS:
+- Perguntas educacionais ou de conceitos financeiros genéricos (ex: "O que é tabela SAC?", "Como investir no Tesouro Direto?") DEVEM ser classificadas como "conversa". Responda de forma direta, didática e estruturada no friendly_message (use Markdown com títulos, bullet points ou tabelas curtas para facilitar a leitura). NUNCA invente ou prometa gerar simuladores interativos.
+
 REGRA CRÍTICA — PERGUNTAS ANALÍTICAS VIRAM "analise", NUNCA "conversa":
 Use intent="analise" quando a pergunta exigir raciocínio/cálculo sobre os dados. Exemplos:
 - "Quanto preciso faturar pra tirar X líquido?" → analysis_type="faturamento_necessario", target_amount=X
