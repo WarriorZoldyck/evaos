@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, createContext, useContext } from "react";
+import React, { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -16,6 +16,8 @@ import {
   CornerDownRight,
   ArrowRightLeft,
   Check,
+  Download,
+  Upload,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -62,8 +64,35 @@ export default function CentrosDeCustos() {
   const { isPersonal } = useCompany();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { categories, loading, refetch } = useCategories();
+  const { categories, loading, refetch, importCategories } = useCategories();
   const { settings, updateField } = useFormFieldSettings();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExport = () => {
+    const dataStr = JSON.stringify(categories, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', 'centros_custos_eva.json');
+    linkElement.click();
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const imported = JSON.parse(ev.target?.result as string) as Category[];
+        if (!Array.isArray(imported)) throw new Error("Invalid format");
+        await importCategories(imported);
+      } catch (err) {
+        toast({ title: 'Erro', description: 'Arquivo inválido', variant: 'destructive' });
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     receita_operacional: true,
@@ -240,11 +269,22 @@ export default function CentrosDeCustos() {
             Somente categorias vinculadas a um centro de custo aparecem no DRE.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Switch id="mdr-toggle" checked={mdrEnabled} onCheckedChange={toggleMdr} />
-          <Label htmlFor="mdr-toggle" className="text-sm cursor-pointer">
-            Taxas MDR
-          </Label>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <Switch id="mdr-toggle" checked={mdrEnabled} onCheckedChange={toggleMdr} />
+            <Label htmlFor="mdr-toggle" className="text-sm cursor-pointer">
+              Taxas MDR
+            </Label>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} title="Importar">
+              <Upload className="h-4 w-4 mr-1" /> Importar
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExport} title="Exportar">
+              <Download className="h-4 w-4 mr-1" /> Exportar
+            </Button>
+            <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImport} />
+          </div>
         </div>
       </div>
 

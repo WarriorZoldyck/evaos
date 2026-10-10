@@ -64,7 +64,9 @@ Deno.serve(async (req) => {
   }
 
   const results = [];
-  const today = new Date();
+  const now = new Date();
+  const brazilTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+  const today = new Date(brazilTime);
   today.setUTCHours(0, 0, 0, 0); // Consider today's date at midnight UTC
 
   for (const profile of profiles) {

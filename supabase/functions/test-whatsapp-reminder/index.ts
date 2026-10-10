@@ -68,7 +68,9 @@ Deno.serve(async (req) => {
     const firstName = profile.full_name ? profile.full_name.split(" ")[0] : "Usuário";
 
     // Busca as contas que estão configuradas para vencer nos dias do lembrete
-    const today = new Date();
+    const now = new Date();
+    const brazilTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+    const today = new Date(brazilTime);
     today.setUTCHours(0, 0, 0, 0);
     const daysBeforeArr = profile.whatsapp_reminders_days || [0, 1, 3]; // fallback
 

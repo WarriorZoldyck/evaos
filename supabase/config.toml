@@ -24,3 +24,5 @@ project_id = "rrrnnrjefyffllnrwhkz"
     verify_jwt = false
   [functions.whatsapp-webhook]
     verify_jwt = false
+  [functions.cron-whatsapp-reminders]
+    verify_jwt = false

@@ -239,6 +239,43 @@ export function useCategories() {
     updateCategory,
     moveCategory,
     deleteCategory,
+    importCategories: async (importedData: any[]) => {
+      setLoading(true);
+      const idMap = new Map<string, string>();
+      const toInsert: any[] = [];
+
+      // Generate new IDs
+      for (const cat of importedData) {
+        if (cat.id) idMap.set(cat.id, crypto.randomUUID());
+      }
+
+      // Remap relationships
+      for (const cat of importedData) {
+        if (cat.id) {
+          toInsert.push({
+            id: idMap.get(cat.id),
+            name: cat.name,
+            type: cat.type || "ambos",
+            dre_section: cat.dre_section || null,
+            parent_id: cat.parent_id ? (idMap.get(cat.parent_id) || null) : null,
+            user_id: effectiveUserId,
+            company_id: cat.parent_id ? null : (selectedCompanyId || null),
+            sort_order: cat.sort_order || 0,
+          });
+        }
+      }
+
+      const { error } = await supabase.from("categories").insert(toInsert);
+      if (error) {
+        toast({ title: "Erro ao importar", description: mapDatabaseError(error), variant: "destructive" });
+        setLoading(false);
+        return false;
+      }
+      
+      toast({ title: "Categorias importadas com sucesso!" });
+      fetchCategories();
+      return true;
+    },
     refetch: fetchCategories,
   };
 

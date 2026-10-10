@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,19 +19,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Search, TrendingUp, TrendingDown, Download, Upload, FolderTree } from "lucide-react";
 import { useCategories, type Category } from "@/hooks/useCategories";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useToast } from "@/hooks/use-toast";
 import { CategoryFormModal } from "@/components/categorias/CategoryFormModal";
 import { CategoryTreeItem } from "@/components/categorias/CategoryTreeItem";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const DEFAULT_CATEGORIES_MODEL = [
+  { id: "r1", name: "Salário / Pró-labore", type: "receita", dre_section: "receita_operacional", sort_order: 0 },
+  { id: "r2", name: "Rendimentos", type: "receita", dre_section: "receita_operacional", sort_order: 1 },
+  { id: "r3", name: "Vendas", type: "receita", dre_section: "receita_operacional", sort_order: 2 },
+  { id: "d1", name: "Alimentação", type: "despesa", dre_section: "despesas_operacionais", sort_order: 0 },
+  { id: "d1-1", name: "Supermercado", type: "despesa", parent_id: "d1", sort_order: 0 },
+  { id: "d1-2", name: "Restaurante e Delivery", type: "despesa", parent_id: "d1", sort_order: 1 },
+  { id: "d2", name: "Moradia / Infraestrutura", type: "despesa", dre_section: "despesas_operacionais", sort_order: 1 },
+  { id: "d2-1", name: "Aluguel ou Prestação", type: "despesa", parent_id: "d2", sort_order: 0 },
+  { id: "d2-2", name: "Contas (Água, Luz, Internet)", type: "despesa", parent_id: "d2", sort_order: 1 },
+  { id: "d3", name: "Saúde", type: "despesa", dre_section: "despesas_operacionais", sort_order: 2 },
+  { id: "d3-1", name: "Plano de Saúde", type: "despesa", parent_id: "d3", sort_order: 0 },
+  { id: "d3-2", name: "Farmácia", type: "despesa", parent_id: "d3", sort_order: 1 },
+  { id: "d4", name: "Transporte", type: "despesa", dre_section: "despesas_operacionais", sort_order: 3 },
+  { id: "d4-1", name: "Combustível", type: "despesa", parent_id: "d4", sort_order: 0 },
+  { id: "d4-2", name: "Aplicativos / Táxi", type: "despesa", parent_id: "d4", sort_order: 1 },
+  { id: "d5", name: "Lazer e Cuidados Pessoais", type: "despesa", dre_section: "despesas_operacionais", sort_order: 4 },
+  { id: "d6", name: "Educação", type: "despesa", dre_section: "despesas_operacionais", sort_order: 5 },
+  { id: "d7", name: "Impostos e Taxas", type: "despesa", dre_section: "impostos_deducoes", sort_order: 6 },
+];
 
 export default function Categorias() {
   const { isPersonal } = useCompany();
   const {
     categories, tree, orphans, loading, search, setSearch,
-    createCategory, updateCategory, moveCategory, deleteCategory,
+    createCategory, updateCategory, moveCategory, deleteCategory, importCategories
   } = useCategories();
+  const { toast } = useToast();
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
 
   const [formOpen, setFormOpen] = useState(false);
@@ -136,6 +160,36 @@ export default function Categorias() {
     e.preventDefault();
   }, []);
 
+  const handleExport = () => {
+    const dataStr = JSON.stringify(categories, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', 'categorias_eva.json');
+    linkElement.click();
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const imported = JSON.parse(ev.target?.result as string) as Category[];
+        if (!Array.isArray(imported)) throw new Error("Invalid format");
+        await importCategories(imported);
+      } catch (err) {
+        toast({ title: 'Erro', description: 'Arquivo inválido', variant: 'destructive' });
+      }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleUseDefaultModel = async () => {
+    await importCategories(DEFAULT_CATEGORIES_MODEL as any[]);
+  };
+
   // Split tree into revenue and expense
   const revenueTree = tree.filter(cat => cat.type === "receita" || cat.type === "ambos");
   const expenseTree = tree.filter(cat => cat.type === "despesa" || cat.type === "ambos");
@@ -201,14 +255,23 @@ export default function Categorias() {
             Adicionar
           </Button>
         </div>
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar categorias..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+        <div className="flex gap-2 w-full sm:w-auto items-center">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar categorias..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button variant="outline" size="icon" onClick={() => fileInputRef.current?.click()} title="Importar JSON">
+            <Upload className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={handleExport} title="Exportar JSON">
+            <Download className="h-4 w-4" />
+          </Button>
+          <input type="file" accept=".json" className="hidden" ref={fileInputRef} onChange={handleImport} />
         </div>
       </div>
 
@@ -253,8 +316,14 @@ export default function Categorias() {
                 className={`min-h-[60px] transition-colors rounded-md ${draggedId ? "ring-1 ring-dashed ring-primary/20" : ""}`}
               >
                 {revenueTree.length === 0 ? (
-                  <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+                  <div className="h-32 flex flex-col items-center justify-center text-muted-foreground text-sm gap-3">
                     {search ? "Nenhuma encontrada" : "Nenhuma categoria de receita"}
+                    {!search && categories.length === 0 && (
+                       <Button variant="outline" size="sm" onClick={handleUseDefaultModel} className="gap-2">
+                          <FolderTree className="h-4 w-4" />
+                          Usar Modelo Pronto
+                       </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-0.5">
@@ -304,8 +373,14 @@ export default function Categorias() {
                 className={`min-h-[60px] transition-colors rounded-md ${draggedId ? "ring-1 ring-dashed ring-primary/20" : ""}`}
               >
                 {expenseTree.length === 0 ? (
-                  <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+                  <div className="h-32 flex flex-col items-center justify-center text-muted-foreground text-sm gap-3">
                     {search ? "Nenhuma encontrada" : "Nenhuma categoria de despesa"}
+                    {!search && categories.length === 0 && (
+                       <Button variant="outline" size="sm" onClick={handleUseDefaultModel} className="gap-2">
+                          <FolderTree className="h-4 w-4" />
+                          Usar Modelo Pronto
+                       </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-0.5">
