@@ -53,6 +53,7 @@ export function WorkScheduleModal({ open, onOpenChange, value, productiveLossPct
     Object.values(value.weekdaySchedule)[0] ?? DEFAULT_RANGE,
   );
   const [saving, setSaving] = useState(false);
+  const [showDetailedWeekdays, setShowDetailedWeekdays] = useState(false);
 
   const [year, month] = monthKey.split("-").map(Number);
 
@@ -108,10 +109,14 @@ export function WorkScheduleModal({ open, onOpenChange, value, productiveLossPct
   const applyToWeekday = () => {
     if (!selected?.range) return;
     const range = selected.range;
+    setWeekdaySchedule((prev) => ({
+      ...prev,
+      [selected.weekday]: { ...range },
+    }));
     setOverrides((prev) => {
       const next = { ...prev };
       for (const d of days) {
-        if (d.weekday === selected.weekday) next[d.date] = { ...range };
+        if (d.weekday === selected.weekday) delete next[d.date];
       }
       return next;
     });
@@ -209,11 +214,43 @@ export function WorkScheduleModal({ open, onOpenChange, value, productiveLossPct
                 }
               />
             </div>
+            <Button 
+               variant="ghost" 
+               size="sm" 
+               className="text-xs mb-1" 
+               onClick={() => setShowDetailedWeekdays(!showDetailedWeekdays)}
+            >
+               {showDetailedWeekdays ? "Ocultar" : "Personalizar por dia"}
+            </Button>
             <div className="flex items-center gap-2 ml-auto">
               <Switch id="wsm-holidays" checked={observeHolidays} onCheckedChange={setObserveHolidays} />
               <Label htmlFor="wsm-holidays" className="text-xs">Considerar feriados nacionais</Label>
             </div>
           </div>
+
+          {showDetailedWeekdays && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-border/50">
+               {ORDERED_WEEKDAYS.map((w) => {
+                 const active = !!weekdaySchedule[w];
+                 if (!active) return null;
+                 const range = weekdaySchedule[w]!;
+                 return (
+                   <div key={w} className="flex flex-col border rounded p-2 bg-background gap-2">
+                     <span className="text-xs font-semibold capitalize">{WEEKDAY_FULL[w]}</span>
+                     <div className="flex items-center gap-1">
+                       <Input type="time" className="h-7 w-[72px] text-xs px-1" value={range.start} onChange={(e) => setWeekdaySchedule(p => ({...p, [w]: {...range, start: e.target.value}}))} />
+                       <span className="text-xs text-muted-foreground">às</span>
+                       <Input type="time" className="h-7 w-[72px] text-xs px-1" value={range.end} onChange={(e) => setWeekdaySchedule(p => ({...p, [w]: {...range, end: e.target.value}}))} />
+                     </div>
+                     <div className="flex items-center gap-1 justify-between mt-1">
+                        <Label className="text-[10px] text-muted-foreground">Intervalo (m):</Label>
+                        <Input type="number" className="h-7 w-16 text-xs px-1" min={0} step={15} value={range.break} onChange={(e) => setWeekdaySchedule(p => ({...p, [w]: {...range, break: Math.max(0, parseInt(e.target.value) || 0)}}))} />
+                     </div>
+                   </div>
+                 );
+               })}
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
