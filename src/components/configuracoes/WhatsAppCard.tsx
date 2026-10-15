@@ -15,6 +15,8 @@ export function WhatsAppCard() {
   const [whatsappNumber, setWhatsappNumber] = useState("");
   const [remindersEnabled, setRemindersEnabled] = useState(false);
   const [remindersDays, setRemindersDays] = useState<number[]>([1, 3]);
+  const [remindersTime, setRemindersTime] = useState("09:00");
+  const [weekdaysOnly, setWeekdaysOnly] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
@@ -23,10 +25,13 @@ export function WhatsAppCard() {
     if (!user) return;
     supabase
       .from("profiles")
-      .select("whatsapp_number, whatsapp_reminders_enabled, whatsapp_reminders_days")
+      .select("whatsapp_number, whatsapp_reminders_enabled, whatsapp_reminders_days, whatsapp_reminders_time, whatsapp_reminders_weekdays_only")
       .eq("id", user.id)
       .single()
-      .then(({ data }) => {
+      .then(({ data: raw }) => {
+        const data = raw as any;
+        if (data?.whatsapp_reminders_time) setRemindersTime(data.whatsapp_reminders_time);
+        if (data?.whatsapp_reminders_weekdays_only) setWeekdaysOnly(true);
         if (data?.whatsapp_number) setWhatsappNumber(data.whatsapp_number);
         if (data?.whatsapp_reminders_enabled) setRemindersEnabled(data.whatsapp_reminders_enabled);
         if (data?.whatsapp_reminders_days) setRemindersDays(data.whatsapp_reminders_days);
@@ -49,7 +54,9 @@ export function WhatsAppCard() {
           whatsapp_number: cleaned || null,
           whatsapp_reminders_enabled: remindersEnabled,
           whatsapp_reminders_days: remindersDays,
-        })
+          whatsapp_reminders_time: remindersTime,
+          whatsapp_reminders_weekdays_only: weekdaysOnly,
+        } as any)
         .eq("id", user.id);
       if (error) throw error;
       setWhatsappNumber(cleaned);
@@ -178,6 +185,28 @@ export function WhatsAppCard() {
                     </label>
                   </div>
                 </div>
+                <div className="flex flex-wrap items-end gap-4 pt-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="reminders-time" className="text-xs font-medium text-muted-foreground">Horário do envio</Label>
+                    <select
+                      id="reminders-time"
+                      value={remindersTime}
+                      onChange={(e) => setRemindersTime(e.target.value)}
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      {Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}:00`).map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center space-x-2 pb-2">
+                    <Checkbox id="weekdays-only" checked={weekdaysOnly} onCheckedChange={(v) => setWeekdaysOnly(!!v)} />
+                    <label htmlFor="weekdays-only" className="text-sm font-medium leading-none">
+                      Somente dias úteis (seg–sex)
+                    </label>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Horário de Brasília. Os lembretes são enviados uma vez por dia.</p>
               </div>
             )}
             

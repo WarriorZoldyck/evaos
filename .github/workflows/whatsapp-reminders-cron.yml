@@ -1,0 +1,22 @@
+name: WhatsApp Reminders Hourly Cron
+
+on:
+  schedule:
+    # A cada hora no minuto 0 (UTC). A edge function decide quem recebe
+    # com base no horário configurado por cada usuário (fuso America/Sao_Paulo).
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-whatsapp-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Reminders Edge Function
+        env:
+          ADMIN_KEY: ${{ secrets.BROADCAST_ADMIN_KEY }}
+        run: |
+          if [ -z "$ADMIN_KEY" ]; then echo "Secret BROADCAST_ADMIN_KEY não configurado no GitHub"; exit 1; fi
+          curl -s -S --fail-with-body -X POST "https://rrrnnrjefyffllnrwhkz.supabase.co/functions/v1/cron-whatsapp-reminders" \
+            -H "Content-Type: application/json" \
+            -H "x-admin-key: ${ADMIN_KEY}" \
+            -d '{"source": "github_actions"}'

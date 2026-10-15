@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
     const { data: profile } = await supabaseClient
       .from("profiles")
-      .select("whatsapp_number, full_name, whatsapp_reminders_days")
+      .select("whatsapp_number, full_name, whatsapp_reminders_days, whatsapp_reminders_time")
       .eq("id", user.id)
       .single();
 
@@ -65,64 +65,127 @@ Deno.serve(async (req) => {
     }
     const normalizedPhone = phone.startsWith("55") ? phone : `55${phone}`;
 
-    const firstName = profile.full_name ? profile.full_name.split(" ")[0] : "Usuário";
+    const firstName = profile.full_name ? profile.full_name.trim().split(" ")[0] : "Usuário";
 
-    // Busca as contas que estão configuradas para vencer nos dias do lembrete
+    // Data de hoje no fuso do Brasil
     const now = new Date();
-    const brazilTime = new Date(now.getTime() - (3 * 60 * 60 * 1000));
-    const today = new Date(brazilTime);
-    today.setUTCHours(0, 0, 0, 0);
-    const daysBeforeArr = profile.whatsapp_reminders_days || [0, 1, 3]; // fallback
-
-    const datesToCheck = daysBeforeArr.map((days: number) => {
-      const d = new Date(today.getTime());
-      d.setUTCDate(d.getUTCDate() + days);
-      return { 
-        days, 
-        dateStr: d.toISOString().split("T")[0] 
-      };
+    const brazilDateFormatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     });
+    const todayDateStr = brazilDateFormatter.format(now); // "YYYY-MM-DD"
 
-    const targetDates = datesToCheck.map((d: any) => d.dateStr);
+    const daysBeforeArr = (profile.whatsapp_reminders_days && profile.whatsapp_reminders_days.length > 0)
+      ? profile.whatsapp_reminders_days
+      : [0, 1, 3];
 
+    const [y, m, d] = todayDateStr.split("-").map(Number);
+    const targetDatesInfo = daysBeforeArr.map((daysAhead: number) => {
+      const targetDate = new Date(Date.UTC(y, m - 1, d + daysAhead));
+      const dateStr = targetDate.toISOString().split("T")[0];
+      return { days: daysAhead, dateStr };
+    });
+    const targetDates = targetDatesInfo.map((t: any) => t.dateStr);
+
+    // 1. Busca lançamentos pontuais pendentes
     const { data: transactions, error: txError } = await supabaseClient
       .from("transactions")
       .select("id, description, amount, payment_date")
       .eq("user_id", user.id)
       .eq("type", "despesa")
       .eq("status", "Pendente")
-      .in("payment_date", targetDates);
+      .in("payment_date", targetDates)
+      .order("payment_date", { ascending: true });
 
     if (txError) {
       throw new Error("Erro ao buscar lançamentos: " + txError.message);
     }
 
-    let message = `Olá ${firstName}! 👋\n\n`;
+    // 2. Busca despesas recorrentes
+    const { data: recurringList } = await supabaseClient
+      .from("recurring_transactions")
+      .select("id, description, amount, type, frequency, start_date, end_date, day_of_month")
+      .eq("user_id", user.id)
+      .eq("type", "despesa");
 
-    if (!transactions || transactions.length === 0) {
-      message += `Tudo certo por aqui! Você não tem contas próximas do vencimento para os dias configurados no lembrete. 🚀`;
+    const allBills: { description: string; amount: number; payment_date: string; isRecurring?: boolean }[] = [
+      ...(transactions || []),
+    ];
+
+    if (recurringList && recurringList.length > 0) {
+      for (const rec of recurringList) {
+        for (const target of targetDatesInfo) {
+          const tDate = new Date(target.dateStr + "T00:00:00");
+          const sDate = new Date(rec.start_date + "T00:00:00");
+          if (tDate < sDate) continue;
+          if (rec.end_date) {
+            const eDate = new Date(rec.end_date + "T00:00:00");
+            if (tDate > eDate) continue;
+          }
+
+          let matches = false;
+          if (rec.frequency === "monthly") {
+            const targetDay = rec.day_of_month || sDate.getDate();
+            const daysInMonth = new Date(tDate.getFullYear(), tDate.getMonth() + 1, 0).getDate();
+            if (tDate.getDate() === Math.min(targetDay, daysInMonth)) {
+              matches = true;
+            }
+          } else if (rec.frequency === "daily") {
+            matches = true;
+          } else if (rec.frequency === "weekly") {
+            matches = (tDate.getTime() - sDate.getTime()) % (7 * 86400000) === 0;
+          }
+
+          if (matches) {
+            const alreadyExists = allBills.some(
+              (b) => b.payment_date === target.dateStr && b.description.toLowerCase().trim() === rec.description.toLowerCase().trim()
+            );
+            if (!alreadyExists) {
+              allBills.push({
+                description: rec.description,
+                amount: rec.amount,
+                payment_date: target.dateStr,
+                isRecurring: true,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    allBills.sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+
+    let message = `Olá, ${firstName}! 👋 *(Teste de Lembrete)*\n\n`;
+
+    if (allBills.length === 0) {
+      message += `Tudo certo por aqui! Você não possui despesas pendentes com vencimento nos dias configurados no seu lembrete (${daysBeforeArr.map((d: number) => d === 0 ? "no dia" : `${d}d antes`).join(", ")}). 🚀\n\nQuando houver contas a vencer, a EVA enviará o resumo para você automaticamente no horário configurado (${profile.whatsapp_reminders_time || "09:00"})!`;
     } else {
       message += `Você tem as seguintes contas próximas do vencimento:\n\n`;
 
-      transactions.forEach((tx: any) => {
-        const txDateObj = datesToCheck.find((d: any) => d.dateStr === tx.payment_date);
-        const daysLeft = txDateObj ? txDateObj.days : null;
-        let dayText = "";
-        if (daysLeft === 0) dayText = "*(VENCE HOJE)*";
-        else if (daysLeft === 1) dayText = "*(VENCE AMANHÃ)*";
-        else dayText = `*(Vence em ${daysLeft} dias)*`;
+      allBills.forEach((bill: any) => {
+        const match = targetDatesInfo.find((d: any) => d.dateStr === bill.payment_date);
+        const daysLeft = match ? match.days : null;
+        let dayBadge = "";
+        if (daysLeft === 0) dayBadge = "🚨 *(VENCE HOJE)*";
+        else if (daysLeft === 1) dayBadge = "⚠️ *(VENCE AMANHÃ)*";
+        else dayBadge = `📅 *(Vence em ${daysLeft} dias)*`;
 
-        message += `💸 ${tx.description}\n`;
-        message += `💰 Valor: ${formatBRL(tx.amount)}\n`;
-        message += `📅 Data: ${tx.payment_date.split("-").reverse().join("/")} ${dayText}\n\n`;
+        const [by, bm, bd] = bill.payment_date.split("-");
+        const formattedDate = `${bd}/${bm}/${by}`;
+
+        message += `💸 *${bill.description}*\n`;
+        message += `💰 Valor: ${formatBRL(bill.amount)}\n`;
+        message += `🗓️ Vencimento: ${formattedDate} ${dayBadge}\n\n`;
       });
 
-      message += `Não se esqueça de acessar o aplicativo para mais detalhes!`;
+      message += `💡 Acesse o EVA OS para conferir ou liquidar seus lançamentos!`;
     }
 
     await sendText(normalizedPhone, message);
 
-    return new Response(JSON.stringify({ success: true, message: "Mensagens enviadas com sucesso!" }), {
+    return new Response(JSON.stringify({ success: true, count: allBills.length, message: "Mensagens enviadas com sucesso!" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {
