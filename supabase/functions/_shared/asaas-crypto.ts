@@ -14,11 +14,11 @@ function toB64(buf: ArrayBuffer | Uint8Array): string {
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin);
 }
-function fromB64(s: string): Uint8Array {
+function fromB64(s: string): ArrayBuffer {
   const bin = atob(s);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
+  return out.buffer;
 }
 
 export async function encryptApiKey(plain: string): Promise<{ encrypted: string; iv: string }> {
