@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "12.2.3 (519615d)"
+    PostgrestVersion: "12.2.3"
   }
   public: {
     Tables: {
@@ -612,6 +612,472 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      clinic_appointments: {
+        Row: {
+          chair: string
+          clinic_user_id: string | null
+          confirmed: boolean
+          created_at: string
+          date: string
+          duration: number
+          id: string
+          notes: string | null
+          patient_id: string
+          procedure_id: string | null
+          professional_id: string
+          status: string
+          time: string
+          updated_at: string
+        }
+        Insert: {
+          chair?: string
+          clinic_user_id?: string | null
+          confirmed?: boolean
+          created_at?: string
+          date: string
+          duration?: number
+          id: string
+          notes?: string | null
+          patient_id: string
+          procedure_id?: string | null
+          professional_id: string
+          status?: string
+          time: string
+          updated_at?: string
+        }
+        Update: {
+          chair?: string
+          clinic_user_id?: string | null
+          confirmed?: boolean
+          created_at?: string
+          date?: string
+          duration?: number
+          id?: string
+          notes?: string | null
+          patient_id?: string
+          procedure_id?: string | null
+          professional_id?: string
+          status?: string
+          time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_appointments_clinic_user_id_fkey"
+            columns: ["clinic_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_documents: {
+        Row: {
+          clinic_user_id: string | null
+          content: string
+          created_at: string
+          date: string
+          id: string
+          patient_id: string
+          title: string
+          type: string
+        }
+        Insert: {
+          clinic_user_id?: string | null
+          content: string
+          created_at?: string
+          date?: string
+          id: string
+          patient_id: string
+          title: string
+          type: string
+        }
+        Update: {
+          clinic_user_id?: string | null
+          content?: string
+          created_at?: string
+          date?: string
+          id?: string
+          patient_id?: string
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_documents_clinic_user_id_fkey"
+            columns: ["clinic_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_evolutions: {
+        Row: {
+          auto: boolean | null
+          clinic_user_id: string | null
+          created_at: string
+          date: string
+          id: string
+          patient_id: string
+          professional_id: string | null
+          text: string
+        }
+        Insert: {
+          auto?: boolean | null
+          clinic_user_id?: string | null
+          created_at?: string
+          date?: string
+          id: string
+          patient_id: string
+          professional_id?: string | null
+          text: string
+        }
+        Update: {
+          auto?: boolean | null
+          clinic_user_id?: string | null
+          created_at?: string
+          date?: string
+          id?: string
+          patient_id?: string
+          professional_id?: string | null
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_evolutions_clinic_user_id_fkey"
+            columns: ["clinic_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_inventory: {
+        Row: {
+          category: string
+          clinic_user_id: string | null
+          cost: number
+          created_at: string
+          id: string
+          min: number
+          name: string
+          qty: number
+          supplier: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          clinic_user_id?: string | null
+          cost?: number
+          created_at?: string
+          id: string
+          min?: number
+          name: string
+          qty?: number
+          supplier?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          clinic_user_id?: string | null
+          cost?: number
+          created_at?: string
+          id?: string
+          min?: number
+          name?: string
+          qty?: number
+          supplier?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_inventory_clinic_user_id_fkey"
+            columns: ["clinic_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_odontograms: {
+        Row: {
+          clinic_user_id: string | null
+          condition: string
+          created_at: string
+          date: string
+          faces: string[] | null
+          id: string
+          item_id: string | null
+          notes: string | null
+          patient_id: string
+          status: string
+          tooth: string
+        }
+        Insert: {
+          clinic_user_id?: string | null
+          condition: string
+          created_at?: string
+          date?: string
+          faces?: string[] | null
+          id?: string
+          item_id?: string | null
+          notes?: string | null
+          patient_id: string
+          status?: string
+          tooth: string
+        }
+        Update: {
+          clinic_user_id?: string | null
+          condition?: string
+          created_at?: string
+          date?: string
+          faces?: string[] | null
+          id?: string
+          item_id?: string | null
+          notes?: string | null
+          patient_id?: string
+          status?: string
+          tooth?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_odontograms_clinic_user_id_fkey"
+            columns: ["clinic_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_patients: {
+        Row: {
+          address: Json | null
+          allergies: string[] | null
+          birth_date: string | null
+          clinic_user_id: string | null
+          conditions: string[] | null
+          cpf: string | null
+          created_at: string
+          email: string | null
+          gender: string | null
+          id: string
+          insurance: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          tags: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          address?: Json | null
+          allergies?: string[] | null
+          birth_date?: string | null
+          clinic_user_id?: string | null
+          conditions?: string[] | null
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          gender?: string | null
+          id: string
+          insurance?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          address?: Json | null
+          allergies?: string[] | null
+          birth_date?: string | null
+          clinic_user_id?: string | null
+          conditions?: string[] | null
+          cpf?: string | null
+          created_at?: string
+          email?: string | null
+          gender?: string | null
+          id?: string
+          insurance?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          tags?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_patients_clinic_user_id_fkey"
+            columns: ["clinic_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_transactions: {
+        Row: {
+          amount: number
+          category: string
+          clinic_user_id: string | null
+          created_at: string
+          date: string
+          description: string
+          due_date: string
+          id: string
+          method: string
+          patient_id: string | null
+          plan_id: string | null
+          status: string
+          type: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          clinic_user_id?: string | null
+          created_at?: string
+          date: string
+          description: string
+          due_date: string
+          id: string
+          method?: string
+          patient_id?: string | null
+          plan_id?: string | null
+          status?: string
+          type: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          clinic_user_id?: string | null
+          created_at?: string
+          date?: string
+          description?: string
+          due_date?: string
+          id?: string
+          method?: string
+          patient_id?: string | null
+          plan_id?: string | null
+          status?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_transactions_clinic_user_id_fkey"
+            columns: ["clinic_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_treatment_plans: {
+        Row: {
+          approved_at: string | null
+          clinic_user_id: string | null
+          created_at: string
+          discount: number | null
+          id: string
+          installments: number | null
+          items: Json
+          method: string | null
+          patient_id: string
+          professional_id: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          clinic_user_id?: string | null
+          created_at?: string
+          discount?: number | null
+          id: string
+          installments?: number | null
+          items?: Json
+          method?: string | null
+          patient_id: string
+          professional_id: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          clinic_user_id?: string | null
+          created_at?: string
+          discount?: number | null
+          id?: string
+          installments?: number | null
+          items?: Json
+          method?: string | null
+          patient_id?: string
+          professional_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clinic_treatment_plans_clinic_user_id_fkey"
+            columns: ["clinic_user_id"]
+            isOneToOne: false
+            referencedRelation: "clinic_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clinic_users: {
+        Row: {
+          avatar: string | null
+          clinic_name: string
+          created_at: string
+          cro: string | null
+          email: string
+          eva_user_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          password_hash: string
+          phone: string | null
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          avatar?: string | null
+          clinic_name?: string
+          created_at?: string
+          cro?: string | null
+          email: string
+          eva_user_id?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          password_hash: string
+          phone?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Update: {
+          avatar?: string | null
+          clinic_name?: string
+          created_at?: string
+          cro?: string | null
+          email?: string
+          eva_user_id?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          password_hash?: string
+          phone?: string | null
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       closed_bill_cycles: {
         Row: {
@@ -2309,6 +2775,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_eva_subscriber_by_email: { Args: { _email: string }; Returns: Json }
       compute_cycle_key: { Args: { payment_date: string }; Returns: string }
       enforce_subscription_delinquency: { Args: never; Returns: number }
       get_account_balance: {
