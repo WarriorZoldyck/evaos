@@ -278,7 +278,7 @@ Deno.serve(async (req) => {
       brazil_date: todayDateStr,
       brazil_time: currentHourMinute,
       dry_run: !!body.dry_run,
-      sent: results.filter((r) => r.ok && r.txCount > 0).length,
+      sent: results.filter((r) => r.ok && (r.txCount ?? 0) > 0).length,
       skipped: results.filter((r) => r.skipped).length,
       failed: results.filter((r) => !r.ok && !r.skipped).length,
       results,

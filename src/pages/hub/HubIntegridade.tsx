@@ -61,7 +61,6 @@ export default function HubIntegridade() {
   const [orphans, setOrphans] = useState<OrphanRow[]>([]);
   const [divergent, setDivergent] = useState<DivergentRow[]>([]);
   const [missingCtx, setMissingCtx] = useState<MissingContextRow[]>([]);
-  const [orphanAccounts, setOrphanAccounts] = useState<OrphanAccountRow[]>([]);
   const [companyOptions, setCompanyOptions] = useState<CompanyOption[]>([]);
   const [pendingAccountCompany, setPendingAccountCompany] = useState<Record<string, string>>({});
   const [fixingOrphan, setFixingOrphan] = useState<string | null>(null);
@@ -140,7 +139,6 @@ export default function HubIntegridade() {
       setOrphans(orphanList);
       setDivergent(divergentList);
       setMissingCtx(missingList);
-      setOrphanAccounts([]); // Removed anomaly 0
       setCompanyOptions(companyData || []);
     } catch (err: any) {
       toast.error("Erro ao verificar integridade: " + (err?.message || String(err)));
