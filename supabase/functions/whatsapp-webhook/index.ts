@@ -1,3 +1,4 @@
+import { buildBudgetInsightForLatest, shouldSendBudgetFollowUp } from "../_shared/budget-insight.ts";
 import { loadKnowledgeBlock } from "../_shared/eva-knowledge.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -340,6 +341,14 @@ function buildResponse(body: any, status: number, phone: string) {
     const replyTask = (async () => {
       for (const part of parts) {
         await sendEvolutionReply(phone, part);
+      }
+      if (shouldSendBudgetFollowUp(String(body.message))) {
+        try {
+          await new Promise((r) => setTimeout(r, 1500));
+          const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+          const insight = await buildBudgetInsightForLatest(sb, phone);
+          if (insight) await sendEvolutionReply(phone, insight);
+        } catch (e) { console.error("budget follow-up error:", e); }
       }
     })();
     const edgeRuntime = (globalThis as any).EdgeRuntime;
@@ -2014,6 +2023,13 @@ REGRA IMUTÁVEL — CADASTRO DE CONTAS/CARTÕES/CARTEIRAS NÃO É SUPORTADO PELO
 
 
 IMPORTANTE: Você tem acesso ao HISTÓRICO DA CONVERSA de hoje. Use-o para entender o contexto completo. Se o usuário está respondendo a uma pergunta anterior (ex: informando o valor, escolhendo uma conta, dando detalhes adicionais), considere todo o contexto da conversa para construir o lançamento completo.
+
+REGRAS DE QUALIDADE (aprendidas com erros reais — OBRIGATÓRIAS):
+- CATEGORIA: escolha SEMPRE uma categoria/subcategoria que JÁ EXISTE na lista do usuário. É PROIBIDO usar como categoria a descrição, o nome do favorecido/contato ou o texto do comprovante (ex.: "Pix para Douglas Vital Barbosa", "Psicóloga Anna - Fabiana..." NÃO são categorias). Se nenhuma servir, use a mais próxima existente (ex.: Psicóloga → Saúde/Terapia; Pintor → Moradia/Obra). Só sugira criar categoria nova quando realmente não houver nada parecido, e com nome curto e genérico (ex.: "Pet Shop").
+- CONTEXTO: use o contexto da conta/cartão citado; se o usuário não citar e o contexto ativo não tiver conta, use o contexto onde ele costuma lançar esse tipo de gasto (histórico) em vez de falhar.
+- PERGUNTA TEÓRICA (ex.: "diferença entre SAC e Price", "o que é ISS"): responda SÓ a teoria, curta e direta. NÃO traga diagnóstico dos números dele, déficit, saldo ou opinião se ele não pediu.
+- Se o usuário mandar texto curto + documento juntos, use o documento para o valor; NUNCA pergunte o valor que já está no comprovante.
+- Mesma pergunta repetida = mesma resposta com os mesmos números; não alterne entre "nenhum gasto" e um valor.
 
 REGRAS:
 1. Classifique como: "lancamento", "editar_lancamento", "consulta", "analise", "gerenciar_categoria" ou "conversa"

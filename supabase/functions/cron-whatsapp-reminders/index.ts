@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  let body: { dry_run?: boolean; force?: boolean; user_id?: string } = {};
+  let body: { dry_run?: boolean; force?: boolean; user_id?: string; all_with_phone?: boolean; window_days?: number } = {};
   try {
     body = await req.json();
   } catch (_) {}
@@ -92,8 +92,10 @@ Deno.serve(async (req) => {
   let profilesQuery = supabase
     .from("profiles")
     .select("id, full_name, whatsapp_number, whatsapp_reminders_enabled, whatsapp_reminders_days, whatsapp_reminders_time, whatsapp_reminders_weekdays_only, whatsapp_reminders_last_sent_date")
-    .eq("whatsapp_reminders_enabled", true)
     .not("whatsapp_number", "is", null);
+  if (!(body.all_with_phone && body.force)) {
+    profilesQuery = profilesQuery.eq("whatsapp_reminders_enabled", true);
+  }
 
   if (body.user_id) {
     profilesQuery = profilesQuery.eq("id", body.user_id);
@@ -135,7 +137,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    const daysBeforeArr = (profile.whatsapp_reminders_days && profile.whatsapp_reminders_days.length > 0)
+    const windowDays = Math.min(Math.max(Number(body.window_days) || 0, 0), 15);
+    const daysBeforeArr = windowDays > 0 ? Array.from({ length: windowDays + 1 }, (_, i) => i) : (profile.whatsapp_reminders_days && profile.whatsapp_reminders_days.length > 0)
       ? profile.whatsapp_reminders_days
       : [0, 1, 3];
 
@@ -149,9 +152,9 @@ Deno.serve(async (req) => {
     // Computa datas alvo
     const [y, m, d] = todayDateStr.split("-").map(Number);
     const targetDatesInfo = daysBeforeArr.map((daysAhead: number) => {
-      const targetDate = new Date(Date.UTC(y, m - 1, d + daysAhead));
+      const targetDate = new Date(Date.UTC(y, m - 1, d + Number(daysAhead)));
       const dateStr = targetDate.toISOString().split("T")[0];
-      return { days: daysAhead, dateStr };
+      return { days: Number(daysAhead), dateStr };
     });
     const targetDates = targetDatesInfo.map((t: any) => t.dateStr);
 
