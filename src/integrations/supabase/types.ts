@@ -1844,6 +1844,9 @@ export type Database = {
           whatsapp_number: string | null
           whatsapp_reminders_days: number[] | null
           whatsapp_reminders_enabled: boolean | null
+          whatsapp_reminders_last_sent_date: string | null
+          whatsapp_reminders_time: string | null
+          whatsapp_reminders_weekdays_only: boolean | null
         }
         Insert: {
           avatar_url?: string | null
@@ -1855,6 +1858,9 @@ export type Database = {
           whatsapp_number?: string | null
           whatsapp_reminders_days?: number[] | null
           whatsapp_reminders_enabled?: boolean | null
+          whatsapp_reminders_last_sent_date?: string | null
+          whatsapp_reminders_time?: string | null
+          whatsapp_reminders_weekdays_only?: boolean | null
         }
         Update: {
           avatar_url?: string | null
@@ -1866,6 +1872,9 @@ export type Database = {
           whatsapp_number?: string | null
           whatsapp_reminders_days?: number[] | null
           whatsapp_reminders_enabled?: boolean | null
+          whatsapp_reminders_last_sent_date?: string | null
+          whatsapp_reminders_time?: string | null
+          whatsapp_reminders_weekdays_only?: boolean | null
         }
         Relationships: []
       }
