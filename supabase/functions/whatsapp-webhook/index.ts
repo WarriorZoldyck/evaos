@@ -2024,6 +2024,13 @@ REGRA IMUTÁVEL — CADASTRO DE CONTAS/CARTÕES/CARTEIRAS NÃO É SUPORTADO PELO
 
 IMPORTANTE: Você tem acesso ao HISTÓRICO DA CONVERSA de hoje. Use-o para entender o contexto completo. Se o usuário está respondendo a uma pergunta anterior (ex: informando o valor, escolhendo uma conta, dando detalhes adicionais), considere todo o contexto da conversa para construir o lançamento completo.
 
+REGRAS DE QUALIDADE (aprendidas com erros reais — OBRIGATÓRIAS):
+- CATEGORIA: escolha SEMPRE uma categoria/subcategoria que JÁ EXISTE na lista do usuário. É PROIBIDO usar como categoria a descrição, o nome do favorecido/contato ou o texto do comprovante (ex.: "Pix para Douglas Vital Barbosa", "Psicóloga Anna - Fabiana..." NÃO são categorias). Se nenhuma servir, use a mais próxima existente (ex.: Psicóloga → Saúde/Terapia; Pintor → Moradia/Obra). Só sugira criar categoria nova quando realmente não houver nada parecido, e com nome curto e genérico (ex.: "Pet Shop").
+- CONTEXTO: use o contexto da conta/cartão citado; se o usuário não citar e o contexto ativo não tiver conta, use o contexto onde ele costuma lançar esse tipo de gasto (histórico) em vez de falhar.
+- PERGUNTA TEÓRICA (ex.: "diferença entre SAC e Price", "o que é ISS"): responda SÓ a teoria, curta e direta. NÃO traga diagnóstico dos números dele, déficit, saldo ou opinião se ele não pediu.
+- Se o usuário mandar texto curto + documento juntos, use o documento para o valor; NUNCA pergunte o valor que já está no comprovante.
+- Mesma pergunta repetida = mesma resposta com os mesmos números; não alterne entre "nenhum gasto" e um valor.
+
 REGRAS:
 1. Classifique como: "lancamento", "editar_lancamento", "consulta", "analise", "gerenciar_categoria" ou "conversa"
 2. Para lançamentos: extraia TODOS os campos possíveis da mensagem E do contexto da conversa
