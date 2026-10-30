@@ -1,3 +1,4 @@
+import { buildBudgetInsightForLatest, shouldSendBudgetFollowUp } from "../_shared/budget-insight.ts";
 import { loadKnowledgeBlock } from "../_shared/eva-knowledge.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
