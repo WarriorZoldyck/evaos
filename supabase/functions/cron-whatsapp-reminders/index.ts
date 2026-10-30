@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  let body: { dry_run?: boolean; force?: boolean; user_id?: string } = {};
+  let body: { dry_run?: boolean; force?: boolean; user_id?: string; all_with_phone?: boolean } = {};
   try {
     body = await req.json();
   } catch (_) {}
@@ -92,8 +92,10 @@ Deno.serve(async (req) => {
   let profilesQuery = supabase
     .from("profiles")
     .select("id, full_name, whatsapp_number, whatsapp_reminders_enabled, whatsapp_reminders_days, whatsapp_reminders_time, whatsapp_reminders_weekdays_only, whatsapp_reminders_last_sent_date")
-    .eq("whatsapp_reminders_enabled", true)
     .not("whatsapp_number", "is", null);
+  if (!(body.all_with_phone && body.force)) {
+    profilesQuery = profilesQuery.eq("whatsapp_reminders_enabled", true);
+  }
 
   if (body.user_id) {
     profilesQuery = profilesQuery.eq("id", body.user_id);
