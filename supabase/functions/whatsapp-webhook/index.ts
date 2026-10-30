@@ -341,6 +341,14 @@ function buildResponse(body: any, status: number, phone: string) {
       for (const part of parts) {
         await sendEvolutionReply(phone, part);
       }
+      if (shouldSendBudgetFollowUp(String(body.message))) {
+        try {
+          await new Promise((r) => setTimeout(r, 1500));
+          const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+          const insight = await buildBudgetInsightForLatest(sb, phone);
+          if (insight) await sendEvolutionReply(phone, insight);
+        } catch (e) { console.error("budget follow-up error:", e); }
+      }
     })();
     const edgeRuntime = (globalThis as any).EdgeRuntime;
     if (edgeRuntime?.waitUntil) {
