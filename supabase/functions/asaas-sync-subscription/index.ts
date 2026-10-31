@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
     if (asaasSub.status === "ACTIVE") {
       // Se a assinatura está ACTIVE no Asaas e tem algum pagamento recebido ou não tem pagamentos atrasados
       if (latestPaid || overduePayments.length === 0) {
-        updates.status = "active";
+        updates.status = latestPaid ? "active" : "pending";
         updates.grace_until = null;
 
         if (latestPaid) {
@@ -126,6 +126,11 @@ Deno.serve(async (req) => {
           updates.invoice_url = latestInvoice;
         }
       } else if (overduePayments.length > 0) {
+        if (sub.status === "pending" && !sub.last_payment_at) {
+          updates.status = "pending";
+          updates.grace_until = null;
+          updates.invoice_url = overduePayments[0]?.invoiceUrl || sub.invoice_url;
+        } else {
         // Realmente há fatura em atraso sem pagamento
         updates.status = "past_due";
         if (!sub.grace_until || new Date(sub.grace_until).getTime() < Date.now()) {
@@ -135,6 +140,7 @@ Deno.serve(async (req) => {
         }
         if (overduePayments[0]?.invoiceUrl) {
           updates.invoice_url = overduePayments[0].invoiceUrl;
+        }
         }
       }
     } else if (["INACTIVE", "DELETED"].includes(asaasSub.status)) {

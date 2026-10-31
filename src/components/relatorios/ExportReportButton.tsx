@@ -10,6 +10,7 @@ import { Download, FileSpreadsheet, FileText, Loader2, Table2 } from "lucide-rea
 import { useToast } from "@/hooks/use-toast";
 import type { DRECategoryRow, DRESection } from "@/hooks/useDREData";
 import { getPeriodLabel } from "@/hooks/useDREData";
+import { escapeCsvCell } from "@/lib/csvSecurity";
 
 export interface ExportRow {
   label: string;
@@ -111,7 +112,7 @@ export function ExportReportButton({ title, fileBaseName, periods, rows, disable
     const all = [headers, ...matrix()];
     const csv =
       "\uFEFF" +
-      all.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+      all.map((r) => r.map(escapeCsvCell).join(";")).join("\n");
     downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8;" }), `${fileBaseName}_${stamp()}.csv`);
   };
 

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkoutStatus, PAID_PAYMENT_STATUSES } from "../_shared/subscription-payment.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -85,7 +86,7 @@ Deno.serve(async (req) => {
       .from("subscriptions")
       .select("id, status")
       .eq("user_id", userId)
-      .in("status", ["trialing", "active", "past_due"])
+      .in("status", ["trialing", "active", "past_due", "pending"])
       .maybeSingle();
     if (existingActive) {
       return new Response(JSON.stringify({ error: "Você já possui uma assinatura ativa" }), { status: 409, headers: corsHeaders });
@@ -150,6 +151,8 @@ Deno.serve(async (req) => {
 
     const finalValueCents = baseCents - discountCents;
     const finalValue = finalValueCents / 100;
+    // Zero-value coupons require a separate trusted courtesy flow; never infer entitlement from a request.
+    if (finalValueCents <= 0) return new Response(JSON.stringify({ error: "Este cupom de cortesia precisa ser ativado pela administração, sem cobrança." }), { status: 400, headers: corsHeaders });
 
     // 4. Asaas customer (criar ou reusar)
     let { data: cust } = await admin
@@ -235,9 +238,11 @@ Deno.serve(async (req) => {
     }
 
     // 6. Buscar primeira cobrança pra pegar URL de pagamento
+    let confirmedPayment = false;
     try {
       const payments = await asaasFetch(`/subscriptions/${asaasSubId}/payments`);
       invoiceUrl = payments?.data?.[0]?.invoiceUrl || null;
+      confirmedPayment = (payments?.data || []).some((p: any) => PAID_PAYMENT_STATUSES.includes(p.status) && p.dueDate >= nextDueDateStr);
     } catch (e) {
       console.warn("Não foi possível obter invoice URL", e);
     }
@@ -249,7 +254,7 @@ Deno.serve(async (req) => {
         .update({
           plan_id: plan.id,
           asaas_subscription_id: asaasSubId,
-          status: "active",
+          status: checkoutStatus(confirmedPayment),
           billing_type,
           billing_cycle: cycleChoice,
           discount_percent: 0,
@@ -258,6 +263,8 @@ Deno.serve(async (req) => {
           trial_ends_at: null,
           canceled_at: null,
           grace_until: null,
+          last_payment_at: confirmedPayment ? new Date().toISOString() : null,
+          current_period_end: null,
           next_due_date: nextDueDateStr!,
           invoice_url: invoiceUrl,
           updated_at: new Date().toISOString(),
@@ -277,7 +284,7 @@ Deno.serve(async (req) => {
           user_id: userId,
           plan_id: plan.id,
           asaas_subscription_id: asaasSubId,
-          status: "active",
+          status: checkoutStatus(confirmedPayment),
           billing_type,
           billing_cycle: cycleChoice,
           is_beta: false,

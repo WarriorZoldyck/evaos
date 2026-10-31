@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
           .from("subscriptions")
           .select("*")
           .eq("user_id", cust.user_id)
-          .in("status", ["active", "past_due", "trialing"])
+          .in("status", ["active", "past_due", "trialing", "pending"])
           .order("updated_at", { ascending: false })
           .limit(1);
 
@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
             sub.last_payment_at &&
             Date.now() - new Date(sub.last_payment_at).getTime() < 30 * 24 * 60 * 60 * 1000;
 
-          if (!isActuallyPaid && !hasRecentPayment) {
+          if (!isActuallyPaid && !hasRecentPayment && !(sub.status === "pending" && !sub.last_payment_at)) {
             const grace = new Date();
             grace.setDate(grace.getDate() + 5);
             updates.status = "past_due";

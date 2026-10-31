@@ -1,4 +1,5 @@
-const apiKey = 'AIzaSyCVyJ0jlD9qzBV8IP1i99u6n-T6USg4U1M';
+const apiKey = process.env.GOOGLE_API_KEY;
+if (!apiKey) throw new Error('GOOGLE_API_KEY is required');
 
 const CARD_SYSTEM_PROMPT = `You are a credit card / bank statement parser. Extract ALL purchase/expense transactions from the provided text.
 

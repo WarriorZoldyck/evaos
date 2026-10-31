@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, ArrowRight } from "lucide-react";
+import { escapeCsvCell } from "@/lib/csvSecurity";
 
 type Tx = {
   id: string;
@@ -338,7 +339,7 @@ export function FaturamentoDetailModal({
       });
     });
     const csv = rows
-      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";"))
+      .map((r) => r.map(escapeCsvCell).join(";"))
       .join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);

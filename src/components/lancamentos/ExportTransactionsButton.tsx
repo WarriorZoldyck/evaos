@@ -13,6 +13,7 @@ import type { Transaction, TransactionFilters, Category, CreditCard } from "@/ho
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { escapeCsvCell } from "@/lib/csvSecurity";
 
 interface Props {
   filters: TransactionFilters;
@@ -157,15 +158,11 @@ export function ExportTransactionsButton({
       }
       const rows = buildRows(txs);
       const header = ["Data", "Competência", "Descrição", "Contato", "Categoria", "Subcategoria", "Subcategoria 2", "Conta", "Tipo", "Status", "Valor"];
-      const escape = (v: any) => {
-        const s = String(v ?? "");
-        return /[";,\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-      };
       const csv = [
         header.join(";"),
         ...rows.map((r) =>
           [r.data, r.competencia, r.descricao, r.contato, r.categoria, r.subcategoria, r.subcategoria2, r.conta, r.tipo, r.status, r.valor.toFixed(2).replace(".", ",")]
-            .map(escape)
+            .map(escapeCsvCell)
             .join(";")
         ),
       ].join("\n");
