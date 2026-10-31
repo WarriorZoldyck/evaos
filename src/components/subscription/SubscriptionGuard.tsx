@@ -23,7 +23,7 @@ export function SubscriptionBanner() {
       <div className="px-4 py-2 bg-destructive/10 border-b border-destructive/40 text-sm flex items-center justify-between gap-2 flex-wrap">
         <span className="flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-          Sua assinatura foi {subscription?.status === "canceled" ? "cancelada" : "encerrada"}. Reative para continuar usando a EVA.
+          {subscription?.status === "pending" ? "Sua assinatura aguarda a confirmação do pagamento." : `Sua assinatura foi ${subscription?.status === "canceled" ? "cancelada" : "encerrada"}. Reative para continuar usando a EVA.`}
         </span>
         <div className="flex items-center gap-3">
           {subscription?.asaas_subscription_id && (
@@ -36,8 +36,8 @@ export function SubscriptionBanner() {
               Já paguei
             </button>
           )}
-          <Link to="/planos" className="text-destructive font-semibold hover:underline">
-            Reativar →
+          <Link to={subscription?.status === "pending" ? "/configuracoes/assinatura" : "/planos"} className="text-destructive font-semibold hover:underline">
+            {subscription?.status === "pending" ? "Ver pagamento →" : "Reativar →"}
           </Link>
         </div>
       </div>
@@ -118,16 +118,16 @@ export function SubscriptionBlockedScreen() {
     <div className="min-h-[60vh] flex items-center justify-center p-6">
       <div className="max-w-md w-full text-center space-y-4 p-8 rounded-2xl border border-border bg-card">
         <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
-        <h2 className="text-2xl font-bold">Assinatura expirada</h2>
+        <h2 className="text-2xl font-bold">{subscription?.status === "pending" ? "Aguardando pagamento" : "Assinatura expirada"}</h2>
         <p className="text-muted-foreground">
-          Seu acesso à EVA foi pausado. Reative sua assinatura para continuar usando todos os recursos.
+          {subscription?.status === "pending" ? "Seu acesso será liberado após a confirmação do pagamento." : "Seu acesso à EVA foi pausado. Reative sua assinatura para continuar usando todos os recursos."}
         </p>
         <div className="flex flex-col gap-2 pt-2">
           <Link
-            to="/planos"
+            to={subscription?.status === "pending" ? "/configuracoes/assinatura" : "/planos"}
             className="inline-block px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90"
           >
-            Reativar assinatura
+            {subscription?.status === "pending" ? "Pagar / ver fatura" : "Reativar assinatura"}
           </Link>
           {subscription?.asaas_subscription_id && (
             <button

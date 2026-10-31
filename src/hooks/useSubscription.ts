@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
-export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled" | "expired";
+export type SubscriptionStatus = "trialing" | "active" | "past_due" | "pending" | "canceled" | "expired";
 
 export interface SubscriptionRow {
   id: string;
@@ -42,10 +42,11 @@ export function useSubscription() {
     queryKey: ["subscription", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
+      if (!user?.id) return null;
       const { data, error } = await supabase
         .from("subscriptions")
         .select("*, plan:subscription_plans(*)")
-        .eq("user_id", user!.id)
+        .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
 
       if (error) throw error;
@@ -117,7 +118,7 @@ export function useSubscription() {
 
   // Se a assinatura está como past_due no banco, dispara sync automático em background uma vez
   useEffect(() => {
-    if (sub?.status === "past_due" && sub.asaas_subscription_id && !hasAutoSynced.current) {
+    if ((sub?.status === "past_due" || sub?.status === "pending") && sub.asaas_subscription_id && !hasAutoSynced.current) {
       hasAutoSynced.current = true;
       syncSubscription();
     }

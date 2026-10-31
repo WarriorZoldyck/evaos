@@ -82,7 +82,7 @@ export default function MinhaAssinatura() {
           {isInTrial && <span className="text-xs px-2 py-1 rounded-full bg-primary/15 text-primary font-semibold">Em teste</span>}
           {isActive && <span className="text-xs px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-600 font-semibold">Ativa</span>}
           {isInGrace && <span className="text-xs px-2 py-1 rounded-full bg-amber-500/15 text-amber-600 font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Pagamento pendente</span>}
-          {isBlocked && <span className="text-xs px-2 py-1 rounded-full bg-destructive/15 text-destructive font-semibold">Expirada</span>}
+          {isBlocked && <span className="text-xs px-2 py-1 rounded-full bg-destructive/15 text-destructive font-semibold">{subscription?.status === "pending" ? "Aguardando pagamento" : "Expirada"}</span>}
         </div>
 
         <div className="grid sm:grid-cols-2 gap-3 text-sm pt-2 border-t border-border">
@@ -112,10 +112,10 @@ export default function MinhaAssinatura() {
           {(isInTrial || isActive) && (
             <Button variant="outline" onClick={() => navigate("/planos")}>Trocar de plano</Button>
           )}
-          {isBlocked && (
+          {isBlocked && subscription?.status !== "pending" && (
             <Button onClick={() => navigate("/planos")}>Reativar assinatura</Button>
           )}
-          {(isInTrial || isActive || isInGrace) && (
+          {(isInTrial || isActive || isInGrace || subscription?.status === "pending") && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" className="text-destructive hover:text-destructive">Cancelar assinatura</Button>
