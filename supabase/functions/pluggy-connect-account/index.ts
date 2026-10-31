@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPluggyApiKey, pluggyGet } from "../_shared/pluggy.ts";
+import { isCompanyOwner } from "../_shared/access-guards.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -79,6 +80,10 @@ Deno.serve(async (req) => {
     let finalCompanyId = company_id ?? null;
 
     if (mode === "new_account") {
+      if (finalCompanyId) {
+        const { data: company, error } = await supabase.from("companies").select("user_id").eq("id", finalCompanyId).maybeSingle();
+        if (error || !isCompanyOwner(company, userId)) return new Response(JSON.stringify({ error: "Empresa inválida" }), { status: 403, headers: corsHeaders });
+      }
       const name = (account_name || institutionName).slice(0, 80);
       const { data: acc, error: accErr } = await admin
         .from("bank_accounts")

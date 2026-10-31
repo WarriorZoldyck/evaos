@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, ArrowRight, CheckCircle2 } from "lucide-react";
 import { LiquidateModal } from "./LiquidateModal";
+import { escapeCsvCell } from "@/lib/csvSecurity";
 
 type Tx = {
   id: string;
@@ -309,7 +310,7 @@ export function EntradasSaidasDetailModal({
       });
     });
     const csv = rows
-      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";"))
+      .map((r) => r.map(escapeCsvCell).join(";"))
       .join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);

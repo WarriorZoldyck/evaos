@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchAiCompletions } from "../_shared/ai-gateway.ts";
+import { isOwnedKnowledgePath } from "../_shared/access-guards.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -37,12 +38,18 @@ Deno.serve(async (req) => {
   const { data: row } = await userClient.from("eva_knowledge").select("*").eq("id", id).maybeSingle();
   if (!row) return json({ error: "Arquivo não encontrado" }, 404);
 
+  if (!isOwnedKnowledgePath(row.file_path, row.user_id)) return json({ error: "Arquivo fora da pasta do proprietário" }, 403);
+  if (row.user_id !== u.user.id) {
+    const { data: canWrite, error } = await userClient.rpc("is_hub_member_writer", { _member_uid: u.user.id, _owner_uid: row.user_id });
+    if (error || !canWrite) return json({ error: "Sem permissão para processar este arquivo" }, 403);
+  }
+
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const setStatus = (patch: Record<string, unknown>) => admin.from("eva_knowledge").update(patch).eq("id", id);
   await setStatus({ status: "processing", error: null });
 
   try {
-    const { data: blob, error: dlErr } = await admin.storage.from("eva-knowledge").download(row.file_path);
+    const { data: blob, error: dlErr } = await userClient.storage.from("eva-knowledge").download(row.file_path);
     if (dlErr || !blob) throw new Error("Não foi possível ler o arquivo.");
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const name = row.file_name.toLowerCase();
