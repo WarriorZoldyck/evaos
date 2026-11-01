@@ -3,29 +3,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const norm = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
-export function shouldSendBudgetFollowUp(message: string) {
-  return /enviad[oa]s? para aprova/i.test(message || "");
-}
-
-export async function buildBudgetInsightForLatest(supabase: any, phone: string): Promise<string | null> {
-  const tail = String(phone).replace(/\D/g, "").slice(-10);
-  if (tail.length < 10) return null;
-  const { data: profs } = await supabase.from("profiles").select("id, whatsapp_number").not("whatsapp_number", "is", null);
-  const prof = (profs || []).find((p: any) => String(p.whatsapp_number).replace(/\D/g, "").endsWith(tail));
-  if (!prof) return null;
-
-  // Dono ativo (membro do Hub pode lançar para outro dono)
-  const { data: active } = await supabase.from("whatsapp_active_owner").select("active_owner_id").eq("member_user_id", prof.id).maybeSingle();
-  const candidates = [prof.id, active?.active_owner_id].filter(Boolean);
-
-  const since = new Date(Date.now() - 5 * 60_000).toISOString();
-  const { data: recent } = await supabase.from("ai_pending_transactions")
-    .select("user_id, type, category, subcategory, subcategory2, company_id, amount")
-    .in("user_id", candidates).gte("created_at", since)
-    .order("created_at", { ascending: false }).limit(1);
-  const tx = recent?.[0];
-  if (!tx) return null;
-  return buildBudgetInsight(supabase, tx.user_id, tx.company_id ?? null, [tx.category, tx.subcategory, tx.subcategory2], tx.type);
+export function shouldSendBudgetFollowUp(status: string, transactionId: string | null) {
+  return status === "approved" && Boolean(transactionId);
 }
 
 export async function buildBudgetInsight(
@@ -34,10 +13,12 @@ export async function buildBudgetInsight(
   const kind = type === "receita" ? "income" : "expense";
   let q = supabase.from("budget_targets").select("category_name, target_amount").eq("user_id", userId).eq("kind", kind);
   q = companyId ? q.eq("company_id", companyId) : q.is("company_id", null);
-  const { data: targets } = await q;
+  const { data: targets, error: targetError } = await q;
+  if (targetError) throw targetError;
   if (!targets?.length) return null;
 
-  const { data: cats } = await supabase.from("categories").select("id, name").eq("user_id", userId);
+  const { data: cats, error: categoryError } = await supabase.from("categories").select("id, name").eq("user_id", userId);
+  if (categoryError) throw categoryError;
   const idToName = new Map<string, string>((cats || []).map((c: any) => [c.id, c.name]));
   const resolve = (r: string | null) => (r ? (UUID_RE.test(r) ? idToName.get(r) || "" : r) : "");
   const txNames = catRefs.map(resolve).map(norm).filter(Boolean);
@@ -58,13 +39,10 @@ export async function buildBudgetInsight(
     .flatMap((col) => refs.map((r) => `${col}.eq.${JSON.stringify(r)}`)).join(",");
 
   const ctx = (qb: any) => (companyId ? qb.eq("company_id", companyId) : qb.is("company_id", null));
-  const [{ data: txs }, { data: pend }] = await Promise.all([
-    ctx(supabase.from("transactions").select("amount").eq("user_id", userId).eq("type", type)
-      .gte("competence_date", start).lte("competence_date", end).or(orFilter)),
-    ctx(supabase.from("ai_pending_transactions").select("amount").eq("user_id", userId).eq("type", type)
-      .eq("status", "pending").gte("competence_date", start).lte("competence_date", end).or(orFilter)),
-  ]);
-  const used = [...(txs || []), ...(pend || [])].reduce((s: number, r: any) => s + Math.abs(Number(r.amount) || 0), 0);
+  const { data: txs, error } = await ctx(supabase.from("transactions").select("amount").eq("user_id", userId).eq("type", type)
+    .gte("competence_date", start).lte("competence_date", end).or(orFilter));
+  if (error) throw error;
+  const used = (txs || []).reduce((s: number, r: any) => s + Math.abs(Number(r.amount) || 0), 0);
   const goal = Number(target.target_amount) || 0;
   if (goal <= 0) return null;
 

@@ -110,9 +110,8 @@ describe("pickBestMatch", () => {
       { date: "2026-06-06", description: "ItalyanSorvetes", amount: 25, type: "despesa" },
       [cand]
     );
-    // Novo comportamento: valor+data batem, único candidato → devolve como "sugerido"
-    expect(r).not.toBeNull();
-    expect(r!.suggested).toBe(true);
+    // Matching amount/date alone must not imply the same merchant.
+    expect(r).toBeNull();
   });
 
   it("does NOT suggest when two candidates share the same amount (ambiguous)", () => {
@@ -164,7 +163,7 @@ describe("pickBestMatch", () => {
     expect(r).not.toBeNull();
   });
 
-  it("suggests a manual June card purchase with same value inside statement scope", () => {
+  it("rejects an unrelated manual June purchase even with the same value inside statement scope", () => {
     const juneManual: CandidateTx = {
       ...baseCand,
       id: "jun",
@@ -181,9 +180,7 @@ describe("pickBestMatch", () => {
       [juneManual],
       { useCompetenceDate: true, dayWindow: 3 }
     );
-    expect(r).not.toBeNull();
-    expect(r!.suggested).toBe(true);
-    expect(r!.candidate.id).toBe("jun");
+    expect(r).toBeNull();
   });
 
   it("card-bill fallback: matches a paid prior-bill candidate without purchase_date_original when description matches", () => {
@@ -207,7 +204,14 @@ describe("pickBestMatch", () => {
       { useCompetenceDate: true, dayWindow: 15, cardBillWindow: 45 }
     );
     expect(r).not.toBeNull();
-    expect(r!.candidate.id).toBe("paid-may");
+    expect(r?.candidate.id).toBe("paid-may");
+  });
+
+  it("does not confuse a joined merchant with a longer unrelated word", () => {
+    expect(pickBestMatch(
+      { date: "2026-06-05", description: "CHATGPTSTORE", amount: 3500, type: "despesa" },
+      [{ ...baseCand, description: "Chat GPT", contact_name: null }],
+    )).toBeNull();
   });
 
   it("card-bill fallback: does NOT match when description is unrelated (avoids random value collisions)", () => {

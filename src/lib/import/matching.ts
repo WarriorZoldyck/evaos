@@ -178,7 +178,14 @@ export function descriptionSimilarity(a: string, b: string): number {
   let inter = 0;
   for (const t of ta) if (tb.has(t)) inter++;
   const union = ta.size + tb.size - inter;
-  return union === 0 ? 0 : inter / union;
+  const overlap = union === 0 ? 0 : inter / union;
+  // Statements sometimes join a merchant's words ("CHATGPT" / "Chat GPT").
+  // Require the full joined name to be a token, not an arbitrary substring.
+  const joinedA = normalize(a).replace(/\s/g, "");
+  const joinedB = normalize(b).replace(/\s/g, "");
+  const joinedOverlap = joinedA.length >= 5 && tb.has(joinedA) ? 1 / tb.size
+    : joinedB.length >= 5 && ta.has(joinedB) ? 1 / ta.size : 0;
+  return Math.max(overlap, joinedOverlap);
 }
 
 export interface ScoreOptions {

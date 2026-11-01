@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           ai_response_message: string | null
           amount: number
+          approved_transaction_id: string | null
           attachment_url: string | null
           bank_account_id: string | null
           barcode: string | null
@@ -56,6 +57,7 @@ export type Database = {
         Insert: {
           ai_response_message?: string | null
           amount: number
+          approved_transaction_id?: string | null
           attachment_url?: string | null
           bank_account_id?: string | null
           barcode?: string | null
@@ -94,6 +96,7 @@ export type Database = {
         Update: {
           ai_response_message?: string | null
           amount?: number
+          approved_transaction_id?: string | null
           attachment_url?: string | null
           bank_account_id?: string | null
           barcode?: string | null
@@ -129,7 +132,15 @@ export type Database = {
           user_id?: string
           wallet_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_pending_transactions_approved_transaction_id_fkey"
+            columns: ["approved_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ai_usage_counters: {
         Row: {
@@ -416,6 +427,48 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      budget_approval_notifications: {
+        Row: {
+          created_at: string
+          pending_id: string
+          status: string
+          transaction_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          pending_id: string
+          status?: string
+          transaction_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          pending_id?: string
+          status?: string
+          transaction_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_approval_notifications_pending_id_fkey"
+            columns: ["pending_id"]
+            isOneToOne: true
+            referencedRelation: "ai_pending_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budget_approval_notifications_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       budget_targets: {
         Row: {

@@ -5,6 +5,7 @@ import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import { mapDatabaseError } from "@/lib/errorMapper";
+import { notifyApprovalBudget } from "@/lib/approvalBudgetNotification";
 
 
 export interface AIPendingTransaction {
@@ -85,7 +86,7 @@ async function approveSingle(pending: AIPendingTransaction, refs?: ValidRefs) {
     ? pending.card_terminal_id
     : null;
 
-  const { error: insertError } = await supabase.from("transactions").insert({
+  const { data: registered, error: insertError } = await supabase.from("transactions").insert({
     user_id: pending.user_id,
     description: pending.description,
     amount: pending.amount,
@@ -113,15 +114,17 @@ async function approveSingle(pending: AIPendingTransaction, refs?: ValidRefs) {
     installments_total: pending.installments_total,
     series_id: pending.series_id,
     original_amount: pending.original_amount,
-  });
+  }).select("id").single();
   if (insertError) throw insertError;
+  if (!registered) throw new Error("Lançamento não registrado");
 
 
   const { error: updateError } = await supabase
     .from("ai_pending_transactions")
-    .update({ status: "approved", reviewed_at: new Date().toISOString() })
+    .update({ status: "approved", reviewed_at: new Date().toISOString(), approved_transaction_id: registered.id })
     .eq("id", pending.id);
   if (updateError) throw updateError;
+  await notifyApprovalBudget(pending.id);
 }
 
 export function useAIPendingTransactions() {
