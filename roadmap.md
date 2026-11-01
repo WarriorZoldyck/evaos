@@ -1,11 +1,11 @@
 # Security hardening
 
 ## WhatsApp update announcement
-- [ ] Correct reconciliation regressions without weakening false-match safeguards.
-- [ ] Move budget follow-up to successful approval with exact record checks and duplicate prevention.
+- [x] Correct reconciliation regressions: preserve unrelated-merchant rejection; recognize joined merchant names; all matching tests pass.
+- [x] Move budget follow-up to successful approval in single, bulk and reconciliation flows; exact persisted record checks, registered-only totals and server-only duplicate prevention implemented and deployed. Live authenticated approval/send remains unverified.
 - [ ] Validate audio and documents in an authenticated user flow; blocked if no supported test session exists.
 - [x] Run release checks: 154 tests passed, 3 reconciliation tests failed; audit events and an active PDF exist in production, but authenticated chat/document/pricing flows remain unverified on external Supabase.
-- [ ] Broadcast option 1 blocked: reconciliation failures, goal follow-up currently triggers on submission for approval rather than confirmation, and authenticated end-to-end checks unavailable; no messages sent.
+- [ ] Broadcast option 1 blocked: authenticated audio, documents and post-approval send remain unverified on external Supabase; original complete-conciliation/all-exports wording overclaims coverage. No messages sent.
 
 - [ ] Close clinic data access: Eva Clinic Bridge uses browser-side password matching and anonymous CRUD; requires authentication migration in that project before RLS lockdown.
 - [ ] Restore secure Clinic subscription verification: its browser calls the now-restricted check_eva_subscriber_by_email RPC; requires authenticated verification in the Clinic project, not reopening anonymous financial access.
