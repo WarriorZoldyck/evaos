@@ -1,5 +1,9 @@
 # Security hardening
 
+## WhatsApp update announcement
+- [ ] Verify each claim in option 1 with focused tests and available live evidence.
+- [ ] Send option 1 only if all advertised workflows are confirmed functional; otherwise report blockers without broadcasting.
+
 - [ ] Close clinic data access: Eva Clinic Bridge uses browser-side password matching and anonymous CRUD; requires authentication migration in that project before RLS lockdown.
 - [ ] Restore secure Clinic subscription verification: its browser calls the now-restricted check_eva_subscriber_by_email RPC; requires authenticated verification in the Clinic project, not reopening anonymous financial access.
 - [x] Review financial access rules and privileged operations; protect maintenance, invitation acceptance, documents, banking and payment-backed checkout.
