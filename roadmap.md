@@ -1,6 +1,9 @@
 # Security hardening
 
 ## WhatsApp update announcement
+- [ ] Correct reconciliation regressions without weakening false-match safeguards.
+- [ ] Move budget follow-up to successful approval with exact record checks and duplicate prevention.
+- [ ] Validate audio and documents in an authenticated user flow; blocked if no supported test session exists.
 - [x] Run release checks: 154 tests passed, 3 reconciliation tests failed; audit events and an active PDF exist in production, but authenticated chat/document/pricing flows remain unverified on external Supabase.
 - [ ] Broadcast option 1 blocked: reconciliation failures, goal follow-up currently triggers on submission for approval rather than confirmation, and authenticated end-to-end checks unavailable; no messages sent.
 
