@@ -3,8 +3,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const norm = (s: string) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
-export function shouldSendBudgetFollowUp(message: string) {
-  return /enviad[oa]s? para aprova/i.test(message || "");
+export function shouldSendBudgetFollowUp(status: string, transactionId: string | null) {
+  return status === "approved" && Boolean(transactionId);
 }
 
 export async function buildBudgetInsightForLatest(supabase: any, phone: string): Promise<string | null> {
@@ -58,13 +58,10 @@ export async function buildBudgetInsight(
     .flatMap((col) => refs.map((r) => `${col}.eq.${JSON.stringify(r)}`)).join(",");
 
   const ctx = (qb: any) => (companyId ? qb.eq("company_id", companyId) : qb.is("company_id", null));
-  const [{ data: txs }, { data: pend }] = await Promise.all([
-    ctx(supabase.from("transactions").select("amount").eq("user_id", userId).eq("type", type)
-      .gte("competence_date", start).lte("competence_date", end).or(orFilter)),
-    ctx(supabase.from("ai_pending_transactions").select("amount").eq("user_id", userId).eq("type", type)
-      .eq("status", "pending").gte("competence_date", start).lte("competence_date", end).or(orFilter)),
-  ]);
-  const used = [...(txs || []), ...(pend || [])].reduce((s: number, r: any) => s + Math.abs(Number(r.amount) || 0), 0);
+  const { data: txs, error } = await ctx(supabase.from("transactions").select("amount").eq("user_id", userId).eq("type", type)
+    .gte("competence_date", start).lte("competence_date", end).or(orFilter));
+  if (error) throw error;
+  const used = (txs || []).reduce((s: number, r: any) => s + Math.abs(Number(r.amount) || 0), 0);
   const goal = Number(target.target_amount) || 0;
   if (goal <= 0) return null;
 
