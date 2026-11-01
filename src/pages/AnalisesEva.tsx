@@ -9,6 +9,7 @@ import { useEffectiveUserId } from "@/hooks/useEffectiveUserId";
 import { useFormFieldSettings } from "@/hooks/useFormFieldSettings";
 import { useContacts } from "@/hooks/useContacts";
 import { supabase } from "@/integrations/supabase/client";
+import { notifyApprovalBudget } from "@/lib/approvalBudgetNotification";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -734,9 +735,10 @@ export default function AnalisesEva() {
 
       const { error: rejErr } = await supabase
         .from("ai_pending_transactions")
-        .update({ status: "approved", reviewed_at: new Date().toISOString() })
+        .update({ status: "approved", reviewed_at: new Date().toISOString(), approved_transaction_id: suggestion.transactionId })
         .eq("id", pending.id);
       if (rejErr) throw rejErr;
+      await notifyApprovalBudget(pending.id);
 
       toast.success("Baixa realizada no lançamento pendente!");
       queryClient.invalidateQueries({ queryKey: ["ai-pending-transactions"] });

@@ -6,3 +6,4 @@
 - Payment-backed checkout must persist pending until provider-confirmed payment; free courtesy grants remain administrative to avoid unverified entitlement.
 - Chat accepts reconstructed user/assistant messages and supported inline media only; personalization never overrides authorization or action boundaries.
 - Shared clinic access must be hardened together with the consuming application's authenticated session; do not reopen anonymous subscriber lookup or trust browser-side password comparisons for compatibility.
+- Budget approval notifications use persisted pending-to-transaction identity, caller RLS/writer checks and a server-only unique send ledger; never infer approval from response text or the latest record.
