@@ -4,7 +4,7 @@
 - [x] Correct reconciliation regressions: preserve unrelated-merchant rejection; recognize joined merchant names; all matching tests pass.
 - [x] Move budget follow-up to successful approval in single, bulk and reconciliation flows; exact persisted record checks, registered-only totals and server-only duplicate prevention implemented and deployed. Live authenticated approval/send remains unverified.
 - [ ] Validate audio and documents in an authenticated user flow; blocked if no supported test session exists.
-- [x] Run release checks: 154 tests passed, 3 reconciliation tests failed; audit events and an active PDF exist in production, but authenticated chat/document/pricing flows remain unverified on external Supabase.
+- [x] Run release checks: all 162 tests pass and preview build is OK; deployed notification denies unauthenticated calls. Authenticated audio/document/pricing/approval flows remain unverified on external Supabase.
 - [ ] Broadcast option 1 blocked: authenticated audio, documents and post-approval send remain unverified on external Supabase; original complete-conciliation/all-exports wording overclaims coverage. No messages sent.
 
 - [ ] Close clinic data access: Eva Clinic Bridge uses browser-side password matching and anonymous CRUD; requires authentication migration in that project before RLS lockdown.
