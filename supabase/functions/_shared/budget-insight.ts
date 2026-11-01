@@ -7,37 +7,18 @@ export function shouldSendBudgetFollowUp(status: string, transactionId: string |
   return status === "approved" && Boolean(transactionId);
 }
 
-export async function buildBudgetInsightForLatest(supabase: any, phone: string): Promise<string | null> {
-  const tail = String(phone).replace(/\D/g, "").slice(-10);
-  if (tail.length < 10) return null;
-  const { data: profs } = await supabase.from("profiles").select("id, whatsapp_number").not("whatsapp_number", "is", null);
-  const prof = (profs || []).find((p: any) => String(p.whatsapp_number).replace(/\D/g, "").endsWith(tail));
-  if (!prof) return null;
-
-  // Dono ativo (membro do Hub pode lançar para outro dono)
-  const { data: active } = await supabase.from("whatsapp_active_owner").select("active_owner_id").eq("member_user_id", prof.id).maybeSingle();
-  const candidates = [prof.id, active?.active_owner_id].filter(Boolean);
-
-  const since = new Date(Date.now() - 5 * 60_000).toISOString();
-  const { data: recent } = await supabase.from("ai_pending_transactions")
-    .select("user_id, type, category, subcategory, subcategory2, company_id, amount")
-    .in("user_id", candidates).gte("created_at", since)
-    .order("created_at", { ascending: false }).limit(1);
-  const tx = recent?.[0];
-  if (!tx) return null;
-  return buildBudgetInsight(supabase, tx.user_id, tx.company_id ?? null, [tx.category, tx.subcategory, tx.subcategory2], tx.type);
-}
-
 export async function buildBudgetInsight(
   supabase: any, userId: string, companyId: string | null, catRefs: (string | null)[], type: string,
 ): Promise<string | null> {
   const kind = type === "receita" ? "income" : "expense";
   let q = supabase.from("budget_targets").select("category_name, target_amount").eq("user_id", userId).eq("kind", kind);
   q = companyId ? q.eq("company_id", companyId) : q.is("company_id", null);
-  const { data: targets } = await q;
+  const { data: targets, error: targetError } = await q;
+  if (targetError) throw targetError;
   if (!targets?.length) return null;
 
-  const { data: cats } = await supabase.from("categories").select("id, name").eq("user_id", userId);
+  const { data: cats, error: categoryError } = await supabase.from("categories").select("id, name").eq("user_id", userId);
+  if (categoryError) throw categoryError;
   const idToName = new Map<string, string>((cats || []).map((c: any) => [c.id, c.name]));
   const resolve = (r: string | null) => (r ? (UUID_RE.test(r) ? idToName.get(r) || "" : r) : "");
   const txNames = catRefs.map(resolve).map(norm).filter(Boolean);
