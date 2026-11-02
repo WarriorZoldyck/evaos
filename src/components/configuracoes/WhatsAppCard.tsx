@@ -13,10 +13,10 @@ import { toast } from "sonner";
 export function WhatsAppCard() {
   const { user } = useAuth();
   const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [remindersEnabled, setRemindersEnabled] = useState(false);
-  const [remindersDays, setRemindersDays] = useState<number[]>([1, 3]);
-  const [remindersTime, setRemindersTime] = useState("09:00");
-  const [weekdaysOnly, setWeekdaysOnly] = useState(false);
+  const [remindersEnabled, setRemindersEnabled] = useState(true);
+  const [remindersDays, setRemindersDays] = useState<number[]>([0, 1, 3]);
+  const [remindersTime, setRemindersTime] = useState("08:00");
+  const [weekdaysOnly, setWeekdaysOnly] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
@@ -31,9 +31,9 @@ export function WhatsAppCard() {
       .then(({ data: raw }) => {
         const data = raw as any;
         if (data?.whatsapp_reminders_time) setRemindersTime(data.whatsapp_reminders_time);
-        if (data?.whatsapp_reminders_weekdays_only) setWeekdaysOnly(true);
+        if (typeof data?.whatsapp_reminders_weekdays_only === "boolean") setWeekdaysOnly(data.whatsapp_reminders_weekdays_only);
         if (data?.whatsapp_number) setWhatsappNumber(data.whatsapp_number);
-        if (data?.whatsapp_reminders_enabled) setRemindersEnabled(data.whatsapp_reminders_enabled);
+        if (typeof data?.whatsapp_reminders_enabled === "boolean") setRemindersEnabled(data.whatsapp_reminders_enabled);
         if (data?.whatsapp_reminders_days) setRemindersDays(data.whatsapp_reminders_days);
         setLoading(false);
       });
