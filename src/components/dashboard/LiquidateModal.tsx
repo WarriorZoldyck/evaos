@@ -543,7 +543,27 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
                   onChange={(e) => setFinalAmount(e.target.value)}
                   disabled={seriesScope === "all"}
                 />
-                {h            {!splitMode && (
+                {hasDifference && (
+                  <p className={`text-xs ${isUnderpayment ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`}>
+                    {isUnderpayment
+                      ? `Pagamento parcial: ${formatCurrency(absDifference)} a menos`
+                      : `Pagamento excedente: ${formatCurrency(absDifference)} a mais`}
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="paymentDate">Data de Pagamento</Label>
+              <Input
+                id="paymentDate"
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+              />
+            </div>
+
+            {!splitMode && (
               <>
                 <div className="space-y-2">
                   <Label>Forma de pagamento</Label>
@@ -608,29 +628,6 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
                   : <p className="text-xs text-muted-foreground">Soma confere com o valor final.</p>}
               </div>
             )}
-
-mentDate"
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="account">Conta</Label>
-              <Select value={accountId} onValueChange={setAccountId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma conta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id}>
-                      {acc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
             <div className="space-y-2">
               <Label htmlFor="notes">Observações (opcional)</Label>
