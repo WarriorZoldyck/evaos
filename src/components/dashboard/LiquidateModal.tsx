@@ -893,7 +893,7 @@ mentDate"
             Cancelar
           </Button>
           {step === 1 ? (
-            <Button onClick={handleNext} disabled={saving} className="gap-1.5">
+            <Button onClick={handleNext} disabled={saving || !!splitError} className="gap-1.5">
               {hasDifference ? (
                 <>Próximo <ArrowRight className="h-3.5 w-3.5" /></>
               ) : (
