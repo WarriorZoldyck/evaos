@@ -448,7 +448,11 @@ export function TransactionFormModal({
 
         form.reset({
           description: editTransaction.description,
-          amount: editTransaction.original_amount ?? editTransaction.amount,
+          // Parcela de série (sem maquininha): original_amount guarda o TOTAL da série,
+          // então o campo deve abrir com o valor da própria parcela.
+          amount: ((editTransaction.installments_total ?? 0) > 1 && !editTransaction.card_terminal_id)
+            ? editTransaction.amount
+            : (editTransaction.original_amount ?? editTransaction.amount),
           payment_date: editTransaction.payment_date ? new Date(editTransaction.payment_date + "T00:00:00") : new Date(),
           competence_date: editTransaction.competence_date ? new Date(editTransaction.competence_date + "T00:00:00") : new Date(),
           status: editTransaction.status,
@@ -682,6 +686,10 @@ export function TransactionFormModal({
       const { user_id, ...updateData } = baseData;
       // Use current form values for type, status, and company_id
       updateData.company_id = formCompanyId;
+      // Preserva o valor original da série ao editar uma parcela
+      if (!selectedTerminal && (editTransaction.installments_total ?? 0) > 1) {
+        updateData.original_amount = editTransaction.original_amount ?? null;
+      }
       // Forward installment toggle so callers (e.g. Análises EVA) can convert
       // a single pending into a series of N parcelas on save.
       if (data.is_installment && data.installments_count && data.installments_count >= 2) {
