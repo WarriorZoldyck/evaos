@@ -21,6 +21,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
@@ -28,6 +30,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, AlertCircle, ArrowRight, ArrowLeft } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { Plus, Trash2 } from "lucide-react";
+import { LIQUIDATION_METHODS, parseAccount, splitsRemaining, validateSplits, type PaymentSplit } from "@/lib/paymentSplit";
 
 interface Transaction {
   id: string;
@@ -44,6 +48,12 @@ interface Transaction {
   installment_number?: number | null;
   installments_total?: number | null;
   original_amount?: number | null;
+  payment_method?: string | null;
+  wallet_id?: string | null;
+  competence_date?: string | null;
+  client_id?: string | null;
+  supplier_id?: string | null;
+  contact_name?: string | null;
 }
 
 interface LiquidateModalProps {
@@ -83,6 +93,10 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
   const [accountId, setAccountId] = useState("");
   const [notes, setNotes] = useState("");
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [wallets, setWallets] = useState<BankAccount[]>([]);
+  const [method, setMethod] = useState("");
+  const [splitMode, setSplitMode] = useState(false);
+  const [splits, setSplits] = useState<PaymentSplit[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Series liquidation scope
@@ -113,7 +127,10 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
 
     setFinalAmount(String(transaction.amount));
     setPaymentDate(format(new Date(), "yyyy-MM-dd"));
-    setAccountId(transaction.bank_account_id || "");
+    setAccountId(transaction.wallet_id ? `wallet:${transaction.wallet_id}` : transaction.bank_account_id ? `bank:${transaction.bank_account_id}` : "");
+    setMethod(transaction.payment_method || "");
+    setSplitMode(false);
+    setSplits([]);
     setNotes("");
     setSeriesScope("only");
     setParcelarFatura(false);
@@ -135,6 +152,11 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
       }
       const { data } = await query.order("name");
       if (data) setAccounts(data);
+      let wq = supabase.from("wallets").select("id, name").eq("user_id", effectiveUserId);
+      if (isPersonal) wq = wq.is("company_id", null);
+      else if (selectedCompanyId) wq = wq.eq("company_id", selectedCompanyId);
+      const { data: w } = await wq.order("name");
+      if (w) setWallets(w);
     };
 
     fetchAccounts();
@@ -176,7 +198,22 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
     ? Math.round(((originalAmount * pendingInstallmentsCount + difference) / pendingInstallmentsCount) * 100) / 100
     : 0;
 
+  const acctFields = { ...parseAccount(accountId), ...(method ? { payment_method: method } : {}) };
+  const canSplit = !isBulk && seriesScope === "only";
+  const splitError = splitMode && canSplit ? validateSplits(finalAmountNum, splits) : null;
+  const startSplit = () => {
+    const half = Math.round((finalAmountNum / 2) * 100) / 100;
+    setSplits([
+      { method: method || "Dinheiro", account: accountId, amount: half },
+      { method: "", account: "", amount: Math.round((finalAmountNum - half) * 100) / 100 },
+    ]);
+    setSplitMode(true);
+  };
+  const updateSplit = (i: number, patch: Partial<PaymentSplit>) =>
+    setSplits((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+
   const handleNext = () => {
+    if (splitError) return;
     if (hasDifference) {
       setStep(2);
     } else {
@@ -188,6 +225,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
     if (!transaction || !user) return;
 
     setSaving(true);
+    const useSplit = splitMode && canSplit && splits.length > 0;
 
     try {
       if (isBulk) {
@@ -196,7 +234,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
           .update({
             status: "Pago" as const,
             payment_date: paymentDate,
-            bank_account_id: accountId || null,
+            ...acctFields,
             liquidation_notes: notes || null,
           })
           .in("id", bulkTransactionIds!);
@@ -207,7 +245,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
           .update({
             status: "Pago" as const,
             payment_date: paymentDate,
-            bank_account_id: accountId || null,
+            ...acctFields,
             liquidation_notes: notes || null,
           })
           .eq("series_id", transaction.series_id)
@@ -219,13 +257,38 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
           .from("transactions")
           .update({
             status: "Pago" as const,
-            amount: finalAmountNum,
+            amount: useSplit ? Number(splits[0].amount) : finalAmountNum,
             payment_date: paymentDate,
-            bank_account_id: accountId || null,
+            ...(useSplit ? { ...parseAccount(splits[0].account), payment_method: splits[0].method } : acctFields),
             liquidation_notes: notes || null,
           })
           .eq("id", transaction.id);
         if (error) throw error;
+
+        if (useSplit && splits.length > 1) {
+          const extra = splits.slice(1).map((sp) => ({
+            user_id: effectiveUserId,
+            company_id: isPersonal ? null : selectedCompanyId,
+            type: transaction.type,
+            description: `${transaction.description} (${sp.method})`,
+            amount: Number(sp.amount),
+            payment_date: paymentDate,
+            competence_date: transaction.competence_date || paymentDate,
+            status: "Pago" as const,
+            category: transaction.category || "Outros",
+            subcategory: transaction.subcategory || null,
+            subcategory2: transaction.subcategory2 || null,
+            client_id: transaction.client_id || null,
+            supplier_id: transaction.supplier_id || null,
+            contact_name: transaction.contact_name || null,
+            parent_id: transaction.id,
+            payment_method: sp.method,
+            ...parseAccount(sp.account),
+            liquidation_notes: notes ? `${notes} • Pagamento dividido` : "Pagamento dividido",
+          }));
+          const { error: splitErr } = await supabase.from("transactions").insert(extra);
+          if (splitErr) throw splitErr;
+        }
 
         // Handle difference actions
         if (hasDifference && isUnderpayment) {
@@ -256,7 +319,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
             competence_date: format(payDate, "yyyy-MM-dd"),
             status: "Pendente" as const,
             category: "Cartão de Crédito",
-            bank_account_id: accountId || null,
+            ...acctFields,
             credit_card_id: transaction.credit_card_id,
             parent_id: transaction.id,
             series_id: seriesId,
@@ -308,7 +371,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
           category: t.category || "Outros",
           subcategory: t.subcategory || null,
           subcategory2: t.subcategory2 || null,
-          bank_account_id: accountId || null,
+          ...acctFields,
         });
         if (error) throw error;
         break;
@@ -327,7 +390,7 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
           category: t.category || "Outros",
           subcategory: t.subcategory || null,
           subcategory2: t.subcategory2 || null,
-          bank_account_id: accountId || null,
+          ...acctFields,
         });
         if (error) throw error;
         break;
@@ -408,6 +471,22 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
     ? Math.round((totalComJuros / Number(faturaInstallments)) * 100) / 100
     : 0;
 
+  const renderAccountItems = (preferWallet: boolean) => {
+    const bankGroup = accounts.length > 0 && (
+      <SelectGroup key="b"><SelectLabel>Contas bancárias</SelectLabel>
+        {accounts.map((a) => <SelectItem key={a.id} value={`bank:${a.id}`}>{a.name}</SelectItem>)}
+      </SelectGroup>
+    );
+    const walletGroup = (
+      <SelectGroup key="w"><SelectLabel>Carteiras (dinheiro)</SelectLabel>
+        {wallets.length > 0
+          ? wallets.map((w) => <SelectItem key={w.id} value={`wallet:${w.id}`}>{w.name}</SelectItem>)
+          : <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma carteira. Crie em Contas &gt; Carteiras.</div>}
+      </SelectGroup>
+    );
+    return preferWallet ? [walletGroup, bankGroup] : [bankGroup, walletGroup];
+  };
+
   return (
     <Dialog open={!!transaction} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -464,20 +543,73 @@ export function LiquidateModal({ transaction, bulkTransactionIds, onClose, onSuc
                   onChange={(e) => setFinalAmount(e.target.value)}
                   disabled={seriesScope === "all"}
                 />
-                {hasDifference && (
-                  <p className={`text-xs ${isUnderpayment ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`}>
-                    {isUnderpayment
-                      ? `Pagamento parcial: ${formatCurrency(absDifference)} a menos`
-                      : `Pagamento excedente: ${formatCurrency(absDifference)} a mais`}
-                  </p>
+                {h            {!splitMode && (
+              <>
+                <div className="space-y-2">
+                  <Label>Forma de pagamento</Label>
+                  <Select value={method} onValueChange={setMethod}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a forma" /></SelectTrigger>
+                    <SelectContent>
+                      {LIQUIDATION_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account">Conta ou carteira</Label>
+                  <Select value={accountId} onValueChange={setAccountId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione uma conta" /></SelectTrigger>
+                    <SelectContent>{renderAccountItems(method === "Dinheiro")}</SelectContent>
+                  </Select>
+                </div>
+                {canSplit && (
+                  <Button type="button" variant="outline" size="sm" onClick={startSplit} disabled={finalAmountNum <= 0}>
+                    <Plus className="h-4 w-4 mr-1" /> Dividir pagamento (ex.: dinheiro + cartão)
+                  </Button>
                 )}
+              </>
+            )}
+
+            {splitMode && canSplit && (
+              <div className="rounded-lg border border-border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Pagamento dividido</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setSplitMode(false)}>Cancelar divisão</Button>
+                </div>
+                {splits.map((sp, i) => (
+                  <div key={i} className="space-y-2 rounded-md bg-muted/30 p-2">
+                    <div className="flex gap-2">
+                      <Select value={sp.method} onValueChange={(v) => updateSplit(i, { method: v })}>
+                        <SelectTrigger className="flex-1"><SelectValue placeholder="Forma" /></SelectTrigger>
+                        <SelectContent>
+                          {LIQUIDATION_METHODS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Input type="number" step="0.01" className="w-28" value={sp.amount}
+                        onChange={(e) => updateSplit(i, { amount: Number(e.target.value) })} />
+                      {splits.length > 1 && (
+                        <Button type="button" variant="ghost" size="icon" aria-label="Remover parte"
+                          onClick={() => setSplits((p) => p.filter((_, idx) => idx !== i))}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <Select value={sp.account} onValueChange={(v) => updateSplit(i, { account: v })}>
+                      <SelectTrigger><SelectValue placeholder="Conta ou carteira" /></SelectTrigger>
+                      <SelectContent>{renderAccountItems(sp.method === "Dinheiro")}</SelectContent>
+                    </Select>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm"
+                  onClick={() => setSplits((p) => [...p, { method: "", account: "", amount: Math.max(0, splitsRemaining(finalAmountNum, p)) }])}>
+                  <Plus className="h-4 w-4 mr-1" /> Adicionar parte
+                </Button>
+                {splitError
+                  ? <p className="text-xs text-destructive">{splitError}</p>
+                  : <p className="text-xs text-muted-foreground">Soma confere com o valor final.</p>}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="paymentDate">Data de Pagamento</Label>
-              <Input
-                id="paymentDate"
+mentDate"
                 type="date"
                 value={paymentDate}
                 onChange={(e) => setPaymentDate(e.target.value)}
