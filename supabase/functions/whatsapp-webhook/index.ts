@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getCreditCardDueDate, getInstallmentDueDate } from "../_shared/creditCardDueDate.ts";
 import { buildBudgetMonthReport, formatBudgetMonthMessage } from "../_shared/budgetMonthReport.ts";
+import { buildPendingBudgetPreview } from "../_shared/budget-insight.ts";
 import { resolveContexts, buildAnalysisData, runAnalysis, runCfoReading, splitForWhatsApp } from "../_shared/eva-analysis.ts";
 import { fetchAiCompletions, getAiConfig } from "../_shared/ai-gateway.ts";
 
@@ -11,6 +12,32 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
+
+async function safeBudgetNote(
+  supabase: any,
+  userId: string,
+  companyId: string | null,
+  catRefs: (string | null | undefined)[],
+  type: string,
+  amount: number,
+  competenceDate?: string | null,
+): Promise<string> {
+  try {
+    const preview = await buildPendingBudgetPreview(
+      supabase,
+      userId,
+      companyId,
+      catRefs,
+      type,
+      amount,
+      competenceDate,
+    );
+    return preview ? `\n\n${preview}` : "";
+  } catch (e) {
+    console.error("Budget preview failed:", e);
+    return "";
+  }
+}
 
 const EVA_MAINTENANCE_FALLBACK = "🛠️ A Eva está em manutenção no momento. Em breve voltaremos ao normal — obrigado pela paciência!";
 const WHATSAPP_AI_MODEL = "gemini-flash-latest";
@@ -1526,10 +1553,15 @@ serve(async (req) => {
           const parcelsDisplay = installmentDetails.map((d: any, i: number) =>
             `  ${i + 1}/${installmentCount}: ${fmt(d.amount)} — vence ${formatDate(computedPaymentDates[i])}`
           ).join("\n");
+          const budgetNote = await safeBudgetNote(
+            supabase, userId, companyId,
+            [txPayload.category_id, txPayload.subcategory_id, txPayload.subcategory2_id, txPayload.category_label],
+            txType, totalAmount, competenceDate,
+          );
 
           return respond({
             success: true, intent: "lancamento",
-            message: `📋 ${installmentCount} parcelas enviadas para aprovação no app!\n\n📝 ${txPayload.description}\n💰 Total: ${fmt(totalAmount)}\n🏦 ${chosenName}\n\n📋 Parcelas:\n${parcelsDisplay}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+            message: `📋 ${installmentCount} parcelas enviadas para aprovação no app!\n\n📝 ${txPayload.description}\n💰 Total: ${fmt(totalAmount)}\n🏦 ${chosenName}\n\n📋 Parcelas:\n${parcelsDisplay}${budgetNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
             transaction: { description: txPayload.description, amount: totalAmount, type: txType, installments: installmentCount },
           }, 200);
         }
@@ -1581,10 +1613,15 @@ serve(async (req) => {
         const chosenName = matchedCardId ? allCcs.find((c: any) => c.id === matchedCardId)?.name
           : matchedBankId ? allAccs.find((a: any) => a.id === matchedBankId)?.name
           : allWlts.find((w: any) => w.id === matchedWalletId)?.name;
+        const budgetNote = await safeBudgetNote(
+          supabase, userId, companyId,
+          [txPayload.category_id, txPayload.subcategory_id, txPayload.subcategory2_id, txPayload.category_label],
+          txType, Math.abs(txPayload.amount || 0), competenceDate,
+        );
 
         return respond({
           success: true, intent: "lancamento",
-          message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${txPayload.description}\n💰 ${fmt(txPayload.amount || 0)}\n📁 ${typeLabel} / ${txPayload.category_label || "Categoria"}\n🏢 ${contextLabel}\n🏦 ${chosenName}\n📅 ${formatDate(competenceDate)}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+          message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${txPayload.description}\n💰 ${fmt(txPayload.amount || 0)}\n📁 ${typeLabel} / ${txPayload.category_label || "Categoria"}\n🏢 ${contextLabel}\n🏦 ${chosenName}\n📅 ${formatDate(competenceDate)}${budgetNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: { description: txPayload.description, amount: txPayload.amount, type: txType, context: contextLabel },
         }, 200);
       }
@@ -1734,10 +1771,15 @@ serve(async (req) => {
 
         const typeLabel = txType === "receita" ? "Receita" : "Despesa";
         const contextLabel = payload.context || "Pessoal";
+        const budgetNote = await safeBudgetNote(
+          supabase, userId, companyId,
+          [newCategory.id, newCategory.name],
+          txType, Math.abs(payload.amount || 0), competenceDate,
+        );
         return respond({
           success: true,
           intent: "lancamento",
-          message: `✅ Categoria "${newCategory.name}" criada!\n\n📋 Lançamento enviado para aprovação no app:\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+          message: `✅ Categoria "${newCategory.name}" criada!\n\n📋 Lançamento enviado para aprovação no app:\n📝 ${payload.description}\n💰 ${fmt(payload.amount || 0)}\n📁 ${typeLabel} / ${newCategory.name}\n🏢 ${contextLabel}\n📅 ${payload.date || todayStr}${budgetNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: {
             description: payload.description,
             amount: payload.amount,
@@ -3883,11 +3925,16 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         const instWalletName = walletId ? contextWallets.find((w: any) => w.id === walletId)?.name : null;
         const instAccountName = instCardName || instBankName || instWalletName;
         const instAccountDisplay = instAccountName ? `\n🏦 ${instAccountName}` : "";
+        const budgetNote = await safeBudgetNote(
+          supabase, userId, companyId,
+          [categoryValue, subcategoryValue, subcategory2Value, categoryLabel],
+          txType, totalAmount, competenceDate,
+        );
 
         return respond({
           success: true,
           intent: "lancamento",
-          message: `📋 ${installmentCount} parcelas enviadas para aprovação!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}${instAccountDisplay}\n\n📋 Parcelas:\n${parcelsDisplay}${barcodeNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+          message: `📋 ${installmentCount} parcelas enviadas para aprovação!\n\n📝 ${aiParsed.description}\n💰 Total: ${fmt(totalAmount)}\n📁 ${typeLabel} / ${categoryLabel}\n🏢 ${contextLabel}${instAccountDisplay}\n\n📋 Parcelas:\n${parcelsDisplay}${barcodeNote}${budgetNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
           transaction: {
             description: aiParsed.description,
             amount: totalAmount,
@@ -3999,11 +4046,16 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const walletName = walletId ? contextWallets.find((w: any) => w.id === walletId)?.name : null;
       const accountDisplayName = cardName || bankName || walletName;
       const accountDisplay = accountDisplayName ? `\n🏦 ${accountDisplayName}` : "";
+      const budgetNote = await safeBudgetNote(
+        supabase, userId, companyId,
+        [categoryValue, subcategoryValue, subcategory2Value, categoryLabel],
+        txType, Math.abs(aiParsed.amount || 0), competenceDate,
+      );
 
       return respond({
         success: true,
         intent: "lancamento",
-        message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
+        message: `📋 Lançamento enviado para aprovação no app!\n\n📝 ${aiParsed.description}\n💰 ${formattedAmount}\n📁 ${typeLabel} / ${categoryLabel}${subDisplay}\n🏢 ${contextLabel}\n📅 Competência: ${formatDate(competenceDate)} | Pagamento: ${formatDate(paymentDate)}${payMethodDisplay}${accountDisplay}${contactDisplay}${budgetNote}\n\n⚠️ Acesse "Análises EVA" no app para aprovar.`,
 
         transaction: {
           description: aiParsed.description,
