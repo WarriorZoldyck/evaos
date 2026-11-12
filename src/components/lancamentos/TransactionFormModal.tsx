@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import type { FormFieldSettings } from "@/hooks/useFormFieldSettings";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -56,6 +57,11 @@ import type {
 } from "@/hooks/useTransactions";
 import { PaymentMethodFields } from "./PaymentMethodFields";
 import { InstallmentPreviewTable } from "./InstallmentPreviewTable";
+import {
+  parseFlexibleAccount,
+  validateInstallmentSplits,
+  type InstallmentSplitPart,
+} from "@/lib/installmentPaymentSplits";
 import { SeriesInstallmentTable } from "./SeriesInstallmentTable";
 import { CategorySelectWithCreate } from "./CategorySelectWithCreate";
 import { ContactSelectWithCreate } from "./ContactSelectWithCreate";
@@ -352,6 +358,8 @@ export function TransactionFormModal({
   const [formCategories, setFormCategories] = useState<Category[]>([]);
   const [customInstallmentAmounts, setCustomInstallmentAmounts] = useState<Record<number, number>>({});
   const [customInstallmentDates, setCustomInstallmentDates] = useState<Record<number, Date>>({});
+  const [flexiblePaymentEnabled, setFlexiblePaymentEnabled] = useState(false);
+  const [customInstallmentPayments, setCustomInstallmentPayments] = useState<Record<number, InstallmentSplitPart[]>>({});
   const [seriesUpdates, setSeriesUpdates] = useState<Array<{ id: string; amount: number; payment_date?: string }>>([]);
 
   const fetchFormCategories = useCallback(async () => {
@@ -436,6 +444,8 @@ export function TransactionFormModal({
       setCustomInstallmentAmounts({});
       setCustomInstallmentDates({});
       setSeriesUpdates([]);
+      setFlexiblePaymentEnabled(false);
+      setCustomInstallmentPayments({});
       if (editTransaction) {
         setFormCompanyId(editTransaction.company_id ?? null);
         setActiveTab(editTransaction.type);
@@ -845,17 +855,48 @@ export function TransactionFormModal({
           }
         }
 
-        installments.push({
-          ...baseData,
-          amount,
-          original_amount: total,
-          payment_date: payISO,
+        const parts = flexiblePaymentEnabled ? customInstallmentPayments[instNum] : undefined;
+        if (parts && parts.length > 0) {
+          const splitErr = validateInstallmentSplits(amount, parts);
+          if (splitErr) {
+            toast.error(`Parcela ${instNum}: ${splitErr}`);
+            setSaving(false);
+            return;
+          }
+          for (const part of parts) {
+            const accFields = parseFlexibleAccount(part.account);
+            installments.push({
+              ...baseData,
+              description:
+                parts.length > 1
+                  ? `${baseData.description} (${part.method})`
+                  : baseData.description,
+              amount: part.amount,
+              original_amount: total,
+              payment_date: payISO,
+              competence_date: format(compDate, "yyyy-MM-dd"),
+              payment_method: part.method,
+              bank_account_id: accFields.bank_account_id,
+              wallet_id: accFields.wallet_id,
+              credit_card_id: accFields.credit_card_id,
+              series_id: seriesId,
+              installment_number: instNum,
+              installments_total: count,
+            });
+          }
+        } else {
+          installments.push({
+            ...baseData,
+            amount,
+            original_amount: total,
+            payment_date: payISO,
 
-          competence_date: format(compDate, "yyyy-MM-dd"),
-          series_id: seriesId,
-          installment_number: instNum,
-          installments_total: count,
-        });
+            competence_date: format(compDate, "yyyy-MM-dd"),
+            series_id: seriesId,
+            installment_number: instNum,
+            installments_total: count,
+          });
+        }
       }
       success = await onSaveMultiple(installments);
     } else if (data.is_recurring && data.recurring_frequency) {
@@ -1107,6 +1148,10 @@ export function TransactionFormModal({
               onCustomInstallmentAmountsChange={setCustomInstallmentAmounts}
               customInstallmentDates={customInstallmentDates}
               onCustomInstallmentDatesChange={setCustomInstallmentDates}
+              flexiblePaymentEnabled={flexiblePaymentEnabled}
+              onFlexiblePaymentEnabledChange={setFlexiblePaymentEnabled}
+              customInstallmentPayments={customInstallmentPayments}
+              onCustomInstallmentPaymentsChange={setCustomInstallmentPayments}
               editTransaction={editTransaction}
               onSeriesUpdatesChange={setSeriesUpdates}
             />
@@ -1137,6 +1182,10 @@ export function TransactionFormModal({
               onCustomInstallmentAmountsChange={setCustomInstallmentAmounts}
               customInstallmentDates={customInstallmentDates}
               onCustomInstallmentDatesChange={setCustomInstallmentDates}
+              flexiblePaymentEnabled={flexiblePaymentEnabled}
+              onFlexiblePaymentEnabledChange={setFlexiblePaymentEnabled}
+              customInstallmentPayments={customInstallmentPayments}
+              onCustomInstallmentPaymentsChange={setCustomInstallmentPayments}
               editTransaction={editTransaction}
               onSeriesUpdatesChange={setSeriesUpdates}
             />
@@ -1287,6 +1336,10 @@ interface MainFormContentProps {
   onCustomInstallmentAmountsChange: (amounts: Record<number, number>) => void;
   customInstallmentDates: Record<number, Date>;
   onCustomInstallmentDatesChange: (dates: Record<number, Date>) => void;
+  flexiblePaymentEnabled: boolean;
+  onFlexiblePaymentEnabledChange: (enabled: boolean) => void;
+  customInstallmentPayments: Record<number, InstallmentSplitPart[]>;
+  onCustomInstallmentPaymentsChange: (payments: Record<number, InstallmentSplitPart[]>) => void;
   editTransaction?: Transaction | null;
   onSeriesUpdatesChange: (updates: Array<{ id: string; amount: number; payment_date?: string }>) => void;
 }
@@ -1315,6 +1368,10 @@ function MainFormContent({
   onCustomInstallmentAmountsChange,
   customInstallmentDates,
   onCustomInstallmentDatesChange,
+  flexiblePaymentEnabled,
+  onFlexiblePaymentEnabledChange,
+  customInstallmentPayments,
+  onCustomInstallmentPaymentsChange,
   editTransaction,
   onSeriesUpdatesChange,
 }: MainFormContentProps) {
@@ -1807,6 +1864,23 @@ function MainFormContent({
                       customDates={customInstallmentDates}
                       onCustomDatesChange={onCustomInstallmentDatesChange}
                       onUpdateTotalAmount={terminalPreview ? undefined : ((newTotal) => form.setValue("amount", newTotal))}
+                      flexiblePaymentEnabled={terminalPreview ? false : flexiblePaymentEnabled}
+                      onFlexiblePaymentEnabledChange={terminalPreview ? undefined : onFlexiblePaymentEnabledChange}
+                      customPayments={customInstallmentPayments}
+                      onCustomPaymentsChange={onCustomInstallmentPaymentsChange}
+                      bankAccounts={bankAccounts}
+                      wallets={wallets}
+                      creditCards={creditCards}
+                      defaultMethod={watchPaymentMethodMain || ""}
+                      defaultAccount={
+                        form.watch("credit_card_id")
+                          ? `card:${form.watch("credit_card_id")}`
+                          : form.watch("bank_account_id")
+                          ? `bank:${form.watch("bank_account_id")}`
+                          : form.watch("wallet_id")
+                          ? `wallet:${form.watch("wallet_id")}`
+                          : ""
+                      }
                     />
                   )}
                   {/* Series installment table for editing existing series */}

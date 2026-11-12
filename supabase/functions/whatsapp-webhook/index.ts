@@ -1556,7 +1556,7 @@ serve(async (req) => {
           const budgetNote = await safeBudgetNote(
             supabase, userId, companyId,
             [txPayload.category_id, txPayload.subcategory_id, txPayload.subcategory2_id, txPayload.category_label],
-            txType, totalAmount, competenceDate,
+            txType, 0, competenceDate,
           );
 
           return respond({
@@ -1616,7 +1616,7 @@ serve(async (req) => {
         const budgetNote = await safeBudgetNote(
           supabase, userId, companyId,
           [txPayload.category_id, txPayload.subcategory_id, txPayload.subcategory2_id, txPayload.category_label],
-          txType, Math.abs(txPayload.amount || 0), competenceDate,
+          txType, 0, competenceDate,
         );
 
         return respond({
@@ -1774,7 +1774,7 @@ serve(async (req) => {
         const budgetNote = await safeBudgetNote(
           supabase, userId, companyId,
           [newCategory.id, newCategory.name],
-          txType, Math.abs(payload.amount || 0), competenceDate,
+          txType, 0, competenceDate,
         );
         return respond({
           success: true,
@@ -3928,7 +3928,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
         const budgetNote = await safeBudgetNote(
           supabase, userId, companyId,
           [categoryValue, subcategoryValue, subcategory2Value, categoryLabel],
-          txType, totalAmount, competenceDate,
+          txType, 0, competenceDate,
         );
 
         return respond({
@@ -4049,7 +4049,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
       const budgetNote = await safeBudgetNote(
         supabase, userId, companyId,
         [categoryValue, subcategoryValue, subcategory2Value, categoryLabel],
-        txType, Math.abs(aiParsed.amount || 0), competenceDate,
+        txType, 0, competenceDate,
       );
 
       return respond({

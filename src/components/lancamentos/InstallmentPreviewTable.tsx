@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { addMonths, addDays, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarIcon, AlertTriangle } from "lucide-react";
+import { CalendarIcon, AlertTriangle, Split, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -21,7 +21,25 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  FLEXIBLE_PAYMENT_METHODS,
+  installmentSplitsRemaining,
+  validateInstallmentSplits,
+  type InstallmentSplitPart,
+} from "@/lib/installmentPaymentSplits";
+
+interface AccountOption {
+  id: string;
+  name: string;
+}
 
 interface InstallmentPreviewTableProps {
   totalAmount: number;
@@ -35,6 +53,15 @@ interface InstallmentPreviewTableProps {
   customDates?: Record<number, Date>;
   onCustomDatesChange?: (dates: Record<number, Date>) => void;
   onUpdateTotalAmount?: (newTotal: number) => void;
+  flexiblePaymentEnabled?: boolean;
+  onFlexiblePaymentEnabledChange?: (enabled: boolean) => void;
+  customPayments?: Record<number, InstallmentSplitPart[]>;
+  onCustomPaymentsChange?: (payments: Record<number, InstallmentSplitPart[]>) => void;
+  bankAccounts?: AccountOption[];
+  wallets?: AccountOption[];
+  creditCards?: AccountOption[];
+  defaultMethod?: string;
+  defaultAccount?: string;
 }
 
 export function InstallmentPreviewTable({
@@ -49,6 +76,15 @@ export function InstallmentPreviewTable({
   customDates = {},
   onCustomDatesChange,
   onUpdateTotalAmount,
+  flexiblePaymentEnabled = false,
+  onFlexiblePaymentEnabledChange,
+  customPayments = {},
+  onCustomPaymentsChange,
+  bankAccounts = [],
+  wallets = [],
+  creditCards = [],
+  defaultMethod = "",
+  defaultAccount = "",
 }: InstallmentPreviewTableProps) {
   const [distribute, setDistribute] = useState(true);
 
@@ -145,8 +181,64 @@ export function InstallmentPreviewTable({
     onCustomDatesChange({ ...customDates, [instNumber]: date });
   };
 
+  const getParts = (instNumber: number, instAmount: number): InstallmentSplitPart[] => {
+    const existing = customPayments[instNumber];
+    if (existing && existing.length > 0) return existing;
+    return [{ method: defaultMethod || "PIX", account: defaultAccount || "", amount: instAmount }];
+  };
+
+  const setParts = (instNumber: number, parts: InstallmentSplitPart[]) => {
+    if (!onCustomPaymentsChange) return;
+    onCustomPaymentsChange({ ...customPayments, [instNumber]: parts });
+  };
+
+  const updatePart = (
+    instNumber: number,
+    instAmount: number,
+    partIdx: number,
+    patch: Partial<InstallmentSplitPart>
+  ) => {
+    const current = getParts(instNumber, instAmount);
+    const next = current.map((p, idx) => (idx === partIdx ? { ...p, ...patch } : p));
+    setParts(instNumber, next);
+  };
+
+  const addSplitPart = (instNumber: number, instAmount: number) => {
+    const current = getParts(instNumber, instAmount);
+    const rem = Math.max(0, installmentSplitsRemaining(instAmount, current));
+    setParts(instNumber, [...current, { method: "", account: "", amount: rem }]);
+  };
+
+  const removeSplitPart = (instNumber: number, instAmount: number, partIdx: number) => {
+    const current = getParts(instNumber, instAmount);
+    if (current.length <= 1) return;
+    setParts(
+      instNumber,
+      current.filter((_, idx) => idx !== partIdx)
+    );
+  };
+
   return (
     <div className="space-y-2">
+      {onFlexiblePaymentEnabledChange && onCustomPaymentsChange && (
+        <div className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="flexible-payment-mode"
+              checked={flexiblePaymentEnabled}
+              onCheckedChange={(checked) => onFlexiblePaymentEnabledChange(!!checked)}
+            />
+            <Label htmlFor="flexible-payment-mode" className="text-xs font-medium cursor-pointer flex items-center gap-1.5">
+              <Split className="h-3.5 w-3.5 text-primary" />
+              Pagamento flexível / misto por parcela
+            </Label>
+          </div>
+          <span className="text-[11px] text-muted-foreground hidden sm:inline">
+            Permite formas diferentes ou dividir a mesma parcela
+          </span>
+        </div>
+      )}
+
       <div className="rounded-md border border-border overflow-hidden">
         <Table>
           <TableHeader>
@@ -159,55 +251,184 @@ export function InstallmentPreviewTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {installments.map((inst) => (
-              <TableRow key={inst.number} className="hover:bg-transparent">
-                <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">
-                  {inst.number}
-                </TableCell>
-                <TableCell className="py-1.5 px-3 text-xs">
-                  {onCustomDatesChange ? (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          className="h-7 px-2 text-xs font-normal"
-                        >
-                          {format(inst.date, "dd/MM/yyyy", { locale: ptBR })}
-                          <CalendarIcon className="ml-1 h-3 w-3 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={inst.date}
-                          onSelect={(d) => handleDateChange(inst.number, d)}
-                          locale={ptBR}
-                          className={cn("p-3 pointer-events-auto")}
+            {installments.map((inst) => {
+              const parts = flexiblePaymentEnabled ? getParts(inst.number, inst.amount) : [];
+              const splitErr = flexiblePaymentEnabled
+                ? validateInstallmentSplits(inst.amount, parts)
+                : null;
+              const rem = flexiblePaymentEnabled
+                ? installmentSplitsRemaining(inst.amount, parts)
+                : 0;
+
+              return (
+                <>
+                  <TableRow key={inst.number} className="hover:bg-transparent">
+                    <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">
+                      {inst.number}
+                    </TableCell>
+                    <TableCell className="py-1.5 px-3 text-xs">
+                      {onCustomDatesChange ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              className="h-7 px-2 text-xs font-normal"
+                            >
+                              {format(inst.date, "dd/MM/yyyy", { locale: ptBR })}
+                              <CalendarIcon className="ml-1 h-3 w-3 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={inst.date}
+                              onSelect={(d) => handleDateChange(inst.number, d)}
+                              locale={ptBR}
+                              className={cn("p-3 pointer-events-auto")}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        format(inst.date, "dd/MM/yyyy", { locale: ptBR })
+                      )}
+                    </TableCell>
+                    <TableCell className="py-1.5 px-3 text-right">
+                      {!hasInterest ? (
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="h-7 w-28 text-xs text-right ml-auto"
+                          value={inst.amount}
+                          onChange={(e) => handleAmountChange(inst.number, e.target.value)}
                         />
-                      </PopoverContent>
-                    </Popover>
-                  ) : (
-                    format(inst.date, "dd/MM/yyyy", { locale: ptBR })
+                      ) : (
+                        <span className="text-xs">
+                          {formatCurrency(inst.amount)}
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+
+                  {flexiblePaymentEnabled && (
+                    <TableRow key={`${inst.number}-pay`} className="bg-muted/15 hover:bg-muted/15">
+                      <TableCell colSpan={3} className="py-2 px-3">
+                        <div className="space-y-1.5">
+                          {parts.map((part, pIdx) => (
+                            <div key={pIdx} className="flex flex-wrap items-center gap-1.5">
+                              <Select
+                                value={part.method}
+                                onValueChange={(v) => updatePart(inst.number, inst.amount, pIdx, { method: v })}
+                              >
+                                <SelectTrigger className="h-7 text-xs w-[140px] bg-background">
+                                  <SelectValue placeholder="Forma" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {FLEXIBLE_PAYMENT_METHODS.map((m) => (
+                                    <SelectItem key={m} value={m} className="text-xs">
+                                      {m}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+
+                              <Select
+                                value={part.account || "__none__"}
+                                onValueChange={(v) =>
+                                  updatePart(inst.number, inst.amount, pIdx, {
+                                    account: v === "__none__" ? "" : v,
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-7 text-xs flex-1 min-w-[140px] bg-background">
+                                  <SelectValue placeholder="Conta / Cartão (opcional)" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__" className="text-xs text-muted-foreground">
+                                    Sem conta vinculada
+                                  </SelectItem>
+                                  {creditCards.map((c) => (
+                                    <SelectItem key={`card:${c.id}`} value={`card:${c.id}`} className="text-xs">
+                                      💳 {c.name}
+                                    </SelectItem>
+                                  ))}
+                                  {bankAccounts.map((a) => (
+                                    <SelectItem key={`bank:${a.id}`} value={`bank:${a.id}`} className="text-xs">
+                                      🏦 {a.name}
+                                    </SelectItem>
+                                  ))}
+                                  {wallets.map((w) => (
+                                    <SelectItem key={`wallet:${w.id}`} value={`wallet:${w.id}`} className="text-xs">
+                                      👛 {w.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+
+                              {parts.length > 1 && (
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="h-7 w-24 text-xs text-right bg-background"
+                                  value={part.amount}
+                                  onChange={(e) =>
+                                    updatePart(inst.number, inst.amount, pIdx, {
+                                      amount: parseFloat(e.target.value) || 0,
+                                    })
+                                  }
+                                />
+                              )}
+
+                              {parts.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => removeSplitPart(inst.number, inst.amount, pIdx)}
+                                  title="Remover parte"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+
+                          <div className="flex items-center justify-between pt-0.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-[11px] text-primary"
+                              onClick={() => addSplitPart(inst.number, inst.amount)}
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Dividir parcela (misto)
+                            </Button>
+
+                            {parts.length > 1 && (
+                              <span
+                                className={cn(
+                                  "text-[11px]",
+                                  splitErr ? "text-destructive font-medium" : "text-emerald-600 dark:text-emerald-400"
+                                )}
+                              >
+                                {splitErr
+                                  ? rem > 0
+                                    ? `Faltam R$ ${formatCurrency(rem)}`
+                                    : `Excede R$ ${formatCurrency(Math.abs(rem))}`
+                                  : "✓ Soma fechada"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   )}
-                </TableCell>
-                <TableCell className="py-1.5 px-3 text-right">
-                  {!hasInterest ? (
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      className="h-7 w-28 text-xs text-right ml-auto"
-                      value={inst.amount}
-                      onChange={(e) => handleAmountChange(inst.number, e.target.value)}
-                    />
-                  ) : (
-                    <span className="text-xs">
-                      {formatCurrency(inst.amount)}
-                    </span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
+                </>
+              );
+            })}
             {/* Total row */}
             <TableRow className="border-t font-medium hover:bg-transparent">
               <TableCell className="py-1.5 px-3 text-xs" colSpan={2}>
