@@ -1365,7 +1365,7 @@ serve(async (req) => {
         const [accsRes, wltsRes, ccsRes] = await Promise.all([
          supabase.from("bank_accounts").select("id, name, company_id, agency_number, account_number").eq("user_id", userId),
           supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
-          supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
+          supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id, parent_card_id").eq("user_id", userId),
         ]);
         const allAccs = (accsRes.data || []).filter((a: any) => companyId ? a.company_id === companyId : !a.company_id);
         const allWlts = (wltsRes.data || []).filter((w: any) => companyId ? w.company_id === companyId : !w.company_id);
@@ -1665,7 +1665,7 @@ serve(async (req) => {
         const [accountsRes, walletsRes, creditCardsRes] = await Promise.all([
           supabase.from("bank_accounts").select("id, name, company_id, agency_number, account_number").eq("user_id", userId),
           supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
-          supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
+          supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id, parent_card_id").eq("user_id", userId),
         ]);
         const accounts = accountsRes.data || [];
         const walletsList = walletsRes.data || [];
@@ -1881,7 +1881,7 @@ serve(async (req) => {
       supabase.from("bank_accounts").select("id, name, type, company_id, agency_number, account_number").eq("user_id", userId),
       supabase.from("wallets").select("id, name, company_id").eq("user_id", userId),
       supabase.from("companies").select("id, name, cnpj").eq("user_id", userId),
-      supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id").eq("user_id", userId),
+      supabase.from("credit_cards").select("id, name, last_four_digits, closing_day, due_day, company_id, bank_account_id, parent_card_id").eq("user_id", userId),
       supabase.from("suppliers").select("id, name").eq("user_id", userId),
       supabase.from("clients").select("id, name").eq("user_id", userId),
       supabase.from("transactions").select("id, description, amount, type, status, payment_date, category, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5),
@@ -2203,7 +2203,7 @@ REGRAS DE GERENCIAMENTO DE CATEGORIAS:
 - NÃO invente ações além das listadas acima.
 
 Para consulta:
-{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|sempre|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"rótulo legível do período, ex: julho/2026 (ou null)","detail_level":"resumo|detalhado","context":"Pessoal|Nome da Empresa","follow_up_queries":[],"friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
+{"intent":"consulta","query_type":"saldo|resumo_mes|gastos_mes|receitas_mes|pendentes|gastos_categoria|agrupar_por_categoria|listar_lancamentos|listar_cartoes|listar_contas|metas_mes|meta_categoria","category_filter":"...(se aplicável)","contact_filter":"nome do fornecedor/cliente (se aplicável)|null","card_filter":"nome do cartão de crédito (se aplicável)|null","tipo_filter":"despesa|receita (apenas para agrupar_por_categoria)","period_filter":"mes_atual|mes_passado|ultimos_7_dias|ultimos_30_dias|ultimos_90_dias|ano_atual|sempre|null","date_from":"YYYY-MM-DD ou null","date_to":"YYYY-MM-DD ou null","period_label":"rótulo legível do período, ex: julho/2026 (ou null)","detail_level":"resumo|detalhado","context":"Pessoal|Nome da Empresa","follow_up_queries":[],"friendly_message":"(opcional, NÃO prometa buscar — o sistema já entrega o resultado)"}
 
 ⚠️ CRÍTICO: Para consultas o campo 'intent' SEMPRE deve ser exatamente "consulta" (literal). O tipo da consulta vai em 'query_type'. NUNCA coloque "agrupar_por_categoria", "saldo", "listar_lancamentos" etc. no campo 'intent' — só em 'query_type'.
 ⚠️ NUNCA use frases como "Vou buscar essa informação", "Já vou te trazer", "Aguarde um momento" no friendly_message de consultas. O backend executa a consulta no mesmo turno e entrega o resultado — promessas de "vou buscar" deixam o usuário sem resposta.
@@ -2217,7 +2217,8 @@ TIPOS DE CONSULTA:
 - "pendentes" = contas a pagar/receber
 - "gastos_categoria" = gastos de UMA categoria específica. EXIGE category_filter preenchido com o nome da categoria.
 - "agrupar_por_categoria" = TODOS os lançamentos agrupados por categoria, com total e % por categoria. Use quando o usuário pedir para "separar/agrupar/dividir por categoria", "gastos por categoria" (sem nomear uma), "quanto gastei em cada categoria", etc. Defina tipo_filter="despesa" (padrão) ou "receita". NÃO use category_filter aqui.
-- "listar_lancamentos" = listar lançamentos filtrados por fornecedor, cliente, descrição, ou qualquer critério específico
+- "listar_lancamentos" = listar lançamentos filtrados por fornecedor, cliente, descrição, cartão de crédito (fatura) ou qualquer critério específico
+- "detalhar fatura <cartão>" / "itens da fatura <cartão>" / "o que tem na fatura do <cartão>" → use query_type="listar_lancamentos", card_filter="<nome do cartão>", detail_level="detalhado". Se o usuário citar uma data de vencimento OU se houver uma mensagem recente de lembrete no histórico citando "Vencimento DD/MM/YYYY" para aquele cartão, preencha date_from e date_to com essa data exata (YYYY-MM-DD) e period_label="vencimento DD/MM/YYYY". Caso contrário, use o mês citado ou "mes_atual".
 - "listar_cartoes" = listar cartões de crédito cadastrados
 - "listar_contas" = listar contas bancárias e carteiras cadastradas
 - "metas_mes" = acompanhamento das METAS ORÇAMENTÁRIAS do mês (quanto já foi gasto/recebido vs a meta, quanto falta e em que categorias não dá para gastar mais). Use quando o usuário falar em "meta", "metas do mês", "orçamento", "quanto ainda posso gastar", "estou dentro da meta?", "quanto falta para bater a meta".
@@ -4935,17 +4936,64 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
           case "listar_lancamentos": {
             const contactFilter = aiParsed.contact_filter || "";
             const categoryFilter = aiParsed.category_filter || "";
-            
+            const cardFilter = aiParsed.card_filter || "";
+
+            const normCardText = (s: string) =>
+              (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+            let matchedRootCard: any = null;
+            let familyCardIds: string[] = [];
+            if (cardFilter) {
+              const target = normCardText(cardFilter);
+              const digitsMatch = cardFilter.match(/(\d{4})/);
+              const matched = creditCards.find((c: any) => {
+                const cname = normCardText(c.name);
+                return cname === target || cname.includes(target) || target.includes(cname) ||
+                  (digitsMatch && c.last_four_digits === digitsMatch[1]);
+              });
+              if (matched) {
+                let root: any = matched;
+                let guard = 0;
+                while (root.parent_card_id && guard < 5) {
+                  const parent = creditCards.find((c: any) => c.id === root.parent_card_id);
+                  if (!parent) break;
+                  root = parent;
+                  guard++;
+                }
+                matchedRootCard = root;
+                const familySet = new Set<string>([root.id]);
+                let added = true;
+                while (added) {
+                  added = false;
+                  for (const c of creditCards) {
+                    if (c.parent_card_id && familySet.has(c.parent_card_id) && !familySet.has(c.id)) {
+                      familySet.add(c.id);
+                      added = true;
+                    }
+                  }
+                }
+                familyCardIds = Array.from(familySet);
+              }
+            }
+
             let q = supabase
               .from("transactions")
-              .select("amount, description, payment_date, contact_name, type, status, category")
+              .select("amount, description, payment_date, contact_name, type, status, category, credit_card_id")
               .eq("user_id", userId)
               .gte("payment_date", periodStart)
               .lte("payment_date", periodEnd)
               .order("payment_date", { ascending: false })
-              .limit(20);
+              .limit(cardFilter ? 100 : 20);
             
             q = addContextFilter(q);
+
+            if (cardFilter) {
+              if (familyCardIds.length === 0) {
+                responseMessage = `💳 Não encontrei nenhum cartão correspondente a "${cardFilter}".`;
+                break;
+              }
+              q = q.in("credit_card_id", familyCardIds);
+            }
 
             // Apply contact/supplier filter
             if (contactFilter) {
@@ -4967,7 +5015,7 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
             const { data: filteredTxns } = await q;
 
             const ctxLabel = aiParsed.context ? ` (${aiParsed.context})` : "";
-            const filterLabel = contactFilter || categoryFilter || "";
+            const filterLabel = matchedRootCard?.name || contactFilter || categoryFilter || "";
             
             if (!filteredTxns || filteredTxns.length === 0) {
               responseMessage = `📋 Nenhum lançamento encontrado${filterLabel ? ` para "${filterLabel}"` : ""} ${periodLabel}${ctxLabel}.`;
@@ -4989,10 +5037,17 @@ CONTEXTO DETECTADO AUTOMATICAMENTE NO DOCUMENTO:
               }).join("\n");
 
               let summary = `\n\n📊 ${filteredTxns.length} lançamento${filteredTxns.length > 1 ? "s" : ""}`;
-              if (totalReceitas > 0) summary += ` | Receitas: ${fmt(totalReceitas)}`;
-              if (totalDespesas > 0) summary += ` | Despesas: ${fmt(totalDespesas)}`;
+              if (matchedRootCard) {
+                const netInvoice = totalDespesas - totalReceitas;
+                summary += ` | Total da fatura: *${fmt(netInvoice)}*`;
+                if (totalReceitas > 0) summary += ` (despesas ${fmt(totalDespesas)} − estornos/créditos ${fmt(totalReceitas)})`;
+              } else {
+                if (totalReceitas > 0) summary += ` | Receitas: ${fmt(totalReceitas)}`;
+                if (totalDespesas > 0) summary += ` | Despesas: ${fmt(totalDespesas)}`;
+              }
 
-              responseMessage = `📋 Lançamentos${filterLabel ? ` de "${filterLabel}"` : ""} ${periodLabel}${ctxLabel}:\n\n${items}${summary}`;
+              const headerPrefix = matchedRootCard ? `💳 Fatura *${matchedRootCard.name}*` : `📋 Lançamentos${filterLabel ? ` de "${filterLabel}"` : ""}`;
+              responseMessage = `${headerPrefix} ${periodLabel}${ctxLabel}:\n\n${items}${summary}`;
             }
             break;
           }
