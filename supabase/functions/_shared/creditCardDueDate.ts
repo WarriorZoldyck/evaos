@@ -32,6 +32,11 @@ export function getCreditCardDueDate(
   closingDay: number,
   dueDay: number
 ): string {
+  if (!competenceISO) return new Date().toISOString().slice(0, 10);
+  if (!closingDay || !dueDay || isNaN(closingDay) || isNaN(dueDay)) {
+    return competenceISO;
+  }
+
   const comp = parseISO(competenceISO);
   const compDay = comp.getDate();
   const compMonth = comp.getMonth();

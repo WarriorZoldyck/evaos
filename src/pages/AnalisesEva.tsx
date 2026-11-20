@@ -33,6 +33,7 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { AdjustInterestModal, parseInterestFromItem } from "@/components/analises-eva/AdjustInterestModal";
+import { getInstallmentDueDate } from "@/lib/creditCardDueDate";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -585,7 +586,7 @@ export default function AnalisesEva() {
       const [accRes, walletRes, cardRes, termRes, companiesRes] = await Promise.all([
         supabase.from("bank_accounts").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
         supabase.from("wallets").select("id, name, company_id").eq("user_id", effectiveUserId).order("name"),
-        supabase.from("credit_cards").select("id, name, last_four_digits, company_id, bank_account_id, parent_card_id").eq("user_id", effectiveUserId).order("name"),
+        supabase.from("credit_cards").select("id, name, last_four_digits, company_id, bank_account_id, parent_card_id, closing_day, due_day").eq("user_id", effectiveUserId).order("name"),
         supabase.from("card_terminals").select("id, name, acquirer, bank_account_id, debit_rate, credit_rate, settlement_days_debit, settlement_days_credit, rates_info, auto_anticipation, company_id").eq("user_id", effectiveUserId).order("name"),
         supabase.from("companies").select("id, name").eq("user_id", effectiveUserId),
       ]);
@@ -827,10 +828,7 @@ export default function AnalisesEva() {
 
       const computeDate = (idx: number): string => {
         if (card && card.closing_day != null && card.due_day != null) {
-          const d = new Date(baseCompetenceStr + "T12:00:00");
-          d.setMonth(d.getMonth() + idx);
-          d.setDate(Math.min(card.due_day, 28));
-          return d.toISOString().slice(0, 10);
+          return getInstallmentDueDate(baseCompetenceStr, card.closing_day, card.due_day, idx + 1);
         }
         const d = new Date(basePaymentStr + "T12:00:00");
         if (intervalDays) d.setDate(d.getDate() + idx * intervalDays);
@@ -923,10 +921,7 @@ export default function AnalisesEva() {
 
       const computeDate = (idx: number): string => {
         if (card && card.closing_day != null && card.due_day != null) {
-          const d = new Date(baseCompetenceStr + "T12:00:00");
-          d.setMonth(d.getMonth() + idx);
-          d.setDate(Math.min(card.due_day, 28));
-          return d.toISOString().slice(0, 10);
+          return getInstallmentDueDate(baseCompetenceStr, card.closing_day, card.due_day, idx + 1);
         }
         const d = new Date(basePaymentStr + "T12:00:00");
         if (intervalDays) d.setDate(d.getDate() + idx * intervalDays);
