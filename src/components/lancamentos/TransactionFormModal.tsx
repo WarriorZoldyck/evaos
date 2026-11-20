@@ -59,6 +59,7 @@ import { PaymentMethodFields } from "./PaymentMethodFields";
 import { InstallmentPreviewTable } from "./InstallmentPreviewTable";
 import {
   parseFlexibleAccount,
+  terminalReceivable,
   validateInstallmentSplits,
   type InstallmentSplitPart,
 } from "@/lib/installmentPaymentSplits";
@@ -894,6 +895,45 @@ export function TransactionFormModal({
           }
           for (const part of parts) {
             const accFields = parseFlexibleAccount(part.account);
+            if (accFields.card_terminal_id) {
+              const term = filteredCardTerminals.find((t) => t.id === accFields.card_terminal_id);
+              if (!term) {
+                toast.error(`Parcela ${instNum}: escolha a maquininha do cartão.`);
+                setSaving(false);
+                return;
+              }
+              // posição desta parte dentro da sequência do cartão
+              const cardInsts = Object.keys(customInstallmentPayments)
+                .map(Number)
+                .sort((a, b) => a - b)
+                .filter((n) => (customInstallmentPayments[n] || []).some((pp) => pp.account === part.account && pp.method === part.method));
+              const rec = terminalReceivable({
+                terminal: term,
+                method: part.method,
+                gross: part.amount,
+                cardCount: cardInsts.length,
+                indexInCard: Math.max(0, cardInsts.indexOf(instNum)),
+                saleDate: new Date(data.payment_date),
+              });
+              installments.push({
+                ...baseData,
+                status: "Pendente",
+                description: `${baseData.description} (${part.method} ${term.name})`,
+                amount: rec.net,
+                original_amount: part.amount,
+                payment_date: format(rec.paymentDate, "yyyy-MM-dd"),
+                competence_date: format(compDate, "yyyy-MM-dd"),
+                payment_method: part.method,
+                bank_account_id: term.bank_account_id,
+                wallet_id: null,
+                credit_card_id: null,
+                card_terminal_id: term.id,
+                series_id: seriesId,
+                installment_number: instNum,
+                installments_total: count,
+              });
+              continue;
+            }
             installments.push({
               ...baseData,
               status: part.status ?? instStatus,
@@ -1933,6 +1973,7 @@ function MainFormContent({
                       wallets={wallets}
                       creditCards={creditCards}
                       showInstallmentRows={!isInstallmentCardReceipt}
+                      cardTerminals={activeTab === "receita" ? cardTerminals : []}
                       paymentFields={show("account_fields") && ["Cartão de Crédito", "Cartão de Débito"].includes(watchPaymentMethodMain || "") ? (
                         <PaymentMethodFields
                           form={form}

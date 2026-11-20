@@ -14,6 +14,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { CardTerminalInfo } from "@/hooks/useTransactions";
+import { MdrInfoCard } from "./MdrInfoCard";
 import {
   Table,
   TableHeader,
@@ -89,6 +91,7 @@ interface InstallmentPreviewTableProps {
   onModalitiesChange?: (methods: string[]) => void;
   paymentFields?: React.ReactNode;
   showInstallmentRows?: boolean;
+  cardTerminals?: CardTerminalInfo[];
 }
 
 export function InstallmentPreviewTable({
@@ -119,7 +122,9 @@ export function InstallmentPreviewTable({
   onModalitiesChange,
   paymentFields,
   showInstallmentRows = true,
+  cardTerminals = [],
 }: InstallmentPreviewTableProps) {
+  const isCardMethod = (m: string) => m === "Cartão de Crédito" || m === "Cartão de Débito";
   const [distribute, setDistribute] = useState(true);
 
   // Modalidades selecionadas para o parcelado (ex: [PIX, Cartão de Crédito])
@@ -450,7 +455,9 @@ export function InstallmentPreviewTable({
         nextPayments[instNum] = [
           {
             method: cfg.method,
-            account: cfg.account || defaultAccount || "",
+            account: isCardMethod(cfg.method)
+              ? (cfg.account?.startsWith("terminal:") ? cfg.account : "")
+              : (cfg.account || defaultAccount || ""),
             amount: instAmount,
             status,
           },
@@ -610,6 +617,39 @@ export function InstallmentPreviewTable({
                         />
                       </div>
                     </div>
+                    {isCardMethod(mName) && cardTerminals.length > 0 && (() => {
+                      const tid = cfg.account?.startsWith("terminal:") ? cfg.account.slice(9) : "";
+                      const term = cardTerminals.find((t) => t.id === tid);
+                      return (
+                        <div className="space-y-1.5 pt-1">
+                          <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                            Maquininha
+                          </Label>
+                          <Select
+                            value={tid || undefined}
+                            onValueChange={(v) => handleUpdateModalityConfig(mName, { account: `terminal:${v}` })}
+                          >
+                            <SelectTrigger className={cn("h-7 text-xs", !tid && "border-destructive")}>
+                              <SelectValue placeholder="Escolha a maquininha" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {cardTerminals.map((t) => (
+                                <SelectItem key={t.id} value={t.id} className="text-xs">{t.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {term && cfg.amount > 0 && (
+                            <MdrInfoCard
+                              terminal={term}
+                              amount={cfg.amount}
+                              paymentMethod={mName}
+                              installmentsCount={cfg.installments || 1}
+                              paymentDate={paymentDate}
+                            />
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -786,8 +826,13 @@ export function InstallmentPreviewTable({
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__" className="text-xs text-muted-foreground">
-                            Sem conta vinculada
+                            {isCardMethod(part.method) ? "Escolha a maquininha" : "Sem conta vinculada"}
                           </SelectItem>
+                          {isCardMethod(part.method) && cardTerminals.map((t) => (
+                            <SelectItem key={`terminal:${t.id}`} value={`terminal:${t.id}`} className="text-xs">
+                              🧾 Maquininha {t.name}
+                            </SelectItem>
+                          ))}
                           {creditCards.map((c) => (
                             <SelectItem key={`card:${c.id}`} value={`card:${c.id}`} className="text-xs">
                               💳 {c.name}

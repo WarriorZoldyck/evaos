@@ -68,3 +68,19 @@ describe("parcela com várias formas de pagamento", () => {
     expect(vSplit(960, [{ method: "Dinheiro", account: "bank:b1", amount: 960 }] as any)).not.toBeNull();
   });
 });
+
+import { terminalReceivable as _tr, validateInstallmentSplits as _vs } from "./installmentPaymentSplits";
+describe("cartão combinado com maquininha", () => {
+  const term = { debit_rate: 1.5, credit_rate: 3.19, settlement_days_debit: 1, settlement_days_credit: 30, rates_info: JSON.stringify([{ installments: 3, rate: 5 }]) };
+  it("8.000 em 3x usa taxa de 3x e cai mês a mês", () => {
+    const sale = new Date(2026, 11, 20);
+    const r = [0, 1, 2].map((i) => _tr({ terminal: term, method: "Cartão de Crédito", gross: 2666.67, cardCount: 3, indexInCard: i, saleDate: sale }));
+    expect(r[0].rate).toBe(5);
+    expect(r[0].net).toBe(2533.34);
+    expect(r.map((x) => x.paymentDate.getMonth())).toEqual([0, 1, 2]);
+  });
+  it("cartão sem maquininha bloqueia", () => {
+    expect(_vs(100, [{ method: "Cartão de Crédito", account: "", amount: 100 }])).toBe("Escolha a maquininha do cartão.");
+    expect(_vs(100, [{ method: "Cartão de Crédito", account: "terminal:x", amount: 100 }])).toBeNull();
+  });
+});
