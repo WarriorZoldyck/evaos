@@ -1,5 +1,10 @@
 # Security hardening
 
+## Card installment form
+- [x] Restore terminal selection and existing MDR/receipt details inside installments, preserving the cash-payment flow.
+- [x] Run installment regressions: 24 tests pass, including terminal/account persistence and installment-specific MDR; preview build OK.
+- [ ] Verify a real authenticated card installment save; external Supabase has no supported managed test session.
+
 ## WhatsApp update announcement
 - [x] Correct reconciliation regressions: preserve unrelated-merchant rejection; recognize joined merchant names; all matching tests pass.
 - [x] Move budget follow-up to successful approval in single, bulk and reconciliation flows; exact persisted record checks, registered-only totals and server-only duplicate prevention implemented and deployed. Live authenticated approval/send remains unverified.

@@ -87,6 +87,8 @@ interface InstallmentPreviewTableProps {
   defaultAccount?: string;
   /** Avisa o formulário quais modalidades foram escolhidas. */
   onModalitiesChange?: (methods: string[]) => void;
+  paymentFields?: React.ReactNode;
+  showInstallmentRows?: boolean;
 }
 
 export function InstallmentPreviewTable({
@@ -115,6 +117,8 @@ export function InstallmentPreviewTable({
   defaultMethod = "",
   defaultAccount = "",
   onModalitiesChange,
+  paymentFields,
+  showInstallmentRows = true,
 }: InstallmentPreviewTableProps) {
   const [distribute, setDistribute] = useState(true);
 
@@ -215,7 +219,7 @@ export function InstallmentPreviewTable({
 
   // Uma única modalidade: todas as parcelas recebem essa forma (e a conta escolhida).
   useEffect(() => {
-    if (selectedModalities.length !== 1 || !onCustomPaymentsChange) return;
+    if (!showInstallmentRows || selectedModalities.length !== 1 || !onCustomPaymentsChange) return;
     const m = selectedModalities[0];
     const acc = modalitiesConfig[m]?.account || "";
     const next: Record<number, InstallmentSplitPart[]> = {};
@@ -235,7 +239,7 @@ export function InstallmentPreviewTable({
       onCustomPaymentsChange(next);
       if (onFlexiblePaymentEnabledChange && !flexiblePaymentEnabled) onFlexiblePaymentEnabledChange(true);
     }
-  }, [selectedModalities, installments, modalitiesConfig]);
+  }, [selectedModalities, installments, modalitiesConfig, showInstallmentRows]);
 
   const total = useMemo(
     () => installments.reduce((sum, inst) => sum + inst.amount, 0),
@@ -318,11 +322,11 @@ export function InstallmentPreviewTable({
       for (const k of Object.keys(all)) {
         const num = Number(k);
         if (num === instNumber) continue;
-        all[num] = all[num].map((p) => (p.method === method && !p.account ? { ...p, account: patch.account! } : p));
+        all[num] = all[num].map((p) => (p.method === method && !p.account ? { ...p, account: patch.account ?? "" } : p));
       }
       onCustomPaymentsChange(all);
       if (modalitiesConfig[method]) {
-        setModalitiesConfig((c) => ({ ...c, [method]: { ...c[method], account: patch.account! } }));
+        setModalitiesConfig((c) => ({ ...c, [method]: { ...c[method], account: patch.account ?? "" } }));
       }
       return;
     }
@@ -356,6 +360,7 @@ export function InstallmentPreviewTable({
       nextMethods = [...selectedModalities, methodName];
     }
     setSelectedModalities(nextMethods);
+    onModalitiesChange?.(nextMethods);
 
     // Inicializa configuração da nova modalidade se necessário
     const nextConfig = { ...modalitiesConfig };
@@ -613,10 +618,12 @@ export function InstallmentPreviewTable({
         )}
       </div>
 
+      {paymentFields}
+
       {/* ------------------------------------------------------------- */}
       {/* SEÇÃO 2: LISTA DE PARCELAS (SESSÃO DE LANÇAMENTO EM CADA UMA) */}
       {/* ------------------------------------------------------------- */}
-      <div className="space-y-2">
+      {showInstallmentRows && <div className="space-y-2">
         <div className="flex items-center justify-between px-0.5">
           <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -881,10 +888,10 @@ export function InstallmentPreviewTable({
             </span>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Alerta de divergência de valor */}
-      {exceeds && onUpdateTotalAmount && (
+      {showInstallmentRows && exceeds && onUpdateTotalAmount && (
         <Alert variant="destructive" className="py-2">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="flex items-center justify-between gap-2 text-xs">
@@ -905,7 +912,7 @@ export function InstallmentPreviewTable({
       )}
 
       {/* Opção de redistribuição */}
-      {!hasInterest && hasEdits && (
+      {showInstallmentRows && !hasInterest && hasEdits && (
         <div className="flex items-center gap-2 pt-0.5">
           <Checkbox
             id="distribute-diff"

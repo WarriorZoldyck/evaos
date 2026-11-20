@@ -29,14 +29,13 @@ function parseRatesInfo(ratesInfo: string | null): RateInfo[] {
   }
 }
 
-export function MdrInfoCard({
+export function calculateTerminalMdr({
   terminal,
   amount,
   paymentMethod,
   installmentsCount,
   paymentDate,
 }: MdrInfoCardProps) {
-  const mdrCalc = useMemo(() => {
     if (!amount || amount <= 0) return null;
 
     const isDebit = paymentMethod === "Cartão de Débito";
@@ -61,10 +60,8 @@ export function MdrInfoCard({
       settlementDays = terminal.settlement_days_credit ?? 2;
     }
 
-    const isInstallment = isCredit && installmentsCount && installmentsCount >= 2;
-
-    if (isInstallment) {
-      const count = installmentsCount!;
+    if (isCredit && installmentsCount && installmentsCount >= 2) {
+      const count = installmentsCount;
       const isLumpSum = settlementDays < 30;
 
       if (isLumpSum) {
@@ -142,7 +139,14 @@ export function MdrInfoCard({
         settlementDate,
       };
     }
-  }, [terminal, amount, paymentMethod, installmentsCount, paymentDate]);
+}
+
+export function MdrInfoCard(props: MdrInfoCardProps) {
+  const { terminal, amount, paymentMethod, installmentsCount, paymentDate } = props;
+  const mdrCalc = useMemo(
+    () => calculateTerminalMdr({ terminal, amount, paymentMethod, installmentsCount, paymentDate }),
+    [terminal, amount, paymentMethod, installmentsCount, paymentDate],
+  );
 
   if (!mdrCalc) return null;
 

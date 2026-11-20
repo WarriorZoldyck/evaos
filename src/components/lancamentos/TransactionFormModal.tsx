@@ -447,6 +447,7 @@ export function TransactionFormModal({
     !!watchIsInstallmentFlag &&
     flexiblePaymentEnabled &&
     !form.watch("card_terminal_id") &&
+    !(activeTab === "receita" && ["Cartão de Crédito", "Cartão de Débito"].includes(watchPaymentMethodTop || "")) &&
     Object.values(customInstallmentPayments).some((parts) => parts && parts.length > 0);
   useEffect(() => {
     form.setValue("per_installment_methods", perInstallmentMethods, { shouldValidate: false });
@@ -1422,6 +1423,8 @@ function MainFormContent({
   const watchCustomDays = form.watch("installment_custom_days");
   const watchCardTerminalId = form.watch("card_terminal_id");
   const watchPaymentMethodMain = form.watch("payment_method");
+  const isInstallmentCardReceipt = watchInstallment && activeTab === "receita" &&
+    ["Cartão de Crédito", "Cartão de Débito"].includes(watchPaymentMethodMain || "");
 
   // Terminal-aware preview: compute net amount and D+N interval for all terminal scenarios
   const terminalPreview = (() => {
@@ -1433,7 +1436,7 @@ function MainFormContent({
     const isCredit = watchPaymentMethodMain === "Cartão de Crédito";
     if (!isDebit && !isCredit) return null;
 
-    const isInstallment = isCredit && watchInstallmentsCount && watchInstallmentsCount >= 2;
+    const isInstallment = watchInstallment && isCredit && watchInstallmentsCount && watchInstallmentsCount >= 2;
     const settlementDaysTerm = terminal.settlement_days_credit ?? 30;
     const isLumpSum = settlementDaysTerm < 30;
 
@@ -1809,8 +1812,8 @@ function MainFormContent({
         />
         )}
 
-        {/* Conta/Maquininha — à vista, ou parcelado em cartão (para escolher cartão/maquininha) */}
-        {show("account_fields") && (!watchInstallment || ["Cartão de Crédito", "Cartão de Débito"].includes(watchPaymentMethodMain || "")) && (
+        {/* Parcelado escolhe o vínculo junto das modalidades, abaixo. */}
+        {show("account_fields") && !watchInstallment && (
         <PaymentMethodFields
           form={form}
           activeTab={activeTab}
@@ -1842,7 +1845,7 @@ function MainFormContent({
                       </FormItem>
                     )}
                   />
-                  <FormField
+                  {!isInstallmentCardReceipt && <FormField
                     control={form.control}
                     name="installment_interval_type"
                     render={({ field }) => (
@@ -1862,8 +1865,8 @@ function MainFormContent({
                         <FormMessage />
                       </FormItem>
                     )}
-                  />
-                  {form.watch("installment_interval_type") === "custom_days" && (
+                  />}
+                  {!isInstallmentCardReceipt && form.watch("installment_interval_type") === "custom_days" && (
                     <FormField
                       control={form.control}
                       name="installment_custom_days"
@@ -1878,7 +1881,7 @@ function MainFormContent({
                       )}
                     />
                   )}
-                  {!form.watch("card_terminal_id") && (
+                  {!isInstallmentCardReceipt && !form.watch("card_terminal_id") && (
                     <FormField
                       control={form.control}
                       name="interest_rate"
@@ -1901,9 +1904,9 @@ function MainFormContent({
                       )}
                     />
                   )}
-                  {interestPreview && watchPaymentDate && !(terminalPreview?.isLumpSum) && (
+                  {interestPreview && watchPaymentDate && (
                     <InstallmentPreviewTable
-                      totalAmount={terminalPreview ? terminalPreview.netTotal : watchAmount}
+                      totalAmount={watchAmount}
                       installmentsCount={watchInstallmentsCount}
                       paymentDate={
                         terminalPreview
@@ -1929,10 +1932,28 @@ function MainFormContent({
                       bankAccounts={bankAccounts}
                       wallets={wallets}
                       creditCards={creditCards}
+                      showInstallmentRows={!isInstallmentCardReceipt}
+                      paymentFields={show("account_fields") && ["Cartão de Crédito", "Cartão de Débito"].includes(watchPaymentMethodMain || "") ? (
+                        <PaymentMethodFields
+                          form={form}
+                          activeTab={activeTab}
+                          paymentMethod={watchPaymentMethodMain}
+                          bankAccounts={bankAccounts}
+                          creditCards={creditCards}
+                          wallets={wallets}
+                          cardTerminals={cardTerminals}
+                        />
+                      ) : undefined}
                       defaultMethod={watchPaymentMethodMain || ""}
                       onModalitiesChange={(methods) => {
                         const next = methods.length === 1 ? methods[0] : "";
-                        if ((form.getValues("payment_method") || "") !== next) form.setValue("payment_method", next);
+                        if ((form.getValues("payment_method") || "") !== next) {
+                          form.setValue("payment_method", next);
+                          form.setValue("card_terminal_id", "");
+                          form.setValue("bank_account_id", "");
+                          form.setValue("credit_card_id", "");
+                          form.setValue("wallet_id", "");
+                        }
                       }}
                       defaultAccount={
                         form.watch("credit_card_id")
