@@ -360,6 +360,7 @@ export function TransactionFormModal({
   const [customInstallmentDates, setCustomInstallmentDates] = useState<Record<number, Date>>({});
   const [flexiblePaymentEnabled, setFlexiblePaymentEnabled] = useState(false);
   const [customInstallmentPayments, setCustomInstallmentPayments] = useState<Record<number, InstallmentSplitPart[]>>({});
+  const [customInstallmentStatuses, setCustomInstallmentStatuses] = useState<Record<number, "Pendente" | "Pago">>({});
   const [seriesUpdates, setSeriesUpdates] = useState<Array<{ id: string; amount: number; payment_date?: string }>>([]);
 
   const fetchFormCategories = useCallback(async () => {
@@ -446,6 +447,7 @@ export function TransactionFormModal({
       setSeriesUpdates([]);
       setFlexiblePaymentEnabled(false);
       setCustomInstallmentPayments({});
+      setCustomInstallmentStatuses({});
       if (editTransaction) {
         setFormCompanyId(editTransaction.company_id ?? null);
         setActiveTab(editTransaction.type);
@@ -760,6 +762,7 @@ export function TransactionFormModal({
             const payDate = addMonths(data.competence_date, i + 1);
             installments.push({
               ...baseData,
+              status: i === 0 ? (data.status || "Pendente") : "Pendente",
               amount: thisNet,
               original_amount: thisGross,
               payment_date: format(payDate, "yyyy-MM-dd"),
@@ -855,6 +858,14 @@ export function TransactionFormModal({
           }
         }
 
+        // Status de cada parcela:
+        // A 1ª parcela herda o status do formulário (ex: "Pago" se foi Pix ou marcada como paga),
+        // enquanto as parcelas 2 em diante DEVEM vir como "Pendente" por padrão.
+        // Se o usuário customizou explicitamente no preview, respeita customInstallmentStatuses[instNum].
+        const instStatus: "Pendente" | "Pago" =
+          customInstallmentStatuses[instNum] ??
+          (instNum === 1 ? (data.status || "Pendente") : "Pendente");
+
         const parts = flexiblePaymentEnabled ? customInstallmentPayments[instNum] : undefined;
         if (parts && parts.length > 0) {
           const splitErr = validateInstallmentSplits(amount, parts);
@@ -867,6 +878,7 @@ export function TransactionFormModal({
             const accFields = parseFlexibleAccount(part.account);
             installments.push({
               ...baseData,
+              status: part.status ?? instStatus,
               description:
                 parts.length > 1
                   ? `${baseData.description} (${part.method})`
@@ -887,10 +899,10 @@ export function TransactionFormModal({
         } else {
           installments.push({
             ...baseData,
+            status: instStatus,
             amount,
             original_amount: total,
             payment_date: payISO,
-
             competence_date: format(compDate, "yyyy-MM-dd"),
             series_id: seriesId,
             installment_number: instNum,
@@ -1152,6 +1164,8 @@ export function TransactionFormModal({
               onFlexiblePaymentEnabledChange={setFlexiblePaymentEnabled}
               customInstallmentPayments={customInstallmentPayments}
               onCustomInstallmentPaymentsChange={setCustomInstallmentPayments}
+              customInstallmentStatuses={customInstallmentStatuses}
+              onCustomInstallmentStatusesChange={setCustomInstallmentStatuses}
               editTransaction={editTransaction}
               onSeriesUpdatesChange={setSeriesUpdates}
             />
@@ -1186,6 +1200,8 @@ export function TransactionFormModal({
               onFlexiblePaymentEnabledChange={setFlexiblePaymentEnabled}
               customInstallmentPayments={customInstallmentPayments}
               onCustomInstallmentPaymentsChange={setCustomInstallmentPayments}
+              customInstallmentStatuses={customInstallmentStatuses}
+              onCustomInstallmentStatusesChange={setCustomInstallmentStatuses}
               editTransaction={editTransaction}
               onSeriesUpdatesChange={setSeriesUpdates}
             />
@@ -1340,6 +1356,8 @@ interface MainFormContentProps {
   onFlexiblePaymentEnabledChange: (enabled: boolean) => void;
   customInstallmentPayments: Record<number, InstallmentSplitPart[]>;
   onCustomInstallmentPaymentsChange: (payments: Record<number, InstallmentSplitPart[]>) => void;
+  customInstallmentStatuses: Record<number, "Pendente" | "Pago">;
+  onCustomInstallmentStatusesChange: (statuses: Record<number, "Pendente" | "Pago">) => void;
   editTransaction?: Transaction | null;
   onSeriesUpdatesChange: (updates: Array<{ id: string; amount: number; payment_date?: string }>) => void;
 }
@@ -1372,6 +1390,8 @@ function MainFormContent({
   onFlexiblePaymentEnabledChange,
   customInstallmentPayments,
   onCustomInstallmentPaymentsChange,
+  customInstallmentStatuses,
+  onCustomInstallmentStatusesChange,
   editTransaction,
   onSeriesUpdatesChange,
 }: MainFormContentProps) {
@@ -1868,6 +1888,10 @@ function MainFormContent({
                       onFlexiblePaymentEnabledChange={terminalPreview ? undefined : onFlexiblePaymentEnabledChange}
                       customPayments={customInstallmentPayments}
                       onCustomPaymentsChange={onCustomInstallmentPaymentsChange}
+                      customStatuses={customInstallmentStatuses}
+                      onCustomStatusesChange={onCustomInstallmentStatusesChange}
+                      mainStatus={form.watch("status") || "Pendente"}
+                      onInstallmentsCountChange={terminalPreview ? undefined : ((newCount) => form.setValue("installments_count", newCount))}
                       bankAccounts={bankAccounts}
                       wallets={wallets}
                       creditCards={creditCards}

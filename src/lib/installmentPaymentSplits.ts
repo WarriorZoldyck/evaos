@@ -3,7 +3,19 @@ export interface InstallmentSplitPart {
   /** "bank:<id>" | "wallet:<id>" | "card:<id>" | "" */
   account: string;
   amount: number;
+  status?: "Pendente" | "Pago";
 }
+
+export const AVAILABLE_PAYMENT_MODALITIES = [
+  { id: "PIX", label: "PIX", icon: "⚡" },
+  { id: "Cartão de Crédito", label: "Cartão de Crédito", icon: "💳" },
+  { id: "Boleto", label: "Boleto", icon: "📄" },
+  { id: "Dinheiro", label: "Dinheiro", icon: "💵" },
+  { id: "Cartão de Débito", label: "Cartão de Débito", icon: "💳" },
+  { id: "Transferência", label: "Transferência", icon: "🏦" },
+  { id: "Cheque", label: "Cheque", icon: "📝" },
+  { id: "Outro", label: "Outro", icon: "➕" },
+] as const;
 
 export const FLEXIBLE_PAYMENT_METHODS = [
   "PIX",
