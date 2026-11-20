@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, ArrowRight, CheckCircle2 } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowRight, CheckCircle2, ChevronLeft, ChevronRight } from "lucide-react";
 import { LiquidateModal } from "./LiquidateModal";
 import { escapeCsvCell } from "@/lib/csvSecurity";
 
@@ -119,6 +119,8 @@ interface Props {
   overdueTotal?: number;
   periodTotal?: number;
   onLiquidated?: () => void;
+  /** Navega para o período anterior/seguinte (setinhas no cabeçalho). */
+  onNavigatePeriod?: (direction: -1 | 1) => void;
 }
 
 export function EntradasSaidasDetailModal({
@@ -141,6 +143,7 @@ export function EntradasSaidasDetailModal({
   overdueTotal,
   periodTotal,
   onLiquidated,
+  onNavigatePeriod,
 }: Props) {
 
   const navigate = useNavigate();
@@ -337,6 +340,16 @@ export function EntradasSaidasDetailModal({
             {isEntradas ? "Receitas" : "Despesas"} {isPrevisto ? "com previsão de pagamento" : "com pagamento"} entre{" "}
             <span className="font-medium text-foreground">{formatDate(dateFrom)}</span> e{" "}
             <span className="font-medium text-foreground">{formatDate(dateTo)}</span>
+            {onNavigatePeriod && (
+              <span className="inline-flex items-center gap-1 ml-2 align-middle">
+                <Button type="button" variant="outline" size="icon" className="h-6 w-6" aria-label="Período anterior" onClick={() => { setPage(1); onNavigatePeriod(-1); }}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <Button type="button" variant="outline" size="icon" className="h-6 w-6" aria-label="Próximo período" onClick={() => { setPage(1); onNavigatePeriod(1); }}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </span>
+            )}
             {isPrevisto && (overdueTotal ?? 0) > 0 ? " (inclui valores em atraso de meses anteriores)" : ""}.{" "}
             <span className="text-muted-foreground">
               {lines.length} lançamento(s).

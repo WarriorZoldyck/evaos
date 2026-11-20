@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { format } from "date-fns";
+import { format, addMonths, addDays, differenceInCalendarDays, differenceInCalendarMonths, startOfMonth, endOfMonth, isSameDay } from "date-fns";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useDashboardData, DashboardFilters, getDateRangeExported } from "@/hooks/useDashboardData";
 import { PeriodFilter } from "@/components/dashboard/PeriodFilter";
@@ -52,6 +52,18 @@ export default function Dashboard() {
 
   const mdr = useMdrSummary();
   const dateRange = useMemo(() => getDateRangeExported(filters), [filters]);
+  const navigatePeriod = useCallback((direction: -1 | 1) => {
+    const { start, end } = dateRange;
+    const isWholeMonths = isSameDay(start, startOfMonth(start)) && isSameDay(end, endOfMonth(end));
+    if (isWholeMonths) {
+      const months = differenceInCalendarMonths(end, start) + 1;
+      const ns = addMonths(start, direction * months);
+      setFilters((f) => ({ ...f, period: "custom", customStart: startOfMonth(ns), customEnd: endOfMonth(addMonths(ns, months - 1)) }));
+    } else {
+      const days = differenceInCalendarDays(end, start) + 1;
+      setFilters((f) => ({ ...f, period: "custom", customStart: addDays(start, direction * days), customEnd: addDays(end, direction * days) }));
+    }
+  }, [dateRange]);
   const balanceReferenceDate = useMemo(
     () => (dateRange.end < new Date() ? dateRange.end : new Date()),
     [dateRange.end],
@@ -309,6 +321,7 @@ export default function Dashboard() {
         transactions={expectedTransactions as any}
         total={summary.entradaPrevista}
         periodTotal={summary.entradaPrevistaPeriodo}
+        onNavigatePeriod={navigatePeriod}
         overdueTotal={summary.entradasEmAtraso}
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}
@@ -327,6 +340,7 @@ export default function Dashboard() {
         transactions={expectedTransactions as any}
         total={summary.saidaPrevista}
         periodTotal={summary.saidaPrevistaPeriodo}
+        onNavigatePeriod={navigatePeriod}
         overdueTotal={summary.saidasEmAtraso}
         dateFrom={format(dateRange.start, "yyyy-MM-dd")}
         dateTo={format(dateRange.end, "yyyy-MM-dd")}

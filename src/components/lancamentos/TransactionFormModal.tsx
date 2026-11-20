@@ -199,7 +199,9 @@ const transactionSchema = z
     if (pm === "Cartão de Débito" && !data.bank_account_id && !data.card_terminal_id) {
       add("bank_account_id", "Selecione a conta bancária ou a maquininha");
     }
-    if (!pm && !data.bank_account_id && !data.credit_card_id && !data.wallet_id && !data.card_terminal_id) {
+    if (data.is_installment && !pm) {
+      add("installments_count", "Selecione a modalidade de pagamento do parcelamento");
+    } else if (!pm && !data.bank_account_id && !data.credit_card_id && !data.wallet_id && !data.card_terminal_id) {
       add("payment_method", "Informe a forma de pagamento e a conta");
     }
     if (data.is_installment && (!data.installments_count || data.installments_count < 2)) {
@@ -444,6 +446,7 @@ export function TransactionFormModal({
   const perInstallmentMethods =
     !!watchIsInstallmentFlag &&
     flexiblePaymentEnabled &&
+    !form.watch("card_terminal_id") &&
     Object.values(customInstallmentPayments).some((parts) => parts && parts.length > 0);
   useEffect(() => {
     form.setValue("per_installment_methods", perInstallmentMethods, { shouldValidate: false });
@@ -880,7 +883,7 @@ export function TransactionFormModal({
           customInstallmentStatuses[instNum] ??
           (instNum === 1 ? (data.status || "Pendente") : "Pendente");
 
-        const parts = flexiblePaymentEnabled ? customInstallmentPayments[instNum] : undefined;
+        const parts = flexiblePaymentEnabled && !data.card_terminal_id ? customInstallmentPayments[instNum] : undefined;
         if (parts && parts.length > 0) {
           const splitErr = validateInstallmentSplits(amount, parts);
           if (splitErr) {
@@ -1747,8 +1750,39 @@ function MainFormContent({
           )}
         </div>
 
-        {/* Forma de pagamento */}
-        {show("payment_method") && (
+        {/* À vista x Parcelado */}
+        {show("installments") && (
+          <div className="space-y-2">
+            <Label>Como foi o pagamento?</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={!watchInstallment ? "default" : "outline"}
+                onClick={() => form.setValue("is_installment", false)}
+              >
+                À vista
+              </Button>
+              <Button
+                type="button"
+                variant={watchInstallment ? "default" : "outline"}
+                onClick={() => {
+                  form.setValue("is_installment", true);
+                  form.setValue("is_recurring", false);
+                  form.setValue("payment_method", "");
+                  form.setValue("bank_account_id", "");
+                  form.setValue("wallet_id", "");
+                  form.setValue("credit_card_id", "");
+                  form.setValue("card_terminal_id", "");
+                }}
+              >
+                Parcelado
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Forma de pagamento (somente à vista) */}
+        {show("payment_method") && !watchInstallment && (
         <FormField
           control={form.control}
           name="payment_method"
@@ -1758,7 +1792,7 @@ function MainFormContent({
               <Select onValueChange={field.onChange} value={field.value || ""}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder={form.watch("is_installment") && flexiblePaymentEnabled && Object.values(customInstallmentPayments).some((p) => p?.length) ? "Definido por parcela" : "Selecione"} />
+                    <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -1775,8 +1809,8 @@ function MainFormContent({
         />
         )}
 
-        {/* Conta/Maquininha */}
-        {show("account_fields") && (
+        {/* Conta/Maquininha — à vista, ou parcelado em cartão (para escolher cartão/maquininha) */}
+        {show("account_fields") && (!watchInstallment || ["Cartão de Crédito", "Cartão de Débito"].includes(watchPaymentMethodMain || "")) && (
         <PaymentMethodFields
           form={form}
           activeTab={activeTab}
@@ -1793,20 +1827,6 @@ function MainFormContent({
           <div className="space-y-4 rounded-lg border border-border p-4">
             {show("installments") && (
             <div className="space-y-3">
-              {/* Hide installment toggle for debit with terminal */}
-              {!(watchPaymentMethodMain === "Cartão de Débito" && watchCardTerminalId) && (
-              <div className="flex items-center gap-3">
-                <Switch
-                  id="installment-toggle"
-                  checked={watchInstallment}
-                  onCheckedChange={(checked) => {
-                    form.setValue("is_installment", checked);
-                    if (checked) form.setValue("is_recurring", false);
-                  }}
-                />
-                <Label htmlFor="installment-toggle">Parcelado?</Label>
-              </div>
-              )}
               {watchInstallment && (
                 <div className="space-y-3 pl-2 border-l-2 border-primary/20 ml-2">
                   <FormField
@@ -1910,6 +1930,10 @@ function MainFormContent({
                       wallets={wallets}
                       creditCards={creditCards}
                       defaultMethod={watchPaymentMethodMain || ""}
+                      onModalitiesChange={(methods) => {
+                        const next = methods.length === 1 ? methods[0] : "";
+                        if ((form.getValues("payment_method") || "") !== next) form.setValue("payment_method", next);
+                      }}
                       defaultAccount={
                         form.watch("credit_card_id")
                           ? `card:${form.watch("credit_card_id")}`

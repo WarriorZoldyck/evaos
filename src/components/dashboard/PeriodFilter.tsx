@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -22,6 +22,9 @@ const periodOptions: { key: PeriodKey; label: string }[] = [
 export function PeriodFilter({ filters, onChange }: PeriodFilterProps) {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [navMonth, setNavMonth] = useState(new Date());
+  useEffect(() => {
+    if (filters.period === "custom" && filters.customStart) setNavMonth(filters.customStart);
+  }, [filters.period, filters.customStart]);
 
   const handlePeriodClick = (key: PeriodKey) => {
     onChange({ period: key });

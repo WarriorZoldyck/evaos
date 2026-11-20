@@ -85,6 +85,8 @@ interface InstallmentPreviewTableProps {
   creditCards?: AccountOption[];
   defaultMethod?: string;
   defaultAccount?: string;
+  /** Avisa o formulário quais modalidades foram escolhidas. */
+  onModalitiesChange?: (methods: string[]) => void;
 }
 
 export function InstallmentPreviewTable({
@@ -110,25 +112,34 @@ export function InstallmentPreviewTable({
   bankAccounts = [],
   wallets = [],
   creditCards = [],
-  defaultMethod = "PIX",
+  defaultMethod = "",
   defaultAccount = "",
+  onModalitiesChange,
 }: InstallmentPreviewTableProps) {
   const [distribute, setDistribute] = useState(true);
 
   // Modalidades selecionadas para o parcelado (ex: [PIX, Cartão de Crédito])
-  const [selectedModalities, setSelectedModalities] = useState<string[]>([
-    defaultMethod || "PIX",
-  ]);
+  const [selectedModalities, setSelectedModalities] = useState<string[]>(
+    defaultMethod ? [defaultMethod] : [],
+  );
 
   // Configuração detalhada por modalidade
-  const [modalitiesConfig, setModalitiesConfig] = useState<Record<string, ModalitySetting>>({
-    [defaultMethod || "PIX"]: {
-      method: defaultMethod || "PIX",
-      amount: totalAmount,
-      installments: Math.max(1, installmentsCount || 2),
-      account: defaultAccount || "",
-    },
-  });
+  const [modalitiesConfig, setModalitiesConfig] = useState<Record<string, ModalitySetting>>(
+    defaultMethod
+      ? {
+          [defaultMethod]: {
+            method: defaultMethod,
+            amount: totalAmount,
+            installments: Math.max(1, installmentsCount || 2),
+            account: defaultAccount || "",
+          },
+        }
+      : {},
+  );
+
+  useEffect(() => {
+    onModalitiesChange?.(selectedModalities);
+  }, [selectedModalities]);
 
   // Mantém modalidades sincronizadas se defaultMethod mudar no formulário principal
   useEffect(() => {
@@ -202,6 +213,30 @@ export function InstallmentPreviewTable({
     return result;
   }, [totalAmount, n, paymentDate, intervalType, customDays, interestRate, hasInterest, customAmounts, distribute, customDates]);
 
+  // Uma única modalidade: todas as parcelas recebem essa forma (e a conta escolhida).
+  useEffect(() => {
+    if (selectedModalities.length !== 1 || !onCustomPaymentsChange) return;
+    const m = selectedModalities[0];
+    const acc = modalitiesConfig[m]?.account || "";
+    const next: Record<number, InstallmentSplitPart[]> = {};
+    let changed = false;
+    for (const inst of installments) {
+      const cur = customPayments[inst.number];
+      if (cur && cur.length > 1) { next[inst.number] = cur; continue; }
+      if (cur && cur.length === 1 && cur[0].method === m && Math.abs(cur[0].amount - inst.amount) < 0.005 && (cur[0].account || !acc)) {
+        next[inst.number] = cur;
+      } else {
+        changed = true;
+        next[inst.number] = [{ method: m, account: cur?.[0]?.method === m && cur[0].account ? cur[0].account : acc, amount: inst.amount, status: getInstallmentStatus(inst.number) }];
+      }
+    }
+    if (Object.keys(customPayments).length !== installments.length) changed = true;
+    if (changed) {
+      onCustomPaymentsChange(next);
+      if (onFlexiblePaymentEnabledChange && !flexiblePaymentEnabled) onFlexiblePaymentEnabledChange(true);
+    }
+  }, [selectedModalities, installments, modalitiesConfig]);
+
   const total = useMemo(
     () => installments.reduce((sum, inst) => sum + inst.amount, 0),
     [installments]
@@ -256,7 +291,7 @@ export function InstallmentPreviewTable({
     const existing = customPayments[instNumber];
     if (existing && existing.length > 0) return existing;
     return [{
-      method: defaultMethod || "PIX",
+      method: defaultMethod || selectedModalities[0] || "",
       account: defaultAccount || "",
       amount: instAmount,
       status: getInstallmentStatus(instNumber),
@@ -276,6 +311,21 @@ export function InstallmentPreviewTable({
   ) => {
     const current = getParts(instNumber, instAmount);
     const next = current.map((p, idx) => (idx === partIdx ? { ...p, ...patch } : p));
+    if (patch.account !== undefined && onCustomPaymentsChange) {
+      // Mesma modalidade nas outras parcelas recebe a mesma conta (só onde ainda está vazia)
+      const method = next[partIdx].method;
+      const all: Record<number, InstallmentSplitPart[]> = { ...customPayments, [instNumber]: next };
+      for (const k of Object.keys(all)) {
+        const num = Number(k);
+        if (num === instNumber) continue;
+        all[num] = all[num].map((p) => (p.method === method && !p.account ? { ...p, account: patch.account! } : p));
+      }
+      onCustomPaymentsChange(all);
+      if (modalitiesConfig[method]) {
+        setModalitiesConfig((c) => ({ ...c, [method]: { ...c[method], account: patch.account! } }));
+      }
+      return;
+    }
     setParts(instNumber, next);
   };
 
@@ -284,7 +334,7 @@ export function InstallmentPreviewTable({
     const rem = Math.max(0, installmentSplitsRemaining(instAmount, current));
     setParts(instNumber, [
       ...current,
-      { method: defaultMethod || "PIX", account: defaultAccount || "", amount: rem, status: getInstallmentStatus(instNumber) },
+      { method: defaultMethod || selectedModalities[0] || "", account: defaultAccount || "", amount: rem, status: getInstallmentStatus(instNumber) },
     ]);
   };
 
@@ -301,7 +351,6 @@ export function InstallmentPreviewTable({
   const handleToggleModality = (methodName: string) => {
     let nextMethods: string[];
     if (selectedModalities.includes(methodName)) {
-      if (selectedModalities.length <= 1) return; // Não deixa desmarcar todas
       nextMethods = selectedModalities.filter((m) => m !== methodName);
     } else {
       nextMethods = [...selectedModalities, methodName];
