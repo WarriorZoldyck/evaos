@@ -157,6 +157,7 @@ const transactionSchema = z
     subcategory: z.string().optional(),
     subcategory2: z.string().optional(),
     payment_method: z.string().optional(),
+    per_installment_methods: z.boolean().optional(),
     bank_account_id: z.string().optional(),
     credit_card_id: z.string().optional(),
     wallet_id: z.string().optional(),
@@ -182,6 +183,10 @@ const transactionSchema = z
     const add = (path: string, message: string) =>
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
     const pm = data.payment_method || "";
+    if (data.is_installment && data.per_installment_methods) {
+      if (!data.installments_count || data.installments_count < 2) add("installments_count", "Informe 2 parcelas ou mais");
+      return;
+    }
     if (pm === "Dinheiro" && !data.wallet_id) add("wallet_id", "Selecione uma carteira");
     // Despesa no crédito exige o cartão; receita no cartão exige a maquininha
     if (pm === "Cartão de Crédito" && !data.credit_card_id && !data.card_terminal_id) {
@@ -435,6 +440,15 @@ export function TransactionFormModal({
 
   const watchIsInstallmentTop = form.watch("is_installment");
   const watchPaymentMethodTop = form.watch("payment_method");
+  const watchIsInstallmentFlag = form.watch("is_installment");
+  const perInstallmentMethods =
+    !!watchIsInstallmentFlag &&
+    flexiblePaymentEnabled &&
+    Object.values(customInstallmentPayments).some((parts) => parts && parts.length > 0);
+  useEffect(() => {
+    form.setValue("per_installment_methods", perInstallmentMethods, { shouldValidate: false });
+    if (perInstallmentMethods) form.clearErrors(["payment_method", "bank_account_id", "wallet_id", "credit_card_id"]);
+  }, [perInstallmentMethods]);
   const watchCreditCardIdTop = form.watch("credit_card_id");
 
 
@@ -1744,7 +1758,7 @@ function MainFormContent({
               <Select onValueChange={field.onChange} value={field.value || ""}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
+                    <SelectValue placeholder={form.watch("is_installment") && flexiblePaymentEnabled && Object.values(customInstallmentPayments).some((p) => p?.length) ? "Definido por parcela" : "Selecione"} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>

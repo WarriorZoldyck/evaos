@@ -48,6 +48,10 @@ export function validateInstallmentSplits(
   for (const p of parts) {
     if (!p.method) return "Selecione a forma de pagamento de cada parte.";
     if (toCents(p.amount) <= 0) return "Cada parte precisa ter valor maior que zero.";
+    const acc = parseFlexibleAccount(p.account || "");
+    if (p.method === "Dinheiro" && !acc.wallet_id) return "Selecione a carteira da parte em Dinheiro.";
+    if (p.method === "Cartão de Crédito" && !acc.credit_card_id && !acc.bank_account_id) return "Selecione o cartão da parte no Cartão de Crédito.";
+    if (!acc.bank_account_id && !acc.wallet_id && !acc.credit_card_id) return `Selecione a conta da parte em ${p.method}.`;
   }
   const rem = installmentSplitsRemaining(installmentAmount, parts);
   if (rem !== 0) {

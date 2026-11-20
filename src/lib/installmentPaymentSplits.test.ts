@@ -33,7 +33,7 @@ describe("installmentPaymentSplits", () => {
     expect(
       validateInstallmentSplits(1000, [
         { method: "Cartão de Crédito", account: "card:c1", amount: 400 },
-        { method: "Boleto", account: "", amount: 600 },
+        { method: "Boleto", account: "bank:b1", amount: 600 },
       ]),
     ).toBeNull();
 
@@ -52,3 +52,19 @@ describe("installmentPaymentSplits", () => {
   });
 });
 
+
+import { validateInstallmentSplits as vSplit } from "./installmentPaymentSplits";
+describe("parcela com várias formas de pagamento", () => {
+  it("aceita boleto com conta + dinheiro com carteira", () => {
+    expect(vSplit(960, [
+      { method: "Boleto", account: "bank:b1", amount: 500 },
+      { method: "Dinheiro", account: "wallet:w1", amount: 460 },
+    ] as any)).toBeNull();
+  });
+  it("rejeita boleto sem conta", () => {
+    expect(vSplit(960, [{ method: "Boleto", account: "", amount: 960 }] as any)).not.toBeNull();
+  });
+  it("rejeita dinheiro sem carteira", () => {
+    expect(vSplit(960, [{ method: "Dinheiro", account: "bank:b1", amount: 960 }] as any)).not.toBeNull();
+  });
+});
