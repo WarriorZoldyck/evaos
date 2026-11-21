@@ -1988,6 +1988,7 @@ function MainFormContent({
                         />
                       ) : undefined}
                       defaultMethod={watchPaymentMethodMain || ""}
+                      summaryTitle={form.watch("description") || ""}
                       onModalitiesChange={(methods) => {
                         const next = methods.length === 1 ? methods[0] : "";
                         if ((form.getValues("payment_method") || "") !== next) {
