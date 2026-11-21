@@ -1144,8 +1144,9 @@ export function TransactionFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent key={editTransaction?.id ?? "new"} className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent key={editTransaction?.id ?? "new"} className="left-0 top-0 translate-x-0 translate-y-0 w-screen max-w-none sm:max-w-none h-[100dvh] max-h-[100dvh] rounded-none sm:rounded-none border-0 p-0 gap-0 overflow-y-auto block data-[state=open]:slide-in-from-right-full data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-left-0 data-[state=closed]:slide-out-to-left-0 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 duration-300">
+        <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-8 space-y-5">
+        <DialogHeader className="sticky top-0 z-10 -mx-4 sm:-mx-8 px-4 sm:px-8 py-3 bg-background/90 backdrop-blur border-b border-border">
           <DialogTitle>
             {isEditing ? "Editar Lançamento" : "Novo Lançamento"}
           </DialogTitle>
@@ -1380,6 +1381,7 @@ export function TransactionFormModal({
             </Form>
           </TabsContent>
         </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );
