@@ -58,8 +58,8 @@ import type {
 import { PaymentMethodFields } from "./PaymentMethodFields";
 import { InstallmentPreviewTable } from "./InstallmentPreviewTable";
 import {
+  computeTerminalBatchReceivables,
   parseFlexibleAccount,
-  terminalReceivable,
   validateInstallmentSplits,
   type InstallmentSplitPart,
 } from "@/lib/installmentPaymentSplits";
@@ -857,6 +857,8 @@ export function TransactionFormModal({
         customDates: customDatesISO,
       });
 
+      const emittedTerminalBatches = new Set<string>();
+
       for (let idx = 0; idx < count; idx++) {
         const payISO = installmentDates[idx];
         const compDate = data.competence_date;
@@ -902,36 +904,70 @@ export function TransactionFormModal({
                 setSaving(false);
                 return;
               }
-              // posição desta parte dentro da sequência do cartão
-              const cardInsts = Object.keys(customInstallmentPayments)
+              const batchKey = `${term.id}::${part.method}`;
+              if (emittedTerminalBatches.has(batchKey)) continue;
+              emittedTerminalBatches.add(batchKey);
+
+              const grossParts: number[] = [];
+              const orderedInstNums = Object.keys(customInstallmentPayments)
                 .map(Number)
-                .sort((a, b) => a - b)
-                .filter((n) => (customInstallmentPayments[n] || []).some((pp) => pp.account === part.account && pp.method === part.method));
-              const rec = terminalReceivable({
+                .filter((n) => n >= 1 && n <= count)
+                .sort((a, b) => a - b);
+              for (const n of orderedInstNums) {
+                for (const pp of customInstallmentPayments[n] || []) {
+                  if (pp.account === part.account && pp.method === part.method) {
+                    grossParts.push(pp.amount);
+                  }
+                }
+              }
+
+              const batch = computeTerminalBatchReceivables({
                 terminal: term,
                 method: part.method,
-                gross: part.amount,
-                cardCount: cardInsts.length,
-                indexInCard: Math.max(0, cardInsts.indexOf(instNum)),
-                saleDate: new Date(data.payment_date),
+                grossParts,
+                saleDate: compDate,
               });
-              installments.push({
-                ...baseData,
-                status: "Pendente",
-                description: `${baseData.description} (${part.method} ${term.name})`,
-                amount: rec.net,
-                original_amount: part.amount,
-                payment_date: format(rec.paymentDate, "yyyy-MM-dd"),
-                competence_date: format(compDate, "yyyy-MM-dd"),
-                payment_method: part.method,
-                bank_account_id: term.bank_account_id,
-                wallet_id: null,
-                credit_card_id: null,
-                card_terminal_id: term.id,
-                series_id: seriesId,
-                installment_number: instNum,
-                installments_total: count,
-              });
+
+              if (batch.isLumpSum) {
+                installments.push({
+                  ...baseData,
+                  status: "Pendente",
+                  description: `${baseData.description} (${part.method} ${term.name})`,
+                  amount: batch.totalNet,
+                  original_amount: batch.totalGross,
+                  payment_date: format(batch.paymentDate, "yyyy-MM-dd"),
+                  competence_date: format(compDate, "yyyy-MM-dd"),
+                  payment_method: part.method,
+                  bank_account_id: term.bank_account_id,
+                  wallet_id: null,
+                  credit_card_id: null,
+                  card_terminal_id: term.id,
+                  series_id: seriesId,
+                  installments: grossParts.length,
+                  installments_total: grossParts.length,
+                });
+              } else {
+                batch.items.forEach((item, cardIdx) => {
+                  installments.push({
+                    ...baseData,
+                    status: "Pendente",
+                    description: `${baseData.description} (${part.method} ${term.name})`,
+                    amount: item.net,
+                    original_amount: item.gross,
+                    payment_date: format(item.paymentDate, "yyyy-MM-dd"),
+                    competence_date: format(compDate, "yyyy-MM-dd"),
+                    payment_method: part.method,
+                    bank_account_id: term.bank_account_id,
+                    wallet_id: null,
+                    credit_card_id: null,
+                    card_terminal_id: term.id,
+                    series_id: seriesId,
+                    installment_number: cardIdx + 1,
+                    installments_total: grossParts.length,
+                    installments: grossParts.length,
+                  });
+                });
+              }
               continue;
             }
             installments.push({

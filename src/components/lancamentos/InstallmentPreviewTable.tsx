@@ -45,6 +45,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   FLEXIBLE_PAYMENT_METHODS,
   AVAILABLE_PAYMENT_MODALITIES,
+  computeTerminalBatchReceivables,
   installmentSplitsRemaining,
   validateInstallmentSplits,
   type InstallmentSplitPart,
@@ -583,6 +584,105 @@ export function InstallmentPreviewTable({
     );
   };
 
+  const summaryRows = useMemo(() => {
+    interface SummaryRow {
+      key: string;
+      date: Date;
+      methodLabel: string;
+      accountLabel: string;
+      hasMissingAccount: boolean;
+      status: "Pendente" | "Pago";
+      amount: number;
+      grossAmount?: number;
+    }
+
+    const rows: SummaryRow[] = [];
+    const emittedTerminalBatches = new Set<string>();
+
+    for (const inst of installments) {
+      const parts = getParts(inst.number, inst.amount);
+      const nonTerminalParts: InstallmentSplitPart[] = [];
+
+      for (const part of parts) {
+        if (part.account?.startsWith("terminal:") && cardTerminals.length > 0) {
+          const tid = part.account.slice(9);
+          const term = cardTerminals.find((t) => t.id === tid);
+          if (term) {
+            const batchKey = `${term.id}::${part.method}`;
+            if (!emittedTerminalBatches.has(batchKey)) {
+              emittedTerminalBatches.add(batchKey);
+              const grossParts: number[] = [];
+              for (const x of installments) {
+                for (const pp of getParts(x.number, x.amount)) {
+                  if (pp.account === part.account && pp.method === part.method) {
+                    grossParts.push(pp.amount);
+                  }
+                }
+              }
+              const batch = computeTerminalBatchReceivables({
+                terminal: term,
+                method: part.method,
+                grossParts,
+                saleDate: paymentDate,
+              });
+              if (batch.isLumpSum) {
+                rows.push({
+                  key: `term-${batchKey}`,
+                  date: batch.paymentDate,
+                  methodLabel: grossParts.length > 1 ? `${part.method} (${grossParts.length}x)` : part.method,
+                  accountLabel: `Maquininha ${term.name}`,
+                  hasMissingAccount: false,
+                  status: "Pendente",
+                  amount: batch.totalNet,
+                  grossAmount: batch.totalGross,
+                });
+              } else {
+                batch.items.forEach((item, idx) => {
+                  rows.push({
+                    key: `term-${batchKey}-${idx}`,
+                    date: item.paymentDate,
+                    methodLabel: `${part.method} (${idx + 1}/${batch.items.length})`,
+                    accountLabel: `Maquininha ${term.name}`,
+                    hasMissingAccount: false,
+                    status: "Pendente",
+                    amount: item.net,
+                    grossAmount: item.gross,
+                  });
+                });
+              }
+            }
+            continue;
+          }
+        }
+        nonTerminalParts.push(part);
+      }
+
+      if (nonTerminalParts.length > 0) {
+        const rowAmount = nonTerminalParts.length === parts.length
+          ? inst.amount
+          : Math.round(nonTerminalParts.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+        rows.push({
+          key: `inst-${inst.number}`,
+          date: inst.date,
+          methodLabel: nonTerminalParts.map((p) => p.method || "—").join(" + "),
+          accountLabel: nonTerminalParts
+            .map((p) => (p.account ? accountLabel(p.account) : isCardMethod(p.method) ? "Falta maquininha" : "Falta conta"))
+            .join(" + "),
+          hasMissingAccount: nonTerminalParts.some((p) => !p.account),
+          status: getInstallmentStatus(inst.number),
+          amount: rowAmount,
+        });
+      }
+    }
+
+    return rows.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [installments, customPayments, customStatuses, mainStatus, cardTerminals, paymentDate, bankAccounts, wallets, creditCards]);
+
+  const summaryTotal = useMemo(
+    () => summaryRows.reduce((sum, r) => sum + r.amount, 0),
+    [summaryRows],
+  );
+
   const downloadSummary = async () => {
     const { jsPDF } = await import("jspdf");
     const autoTable = (await import("jspdf-autotable")).default;
@@ -592,18 +692,20 @@ export function InstallmentPreviewTable({
     doc.setFontSize(10);
     let y = 26;
     if (summaryTitle) { doc.text(summaryTitle, 14, y); y += 6; }
-    doc.text(`Valor total: R$ ${formatCurrency(total)}`, 14, y); y += 6;
+    doc.text(`Valor total: R$ ${formatCurrency(summaryTotal)}`, 14, y); y += 6;
     const cond = selectedModalities.map((m) => {
       const c = modalitiesConfig[m];
       return c ? `${m}: R$ ${formatCurrency(c.amount)} em ${c.installments}x` : m;
     }).join("  |  ");
     if (cond) { doc.text(doc.splitTextToSize(`Condição: ${cond}`, 180), 14, y); y += 8; }
-    const rows = [...installments].sort((a, b) => a.date.getTime() - b.date.getTime()).map((inst, i) => {
-      const parts = getParts(inst.number, inst.amount);
-      return [String(i + 1), format(inst.date, "dd/MM/yyyy"), parts.map((p) => p.method).join(" + "), `R$ ${formatCurrency(inst.amount)}`];
-    });
+    const rows = summaryRows.map((row, i) => [
+      String(i + 1),
+      format(row.date, "dd/MM/yyyy"),
+      row.methodLabel,
+      `R$ ${formatCurrency(row.amount)}`,
+    ]);
     autoTable(doc, { startY: y + 2, head: [["#", "Vencimento", "Forma", "Valor"]], body: rows,
-      foot: [["", "", "Total", `R$ ${formatCurrency(total)}`]], styles: { fontSize: 9 } });
+      foot: [["", "", "Total", `R$ ${formatCurrency(summaryTotal)}`]], styles: { fontSize: 9 } });
     doc.setFontSize(8);
     doc.text(`Gerado em ${format(new Date(), "dd/MM/yyyy")}`, 14, 288);
     const blob = doc.output("blob");
@@ -784,62 +886,66 @@ export function InstallmentPreviewTable({
                       );
                     })()}
                     {!isCardMethod(mName) && renderAccountSelect(mName, cfg)}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <div>
-                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">1º vencimento</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button type="button" variant="outline" className="h-7 w-full justify-start px-2 text-xs font-normal mt-0.5">
-                              <CalendarIcon className="mr-1.5 h-3 w-3 opacity-60" />
-                              {format(cfg.firstDate ?? paymentDate, "dd/MM/yyyy", { locale: ptBR })}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar mode="single" selected={cfg.firstDate ?? paymentDate}
-                              onSelect={(d) => d && handleUpdateModalityConfig(mName, { firstDate: d })}
-                              locale={ptBR} className="p-3 pointer-events-auto" />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <div>
-                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Intervalo</Label>
-                        <Select value={String(cfg.intervalDays || 0)}
-                          onValueChange={(v) => handleUpdateModalityConfig(mName, { intervalDays: Number(v) })}>
-                          <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="0" className="text-xs">Mensal</SelectItem>
-                            {[7, 10, 14, 15, 21, 28, 30, 45, 60].map((d) => (
-                              <SelectItem key={d} value={String(d)} className="text-xs">A cada {d} dias</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    {(modalityRanges[mName]?.length ?? 0) > 0 && (
-                      <div className="space-y-1 pt-1.5 border-t border-border/50">
-                        {modalityRanges[mName].map((k, j) => {
-                          const inst = installments.find((x) => x.number === k);
-                          if (!inst) return null;
-                          return (
-                            <div key={k} className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-muted-foreground w-8 shrink-0">{j + 1}/{modalityRanges[mName].length}</span>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button type="button" variant="outline" className="h-6 px-2 text-[11px] font-normal">
-                                    {format(inst.date, "dd/MM/yyyy", { locale: ptBR })}
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                  <Calendar mode="single" selected={inst.date} onSelect={(d) => handleDateChange(k, d)}
-                                    locale={ptBR} className="p-3 pointer-events-auto" />
-                                </PopoverContent>
-                              </Popover>
-                              <Input type="number" step="0.01" min="0" className="h-6 flex-1 text-[11px] text-right"
-                                value={inst.amount} onChange={(e) => handleModalityInstAmount(mName, k, e.target.value)} />
-                            </div>
-                          );
-                        })}
-                      </div>
+                    {!(isCardMethod(mName) && cardTerminals.length > 0 && cfg.account?.startsWith("terminal:")) && (
+                      <>
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">1º vencimento</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button type="button" variant="outline" className="h-7 w-full justify-start px-2 text-xs font-normal mt-0.5">
+                                  <CalendarIcon className="mr-1.5 h-3 w-3 opacity-60" />
+                                  {format(cfg.firstDate ?? paymentDate, "dd/MM/yyyy", { locale: ptBR })}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar mode="single" selected={cfg.firstDate ?? paymentDate}
+                                  onSelect={(d) => d && handleUpdateModalityConfig(mName, { firstDate: d })}
+                                  locale={ptBR} className="p-3 pointer-events-auto" />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Intervalo</Label>
+                            <Select value={String(cfg.intervalDays || 0)}
+                              onValueChange={(v) => handleUpdateModalityConfig(mName, { intervalDays: Number(v) })}>
+                              <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0" className="text-xs">Mensal</SelectItem>
+                                {[7, 10, 14, 15, 21, 28, 30, 45, 60].map((d) => (
+                                  <SelectItem key={d} value={String(d)} className="text-xs">A cada {d} dias</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        {(modalityRanges[mName]?.length ?? 0) > 0 && (
+                          <div className="space-y-1 pt-1.5 border-t border-border/50">
+                            {modalityRanges[mName].map((k, j) => {
+                              const inst = installments.find((x) => x.number === k);
+                              if (!inst) return null;
+                              return (
+                                <div key={k} className="flex items-center gap-1.5">
+                                  <span className="text-[10px] text-muted-foreground w-8 shrink-0">{j + 1}/{modalityRanges[mName].length}</span>
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button type="button" variant="outline" className="h-6 px-2 text-[11px] font-normal">
+                                        {format(inst.date, "dd/MM/yyyy", { locale: ptBR })}
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                      <Calendar mode="single" selected={inst.date} onSelect={(d) => handleDateChange(k, d)}
+                                        locale={ptBR} className="p-3 pointer-events-auto" />
+                                    </PopoverContent>
+                                  </Popover>
+                                  <Input type="number" step="0.01" min="0" className="h-6 flex-1 text-[11px] text-right"
+                                    value={inst.amount} onChange={(e) => handleModalityInstAmount(mName, k, e.target.value)} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 );
@@ -858,7 +964,7 @@ export function InstallmentPreviewTable({
         <div className="flex items-center justify-between px-0.5">
           <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Resumo das Parcelas ({installments.length})
+            Resumo das Parcelas ({summaryRows.length})
           </Label>
           <span className="text-[11px] text-muted-foreground">
             A 1ª parcela herda o status inicial; as demais vêm como pendentes
@@ -879,24 +985,27 @@ export function InstallmentPreviewTable({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {[...installments].sort((x, y) => x.date.getTime() - y.date.getTime()).map((inst, i) => {
-                  const parts = getParts(inst.number, inst.amount);
-                  const st = getInstallmentStatus(inst.number);
-                  return (
-                    <TableRow key={inst.number}>
-                      <TableCell className="py-1.5 text-xs">{i + 1}</TableCell>
-                      <TableCell className="py-1.5 text-xs">{format(inst.date, "dd/MM/yyyy", { locale: ptBR })}</TableCell>
-                      <TableCell className="py-1.5 text-xs">{parts.map((p) => p.method || "—").join(" + ")}</TableCell>
-                      <TableCell className={cn("py-1.5 text-xs", parts.some((p) => !p.account) && "text-destructive")}>
-                        {parts.map((p) => p.account ? accountLabel(p.account) : (isCardMethod(p.method) ? "Falta maquininha" : "Falta conta")).join(" + ")}
-                      </TableCell>
-                      <TableCell className="py-1.5 text-xs">
-                        <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", st === "Pago" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600")}>{st}</span>
-                      </TableCell>
-                      <TableCell className="py-1.5 text-xs text-right font-semibold">R$ {formatCurrency(inst.amount)}</TableCell>
-                    </TableRow>
-                  );
-                })}
+                {summaryRows.map((row, i) => (
+                  <TableRow key={row.key}>
+                    <TableCell className="py-1.5 text-xs">{i + 1}</TableCell>
+                    <TableCell className="py-1.5 text-xs">{format(row.date, "dd/MM/yyyy", { locale: ptBR })}</TableCell>
+                    <TableCell className="py-1.5 text-xs">{row.methodLabel}</TableCell>
+                    <TableCell className={cn("py-1.5 text-xs", row.hasMissingAccount && "text-destructive")}>
+                      {row.accountLabel}
+                    </TableCell>
+                    <TableCell className="py-1.5 text-xs">
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", row.status === "Pago" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600")}>{row.status}</span>
+                    </TableCell>
+                    <TableCell className="py-1.5 text-xs text-right font-semibold">
+                      R$ {formatCurrency(row.amount)}
+                      {row.grossAmount != null && row.grossAmount !== row.amount && (
+                        <span className="block text-[10px] font-normal text-muted-foreground">
+                          Bruto: R$ {formatCurrency(row.grossAmount)}
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -911,7 +1020,7 @@ export function InstallmentPreviewTable({
         {/* Total consolidado */}
         <div className="rounded-md border border-border bg-muted/40 p-2.5 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 font-medium">
-            <span>Total das {installments.length} parcelas</span>
+            <span>Total ({summaryRows.length} {summaryRows.length === 1 ? "lançamento" : "lançamentos"})</span>
             {totalInterest > 0 && (
               <span className="text-muted-foreground font-normal">
                 (juros: R$ {formatCurrency(totalInterest)})
@@ -920,7 +1029,7 @@ export function InstallmentPreviewTable({
           </div>
           <div className="text-right">
             <span className="font-bold text-sm text-foreground">
-              R$ {formatCurrency(total)}
+              R$ {formatCurrency(summaryTotal)}
             </span>
           </div>
         </div>

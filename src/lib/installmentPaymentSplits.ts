@@ -1,3 +1,6 @@
+import { addDays } from "date-fns";
+import { addBusinessDays } from "@/lib/utils";
+
 export interface InstallmentSplitPart {
   method: string;
   /** "bank:<id>" | "wallet:<id>" | "card:<id>" | "terminal:<id>" | "" */
@@ -132,4 +135,72 @@ export function terminalReceivable(params: {
     d.setDate(d.getDate() + settlementDays);
   }
   return { rate, fee, net, paymentDate: d };
+}
+
+export interface TerminalBatchResult {
+  isLumpSum: boolean;
+  rate: number;
+  settlementDays: number;
+  totalGross: number;
+  totalFee: number;
+  totalNet: number;
+  paymentDate: Date;
+  items: { gross: number; fee: number; net: number; paymentDate: Date }[];
+}
+
+/**
+ * Consolida recebíveis de cartão via maquininha em parcelamentos combinados:
+ * - Com antecipação (settlementDays < 30), débito ou 1x: gera 1 único recebível líquido em D+settlementDays.
+ * - Sem antecipação (settlementDays >= 30 e 2+ parcelas): gera 1 recebível líquido por mês (D + 1 mês, 2 meses...).
+ */
+export function computeTerminalBatchReceivables(params: {
+  terminal: TerminalRateSource;
+  method: string;
+  grossParts: number[];
+  saleDate: Date;
+}): TerminalBatchResult {
+  const cardCount = Math.max(1, params.grossParts.length);
+  const { rate, settlementDays } = terminalRateFor(params.terminal, params.method, cardCount);
+  const isDebit = params.method === "Cartão de Débito";
+  const isLumpSum = isDebit || cardCount === 1 || (params.method === "Cartão de Crédito" && settlementDays < 30);
+  const totalGross = Math.round(params.grossParts.reduce((s, g) => s + g, 0) * 100) / 100;
+
+  if (isLumpSum) {
+    const totalFee = Math.round(totalGross * (rate / 100) * 100) / 100;
+    const totalNet = Math.round((totalGross - totalFee) * 100) / 100;
+    const paymentDate = isDebit
+      ? addBusinessDays(params.saleDate, settlementDays)
+      : addDays(params.saleDate, settlementDays);
+    return {
+      isLumpSum: true,
+      rate,
+      settlementDays,
+      totalGross,
+      totalFee,
+      totalNet,
+      paymentDate,
+      items: [],
+    };
+  }
+
+  const items = params.grossParts.map((gross, i) => {
+    const fee = Math.round(gross * (rate / 100) * 100) / 100;
+    const net = Math.round((gross - fee) * 100) / 100;
+    const d = new Date(params.saleDate);
+    d.setMonth(d.getMonth() + i + 1);
+    return { gross, fee, net, paymentDate: d };
+  });
+  const totalFee = Math.round(items.reduce((s, x) => s + x.fee, 0) * 100) / 100;
+  const totalNet = Math.round(items.reduce((s, x) => s + x.net, 0) * 100) / 100;
+
+  return {
+    isLumpSum: false,
+    rate,
+    settlementDays,
+    totalGross,
+    totalFee,
+    totalNet,
+    paymentDate: items[0]?.paymentDate ?? params.saleDate,
+    items,
+  };
 }
